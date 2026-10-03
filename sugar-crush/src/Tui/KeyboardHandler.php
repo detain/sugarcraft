@@ -285,8 +285,9 @@ final class KeyboardHandler
      * and the chat draft is empty.
      *
      * This is the interaction door the docked panes were missing. Most of
-     * them are deliberately read-only surfaces — SettingsPane's own footer
-     * says "read-only — /theme, /model", and Files/Tools are lists — so
+     * them are deliberately read-only surfaces — Files/Tools are lists, and
+     * the Settings pane is a summary whose Enter opens the full settings view
+     * instead (see {@see handle()}) — so
      * without a key, focusing one was a dead end for changing anything.
      * Enter feeds `Ctrl+P` to the hosted Chat through
      * {@see \SugarCraft\Crush\App\App::consumeShellCmd()}'s
@@ -318,11 +319,13 @@ final class KeyboardHandler
      * Whether one of the shell's OWN views is driving the keyboard, so that a
      * key belongs to it rather than to whatever is behind it.
      *
-     * All three cover the hosted chat and bind `↑`/`↓`/`Enter` themselves:
-     * the F10 menu, `Pane::Agents`' full-pane dashboard, and an open skill
+     * All four cover the hosted chat and bind `↑`/`↓`/`Enter` themselves:
+     * the F10 menu, `Pane::Agents`' full-pane dashboard, an open skill
      * picker (letting its keys fall through would scroll the chat behind the
      * modal instead of moving the highlighted skill — which is exactly why the
-     * Skills pane could be OPENED but never selected from).
+     * Skills pane could be OPENED but never selected from), and the full-band
+     * settings view (N-P1), which {@see \SugarCraft\Crush\App\App::handleKey()}
+     * hands every key to before this class is consulted at all.
      *
      * Read three times: once as claim rule 2, once by {@see chatOwns()} for
      * the one chord {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}
@@ -334,7 +337,7 @@ final class KeyboardHandler
      * that a yielded rune is yielded unconditionally — changes no routing at
      * all. Two guarantees overlap to make it unobservable.
      *
-     * Inside these three states claim rule 2 claims every key `chatOwns()` has
+     * Inside these states claim rule 2 claims every key `chatOwns()` has
      * not already taken — NOT every key, and the difference is measured: six
      * chords escape rule 2 in `Pane::Agents`, pinned by name in
      * `KeyboardHandlerTest::testOnlyChatsOwnChordsEscapeTheShellInTheAgentPane()`.
@@ -361,7 +364,8 @@ final class KeyboardHandler
     {
         return MenuBar::getActiveMenu() > 0
             || $app->pane === Pane::Agents
-            || ($app->pane === Pane::Skills && $app->skillPickerOptions !== []);
+            || ($app->pane === Pane::Skills && $app->skillPickerOptions !== [])
+            || $app->settingsEditor !== null;
     }
 
     /**
@@ -555,7 +559,11 @@ final class KeyboardHandler
         // key on exactly this predicate; the agent view and the skill picker
         // consumed their own Enter above).
         if ($key === 'enter' && self::enterOpensPaletteDoor($app)) {
-            return [$app, new CommandPaletteCmd()];
+            // Except on the settings pane, whose door is the settings view the
+            // pane summarises (N-P1) rather than the generic palette.
+            return $app->pane === Pane::Settings
+                ? [$app->openSettings(), null]
+                : [$app, new CommandPaletteCmd()];
         }
 
         // Handle arrow keys / vim keys for navigation
@@ -856,7 +864,11 @@ final class KeyboardHandler
             's' => [$app, new SourceSkillCmd()],
             'a' => [$app->withPane(Pane::Agents), null],
             'p' => [$app, new ProviderSelectCmd()],
-            ',' => [$app->withPane(Pane::Settings), null],
+            // The first press focuses the settings pane; a second, with the
+            // pane already focused, opens the full settings view (N-P1).
+            ',' => $app->pane === Pane::Settings
+                ? [$app->openSettings(), null]
+                : [$app->withPane(Pane::Settings), null],
             default => [$app, null],
         };
     }

@@ -50,6 +50,7 @@ final class KeyBindingRegistryTest extends TestCase
             KeyBindingRegistry::CONTEXT_PERMISSION,
             KeyBindingRegistry::CONTEXT_AGENTS,
             KeyBindingRegistry::CONTEXT_SKILLS,
+            KeyBindingRegistry::CONTEXT_SETTINGS,
             KeyBindingRegistry::CONTEXT_MENU,
             KeyBindingRegistry::CONTEXT_MOUSE,
         ];
@@ -217,7 +218,8 @@ final class KeyBindingRegistryTest extends TestCase
     /**
      * The shape of the table, stated as numbers because prose elsewhere states
      * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "81 live rows
-     * across 9 contexts", the sweep counts in
+     * across 9 contexts" (stale since N-P1 — 88 across 10; that docblock is
+     * outside the settings step's Chat regions and is handed to integration), the sweep counts in
      * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}, and
      * {@see \SugarCraft\Crush\Tests\Commands\KeyBindingDriftTest}'s KEYISH
      * docblock ("all 85 declared rows"). A prose number nobody measures is how
@@ -263,13 +265,17 @@ final class KeyBindingRegistryTest extends TestCase
      * P-A2): ten picker rows (`picker.filter`, `.rename`, `.delete`,
      * `.delete-children`, `.pin`, `.fork`, `.archive`, `.unarchive`,
      * `.archived`, `.children`) and `mouse.session-action`.
+     *
+     * 81 -> 88 live (85 -> 92 all) and 9 -> 10 contexts with the settings view
+     * (roadmap N-P1): the six `settings.*` rows of the new `Settings view`
+     * context and `shell.settings-open`, the settings pane's Enter door.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(85, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(81, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(92, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(88, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
-        $this->assertCount(9, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
+        $this->assertCount(10, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
     /**

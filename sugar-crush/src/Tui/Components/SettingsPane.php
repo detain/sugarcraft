@@ -28,11 +28,13 @@ use SugarCraft\Crush\Tui\Pane;
  * rather than a plausible default, because a settings screen that guesses is
  * worse than one that admits it does not know.
  *
- * It is deliberately READ-ONLY. The two settings that genuinely can be
- * changed at runtime — theme and model — are changed through `/theme` and
- * `/model` (and their Ctrl+P palette entries), and {@see FOOTER} says so.
- * Offering a control here that dispatched nothing is the exact failure mode
- * the empty pane already was.
+ * It is deliberately a SUMMARY. Every key, with its source and when a change
+ * to it applies, is the full settings view's job
+ * ({@see \SugarCraft\Crush\Tui\Settings\SettingsEditor}, roadmap N-P1),
+ * which Enter on this pane — or `/settings` — opens, and {@see FOOTER} says so.
+ * Theme and model are still changed through `/theme` and `/model` (and their
+ * Ctrl+P palette entries). Offering a control here that dispatched nothing is
+ * the exact failure mode the empty pane already was.
  */
 final class SettingsPane
 {
@@ -46,10 +48,12 @@ final class SettingsPane
     private const VALUE_INDENT = 2;
 
     /**
-     * Why the pane offers no controls, naming the commands that do work.
-     * Both are real {@see \SugarCraft\Crush\Commands\CommandRegistry} rows.
+     * The way to the full view this pane summarises: Enter on the focused pane
+     * (an empty draft — {@see \SugarCraft\Crush\Tui\KeyboardHandler}), or
+     * the real `/settings` {@see \SugarCraft\Crush\Commands\CommandRegistry}
+     * row.
      */
-    private const FOOTER = 'read-only — /theme, /model';
+    private const FOOTER = 'Enter or /settings: all settings';
 
     /**
      * Placeholder for a value this App genuinely has no answer for, kept

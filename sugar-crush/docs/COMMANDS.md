@@ -39,8 +39,9 @@ dispatch arms (keeping both would list every built-in twice in the "/" popup).
 ### Except the control plane
 
 Every name in `CommandRegistry::CONTROL_PLANE` is taken back whatever a file
-says: `budget`, `clear`, `exit`, `help`, `model`,
-`permissions`, `quit`. These are how you drive and leave the application, and a
+says: `budget`, `clear`, `config`, `exit`, `help`, `model`,
+`permissions`, `quit`, `settings`. These are how you drive, inspect and leave the
+application, and a
 cloned repository redefining `/exit` is not a thing that should be possible. A
 refused file is recorded on `CommandLoader::refusedCommands()` and reported at
 launch — keyed by command *name*, deliberately separate from the directory
@@ -58,11 +59,11 @@ reservation earns its keep now for exactly the reason it was made: that report
 is how you check what a cloned repository has made possible, and a file that
 could replace it could falsify the check.
 
-`quit` is the asymmetry now. It is reserved and it is dispatched — an arm in
-`Chat::dispatchCommand()` — but it has no row of its own, so nothing advertises
-it. A file named `quit.md` still loses the name: `CommandLoader::loadAll()`
-takes back every reserved name, restoring the built-in row where one exists and
-unsetting the name where none does.)
+`quit` and `config` are the asymmetry now. Each is reserved and dispatched — an
+alias on the `exit` and `settings` spec files — but has no row of its own, so
+nothing advertises it. A file named `quit.md` or `config.md` still loses the
+name: `CommandLoader::loadAll()` takes back every reserved name, restoring the
+built-in row where one exists and unsetting the name where none does.)
 
 ---
 
@@ -305,6 +306,7 @@ edit it by hand.
 | `/docs` | | | — | Open the documentation |
 | `/exit` | ✓ | ✓ | — | Quit the app |
 | `/theme` | ✓ | | — | Switch the color theme |
+| `/settings` | ✓ | ✓ | `[search]` | Show every setting, its value, where it came from and when it applies |
 | `/agents` | ✓ | | — | List active agents, or inspect one by name |
 | `/mcp` | ✓ | | `<list\|add\|remove\|login> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
 | `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |

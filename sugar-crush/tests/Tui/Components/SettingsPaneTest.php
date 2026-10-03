@@ -196,16 +196,18 @@ final class SettingsPaneTest extends TestCase
     }
 
     /**
-     * The pane offers no control it cannot honour, and names the commands
-     * that do work instead.
+     * The pane offers no control it cannot honour, and names the door to the
+     * full settings view it summarises (N-P1).
      */
-    public function testRenderSaysItIsReadOnlyAndNamesTheWorkingCommands(): void
+    public function testRenderNamesTheDoorToTheFullSettingsView(): void
     {
         $plain = Ansi::strip(SettingsPane::render($this->app(), 60, 30));
 
-        $this->assertStringContainsString('read-only', $plain);
-        $this->assertStringContainsString('/theme', $plain);
-        $this->assertStringContainsString('/model', $plain);
+        $this->assertStringContainsString('Enter or /settings', $plain);
+        $this->assertContains('settings', array_map(
+            static fn ($spec): string => $spec->name,
+            \SugarCraft\Crush\Commands\CommandRegistry::slashCommands(),
+        ), 'the footer names a command the registry advertises');
     }
 
     /**
@@ -273,7 +275,7 @@ final class SettingsPaneTest extends TestCase
 
         $this->assertStringContainsString('settings', $frame);
         $this->assertStringContainsString('Provider', $frame);
-        $this->assertStringContainsString('read-only', $frame);
+        $this->assertStringContainsString('/settings', $frame);
     }
 
     /** And the bar advertises it, so Tab and the strip agree. */

@@ -33,6 +33,7 @@ enum PaletteAction: string
     case DockPaneLeft = 'dock_pane_left';
     case DockPaneRight = 'dock_pane_right';
     case LayoutReset = 'layout_reset';
+    case OpenSettings = 'open_settings';
 
     /**
      * This action's registry row. Throws rather than returning null: an

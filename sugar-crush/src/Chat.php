@@ -9031,6 +9031,14 @@ final class Chat implements Model
         // (checked above the mid-turn block) already quits mid-turn anyway. The
         // bare-name test mirrors {@see dispatchCommand()}'s own — `/exit now` is a
         // prompt there and must stay one here.
+        //
+        // The settings view (roadmap N-P1) is the overlay this rule does NOT
+        // close off mid-turn, and not by an exemption here: it writes no history
+        // and sends nothing to the model, so its doors that matter mid-turn —
+        // `Ctrl+,` then Enter on the settings pane, and the F10 menu row — open
+        // it in the shell ({@see \SugarCraft\Crush\App\App::openSettings()})
+        // without ever reaching this method. A TYPED `/settings` is refused here
+        // like every other slash command.
         if ($this->inFlight) {
             if ($text === '/exit' || $text === '/quit') {
                 return [$this, Cmd::quit()];
@@ -9065,7 +9073,7 @@ final class Chat implements Model
         // on the same precedence ({@see slashCommandRows()}), so what is listed
         // and what runs cannot disagree — a claim that was FALSE for the
         // `/name:arg` spelling until {@see expandCustomCommand()} learned it,
-        // and that {@see CommandRegistry::CONTROL_PLANE} bounds: seven names
+        // and that {@see CommandRegistry::CONTROL_PLANE} bounds: nine names
         // are reserved to the application and never reach this map at all.
         //
         // It rewrites $text instead of returning a [Chat, Cmd] pair like the
@@ -10708,6 +10716,24 @@ final class Chat implements Model
         return $this->withInputBuf(
             \SugarCraft\Crush\Commands\InitCommand::prompt(self::commandArgument($text)),
         )->submit();
+    }
+
+    /**
+     * `/settings [search]` (`/config`) — roadmap N-P1. The settings view is
+     * SHELL state ({@see \SugarCraft\Crush\App\App::$settingsEditor}), so
+     * this clears the box and asks the host for it over the Cmd channel, the
+     * `/layout` technique; the argument pre-fills the view's search. Nothing is
+     * written to the transcript: the view is the answer, and a row here would
+     * be sent to the model.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleSettingsCommand(string $text): array
+    {
+        return [
+            $this->withInputBuf(''),
+            Cmd::send(new \SugarCraft\Crush\Tui\Settings\OpenSettingsMsg(self::commandArgument($text))),
+        ];
     }
 
     /**
@@ -17323,6 +17349,8 @@ final class Chat implements Model
             PaletteAction::DockPaneLeft => $closed->handlePaneCommand('/pane dock left'),
             PaletteAction::DockPaneRight => $closed->handlePaneCommand('/pane dock right'),
             PaletteAction::LayoutReset => $closed->handleLayoutCommand('/layout reset'),
+            // N-P1: the settings view is the shell's; this only asks for it.
+            PaletteAction::OpenSettings => $closed->handleSettingsCommand('/settings'),
             PaletteAction::Exit => [$closed, Cmd::quit()],
             default => [$closed, null],
         };

@@ -41,7 +41,7 @@ final class CommandRegistry
      *
      * Every other built-in is overridable on purpose — that is the feature the
      * tiering exists for, and a project that wants its own `/compact` or
-     * `/review` gets it. These seven are different in kind: they are how the
+     * `/review` gets it. These nine are different in kind: they are how the
      * user drives, inspects, pays for and LEAVES the application, so a clone
      * that redefined one would be answering a keystroke the user aimed at the
      * app rather than at the model. `/exit` was measured doing exactly that —
@@ -64,12 +64,13 @@ final class CommandRegistry
      * rather than deleted because the shape it describes is the one to watch
      * for: a reserved name is a promise, and the only way to tell whether the
      * promise was kept is `Commands\SlashDispatchTest`, which drives every
-     * VISIBLE row through the real dispatch. `quit` is the remaining
-     * asymmetry and is deliberate — it has no row of its own because it is an
-     * alias of `exit`, but it IS dispatched, so it is a reserved name that
-     * works rather than one that does not.
+     * VISIBLE row through the real dispatch. `quit` and `config` are the
+     * remaining asymmetry and are deliberate — neither has a row of its own
+     * because they are aliases of `exit` and `settings`, but both ARE
+     * dispatched, so they are reserved names that work rather than ones that
+     * do not.
      */
-    public const CONTROL_PLANE = ['budget', 'clear', 'exit', 'help', 'model', 'permissions', 'quit'];
+    public const CONTROL_PLANE = ['budget', 'clear', 'config', 'exit', 'help', 'model', 'permissions', 'quit', 'settings'];
 
     /** Whether $name is one of {@see CONTROL_PLANE}. */
     public static function isControlPlane(string $name): bool

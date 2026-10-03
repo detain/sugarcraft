@@ -46,6 +46,7 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Tui\Settings\SettingsSources;
 use SugarCraft\Mouse\Zone;
 
 /**
@@ -254,8 +255,8 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 85 declared rows — and THAT is the domain
-     * of the zero. It says nothing about prose not yet written; it says those 85
+     * Zero false positives across all 92 declared rows — and THAT is the domain
+     * of the zero. It says nothing about prose not yet written; it says those 92
      * rows are clean under this pattern.
      *
      * The eight rows the draft's editing keyboard added are what it cost to keep
@@ -280,8 +281,8 @@ final class KeyBindingDriftTest extends TestCase
      *
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
-     * near-misses probed, because five `*.move` rows describe arrow movement
-     * (thirteen rows carry an arrow GLYPH in their label; both counts are asserted
+     * near-misses probed, because six `*.move` rows describe arrow movement
+     * (fifteen rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -511,21 +512,21 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         $this->assertCount(
-            5,
+            6,
             $move,
-            'KEYISH\'s docblock says five `*.move` rows describe arrow movement; it found: '
+            'KEYISH\'s docblock says six `*.move` rows describe arrow movement; it found: '
             . implode(', ', $move),
         );
         $this->assertCount(
-            13,
+            15,
             $arrowLabelled,
-            'KEYISH\'s docblock says thirteen rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says fifteen rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
-        // count the interesting one — the extra six are `chat.slash-menu`,
-        // `chat.recall`, `chat.cursor`, `chat.word-motion`, `chat.draft-rows`
-        // and `menu.switch`.
+        // count the interesting one — the extra rows include `chat.slash-menu`,
+        // `chat.recall`, `chat.cursor`, `chat.word-motion`, `chat.draft-rows`,
+        // `menu.switch` and `settings.category`.
         $this->assertSame([], array_diff($move, $arrowLabelled));
     }
 
@@ -987,9 +988,27 @@ final class KeyBindingDriftTest extends TestCase
                 [, $cmd] = $this->claim($k[0], $this->app());
                 $this->assertInstanceOf(SourceSkillCmd::class, $cmd);
             },
+            // Both halves of the description: the first press focuses the
+            // pane and opens nothing; the second, from the focused pane,
+            // opens the settings view.
             'shell.settings' => function (array $k): void {
-                [$app] = $this->claim($k[0], $this->app());
-                $this->assertSame(Pane::Settings, $app->pane);
+                [$focused] = $this->claim($k[0], $this->settingsSourcedApp());
+                $this->assertSame(Pane::Settings, $focused->pane);
+                $this->assertNull($focused->settingsEditor, 'the first press only focuses');
+
+                [$opened] = $this->claim($k[0], $focused);
+                $this->assertNotNull($opened->settingsEditor, 'the second press opens the settings view');
+            },
+            // The Settings pane's Enter door, against the palette door's
+            // fixture: same empty draft, but the pane it is pressed from
+            // decides which surface opens.
+            'shell.settings-open' => function (array $k): void {
+                [$app, $cmd] = $this->claim(
+                    $k[0],
+                    $this->settingsSourcedApp()->withChat(new Chat())->withPane(Pane::Settings),
+                );
+                $this->assertNotNull($app->settingsEditor);
+                $this->assertNull($cmd, 'the settings pane opens the view, not the palette');
             },
 
             // ── Command palette ──────────────────────────────────────────
@@ -1430,6 +1449,57 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame(Pane::Chat, $app->pane);
             },
 
+            // ── Settings view (N-P1) ─────────────────────────────────────
+            // Driven through App::update(), which hands the open view every
+            // key before the shell's own handler is consulted. Both arrow
+            // rows wrap from row/tab 0, so each key is asserted to land on a
+            // DIFFERENT, named place — the menu.switch lesson below.
+            'settings.move' => function (array $k): void {
+                $open = $this->settingsOpenApp();
+                $last = \count($open->settingsEditor->rows()) - 1;
+                $this->assertGreaterThan(1, $last, 'fixture: the first category lists more than two keys');
+
+                [$up] = $open->update($k[0]);
+                [$down] = $open->update($k[1]);
+                $this->assertSame($last, $up->settingsEditor->cursor, 'up from the first row wraps to the last');
+                $this->assertSame(1, $down->settingsEditor->cursor, 'down moves to the second row');
+            },
+            'settings.category' => function (array $k): void {
+                $open = $this->settingsOpenApp();
+                $tabs = \count($open->settingsEditor->tabLabels());
+
+                [$left] = $open->update($k[0]);
+                [$right] = $open->update($k[1]);
+                $this->assertSame($tabs - 1, $left->settingsEditor->tab, 'left from the first tab wraps to Files');
+                $this->assertTrue($left->settingsEditor->onFilesTab());
+                $this->assertSame(1, $right->settingsEditor->tab);
+            },
+            'settings.search' => function (array $k): void {
+                [$app] = $this->settingsOpenApp()->update($k[0]);
+                $this->assertTrue($app->settingsEditor->searching);
+
+                [$typed] = $app->update(new KeyMsg(KeyType::Char, 'k'));
+                $this->assertSame('k', $typed->settingsEditor->query, 'while searching, letters type rather than move');
+            },
+            'settings.search-keep' => function (array $k): void {
+                [$kept] = $this->settingsSearchingApp('trust')->update($k[0]);
+                $this->assertFalse($kept->settingsEditor->searching);
+                $this->assertSame('trust', $kept->settingsEditor->query);
+                $this->assertNotSame([], $kept->settingsEditor->rows(), 'the matches stay listed');
+            },
+            'settings.erase' => function (array $k): void {
+                [$erased] = $this->settingsSearchingApp('trust')->update($k[0]);
+                $this->assertSame('trus', $erased->settingsEditor->query);
+            },
+            'settings.close' => function (array $k): void {
+                [$cleared] = $this->settingsSearchingApp('trust')->update($k[0]);
+                $this->assertNotNull($cleared->settingsEditor, 'the first Esc clears the search');
+                $this->assertSame('', $cleared->settingsEditor->query);
+
+                [$closed] = $cleared->update($k[0]);
+                $this->assertNull($closed->settingsEditor, 'the second closes the view');
+            },
+
             // ── Menu bar ─────────────────────────────────────────────────
             // Both directions, from a menu in the MIDDLE of the strip. The
             // strip wraps, so from menu 1 every move lands on a different,
@@ -1844,6 +1914,29 @@ final class KeyBindingDriftTest extends TestCase
     private function app(): App
     {
         return App::new($this->provider, 'test-model');
+    }
+
+    /** An App whose settings view reads fixed, file-free sources. */
+    private function settingsSourcedApp(): App
+    {
+        return $this->app()->withSettingsSources(
+            static fn (): SettingsSources => SettingsSources::fromLaunch(null, null, null, null, []),
+        );
+    }
+
+    private function settingsOpenApp(): App
+    {
+        return $this->settingsSourcedApp()->openSettings();
+    }
+
+    private function settingsSearchingApp(string $query): App
+    {
+        [$app] = $this->settingsOpenApp()->update(new KeyMsg(KeyType::Char, '/'));
+        foreach (mb_str_split($query) as $char) {
+            [$app] = $app->update(new KeyMsg(KeyType::Char, $char));
+        }
+
+        return $app;
     }
 
     private function agentApp(int $agents): App

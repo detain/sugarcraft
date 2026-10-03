@@ -804,7 +804,8 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on a blank line would otherwise make one impossible. Works after leading whitespace too: `␣??` leaves `␣?` |
 | `/keys` | The same reference, by **name**: typing `/k` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. (`/help` was a second spelling of this and is now the **slash-command list** instead.) It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Typing `/keys` onto a draft opens the reference exactly when `?` on that draft would — which is the sense in which it is not a hatch. It is *not* interchangeable with `?` more generally: a draft that **is** the command modulo surrounding whitespace (`␣/keys`, `/keys␣`) opens the reference on `Enter`, where `?` would type a character, and on a blank line `?` opens it while `Enter` sends nothing. Submitting `/keys` also clears the input line and `?` does not. Clear the line and either route works |
 | `Enter` | Send |
-| `Enter` (docked pane focused, empty draft) | Open the command palette — the door from a read-only pane to the commands that change settings; a non-empty draft sends exactly as before, from any pane |
+| `Enter` (docked pane focused, empty draft) | Open the command palette — the door from a read-only pane to the commands that change things; on the **Settings** pane it opens the settings view instead (see `Ctrl+,`). A non-empty draft sends exactly as before, from any pane |
+| `Ctrl+,` | Focus the Settings pane; press it again there (or `Enter` on an empty draft, or type `/settings` — alias `/config` — or pick **View settings** from `Ctrl+P` or the `F10` App menu) to open the **settings view**: every setting, by category, with the value this launch runs with, where it came from (default, a project file, your `settings.json` or `config.json`, the environment, a flag), whether an environment variable or flag locks it, and when a change would apply (live, next turn, restart, next launch). `/` searches every category (`/settings compaction` opens with the search filled in), `←`/`→` switch category, `↑`/`↓` move, and `Esc` clears the search, then closes the view. The last tab, **Files**, lists the settings files and whether this launch reads them — including a project's own `.sugar-crush/config.json`, which is *not* a settings layer. The view is read-only for now and writes nothing, so it opens mid-turn too (except as a typed `/settings`, refused mid-turn like every slash command). Many terminals cannot send `Ctrl+,`; the slash command, the palette row and the menu row always work |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
 | `Esc` | Close the palette or the session picker (a filter typed into the picker is cleared first) |
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
@@ -853,8 +854,9 @@ are registered during the render pass, so clicks land on what you see: wheel
 scrolls the transcript, clicking a tool call or a `💭 Thought` row
 expands/collapses it, clicking a session tab switches sessions, clicking a docked pane's header focuses that
 pane, clicking a pane tab on the menu bar toggles its docking (see below),
-clicking a palette/picker row selects it, and clicking the menu bar opens a
-menu. Click-vs-drag is
+clicking a palette/picker row selects it, clicking the menu bar opens a
+menu, and in the settings view a click on a category tab switches to it, a
+click on a row highlights it and the wheel moves the highlight. Click-vs-drag is
 discriminated so a text-selection drag does not fire the zone underneath it.
 
 Dragging across the transcript selects text: the covered rows highlight as
@@ -903,9 +905,10 @@ popup completing as you type; **Agents** is a real dashboard (`c`/`r`/`s`/`q`,
 enter) whenever the picker is open — `Ctrl+S` opens it; **Files** and **Tools**
 are read-only listings — their focus buys you the divider-resized view, the
 `Ctrl+O` peek, and the `Enter` palette door; **Settings** is a read-out panel
-by design — its own footer says the settings change through `/theme`, `/model`
-and the palette, which is exactly what the `Enter` door from that pane hands
-you.
+summarising the live configuration — its footer names its door, and `Enter`
+from that pane (or `/settings`) opens the full settings view, every key with its
+value, source and apply mode; theme and model still change through `/theme`,
+`/model` and the palette.
 
 ### Attachments
 
@@ -951,7 +954,8 @@ taken as written. `Tab` completes the path under the cursor.
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
 `/compact` `/editor` `/exit` (`/quit`) `/fork` `/help` `/init` `/keys` `/layout`
 `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions` `/rename` `/rewind`
-`/rules` `/sessions` `/share` `/theme` `/websearch` `/workflow`.
+`/rules` `/sessions` `/settings` (`/config`) `/share` `/theme` `/websearch`
+`/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
@@ -998,9 +1002,9 @@ terminal rather than letting it run off the edge: the description gives up
 columns first, then the hint, and the name (the row's identity) last.
 
 `/help` lists every command the registry advertises, with its argument hint —
-that is the list above without the three aliases: `/agents`, `/bg` and `/exit`
-appear, `/agent`, `/background` and `/quit` do not.
-`tests/Commands/SlashDispatchTest.php` fails if a fourth unadvertised alias
+that is the list above without the four aliases: `/agents`, `/bg`, `/exit` and
+`/settings` appear, `/agent`, `/background`, `/quit` and `/config` do not.
+`tests/Commands/SlashDispatchTest.php` fails if a fifth unadvertised alias
 turns up without a reason written next to it. `/model` on its own opens the
 same provider picker `Ctrl+P` → **Switch model** opens; `/model <provider>`
 switches straight to one, and an unknown name says so in the transcript instead

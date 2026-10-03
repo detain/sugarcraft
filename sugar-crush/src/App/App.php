@@ -56,6 +56,9 @@ use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\PaneDragController;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
+use SugarCraft\Crush\Tui\Settings\OpenSettingsMsg;
+use SugarCraft\Crush\Tui\Settings\SettingsEditor;
+use SugarCraft\Crush\Tui\Settings\SettingsSources;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\ZoneClickTracker;
 use DateTimeImmutable;
@@ -249,6 +252,21 @@ final class App implements Model
          * state — the renderer clamps it to what the terminal can hold.
          */
         public readonly ?int $agentSplitCols = null,
+        /**
+         * The full-band settings view while it is open (roadmap N-P1), null
+         * otherwise. Shell state like the skill picker: it writes no history
+         * and sends nothing to the model, so it may open while a turn runs.
+         */
+        public readonly ?SettingsEditor $settingsEditor = null,
+        /**
+         * What the settings view reads, as a factory run each time it opens
+         * (`\Closure(): SettingsSources`). The launch supplies one built with
+         * its own project-trust answer and parsed flags; null falls back to
+         * {@see SettingsSources::bestEffort()}, which reads the user's files and
+         * the environment and says on its Files tab that the project's files
+         * were not consulted.
+         */
+        public readonly ?\Closure $settingsSources = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -496,6 +514,35 @@ final class App implements Model
      * nothing else was on — and nothing docked right, where today's sidebar
      * only ever renders while its pane has focus.
      */
+    /** @param ?\Closure(): SettingsSources $v what the settings view reads when it opens */
+    public function withSettingsSources(?\Closure $v): self
+    {
+        return $this->mutate(settingsSources: $v);
+    }
+
+    /**
+     * Open the settings view, its search pre-filled with `$query`.
+     *
+     * The values are resolved NOW, once: the view explains the launch's
+     * settings as they stand when it is opened, and re-reading files on every
+     * keystroke would be I/O in the update path for nothing.
+     */
+    public function openSettings(string $query = ''): self
+    {
+        $sources = $this->settingsSources !== null
+            ? ($this->settingsSources)()
+            : SettingsSources::bestEffort($this->root);
+
+        MenuBar::closeMenu();
+
+        return $this->mutate(settingsEditor: SettingsEditor::open($sources, $query));
+    }
+
+    public function closeSettings(): self
+    {
+        return $this->settingsEditor === null ? $this : $this->mutate(settingsEditor: null);
+    }
+
     public function dock(): DockLayout
     {
         return $this->dock ?? self::defaultDock();
@@ -1175,6 +1222,7 @@ final class App implements Model
     {
         return match (true) {
             $msg instanceof WindowSizeMsg => $this->handleWindowSize($msg),
+            $msg instanceof OpenSettingsMsg => [$this->openSettings($msg->query), null],
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
             $msg instanceof DockPaneMsg,
@@ -1335,6 +1383,19 @@ final class App implements Model
             return $this->delegateToChat($msg);
         }
 
+        // The settings view covers the band: the wheel moves its highlight, and
+        // a click that lands on none of its zones (or the menu's) reaches no
+        // chat — there is none on screen to receive it.
+        if ($this->settingsEditor !== null && $msg instanceof MouseWheelMsg) {
+            $notch = match ($msg->button) {
+                MouseButton::WheelDown => 1,
+                MouseButton::WheelUp => -1,
+                default => 0,
+            };
+
+            return [$notch === 0 ? $this : $this->mutate(settingsEditor: $this->settingsEditor->wheel($notch)), null];
+        }
+
         // The wheel scrolls whatever scrollable surface is under the pointer —
         // a docked pane, or the live-agent column — and only there; anywhere
         // else it stays the transcript's, as it always was. Down shows more
@@ -1379,7 +1440,7 @@ final class App implements Model
         $click = self::chromeClickTracker()->track($event, $zone);
 
         if ($click === null) {
-            return $zone === null ? $this->delegateToChat($msg) : [$this, null];
+            return $zone === null && $this->settingsEditor === null ? $this->delegateToChat($msg) : [$this, null];
         }
 
         return $this->dispatchChromeClick($click->zone->id);
@@ -1777,6 +1838,13 @@ final class App implements Model
      */
     private function dispatchChromeClick(string $zoneId): array
     {
+        if (str_starts_with($zoneId, SettingsEditor::ZONE_PREFIX)) {
+            return [
+                $this->settingsEditor === null ? $this : $this->mutate(settingsEditor: $this->settingsEditor->click($zoneId)),
+                null,
+            ];
+        }
+
         $titles = MenuBar::MENU_TITLE_ZONE_PREFIX;
         if (str_starts_with($zoneId, $titles)) {
             MenuBar::openMenu((int) substr($zoneId, strlen($titles)));
@@ -1898,6 +1966,16 @@ final class App implements Model
             return [$origin === null ? $this : $this->mutate(dock: $origin), null];
         }
 
+        // The settings view is MODAL while it is open: every key is its own,
+        // so nothing types into a chat it covers. Three exceptions keep the
+        // app drivable — Ctrl+C still quits (Chat's binding), and F10 and an
+        // open menu keep the menu bar the view leaves on screen.
+        if ($this->settingsEditor !== null && !self::settingsEditorYields($msg)) {
+            $next = $this->settingsEditor->update($msg);
+
+            return [$next === null ? $this->closeSettings() : $this->mutate(settingsEditor: $next), null];
+        }
+
         $handled = $this->dispatchKey($msg);
 
         if ($handled === null) {
@@ -1907,6 +1985,17 @@ final class App implements Model
         [$next, $cmd] = $handled;
 
         return $cmd === null ? [$next, null] : $next->consumeShellCmd($cmd);
+    }
+
+    /**
+     * Whether a key goes past the open settings view: the quit chord to Chat,
+     * the menu key and anything an open menu answers to the shell.
+     */
+    private static function settingsEditorYields(KeyMsg $msg): bool
+    {
+        return MenuBar::getActiveMenu() > 0
+            || $msg->type === KeyType::F10
+            || ($msg->type === KeyType::Char && ($msg->rune === "\x03" || ($msg->ctrl && $msg->rune === 'c')));
     }
 
     /**
@@ -1972,7 +2061,9 @@ final class App implements Model
 
         foreach (CommandRegistry::all() as $spec) {
             if ($spec->label() === $selected->item) {
-                return $this->runRegistryCommand($spec->name);
+                // Anything but the settings row answers in the chat, which the
+                // settings view would cover — so the view steps aside first.
+                return ($spec->name === 'settings' ? $this : $this->closeSettings())->runRegistryCommand($spec->name);
             }
         }
 
@@ -2014,6 +2105,13 @@ final class App implements Model
 
         if ($spec === null) {
             return [$this->withError("Unknown command '{$name}'."), null];
+        }
+
+        // The settings view is shell state that writes nothing, so it opens
+        // here, mid-turn included, rather than through Chat's command entry
+        // point — which refuses every command while a turn runs.
+        if ($spec->name === 'settings') {
+            return [$this->openSettings(), null];
         }
 
         if ($this->chat === null) {
@@ -2479,6 +2577,8 @@ final class App implements Model
             expandedAgents: array_key_exists('expandedAgents', $changes) ? $changes['expandedAgents'] : $this->expandedAgents,
             paneScroll: array_key_exists('paneScroll', $changes) ? $changes['paneScroll'] : $this->paneScroll,
             agentSplitCols: array_key_exists('agentSplitCols', $changes) ? $changes['agentSplitCols'] : $this->agentSplitCols,
+            settingsEditor: array_key_exists('settingsEditor', $changes) ? $changes['settingsEditor'] : $this->settingsEditor,
+            settingsSources: array_key_exists('settingsSources', $changes) ? $changes['settingsSources'] : $this->settingsSources,
         );
     }
 }

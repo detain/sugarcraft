@@ -559,6 +559,12 @@ final class Renderer
         // Pane::Agents is painted through renderSide()/AgentsPane while some
         // other pane holds focus — the side-by-side seam the sidebar
         // docblocks named — and focusing Agents still takes the full band.)
+        // The settings view (N-P1) takes the band the same way, ahead of any
+        // pane focus: it is modal while open, Agents included.
+        if ($a->settingsEditor !== null) {
+            return self::renderSettingsEditor($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
         if ($a->pane === Pane::Agents) {
             return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
@@ -808,6 +814,69 @@ final class Renderer
             self::lineCount($frame),
             false,
         );
+
+        return new View($frame);
+    }
+
+    /**
+     * The settings-view frame (roadmap N-P1): shell chrome around the full-band
+     * {@see \SugarCraft\Crush\Tui\Settings\SettingsEditor}.
+     *
+     * {@see renderAgentDashboard()}'s discipline — held to `$rows` and `$cols`,
+     * the hosted chat's zones dropped because its frame is not on screen — with
+     * two additions: the view's own tab and row zones are recorded in the
+     * chrome registry (as `settings:` ids, the dock-row technique), and the
+     * menu's dropdown is painted, because the menu bar stays live over the view.
+     */
+    private static function renderSettingsEditor(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $editor = $a->settingsEditor;
+        \assert($editor !== null);
+        $theme = $a->theme();
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $editor->view($theme, $cols, $paneRows);
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+        $frame = self::overlayDropdown($frame, MenuBar::renderDropdown($theme), MenuBar::activeMenuColumn(), self::lineCount($menuBar));
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        $byRow = [];
+        foreach ($editor->zones($theme, $cols, $paneRows) as [$row, $from, $to, $id]) {
+            $to = min($to, $cols);
+            if ($to <= $from) {
+                continue;
+            }
+
+            $byRow[$bandTop + $row][] = [$from, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $from))];
+        }
+
+        $zoneRows = [];
+        foreach ($byRow as $absRow => $spans) {
+            usort($spans, static fn (array $x, array $y): int => $x[0] <=> $y[0]);
+            $zoneRows[$absRow] = self::scratchRow($cols, $spans);
+        }
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $zoneRows);
 
         return new View($frame);
     }

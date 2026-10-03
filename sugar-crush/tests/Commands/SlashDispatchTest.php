@@ -189,7 +189,9 @@ final class SlashDispatchTest extends TestCase
         //   testBothAgentSpellingsStillDispatch() for what bare `/agent`
         //   actually does.
         // - `background`: the long form of the `bg` row, same story.
-        $unadvertisedAliases = ['quit', 'agent', 'background'];
+        // - `config`: the spelling other CLIs teach for `/settings` (N-P1);
+        //   reserved in CONTROL_PLANE beside the row it aliases.
+        $unadvertisedAliases = ['quit', 'agent', 'background', 'config'];
 
         $advertised = array_map(static fn(CommandSpec $spec): string => $spec->name, CommandRegistry::slashCommands());
         $dispatched = [];

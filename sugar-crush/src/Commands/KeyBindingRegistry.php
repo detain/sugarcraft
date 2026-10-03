@@ -65,6 +65,8 @@ final class KeyBindingRegistry
     public const CONTEXT_AGENTS = 'Agent view';
     /** Keys the Ctrl+S skill picker answers while it is open. */
     public const CONTEXT_SKILLS = 'Skill picker';
+    /** Keys the full-band settings view (`/settings`) answers while it is open. */
+    public const CONTEXT_SETTINGS = 'Settings view';
     /** Keys the F10 menu bar answers while it is open. */
     public const CONTEXT_MENU = 'Menu bar';
     /** Mouse gestures, when the terminal reports them. */
@@ -86,6 +88,7 @@ final class KeyBindingRegistry
             ...self::permission(),
             ...self::agents(),
             ...self::skills(),
+            ...self::settings(),
             ...self::menu(),
             ...self::mouse(),
         ];
@@ -490,18 +493,25 @@ final class KeyBindingRegistry
             // Enter keeps its chat meaning (send) everywhere it had it; this
             // row is the one new door: with a dockable pane focused and the
             // draft empty, Enter opens the palette, which is how a read-only
-            // pane (Files, Tools, Settings) reaches the commands that change
-            // settings — its panel footer says so (`/theme`, `/model`).
+            // list pane (Files, Tools, Skills) reaches the commands. The
+            // Settings pane's door is the settings view instead (next row);
+            // the Agents dashboard answers Enter itself.
             KeyBinding::new(
                 'shell.pane-palette',
                 'Enter',
-                'Open the palette from a docked pane (empty draft)',
+                'Open the palette from a list pane (empty draft)',
+                $c,
+            ),
+            KeyBinding::new(
+                'shell.settings-open',
+                'Enter',
+                'Open settings view from its pane (empty draft)',
                 $c,
             ),
             KeyBinding::new('shell.new-session', 'Ctrl+N', 'Start a fresh session', $c),
             KeyBinding::new('shell.palette', 'Ctrl+K', 'Open the command palette', $c),
             KeyBinding::new('shell.skills', 'Ctrl+S', 'Open the skill picker', $c),
-            KeyBinding::new('shell.settings', 'Ctrl+,', 'Focus the settings pane', $c),
+            KeyBinding::new('shell.settings', 'Ctrl+,', 'Focus the settings pane; again to open the view', $c),
             KeyBinding::new(
                 'shell.group-input',
                 'Ctrl+G',
@@ -590,7 +600,12 @@ final class KeyBindingRegistry
 
         return [
             KeyBinding::new('permission.once', 'y', 'Allow this one call', $c),
-            KeyBinding::new('permission.always', 'a', 'Ask to allow this call for the whole session', $c),
+            // "Calls like this one", not "this call" or "every call to this
+            // tool": a confirmed grant is remembered as a PATTERN on the engine
+            // path (Permissions\SessionPermissionMemo — `git status` grants
+            // `Bash(git status *)`, an edit grants that path) and as the exact
+            // call on Chat's own path, which is a call like itself.
+            KeyBinding::new('permission.always', 'a', 'Ask to allow calls like this one for the session', $c),
             KeyBinding::new('permission.deny', 'n', 'Refuse the call (or Esc)', $c),
             KeyBinding::new('permission.rearm', 'Enter', 'Make the answer keys live again', $c),
         ];
@@ -636,6 +651,29 @@ final class KeyBindingRegistry
             KeyBinding::new('skills.move', '↑ / ↓', 'Move the highlighted skill (or k / j)', $c),
             KeyBinding::new('skills.select', 'Enter', 'Enable the highlighted skill', $c),
             KeyBinding::new('skills.close', 'Esc', 'Dismiss the picker', $c),
+        ];
+    }
+
+    /**
+     * The settings view (roadmap N-P1). Read-only in this phase, so there is no
+     * save or reset key — and decision D7 keeps Ctrl+S / Ctrl+R off it in any
+     * case, because both are shell chords already (`shell.skills`, the picker).
+     * While the search box has focus every printable key types into it; the
+     * `(or …)` letters below apply outside it.
+     *
+     * @return list<KeyBinding>
+     */
+    private static function settings(): array
+    {
+        $c = self::CONTEXT_SETTINGS;
+
+        return [
+            KeyBinding::new('settings.move', '↑ / ↓', 'Move between settings (or k / j)', $c),
+            KeyBinding::new('settings.category', '← / →', 'Switch category (or h / l)', $c),
+            KeyBinding::new('settings.search', '/', 'Search every category as you type', $c),
+            KeyBinding::new('settings.search-keep', 'Enter', 'Stop typing the search, keep its matches', $c),
+            KeyBinding::new('settings.erase', 'Backspace', 'Erase the last character of the search', $c),
+            KeyBinding::new('settings.close', 'Esc', 'Clear the search, then close the view', $c),
         ];
     }
 
