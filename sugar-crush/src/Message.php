@@ -19,6 +19,18 @@ use SugarCraft\Crush\Permissions\DenialKind;
 final class Message implements \JsonSerializable
 {
     /**
+     * WHICH ROW THIS IS, across withers (roadmap O-2b, the W1-b/W2-a live
+     * identity handoff). Chat is immutable and every wither returns a new
+     * instance - a placeholder finished by {@see withToolResults()}, a shown
+     * tool row stamped by {@see withStepId()} - so the store, which gives a
+     * live row its id/ref at its first save, cannot key that memo by
+     * instance: each copy would read as a new row and burn a fresh ref. It
+     * keys it by this token instead, minted once per constructed row and
+     * carried by every wither. See {@see rowKey()}.
+     */
+    private readonly object $rowKey;
+
+    /**
      * @param list<Attachment> $attachments
      * @param list<ToolCall> $toolCalls
      * @param list<ToolResult> $toolResults
@@ -185,7 +197,10 @@ final class Message implements \JsonSerializable
          * {@see \SugarCraft\Crush\Session\EnhancedSessionStore::saveTranscript()}
          * records it the first time the row is saved, the row carries it from
          * the next {@see \SugarCraft\Crush\Session\EnhancedSessionStore::loadTranscript()}
-         * on, and every later save keeps it - so checkpoints, `/rewind`, server
+         * on, and every later save keeps it. Until that reload a live row's
+         * field stays null and its identity is read through
+         * {@see \SugarCraft\Crush\Host\TranscriptStore::identityOf()}, which
+         * follows the row across withers by {@see rowKey()} - so checkpoints, `/rewind`, server
          * events and pruning ledgers can name one row without counting
          * positions, which shift as soon as anything is compacted, inserted or
          * rewound.
@@ -235,7 +250,16 @@ final class Message implements \JsonSerializable
          * @var list<Message>
          */
         public readonly array $turnTranscript = [],
-    ) {}
+        /**
+         * The row-identity token {@see rowKey()} returns. Never pass one:
+         * null mints a fresh token, which is what a new row is, and
+         * {@see mutate()} passes the original's on so a wither's copy stays
+         * the same row. Not a promoted property, so it is not public state.
+         */
+        ?object $rowKey = null,
+    ) {
+        $this->rowKey = $rowKey ?? new \stdClass();
+    }
 
     public static function user(string $content, ?int $now = null): self
     {
@@ -581,9 +605,10 @@ final class Message implements \JsonSerializable
      * $ref's docblocks. Written by
      * {@see \SugarCraft\Crush\Session\EnhancedSessionStore::loadTranscript()}'s
      * rows (through {@see fromArray()}). A row minted in this process gets
-     * its identity from the store's first save of it instead (by instance, so
-     * a wither's copy is a new row to it). An empty id clears it; a ref below
-     * 1 clears it.
+     * its identity from the store's first save of it instead, keyed by its
+     * {@see rowKey()} so a wither's copy is the same row to it, and read back
+     * live through {@see \SugarCraft\Crush\Host\TranscriptStore::identityOf()}.
+     * An empty id clears it; a ref below 1 clears it.
      */
     public function withIdentity(?string $id, ?int $ref): self
     {
@@ -767,7 +792,23 @@ final class Message implements \JsonSerializable
             'stepId' => $this->stepId,
             'userVisible' => $this->userVisible,
             'turnTranscript' => $this->turnTranscript,
+            'rowKey' => $this->rowKey,
         ], $changes));
+    }
+
+    /**
+     * An opaque token naming this logical row: the same object on every copy
+     * a wither makes of it, a different one on every row built afresh
+     * (including a {@see fromArray()} revival, which carries its identity in
+     * $id/$ref instead). {@see \SugarCraft\Crush\Session\EnhancedSessionStore}
+     * keys the identity it gives a not-yet-reloaded row by it, which is what
+     * keeps a live row's id stable across saves
+     * ({@see \SugarCraft\Crush\Host\TranscriptStore::identityOf()}).
+     * Compare it by identity only; it carries no data.
+     */
+    public function rowKey(): object
+    {
+        return $this->rowKey;
     }
 
     /**

@@ -695,6 +695,29 @@ persists those refs. `Message` also carries `stepId`, the engine step a row came
 from, and `userVisible`, which hides a row from the transcript without hiding it
 from the model (the twin of `uiOnly`). Legacy rows have no `stepId`.
 
+**`Host\TranscriptStore` owns the transcript on disk.** Saving (debounced or
+immediate), loading with the crash repairs (a "running" placeholder comes back
+as an interrupted row), the single-writer `SessionLock`, and each row's
+identity all live there, and `Chat` delegates to it. `Chat` reaches it through
+the workspace's service locator (`Host\WorkspaceContext::service()`), so a host
+without a screen saves and resumes a transcript exactly as the TUI does. A row
+minted in this process carries no id until the session is reloaded, but
+`TranscriptStore::identityOf()` answers the id its first save gave it, and
+`TranscriptStore::identify()` allocates one ahead of that save. The store keys
+that memory by `Message::rowKey()`, a token every wither carries forward, so a
+placeholder finished by `withToolResults()` or a row stamped with its step keeps
+its id instead of spending a new ref on every save.
+
+**`Host\EventLog` is the durable event log** a host writes before it
+broadcasts, in a `session_events` table in the same `session.db` (`session_id`,
+`seq`, `ts` in milliseconds, `type`, a JSON `payload`). `seq` is monotonic per
+session and never reused: it is `MAX(seq) + 1` inside the store's
+`BEGIN IMMEDIATE` transaction, so it continues across a restart. The log keeps
+the newest 20,000 events per session (`EventLog::DEFAULT_RETAIN`), and
+`EventLog::isReplayable()` tells a reconnecting reader whether it can replay
+from its cursor or must resync from a snapshot. Deleting or pruning a session
+takes its events with it, and a `/branch` fork starts its own log at seq 1.
+
 Each `sessions` row carries a `Session\SessionKind` (`main`, `branch`,
 `subagent`, `background`) and an optional `parent_id`: `/branch` records the
 session it forked from, and child rows record the session that spawned them.

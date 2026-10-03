@@ -483,6 +483,29 @@ final class EnhancedSessionStore
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
         ');
+
+        // The durable per-session event log (roadmap O-2b, Appendix O §4.8 /
+        // §6.4): every event a host broadcasts as durable is written here
+        // first, under a `seq` that is monotonic per session and never reused,
+        // so a client that reconnects asks for "everything after seq N" and
+        // gets exactly what it missed — across a server restart too, since
+        // the next seq is read back from MAX(seq). The primary key IS the
+        // replay index (`WHERE session_id = ? AND seq > ?`), so no second
+        // index is kept. The FK cascade means a deleted or pruned session
+        // takes its events with it, exactly as it takes its checkpoints.
+        // Created here because this runs on every construction, so an older
+        // database gains the table the next time it is opened.
+        $this->pdo->exec('
+            CREATE TABLE IF NOT EXISTS session_events (
+                session_id TEXT NOT NULL,
+                seq INTEGER NOT NULL,
+                ts INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                PRIMARY KEY (session_id, seq),
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            ) WITHOUT ROWID
+        ');
     }
 
     /**
@@ -1372,17 +1395,33 @@ final class EnhancedSessionStore
     private array $transcriptAllocators = [];
 
     /**
-     * The identity each {@see Message} INSTANCE was given by a save, so the
-     * same in-memory row is saved under the same id every time even though
-     * Chat - immutable, a new instance per change - never holds a stamped
-     * copy. Store-wide rather than per session: a `/branch` fork's rows are
+     * The identity each live ROW was given by a save (or by
+     * {@see assignIdentity()}), keyed by the row's {@see Message::rowKey()}
+     * token, so the same in-memory row is saved under the same id every time
+     * even though Chat - immutable, a new instance per change - never holds a
+     * stamped copy. Keyed by the token rather than the instance (roadmap
+     * O-2b) because every wither makes a new instance: a placeholder finished
+     * by `withToolResults()` or a tool row stamped by `withStepId()` is the
+     * same row, and keyed by instance it was given a fresh ref on its next
+     * save. Store-wide rather than per session: a `/branch` fork's rows are
      * its parent's rows and keep their parent's identities. Weak, so a row
      * dropped from every history takes its entry with it (its ref stays
-     * spent). Created lazily: the constructor is not this region's.
+     * spent). Created lazily.
+     *
+     * @var \WeakMap<object, array{0: string, 1: int}>|null
+     */
+    private ?\WeakMap $givenIdentities = null;
+
+    /**
+     * The rare second copy of one row in one history - the same
+     * {@see Message::rowKey()} twice, which a caller that appends a row and a
+     * wither of it gets. The first occurrence keeps the token's identity; each
+     * later one is a row of its own, keyed by INSTANCE here so it too is
+     * stable across saves, and never shares an id with the first.
      *
      * @var \WeakMap<Message, array{0: string, 1: int}>|null
      */
-    private ?\WeakMap $givenIdentities = null;
+    private ?\WeakMap $duplicateIdentities = null;
 
     /**
      * Store $messages as the session's current transcript, replacing the last
@@ -1402,7 +1441,7 @@ final class EnhancedSessionStore
      * {@see TRANSCRIPT_SCHEMA_VERSION}). A row that already carries its
      * `id`/`ref` keeps them; one that does not is given the next ref from the
      * session's {@see \SugarCraft\Crush\Support\MessageIdAllocator} - the
-     * same one for the same {@see Message} instance on every save, see
+     * same one for the same row on every save, wither copies included, see
      * {@see $givenIdentities} - and that identity is written to
      * the state's `identities` map, by position, instead of into the row. The
      * row's own bytes are left alone on purpose: its blob is the one the
@@ -1433,23 +1472,30 @@ final class EnhancedSessionStore
             $messages = array_values($messages);
             $allocator = $this->transcriptAllocator($sessionId);
             $given = $this->givenIdentities ??= new \WeakMap();
+            $duplicates = $this->duplicateIdentities ??= new \WeakMap();
             // Every ref already held - carried, or given by an earlier save -
             // is observed BEFORE any is allocated, so a fresh row early in the
             // list cannot take a ref a later row holds.
             foreach ($messages as $message) {
-                $allocator->observe(
-                    ($message instanceof Message ? ($given[$message][1] ?? null) : null)
-                        ?? self::carriedIdentity($message)[1],
-                );
+                if ($message instanceof Message) {
+                    $allocator->observe($given[$message->rowKey()][1] ?? null);
+                    $allocator->observe($duplicates[$message][1] ?? null);
+                }
+                $allocator->observe(self::carriedIdentity($message)[1]);
             }
             $identities = [];
+            $seenRows = [];
             foreach ($messages as $i => $message) {
                 [$id, $ref] = self::carriedIdentity($message);
                 if ($id !== null && $ref !== null) {
                     continue;
                 }
                 if ($message instanceof Message) {
-                    $identities[$i] = $given[$message] ??= $allocator->identityFor($id, $ref);
+                    $key = $message->rowKey();
+                    $identities[$i] = isset($seenRows[spl_object_id($key)])
+                        ? ($duplicates[$message] ??= $allocator->identityFor($id, $ref))
+                        : ($given[$key] ??= $allocator->identityFor($id, $ref));
+                    $seenRows[spl_object_id($key)] = true;
                 } elseif (\is_array($message)) {
                     $identities[$i] = $allocator->identityFor($id, $ref);
                 }
@@ -1610,6 +1656,167 @@ final class EnhancedSessionStore
             \is_string($row['id'] ?? null) && $row['id'] !== '' ? $row['id'] : null,
             \is_int($row['ref'] ?? null) && $row['ref'] >= 1 ? $row['ref'] : null,
         ];
+    }
+
+    /**
+     * The `[id, ref]` $message has, or null when it has none yet: the identity
+     * it carries (a reloaded row), else the one a save or
+     * {@see assignIdentity()} gave its row (roadmap O-2b).
+     *
+     * This is how a LIVE row's identity is read. Chat never holds a stamped
+     * copy of a row it minted - the field stays null until the session is
+     * reloaded - but the store remembers what it gave the row, by its
+     * {@see Message::rowKey()}, so every wither of it answers the same. A row
+     * that has been saved only as a duplicate of another row answers with its
+     * own, instance-keyed identity.
+     *
+     * @return array{0: string, 1: int}|null
+     */
+    public function identityOf(Message $message): ?array
+    {
+        [$id, $ref] = self::carriedIdentity($message);
+        if ($id !== null && $ref !== null) {
+            return [$id, $ref];
+        }
+
+        return $this->duplicateIdentities[$message] ?? $this->givenIdentities[$message->rowKey()] ?? null;
+    }
+
+    /**
+     * $message's identity, allocated now from $sessionId's allocator when its
+     * row has none yet - so a host can name a row in an event BEFORE the
+     * debounced save reaches it, and that save then writes the same identity
+     * (it observes every given ref before allocating any).
+     *
+     * @return array{0: string, 1: int}
+     */
+    public function assignIdentity(string $sessionId, Message $message): array
+    {
+        $known = $this->identityOf($message);
+        if ($known !== null) {
+            return $known;
+        }
+
+        $given = $this->givenIdentities ??= new \WeakMap();
+        [$id, $ref] = self::carriedIdentity($message);
+
+        return $given[$message->rowKey()] = $this->transcriptAllocator($sessionId)->identityFor($id, $ref);
+    }
+
+    /**
+     * Append one durable event to $sessionId's log and return its `seq`
+     * (roadmap O-2b; the `session_events` table, Appendix O §6.4).
+     *
+     * The seq is `MAX(seq) + 1` read and written inside one `BEGIN IMMEDIATE`
+     * transaction, so two writers on one database can never take the same
+     * number and a restarted process continues where the log left off. It is
+     * never reused: retention trims from the OLD end only, so MAX survives.
+     *
+     * The session row is recreated if it has gone, for the reason
+     * {@see saveTranscript()} recreates it - the foreign key would otherwise
+     * refuse the write.
+     *
+     * Retention: once the log holds more than $retain events the oldest are
+     * dropped in the same transaction; a reader whose cursor fell behind
+     * {@see sessionEventBounds()}'s oldest seq must resync from a snapshot.
+     * $retain below 1 keeps everything.
+     *
+     * @param array<string, mixed> $payload JSON-encodable; invalid UTF-8 is substituted, never fatal
+     * @param int|null $tsMs milliseconds since the epoch; null is now
+     *
+     * @throws \InvalidArgumentException on an empty type
+     * @throws \JsonException on a payload JSON cannot encode at all (e.g. INF)
+     */
+    public function appendSessionEvent(
+        string $sessionId,
+        string $type,
+        array $payload = [],
+        ?int $tsMs = null,
+        int $retain = 0,
+    ): int {
+        if (trim($type) === '') {
+            throw new \InvalidArgumentException('A session event needs a non-empty type.');
+        }
+
+        $encoded = json_encode(
+            $payload === [] ? new \stdClass() : $payload,
+            JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+        );
+        $tsMs ??= (int) floor(microtime(true) * 1000);
+
+        return $this->writeTransaction(function () use ($sessionId, $type, $encoded, $tsMs, $retain): int {
+            if ($this->sessionStore->getSession($sessionId) === null) {
+                $this->sessionStore->createSession($sessionId, 'sugarcrush', 'unknown');
+            }
+
+            $max = $this->pdo->prepare('SELECT COALESCE(MAX(seq), 0) FROM session_events WHERE session_id = ?');
+            $max->execute([$sessionId]);
+            $seq = (int) $max->fetchColumn() + 1;
+            $max->closeCursor();
+
+            $this->pdo->prepare('
+                INSERT INTO session_events (session_id, seq, ts, type, payload) VALUES (?, ?, ?, ?, ?)
+            ')->execute([$sessionId, $seq, $tsMs, $type, $encoded]);
+
+            if ($retain >= 1 && $seq > $retain) {
+                $this->pdo->prepare('DELETE FROM session_events WHERE session_id = ? AND seq <= ?')
+                    ->execute([$sessionId, $seq - $retain]);
+            }
+
+            return $seq;
+        });
+    }
+
+    /**
+     * $sessionId's events with a seq above $afterSeq, oldest first, at most
+     * $limit of them - one page of a replay. The rows are fetched in full
+     * before they are returned, so no read cursor stays open across a later
+     * INSERT (the WAL note on this store).
+     *
+     * @return list<array{seq: int, ts: int, type: string, payload: array<string, mixed>}>
+     */
+    public function sessionEvents(string $sessionId, int $afterSeq = 0, int $limit = 200): array
+    {
+        $stmt = $this->pdo->prepare('
+            SELECT seq, ts, type, payload FROM session_events
+            WHERE session_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?
+        ');
+        $stmt->bindValue(1, $sessionId);
+        $stmt->bindValue(2, $afterSeq, PDO::PARAM_INT);
+        $stmt->bindValue(3, max(1, $limit), PDO::PARAM_INT);
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+
+        return array_map(static function (array $row): array {
+            $payload = json_decode((string) $row['payload'], true);
+
+            return [
+                'seq' => (int) $row['seq'],
+                'ts' => (int) $row['ts'],
+                'type' => (string) $row['type'],
+                'payload' => \is_array($payload) ? $payload : [],
+            ];
+        }, $rows);
+    }
+
+    /**
+     * `[oldest, latest]` seq in $sessionId's log: oldest is null when the log
+     * is empty, latest is 0 then. A replay cursor below oldest - 1 has lost
+     * events to retention and must resync from a snapshot (Appendix O §6.8).
+     *
+     * @return array{0: ?int, 1: int}
+     */
+    public function sessionEventBounds(string $sessionId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT MIN(seq), MAX(seq) FROM session_events WHERE session_id = ?');
+        $stmt->execute([$sessionId]);
+        $row = $stmt->fetch(PDO::FETCH_NUM);
+        $stmt->closeCursor();
+
+        $oldest = \is_array($row) && $row[0] !== null ? (int) $row[0] : null;
+
+        return [$oldest, $oldest === null ? 0 : (int) $row[1]];
     }
 
     /**

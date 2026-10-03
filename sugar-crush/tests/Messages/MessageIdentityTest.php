@@ -87,6 +87,44 @@ final class MessageIdentityTest extends TestCase
         }
     }
 
+    /**
+     * Roadmap O-2b: the row token the store keys a live row's identity by is
+     * carried by EVERY wither (so a copy is the same row) and minted afresh by
+     * every construction, revival included (so two rows never share one). It
+     * carries no data, so two equal rows still compare equal.
+     */
+    public function testEveryWitherCarriesTheRowKeyAndEveryConstructionMintsOne(): void
+    {
+        $row = Message::assistant('a');
+        $key = $row->rowKey();
+
+        $copies = [
+            'attachFile' => $row->attachFile('/tmp/x'),
+            'attachImage' => $row->attachImage('/tmp/x.png'),
+            'withToolCalls' => $row->withToolCalls([new ToolCall('bash', [], 'c1')]),
+            'withToolResults' => $row->withToolResults([ToolResult::ok('bash', 'ok', 'c1')]),
+            'withReasoning' => $row->withReasoning('r'),
+            'withImage' => $row->withImage('bytes', 'kitty'),
+            'withUsage' => $row->withUsage(Usage::reported(1, 0.0, 1, 0)),
+            'withLengthStopped' => $row->withLengthStopped(true),
+            'withStepsTruncated' => $row->withStepsTruncated(true),
+            'withUiOnly' => $row->withUiOnly(),
+            'withLoopGuardStoppedBy' => $row->withLoopGuardStoppedBy('Read'),
+            'withAttachmentNotice' => $row->withAttachmentNotice('n'),
+            'withIdentity' => $row->withIdentity('m_s_1', 1),
+            'withStepId' => $row->withStepId('step-1'),
+            'withUserVisible' => $row->withUserVisible(false),
+            'withTurnTranscript' => $row->withTurnTranscript([Message::user('nudge')]),
+        ];
+        foreach ($copies as $wither => $copy) {
+            $this->assertSame($key, $copy->rowKey(), "{$wither}() lost the row key");
+        }
+
+        $this->assertNotSame($key, Message::assistant('a')->rowKey(), 'a new row is a new row');
+        $this->assertNotSame($key, Message::fromArray($row->jsonSerialize())->rowKey(), 'a revival is a row of its own');
+        $this->assertEquals(Message::assistant('a', 5), Message::assistant('a', 5), 'the token carries no data');
+    }
+
     public function testWithToolResultsStillClearsThePlaceholderFields(): void
     {
         $placeholder = Message::toolRunning(new ToolCall('Bash', ['command' => 'ls'], 'c1'))->withIdentity('m_s_1', 1);

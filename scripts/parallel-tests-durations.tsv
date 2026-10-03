@@ -243,6 +243,7 @@ sugar-crush/tests/Permissions/ForgedRefusalTest.php	0.820	13
 sugar-crush/tests/Backend/CommandBackendTest.php	0.809	15
 sugar-crush/tests/Integration/FanOutResearchTest.php	0.806	1
 sugar-crush/tests/Backend/ResultFrameTranscriptCodecTest.php	0.800	4
+sugar-crush/tests/Host/TranscriptStoreTest.php	0.800	12
 sugar-crush/tests/StdinConstantReaderCensusTest.php	0.796	23
 sugar-crush/tests/Backend/EngineBackendLengthStopTest.php	0.795	34
 sugar-crush/tests/Integration/StreamingWiringTest.php	0.787	20
@@ -296,6 +297,7 @@ sugar-crush/tests/App/SidePaneRowClickTest.php	0.415	7
 sugar-crush/tests/Support/TimedFileLockTest.php	0.409	4
 sugar-crush/tests/Agents/ForeignAgentPresetRegistryTest.php	0.403	39
 sugar-crush/tests/Agents/MailboxTest.php	0.401	22
+sugar-crush/tests/Host/EventLogTest.php	0.400	8
 sugar-crush/tests/Tools/BuiltIn/EditTest.php	0.398	15
 sugar-crush/tests/Cli/BootstrapClaudeMcpGrantTest.php	0.394	10
 sugar-crush/tests/Config/TrustKeyDocumentationDriftTest.php	0.394	12
@@ -317,6 +319,7 @@ sugar-crush/tests/Chat/InterimNarrationKeptTest.php	0.300	4
 sugar-crush/tests/Backend/ChildChannelVerdictTest.php	0.300	2
 sugar-crush/tests/Runtime/SpillToFileTest.php	0.300	4
 sugar-crush/tests/Tui/SessionPickerGoldenTest.php	0.300	10
+sugar-crush/tests/Session/SessionEventsTableTest.php	0.300	7
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
@@ -530,7 +533,7 @@ sugar-crush/tests/Permissions/PermissionGateAcceptEditsTest.php	0.030	27
 sugar-crush/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.030	16
 sugar-crush/tests/Skills/TruncatesOutputNudgeMarginDocTest.php	0.030	4
 sugar-crush/tests/Hooks/BashEscapeDenyHookTest.php	0.030	55
-sugar-crush/tests/Messages/MessageIdentityTest.php	0.030	13
+sugar-crush/tests/Messages/MessageIdentityTest.php	0.030	14
 sugar-crush/tests/Context/TurnContextBlockTest.php	0.030	9
 sugar-crush/tests/Config/Settings/SettingsResolverTest.php	0.030	14
 sugar-crush/tests/Tools/McpToolBridgeTest.php	0.029	54

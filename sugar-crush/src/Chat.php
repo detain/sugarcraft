@@ -1784,6 +1784,10 @@ final class Chat implements Model
      * full list and what a SIGKILL can still lose.
      *
      * A READ-ONLY session never saves (audit SES-3(b)): another TUI owns it.
+     *
+     * The write itself is {@see \SugarCraft\Crush\Host\TranscriptStore}'s
+     * (roadmap O-2b), so a host without a screen saves a transcript exactly
+     * as the TUI does.
      */
     private function persistTranscript(self $previous): void
     {
@@ -1795,7 +1799,32 @@ final class Chat implements Model
             return;
         }
 
-        $this->transcriptWriter->schedule($this->sessionStore, $this->currentSessionId, $this->history);
+        $this->transcripts()->schedule($this->currentSessionId, $this->history);
+    }
+
+    /**
+     * This session's {@see \SugarCraft\Crush\Host\TranscriptStore} (roadmap
+     * O-2b): the one the workspace registered on its
+     * {@see \SugarCraft\Crush\Host\WorkspaceContext::service()} locator when
+     * it is over this Chat's own session store, else one built over that
+     * store — so an embedder or a test with no workspace still persists, and
+     * a workspace whose store is not this Chat's is never written through by
+     * mistake. Either way it is bound to THIS lineage's
+     * debounced writer, the one {@see subscriptions()}' flush tick and the
+     * shutdown flush watch; a snapshot scheduled anywhere else would wait for
+     * a tick nobody declared. Built per call rather than held: the locator is
+     * how the O-2 extractions avoid growing Chat's state.
+     */
+    private function transcripts(): \SugarCraft\Crush\Host\TranscriptStore
+    {
+        $registered = $this->workspace?->service(\SugarCraft\Crush\Host\TranscriptStore::class);
+        if ($registered instanceof \SugarCraft\Crush\Host\TranscriptStore
+            && $registered->store() === $this->sessionStore
+        ) {
+            return $registered->withWriter($this->transcriptWriter);
+        }
+
+        return \SugarCraft\Crush\Host\TranscriptStore::new($this->sessionStore, $this->transcriptWriter);
     }
 
     /**
@@ -1808,7 +1837,7 @@ final class Chat implements Model
      */
     public function flushTranscript(): void
     {
-        $this->transcriptWriter->flush();
+        $this->transcripts()->flush();
     }
 
     /**
@@ -1873,7 +1902,8 @@ final class Chat implements Model
             return $this->mutate(['sessionLock' => null, 'readOnlySession' => false]);
         }
 
-        $lock = $this->sessionStore->lockSession($id);
+        $transcripts = $this->transcripts();
+        $lock = $transcripts->lock($id);
         if ($lock !== null) {
             return $this->mutate(['sessionLock' => $lock, 'readOnlySession' => false]);
         }
@@ -1884,7 +1914,7 @@ final class Chat implements Model
             'history' => [...$this->history, Message::notice(sprintf(
                 self::READ_ONLY_SESSION_NOTICE,
                 $this->currentSessionName ?? $id,
-                self::lockHolderClause($this->sessionStore->sessionLockHolder($id)),
+                self::lockHolderClause($transcripts->lockHolder($id)),
             ))],
         ]);
     }
@@ -1924,7 +1954,8 @@ final class Chat implements Model
             return $this;
         }
 
-        $lock = $this->sessionStore->lockSession($id);
+        $transcripts = $this->transcripts();
+        $lock = $transcripts->lock($id);
         if ($lock === null) {
             return $this;
         }
@@ -1932,7 +1963,7 @@ final class Chat implements Model
         // Anything still waiting on the debounce tick is written first, for
         // the reason switchToSession() does. A read-only window schedules
         // nothing (persistTranscript()), so this is a guard, not a save.
-        $this->transcriptWriter->flush();
+        $transcripts->flush();
         $draft = $this->readOnlyDraft;
 
         return $this->mutate([
@@ -1940,7 +1971,7 @@ final class Chat implements Model
             'sessionLock' => $lock,
             'readOnlySession' => false,
             'readOnlyDraft' => null,
-            'history' => [...self::loadTranscript($this->sessionStore, $id), Message::notice(sprintf(
+            'history' => [...$transcripts->load($id), Message::notice(sprintf(
                 self::SESSION_WRITABLE_NOTICE,
                 $this->currentSessionName ?? $id,
             ))],
@@ -1963,16 +1994,15 @@ final class Chat implements Model
      * `/rewind`; left as a placeholder it would spin forever for a result that
      * cannot arrive.
      *
+     * The builder is {@see \SugarCraft\Crush\Host\TranscriptStore::reviveRow()}
+     * since roadmap O-2b; kept here, by name, for the callers and tests that
+     * cite it.
+     *
      * @param array<string, mixed> $row
      */
     public static function reviveTranscriptMessage(array $row): Message
     {
-        $pendingId = $row['pendingToolCallId'] ?? null;
-        if (\is_string($pendingId) && $pendingId !== '') {
-            return self::reviveCheckpointMessage($row);
-        }
-
-        return Message::fromArray($row);
+        return \SugarCraft\Crush\Host\TranscriptStore::reviveRow($row);
     }
 
     /**
@@ -2015,7 +2045,8 @@ final class Chat implements Model
 
     /**
      * The saved transcript of $sessionId as Messages, or [] when the store
-     * has none (or cannot say).
+     * has none (or cannot say) —
+     * {@see \SugarCraft\Crush\Host\TranscriptStore::load()} over $store.
      *
      * @return list<Message>
      */
@@ -2023,17 +2054,7 @@ final class Chat implements Model
         \SugarCraft\Crush\Session\SessionStore|EnhancedSessionStore|null $store,
         string $sessionId,
     ): array {
-        if (!$store instanceof EnhancedSessionStore) {
-            return [];
-        }
-
-        try {
-            $rows = $store->loadTranscript($sessionId) ?? [];
-        } catch (\Throwable) {
-            return [];
-        }
-
-        return array_map(static fn(array $row): Message => self::reviveTranscriptMessage($row), $rows);
+        return \SugarCraft\Crush\Host\TranscriptStore::new($store)->load($sessionId);
     }
 
     /**
@@ -2054,8 +2075,9 @@ final class Chat implements Model
     {
         // The session being left may still have a save waiting on its debounce
         // tick (audit R2). Written now, so switching straight back reads it.
-        $this->transcriptWriter->flush();
-        $history = self::loadTranscript($this->sessionStore, $sessionId);
+        $transcripts = $this->transcripts();
+        $transcripts->flush();
+        $history = $transcripts->load($sessionId);
 
         return $this->mutate([
             ...$this->sessionChangeResets(),
@@ -8540,22 +8562,9 @@ final class Chat implements Model
      */
     public static function reviveCheckpointMessage(array $row): Message
     {
-        $content = \is_string($row['content'] ?? null) ? $row['content'] : '';
-        $pendingId = $row['pendingToolCallId'] ?? null;
-
-        if (\is_string($pendingId) && $pendingId !== '') {
-            return self::interruptedToolCallMessage($content, $pendingId, self::INTERRUPTED_TOOL_CALL);
-        }
-
-        $message = match ($row['role'] ?? '') {
-            'assistant' => Message::assistant($content),
-            'system'    => Message::system($content),
-            default     => Message::user($content),
-        };
-
-        // A command echo or notice must come back off a `/rewind` as UI-only
-        // as it went in (audit 15b-03), or the restore would put it on the wire.
-        return ($row['uiOnly'] ?? false) === true ? $message->withUiOnly() : $message;
+        // The builder is Host\TranscriptStore's since roadmap O-2b, so a host
+        // without a screen heals a checkpoint exactly as `/rewind` does.
+        return \SugarCraft\Crush\Host\TranscriptStore::reviveCheckpointRow($row);
     }
 
     /**
@@ -8568,12 +8577,7 @@ final class Chat implements Model
      */
     private static function interruptedToolCallMessage(string $content, string $callId, string $reason): Message
     {
-        return Message::assistant($reason)
-            ->withToolResults([ToolResult::error(
-                $content !== '' ? $content : $callId,
-                $reason,
-                $callId,
-            )]);
+        return \SugarCraft\Crush\Host\TranscriptStore::interruptedToolCallRow($content, $callId, $reason);
     }
 
     /**
