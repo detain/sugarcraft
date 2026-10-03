@@ -387,7 +387,7 @@ final class TaskSpendPropagationTest extends TestCase
         $results = self::taskResults($events);
         $this->assertCount(2, $results);
         $this->assertStringContainsString('produced no result', $results[0], 'the first Task\'s child really died');
-        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the report'), $results[1]);
+        $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the report') . "\n\n[sub-agent ", $results[1]);
         $this->assertEqualsWithDelta(1.70, $reply->usage?->costUsd ?? 0.0, 1e-9, 'the dead run\'s $1 is billed with everything else');
         $this->assertSame(170, $reply->usage?->totalTokens);
     }

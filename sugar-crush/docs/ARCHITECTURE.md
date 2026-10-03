@@ -452,14 +452,16 @@ order as running ones exit (`Runtime::executeConcurrently()`). A queue costs a
 delegation nothing because the group deadline never kills it; seconds-scale
 siblings are never queued, so they keep the whole deadline for themselves.
 
-A delegation that ends without a report — step cap reached, or a failure
-part-way — is resumable: its typed transcript is saved on disk
-(`Agents\SuspendedDelegations`; memory would not survive, since every turn and
-every parallel `Task` runs in a fork) and the refusal names a `resume` id that
-continues the same conversation through `EngineBackend::completeTranscript()`.
-A step-capped run is the one that is no longer a refusal: the engine's no-tools
-summary (see the agentic loop below) is returned as its report, with the
-`resume` id appended.
+Every delegation that ran is resumable — a finished report, a step-capped
+run, or a failure part-way: its typed transcript is saved on disk
+(`Agents\SuspendedDelegations`, capped by age and count; memory would not
+survive, since every turn and every parallel `Task` runs in a fork) and the
+result names a `resume` id that continues the same conversation through
+`EngineBackend::completeTranscript()`, so a follow-up reaches the agent that
+did the work. A step-capped run is returned as a report, not a refusal: the
+engine's no-tools summary (see the agentic loop below), with the `resume` id
+appended. A failed run's refusal also carries the last 12 KB of what it
+produced, fenced as sub-agent output.
 
 ---
 

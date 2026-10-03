@@ -94,7 +94,8 @@ final class TaskToolOutputFenceTest extends TestCase
         $tool = (new TaskTool(self::engineManager($probe, maxTurns: 5)))
             ->withEngine(EngineBackend::new($provider, 'm')->withTools([$probe]));
 
-        $this->assertSame(DelegatedOutputFence::wrap(self::HOSTILE), $tool->execute(self::call())->content());
+        // The finished-run resume note (step 4.7-1) is harness text after the fence.
+        $this->assertStringStartsWith(DelegatedOutputFence::wrap(self::HOSTILE) . "\n\n[sub-agent \"coder\" finished;", $tool->execute(self::call())->content());
     }
 
     public function testPoolArmReportIsFenced(): void

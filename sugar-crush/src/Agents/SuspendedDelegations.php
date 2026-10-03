@@ -16,9 +16,14 @@ use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Usage;
 
 /**
- * Delegated `Task` runs that ended without a report, kept so they can be
- * RESUMED rather than started over (see
- * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}).
+ * Delegated `Task` runs, kept so they can be RESUMED rather than started over
+ * (see {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}): a run that ended
+ * without a report continues where it stopped, and since step 4.7-1 a run that
+ * FINISHED is kept too, so a follow-up reaches the agent that did the work.
+ *
+ * BOUNDED TWICE, because every delegation now writes one file: by age
+ * ({@see MAX_AGE_SECONDS}) and by count ({@see MAX_RUNS}, oldest evicted first),
+ * both applied on each {@see save()}.
  *
  * ON DISK, NOT IN MEMORY, because nothing in memory survives: every TUI turn
  * runs in a forked completion child, and parallel `Task` calls are forked
@@ -53,6 +58,13 @@ final class SuspendedDelegations
 
     /** A suspension nobody resumed within a week is swept on the next save. */
     public const MAX_AGE_SECONDS = 7 * 86400;
+
+    /**
+     * How many runs the store keeps; a save beyond it evicts the least
+     * recently written. Step 4.7-1 saves EVERY run, so without a count cap a
+     * busy week of delegations is a week of transcripts on disk.
+     */
+    public const MAX_RUNS = 200;
 
     /** The store directory's stem; {@see directoryFor()} appends whose it is. */
     private const DIR_NAME = 'sugarcrush-suspended-delegations';
@@ -200,13 +212,33 @@ final class SuspendedDelegations
         return $dir . '/' . $id . '.run';
     }
 
+    /**
+     * Drop expired runs, then the oldest beyond {@see MAX_RUNS} - 1, leaving
+     * room for the run being saved.
+     */
     private function sweep(string $dir): void
     {
+        $kept = [];
         foreach (glob($dir . '/*.run') ?: [] as $file) {
             $mtime = @filemtime($file);
-            if ($mtime !== false && time() - $mtime > self::MAX_AGE_SECONDS) {
-                @unlink($file);
+            if ($mtime === false) {
+                continue;
             }
+            if (time() - $mtime > self::MAX_AGE_SECONDS) {
+                @unlink($file);
+                continue;
+            }
+            $kept[$file] = $mtime;
+        }
+
+        $excess = count($kept) - (self::MAX_RUNS - 1);
+        if ($excess <= 0) {
+            return;
+        }
+
+        asort($kept);
+        foreach (array_slice(array_keys($kept), 0, $excess) as $file) {
+            @unlink($file);
         }
     }
 }

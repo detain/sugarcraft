@@ -67,7 +67,7 @@ final class TaskToolEngineTest extends TestCase
         $result = (new TaskTool($manager))->withEngine($engine)->execute(self::call());
 
         $this->assertFalse($result->isError(), $result->content());
-        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the audit report'), $result->content());
+        $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the audit report') . "\n\n[sub-agent \"coder\" finished;", $result->content());
         $this->assertSame([['path' => 'candy-core']], $probe->calls, 'the sub-agent\'s tool call was executed');
         $this->assertCount(2, $provider->requests, 'one step for the tool call, one for the report');
 
@@ -143,7 +143,7 @@ final class TaskToolEngineTest extends TestCase
 
         $result = (new TaskTool($manager))->withEngine($engine)->execute(self::call());
 
-        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('could not read it'), $result->content());
+        $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('could not read it') . "\n\n[sub-agent \"coder\" finished;", $result->content());
         $this->assertSame([], $read->calls, 'ProtectFilesHook denied .env inside the sub-agent too');
         $toolTurns = array_values(array_filter(
             self::turns($provider->requests[1]),
@@ -183,7 +183,7 @@ final class TaskToolEngineTest extends TestCase
             self::turns($provider->requests[2]),
             static fn (array $turn): bool => $turn[0] === 'tool',
         ));
-        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('sub-agent report'), $toolTurns[0][1] ?? null, 'the caller received the sub-agent\'s report');
+        $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('sub-agent report') . "\n\n[sub-agent \"coder\" finished;", $toolTurns[0][1] ?? '', 'the caller received the sub-agent\'s report');
     }
 
     public function testTheEngineExposesItsToolsUnbound(): void
@@ -218,7 +218,7 @@ final class TaskToolEngineTest extends TestCase
         $resumed = $task->execute(self::call(['resume' => $id, 'prompt' => 'carry on and report']));
 
         $this->assertFalse($resumed->isError(), $resumed->content());
-        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the report, finished'), $resumed->content());
+        $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('the report, finished') . "\n\n[sub-agent \"coder\" finished;", $resumed->content());
         $this->assertCount(1, $probe->calls, 'the resumed run did not redo the finished step');
 
         $turns = self::turns($provider->requests[2]);
@@ -233,7 +233,8 @@ final class TaskToolEngineTest extends TestCase
             $provider->requests[2]->messages[2]->toArray()['tool_calls'] ?? null,
             'the earlier assistant step kept its tool call across the disk round-trip',
         );
-        $this->assertNull($this->store->load($id), 'a report clears the suspension');
+        $this->assertSame($id, self::resumeId($resumed->content()), 'a report keeps the run resumable under the same id (step 4.7-1)');
+        $this->assertNotNull($this->store->load($id), 'the finished run is still on disk for a follow-up');
     }
 
     public function testARunInterruptedPartWayResumesFromItsLastCompletedStep(): void
@@ -256,7 +257,7 @@ final class TaskToolEngineTest extends TestCase
         $provider->then(new CompleteResponse(content: 'recovered report'));
         $resumed = $task->execute(self::call(['resume' => $id]));
 
-        $this->assertSame(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('recovered report'), $resumed->content());
+        $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('recovered report') . "\n\n[sub-agent \"coder\" finished;", $resumed->content());
         $this->assertSame(
             ['system', 'user', 'assistant', 'tool', 'user'],
             array_column(self::turns($provider->requests[2]), 0),

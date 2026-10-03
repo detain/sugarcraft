@@ -119,16 +119,18 @@ use SugarCraft\Crush\Usage;
  * would keep editing the tree, so every chunk and tool event checks the
  * parent pid it started under and abandons the run once that process is gone.
  *
- * A RUN THAT ENDS WITHOUT A REPORT CAN BE RESUMED. When the sub-agent hits its
- * step cap (its report is then the engine's no-tools summary of where it
- * stopped, with the resume id appended), or fails part-way (a provider error, a dropped
+ * EVERY RUN THAT RAN CAN BE RESUMED (step 4.7-1). Whether the sub-agent
+ * reports, hits its step cap (its report is then the engine's no-tools
+ * summary of where it stopped), or fails part-way (a provider error, a dropped
  * connection, a cancelled parent), its transcript is saved to
- * {@see SuspendedDelegations} and the refusal names a `resume` id. Calling
+ * {@see SuspendedDelegations} and the result names a `resume` id. Calling
  * Task again with that id continues the SAME conversation — every tool call
  * and result it already made — with `prompt` as the next instruction, and
- * another full `maxTurns` of steps. The id is stable across repeated resumes,
- * and the refusal counts them, so a caller can apply its own retry budget; a
- * report clears it. A refusal that says nothing about resuming is one where
+ * another full `maxTurns` of steps: a follow-up to a finished agent, or a
+ * retry of a failed one. The id is stable across repeated resumes, and the
+ * result counts them, so a caller can apply its own retry budget. A run that
+ * fails also hands back the last 3 x {@see ACTIVITY_TAIL_BYTES} bytes of what
+ * it produced, fenced. A refusal that says nothing about resuming is one where
  * nothing ran (bad grant, unknown agent) and there is nothing to continue.
  *
  * THE SUB-AGENT'S SPEND IS THE CALLER'S SPEND (audit B4). Every result this
@@ -328,10 +330,11 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 ],
                 'resume' => [
                     'type' => 'string',
-                    'description' => 'Optional. The resume id from an earlier Task result that ended without a'
-                        . ' report or was interrupted: continues that sub-agent\'s own conversation instead of'
-                        . ' starting over. `agent` must name the same agent, and `prompt` is the instruction to'
-                        . ' continue with (e.g. "continue and give your final report")',
+                    'description' => 'Optional. The resume id an earlier Task result named — a finished report,'
+                        . ' a step-capped summary or a failure: continues that sub-agent\'s own conversation'
+                        . ' instead of starting over. `agent` must name the same agent, and `prompt` is the'
+                        . ' instruction to continue with (e.g. "continue and give your final report", or a'
+                        . ' follow-up question about its report)',
                 ],
             ],
             'required' => ['description', 'prompt', 'agent'],
@@ -539,6 +542,49 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             $messages[] = new UserMessage($subAgent->task);
         }
         $resumes = $suspension === null ? 0 : $suspension['resumes'] + 1;
+
+        // Step 4.7-1: a run that FAILS hands back the last 3 x 4096 bytes of
+        // what it produced — its own text, the calls it made and their
+        // results, from this run's steps only (the opening turns and a
+        // resumed run's earlier steps are not "partial output" of this one).
+        // Before it the caller got the failure reason and a resume id, and the
+        // only trace of the work was the activity trail on a dashboard row the
+        // MODEL never sees, so it could not judge whether to resume, redo or
+        // give up. Labels are bracketed, not `assistant:`, so the fence does
+        // not quote them; the body is fenced because it is foreign bytes
+        // re-entering the caller's conversation (step 0.15).
+        $opening = count($messages);
+        $failureTailBytes = 3 * self::ACTIVITY_TAIL_BYTES;
+        $failureTail = static function (array $transcript) use ($opening, $failureTailBytes): string {
+            $parts = [];
+            foreach (array_slice($transcript, $opening) as $message) {
+                if ($message instanceof AssistantMessage) {
+                    $text = trim($message->content());
+                    foreach ($message->toolCalls() ?? [] as $call) {
+                        $text .= ($text === '' ? '' : "\n") . '-> ' . $call->name();
+                    }
+                    $label = '[sub-agent]';
+                } elseif ($message instanceof \SugarCraft\Crush\Messages\ToolResultMessage) {
+                    $text = trim($message->content());
+                    $label = $message->isError() ? '[tool error]' : '[tool result]';
+                } else {
+                    $text = trim($message->content());
+                    $label = '[' . $message->role() . ']';
+                }
+                if ($text !== '') {
+                    $parts[] = $label . ' ' . $text;
+                }
+            }
+            if ($parts === []) {
+                return '';
+            }
+
+            return sprintf(
+                ".\n\nIts partial output before it stopped (the last %d bytes at most):\n%s",
+                $failureTailBytes,
+                \SugarCraft\Crush\Context\DelegatedOutputFence::wrap(self::tailClip(implode("\n", $parts), $failureTailBytes)),
+            );
+        };
 
         $orphanGuard = ParentProcessGuard::capture('turn that delegated it');
         $heartbeat = $this->heartbeat;
@@ -755,7 +801,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
             return $this->refusal(
                 $toolCallId,
-                $why . '. ' . $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null),
+                $why . '. ' . $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null) . $failureTail($failure->transcript),
                 self::elapsedMs($startedAt),
                 $spent,
             );
@@ -781,7 +827,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
             return $this->refusal(
                 $toolCallId,
-                $why . '. ' . $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null),
+                $why . '. ' . $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null) . $failureTail($turn->transcript),
                 self::elapsedMs($startedAt),
                 $spent,
             );
@@ -797,7 +843,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $agentName,
                 $maxTurns,
                 $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null),
-            ), self::elapsedMs($startedAt), $spent);
+            ) . $failureTail($turn->transcript), self::elapsedMs($startedAt), $spent);
         }
 
         // A run that hit its step cap now ENDS IN A SUMMARY rather than in
@@ -808,6 +854,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // the run is still unfinished, so it keeps its resume id rather than
         // forgetting it: dropping resumability is the regression the summary
         // would otherwise have introduced.
+        //
+        // A run that FINISHED keeps its id too (step 4.7-1). A report used to
+        // forget the suspension, so a follow-up question to the agent that
+        // just did the work — "and the other module?", "fix what you found" —
+        // started a stranger from nothing and paid for every read again.
+        // Every run is now saved and its report names the id; the store's
+        // age and count caps ({@see SuspendedDelegations}) bound the cost.
         //
         // The report re-enters the parent's conversation as foreign bytes,
         // so it is fenced (step 0.15) - before the harness's own step-cap
@@ -822,8 +875,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $maxTurns,
                 $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null),
             );
-        } elseif ($suspension !== null) {
-            $this->suspendedStore()->forget($suspension['id']);
+        } else {
+            $content .= sprintf(
+                "\n\n[sub-agent \"%s\" finished; to follow up with it in the same conversation instead of starting over: %s.]",
+                $agentName,
+                $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null),
+            );
         }
 
         return new ToolResult(
