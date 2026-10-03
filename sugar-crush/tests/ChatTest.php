@@ -1897,7 +1897,7 @@ final class ChatTest extends TestCase
                 return $this->stubs['listWorkflows'] ?? [];
             }
 
-            public function run(string $workflowPath, array $context = []): \SugarCraft\Crush\Workflows\WorkflowResult
+            public function run(string $workflowPath, array $context = [], ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): \SugarCraft\Crush\Workflows\WorkflowResult
             {
                 if (isset($this->stubs['run'])) {
                     return $this->stubs['run'];
@@ -1912,7 +1912,7 @@ final class ChatTest extends TestCase
                 }
             }
 
-            public function resume(string $workflowId): \SugarCraft\Crush\Workflows\WorkflowResult
+            public function resume(string $workflowId, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): \SugarCraft\Crush\Workflows\WorkflowResult
             {
                 if (isset($this->stubs['resume'])) {
                     return $this->stubs['resume'];

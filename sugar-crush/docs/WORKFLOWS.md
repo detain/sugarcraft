@@ -298,7 +298,9 @@ name; both resolve to the same run.
   completed and the pause file is withdrawn. While the run's turn holds the
   prompt, other slash commands are refused, but `/workflow pause` and
   `/workflow status` are let through, so a live pause is simply typed. (`Esc
-  Esc` releases the turn instead; that does not stop the run.)
+  Esc` cancels instead: the stage in flight has its agents stopped, no later
+  stage runs, and the report says **cancelled**. A pause already requested
+  still stands, so the run can be resumed from its successful stages.)
 - **`pause` on a finished run** records it. For a **failed** run this is the
   recovery path: pause, fix the cause, resume, and the resume re-runs the
   stage that failed. Pausing a completed run is allowed too. Resuming it runs

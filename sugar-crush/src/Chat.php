@@ -2242,6 +2242,12 @@ final class Chat implements Model
         if ($msg instanceof SessionLockRetryMsg) {
             return [$this->retakenSessionLock(), null];
         }
+        if ($msg instanceof CancelledWorkflowReportMsg) {
+            // The report of a run Esc Esc cancelled: appended, and NOTHING
+            // else — the turn it occupied was released by the cancel, and
+            // whatever turn is running now is not this report's to settle.
+            return [$this->mutate(['history' => [...$this->history, $msg->message]]), null];
+        }
         if ($msg instanceof InitialPromptMsg) {
             return $this->submitInitialPrompt($msg->prompt);
         }
@@ -2586,7 +2592,11 @@ final class Chat implements Model
                 // it, so left alone it spun for the rest of the session - and a
                 // later turn reusing the call id (DSML's `dsml_call_0`) had its
                 // result written onto this dead row instead of its own.
-                'history' => [...$this->historyWithInterruptedPlaceholders(), Message::notice('_Request cancelled._')],
+                // A workflow turn says what the cancel is doing, since its
+                // report is still to come (driveWorkflowFiber()).
+                'history' => [...$this->historyWithInterruptedPlaceholders(), Message::notice(
+                    $this->workflowTurnInFlight ? self::WORKFLOW_CANCELLED_NOTICE : '_Request cancelled._',
+                )],
                 // Half a sentence left under the cancellation notice would
                 // read as an answer the user is still waiting on. The
                 // generation bump also strands any delta still in the inbox,
@@ -9235,6 +9245,13 @@ final class Chat implements Model
         . 'becomes writable by itself.';
 
     /**
+     * The row double-Escape adds when the turn it cancels is a workflow run:
+     * the run's agents are being stopped, and its partial report — a
+     * {@see CancelledWorkflowReportMsg} — follows once they have.
+     */
+    public const WORKFLOW_CANCELLED_NOTICE = '_Workflow cancelled: stopping its agents. Its report follows._';
+
+    /**
      * The row {@see retakenSessionLock()} adds when a read-only window takes
      * the lock after the other TUI let go: `%s` the session's name or id.
      * Public for the tests that quote it.
@@ -11625,12 +11642,16 @@ final class Chat implements Model
         }
 
         $engine = $this->workflowEngine;
+        // The run's Esc Esc: held as this turn's inFlightCancellation, so the
+        // double-Escape arm's existing cancel() reaches the engine, which
+        // kills the stage's agents and stops the run (see driveWorkflowFiber()).
+        $cancellation = new CancellationToken();
 
         // Built here, started by the driver's FIRST timer tick. Everything
         // inside runs off the main stack.
-        $fiber = new \Fiber(static function () use ($engine, $workflowName, $context): string {
+        $fiber = new \Fiber(static function () use ($engine, $workflowName, $context, $cancellation): string {
             try {
-                return self::describeWorkflowResult($workflowName, $engine->run($workflowName, $context));
+                return self::describeWorkflowResult($workflowName, $engine->run($workflowName, $context, $cancellation));
             } catch (\Throwable $e) {
                 // One catch, where there used to be three arms
                 // ({@see WorkflowNotFoundException}, {@see WorkflowLoadException},
@@ -11651,10 +11672,11 @@ final class Chat implements Model
             // driveWorkflowFiber() settles, on both the success and the error
             // path -- both resolve, neither rejects.
             'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
             'workflowTurnInFlight' => true,
         ]);
 
-        return [$next, $next->driveWorkflowFiber($fiber)];
+        return [$next, $next->driveWorkflowFiber($fiber, $cancellation)];
     }
 
     /**
@@ -11696,6 +11718,9 @@ final class Chat implements Model
         // success; and a run paused while live reported "completed".
         $outcome = match (true) {
             $result->status === WorkflowStatus::Paused => 'paused',
+            // Ahead of isFailure(), which counts Cancelled as a failure: a run
+            // the user stopped did not fail, and must not read as though it had.
+            $result->status === WorkflowStatus::Cancelled => 'cancelled',
             $result->isFailure() => 'failed',
             $result->isSuccess() => 'completed',
             default => $result->status->value,
@@ -11731,6 +11756,11 @@ final class Chat implements Model
             $response .= "\n\nContinue it with `/workflow resume {$result->workflowId}`.";
         }
 
+        if ($result->status === WorkflowStatus::Cancelled) {
+            $response .= "\n\nCancelled with Esc Esc: the stage in flight had its agents stopped, and no later "
+                . 'stage ran. The totals above include what the stopped stage had already spent.';
+        }
+
         return $response;
     }
 
@@ -11764,15 +11794,28 @@ final class Chat implements Model
      * periodic timer holding a terminated fiber would resume it and raise
      * `FiberError` on the next tick.
      *
-     * ⚠️ KNOWN LIMITATION, stated rather than hidden by a generation stamp:
-     * double-Escape releases the TURN (it clears `inFlight` and bumps the
-     * generation) but does NOT stop the workflow — the fiber keeps being
-     * resumed and its report still lands, because this Msg carries no
-     * generation. That is deliberate for now: the run really did happen and
-     * its result is worth showing, and silently dropping it would leave the
-     * user with forked workers they cannot see and no record they ran.
-     * Actually CANCELLING mid-run means threading a `CancellationToken` down
-     * to `AgentWorkerPool::cancelAll()`, which is its own change.
+     * ## Double-Escape stops the run
+     *
+     * $cancellation is the run's token, held as the turn's
+     * `inFlightCancellation`, so the double-Escape arm's `cancel()` reaches
+     * the engine. `WorkflowEngine` registered on it
+     * ({@see CancellationToken::onCancel()}), so the cancel calls
+     * `AgentWorkerPool::cancelAll()` on the stage's live pool THERE AND THEN —
+     * the fiber is suspended in that pool's idle poll and could not look at a
+     * flag itself — killing the stage's forked agents (asynchronously, with a
+     * grace, on the loop), and the stage loop then stops with a Cancelled
+     * result instead of starting the next stage. An engine that ignores the
+     * token just finishes.
+     *
+     * THE PARTIAL REPORT STILL LANDS, marked cancelled
+     * ({@see describeWorkflowResult()}): the stages that ran really ran and
+     * cost money, and dropping the report would leave no record of them. It
+     * arrives as a {@see CancelledWorkflowReportMsg}, NOT an AssistantMsg,
+     * because the cancel already released the turn — by the time the run
+     * winds down the user may have started another, and an AssistantMsg would
+     * settle that one on this run's behalf. This used to be a known
+     * limitation: Esc Esc released the turn and the workflow ran on to the
+     * end, forked workers and all.
      *
      * WHAT THAT LIMITATION USED TO IMPLY, and no longer does: because the
      * released turn accepts input again, a user could type a SECOND
@@ -11784,21 +11827,29 @@ final class Chat implements Model
      * run A's own printed id persisted run B). `WorkflowEngine` now REFUSES a
      * run that would interleave with a live one and says so; see
      * `WorkflowEngine::$liveRunOwners`. Nesting — a stage re-entering `run()`
-     * on the same call stack — is unaffected and still works. So the turn is
-     * still released without stopping the run; what changed is that the
-     * released turn can no longer start a second one on top of it.
+     * on the same call stack — is unaffected and still works. The refusal
+     * still matters after a cancel: the run winds down over the kill's grace,
+     * and a `/workflow run` typed in that window is refused rather than
+     * interleaved.
      */
-    private function driveWorkflowFiber(\Fiber $fiber): \Closure
+    private function driveWorkflowFiber(\Fiber $fiber, ?CancellationToken $cancellation = null): \Closure
     {
-        return Cmd::promise(static function () use ($fiber): PromiseInterface {
+        return Cmd::promise(static function () use ($fiber, $cancellation): PromiseInterface {
             $deferred = new Deferred();
             $loop = Loop::get();
             $timer = null;
 
-            $settle = static function (string $text) use ($deferred): void {
+            $settle = static function (string $text) use ($deferred, $cancellation): void {
                 // The engine's report, not a model reply to this conversation:
                 // UI-only like the `/workflow run` echo it answers.
-                $deferred->resolve(new AssistantMsg(Message::assistant($text)->withUiOnly()));
+                $report = Message::assistant($text)->withUiOnly();
+
+                // A run Esc Esc cancelled has no turn left to settle: the
+                // cancel released it, and another may be running by now. Its
+                // report is still shown, as its own Msg.
+                $deferred->resolve($cancellation?->isCancelled()
+                    ? new CancelledWorkflowReportMsg($report)
+                    : new AssistantMsg($report));
             };
 
             $timer = $loop->addPeriodicTimer(
@@ -11903,11 +11954,13 @@ final class Chat implements Model
         }
 
         $engine = $this->workflowEngine;
+        // Esc Esc stops a resumed run exactly as a fresh one; see workflowRun().
+        $cancellation = new CancellationToken();
 
         // Static for the reason workflowRun()'s fiber is: it outlives this Chat.
-        $fiber = new \Fiber(static function () use ($engine, $workflowId): string {
+        $fiber = new \Fiber(static function () use ($engine, $workflowId, $cancellation): string {
             try {
-                return self::describeWorkflowResult($workflowId, $engine->resume($workflowId), resumed: true);
+                return self::describeWorkflowResult($workflowId, $engine->resume($workflowId, $cancellation), resumed: true);
             } catch (\Throwable $e) {
                 // WorkflowNotRunningException (nothing paused under that id),
                 // WorkflowNotFoundException (the definition is gone) and the
@@ -11921,10 +11974,11 @@ final class Chat implements Model
             'inputBuf' => '',
             // A resumed run is a turn exactly as a fresh one is; see workflowRun().
             'inFlight' => true,
+            'inFlightCancellation' => $cancellation,
             'workflowTurnInFlight' => true,
         ]);
 
-        return [$next, $next->driveWorkflowFiber($fiber)];
+        return [$next, $next->driveWorkflowFiber($fiber, $cancellation)];
     }
 
     /**

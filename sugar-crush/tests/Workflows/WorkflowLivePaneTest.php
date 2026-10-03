@@ -178,7 +178,7 @@ final class WorkflowLivePaneTest extends TestCase
         $engine = new class implements WorkflowEngineInterface {
             public bool $entered = false;
 
-            public function run(string $workflowPath, array $context = []): WorkflowResult
+            public function run(string $workflowPath, array $context = [], ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): WorkflowResult
             {
                 $this->entered = true;
 
@@ -193,7 +193,7 @@ final class WorkflowLivePaneTest extends TestCase
 
             public function pause(string $workflowId): void {}
 
-            public function resume(string $workflowId): WorkflowResult
+            public function resume(string $workflowId, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): WorkflowResult
             {
                 throw new \RuntimeException('not used');
             }

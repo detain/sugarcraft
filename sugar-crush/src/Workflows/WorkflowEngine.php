@@ -14,6 +14,7 @@ use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\EngineExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\ToolDeclaration;
@@ -264,8 +265,31 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private array $liveRuns = [];
 
+    /** The error a stage the cancel interrupted carries ({@see cancelledRun()}). */
+    public const CANCELLED_STAGE_ERROR = 'cancelled with Esc Esc while it ran; its agents were stopped';
+
     /** Source of {@see $liveRuns} keys. */
     private int $liveRunSequence = 0;
+
+    /**
+     * The cancellation token of the OUTERMOST live run that was given one
+     * ({@see run()}, {@see resume()}), or null. Engine state rather than a
+     * parameter threaded through every stage helper, so a NESTED run — a
+     * stage re-entering {@see run()} on the same call stack — is stopped by
+     * the same Esc Esc as the run around it.
+     */
+    private ?CancellationToken $runCancellation = null;
+
+    /**
+     * The pools the current stage is dispatching on, held WEAKLY: a stage
+     * pool is single-use and dropped when its stage returns, and a strong
+     * reference here would keep its forked-worker bookkeeping and IPC
+     * directory alive until the run ended. {@see cancelDispatchingPools()}
+     * is what reads it.
+     *
+     * @var list<\WeakReference<AgentWorkerPool>>
+     */
+    private array $dispatchPools = [];
 
     /**
      * @param string $model    The model every stage's agent runs on. A workflow
@@ -458,14 +482,132 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @throws WorkflowNotFoundException When the workflow does not exist.
      * @throws WorkflowLoadException When the workflow cannot be loaded.
      */
-    public function run(string $workflowPath, array $context = []): WorkflowResult
+    public function run(string $workflowPath, array $context = [], ?CancellationToken $cancellation = null): WorkflowResult
     {
         self::refuseReservedContextKeys($context);
         $workflow = $this->registry->load($workflowPath);
-        $result = $this->runFromWorkflow($workflow, $context, 0, null, $workflowPath, $workflowPath);
+        $result = $this->underCancellation(
+            $cancellation,
+            fn(): WorkflowResult => $this->runFromWorkflow($workflow, $context, 0, null, $workflowPath, $workflowPath),
+        );
         $this->rememberResult($workflowPath, $result, $workflowPath);
 
         return $result;
+    }
+
+    /**
+     * Run $run with $cancellation as the live run's token: while it runs, a
+     * cancel kills every agent the current stage has in flight
+     * ({@see cancelDispatchingPools()}), and the stage loop stops at its next
+     * check with a {@see WorkflowStatus::Cancelled} result
+     * ({@see runGuardedFromWorkflow()}).
+     *
+     * The PUSH half is what makes Esc Esc effective: while Chat handles the
+     * keystroke the run's fiber is suspended inside the pool's idle poll, so
+     * nothing on the run's stack can look at a flag until the stage's agents
+     * finish on their own — which, for a stage running a model's tool loop,
+     * is the whole stage. {@see AgentWorkerPool::cancelAll()} on the loop is
+     * asynchronous since wave 10 (`killTreeAsync` with a grace), so calling
+     * it from inside Chat's `update()` does not block the frame.
+     *
+     * A run nested inside a run that already has a token keeps the outer one.
+     */
+    private function underCancellation(?CancellationToken $cancellation, \Closure $run): WorkflowResult
+    {
+        if ($cancellation === null || $this->runCancellation !== null) {
+            return $run();
+        }
+
+        $this->runCancellation = $cancellation;
+        $detach = $cancellation->onCancel(function (): void {
+            $this->cancelDispatchingPools();
+        });
+
+        try {
+            return $run();
+        } finally {
+            $detach();
+            $this->runCancellation = null;
+            $this->dispatchPools = [];
+        }
+    }
+
+    /** Cancel every pool the current stage is still dispatching on. */
+    private function cancelDispatchingPools(): void
+    {
+        foreach ($this->dispatchPools as $reference) {
+            $reference->get()?->cancelAll();
+        }
+    }
+
+    /**
+     * Register $pool as one the current stage dispatches on, so a cancel
+     * reaches its agents. A pool built AFTER the cancel — a pipeline's next
+     * step — is cancelled before it dispatches anything, so its first
+     * `executeAll()` returns at once rather than starting work the user
+     * stopped.
+     */
+    private function dispatching(AgentWorkerPool $pool): AgentWorkerPool
+    {
+        if ($this->runCancellation === null) {
+            return $pool;
+        }
+
+        $this->dispatchPools = array_values(array_filter(
+            $this->dispatchPools,
+            static fn(\WeakReference $reference): bool => $reference->get() !== null,
+        ));
+        $this->dispatchPools[] = \WeakReference::create($pool);
+
+        if ($this->runCancellation->isCancelled()) {
+            $pool->cancelAll();
+        }
+
+        return $pool;
+    }
+
+    /**
+     * The result a cancelled run returns: the stages that settled, the last
+     * of them marked {@see WorkflowStatus::Cancelled} when the cancel landed
+     * while it ran — its agents were killed, so whatever it reports is not
+     * the stage's work — and the run itself Cancelled.
+     *
+     * A pause requested before the cancel still stands, recording the
+     * successful prefix, as it does for a run whose stage failed.
+     *
+     * @param \Closure(WorkflowStatus): WorkflowResult $snapshot
+     * @param list<StageResult> $stageResults by reference: the live list the snapshot reads
+     */
+    private function cancelledRun(
+        \Closure $snapshot,
+        array &$stageResults,
+        bool $stageInterrupted,
+        string $interruptId,
+        ?string $loadPath,
+        bool $pauseWasRequested,
+        bool &$pauseRequested,
+    ): WorkflowResult {
+        if ($stageInterrupted && $stageResults !== []) {
+            $last = array_key_last($stageResults);
+            $stage = $stageResults[$last];
+            $stageResults[$last] = new StageResult(
+                stageName: $stage->stageName,
+                status: WorkflowStatus::Cancelled,
+                output: $stage->output,
+                error: self::CANCELLED_STAGE_ERROR,
+                agents: $stage->agents,
+                startedAt: $stage->startedAt,
+                completedAt: $stage->completedAt,
+            );
+        }
+
+        $cancelled = $snapshot(WorkflowStatus::Cancelled);
+        if ($pauseWasRequested) {
+            $pauseRequested = true;
+            $this->writePauseFile($interruptId, $cancelled, $loadPath);
+        }
+
+        return $cancelled;
     }
 
     /**
@@ -611,7 +753,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @throws WorkflowNotRunningException When no pause file exists for this workflow.
      * @throws WorkflowNotFoundException   When the workflow definition can no longer be loaded.
      */
-    public function resume(string $workflowId): WorkflowResult
+    public function resume(string $workflowId, ?CancellationToken $cancellation = null): WorkflowResult
     {
         $pauseFile = $this->pauseFileFor($workflowId);
 
@@ -644,15 +786,23 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $pauseKey = basename($pauseFile, '.json');
 
         $pauseRequested = false;
-        $result = $this->runFromWorkflow(
-            $workflow,
-            $context,
-            $stagesCompleted,
-            is_string($data['workflowId'] ?? null) && $data['workflowId'] !== '' ? $data['workflowId'] : $workflowId,
-            $pauseKey,
-            $workflowPath,
-            $prior,
-            $pauseRequested,
+        $runId = is_string($data['workflowId'] ?? null) && $data['workflowId'] !== '' ? $data['workflowId'] : $workflowId;
+        // A full closure, not `fn`: $pauseRequested is an OUT parameter, and
+        // an arrow function would capture a copy of it.
+        $result = $this->underCancellation(
+            $cancellation,
+            function () use ($workflow, $context, $stagesCompleted, $runId, $pauseKey, $workflowPath, $prior, &$pauseRequested): WorkflowResult {
+                return $this->runFromWorkflow(
+                    $workflow,
+                    $context,
+                    $stagesCompleted,
+                    $runId,
+                    $pauseKey,
+                    $workflowPath,
+                    $prior,
+                    $pauseRequested,
+                );
+            },
         );
         $this->rememberResult($pauseKey, $result, $workflowPath);
 
@@ -1186,7 +1336,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     . 'Wait for it to finish before starting another — this engine keeps one '
                     . 'result slot per workflow name and one signal-handler frame per run, so '
                     . 'two runs at once would overwrite each other\'s bookkeeping. '
-                    . '(Pressing Escape releases the prompt but does not stop the run.)'
+                    . '(Esc Esc stops a run, but its agents take a moment to wind down.)'
                 );
             }
         }
@@ -1306,6 +1456,22 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     continue;
                 }
 
+                // Cancelled (Chat's Esc Esc) before this stage started — on the
+                // run's very first tick, or between two stages: nothing more
+                // is dispatched. Checked ahead of a pause, because a cancel is
+                // the later and stronger of the two requests.
+                if ($this->runCancellation?->isCancelled()) {
+                    return $this->cancelledRun(
+                        $snapshot,
+                        $stageResults,
+                        false,
+                        $interruptId,
+                        $loadPath,
+                        $this->liveRuns[$liveToken]['pauseRequested'],
+                        $pauseRequested,
+                    );
+                }
+
                 // A live pause() landed while the previous stage was in flight
                 // (Chat's fiber was suspended in the pool): stop before starting
                 // this one, and rewrite the file pause() wrote with the stage
@@ -1362,6 +1528,23 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $stageResults[] = $stageResult;
                 $totalTokens += $this->sumTokens($stageResult);
                 $totalCost += $this->sumCost($stageResult);
+
+                // Cancelled WHILE this stage ran: its agents were killed
+                // (underCancellation()), so the stage's result — a failure, or
+                // a "success" missing the agents that died — is not its work,
+                // and no later stage runs. The tokens it spent are still the
+                // run's spend, counted above.
+                if ($this->runCancellation?->isCancelled()) {
+                    return $this->cancelledRun(
+                        $snapshot,
+                        $stageResults,
+                        true,
+                        $interruptId,
+                        $loadPath,
+                        $this->liveRuns[$liveToken]['pauseRequested'],
+                        $pauseRequested,
+                    );
+                }
 
                 // Fail fast: stop processing on first stage failure
                 if ($stageResult->isFailure()) {
@@ -1837,7 +2020,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private function stagePool(int $stageTimeout, int $stageClock): AgentWorkerPool
     {
-        return $this->pool->withTimeBudget(self::remainingBudget($stageTimeout, $stageClock));
+        return $this->dispatching($this->pool->withTimeBudget(self::remainingBudget($stageTimeout, $stageClock)));
     }
 
     /** Seconds left of $stageTimeout since the hrtime(true) reading $stageClock. */
@@ -2022,7 +2205,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $pool = $pool->withMaxRetries($this->pool->maxRetries());
         // WF-1: the stage's budget bounds the whole fan-out, queue time
         // included — see stagePool() for why it is the remainder.
-        $pool = $pool->withTimeBudget(self::remainingBudget($workflow->timeout, $stageClock));
+        $pool = $this->dispatching($pool->withTimeBudget(self::remainingBudget($workflow->timeout, $stageClock)));
 
         // Route the stage pool through the AgentManager when one is attached:
         // the manager registers each SubAgent and mirrors per-result usage back

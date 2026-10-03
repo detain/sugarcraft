@@ -14,6 +14,7 @@ use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Backend\EchoBackend;
+use SugarCraft\Crush\CancelledWorkflowReportMsg;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
@@ -160,7 +161,7 @@ final class WorkflowControlMidRunTest extends TestCase
     }
 
     /** Run the loop until the run's report lands, and apply it. */
-    private function settle(Chat $chat, \SugarCraft\Core\AsyncCmd $async): Chat
+    private function settle(Chat $chat, \SugarCraft\Core\AsyncCmd $async, mixed &$resolvedMsg = null): Chat
     {
         $loop = Loop::get();
         $resolved = null;
@@ -174,6 +175,7 @@ final class WorkflowControlMidRunTest extends TestCase
             $loop->cancelTimer($safety);
         }
         self::assertNotNull($resolved, 'the run did not settle');
+        $resolvedMsg = $resolved;
         [$after] = $chat->update($resolved);
 
         return $after;
@@ -258,8 +260,51 @@ final class WorkflowControlMidRunTest extends TestCase
             'the exception belongs to the workflow turn and ends with it',
         );
 
-        // The released run still reports (WF-2's known limitation); settle it
-        // so no timer outlives the test.
+        // The cancelled run still reports, marked cancelled; settle it so no
+        // timer outlives the test.
         $this->settle($cancelled, $async);
+    }
+
+    /**
+     * Wave 11: double-Escape used to release the turn and leave the workflow
+     * running to the end. It now stops the run — no later stage starts — and
+     * the partial report still lands, marked cancelled, through its own Msg.
+     */
+    public function testDoubleEscapeStopsTheRunAndItsReportLandsMarkedCancelled(): void
+    {
+        [$running, $async] = $this->liveRun();
+
+        [$once] = $running->update(new KeyMsg(KeyType::Escape, ''));
+        [$cancelled] = $once->update(new KeyMsg(KeyType::Escape, ''));
+        self::assertSame(Chat::WORKFLOW_CANCELLED_NOTICE, self::last($cancelled)->content);
+
+        $resolved = null;
+        $settled = $this->settle($cancelled, $async, $resolved);
+
+        self::assertInstanceOf(CancelledWorkflowReportMsg::class, $resolved, 'not an AssistantMsg: the turn is already released');
+        self::assertSame(['do a'], $this->prompts, 'b and c never start once the run is cancelled');
+        self::assertStringContainsString("Workflow 'three' cancelled", self::last($settled)->content);
+        self::assertStringContainsString('Cancelled with Esc Esc', self::last($settled)->content);
+        self::assertTrue(self::last($settled)->uiOnly, 'the engine report stays off the model wire');
+        self::assertSame(WorkflowStatus::Cancelled, $this->engine->getStatus('three'));
+    }
+
+    /**
+     * The cancel released the turn, so the user may start another before the
+     * run has wound down. The late report must not settle THAT turn.
+     */
+    public function testTheCancelledReportDoesNotSettleATurnStartedAfterTheCancel(): void
+    {
+        [$running, $async] = $this->liveRun();
+        [$once] = $running->update(new KeyMsg(KeyType::Escape, ''));
+        [$cancelled] = $once->update(new KeyMsg(KeyType::Escape, ''));
+
+        [$nextTurn] = self::typed($cancelled, 'next question')->update(new KeyMsg(KeyType::Enter, ''));
+        self::assertTrue($nextTurn->inFlight, 'fixture: a new turn is running');
+
+        $settled = $this->settle($nextTurn, $async);
+
+        self::assertTrue($settled->inFlight, 'the report left the new turn running');
+        self::assertStringContainsString("Workflow 'three' cancelled", self::last($settled)->content);
     }
 }
