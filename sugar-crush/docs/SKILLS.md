@@ -202,7 +202,11 @@ shipped. A body enters every turn only where the user asked for it by name.
 called at **both** composition sites — `Bootstrap::backend()` and
 `Bootstrap::backendFor()` — each threading the result through
 `EngineBackend::withSkills()` into `App::$enabledSkills`, so a provider switch
-mid-session cannot drop what the first launch put there. Three properties of the
+mid-session cannot drop what the first launch put there. The switch itself
+(`/model <provider>`, Ctrl+P → **Switch model**) builds its engine through the
+factory `Bootstrap::chat()` hands `Chat`, which reuses the launch's skill
+registry, `/rules` set and agent manager, so the switched engine keeps the same
+skills, the session's rule toggles and the `Task` tool. Three properties of the
 resolution are load-bearing, and all three are stated in its own doc-block:
 
 - **Each name counts once.** The list is deduplicated strictly before it is

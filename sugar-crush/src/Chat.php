@@ -1492,6 +1492,18 @@ final class Chat implements Model
          * submitted as the first prompt from {@see init()} (audit CLI-2(b)).
          */
         private readonly ?string $initialPrompt = null,
+        /**
+         * `\Closure(string $provider): Backend` — how a provider switch
+         * (Ctrl+P "Switch model", `/model <provider>`) builds the replacement
+         * backend (N-P3a). {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+         * passes one that captures the launch's skill registry,
+         * {@see $rulesState}, agent manager and a worker pool rebuilt for the
+         * new provider, so the switched engine keeps `Task` and the session's
+         * `/rules` toggles. Null — embedders and tests — falls back to
+         * {@see \SugarCraft\Crush\Cli\Bootstrap::backendFor()} with what
+         * this Chat holds; see {@see selectPaletteProvider()}.
+         */
+        private readonly ?\Closure $backendFactory = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -8561,6 +8573,9 @@ final class Chat implements Model
             'readOnlySession' => $this->readOnlySession,
             'readOnlyDraft' => $this->readOnlyDraft,
             'initialPrompt' => $this->initialPrompt,
+            // Dropped here, a provider switch made after the first keystroke
+            // would lose Task and the `/rules` set again (N-P3a).
+            'backendFactory' => $this->backendFactory,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -17023,11 +17038,29 @@ final class Chat implements Model
             // is the one failure a guard must not have (see
             // {@see \SugarCraft\Crush\Hooks\HookConfig}), and it fails exactly
             // when it matters: the tool call the hook existed to stop.
-            $backend = \SugarCraft\Crush\Cli\Bootstrap::backendFor(
-                $name,
-                $this->projectRoot,
-                gate: $this->permissionGate(),
-            );
+            //
+            // AND THE REST OF THE LAUNCH'S COLLABORATORS ARE THREADED (N-P3a).
+            // Built from the root and the gate alone, the new engine came back
+            // without the session's {@see $rulesState} — every `/rules` toggle
+            // stopped reaching the prompt — and without a task manager, so
+            // `Task` silently left the tool list. The launch's factory carries
+            // the skill registry, the set, the manager and a pool rebuilt for
+            // the new provider; the embedder fallback carries what this Chat
+            // holds.
+            if ($this->backendFactory !== null) {
+                $backend = ($this->backendFactory)($name);
+            } else {
+                $backend = \SugarCraft\Crush\Cli\Bootstrap::backendFor(
+                    $name,
+                    $this->projectRoot,
+                    gate: $this->permissionGate(),
+                    rulesState: $this->rulesState,
+                    taskManager: $this->agentManager,
+                );
+                if ($backend instanceof \SugarCraft\Crush\Backend\EngineBackend) {
+                    $backend = $backend->withRulesState($this->rulesState);
+                }
+            }
         } catch (\Throwable $e) {
             return [$this->mutate([
                 'palette' => null,

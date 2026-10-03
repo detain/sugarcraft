@@ -1389,6 +1389,33 @@ final class Bootstrap
             $backend = $backend->withRulesState($rulesState);
         }
 
+        // N-P3a: THE PROVIDER SWITCH BUILDS ITS BACKEND FROM THE LAUNCH'S
+        // COLLABORATORS, not from whatever `Chat` happens to hold. Ctrl+P
+        // "Switch model" and `/model <provider>` used to call backendFor() with
+        // only the root and the gate, so the replacement engine came back
+        // without `rulesState` (every `/rules` toggle stopped reaching the
+        // prompt) and without a task manager (tools() only adds `Task` when it
+        // has one, so the tool vanished mid-session). Chat cannot name these
+        // itself — the skill registry, the manager and the pool's provider spec
+        // are launch decisions — so the launch hands it this closure.
+        //
+        // The pool is REBUILT for the new provider rather than reused: its
+        // `workerProvider` spec is the provider a forked worker constructs, and
+        // the launch's spec names the provider being switched away from.
+        $backendFactory = static function (string $providerName) use ($root, $skills, $permissionGate, $rulesState, $agentManager): Backend {
+            $switched = self::backendFor(
+                $providerName,
+                $root,
+                $skills,
+                $permissionGate,
+                rulesState: $rulesState,
+                taskManager: $agentManager,
+                taskPool: self::taskWorkerPool(self::agentPoolConfig($providerName)),
+            );
+
+            return $switched instanceof EngineBackend ? $switched->withRulesState($rulesState) : $switched;
+        };
+
         $chat = new Chat(
             // The resumed conversation (--continue / --resume <id>), or [] for
             // a new session.
@@ -1504,6 +1531,9 @@ final class Bootstrap
             // the argument that makes `/rules` reach the prompt rather than merely
             // decorate the transcript.
             rulesState: $rulesState,
+            // N-P3a: what a provider switch builds its replacement backend
+            // with — see the closure's own block above.
+            backendFactory: $backendFactory,
         );
 
         // Drained AFTER construction for the same reason the workflow registry's
@@ -2791,11 +2821,14 @@ final class Bootstrap
      * (E652). Everything else on {@see \SugarCraft\Crush\Agents\AgentPoolConfig}
      * keeps its documented default; this method exists to carry the ONE field
      * only the launch can answer: which provider the forked workers inherit.
+     *
+     * @param ?string $providerName The provider a mid-session switch moved to
+     *        (N-P3a); null keeps the launch's own selection.
      */
-    private static function agentPoolConfig(): \SugarCraft\Crush\Agents\AgentPoolConfig
+    private static function agentPoolConfig(?string $providerName = null): \SugarCraft\Crush\Agents\AgentPoolConfig
     {
         return new \SugarCraft\Crush\Agents\AgentPoolConfig(
-            workerProvider: self::workerProviderSpec(),
+            workerProvider: self::workerProviderSpec($providerName),
         );
     }
 
@@ -2814,21 +2847,28 @@ final class Bootstrap
      * an echo-backed sub-agent answering in the transcript is precisely the
      * silently-fabricated "Completed" the E641-era refusal was minted to kill.
      *
+     * @param ?string $providerName A provider a mid-session switch named
+     *        (N-P3a), built on the model {@see backendFor()} sends to it;
+     *        null keeps the launch's selection.
+     *
      * @return ?array<string, mixed>
      */
-    private static function workerProviderSpec(): ?array
+    private static function workerProviderSpec(?string $providerName = null): ?array
     {
-        $providerName = self::selectedProviderName();
+        $model = null;
         if ($providerName === null) {
-            return null;
-        }
+            $providerName = self::selectedProviderName();
+            if ($providerName === null) {
+                return null;
+            }
 
-        [, $model] = self::selectedProviderLabel();
+            [, $model] = self::selectedProviderLabel();
+        }
 
         try {
             $factory = new ProviderFactory();
             $config = $factory->defaultConfig($providerName);
-            $config['model'] = $model;
+            $config['model'] = $model ?? self::selectedModelName() ?? ($config['model'] ?? 'gpt-4o');
 
             // E652 review fix — never put a RESOLVED credential on the fork
             // frame. defaultConfig() bakes getenv() output into apiKey (and
