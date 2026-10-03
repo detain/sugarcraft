@@ -126,6 +126,7 @@ sugar-crush/tests/Context/GlobDialectDifferentialTest.php	2.497	13
 sugar-crush/tests/Workflows/WorkflowAgentResultsTest.php	2.494	13
 sugar-crush/tests/Tools/BuiltIn/UnifiedDiffBoundedMemoryTest.php	2.416	5
 sugar-crush/tests/Backend/EngineBackendParallelConfigTest.php	2.415	29
+sugar-crush/tests/Runtime/RejectionFeedbackReachesModelTest.php	2.400	9
 sugar-crush/tests/MCP/GitCommandHandlersProcessTest.php	2.395	14
 sugar-crush/tests/Agents/AgentWorkerPoolCancelKeepsLoopLiveTest.php	2.363	5
 sugar-crush/tests/Agents/WorkerExitCodeAttributionTest.php	2.313	2
@@ -190,6 +191,7 @@ sugar-crush/tests/Tools/OutputTruncationTest.php	1.283	24
 sugar-crush/tests/Integration/SystemPromptWiringTest.php	1.275	14
 sugar-crush/tests/Integration/ForeignAgentPresetWiringTest.php	1.273	16
 sugar-crush/tests/Chat/ToolChildReapTest.php	1.253	5
+sugar-crush/tests/Chat/EngineAskModalTest.php	1.250	11
 sugar-crush/tests/Backend/EngineBackendEmptyReplyTest.php	1.235	7
 sugar-crush/tests/Tools/TaskToolProgressFramesTest.php	1.216	10
 sugar-crush/tests/Backend/ScaledClockHelperSeamTest.php	1.187	6
@@ -453,6 +455,7 @@ sugar-crush/tests/Commands/ShareLocalExportTest.php	0.052	8
 sugar-crush/tests/MCP/OAuthClientRegistrationTest.php	0.051	46
 sugar-crush/tests/Context/PromptFenceAttributeTagTest.php	0.050	141
 sugar-crush/tests/Agents/AgentDefinitionTest.php	0.050	40
+sugar-crush/tests/Permissions/SessionPermissionMemoTest.php	0.050	28
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5

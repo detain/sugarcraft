@@ -434,7 +434,33 @@ executing `PermissionRule::matchesToolName('Doctor', 'doctor')` — `false`.
 `Ask` is only meaningful where somewhere to ask exists. There are now three
 situations, not two:
 
-- **`Chat`** shows a modal and settles the paused call.
+- **`Chat`** shows a modal and settles the paused call — on its own tool path
+  and on the **engine** path alike. An engine turn runs in a forked child;
+  `Chat` starts it through `InteractiveTurn::completeInteractive()`, so each
+  `Ask` the child's gate raises crosses the turn's socket as an `ask` frame,
+  becomes the same y/n/a modal, and the answer returns as `ask_reply` while
+  the child waits (its idle ceiling paused). The answer reaches `Runtime` as
+  an `ApprovalVerdict` rather than a bit:
+  - `n`/`Esc` is `Permission denied:`, and a reply's note — when one is
+    given — reaches the model after the question as `the user said: …`;
+  - a question the turn ends underneath (the child or its stream gone) is
+    `Permission required:`, because nobody answered it;
+  - `a` + `y` remembers a **pattern** for the rest of the session
+    (`Permissions\SessionPermissionMemo`): `git status` → `Bash(git status)`
+    and `Bash(git status *)`, an `Edit` → that path, a `WebFetch` → that host,
+    a tool with no subject argument (`mcp__*`, `Task`) → the tool. A chained,
+    piped, redirected or launcher (`bash -c`, `sudo`, `xargs`, `find`) `Bash`
+    line is remembered exactly. The patterns reach every later turn's gate
+    through `PermissionGate::withSessionRules()`, which consults them **only
+    to answer an `Ask`** — a configured `Deny`, Plan mode, `dont-ask` and the
+    `rm -rf /` breaker still win, and an `Allow` pattern still needs every
+    command of a chain to match. Nothing is written to a settings file.
+  - Only the gate's own question offers "always". A question one of your
+    hooks asks is put every time, and `a` there counts as "once".
+  - A `Task` sub-agent running in a **parallel** batch has no channel of its
+    own yet: its question is refused with a reason the model reads
+    (`approval from a parallel sub-agent is not yet supported; run it alone or
+    allow it by rule`). A `Task` run alone asks normally.
 - **The console paths** attach `HeadlessPermissionPrompt` as `Runtime`'s
   approver. At a terminal it asks on **stderr** and reads the answer from
   stdin, granting only on a literal `y`/`yes`. With no terminal it does not
@@ -449,11 +475,13 @@ situations, not two:
     there not to prompt — nobody is watching a daemon — but so the session's
     log records *which* tool was refused under *which* mode and what to change,
     instead of the bare "no approver is attached to this run".
-- **Everything else**, the TUI's engine path included, still fails **closed**:
-  `Runtime::settleAsk()` turns an `Ask` into a denial when no approver is
-  attached, and `Bootstrap` deliberately attaches none for a caller inside a
-  TUI, because a closure that blocks on stdin would fight the render loop for
-  keystrokes.
+- **Everything else** still fails **closed**: `Runtime::settleAsk()` turns an
+  `Ask` into a `Permission required:` denial when no approver is attached, and
+  `Bootstrap` deliberately attaches none for a caller inside a TUI — the TUI
+  answers over the frame channel above instead, because a closure that blocks
+  on stdin would fight the render loop for keystrokes. A plain
+  `completeAsync()` caller (one that never promised to answer) gets the same
+  refusal from the turn child.
 
 And any caller that holds no prompt at all must not turn "would
 have asked" into "no" — `PermissionGate::refuses()` answers `true` only for

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Hooks;
 
+use SugarCraft\Crush\Permissions\ApprovalVerdict;
+
 /**
  * Manages hook loading and execution.
  */
@@ -182,21 +184,35 @@ final class HookManager
      * back here. This lives on HookManager rather than HookResult because a
      * HookResult is a readonly value with no notion of a user or a session.
      *
+     * An {@see ApprovalVerdict} (roadmap 1.C-2) settles the same way as its
+     * `permits()` bit, and a refusing verdict's feedback — a user's note, or
+     * the reason nobody could answer — is appended to the hook's question
+     * ({@see ApprovalVerdict::denialMessage()}) rather than replacing it, so
+     * the model reads both what was asked and what came back. The `bool`
+     * form is unchanged for every existing caller.
+     *
      * @param HookResult $ask the ASK decision preToolUse() returned
-     * @param bool $approved true when the user permitted the call
+     * @param bool|ApprovalVerdict $approved true (or a permitting verdict) when
+     *                         the user permitted the call
      * @param string $feedback optional "reject with feedback" text that
      *                         replaces the hook's own prompt in the settled
-     *                         result's message
+     *                         result's message; ignored for a verdict, which
+     *                         carries its own
      * @throws \InvalidArgumentException when $ask is not an ASK — an already
      *         settled decision must not be re-resolved, since doing so is a
      *         path from DENY to ALLOW
      */
-    public function resolveAsk(HookResult $ask, bool $approved, string $feedback = ''): HookResult
+    public function resolveAsk(HookResult $ask, bool|ApprovalVerdict $approved, string $feedback = ''): HookResult
     {
         if (!$ask->isAsk()) {
             throw new \InvalidArgumentException(
                 "Cannot resolve a '{$ask->action}' hook result: only an ask awaits a user decision.",
             );
+        }
+
+        if ($approved instanceof ApprovalVerdict) {
+            $feedback = $approved->permits() ? '' : $approved->denialMessage($ask->message);
+            $approved = $approved->permits();
         }
 
         $message = $feedback !== '' ? $feedback : $ask->message;

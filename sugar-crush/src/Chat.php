@@ -3278,14 +3278,15 @@ final class Chat implements Model
         //
         // DORMANT DEFENCE, stated as such rather than as a live path closed --
         // the same honest form shellOwnsKeyboard()'s unobservable conjunct is
-        // documented in. Measured: both callers build the ASK with
-        // $this->generation on the very object they then call (beginToolCalls()
-        // and answerPermission(), and mutate() touches no 'generation' at
-        // either site), so the comparison below is tautologically FALSE at
-        // every internal call site. `grep 'new PermissionRequestMsg' src/`
-        // finds exactly those two lines; nothing else constructs one, and the
-        // engine path that would -- PermissionRequestMsg's own docblock names
-        // it -- is not wired.
+        // documented in. Measured: the two Chat-native callers build the ASK
+        // with $this->generation on the very object they then call
+        // (beginToolCalls() and answerPermission(), and mutate() touches no
+        // 'generation' at either site), so the comparison below is
+        // tautologically FALSE at both. The THIRD constructor in `src/`, the
+        // engine path wired by roadmap 1.C-2 (pumpLiveToolEvents()), stamps
+        // the inbox entry's generation only after comparing it equal to
+        // $this->generation and answering a stale question itself -- so it
+        // cannot make the comparison true either.
         //
         // What that bounds is which tests can watch this guard FIRE. It does
         // NOT bound which tests reach a STAMPED ask, and the first version of
@@ -3590,7 +3591,7 @@ final class Chat implements Model
      *
      * @return array{0:Chat,1:?\Closure}
      */
-    private function answerPermission(PermissionReply $reply): array
+    private function answerPermission(PermissionReply $reply, string $note = ''): array
     {
         $request = $this->pendingPermission;
         if ($request === null) {
@@ -3615,12 +3616,41 @@ final class Chat implements Model
         // Program waiting on a decision that has already been made.
         $this->permissionDeferred?->resolve(null);
 
+        // THE ENGINE PATH (roadmap 1.C-2) has no batch here to resume or end:
+        // the call belongs to the forked turn child, which is blocked on this
+        // answer and does the rest itself — runs the call, or hands the model
+        // the refusal (with $note as feedback it reads). So the answer goes out
+        // through the question's own handle and the turn stays in flight.
+        // `reply()` answering false (the turn already settled the question) is
+        // harmless: the modal comes down either way.
+        //
+        // "Always" is remembered as a PATTERN ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo})
+        // — for a question the gate put alone, the only kind it is offered on —
+        // kept in the session's grant map beside the Chat-native exact-call
+        // grants, and handed to every later turn's gate.
+        if ($request->pendingAsk !== null) {
+            $ask = $request->pendingAsk;
+            if ($reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled()) {
+                $memo = \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants)
+                    ->withGrant($ask->tool, $ask->arguments);
+                $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
+            }
+            $ask->reply($reply, $note === '' ? null : $note);
+
+            return [$this->mutate($cleared), null];
+        }
+
         // A denial ENDS the turn, with no AssistantMsg to follow it, so a queue
         // released only at update()'s settle arm would strand here — the
         // permission prompt is a mid-turn state by definition, which makes it one
         // of the likelier places for a queue to have accumulated. The permitting
         // path below keeps the turn running and deliberately does not drain.
         if (!$reply->permits()) {
+            // A rejection's feedback is the model's to read, on this path as
+            // on the engine one (1.C-2).
+            $refusal = \SugarCraft\Crush\Permissions\ApprovalVerdict::rejectedByUser($note)
+                ->denialMessage("{$request->toolCall->name} was not run.");
+
             return self::releaseQueuedPrompts([$this->mutate([
                 ...$cleared,
                 'inFlight' => false,
@@ -3637,7 +3667,7 @@ final class Chat implements Model
                     // toTypedMessages() flattens tool calls and results away,
                     // so on that path this note is the model's only record
                     // that the call it asked for was refused.
-                    Message::system('_' . DenialKind::Refused->reason("{$request->toolCall->name} was not run.") . '_'),
+                    Message::system('_' . DenialKind::Refused->reason($refusal) . '_'),
                     // The refusal also has to exist as a RESULT, not only as
                     // a system note (crush_feat.md §1 E7): the assistant
                     // message above carries the tool call, so leaving it
@@ -3648,7 +3678,7 @@ final class Chat implements Model
                     Message::assistant('')->withToolResults([ToolResult::denied(
                         $request->toolCall->name,
                         DenialKind::Refused,
-                        "{$request->toolCall->name} was not run.",
+                        $refusal,
                         $request->toolCall->id,
                     )]),
                 ],
@@ -4467,6 +4497,76 @@ final class Chat implements Model
             $consumed === 0 ? array_values($pending) : array_slice($pending, $consumed),
         );
         $more = count($this->liveToolEvents) > 0 ? Cmd::send(new ToolEventPumpMsg()) : null;
+
+        // ── the engine turn's permission questions (roadmap 1.C-2) ──
+        //
+        // Matched by askId BEFORE the generation check: a settlement names the
+        // one question it settles, and the modal up for that question has to
+        // come down whatever happened to the turn — this is how a question the
+        // turn's end settled (`cancelled`) stops being drawn as answerable. A
+        // settlement for anything else (the user's own answer, already
+        // applied) changes nothing.
+        if ($event instanceof \SugarCraft\Crush\Events\PermissionResolved) {
+            $open = $this->pendingPermission?->pendingAsk;
+            if ($open === null || $open->askId !== $event->askId) {
+                return [$this, $more];
+            }
+            $this->permissionDeferred?->resolve(null);
+
+            return [$this->mutate([
+                'pendingPermission' => null,
+                'permissionStage' => PermissionPromptStage::Armed,
+                'permissionDeferred' => null,
+            ]), $more];
+        }
+
+        if ($event instanceof \SugarCraft\Crush\Events\PermissionAsked) {
+            $ask = $event->ask;
+            if ($ask->isSettled()) {
+                return [$this, $more];
+            }
+            // A question from a turn the user has since abandoned is ANSWERED,
+            // not skipped: the child is blocked on it, and skipping would
+            // leave it blocked until the teardown that abandoning already
+            // started. A refusal is the only safe answer for nobody.
+            if ($generation !== $this->generation) {
+                $ask->reply(PermissionReply::Reject, 'the turn this question belonged to was abandoned');
+
+                return [$this, $more];
+            }
+            // "Always" given earlier this session answers it without a
+            // prompt — but only a question the permission gate put alone
+            // ({@see Backend\PendingAsk::offers()}): a user hook's question is
+            // put every time, exactly as on the Chat-native path.
+            if ($ask->offers(PermissionReply::Always)
+                && \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants)
+                    ->allows($ask->tool, $ask->arguments, $this->projectRoot())) {
+                $ask->reply(PermissionReply::Once);
+
+                return [$this, $more];
+            }
+            // One modal at a time: the question goes back to the head of the
+            // inbox and the tool-event tick, which runs while a turn is in
+            // flight, offers it again once the prompt that is up is answered.
+            if ($this->pendingPermission !== null) {
+                $this->liveToolEvents->exchangeArray([$entry, ...$this->liveToolEvents->getArrayCopy()]);
+
+                return [$this, null];
+            }
+
+            [$asking, $wait] = $this->requestPermission(new PermissionRequestMsg(
+                // No parked batch on this path — the child owns the call — so
+                // the assistant message is a placeholder answerPermission()'s
+                // engine branch never reads.
+                Message::assistant(''),
+                ToolCall::fromEngineCall(new EngineToolCall($ask->toolCallId, $ask->tool, $ask->arguments)),
+                $ask->reason,
+                $generation,
+                $ask,
+            ));
+
+            return [$asking, $more === null ? $wait : Cmd::batch($wait, $more)];
+        }
 
         if ($generation !== $this->generation) {
             return [$this, $more];
@@ -11472,6 +11572,16 @@ final class Chat implements Model
         if ($backend instanceof Backend\EngineBackend && $next->currentSessionId !== null) {
             $backend = $backend->withSessionId($next->currentSessionId);
         }
+        // Roadmap 1.C-2: the "always allow (this session)" answers given on
+        // the engine path ride into this turn's gate as Allow rules — read per
+        // DISPATCH, like the session id above, so a grant given mid-turn
+        // covers every later turn. They can only answer an Ask, never lift a
+        // Deny ({@see \SugarCraft\Crush\Permissions\PermissionGate::withSessionRules()}).
+        $sessionGrants = \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($next->permissionGrants);
+        if ($backend instanceof Backend\EngineBackend && $sessionGrants->patterns() !== []
+            && ($gate = $backend->permissionGate()) !== null) {
+            $backend = $backend->withPermissionGate($gate->withSessionRules($sessionGrants->rules()));
+        }
         // Only the rows the model may see (audit 15b-03): command echoes and
         // their output, notices and error strings live in the same list for
         // the transcript's sake and never go out as turns.
@@ -11549,7 +11659,11 @@ final class Chat implements Model
         };
 
         return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation, $inbox): PromiseInterface {
-            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity $event) use ($inbox, $generation): void {
+            // The permission events (1.C-2) share the inbox: a question has to
+            // reach the screen in the turn's own event order, between the tool
+            // events around it, and {@see pumpLiveToolEvents()} is what puts
+            // it up as the modal.
+            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|\SugarCraft\Crush\Events\PermissionAsked|\SugarCraft\Crush\Events\PermissionResolved $event) use ($inbox, $generation): void {
                 $inbox[] = [$generation, $event];
             };
 
@@ -11590,26 +11704,59 @@ final class Chat implements Model
             // positional arguments to a userland method without a murmur - and
             // that silence is exactly the failure mode this branch exists to
             // make impossible to reintroduce.
-            $promise = $backend instanceof ObservesReasoning
-                ? $backend->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning)
-                : $backend->completeAsync($history, $onToken, $cancellation, $onEvent);
+            //
+            // AND A BACKEND THAT CAN PUT A QUESTION TO US IS ASKED TO (1.C-2):
+            // {@see Backend\InteractiveTurn} is the promise to answer every
+            // ASK the turn raises, which this Chat keeps through the modal. A
+            // plain backend keeps settling its own asks, as before.
+            $promise = match (true) {
+                $backend instanceof Backend\InteractiveTurn
+                    => $backend->completeInteractive($history, $onToken, $cancellation, $onEvent, $onReasoning),
+                $backend instanceof ObservesReasoning
+                    => $backend->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning),
+                default => $backend->completeAsync($history, $onToken, $cancellation, $onEvent),
+            };
+
+            // The permission events are not tool lifecycle states and never
+            // ride a BackendToolEventsMsg: they stay on the inbox for the live
+            // pump, which takes down a modal whose question the turn's end
+            // settled (`cancelled`) — the settle below would otherwise drain
+            // that fact away with the turn and leave the modal up over a
+            // question nobody is waiting on.
+            $drain = static function () use ($inbox, $generation): array {
+                $held = [];
+                $rest = [];
+                foreach ($inbox as $entry) {
+                    if ($entry[1] instanceof \SugarCraft\Crush\Events\PermissionAsked
+                        || $entry[1] instanceof \SugarCraft\Crush\Events\PermissionResolved) {
+                        $held[] = $entry;
+                    } else {
+                        $rest[] = $entry;
+                    }
+                }
+                $inbox->exchangeArray($rest);
+                $events = self::drainToolEventInbox($inbox, $generation);
+                $inbox->exchangeArray($held);
+
+                return $events;
+            };
 
             return $promise->then(
-                static function (Message $msg) use ($inbox, $generation): ?Msg {
-                    $events = self::drainToolEventInbox($inbox, $generation);
+                static function (Message $msg) use ($drain, $generation): ?Msg {
+                    $events = $drain();
 
                     return $events === []
                         ? new AssistantMsg($msg, $generation)
                         : new BackendToolEventsMsg($events, $msg, $generation);
                 },
-                static function (\Throwable $e) use ($inbox, $generation): ?Msg {
+                static function (\Throwable $e) use ($drain, $generation): ?Msg {
                     // A turn that failed AFTER running tools still shows what
                     // those tools did - otherwise the placeholders queued for
                     // them would be the only trace and they never even render.
                     // UI-only (audit 15b-03): the model did not say this, so it
                     // must not be replayed to it as its own words next turn.
                     $message = Message::assistant('_[error: ' . $e->getMessage() . ']_')->withUiOnly();
-                    $events = self::drainToolEventInbox($inbox, $generation);
+                    $events = $drain();
 
                     return $events === []
                         ? new AssistantMsg($message, $generation)

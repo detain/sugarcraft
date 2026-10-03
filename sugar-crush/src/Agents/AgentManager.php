@@ -97,8 +97,8 @@ final class AgentManager
 
     /**
      * @param \Closure(PermissionMode): PermissionGate $permissionGateFactory Factory to create PermissionGate from PermissionMode
-     * @param \Closure(ToolCall, SubAgent): bool $permissionApprover Settles a
-     *        {@see PermissionDecision::Ask} into a real allow/deny. @see evaluateToolCalls()
+     * @param \Closure(ToolCall, SubAgent): (bool|\SugarCraft\Crush\Permissions\ApprovalVerdict) $permissionApprover
+     *        Settles a {@see PermissionDecision::Ask} into a real allow/deny. @see evaluateToolCalls()
      * @param ?list<Tool> $toolRegistry The session's model-facing tool set —
      *        {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}'s return — from
      *        which {@see resolveGrantedTools()} selects the subset an agent's
@@ -1130,8 +1130,18 @@ final class AgentManager
                 );
             }
 
-            if (($this->permissionApprover)($toolCall, $subAgent) !== true) {
-                $this->refuseToolCall($toolCall, $subAgent, 'refused at the permission prompt');
+            // A literal `true` or a permitting ApprovalVerdict (1.C-2); the
+            // verdict's feedback, and whether anybody answered at all, reach
+            // the failure the sub-agent reports.
+            $verdict = \SugarCraft\Crush\Permissions\ApprovalVerdict::of(($this->permissionApprover)($toolCall, $subAgent));
+            if (!$verdict->permits()) {
+                $this->refuseToolCall(
+                    $toolCall,
+                    $subAgent,
+                    $verdict->denialMessage($verdict->isUnanswered()
+                        ? 'requires approval and nobody answered'
+                        : 'refused at the permission prompt'),
+                );
             }
         }
     }

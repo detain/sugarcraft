@@ -99,6 +99,16 @@ final class PermissionGate
     private int $totalBlocks = 0;
     private ?string $lastBlockedCategory = null;
 
+    /**
+     * The interactive session's "always allow" grants (roadmap 1.C-2) — see
+     * {@see withSessionRules()}. Not a constructor parameter, and not
+     * readonly: it is set only on a CLONE, so the gate a launch built is never
+     * changed under anybody holding it.
+     *
+     * @var list<PermissionRule>
+     */
+    private array $sessionRules = [];
+
     public function __construct(
         private readonly PermissionMode $mode,
         /** @var PermissionRule[] */
@@ -157,6 +167,53 @@ final class PermissionGate
     public function rules(): array
     {
         return array_values($this->rules);
+    }
+
+    /**
+     * This gate, plus the `Allow` rules an interactive session's "always"
+     * answers produced ({@see SessionPermissionMemo}, roadmap 1.C-2).
+     *
+     * THEY ONLY EVER ANSWER A QUESTION. A session rule is consulted after
+     * everything else has decided, and only when the decision is `Ask`: it
+     * turns that question into the `Allow` the user already gave, and it can
+     * never touch a `Deny` — a configured deny rule, Plan mode's refusals,
+     * `dont-ask`, Auto's classifier blocks and the `rm -rf /` breaker all win
+     * exactly as they did. That is narrower than Appendix O §5.1's "prepended
+     * `permissionRules` entry", on purpose: prepended, a remembered
+     * `Allow Bash(git *)` would outrank a configured `Deny Bash(git push *)`,
+     * and "don't ask me again" is not "ignore my policy".
+     *
+     * A CLONE, so the circuit-breaker state at the moment of the call carries
+     * over and the receiver is left untouched. Rules that are not `Allow` are
+     * refused: a remembered answer cannot take capability away, and the gate's
+     * configured rules are where a refusal is spelled.
+     *
+     * @param list<PermissionRule> $rules
+     *
+     * @throws \InvalidArgumentException when a rule is not an `Allow`
+     */
+    public function withSessionRules(array $rules): self
+    {
+        foreach ($rules as $rule) {
+            if (!$rule instanceof PermissionRule || $rule->action !== PermissionAction::Allow) {
+                throw new \InvalidArgumentException('A session permission rule can only allow.');
+            }
+        }
+
+        $copy = clone $this;
+        $copy->sessionRules = array_values($rules);
+
+        return $copy;
+    }
+
+    /**
+     * The session's remembered grants, read-only — see {@see withSessionRules()}.
+     *
+     * @return list<PermissionRule>
+     */
+    public function sessionRules(): array
+    {
+        return $this->sessionRules;
     }
 
     /**
@@ -327,13 +384,25 @@ final class PermissionGate
             return PermissionDecision::Deny;
         }
 
-        // 1. Check explicit rules first (highest priority)
-        $ruleDecision = $this->evaluateRules($call, $argumentsKnown, $projectRoot);
-        if ($ruleDecision !== null) {
-            return $ruleDecision;
-        }
+        // 1. Check explicit rules first (highest priority), then 2. the
+        // mode-specific logic; 3. a session "always" can only answer an Ask.
+        $decision = $this->evaluateRules($call, $argumentsKnown, $projectRoot)
+            ?? $this->evaluateMode($call, $commitAutoStrikes, $argumentsKnown, $projectRoot);
 
-        // 2. Mode-specific logic
+        return $decision === PermissionDecision::Ask && $this->sessionAllows($call, $argumentsKnown, $projectRoot)
+            ? PermissionDecision::Allow
+            : $decision;
+    }
+
+    /**
+     * Mode-specific logic — step 2 of {@see decide()}.
+     */
+    private function evaluateMode(
+        ToolCall $call,
+        bool $commitAutoStrikes,
+        bool $argumentsKnown,
+        ?string $projectRoot,
+    ): PermissionDecision {
         return match ($this->mode) {
             PermissionMode::Default => $this->evaluateDefault($call),
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call, $projectRoot),
@@ -364,6 +433,24 @@ final class PermissionGate
             }
         }
         return null;
+    }
+
+    /**
+     * Whether a remembered session grant answers this call. The rules are
+     * `Allow`s, so {@see PermissionRule::matches()} applies the permissive
+     * arm: every command of a chain must match, a substitution or a writing
+     * redirection grants nothing, and an unknowable subject (a declaration)
+     * never matches.
+     */
+    private function sessionAllows(ToolCall $call, bool $argumentsKnown, ?string $projectRoot): bool
+    {
+        foreach ($this->sessionRules as $rule) {
+            if ($rule->matches($call, $argumentsKnown, $projectRoot)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function actionToDecision(PermissionAction $action): PermissionDecision

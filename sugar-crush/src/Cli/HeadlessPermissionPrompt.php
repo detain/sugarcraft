@@ -33,9 +33,11 @@ use SugarCraft\Crush\Tools\ToolCall;
  * {@see \SugarCraft\Crush\Runtime::settleAsk()}, is the natural fit here rather
  * than a compromise. The TUI is a different problem and this class is
  * deliberately not the answer to it: `Chat`'s prompt is a `Deferred` settled by
- * a later `Msg`, and `EngineBackend::completeAsync()` runs the turn in a forked
- * child whose channel home is one-way, so neither can be served by a closure
- * that blocks on a file descriptor. See the known-gap entry in `README.md`.
+ * a later `Msg`, so it cannot be served by a closure that blocks on a file
+ * descriptor. The TUI answers instead over the turn's two-way frame channel
+ * (roadmap 1.C-2: `Chat` starts engine turns through
+ * {@see \SugarCraft\Crush\Backend\InteractiveTurn::completeInteractive()}
+ * and puts each `ask` frame up as its modal).
  *
  * ## Two behaviours, decided by one probe
  *
@@ -235,11 +237,13 @@ use SugarCraft\Crush\Tools\ToolCall;
  * `{tool, kind, reason}` triple from both arms can now branch on the one fact
  * stderr alone carried: whether a person said no or nobody was there to say it.
  *
- * WHY THE FACT CANNOT CROSS THROUGH THIS CLASS'S OWN CONTRACT, measured rather
- * than assumed: the approver answers `Runtime::settleAsk()`'s
- * `\Closure(ToolCall, HookResult): bool` — one bit, and widening it edits
- * `Runtime.php` and the engine seam, neither of which is this file; and the
- * refusal's `reason` TEXT is rendered in `Runtime.php` behind the
+ * WHY THE FACT DOES NOT CROSS THROUGH THIS CLASS'S OWN CONTRACT. The contract
+ * is no longer one bit — since roadmap 1.C-2 `Runtime::settleAsk()` also takes
+ * an {@see \SugarCraft\Crush\Permissions\ApprovalVerdict}, whose
+ * `unanswered()` would render the no-terminal arm as `Permission required:` —
+ * and this class still answers `bool` ON PURPOSE: that verdict would change
+ * the refusal's kind and prefix, which is exactly what the decision above
+ * rules out. The refusal's `reason` TEXT is rendered in `Runtime.php` behind the
  * `Permission denied:` prefix whose byte-identity across the two arms
  * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} pins — a reason
  * tag there would move the observer line the same test exists to keep shared.

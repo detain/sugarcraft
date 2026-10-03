@@ -2596,7 +2596,9 @@ final class Runtime
                 // precedence is structurally untouched.
                 $hookResult = $this->hookManager->resolveAsk($hookResult, true);
             } else {
-                $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest);
+                // $kind is refined by the settlement itself: an approver that
+                // answers "nobody answered" (1.C-2) is Unanswered, not Refused.
+                $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest, $kind);
                 if ($memoKey !== null && ($hookResult->isAllowed() || $hookResult->isModified())) {
                     $this->taskGrants[$memoKey] = true;
                 }
@@ -3377,14 +3379,32 @@ final class Runtime
      * {@see \SugarCraft\Crush\Permissions\DenialKind::Unanswered} rather
      * than by this message's wording alone.
      *
+     * THE APPROVER'S ANSWER IS A VERDICT, NOT A BIT (roadmap 1.C-2). It may
+     * return a literal `true` (grant) as before, or an
+     * {@see \SugarCraft\Crush\Permissions\ApprovalVerdict}, which carries the
+     * two facts a `bool` dropped: a question NOBODY answered (the TUI's frame
+     * channel closing under it) settles as
+     * {@see \SugarCraft\Crush\Permissions\DenialKind::Unanswered} — written
+     * back through `$kind` for {@see gate()} — rather than as a refusal, and a
+     * refusal's feedback (the user's note, or the reason a parallel
+     * sub-agent's question could not be put) reaches the model through
+     * {@see HookManager::resolveAsk()}. Anything else an approver returns is
+     * a feedback-less refusal, exactly as before.
+     *
      * @param ?callable $onPermissionRequest see {@see run()}
+     * @param DenialKind $kind set to the kind a refusal from here is: Unanswered
+     *                         when nobody is attached or nobody answered,
+     *                         otherwise left as the caller set it
      */
     private function settleAsk(
         ToolCall $toolCall,
         HookResult $ask,
         ?callable $onPermissionRequest,
+        DenialKind &$kind = DenialKind::Refused,
     ): HookResult {
         if ($onPermissionRequest === null) {
+            $kind = DenialKind::Unanswered;
+
             // THE MESSAGE NO LONGER OPENS "Permission required and", because
             // {@see gate()} now prefixes this arm with
             // {@see \SugarCraft\Crush\Permissions\DenialKind::Unanswered} —
@@ -3413,13 +3433,19 @@ final class Runtime
         // {@see \SugarCraft\Crush\Chat::gateToolCall()}'s ASK branch.
         $toolCall = self::asAsked($toolCall, $ask);
 
-        // `=== true`, never a (bool) cast: only a literal true is a grant.
-        // A cast would turn ANY truthy return into permission, and the
-        // obvious wiring for this seam is Chat handing over an approver that
-        // returns a PermissionReply — every case of which, Reject included,
-        // is a truthy object. That is exactly how ForeignAgentPresetRegistry
-        // silently granted tool access earlier in this build.
-        return $this->hookManager->resolveAsk($ask, $onPermissionRequest($toolCall, $ask) === true);
+        // `=== true` or a permitting verdict, never a (bool) cast: only a
+        // literal true is a grant. A cast would turn ANY truthy return into
+        // permission, and the obvious wiring for this seam is Chat handing
+        // over an approver that returns a PermissionReply — every case of
+        // which, Reject included, is a truthy object. That is exactly how
+        // ForeignAgentPresetRegistry silently granted tool access earlier in
+        // this build. ApprovalVerdict::of() keeps that rule.
+        $verdict = \SugarCraft\Crush\Permissions\ApprovalVerdict::of($onPermissionRequest($toolCall, $ask));
+        if ($verdict->isUnanswered()) {
+            $kind = DenialKind::Unanswered;
+        }
+
+        return $this->hookManager->resolveAsk($ask, $verdict);
     }
 
     /**
