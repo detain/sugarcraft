@@ -591,6 +591,22 @@ final class Chat implements Model
     private const TRANSCRIPT_FLUSH_SUBSCRIPTION = 'crush.transcript-flush';
 
     /**
+     * Reconciliation id of the read-only window's lock retry (audit SES-3
+     * residual) — declared by {@see subscriptions()} only while the open
+     * session is read-only because another TUI holds it.
+     */
+    private const SESSION_LOCK_RETRY_SUBSCRIPTION = 'crush.session-lock-retry';
+
+    /**
+     * How often a read-only window retries the lock (seconds). The retry is
+     * one non-blocking `flock()` on a file in the config directory
+     * ({@see SessionLock::acquire()}), so the period is about how soon after
+     * the other window closes this one notices, not about cost: a second reads
+     * as "at once" to someone who just quit the other terminal.
+     */
+    private const SESSION_LOCK_RETRY_SECONDS = 1.0;
+
+    /**
      * How often the runtime-notice inbox is polled (seconds) while the tick is
      * declared at all.
      *
@@ -1747,7 +1763,9 @@ final class Chat implements Model
      * When another TUI already holds that session, the Chat comes back
      * READ-ONLY: the transcript is on screen, a notice says who has it and
      * offers `/branch` to fork it, and nothing typed is sent or saved until
-     * the user forks or switches to a session no one else has open. Every
+     * the user forks or switches to a session no one else has open — or the
+     * other TUI lets go, which the lock retry {@see subscriptions()} ticks
+     * while read-only notices within a second ({@see retakenSessionLock()}). Every
      * later session switch moves the lock with it
      * ({@see relockedForCurrentSession()}).
      *
@@ -1813,6 +1831,65 @@ final class Chat implements Model
                 $this->currentSessionName ?? $id,
                 self::lockHolderClause($this->sessionStore->sessionLockHolder($id)),
             ))],
+        ]);
+    }
+
+    /**
+     * The read-only window's way back to writable (audit SES-3 residual): the
+     * lock retry {@see subscriptions()} ticks while {@see $readOnlySession}
+     * is set. Unchanged — the same instance, so `update()` saves nothing —
+     * while the other TUI still holds the session.
+     *
+     * Before this a read-only window became writable only on a session
+     * switch, `/branch` or a relaunch, so closing the OTHER terminal left this
+     * one refusing every prompt on a session nobody held any more.
+     *
+     * THE TRANSCRIPT IS RELOADED FROM THE STORE, never kept: the holder kept
+     * writing after this window loaded, and this window's copy is the older
+     * one. Saving it — which the first change after the upgrade would do —
+     * would erase whatever the holder added, the very loss the lock exists to
+     * prevent. The reload also closes the "loaded before locking" stale-load
+     * residual for this path. The state tied to the transcript being replaced
+     * goes with it ({@see sessionChangeResets()}), and a draft a refusal
+     * stashed comes back into an empty box, as `/branch` puts it back.
+     *
+     * NOT WHILE A REQUEST IS IN FLIGHT: replacing the history under a running
+     * request would hand its reply a transcript it was not asked about. The
+     * retry simply waits for the next tick.
+     */
+    private function retakenSessionLock(): self
+    {
+        $id = $this->currentSessionId;
+        if (!$this->readOnlySession
+            || !$this->sessionLocking
+            || $this->inFlight
+            || $id === null
+            || !$this->sessionStore instanceof EnhancedSessionStore
+        ) {
+            return $this;
+        }
+
+        $lock = $this->sessionStore->lockSession($id);
+        if ($lock === null) {
+            return $this;
+        }
+
+        // Anything still waiting on the debounce tick is written first, for
+        // the reason switchToSession() does. A read-only window schedules
+        // nothing (persistTranscript()), so this is a guard, not a save.
+        $this->transcriptWriter->flush();
+        $draft = $this->readOnlyDraft;
+
+        return $this->mutate([
+            ...$this->sessionChangeResets(),
+            'sessionLock' => $lock,
+            'readOnlySession' => false,
+            'readOnlyDraft' => null,
+            'history' => [...self::loadTranscript($this->sessionStore, $id), Message::notice(sprintf(
+                self::SESSION_WRITABLE_NOTICE,
+                $this->currentSessionName ?? $id,
+            ))],
+            ...($draft !== null && trim($this->inputBuf) === '' ? ['inputBuf' => $draft] : []),
         ]);
     }
 
@@ -2161,6 +2238,9 @@ final class Chat implements Model
             $this->transcriptWriter->flush();
 
             return [$this, null];
+        }
+        if ($msg instanceof SessionLockRetryMsg) {
+            return [$this->retakenSessionLock(), null];
         }
         if ($msg instanceof InitialPromptMsg) {
             return $this->submitInitialPrompt($msg->prompt);
@@ -9151,7 +9231,16 @@ final class Chat implements Model
      */
     public const READ_ONLY_SESSION_NOTICE = 'Session %s is open in another sugarcrush%s, so this window is '
         . 'read-only: nothing typed here is sent to the model or saved to that session. Type /branch to fork '
-        . 'it into a new session this window owns and carry on there.';
+        . 'it into a new session this window owns and carry on there, or close the other window and this one '
+        . 'becomes writable by itself.';
+
+    /**
+     * The row {@see retakenSessionLock()} adds when a read-only window takes
+     * the lock after the other TUI let go: `%s` the session's name or id.
+     * Public for the tests that quote it.
+     */
+    public const SESSION_WRITABLE_NOTICE = 'The other sugarcrush has closed session %s, so this window can write '
+        . 'to it now. The transcript was reloaded to include what it saved.';
 
     /**
      * The row {@see refuseReadOnly()} adds for input a read-only session will
@@ -16854,6 +16943,22 @@ final class Chat implements Model
                 self::TRANSCRIPT_FLUSH_SUBSCRIPTION,
                 $this->transcriptWriter->delaySeconds(),
                 static fn (): \SugarCraft\Core\Msg => new TranscriptFlushMsg(),
+            );
+        }
+
+        // The read-only window's lock retry (audit SES-3 residual). Declared
+        // only while another TUI holds the open session, so a writable
+        // session — every session but a second window's — pays nothing; the
+        // reconcile after the retry that wins the lock cancels it.
+        if ($this->readOnlySession
+            && $this->sessionLocking
+            && $this->currentSessionId !== null
+            && $this->sessionStore instanceof EnhancedSessionStore
+        ) {
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                self::SESSION_LOCK_RETRY_SUBSCRIPTION,
+                self::SESSION_LOCK_RETRY_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new SessionLockRetryMsg(),
             );
         }
 

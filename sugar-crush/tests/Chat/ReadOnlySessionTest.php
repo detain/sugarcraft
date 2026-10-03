@@ -12,6 +12,7 @@ use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionLock;
+use SugarCraft\Crush\SessionLockRetryMsg;
 use SugarCraft\Crush\TranscriptFlushMsg;
 
 /**
@@ -243,6 +244,117 @@ final class ReadOnlySessionTest extends TestCase
         self::assertFalse($one->isReadOnlySession());
         self::assertFalse($two->isReadOnlySession());
         self::assertNotNull($this->store->lockSession('shared'));
+    }
+
+    // =====================================================================
+    // Becoming writable when the other window lets go (SES-3 residual)
+    // =====================================================================
+
+    private const LOCK_RETRY = 'crush.session-lock-retry';
+
+    /**
+     * THE RESIDUAL: closing the window that held the session used to leave
+     * this one refusing every prompt until a switch, `/branch` or relaunch.
+     * The retry tick takes the lock, and the transcript is RELOADED — the
+     * holder wrote after this window loaded, and saving the stale copy would
+     * erase that.
+     */
+    public function testAReadOnlyWindowBecomesWritableOnceTheOtherWindowLetsGo(): void
+    {
+        $writer = $this->open();
+        $reader = $this->open();
+        self::assertTrue($reader->isReadOnlySession(), 'fixture: the writer holds the session');
+        self::assertTrue($reader->subscriptions()?->has(self::LOCK_RETRY), 'a read-only window retries the lock');
+
+        [$sent] = self::typed($writer, 'written after the reader loaded')->update(new KeyMsg(KeyType::Enter));
+        $sent->update(new TranscriptFlushMsg());
+        self::releaseLockOf($sent);
+        unset($writer, $sent);
+
+        [$upgraded, $cmd] = $reader->update(new SessionLockRetryMsg());
+
+        self::assertNull($cmd);
+        self::assertFalse($upgraded->isReadOnlySession());
+        self::assertContains(
+            'written after the reader loaded',
+            array_map(static fn(Message $m): string => $m->content, $upgraded->history),
+            'the transcript was reloaded from the store, not kept',
+        );
+        self::assertSame(
+            sprintf(Chat::SESSION_WRITABLE_NOTICE, 'Shared work'),
+            $upgraded->history[\count($upgraded->history) - 1]->content,
+        );
+        self::assertNull($this->store->lockSession('shared'), 'this window holds the session now');
+        self::assertFalse($upgraded->subscriptions()?->has(self::LOCK_RETRY) ?? false, 'and stops retrying');
+    }
+
+    /**
+     * And the upgraded window really writes: its next prompt is sent and saved
+     * on top of what the other window wrote, not over it.
+     */
+    public function testTheUpgradedWindowSavesOnTopOfTheOtherWindowsWork(): void
+    {
+        $writer = $this->open();
+        $reader = $this->open();
+        [$sent] = self::typed($writer, 'from the first window')->update(new KeyMsg(KeyType::Enter));
+        $sent->update(new TranscriptFlushMsg());
+        self::releaseLockOf($sent);
+        unset($writer, $sent);
+
+        [$upgraded] = $reader->update(new SessionLockRetryMsg());
+        [$prompted, $cmd] = self::typed($upgraded, 'from the second window')->update(new KeyMsg(KeyType::Enter));
+        $prompted->flushTranscript();
+
+        self::assertNotNull($cmd, 'the prompt was dispatched');
+        $saved = array_column((array) $this->store->loadTranscript('shared'), 'content');
+        self::assertContains('from the first window', $saved);
+        self::assertContains('from the second window', $saved);
+    }
+
+    public function testWhileTheOtherWindowStillHoldsItTheRetryChangesNothing(): void
+    {
+        $writer = $this->open();
+        $reader = $this->open();
+
+        [$same, $cmd] = $reader->update(new SessionLockRetryMsg());
+
+        self::assertSame($reader, $same, 'no clone, so nothing is saved or repainted');
+        self::assertNull($cmd);
+        self::assertTrue($same->isReadOnlySession());
+        self::assertFalse($writer->isReadOnlySession());
+    }
+
+    /** A draft a refusal stashed comes back into the box, as `/branch` puts it back. */
+    public function testTheRefusedDraftComesBackWhenTheWindowBecomesWritable(): void
+    {
+        $writer = $this->open();
+        [$refused] = self::typed($this->open(), 'my real question')->update(new KeyMsg(KeyType::Enter));
+        self::assertSame('', $refused->inputBuf, 'fixture: refused and stashed');
+        self::releaseLockOf($writer);
+        unset($writer);
+
+        [$upgraded] = $refused->update(new SessionLockRetryMsg());
+
+        self::assertFalse($upgraded->isReadOnlySession());
+        self::assertSame('my real question', $upgraded->inputBuf);
+    }
+
+    /** A writable window, and a window that never asked for locking, poll nothing. */
+    public function testOnlyAReadOnlyWindowDeclaresTheRetry(): void
+    {
+        $writer = $this->open();
+        $unlocked = new Chat(sessionStore: $this->store, currentSessionId: 'shared');
+
+        self::assertFalse($writer->subscriptions()?->has(self::LOCK_RETRY) ?? false);
+        self::assertFalse($unlocked->subscriptions()?->has(self::LOCK_RETRY) ?? false);
+    }
+
+    /** What the holding process exiting does to its lock, in-process. */
+    private static function releaseLockOf(Chat $chat): void
+    {
+        $lock = (new \ReflectionProperty(Chat::class, 'sessionLock'))->getValue($chat);
+        self::assertInstanceOf(SessionLock::class, $lock, 'fixture: this window holds the lock');
+        $lock->release();
     }
 
     private function open(): Chat

@@ -169,6 +169,9 @@ new one this window owns and carries on there, and the refused draft comes back
 in the box;
 commands that only read or change the window itself (`/help`, `/sessions`,
 `/theme`, `/model`, …) still work, and so does switching to another session.
+Close the other window and this one notices within a second: it takes the
+session over, reloads the transcript (so whatever the other window saved is
+kept), says so, and puts a refused draft back in the box.
 The guard is a `flock()` on `~/.sugar-crush/sessions/<id>.lock`, so it is
 released the moment the holding process exits, however it exits. Where the lock
 cannot be taken at all (a home directory that refuses the file), the session
