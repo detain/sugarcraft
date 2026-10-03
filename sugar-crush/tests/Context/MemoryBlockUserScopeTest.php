@@ -70,7 +70,7 @@ final class MemoryBlockUserScopeTest extends TestCase
         $this->store->add('Prefer short answers.', MemoryScope::User);
 
         $block = MemoryBlock::capture($this->store);
-        $rendered = $block->render();
+        $rendered = self::idless($block->index());
 
         $this->assertCount(1, $block->userEntries());
         $this->assertSame([], $block->entries());
@@ -94,7 +94,7 @@ final class MemoryBlockUserScopeTest extends TestCase
         $local = new MemoryStore($localDir);
         $local->add('Repository note.', MemoryScope::Project);
 
-        $rendered = MemoryBlock::capture($this->store, $local)->render();
+        $rendered = self::idless(MemoryBlock::capture($this->store, $local)->index());
 
         $personal = strpos($rendered, 'Personal preference.');
         $repository = strpos($rendered, 'Repository note.');
@@ -119,7 +119,7 @@ final class MemoryBlockUserScopeTest extends TestCase
         $block = MemoryBlock::capture($this->store, $local);
 
         $this->assertSame([], $block->userEntries());
-        $this->assertStringNotContainsString('Planted by the checkout', $block->render());
+        $this->assertStringNotContainsString('Planted by the checkout', self::idless($block->index()));
     }
 
     public function testUserNotesAreCappedAtFourAndProjectNotesKeepTheRest(): void
@@ -127,11 +127,11 @@ final class MemoryBlockUserScopeTest extends TestCase
         for ($i = 1; $i <= 6; $i++) {
             $this->store->add("personal note {$i}", MemoryScope::User);
         }
-        for ($i = 1; $i <= 12; $i++) {
+        for ($i = 1; $i <= MemoryBlock::MAX_ENTRIES; $i++) {
             $this->store->add("project note {$i}", MemoryScope::Project);
         }
 
-        $rendered = MemoryBlock::capture($this->store)->render();
+        $rendered = self::idless(MemoryBlock::capture($this->store)->index());
 
         $this->assertSame(MemoryBlock::USER_MAX_ENTRIES, preg_match_all('/personal note \d+/', $rendered));
         $this->assertSame(
@@ -145,26 +145,27 @@ final class MemoryBlockUserScopeTest extends TestCase
     public function testFewerUserNotesLeaveTheirUnusedSlotsToTheProject(): void
     {
         $this->store->add('one personal note', MemoryScope::User);
-        for ($i = 1; $i <= 12; $i++) {
+        for ($i = 1; $i <= MemoryBlock::MAX_ENTRIES; $i++) {
             $this->store->add("project note {$i}", MemoryScope::Project);
         }
 
-        $rendered = MemoryBlock::capture($this->store)->render();
+        $rendered = self::idless(MemoryBlock::capture($this->store)->index());
 
         $this->assertSame(MemoryBlock::MAX_ENTRIES - 1, preg_match_all('/project note \d+/', $rendered));
     }
 
     public function testUserNotesAreCappedAtTheirByteBudget(): void
     {
-        // Each line ~410 bytes: two fit in 1024, a third does not.
+        // Each index line ~460 bytes (the preview is short, the tags are
+        // not): two fit in 1024, a third does not.
         for ($i = 1; $i <= 3; $i++) {
-            $this->store->add("personal {$i} " . str_repeat('x', 400), MemoryScope::User);
+            $this->store->add("personal {$i}", MemoryScope::User, [str_repeat('x', 400)]);
         }
         $this->store->add('project survives', MemoryScope::Project);
 
-        $rendered = MemoryBlock::capture($this->store)->render();
+        $rendered = self::idless(MemoryBlock::capture($this->store)->index());
 
-        $this->assertSame(2, preg_match_all('/personal \d x+/', $rendered));
+        $this->assertSame(2, preg_match_all('/personal \d \(tags: x+/', $rendered));
         $this->assertStringContainsString('project survives', $rendered);
         $this->assertStringContainsString(' 1 further note(s) were omitted by those limits.', $rendered);
     }
@@ -176,10 +177,20 @@ final class MemoryBlockUserScopeTest extends TestCase
         file_put_contents($this->dir . '/user/broken.md', "no frontmatter here\n");
 
         $block = MemoryBlock::capture($this->store);
-        $rendered = $block->render();
+        $rendered = self::idless($block->index());
 
         $this->assertCount(1, $block->skipped());
         $this->assertStringContainsString('1 memory note(s) could not be read and are not included here: broken.md (', $rendered);
         $this->assertStringNotContainsString('project memory note(s)', $rendered);
+    }
+
+    /**
+     * The index with each line's `id: ` stripped, so assertions about budget,
+     * order and provenance read the note text (5.1-1 added the ids; their
+     * shape is pinned in MemoryIndexInjectionTest).
+     */
+    private static function idless(string $index): string
+    {
+        return (string) preg_replace('/^(- \[[^\]]*\] )[A-Za-z0-9_.-]+: /m', '$1', $index);
     }
 }

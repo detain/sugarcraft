@@ -252,10 +252,11 @@ is refused with a reason — run it alone or allow it by rule.
 
 ## `/memory add` worked but the model does not know
 
-`MemoryBlock` folds **`project` scope only** into the system prompt, and
-`/memory add` defaults to `user`. Use `--scope project`.
+`MemoryBlock` folds an **index** of the `user` and `project` scopes into the
+system prompt — one line per note, not the note text — and never the `agent`
+scope, where `/memory import` lands. `/memory add` defaults to `project`.
 
-Two more bounds: 12 entries, newest first, and 4096 bytes of rendered note
+Two more bounds: 40 entries, newest first, and 4096 bytes of rendered note
 lines. And the block is frozen at capture, so a note written mid-turn lands on
 the **next** `Runtime`, not the next step.
 

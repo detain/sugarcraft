@@ -933,8 +933,13 @@ final class BaseSystemPromptTest extends TestCase
         // tree): 8,086 = 8,504 - 745 (1.A-1's git-section deletion) + 327
         // (3.I-1's Edit-paragraph replace); the two edits sit in disjoint
         // regions, so the merged golden is both edits applied verbatim.
+        // MEASURED 2026-10-03 at roadmap 5.1-1: 8,086 -> 9,426, inside the
+        // <project-memory> section only: the header now describes an index
+        // wording, each note line carries its id (`note-2: `, `note-1: `), and the
+        // standing memory instructions follow the fence. Every byte before the
+        // fence and after the instructions is identical.
         self::assertSame(
-            8086,
+            9426,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',

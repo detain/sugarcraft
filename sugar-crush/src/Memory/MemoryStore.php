@@ -104,6 +104,12 @@ use Symfony\Component\Yaml\Yaml;
 final class MemoryStore
 {
     private const MAX_INDEX_LINES = 200;
+
+    /**
+     * How much of a note's content its index entry previews, in bytes — here
+     * and in the prompt's memory index ({@see \SugarCraft\Crush\Context\MemoryBlock}).
+     */
+    public const INDEX_PREVIEW_BYTES = 80;
     private const MAX_INDEX_BYTES = 25 * 1024;
     private const MEMORY_INDEX_FILENAME = 'MEMORY.md';
 
@@ -724,8 +730,8 @@ final class MemoryStore
         $lines = [];
         $lines[] = '[' . strtoupper($entry->type()) . '] ' . $entry->id() . $tagLine;
 
-        $preview = strlen($entry->content()) > 80
-            ? substr($entry->content(), 0, 80) . '...'
+        $preview = strlen($entry->content()) > self::INDEX_PREVIEW_BYTES
+            ? substr($entry->content(), 0, self::INDEX_PREVIEW_BYTES) . '...'
             : $entry->content();
         $lines[] = $preview;
         $lines[] = '';

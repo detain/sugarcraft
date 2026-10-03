@@ -9,8 +9,10 @@ use SugarCraft\Crush\Memory\MemoryEntry;
 use SugarCraft\Crush\Memory\MemoryStore;
 
 /**
- * Renders the project's accreted memory entries as a fenced block for the
- * system prompt (crush_code.md Phase 5 item 9).
+ * Renders the memory INDEX for the system prompt — one line per saved note
+ * (type, id, opening words, tags), never the note bodies — plus the standing
+ * instructions that tell the model when to save a note and when not to
+ * (roadmap 5.1-1; crush_code.md Phase 5 item 9 before it).
  *
  * Shaped after {@see EnvironmentBlock} — same directory, same
  * capture-then-render split — so
@@ -24,72 +26,54 @@ use SugarCraft\Crush\Memory\MemoryStore;
  * step — asserted by
  * `tests/Integration/MemoryPromptWiringTest::testAFreshRuntimeSeesTheNewNote()`.
  *
+ * AN INDEX, NOT BODIES (roadmap 5.1-1)
+ * ------------------------------------
+ * This block used to render the twelve newest note BODIES. A body is up to
+ * {@see MAX_ENTRY_BYTES}, so the byte budget admitted as few as eight notes and
+ * the rest were invisible: the model could not know a note existed, let alone
+ * read it. Each line is now an index entry in the shape
+ * {@see MemoryStore}'s own `MEMORY.md` index uses — `[type] id`, the tags and
+ * the first {@see MemoryStore::INDEX_PREVIEW_BYTES} bytes of the content — so
+ * the same budget lists several times as many notes, each addressable by id.
+ * The full text is read on demand, not paid for on every step.
+ *
  * WHY SCOPE, NOT SEARCH
  * --------------------
- * Phase 5 item 9 says to "run `MemoryStore::search()` against the current turn
- * and/or project-scope entries". Only the second half of that is implemented,
- * and the first half is not a simplification — it does not work.
- * {@see MemoryStore::search()} is a case-insensitive SUBSTRING match: it keeps
- * an entry when the query appears literally inside the entry's content, type or
- * one of its tags. Passing a whole user turn as the query therefore asks
- * "does this entire sentence appear verbatim inside a memory entry", which is
- * essentially never true. Recall built that way would be permanently and
- * silently empty — a wired feature that never fires, which is worse than an
- * unwired one because nothing looks broken.
+ * The index is query-independent: {@see MemoryStore::list()} per scope, one
+ * directory read each, captured once per session. A query-dependent block was
+ * rejected three times over — {@see MemoryStore::search()} is a substring
+ * match, so a whole user turn as the query matches nothing; a per-term search
+ * would re-scan the store on every step of the loop; and turn-varying text in
+ * the system prompt voids the cached prefix behind it. Turn-dependent
+ * retrieval belongs in the turn (roadmap 5.3), not in the preamble.
  *
- * The alternative considered and rejected was tokenising the turn and searching
- * per term, ranking by how many terms hit. It was rejected on three grounds,
- * in increasing order of importance:
- *
- *   - Cost. `search()` reads every `.md` file in EVERY scope directory and
- *     YAML-parses each one, per call. `buildSystemPrompt()` runs once per step
- *     of the agentic loop (up to `maxSteps`, default 1000), so a per-term search
- *     would be terms x steps full-store scans per turn.
- *   - Prompt caching, stated carefully because P3.S1 inverted this argument
- *     when it moved the volatile env block to the very END of the system prompt
- *     (the ordering invariant recorded in
- *     {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()}). Turn-varying
- *     content voids the cacheable prefix of every layer AFTER it — and
- *     {@see EnvironmentBlock::render()} still shells out to
- *     `git status --porcelain` on every call but now sits BEHIND this block, so
- *     its churn no longer reaches this prefix at all: this block stays stable
- *     across the first edit of a session and every edit after it. The live-poll
- *     behaviour itself is pinned, deliberately, by
- *     `tests/Providers/PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
- *     With env last there is no earlier churn left to mask the cost, so the
- *     accurate claim is broader than it used to be: a query-dependent memory
- *     block would newly void the prefix in EVERY session, read-only and
- *     write-heavy alike. That makes caching a real and now UNMASKED reason,
- *     still SECONDARY — not the decisive one.
- *   - Placement. This is the decisive one. The system prompt is where STANDING
- *     instructions live: it is what already carries root `AGENTS.md`/`CLAUDE.md`.
- *     Turn-dependent retrieval belongs in the turn, not in the preamble.
- *     Project-scope memory entries genuinely ARE standing project convention,
- *     which is what makes them belong here and makes a query unnecessary.
- *
- * So recall is {@see MemoryStore::list()} at {@see MemoryScope::Project} and
- * {@see MemoryScope::User}: query-independent, one directory read per scope
- * instead of a whole-store scan, and scope-authoritative — `list()` reads only
- * that scope's directory AND re-checks each entry's own `scope()` field, so
- * nothing from another scope can leak in.
- *
- * USER SCOPE, UNDER ITS OWN SUB-BUDGET (roadmap 0.6, decision D4)
- * ---------------------------------------------------------------
+ * USER SCOPE FIRST, UNDER ITS OWN SUB-BUDGET (roadmap 0.6, decision D4)
+ * ---------------------------------------------------------------------
  * User memory follows the operator across every project, which is the point of
- * it — "I prefer tabs", "answer tersely" — and also the reason it is bounded
- * apart: it is the operator's standing preference, read in every repository the
- * operator opens, so it is folded in deliberately and capped where it cannot
- * crowd the project out. User notes come only from the HOME store (a clone's
- * `.sugar-crush/memory` cannot speak as the operator), are listed FIRST under
- * their own label, and spend at most {@see USER_MAX_ENTRIES} notes and
- * {@see USER_MAX_BYTES} bytes of the one {@see MAX_ENTRIES} / {@see MAX_BYTES}
- * budget, so project notes always keep the rest.
+ * it — "I prefer tabs", "answer tersely" — and also the risk 5.1-1 records as a
+ * decision rather than an accident: the operator's index reaches the prompt in
+ * every repository the operator opens. It is bounded apart for that reason.
+ * User notes come only from the HOME store (a clone's `.sugar-crush/memory`
+ * cannot speak as the operator), are listed FIRST under their own label, and
+ * spend at most {@see USER_MAX_ENTRIES} lines and {@see USER_MAX_BYTES} bytes of
+ * the one {@see MAX_ENTRIES} / {@see MAX_BYTES} budget, so project notes always
+ * keep the rest. Project notes follow from the repo-local store and the home
+ * store's keyed project scope.
+ *
+ * STANDING INSTRUCTIONS
+ * ---------------------
+ * {@see STANDING_INSTRUCTIONS} follow the fence: harness-written text on when
+ * to save, which types exist, and what NOT to save (what the code already
+ * says). They are rendered whenever a store is wired, even with no notes yet —
+ * an empty memory is exactly when the model needs to know it may write one.
+ * They sit OUTSIDE the fence because they are the harness's words; only the
+ * index is the operator's (and possibly a checkout's) text.
  *
  * WHAT IS DELIBERATELY NOT HERE
  * -----------------------------
  * Agent-scope entries. That scope is where `/memory import` lands another
  * tool's memory on purpose (see {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}),
- * so those bodies stay listable and searchable until the user promotes what
+ * so those notes stay listable and searchable until the user promotes what
  * they want; `/memory add --scope agent` says so in its reply.
  *
  * A NOTE ON THE FENCE NAME
@@ -134,18 +118,20 @@ use SugarCraft\Crush\Memory\MemoryStore;
 final readonly class MemoryBlock implements PromptSection
 {
     /**
-     * Most notes rendered, newest first. Anything past this is dropped and the
-     * block says so.
+     * Most index lines rendered (one per note), newest first. Anything past
+     * this is dropped and the block says so.
      *
      * Bounded because the fold happens on EVERY turn: the block is part of the
      * system prompt, so an unbounded one grows the prompt for the rest of the
      * session, and the context window and the compaction tiers are now real
      * (crush_code.md Phase 5 items 4/5) — an inflating prompt pushes a session
-     * into automatic compaction sooner. Twelve is enough to carry a project's
-     * standing conventions and small enough that the block cannot become the
-     * largest thing in the prompt.
+     * into automatic compaction sooner. Forty, up from the twelve BODIES this
+     * block used to carry (roadmap 5.1-1): an index line is a fraction of a
+     * body, so forty of them fit the same {@see MAX_BYTES} that twelve bodies
+     * could overflow, and the byte budget rather than this count is what
+     * usually binds.
      */
-    public const MAX_ENTRIES = 12;
+    public const MAX_ENTRIES = 40;
 
     /**
      * Total budget for the rendered note lines, in BYTES.
@@ -157,8 +143,8 @@ final readonly class MemoryBlock implements PromptSection
      * this codebase keeps estimated and provider-counted figures apart.
      *
      * DOMAIN, stated exactly because the first version of this docblock got it
-     * wrong: the budget covers the summed RENDERED NOTE LINES — `- `, the
-     * `[type]`, the content and the `(tags: …)` suffix all inside it, because
+     * wrong: the budget covers the summed RENDERED INDEX LINES — `- `, the
+     * `[type]`, the id, the preview and the `(tags: …)` suffix all inside it, because
      * that is what {@see render()} measures with `strlen($line)`. Outside it:
      * the `<project-memory>` fence, the header sentence, the provenance group
      * labels ({@see PERSONAL_GROUP_LABEL}, {@see REPOSITORY_GROUP_LABEL},
@@ -175,7 +161,7 @@ final readonly class MemoryBlock implements PromptSection
 
     /**
      * Most user-scope notes rendered (D4), counted INSIDE {@see MAX_ENTRIES}:
-     * the operator's cross-project notes may take four of the twelve slots and
+     * the operator's cross-project notes may take four of the forty lines and
      * never more, so a long personal list cannot push the project's own
      * conventions out of the block.
      */
@@ -213,6 +199,27 @@ final readonly class MemoryBlock implements PromptSection
      * half an instruction can read as a whole one.
      */
     public const MAX_ENTRY_BYTES = 512;
+
+    /**
+     * The harness's standing guidance on memory, rendered before the fence
+     * whenever a store is wired (roadmap 5.1-1). What a note is for, the four
+     * types {@see \SugarCraft\Crush\Memory\MemoryEntry} carries, and above
+     * all what NOT to save: anything the repository already says, which goes
+     * stale the moment the code changes.
+     */
+    public const STANDING_INSTRUCTIONS = <<<'TXT'
+        # Memory
+
+        You have a persistent memory that outlives this session. When it holds notes, the project-memory block is its index: one line per saved note with its type, id, opening words and tags. A note's full text is not in this prompt.
+
+        Save a note when you learn something a future session will need and cannot get from the repository: a preference or correction the user gave you, a decision and the reason for it, a convention the user stated, where something non-obvious lives. Save when the user asks you to remember something.
+
+        Types: `preference` (how the user wants you to work), `convention` (how this project does things), `decision` (a choice and why it was made), `pattern` (a recurring fix or technique). Scopes: `user` notes follow the user into every project; `project` notes belong to this repository.
+
+        Do not save what the code says. Anything you can read from the files, the git history or the docs is already remembered, and a note that restates it goes stale the moment the code changes. Do not save secrets, one-off task details or the transcript of this conversation. Prefer updating an existing note to adding a near-duplicate.
+
+        The user manages notes with the memory slash command (list, add, search, edit, delete); ask them to save or show a note when you need one.
+        TXT;
 
     /**
      * Appended to a line cut at {@see MAX_ENTRY_BYTES}, and paid for out of
@@ -267,6 +274,9 @@ final readonly class MemoryBlock implements PromptSection
      * @param bool                  $userSkipped whether $skipped holds any
      *                                       user-scope file, so the skip line
      *                                       stops calling them all "project"
+     * @param bool                  $captured   read from a wired store, so the
+     *                                       standing instructions are rendered
+     *                                       even before the first note exists
      */
     private function __construct(
         private array $entries,
@@ -274,6 +284,7 @@ final readonly class MemoryBlock implements PromptSection
         private array $fromRepository = [],
         private array $userEntries = [],
         private bool $userSkipped = false,
+        private bool $captured = false,
     ) {}
 
     /**
@@ -354,10 +365,14 @@ final readonly class MemoryBlock implements PromptSection
         ];
         ksort($skipped, \SORT_STRING);
 
-        return new self(array_values($entries), $skipped, $fromRepository, array_values($userEntries), $userSkipped !== []);
+        return new self(array_values($entries), $skipped, $fromRepository, array_values($userEntries), $userSkipped !== [], true);
     }
 
-    /** An explicitly empty block, for a session with no memory store at all. */
+    /**
+     * An explicitly empty block, for a session with no memory store at all:
+     * it renders nothing, not even the standing instructions, because there
+     * is no memory for them to describe.
+     */
     public static function empty(): self
     {
         return new self([]);
@@ -397,13 +412,33 @@ final readonly class MemoryBlock implements PromptSection
     }
 
     /**
-     * The fenced block, or the empty string when there is nothing to say.
+     * The fenced index followed by the standing instructions, the instructions
+     * alone when the store holds nothing to list, or the empty string for a
+     * session with no store at all ({@see empty()}).
      *
-     * Empty string rather than an empty fence: a session with no project memory
-     * must add nothing at all to the prompt, not an empty container the model
-     * has to interpret.
+     * No empty fence: a store with no notes adds the instructions and nothing
+     * the model has to interpret as a listing.
      */
     public function render(): string
+    {
+        if (!$this->captured) {
+            return '';
+        }
+
+        $fenced = $this->index();
+
+        // Index FIRST, so a block with notes still opens on its fence, and the
+        // harness's guidance follows it outside the fence.
+        return $fenced === ''
+            ? self::STANDING_INSTRUCTIONS
+            : $fenced . "\n\n" . self::STANDING_INSTRUCTIONS;
+    }
+
+    /**
+     * The fenced index alone — what {@see render()} appends to the standing
+     * instructions — or the empty string when there is nothing to list.
+     */
+    public function index(): string
     {
         // 0.6 / D4: the user's own notes are admitted FIRST, under their own
         // sub-budget, and what they spend comes out of the one total budget —
@@ -499,9 +534,9 @@ final readonly class MemoryBlock implements PromptSection
         // all and each group's label makes its own (audit 15d-07).
         if ($repositoryLines === []) {
             $header = sprintf(
-                'Notes recorded for this project across earlier sessions, most recently updated first. '
-                . 'At most %d notes and %d bytes of listed notes are included, and any single note '
-                . 'longer than %d bytes is shown truncated, so this list may be incomplete. These '
+                'Index of the notes recorded for this project across earlier sessions, one line per note, '
+                . 'most recently updated first. At most %d notes and %d bytes of index lines are included, '
+                . 'and any single line longer than %d bytes is shown truncated, so this index may be incomplete. These '
                 . 'are notes the user or a previous session wrote down, not verified fact — treat '
                 . 'them as project convention, and prefer what you can confirm in the repository '
                 . 'itself.',
@@ -512,10 +547,10 @@ final readonly class MemoryBlock implements PromptSection
             $body = implode("\n", $userLines);
         } else {
             $header = sprintf(
-                'Notes for this project, grouped by where they come from, most recently updated first '
-                . 'within each group. At most %d notes and %d bytes of listed notes are included across '
-                . 'all groups, and any single note longer than %d bytes is shown truncated, so this list '
-                . 'may be incomplete. None of these notes is verified fact — prefer what you can confirm '
+                'Index of the notes for this project, one line per note, grouped by where they come from, '
+                . 'most recently updated first within each group. At most %d notes and %d bytes of index lines '
+                . 'are included across all groups, and any single line longer than %d bytes is shown truncated, '
+                . 'so this index may be incomplete. None of these notes is verified fact — prefer what you can confirm '
                 . 'in the repository itself.',
                 self::MAX_ENTRIES,
                 self::MAX_BYTES,
@@ -552,11 +587,11 @@ final readonly class MemoryBlock implements PromptSection
         $omitted = count($this->entries) + count($this->userEntries) - count($rendered) - count($personal);
 
         $header = sprintf(
-            'Notes for this session, grouped by where they come from, most recently updated first '
-            . 'within each group. At most %d notes and %d bytes of listed notes are included across '
-            . 'all groups — the user\'s own cross-project notes at most %d notes and %d bytes of that — '
-            . 'and any single note longer than %d bytes is shown truncated, so this list may be '
-            . 'incomplete. None of these notes is verified fact — prefer what you can confirm in the '
+            'Index of the notes for this session, one line per note, grouped by where they come from, '
+            . 'most recently updated first within each group. At most %d notes and %d bytes of index lines '
+            . 'are included across all groups — the user\'s own cross-project notes at most %d notes and '
+            . '%d bytes of that — and any single line longer than %d bytes is shown truncated, so this '
+            . 'index may be incomplete. None of these notes is verified fact — prefer what you can confirm in the '
             . 'repository itself.',
             self::MAX_ENTRIES,
             self::MAX_BYTES,
@@ -685,21 +720,28 @@ final readonly class MemoryBlock implements PromptSection
     }
 
     /**
-     * One note as a single line: `- [type] content (tags: a, b)`.
+     * One note as a single index line: `- [type] id: opening words (tags: a, b)`.
      *
-     * Collapsed to one line because the block is a list and a multi-line note
-     * would make the next "- " ambiguous about whether it starts a new note.
+     * The fields are those of {@see MemoryStore}'s `MEMORY.md` index: the id
+     * (so the note can be asked for by name), the type, the tags and the first
+     * {@see MemoryStore::INDEX_PREVIEW_BYTES} bytes of the content, cut on a
+     * character boundary and marked with `...` when cut. Collapsed to one line
+     * because the block is a list and a multi-line note would make the next
+     * "- " ambiguous about whether it starts a new note.
      *
-     * Clipped ONCE, at the end, over the assembled line. Clipping `content()`
-     * on its way in would bound only the field the notes usually carry their
-     * bytes in and leave `type()` and `tags()` free — and `tags()` is a list, so
-     * it is the field that scales without limit. Entries are hand-editable
-     * markdown by design, and `ForeignMemoryImporter` writes tags from another
-     * tool's files, so "no writer sets many tags today" is not a bound.
+     * Clipped ONCE, at the end, over the assembled line: the preview bounds the
+     * content, but `tags()` is a list and scales without limit — entries are
+     * hand-editable markdown, and `ForeignMemoryImporter` writes tags from
+     * another tool's files.
      */
     private function renderEntry(MemoryEntry $entry): string
     {
-        $line = '- [' . $this->oneLine($entry->type()) . '] ' . $this->oneLine($entry->content());
+        $content = $this->oneLine($entry->content());
+        if (strlen($content) > MemoryStore::INDEX_PREVIEW_BYTES) {
+            $content = rtrim(mb_strcut($content, 0, MemoryStore::INDEX_PREVIEW_BYTES, 'UTF-8')) . '...';
+        }
+
+        $line = '- [' . $this->oneLine($entry->type()) . '] ' . $this->oneLine($entry->id()) . ': ' . $content;
 
         $tags = array_values(array_filter(array_map(
             fn(string $tag): string => $this->oneLine($tag),
@@ -713,10 +755,8 @@ final readonly class MemoryBlock implements PromptSection
         // P5.S3: escape BEFORE clip, in that order and for one reason — every
         // byte budget in this class is a promise the header makes about the
         // rendered line, and rendering happens after escaping, so the clip
-        // must measure escaped bytes. A note carrying several fence tags grows
-        // (`</` → `&lt;/`) and the growth is charged to the entry budget that
-        // produced it, never smuggled past MAX_ENTRY_BYTES into the prompt.
-        // See PromptFence for why the roster is escaped whole.
+        // must measure escaped bytes. See PromptFence for why the roster is
+        // escaped whole.
         return $this->clip(PromptFence::escape($line));
     }
 

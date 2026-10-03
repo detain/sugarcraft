@@ -179,10 +179,10 @@ final class PromptSourceUtf8Test extends TestCase
         $block = $class->newInstanceWithoutConstructor();
         $class->getConstructor()?->invoke($block, [$entry]);
 
-        $rendered = $block->render();
+        $rendered = $block->index();
 
         $this->assertEncodable($rendered);
-        self::assertStringContainsString('- [pattern] Direct caf? BLOCKCANARY', $rendered);
+        self::assertStringContainsString('- [pattern] direct: Direct caf? BLOCKCANARY', $rendered);
     }
 
     public function testARepoMapPackageWithALatin1DescriptionIsMappedNotDropped(): void

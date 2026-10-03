@@ -804,10 +804,10 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/\{\@see MemoryBlock::MAX_BYTES\}\s+\*\s+is ([\d,]+) for ([a-z]+) curated notes/s', $diffDoc, $m),
+            preg_match('/\{\@see MemoryBlock::MAX_BYTES\}\s+\*\s+is ([\d,]+) for ([a-z]+) (?:curated|indexed) notes/s', $diffDoc, $m),
             'the neighbour sentence no longer pairs the byte figure with its spelled entry count',
         );
-        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'twenty' => 20, 'thirty' => 30, 'forty' => 40, 'fifty' => 50];
         self::assertSame($memoryBytes, (int) str_replace(',', '', $m[1]), 'prose Memory::MAX_BYTES cite drifted from the constant');
         self::assertSame($memoryEntries, $wordNumbers[$m[2]] ?? -1, 'the spelled "twelve curated notes" no longer counts MemoryBlock::MAX_ENTRIES — flip both together (census-trio lesson)');
 

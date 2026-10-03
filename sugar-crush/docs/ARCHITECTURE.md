@@ -450,8 +450,9 @@ names it:
    `@import`s expanded, via `InstructionFileLoader`, escaped by `PromptFence`;
 7. the repository's own project-tier rules from `RuleLoader`, same
    `<project-instructions>` fence as the documents immediately above them;
-8. `MemoryBlock` — `user`-scope notes first (at most 4 / 1 KB), then
-   `project`-scope entries, fenced `<project-memory>`;
+8. `MemoryBlock` — an index of the notes, one line each: `user`-scope first
+   (at most 4 / 1 KB), then `project`-scope, fenced `<project-memory>`, then
+   the standing memory instructions;
 9. explicitly enabled skills' full bodies;
 10. `SkillMatcher::listForPrompt()` — name + description for every discovered
     auto-invocable skill, each line badged with its tier (`[built-in]`,

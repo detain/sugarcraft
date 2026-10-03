@@ -327,9 +327,9 @@ final class MemoryImportCommandTest extends TestCase
 
         $this->reply('/memory import opencode');
 
-        // Pin 1: the `agent` scope is uncapped — 11 presets + 3 imports land
-        // as 14, past MAX_ENTRIES, and the command neither clamps nor warns.
-        $this->assertCount(14, $this->store->list('agent'));
+        // Pin 1: the `agent` scope is uncapped — MAX_ENTRIES - 1 presets + 3
+        // imports land past MAX_ENTRIES, and the command neither clamps nor warns.
+        $this->assertCount(MemoryBlock::MAX_ENTRIES + 2, $this->store->list('agent'));
 
         // Pin 2 (MEASURED, R-2 + the fix-forward measurement): capture()
         // lists MemoryScope::Project, so agent entries — capped or not —
@@ -344,10 +344,10 @@ final class MemoryImportCommandTest extends TestCase
         for ($i = 1; $i <= MemoryBlock::MAX_ENTRIES + 1; $i++) {
             $this->store->add(sprintf('project note %02d', $i), 'project');
         }
-        $block = MemoryBlock::capture($this->store)->render();
+        $block = MemoryBlock::capture($this->store)->index();
         $this->assertSame(
             MemoryBlock::MAX_ENTRIES,
-            substr_count($block, '- [pattern] project note '),
+            preg_match_all('/^- \[pattern\] [0-9a-f]+: project note /m', $block),
             'render stops at the entry cap regardless of which note lost the id tiebreak'
         );
         $this->assertStringContainsString('1 further note(s) were omitted by those limits.', $block);

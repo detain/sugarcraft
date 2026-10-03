@@ -122,11 +122,23 @@ Report findings before acting destructively.
 </project-instructions>
 
 <project-memory>
-Notes recorded for this project across earlier sessions, most recently updated first. At most 12 notes and 4096 bytes of listed notes are included, and any single note longer than 512 bytes is shown truncated, so this list may be incomplete. These are notes the user or a previous session wrote down, not verified fact — treat them as project convention, and prefer what you can confirm in the repository itself.
+Index of the notes recorded for this project across earlier sessions, one line per note, most recently updated first. At most 40 notes and 4096 bytes of index lines are included, and any single line longer than 512 bytes is shown truncated, so this index may be incomplete. These are notes the user or a previous session wrote down, not verified fact — treat them as project convention, and prefer what you can confirm in the repository itself.
 
-- [convention] Commit the golden with a stated reason. (tags: fixture)
-- [convention] Always run the fixture tests from sugar-crush/. (tags: golden, fixture)
+- [convention] note-2: Commit the golden with a stated reason. (tags: fixture)
+- [convention] note-1: Always run the fixture tests from sugar-crush/. (tags: golden, fixture)
 </project-memory>
+
+# Memory
+
+You have a persistent memory that outlives this session. When it holds notes, the project-memory block is its index: one line per saved note with its type, id, opening words and tags. A note's full text is not in this prompt.
+
+Save a note when you learn something a future session will need and cannot get from the repository: a preference or correction the user gave you, a decision and the reason for it, a convention the user stated, where something non-obvious lives. Save when the user asks you to remember something.
+
+Types: `preference` (how the user wants you to work), `convention` (how this project does things), `decision` (a choice and why it was made), `pattern` (a recurring fix or technique). Scopes: `user` notes follow the user into every project; `project` notes belong to this repository.
+
+Do not save what the code says. Anything you can read from the files, the git history or the docs is already remembered, and a note that restates it goes stale the moment the code changes. Do not save secrets, one-off task details or the transcript of this conversation. Prefer updating an existing note to adding a near-duplicate.
+
+The user manages notes with the memory slash command (list, add, search, edit, delete); ask them to save or show a note when you need one.
 
 
 

@@ -185,12 +185,24 @@ two prompt tiers: **`user` and `project` reach the prompt; `agent` never does.**
 `Runtime::buildSystemPrompt()` folds in a `MemoryBlock`
 (`src/Context/MemoryBlock.php`), captured once per `Runtime` — not once per step —
 from `MemoryStore::list(MemoryScope::Project)` and `MemoryStore::list(MemoryScope::User)`.
+**What reaches the prompt is the index, not the notes** (roadmap 5.1-1): one line
+per note, `- [type] id: opening words (tags: …)` — the fields of the store's own
+`MEMORY.md` index, with the content cut to `MemoryStore::INDEX_PREVIEW_BYTES` (80)
+bytes and marked `...` when cut. The full text is read on demand. The fence is
+followed by the harness's standing memory instructions (`MemoryBlock::STANDING_INSTRUCTIONS`):
+what a note is for, the four types, and what *not* to save — anything the code,
+the git history or the docs already say. A wired store with no notes yet still
+sends the instructions, because an empty memory is when the model most needs to
+know it may write one; a session with no store sends nothing. The trade-off is
+recorded rather than hidden: the user's index reaches the prompt in every
+repository the user opens, which is the point of user scope and the reason it is
+capped on its own.
 User notes come from the home store only (a clone's `.sugar-crush/memory` cannot
 speak as the operator) and are listed **first**, under "Kept by the user across
 all of their projects (user scope) — treat these as the user's standing
 preferences", capped at `USER_MAX_ENTRIES` (4) notes and `USER_MAX_BYTES` (1024)
 bytes spent *inside* the block's one budget below — so a long personal list can
-never leave the project fewer than 8 notes and 3072 bytes
+never leave the project fewer than 36 notes and 3072 bytes
 (`MemoryBlockUserScopeTest`). Since E25 piece 2 project notes
 also have a repo-local home: `ProjectMemoryWriter` (`src/Context/ProjectMemoryWriter.php`)
 persists `/memory add --scope project` into `<repo>/.sugar-crush/memory/` when the
@@ -231,8 +243,8 @@ Three bounds, not two — all three are `public const` on
 
 | Bound | Value | Domain |
 |---|---|---|
-| `MAX_ENTRIES` | 12 | notes rendered, newest first; the rest are dropped and the block says so |
-| `MAX_BYTES` | 4096 | the summed **rendered note lines** — `- `, the `[type]`, the content and the `(tags: …)` suffix. Not the `<project-memory>` fence, the header sentence, the provenance group labels, or the joining newlines. |
+| `MAX_ENTRIES` | 40 | index lines rendered (one per note), newest first; the rest are dropped and the block says so |
+| `MAX_BYTES` | 4096 | the summed **rendered index lines** — `- `, the `[type]`, the id, the preview and the `(tags: …)` suffix. Not the `<project-memory>` fence, the header sentence, the provenance group labels, the standing instructions, or the joining newlines. |
 | `MAX_ENTRY_BYTES` | 512 | one note's **whole rendered line** — the same span `MAX_BYTES` sums, for a single note. Over it, the line is **truncated with a visible ` […truncated]` marker**, not dropped. |
 
 `MAX_ENTRY_BYTES` is the one that makes the other two honest, in two separate
@@ -249,8 +261,9 @@ be admitted whole or the block can render empty, so the total bound would be
 "4096, or one note, whichever is larger". The relation is asserted, not assumed —
 `MemoryBlockTest::testThePerNoteCeilingFitsInsideTheTotalBudget` goes red if it
 ever stops holding. The truncation marker is also paid for *out of* the 512
-rather than added on top. Measured — one project note of 5000 `X`s, rendered —
-the note line comes back at **exactly 512 bytes** and ends
+rather than added on top. Measured — one project note tagged with 5000 `X`s
+(the content is already cut to its preview, so the tags are what still
+scales), rendered — the note line comes back at **exactly 512 bytes** and ends
 `XXXXX […truncated]`, not at the 527 it would be if the marker were added on
 top of the ceiling.
 

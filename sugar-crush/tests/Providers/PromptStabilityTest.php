@@ -822,10 +822,14 @@ final class PromptStabilityTest extends TestCase
     // for repository-shipped notes — the header is 42 B shorter (it no longer
     // claims the user wrote the notes) and the 156 B label + its newline are
     // new: -42 + 157 = +115, all on the production side.
-    private const STABLE_LAYERS_BYTES = 2671;
+    // MEASURED 2026-10-03 at roadmap 5.1-1: 2,671 -> 4,029. One mover only: the
+    // `<project-memory>` layer, whose note lines became index lines (the id
+    // joins each line) and which is now followed by MemoryBlock's standing
+    // memory instructions — all production-authored bytes.
+    private const STABLE_LAYERS_BYTES = 4029;
 
     /**
-     * The same 2,671 bytes (post-15d-07; 2,556 post-15d-02; 1,857 post-P5.S6; 1,575 before) as
+     * The same 4,029 bytes (post-5.1-1; 2,671 post-15d-07; 2,556 post-15d-02; 1,857 post-P5.S6; 1,575 before) as
      * {@see STABLE_LAYERS_BYTES}, split per layer, so a
      * width that moves names the layer AND the code that authored the bytes.
      *
@@ -841,10 +845,10 @@ final class PromptStabilityTest extends TestCase
      *   |--------------------------|------:|--------:|-------------------------|
      *   | `<repo-map>`             |   727 |      19 |  708  RepoMapBlock header + PSR-4 note + entry formatting + fences |
      *   | `<project-instructions>` |   421 |      90 |  331  the fence spellings + P5.S6 authority preamble (280 B) + separator |
-     *   | `<project-memory>`       |   633 |      51 |  582  MemoryBlock header + 15d-07 repository label + `- [pattern] ` + fences |
+     *   | `<project-memory>`       | 1,991 |      51 | 1940  MemoryBlock header + 15d-07 repository label + `- [pattern] <id>: ` + fences + standing instructions |
      *   | `## Skill: prefix-demo`  |    73 |      59 |   14  Skill::systemPromptContribution()'s heading |
      *   | `<available-skills>`     |   817 |      70 |  747  Runtime's fence + 15d-02 preamble (648 B) + SkillMatcher's caption + `- [project] `/`: ` |
-     *   | **total**                | 2,671 |     289 | 2,382 |
+     *   | **total**                | 4,029 |     289 | 3,740 |
      *
      * The `project-instructions` row is MEASURED 2026-09-05 (P5.S6): the
      * pre-preamble take of it was 139/90/49, recorded 2026-08-31; the whole
@@ -860,7 +864,7 @@ final class PromptStabilityTest extends TestCase
     private const STABLE_LAYER_WIDTHS = [
         '<repo-map>' => 727,
         '<project-instructions>' => 421,
-        '<project-memory>' => 633,
+        '<project-memory>' => 1991,
         '## Skill: prefix-demo' => 73,
         '<available-skills>' => 817,
     ];

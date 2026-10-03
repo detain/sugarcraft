@@ -199,7 +199,7 @@ final readonly class EnvironmentBlock implements PromptSection
      * minified bundles gets far fewer lines for the same bytes.
      *
      * Sized BETWEEN its two neighbours on purpose. {@see MemoryBlock::MAX_BYTES}
-     * is 4096 for twelve curated notes, and {@see TruncatesOutput}'s tool
+     * is 4096 for forty indexed notes, and {@see TruncatesOutput}'s tool
      * default is 65536; a diff needs more than a note list (one hunk with
      * context is already ~10 lines) and less than a tool result, because a tool
      * result is text the model ASKED for whereas this block is emitted
