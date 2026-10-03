@@ -17,6 +17,13 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * candy-fuzzy's DoS length caps — apart from the per-codepoint case-fold
  * deviations candy-fuzzy's CharFold now applies deliberately (see score()).
  *
+ * Over-cap input (query past {@see SmithWatermanMatcher::DEFAULT_MAX_QUERY_LENGTH},
+ * candidate past {@see SmithWatermanMatcher::DEFAULT_MAX_CANDIDATE_LENGTH}
+ * characters) is aligned on its PREFIX, on the same score scale as every other
+ * item — so match() ranks a very long item consistently with short ones (the
+ * SSOT once switched over-cap input to a Sahilm fallback on a different scale).
+ * The trade-off: text that exists only past the candidate cap is not searched.
+ *
  * The public API (constructor, withProfile(), score(), match()) is unchanged.
  * match() keeps candy-lister's own \Stringable-item contract and input-order
  * tiebreak — it is intentionally NOT SmithWatermanMatcher::matchAll(), whose
@@ -36,7 +43,7 @@ final class FuzzyMatch
 
     public function __construct(?ScoringProfile $profile = null)
     {
-        $this->profile = $profile ?? ScoringProfile::default();
+        $this->profile = $profile ?? ScoringProfile::canonical();
         $this->matcher = SmithWatermanMatcher::new($this->profile);
     }
 
