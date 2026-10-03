@@ -269,9 +269,10 @@ session like any other. A frame with no cells at all resets the session, so the 
 non-empty composite is emitted in full rather than diffed against a frame the
 terminal no longer shows.
 
-Truecolor SGR components outside 0–255 (`38;2;300;0;0`) are clamped to 255 / 0 when
-the diff pen is built, so a delta repaints a cell in the colour the terminal showed
-for the full frame rather than a bit-masked wrap-around.
+Truecolor SGR components outside 0–255 (`38;2;300;0;0`) and 256-colour palette
+indices outside 0–255 (`38;5;300`) are clamped to 255 / 0 when the diff pen is built,
+so a delta repaints a cell in the colour the terminal showed for the full frame rather
+than a bit-masked wrap-around or an out-of-range pen.
 
 ## Shared foundations
 

@@ -226,6 +226,57 @@ final class VeilTest extends TestCase
         $this->assertStringNotContainsString('38;2;44;0;0', $delta);
     }
 
+    public function testXterm256IndexAboveThePaletteIsClampedInTheDiffPen(): void
+    {
+        // 38;5;300 saturates to index 255 (gray 238) — unclamped, the gray
+        // ramp computed 688 per channel, a pen above 0xFFFFFF that re-encoded
+        // as the unrelated 178;178;176.
+        $v = Veil::new();
+        $bg = "....\n....";
+        $v->composite("\e[38;5;10mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+        $delta = $v->composite("\e[38;5;300mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+
+        $this->assertStringContainsString('38;2;238;238;238', $delta);
+        $this->assertStringNotContainsString('38;2;178;178;176', $delta);
+    }
+
+    public function testXterm256IndexBelowZeroIsClampedInTheDiffPen(): void
+    {
+        // A negative index saturates to 0 (black), not the white fallback
+        // the out-of-bounds palette lookup produced.
+        $v = Veil::new();
+        $bg = "....\n....";
+        $v->composite("\e[48;5;10mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+        $delta = $v->composite("\e[48;5;-3mAB\e[0m", $bg, Position::TOP, Position::LEFT);
+
+        $this->assertStringContainsString('48;2;0;0;0', $delta);
+        $this->assertStringNotContainsString('48;2;255;255;255', $delta);
+    }
+
+    /**
+     * @return iterable<string, array{string, int}>
+     */
+    public static function xterm256PenProvider(): iterable
+    {
+        yield 'index 255 is the top of the gray ramp' => ['38;5;255', 0xEEEEEE];
+        yield 'index 256 saturates to 255' => ['38;5;256', 0xEEEEEE];
+        yield 'index 300 saturates to 255' => ['38;5;300', 0xEEEEEE];
+        yield 'index 232 is the bottom of the gray ramp' => ['38;5;232', 0x080808];
+        yield 'index 196 is cube red' => ['38;5;196', 0xFF0000];
+        yield 'index 1 matches SGR 31' => ['38;5;1', 0xFF0000];
+        yield 'negative index saturates to 0' => ['38;5;-5', 0x000000];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('xterm256PenProvider')]
+    public function testXterm256PenStaysInsideRgbRange(string $sgr, int $expected): void
+    {
+        $pen = (new \ReflectionMethod(Veil::class, 'penFromSgr'))->invoke(null, $sgr, null);
+
+        $this->assertNotNull($pen);
+        $this->assertSame($expected, $pen->fg());
+        $this->assertLessThanOrEqual(0xFFFFFF, $pen->fg());
+    }
+
     public function testEmptyForeground(): void
     {
         $bg = "..........";

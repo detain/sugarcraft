@@ -916,10 +916,12 @@ final class Veil
      * SGR reset deliberately does NOT clear the link pen (xterm scopes
      * links to the OSC 8 protocol).
      *
-     * One deliberate divergence: truecolor components are CLAMPED into
-     * 0–255 (see channel()), where candy-buffer masks them with `& 0xFF`.
-     * The pen is re-encoded into every delta, so a wrapped component would
-     * repaint a cell in a colour the full frame never showed.
+     * Out-of-range colour operands are CLAMPED into 0–255 (see channel()),
+     * never bit-masked — truecolor components and 38;5/48;5 palette indices
+     * alike, the same rule candy-buffer's styleFromSgr() applies. The pen is
+     * re-encoded into every delta, so a wrapped component or an index past
+     * the palette would repaint a cell in a colour the full frame never
+     * showed.
      */
     private static function penFromSgr(string $params, ?BufferStyle $carry): ?BufferStyle
     {
@@ -1019,9 +1021,16 @@ final class Veil
         return ($lift(($base >> 16) & 0xFF) << 16) | ($lift(($base >> 8) & 0xFF) << 8) | $lift($base & 0xFF);
     }
 
-    /** Standard xterm 256-colour cube → 0xRRGGBB. */
+    /**
+     * Standard xterm 256-colour palette index → 0xRRGGBB: 0-7 and 8-15 map
+     * through ansiColorToHex(), 16-231 the 6×6×6 cube, 232-255 the grayscale
+     * ramp. The index is clamped into 0-255 first (channel(), as candy-buffer
+     * does): unclamped, `38;5;300` ran the gray-ramp formula to 688 per
+     * channel and returned 0x2b2b2b0, a value outside 0xRRGGBB.
+     */
     private static function xterm256ToHex(int $n): int
     {
+        $n = self::channel($n);
         if ($n < 8) {
             return self::ansiColorToHex($n);
         }
