@@ -21,27 +21,27 @@ final class StatusLine
 
     public static function success(string $message, ?Theme $theme = null): string
     {
-        return self::format(self::GLYPH_SUCCESS, $message, ($theme ?? Theme::ansi())->success);
+        return self::format(self::GLYPH_SUCCESS, $message, ($theme ?? Theme::detect())->success);
     }
 
     public static function error(string $message, ?Theme $theme = null): string
     {
-        return self::format(self::GLYPH_ERROR, $message, ($theme ?? Theme::ansi())->error);
+        return self::format(self::GLYPH_ERROR, $message, ($theme ?? Theme::detect())->error);
     }
 
     public static function warn(string $message, ?Theme $theme = null): string
     {
-        return self::format(self::GLYPH_WARN, $message, ($theme ?? Theme::ansi())->warn);
+        return self::format(self::GLYPH_WARN, $message, ($theme ?? Theme::detect())->warn);
     }
 
     public static function info(string $message, ?Theme $theme = null): string
     {
-        return self::format(self::GLYPH_INFO, $message, ($theme ?? Theme::ansi())->info);
+        return self::format(self::GLYPH_INFO, $message, ($theme ?? Theme::detect())->info);
     }
 
     public static function prompt(string $message, ?Theme $theme = null): string
     {
-        return self::format(self::GLYPH_PROMPT, $message, ($theme ?? Theme::ansi())->prompt);
+        return self::format(self::GLYPH_PROMPT, $message, ($theme ?? Theme::detect())->prompt);
     }
 
     /**

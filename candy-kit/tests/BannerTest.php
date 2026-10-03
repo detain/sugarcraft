@@ -39,7 +39,7 @@ final class BannerTest extends TestCase
 
     public function testAnsiThemeWrapsTitleInSgr(): void
     {
-        $out = Banner::title('CandyApp', 'v0.1.0');
+        $out = Banner::title('CandyApp', 'v0.1.0', Theme::ansi());
         $this->assertStringContainsString("\x1b[", $out);
         $this->assertStringContainsString('CandyApp', $out);
     }
@@ -70,5 +70,24 @@ final class BannerTest extends TestCase
 
         // A second plain render is byte-identical to the first (no drift).
         $this->assertSame($plain, Banner::title('App', 'v1', Theme::plain()));
+    }
+
+    /**
+     * Security: title/subtitle are interpolated into the bordered box. Under
+     * the plain theme any ESC/BEL in the output came from the caller; a raw
+     * newline would add an unbordered-width row. All must be neutralized.
+     */
+    public function testTitleAndSubtitleEscapeAndControlBytesNeutralized(): void
+    {
+        $out = Banner::title("a\x1b[2Jb\nc", "s\x1b]0;t\x07u\nv", Theme::plain(), Border::ascii());
+        $this->assertStringNotContainsString("\x1b", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+        $this->assertSame(
+            "+-------+\n"
+            . "|  abc  |\n"
+            . "|  suv  |\n"
+            . "+-------+",
+            $out,
+        );
     }
 }

@@ -154,16 +154,125 @@ final class HelpTextTest extends TestCase
         $this->assertStringContainsString('myapp', $out);
     }
 
-    public function testRenderWithThemeDefaultFallsBackToAnsi(): void
+    public function testRenderWithAnsiThemeEmitsSgr(): void
     {
-        // Passing null theme should use Theme::ansi() internally.
-        // Indirectly verify by checking SGR sequences appear (ansi theme adds styles).
+        // The no-theme fallback is Theme::detect() (covered by
+        // DefaultThemeTest); the explicit ansi palette always styles.
         $out = HelpText::render(
             usage: 'myapp',
             sections: ['flags' => ['-v' => 'verbose']],
             description: 'A tool.',
+            theme: Theme::ansi(),
         );
         // The accent/prompt styles in ansi theme emit SGR.
         $this->assertStringContainsString("\x1b[", $out);
+    }
+
+    /**
+     * A long description wraps inside its column: every line fits $width and
+     * every continuation line starts at the description column (it used to
+     * render as one 500-cell line the terminal hard-wrapped to column 0).
+     */
+    public function testLongDescriptionWrapsAndKeepsColumnAlignment(): void
+    {
+        $long = trim(str_repeat('lorem ipsum dolor ', 30));
+        $out = HelpText::renderRows(['--config' => $long, '-v' => 'verbose'], Theme::plain(), 40);
+        $lines = explode("\n", $out);
+
+        $this->assertGreaterThan(2, count($lines), 'the long description wrapped');
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(40, Width::string($line), "line fits: '{$line}'");
+        }
+        // 2-cell margin + '--config' (8) + 2-cell gutter = column 12.
+        $this->assertStringStartsWith('  --config  lorem', $lines[0]);
+        $continuations = array_slice($lines, 1, -1);
+        foreach ($continuations as $line) {
+            $this->assertMatchesRegularExpression('/^ {12}\S/', $line);
+        }
+        $this->assertSame('  -v        verbose', end($lines));
+        // No text was lost in the wrap.
+        $joined = implode(' ', array_map(static fn (string $l): string => trim($l), array_slice($lines, 0, -1)));
+        $this->assertSame('--config  ' . $long, $joined);
+    }
+
+    /** Descriptions that already fit are byte-identical to the unwrapped render. */
+    public function testFittingRowsAreUnchangedByWidth(): void
+    {
+        $rows = ['-h' => 'show help', '--verbose' => 'more output'];
+        $this->assertSame(
+            HelpText::renderRows($rows, Theme::plain(), null),
+            HelpText::renderRows($rows, Theme::plain(), 80),
+        );
+    }
+
+    /** width: null disables wrapping entirely. */
+    public function testNullWidthNeverWraps(): void
+    {
+        $long = trim(str_repeat('word ', 100));
+        $out = HelpText::renderRows(['-x' => $long], Theme::plain(), null);
+        $this->assertSame('  -x  ' . $long, $out);
+    }
+
+    /** Default width is 80 cells. */
+    public function testDefaultWidthIsEighty(): void
+    {
+        $out = HelpText::renderRows(['-x' => trim(str_repeat('word ', 100))], Theme::plain());
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(80, Width::string($line));
+        }
+    }
+
+    /** Too little room right of the key column: stack the description under the key. */
+    public function testNarrowColumnFallsBackToStackedLayout(): void
+    {
+        $out = HelpText::renderRows(
+            ['--a-really-long-option-name' => 'does a thing to the other thing'],
+            Theme::plain(),
+            34,
+        );
+        $this->assertSame(
+            "  --a-really-long-option-name\n"
+            . "      does a thing to the other\n"
+            . "      thing",
+            $out,
+        );
+    }
+
+    /** Usage and description paragraphs wrap too. */
+    public function testUsageAndDescriptionWrap(): void
+    {
+        $out = HelpText::render(
+            usage: 'myapp ' . trim(str_repeat('[--flag] ', 10)),
+            sections: [],
+            description: trim(str_repeat('prose ', 20)),
+            theme: Theme::plain(),
+            width: 30,
+        );
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(30, Width::string($line), "line fits: '{$line}'");
+        }
+        [$usage] = explode("\n\n", $out);
+        foreach (array_slice(explode("\n", $usage), 1) as $line) {
+            $this->assertStringStartsWith('  ', $line, 'usage lines keep their indent');
+        }
+    }
+
+    public function testWidthBelowOneThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        HelpText::renderRows(['-x' => 'y'], Theme::plain(), 0);
+    }
+
+    public function testRenderWidthBelowOneThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        HelpText::render('app', [], theme: Theme::plain(), width: -1);
+    }
+
+    /** Section titles uppercase multibyte-safely (strtoupper left `café` as `CAFé`). */
+    public function testSectionTitleUppercasesMultibyte(): void
+    {
+        $out = HelpText::render('', ['café' => ['-x' => 'y']], theme: Theme::plain());
+        $this->assertStringStartsWith("CAFÉ\n", $out);
     }
 }

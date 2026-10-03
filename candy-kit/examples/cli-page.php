@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Kit\Banner;
 use SugarCraft\Kit\HelpText;
 use SugarCraft\Kit\Section;
@@ -17,7 +18,11 @@ use SugarCraft\Kit\Stage;
 use SugarCraft\Kit\StatusLine;
 use SugarCraft\Kit\Theme;
 
-$theme = Theme::dracula();
+// An explicit theme renders as given; downgrade it to what STDOUT can show
+// so `php examples/cli-page.php | less` gets plain text, not escape bytes.
+// (With NO_COLOR set, candy-core's ColorProfile::detect() answers Ascii
+// before it checks tty-ness, so a pipe still gets bold/faint — no colour.)
+$theme = Theme::dracula()->withColorProfile(ColorProfile::detect(null, STDOUT));
 
 echo Banner::title('myapp', 'A demo CLI built with CandyKit', $theme) . "\n\n";
 

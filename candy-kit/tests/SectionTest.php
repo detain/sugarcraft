@@ -147,4 +147,69 @@ final class SectionTest extends TestCase
         $out = Section::rule(Theme::plain());
         $this->assertSame(80, Width::string($out));
     }
+
+    /**
+     * $width is a hard cap: a label longer than the room left is cut with an
+     * ellipsis instead of pushing the line past the requested width (it used
+     * to return 44 cells for width 20, forcing a terminal wrap).
+     */
+    public function testHeaderTruncatesOverlongLabelToWidth(): void
+    {
+        $out = Section::header('A VERY LONG SECTION LABEL THAT OVERFLOWS', Theme::plain(), 2, 20);
+        $this->assertSame(20, Width::string($out));
+        // 2 lead runes + space + 15-cell label cut + … + space = 20.
+        $this->assertSame('── A VERY LONG SEC… ', $out);
+    }
+
+    public function testSubHeaderTruncatesOverlongLabelToWidth(): void
+    {
+        $out = Section::subHeader('A VERY LONG SECTION LABEL', Theme::plain(), 4, 10);
+        $this->assertSame(10, Width::string($out));
+        // 4-space indent + space + 3-cell label cut + … + space = 10.
+        $this->assertSame('     A V… ', $out);
+    }
+
+    /** The cut is made on the plain label, so styled output keeps whole SGR runs. */
+    public function testTruncatedLabelStaysWellFormedUnderAnsiTheme(): void
+    {
+        $out = Section::header('A VERY LONG SECTION LABEL', Theme::ansi(), 2, 12);
+        $this->assertSame(12, Width::string($out));
+        $this->assertStringContainsString("\x1b[0m", $out, 'the label style is closed');
+        $this->assertStringContainsString('…', $out);
+    }
+
+    /** No room even for the ellipsis: the label is dropped, the line still fits. */
+    public function testLabelDroppedWhenNotEvenEllipsisFits(): void
+    {
+        $this->assertSame('───', Section::header('LABEL', Theme::plain(), leftPad: 2, width: 3));
+        $this->assertSame('   ··', Section::subHeader('LABEL', Theme::plain(), indent: 3, width: 5));
+    }
+
+    /** A lead (runes / indent) wider than the whole line is cut to the width. */
+    public function testLeadWiderThanWidthIsCut(): void
+    {
+        $this->assertSame('───', Section::header('X', Theme::plain(), leftPad: 10, width: 3));
+        $this->assertSame('  ', Section::subHeader('X', Theme::plain(), indent: 8, width: 2));
+        $this->assertSame('', Section::header('X', Theme::plain(), width: 0));
+        $this->assertSame('', Section::header('X', Theme::plain(), width: -5));
+    }
+
+    /** Wide (CJK) labels are cut by display cells, never past the width. */
+    public function testWideLabelTruncationNeverOvershoots(): void
+    {
+        foreach (range(4, 14) as $w) {
+            $out = Section::header('漢字漢字漢字漢字', Theme::plain(), 2, $w);
+            $this->assertLessThanOrEqual($w, Width::string($out), "width {$w}");
+        }
+    }
+
+    /** rule() length contract as documented: whole runes in max(1, $width) cells. */
+    public function testRuleLengthContract(): void
+    {
+        $this->assertSame('─', Section::rule(Theme::plain(), 0));
+        $this->assertSame('─', Section::rule(Theme::plain(), -3));
+        $this->assertSame('', Section::rule(Theme::plain(), 1, '漢'));
+        $this->assertSame('──', Section::rule(Theme::plain(), null));
+        $this->assertSame('漢', Section::rule(Theme::plain(), null, '漢'));
+    }
 }

@@ -36,7 +36,7 @@ final class Stage
         ?Theme $theme = null,
         string $glyph = self::GLYPH_ARROW,
     ): string {
-        $theme  ??= Theme::ansi();
+        $theme  ??= Theme::detect();
         $current = max(0, $current);
         $total   = max(0, $total);
         if ($total > 0) {
@@ -64,7 +64,7 @@ final class Stage
         bool $isLast = false,
         int $indent = 2,
     ): string {
-        $theme ??= Theme::ansi();
+        $theme ??= Theme::detect();
         $glyph = $isLast ? '└─' : '├─';
         $pad   = str_repeat(' ', max(0, $indent));
         return $pad . $theme->muted->render($glyph) . ' ' . SafeText::line($message);
@@ -93,7 +93,7 @@ final class Stage
         bool $isLast = false,
         int $indent = 2,
     ): string {
-        $theme   ??= Theme::ansi();
+        $theme   ??= Theme::detect();
         $current  = max(0, $current);
         $total    = max(0, $total);
         if ($total > 0) {

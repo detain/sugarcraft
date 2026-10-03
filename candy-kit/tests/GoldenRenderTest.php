@@ -12,6 +12,7 @@ use SugarCraft\Kit\Frame;
 use SugarCraft\Kit\Logo;
 use SugarCraft\Kit\StatusLine;
 use SugarCraft\Kit\Stage;
+use SugarCraft\Kit\Theme;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Testing\Snapshot\Assertions;
 
@@ -35,12 +36,14 @@ final class GoldenRenderTest extends TestCase
     /**
      * Test that Stage::step() emits deterministic ANSI output.
      *
-     * Uses Theme::ansi() to produce the default colourful output.
+     * Passes Theme::ansi() explicitly: the no-theme fallback is
+     * Theme::detect(), whose output depends on the runner's tty/env, while
+     * a golden must pin one byte sequence.
      * Snapshot pins the arrow glyph + count formatting + message + colors.
      */
     public function testStepRendersAnsi(): void
     {
-        $output = Stage::step(2, 5, 'building dependencies');
+        $output = Stage::step(2, 5, 'building dependencies', Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -54,7 +57,7 @@ final class GoldenRenderTest extends TestCase
      */
     public function testSubStepRendersAnsi(): void
     {
-        $output = Stage::subStep('installing packages', null, false);
+        $output = Stage::subStep('installing packages', Theme::ansi(), false);
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -65,7 +68,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testBannerTitleRendersAnsi(): void
     {
-        $output = Banner::title('MyApp', 'v1.0.0');
+        $output = Banner::title('MyApp', 'v1.0.0', Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -76,7 +79,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testSectionHeaderRendersAnsi(): void
     {
-        $output = Section::header('Features');
+        $output = Section::header('Features', Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -87,7 +90,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testSectionRuleRendersAnsi(): void
     {
-        $output = Section::rule();
+        $output = Section::rule(Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -98,7 +101,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testSectionSubHeaderRendersAnsi(): void
     {
-        $output = Section::subHeader('Sub-section');
+        $output = Section::subHeader('Sub-section', Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -113,6 +116,7 @@ final class GoldenRenderTest extends TestCase
             'myapp [flags] <file>',
             ['flags' => ['-h' => 'show help', '-v' => 'verbose']],
             'A sample application.',
+            Theme::ansi(),
         );
 
         $this->assertNotEmpty($output);
@@ -174,7 +178,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testStatusLineSuccessRendersAnsi(): void
     {
-        $output = StatusLine::success('Deployment complete');
+        $output = StatusLine::success('Deployment complete', Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -185,7 +189,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testStatusLineErrorRendersAnsi(): void
     {
-        $output = StatusLine::error('Something went wrong');
+        $output = StatusLine::error('Something went wrong', Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -196,7 +200,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testStatusLineWarnRendersAnsi(): void
     {
-        $output = StatusLine::warn('Low disk space');
+        $output = StatusLine::warn('Low disk space', Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(
@@ -207,7 +211,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testStageSubStepWithProgressRendersAnsi(): void
     {
-        $output = Stage::subStepWithProgress('installing packages', 4, 10);
+        $output = Stage::subStepWithProgress('installing packages', 4, 10, Theme::ansi());
 
         $this->assertNotEmpty($output);
         Assertions::assertGoldenAnsi(

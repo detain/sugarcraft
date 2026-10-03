@@ -37,7 +37,7 @@ final class StatusLineTest extends TestCase
 
     public function testAnsiSuccessIsStyledThenPlainMessage(): void
     {
-        $line = StatusLine::success('done');
+        $line = StatusLine::success('done', Theme::ansi());
         // Glyph is wrapped in SGR; message is plain text after a space.
         $this->assertStringContainsString("\x1b[", $line);
         $this->assertStringContainsString(' done', $line);
