@@ -124,7 +124,6 @@
 - On by default. candy-mouse `Mark::zone()` / `Scanner` (`Renderer.php:18-20`).
 - Zone prefixes are `tab:`, `pane:`, `picker-item:`, `session-row:`, `toolcall:`, `divider:`, `stackdiv:` (`Renderer.php:543-604`). The id charset is `/\A[A-Za-z0-9._:-]+\z/` (`:696`); `Mark::MAX_ID_BYTES = 256`.
 - Clicks are dispatched by prefix in `Chat` (`:5334-5372`). `refuseMouseDispatch()` (`:5530-5555`) blocks clicks under modals. While a turn is in flight it hands tab clicks and the Agents-pane header to their handlers' own refusal (`midTurnRefusalOfItsOwn()` `:5560`).
-- **The image-marker / zone-sentinel collision noted in memory is fixed.** Image markers moved to U+E002+id, and `Renderer::maskImageMarkers()` (`:1187-1195`) blanks any non-sentinel Private-Use character in the copy the scanner reads. Session titles get PUA-stripped (`Chat::sanitizeSessionField()`).
 - **Implication:** any new agent-originated text (tool arguments, prose, agent names) must go through the same `Sanitize::untrustedForMarkedFrames()` plus PUA strip before it reaches a frame, or a hostile `\u{E000}…` in a Grep pattern can break every zone after it.
 
 ### 1.4 Server and web UI

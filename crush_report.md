@@ -46,7 +46,7 @@
 
 # Part I — Executive summary
 
-## The ten findings that matter most
+## The findings that matter most
 
 1. **The forked turn's socket already works in both directions, but only the child ever writes.** Several gaps follow from that one-way use:
    - The TUI cannot answer a permission prompt, so every Ask becomes a deny.
@@ -67,25 +67,20 @@
 
 4. **Tool history is lossy across turns.** `Chat::toolResultMessage()` stores tool output as an assistant row. `EngineBackend::toTypedMessages()` maps rows by role only, so the next turn sees earlier tool output as the assistant's own prose, with no tool name, arguments or call id. The data is already persisted (`Message::jsonSerialize` keeps `toolResults[].id/name/arguments`); it is only thrown away at conversion. This blocks structured pruning, dedup, resumable approval and loop detection over history. *(8 reports.)*
 
-5. **Context is managed only between user turns.** Compaction runs only in `Chat::submit()`, using a chars/4 estimate that ignores the system prompt and tool schemas. Within one turn the context grows without limit, and nothing recovers from a context-overflow error. `removeToolResults()` matches a message shape that is never produced, so it is a no-op. The default `maxSteps = 8` hides all of this, and it also truncates ordinary multi-file work. **11 of 12** reports ask for step-level pressure checks, tool-output pruning and overflow recovery, and for a higher step cap once those exist.
+5. **Context is managed only between user turns.** Compaction runs only in `Chat::submit()`, using a chars/4 estimate that ignores the system prompt and tool schemas. Within one turn the context grows without limit, and nothing recovers from a context-overflow error. `removeToolResults()` matches a message shape that is never produced, so it is a no-op. **11 of 12** reports ask for step-level pressure checks, tool-output pruning and overflow recovery.
 
-6. **Nothing detects loops, and the step cap is the only brake.**
-   - The cap is 8 by default. opencode, Cline, OpenClaw and dsh have no cap at all; OpenHands uses 500, goose 1000, nanobot 200.
-   - None of the hash-based repeat detectors those agents use exist here.
-   - The spend cap is no backstop on the primary provider, because SGLang and Custom report $0.
+6. **A Bash command that prints nothing kills the whole turn.** Bash has no per-command timeout, and sequential tools send no heartbeat. So `composer install` or `phpunit` running quietly for 120 s trips the `COMPLETE_TIMEOUT_SECONDS` watchdog, which SIGKILLs the turn child. **10 reports.** The common fix: a `timeout` parameter, heartbeats, auto-backgrounding with a job/process tool, and output spilled to a file.
 
-7. **A Bash command that prints nothing kills the whole turn.** Bash has no per-command timeout, and sequential tools send no heartbeat. So `composer install` or `phpunit` running quietly for 120 s trips the `COMPLETE_TIMEOUT_SECONDS` watchdog, which SIGKILLs the turn child. **10 reports.** The common fix: a `timeout` parameter, heartbeats, auto-backgrounding with a job/process tool, and output spilled to a file.
+7. **A permissive default with no undo.** `bypass-permissions` plus `/rewind` that restores only the transcript means an errant Edit, Write or Bash cannot be recovered. Cline, opencode, Zed, Kilo, Aider and Claude Code all ship file checkpoints (shadow git, `git stash create` refs, or per-file snapshots) because, in Cline's own docs, "checkpoints make auto-approve practical".
 
-8. **A permissive default with no undo.** `bypass-permissions` plus `/rewind` that restores only the transcript means an errant Edit, Write or Bash cannot be recovered. Cline, opencode, Zed, Kilo, Aider and Claude Code all ship file checkpoints (shadow git, `git stash create` refs, or per-file snapshots) because, in Cline's own docs, "checkpoints make auto-approve practical".
-
-9. **Sub-agents are synchronous and closed off.**
+8. **Sub-agents are synchronous and closed off.**
    - Task runs in parallel and can be resumed, but only after failure.
    - The parent can't message a child, a child can't spawn further sub-agents, and only the final text comes back, unhardened.
    - Preset `model`, `permissionMode`, `effort`, `isolation` and `background` are silently ignored, and `Bash(git *)` grants all of Bash.
    - Parallel fan-out has no cap.
    - The infrastructure for real orchestration already exists, dormant: `Mailbox`, `TaskList`, `TeamManager`, `SuspendedDelegations`, `BackgroundSupervisor::reconnect()`. OpenClaw, dsh, Goose, Kilo and Cline show the target design: background children, send and steer, wait, list, cancel, and announce-on-settle.
 
-10. **The user's headline wish — agents compacting their own history — is designed in detail.** The DCP report (Appendix D, §13.2) gives a complete design:
+9. **The user's headline wish — agents compacting their own history — is designed in detail.** The DCP report (Appendix D, §13.2) gives a complete design:
     - stable per-row IDs plus unique tool-call IDs;
     - a non-destructive `ContextLedger` and a `ContextProjector` applied before each request;
     - automatic dedup, stale-read, superseded-write and failed-input strategies;
@@ -96,14 +91,9 @@
 
     Kilo legacy (a `condense` tool with a user-approved preview) and Goose (agent-visible vs user-visible flags) supply the remaining pieces.
 
-11. **The code audit found about 136 new defects** (Part IX). 135 of them, including the one Critical and all 20 High items, are already fixed on master, along with 4 more defects found while fixing them: MCP interoperability with official-SDK servers (nested empty arguments included), fork-shared MCP and LSP connections, silent provider errors (in sub-agents too), invalid UTF-8 (command backends included), the permission bypasses (including `$(…)`, backticks and redirects in allow rules), git MCP option injection, the repo-supplied terminal escapes, unfenced repo skill descriptions, Esc Esc tool placeholders that never healed, raw CR and C1 controls reaching the terminal, a turn kill that left its commands running, streamed tool calls dropped on `stop`, built-in skills that told every project to `git clean -fd`, the full-history markdown re-render on every frame, `error_log()` output painted over the TUI, env-block git calls that honoured the user's git config and took `index.lock`, PostToolUse blocks that did nothing, hook input that defeated grep-style deny hooks, a hostile `.gitignore` that stalled Glob for minutes, prompt hooks and custom-command shell blocks that froze the TUI inside `update()`, forks that carried no conversation, the multi-second `/branch` freeze, Vertex quota errors that were never retried, `claude-mcp` calls that gave up after one second, a stray stdout line that aborted MCP requests, workflow pause and resume that skipped the failed stage, uncapped `CLAUDE.md`/`AGENTS.md` and `@imports`, Edit and Write that read huge files whole and truncated files in place, file tools that hung on a FIFO, mid-session path rules that never reached the agent, a status bar and session tab strip wider than the terminal, recovered tool-call markup left in the reply and sent twice, MiniMax parameters turned into arrays, malformed tool arguments that ran the tool with `[]`, a `claude-code` provider that could not stream, menu commands that erased the draft, background sessions nothing could stop and IPC directories left in `/tmp`, a symlinked `config.json` replaced on the first write, glob metacharacters in the checkout path that hid every repo memory note, a Claude memory import that imported nothing, repo memory framed as the user's own notes, WebFetch results that were 32× the Bash cap or reported error pages as success, tool output that could forge a "refused by policy" verdict, a Task grant memo and a Chat "Always" grant that silenced user-hook asks, an accept-edits mode that allowed `rm` but asked for Edit, WebFetch counted as read-only, provider API keys in the Bash and hook environment, cancelled sub-agent workers whose commands kept running, a cleartext default search endpoint, forged image markers that repainted images and blanked Nerd Font glyphs, OAuth logins that failed on path-bearing MCP URLs or lost another process's tokens, a single malformed agent preset that hid every preset, `/tmp` names one user could block for everyone, a sub-agent map that never shrank, the SGLang `max_tokens: 4096` default, UI-only notices fed to the compaction summary, project MCP servers whose changed command ran with no new consent, project memory notes that reached every other repository, `.sugar-crush/*` lookups that missed the repo root on a subdirectory launch, title and summary models a project could pick on the user's key, sub-agent path grants a symlink could launder, workflow retries that never ran, a user `modelPrices` setting that never reached Vertex or Bedrock, a context calibration inflated by sub-agent tokens, a skill launch notice that called a shadowed skill unreadable, two TUIs on one session that overwrote each other's transcript, prompt words typed on the command line that were silently dropped, cache tokens left unpriced on Vertex and Bedrock, and message attachments that nothing created and the wire dropped (now `@file` mentions, image paste and Ctrl+V on every vision-capable provider, wave 11). Waves 2 to 6 found 23 more, smaller defects while fixing these, and all 23 are fixed too (a `Width::wrap()` hang, bidi overrides and lone C1 bytes on screen, an empty permission-modal value, uncapped skill file reads, nested empty maps replayed as `[]`, candy-shine streaming that broke its `render()` law, `claude-code` turns that reported 0 tokens, `/workflow pause` refused mid-run, stale docs among them); waves 7 and 8A found 3 more, all fixed in wave 8B (MCP-10, A26, F-D1); wave 8B found 1 (B8, the LSP lock-file leak, fixed in wave 9); wave 9 found 2 (15b-35, CLI-3), both fixed in wave 10; waves 10 and 11 found none. **The audit remediation is complete.** One finding remains, Low and deferred by decision:
-    - **sugar-crush has no i18n** (15b-14), deferred until after the roadmap.
+10. **The code audit (Part IX) leaves one open finding:** sugar-crush has no i18n (15b-14, Low), deferred until after the roadmap. The TUI engine path still refuses every Ask (Part II #1).
 
-    Still owed outside the open findings: **the TUI engine path still refuses every Ask** (Part II #1), which since wave 8A includes WebFetch under `default` and `plan` and every MCP call under `auto`; and **live verification** of A15's cache marks (one Vertex Claude and one Bedrock request), of A21 (b) (one Gemini 2.5 request) and of the cache-health notice wired in wave 11 (a real Vertex or Bedrock reply that reports empty cache buckets). R1's last residual, mid-session `loadForPath()` refusals, was surfaced in wave 11.
-
-    About two thirds are reproduced with scripts. No Critical, High, Medium-High or Medium item remains (IX.3, IX.4).
-
-12. **The features you asked for are designed and slotted into the roadmap** (Part VIII):
+11. **The features you asked for are designed and slotted into the roadmap** (Part VIII):
     - a schema-driven settings editor, built entirely from SugarCraft libraries already in the dependency tree;
     - about 75 behaviours made configurable;
     - `sugarcrush serve`: ReactPHP WebSocket server, JSON-RPC, replayable event log, approvals over the wire;
@@ -122,14 +112,12 @@
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Parent→child channel (approvals + steering) | ● | ● | | ● | ● | ● | ● | ● | | ● | ● | ● | 10 |
 | Step-level context management + overflow recovery | ● | ● | ● | ● | ● | ● | ● | ● | ◐ | ● | ● | ● | 11 |
-| Raise `maxSteps` + graceful last-step summary | ● | ● | | ● | ● | ● | ● | ● | ◐ | ● | ● | ● | 11 |
 | State-oriented, cache-reusing compaction summary | ● | ● | ● | ● | ● | ● | ● | ● | ◐ | ● | ● | ● | 11 |
 | Bash timeout + heartbeat + background jobs | ● | ● | | ● | ● | ● | ● | ● | | ● | ● | ● | 10 |
 | Read offset/limit + line numbers | ● | ● | | ● | ● | ● | ● | | | ● | ● | ● | 9 |
 | Prune old tool outputs (fix `removeToolResults`) | ● | ● | ● | ● | ● | ◐ | | ◐ | ◐ | | ● | ● | 9 |
 | Spill oversized output to file + cap MCP output | ● | ● | | ● | ● | ● | | ● | | ● | ● | ● | 9 |
 | Fuzzy Edit + informative edit-failure feedback | | ● | | ● | ● | ● | ● | ● | ● | ● | ● | | 9 |
-| Wire `CacheBreakpoints` (Anthropic routes) | ● | ● | ● | | ● | ● | | ● | ● | ● | ● | | 9 |
 | Background sub-agents + messaging (wire Mailbox/TaskList/Team) | ● | ● | | ● | ● | ◐ | ◐ | ● | | ● | ● | ● | 9 |
 | Honour preset `model`/`permissionMode` | ● | ● | | | ● | ● | ● | ● | ● | | ● | ● | 9 |
 | Cache-stable prompt prefix (`<env>` out, no hoisting) | ● | ● | ● | | | | ● | ● | ◐ | ● | | ● | 8 |
@@ -137,7 +125,6 @@
 | Token estimate counts system + tools; `/context` breakdown | ● | | ● | ● | | | ● | | ● | ● | ● | ● | 8 |
 | Todo / plan tool (wire `TaskList`/`SessionMeta::$tasks`) | ● | ● | | ● | ● | ● | | ● | | | ● | ● | 8 |
 | File checkpoints + `/rewind --files` / `/undo` | ● | ● | | ● | ● | ◐ | ● | | ● | | | ● | 8 |
-| Doom-loop / repeat-call detector | | ● | | ● | ● | ● | | ◐ | | ● | ● | ● | 8 |
 | Wire `Stop` hook; `/goal` loop | ● | | | ● | ● | ● | | ● | | ● | | ● | 7 |
 | Argument-scoped permission rules + shell splitting | ● | | | ● | ● | ● | ● | | | | ● | ● | 7 |
 | Remove hard-coded SugarCraft Bash/PR guidance | ● | ● | | ● | | | | | | ● | ● | ● | 6 |
@@ -168,11 +155,9 @@ Severity reflects user impact on the live default path.
 | 3 | **High** | `reasoning_content` is not passed back on DeepSeek tool-call steps | `SglangProvider.php:1580-1585` | 12 |
 | 4 | **High** | Cross-turn tool replay is lossy (tool output arrives as assistant prose) | `Chat.php:4017-4023`; `EngineBackend.php:2071-2083` | 02 03 05 06 07 08 10 12 |
 | 5 | **High** | No context management inside a turn and no overflow recovery. Task sub-agents (up to 50 steps) have none at all. | baseline §3.3 | all |
-| 6 | **High** | `maxSteps = 8`. Truncation returns the last assistant text, often an empty or "let me check…" reply, with no final summary. A truncated turn can't be resumed. | `EngineBackend.php:262`, `:1017-1023` | all |
 | 7 | **High** | A silent Bash command kills the whole turn at 120 s; Bash has no timeout | `EngineBackend.php:99`, `:1444-1455`; `Runtime::executeSequentially` `:1748` | 01 02 04 05 06 07 08 10 11 12 |
 | 8 | **High** | No file-level undo while the default is bypass; `/rewind` restores only the transcript | `Chat.php:12317-12424` | 01 02 04 05 07 09 |
 | 9 | **High** | The agent can write its own policy files (`settings.json` tiers, `.mcp.json`, `.sugar-crush/{skills,commands,rules}`), so it could give itself trust | `ProtectFilesHook::WRITE_ONLY_PATTERNS` `:83-86` | 07 |
-| 10 | Med-High | No loop or stuck detection anywhere | grep of `src/` | 02 04 05 06 10 11 12 |
 | 11 | Med-High | MCP results are uncapped and MCP calls have no timeout | `McpToolBridge.php:587-622` | 01 02 04 05 06 08 10 11 12 |
 | 12 | Med-High | Tool-call ids are not unique on the DSML and MiniMax parsers: `dsml_call_0` repeats every response, which can confuse `HistorySanitizer` *(inferred)* | `DsmlToolCallParser.php:335`; `MinimaxXmlFallbackToolCallParser.php:203`; `HistorySanitizer.php:82-96` | 03 |
 | 13 | Medium | The SugarCraft-specific git/PR workflow (`unset GITHUB_TOKEN`, `gh pr merge`, composer rules) is sent to **every** project | `Bash.php:124-163` | 01 02 04 10 11 12 |
@@ -185,19 +170,19 @@ Severity reflects user impact on the live default path.
 | 20 | Medium | Compaction overwrites the displayed and persisted history: scrollback is lost, and `/rewind` checkpoints after compaction hold the compacted text *(partly inferred)* | `Chat::compactionChanges` `:10477-10565` | 05 08 |
 | 21 | Medium | The token estimate ignores the system prompt and tool schemas; percentage thresholds on a 1M window fire at ~734k tokens | `Chat::rawTokenProxy` `:14734-14742` | 03 04 07 09 11 |
 | 22 | Medium | Sub-agent output goes to the parent unescaped, with no "no authority" framing; `/websearch` results are injected as user+assistant pairs | `TaskTool.php:604-629`; `Chat.php:9998` | 01 04 |
-| 23 | Medium | Preset `model`/`permissionMode`/`effort`/`isolation`/`memory`/`background` are inert; preset `tools: Bash(git *)` grants all of Bash (*permission rules* are argument-scoped, and `docs/PERMISSIONS.md` now says so; see IX.1); `disallowedTools` is ignored without `tools:`; a read-only reviewer preset can run any shell command | baseline §2.1; `AgentManager.php:1103-1260` | 01 04 05 06 07 08 11 12 |
+| 23 | Medium | Preset `model`/`permissionMode`/`effort`/`isolation`/`memory`/`background` are inert; preset `tools: Bash(git *)` grants all of Bash (*permission rules* are argument-scoped; see IX.1); `disallowedTools` is ignored without `tools:`; a read-only reviewer preset can run any shell command | baseline §2.1; `AgentManager.php:1103-1260` | 01 04 05 06 07 08 11 12 |
 | 24 | Medium | Parallel Task fan-out has no cap (`AgentPoolConfig::maxConcurrent=5` is used only for workflows) | `Runtime::executeConcurrently` `:1853` | 07 10 11 |
 | 25 | Medium | Edit is exact-match only, with a terse error; no staleness check; `Write overwrite:true` can overwrite edits the user made since the last read | `Edit.php:178-197` | 02 04 05 07 08 09 10 11 |
 | 26 | Medium | Read has no paging (up to 1 MiB), no line numbers, and no continuation | `Read.php` | 02 04 06 07 10 11 12 |
 | 27 | Medium | No retry once a stream has produced its first token; no continuation on output-length stops (the 4096 `max_tokens` default on Custom/OpenAI cuts large Writes) | `Runtime::runStreaming` `:1324-1459` | 07 09 10 11 |
 | 28 | Medium | A reply that is only reasoning, or empty, ends the turn silently *(inferred)* | `runTurn()` | 06 08 10 |
 | 29 | Low-Med | Only the final assistant text of a turn is kept, so interim reasoning is lost for the next turn | `EngineBackend.php:985`, `:1019` | 03 |
-| 30 | Low-Med | `/bg` results never come back to chat; `/fork` runs ignore history (the forked session's stored copy is complete since the fix for audit SES-2, `698a1efff`, but the background daemon does not load it); daemons are not picked up again after restart | baseline §2.4 | 04 08 10 12 |
+| 30 | Low-Med | `/bg` results never come back to chat; `/fork` runs ignore history (the background daemon does not load the forked session's transcript); daemons are not picked up again after restart | baseline §2.4 | 04 08 10 12 |
 | 31 | Low-Med | The OpenAI provider never emits tool calls (always streams; `parseChunk` hard-codes `toolCalls: null`); `anthropic` is OpenAI-shaped with tools off | `OpenAIProvider.php:488-507`; `ProviderFactory.php:663-694` | baseline |
 | 32 | Low-Med | `/model` switches provider, not model, and appears to drop the Task tool and rule toggles *(inferred)* | `Chat.php:14106-14146`; `Bootstrap.php:6748` | baseline |
 | 33 | Low | The session-affinity header is dormant, so multi-replica SGLang routers lose radix locality | `SessionAffinity` trait | 02 12 |
 | 34 | Low | No Unicode-tag (U+E0000–E007F) stripping in prompt fences; MCP stdio env not filtered (`LD_PRELOAD`, `NODE_OPTIONS`) | `PromptFence::escape` `:174`; `McpClient::resolveEnv` `:608-621` | 08 |
-| 35 | Low | `/share` always fails (stub uploader); WebSearch has no default endpoint since F-W3 (b) (`adbb3df16`) and errors until `SUGARCRUSH_SEARCH_ENDPOINT` is set; the LSP tool is registered with a null client | baseline §11 | baseline 02 08 |
+| 35 | Low | `/share` always fails (stub uploader); WebSearch has no default endpoint and errors until `SUGARCRUSH_SEARCH_ENDPOINT` is set; the LSP tool is registered with a null client | baseline §11 | baseline 02 08 |
 | 36 | Low | No snapshot or drift test of the assembled system prompt, even though section order matters for caching | — | 11 |
 | 37 | Low | Silently ignored configuration everywhere (dormant frontmatter keys); dsh's rule is "fail loud" | baseline §11.2 | 12 |
 
@@ -226,7 +211,6 @@ These are the recommendations from all twelve reports, de-duplicated. They are o
 | 0.6 | `/memory add` defaults to project scope; inject user scope too (user first); warn when a memory lands in a scope that is never injected | `MemoryBlock::capture()`; `/memory` handler | S | CC Kilo OH nano Claw |
 | 0.7 | Fix `removeNavigationSteps` (anchor patterns, never touch User rows) and `isFileReadMessage` (key on the tool row, not a regex) | `ContextCompactor.php:936-1110` | S | CC Cline |
 | 0.8 | Protect policy surfaces: add `settings*.json`, `.mcp.json`, `.sugar-crush/{skills,commands,rules}/` to `ProtectFilesHook` (deny now; always-Ask after Wave 1) | `ProtectFilesHook.php:83-86` | S | Zed |
-| 0.9 | Repeat-call detector (canonical `name+sorted-JSON args`; warn at 3, hard stop at 5–8 or OpenClaw's 10/20/30 with result hashing) **then** raise `maxSteps` to ~50–100; on the last step send a tool-less "summarise what's done / remaining / next" prompt | new `src/Runtime/LoopGuard.php`; `EngineBackend::runTurn()` `:862-1024` | S | 11 reports |
 | 0.10 | Empty or reasoning-only reply → one nudge, then continue; empty-turn retry ×2 | `runTurn()` | S | OH Goose nano |
 | 0.11 | Better edit failures: "did you mean" lines (≥0.6 similarity, line numbers), "new_string already present", uniform-indent retry, line numbers of every match on ambiguity | `Edit.php:178-197` | S | Aider Goose Cline OH Claw |
 | 0.12 | Read `offset`/`limit`, `N:` line numbers, continuation footer, 2000-line / 50 KB default page | `Read.php:153-379` | S | 9 reports |
@@ -314,7 +298,7 @@ How the pieces connect:
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 4.1 | Honour preset `model`/`effort`/`permissionMode` (new `EngineBackend::withModel()`, per-sub-agent `PermissionGate`); per-call `model` arg; `subagentModel` default; **fail loudly** on unsupported preset fields (dsh) | S–M | 9 reports |
-| 4.2 | Argument-scoped **grant** rules for presets, reusing the permission-rule matcher (already argument-scoped, and since `c8fc573a5` fail-closed: the `ShellWords` splitter refuses `$()`, backticks, process substitution and non-inert redirects in allow rules, every segment must match, deny on any segment); (sub-agent gates already get the project root, so path rules match respellings there too: Part IX F-J3, fixed in `3b7d2fd33` and `a5b6e3d78`); route Task through `refuseCallOutsideGrant()` (dormant) | M | CC Zed Cline Kilo |
+| 4.2 | Argument-scoped **grant** rules for presets, reusing the argument-scoped, fail-closed permission-rule matcher; route Task through `refuseCallOutsideGrant()` (dormant) | M | CC Zed Cline Kilo |
 | 4.3 | **Background Task** (`background:true` / preset `background`): returns `{agent_id}` at once ("DO NOT sleep or poll"). Runs via `BackgroundSupervisor` or `AgentWorkerPool`. On settle, a user-role announce row (`[Subagent '<label>' completed] … status from the runtime outcome (ok/error/timeout), stats line: runtime, tokens, cost, resume id`) is appended, and a turn is auto-dispatched if idle or injected via steer if busy. An "Active subagents" block appears in each turn context. Wire `BackgroundSupervisor::reconnect()`. Also fixes `/bg` results never returning | M–L | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
@@ -417,8 +401,6 @@ The sugar-crush design (Appendix D §13.2) adapts all of this with a `ContextLed
 - skills listing and bodies;
 - `<env>`: cwd, OS, PHP, model, date, git branch/status/log, post-write diffs up to 2×8 KiB, re-rendered every step and sitting last in the system message.
 
-It reaches every provider now: the old bug where SGLang and Custom dropped the system prompt is fixed.
-
 **The universal pattern elsewhere:**
 - *Static system prompt; volatile context appended.*
   - Claude Code: git status is a startup snapshot; mid-session context is appended as system-reminders; CLAUDE.md is frozen until `/clear` or `/compact`.
@@ -497,7 +479,7 @@ Common gaps across the reports:
 The root issue is 1.C: asks cannot be answered.
 
 **Additional ideas:**
-- argument-scoped rules with a fail-closed shell splitter (Zed, CC, Cline): sugar-crush's permission rules now have both (allow rules fail closed since `c8fc573a5`), but preset grants still match by name;
+- argument-scoped rules with a fail-closed shell splitter (Zed, CC, Cline): sugar-crush's permission rules have both, but preset grants still match by name;
 - always-Ask on policy files (Zed);
 - inspectors where the strictest verdict wins, with security findings forcing Ask even in auto (Goose);
 - an LLM exec reviewer (OpenClaw, Goose adversary, dsh auto-review);
@@ -510,7 +492,7 @@ The root issue is 1.C: asks cannot be answered.
 
 - **Session tools:** child sessions you can navigate into (opencode); a todo pane; `/context` breakdown; cache-hit % and cost in the status bar.
 - **Review and undo:** per-hunk Keep/Reject review with an action log (Zed); `/undo` that restores the prompt into the input (opencode).
-- **Attention and input:** desktop/bell notifications; `@`-mentions; an Enter-steer / Tab-queue split.
+- **Attention and input:** desktop/bell notifications; an Enter-steer / Tab-queue split.
 - **Side commands:** `/btw` side questions; `/handoff`; local export for `/share`.
 
 ---
@@ -616,7 +598,6 @@ Three design agents covered them. **Appendix N** is the settings report, **Appen
 **Behaviour that should become settings.**
 
 The report lists **about 45 hard-coded constants**, each with file:line and a proposed key, type, default and tier. The main ones:
-- `maxToolSteps` (8 at the time; 1000 by default since wave 8A, `28f223839`);
 - the 120 s idle watchdog, as `turnIdleTimeoutSeconds`;
 - the compaction thresholds 70/85/95 and keep-10;
 - the 64 KiB and 1 MiB output caps;
@@ -803,86 +784,36 @@ The new requests overlap heavily with Wave 1.C. The recommended build order is:
 
 # Part IX — Code-audit findings (new defects in sugar-crush)
 
-Five agents audited sugar-crush's own source for **new** defects, one per area. Each was told the Part II list so it would not re-report known items. They worked from master @ `05db616f3` with PHP 8.3.6, wrote repro scripts under `/home/sites/crush-research-repos/_audit-scratch/<id>/`, changed no source and committed nothing.
+Five agents audited sugar-crush's own source for **new** defects, one per area (Appendices Q–U). Each was told the Part II list so it would not re-report known items. Every finding they filed is fixed and has been removed from this report, except one.
 
-**Totals at audit time: about 136 findings** — 1 Critical, 20 High, about 47 Medium, and the rest Low-Medium, Low or Info.
-
-**Since the audit, 168 findings have been fixed on master** (each appendix ends with a **Fixed since audit** list giving the commit): 135 of the original findings, the 4 new items found while fixing them in wave 1, all 23 items waves 2 to 6 found while fixing theirs (10 in wave 2, 5 in wave 3, 3 in wave 4, 3 in wave 5, 2 in wave 6), all 3 that waves 7 and 8A found (MCP-10, A26, F-D1, fixed in wave 8B), the 1 that wave 8B found (B8, fixed in wave 9), and the 2 that wave 9 found (15b-35 and CLI-3, fixed in wave 10). Waves 10 and 11 filed no new finding; wave 11 fixed 15b-15 (attachments) and R1's last residual. **The remediation is complete: 1 finding remains**, Low, deferred by decision and not a defect on the live path: 15b-14 (no i18n). A15 and A21 are counted as fixed but **need live verification** (no AWS or GCP credentials were available), as does wave 11's cache-health notice. The tables below count what remains.
-
-At audit time, about two thirds were **reproduced with a script**; the rest are verified by reading, and a few are marked *suspected*. Full write-ups are in Appendices Q–U; each finding has code excerpt, failure scenario, fix and a test that would catch it.
-
-| Appendix | Area | Findings | Critical / High |
-|---|---|---|---|
-| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 0 | 0 / 0 |
-| **R** (15b) | Chat state machine, TUI, rendering, commands | 1 | 0 / 0 |
-| **S** (15c) | Tools, permissions, hooks (security) | 0 | 0 / 0 |
-| **T** (15d) | Context assembly, memory, skills, config | 0 | 0 / 0 |
-| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 0 | 0 / 0 |
+| Appendix | Area | Open findings |
+|---|---|---|
+| **Q** (15a) | Engine, runtime, providers, tool-call parsers, process support | 0 |
+| **R** (15b) | Chat state machine, TUI, rendering, commands | 1 (15b-14) |
+| **S** (15c) | Tools, permissions, hooks (security) | 0 |
+| **T** (15d) | Context assembly, memory, skills, config | 0 |
+| **U** (15e) | Agents, workflows, sessions, MCP, git MCP, CLI | 0 |
 
 Appendix P adds three session-picker bugs, B1–B3 (Part VIII.4).
 
 ## IX.1 Corrections to earlier parts
 
-- **Argument-scoped permission rules ARE implemented** (Appendix S, top callout; `PermissionRule::matches()` / `matchesShellSubject()`). `Bash(rm *)` deny denies, and `Bash(git *)` no longer grants all of Bash for **permission rules**.
-  - Part II #23 now says so; roadmap item 4.2 now covers only preset grants and path respellings.
-  - `docs/PERMISSIONS.md` is now corrected: its stale "Pattern matching is name-only" section was rewritten in `d3d90fece` to describe argument-scoped rules as implemented, and since `c8fc573a5` it describes the fail-closed allow rules.
-  - Sub-agent **preset grants** still match by name (`AgentManager::resolveGrantedTools`).
-  - The new matcher's remaining real gap was F-J3, now fixed: path rules match the root-anchored, resolved and symlinked spellings on the main tool loop (`3b7d2fd33`) and in sub-agent gates and preset grants (`a5b6e3d78`); declaration checks have no path subject, so they need no root, and Chat's own `!` checks judge only Bash (F-J3-rem (b), closed as moot in wave 9 and pinned by `ChatBashGateRootTest`, `e76e8a93e`). F-P5 (`$(…)`, backticks and redirects slipping past allow rules) was fixed in `c8fc573a5`.
-- **Two documentation statements were stale:** "rule `paths:` scoping not applied" (it is) and "only two keys re-applied per turn" (`maxOutputTokens` is too). Both are now corrected and pinned by `DocFigureProseDriftTest` (`232013284`).
-- **The image-marker / mouse-zone collision from project memory is already fixed** (Appendix P). Since 15b-17's fix (`b38bf8403`, wave 7) an image marker is an authenticating escape plus its cell, so a bare Private-Use codepoint in agent text is inert and no longer needs stripping.
+- **Argument-scoped permission rules are implemented** (Appendix S, top callout; `PermissionRule::matches()` / `matchesShellSubject()`). `Bash(rm *)` deny denies, `Bash(git *)` does not grant all of Bash for **permission rules**, and allow rules fail closed on `$(…)`, backticks and redirects. Sub-agent **preset grants** still match by name (`AgentManager::resolveGrantedTools`), which is what Part II #23 and roadmap item 4.2 cover.
 - **Workerman is not used anywhere in the monorepo** (Appendix O §3).
 
-## IX.2 Cross-cutting defect themes
+## IX.2 Remaining work
 
-Several audits found the same root cause in different places. Fixing each theme once fixes them all.
-
-1. **Killing a turn did not kill all of its commands (fixed).** Turn teardown and the parallel deadline kill the whole process tree (`ProcessContainment::killTree()`, `c54372b2a`), and since waves 7 and 8A so do the dormant Chat site (`83a92e36d`) and `AgentWorkerPool`'s cancel path (`2b136d35a`); `EngineExecutor` runs inside the pool's fork, so the pool's tree kill covers it (F-E2). Since wave 9 the engine teardown and both Chat cancel sites kill the tree on the loop (`ProcessContainment::killTreeAsync()`, `775bfd1e6`), so Escape no longer holds the loop for the whole walk (about 120 ms → one 30 ms snapshot). Since wave 10 `AgentWorkerPool`'s cancel, cancel-all, reset and deadline kills run on the loop too, with a SIGTERM grace before the 9 (R3, `28879e573`). Known limits, not findings: `BackgroundSessionRunner` still kills without `killTree()`, and each async pass costs one `/proc` scan (about 30 ms).
-2. **Terminal-injection and rendering hygiene (fixed).** CR, UTF-8 C1 controls, the permission modal's byte wrap and `error_log()` output over the frame are fixed (`Sanitize::untrustedForDisplay()`, the C1 sweep, `Sanitize::visibleControls()`, and `TuiErrorLog`, which sends the TUI's `error_log` to `~/.sugar-crush/logs/sugarcrush.log`), and the status bar, frame and session tab strip are clipped to the terminal width, with tab names sanitized. Waves 7 and 8A closed the rest: forged image markers (15b-17), bidi overrides and zero-width characters (15b-28, marked visibly by `Sanitize::markInvisibleFormatting()`), lone raw C1 bytes in candy-shine (15b-29), the `Width::wrap()` hang (15b-26), and the permission prompts' invalid-UTF-8 and control-character arguments (15b-27, R17). Wave 9 closed the last items: the notice sink's clip and overflow strings name where the full text really went (C4), `TuiErrorLog` falls back to a private temp-dir log or the null device instead of the tty (R16), the image-marker prose describes the two-part marker (15b-32), and the permission modal and transcript tables fit terminals under 26 columns (R4).
-3. **Repo-controlled content reaches the prompt without fencing or caps (fixed).**
-   - A repo's skills no longer shadow the user's own: precedence is built-in < project < user and every shadowing is reported (15d-03 (b), `9e69d6c9e`), and since wave 9 the launch notice names shadowed skills as well as unreadable ones (15d-03, `32340e1b5`).
-   - Instruction documents, `@imports` and enabled skill bodies have byte budgets, and since wave 8A every skill file read is bounded too (15d-27, `9e69d6c9e`). Since wave 9 a launch notice names the instruction files and skill bodies the budgets left out (R1, `d1416fb86`); since wave 10 `EngineBackend`'s per-turn `App` takes the Chat's own `CompactorConfig` (R1, `2fc25bef1` + `5d2229e76`). Since wave 11 a file `loadForPath()` refuses mid-session gets one UI-only notice (R1, `459326393`), so R1 is fixed in full.
-4. **Prompt assembly read the user's git config and the filesystem nondeterministically (fixed; one prompt-layout item remains).** The env block's git calls now run with `--no-optional-locks -c color.ui=false`, diff through plumbing with `--no-ext-diff`, never write the index, and are bounded at 2 s each; a subdirectory launch reports the repo root and its git state; rule and repo-map walks sort before capping (15d-12, 15d-14, 15d-13 (a), 15d-17).
-   - Since wave 8B, `.sugar-crush/*` and `.mcp.json` lookups walk up to the repo root on a subdirectory launch (15d-13 (b), `f2c1f0445`).
-   - What remains is not an audit item: the env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
-5. **Errors are swallowed and turns "succeed" (fixed).** The last open case, malformed tool-call arguments that ran the tool with `[]`, now gets an error result and the tool does not run (`16b9d6750`).
-6. **The permission layer had holes in the default and stricter modes (mostly fixed).** Accept-edits now grants in-root Edit and Write and asks for `rm`, `mv` and `cp` (F-P4); WebFetch left the read-only class and gained `WebFetch(domain:…)` rules (F-P6); `auto` classifies Write, Edit, WebFetch and `mcp__*` (F-P3 (b)); Bash, Grep and hooks get a scrubbed environment (F-E1); refusals are carried structurally, so tool output cannot forge one (F-P8); hook asks are no longer silenced by the Task memo or a Chat "Always" grant (F-P7, F-P9); path deny rules match respellings and symlinks in sub-agent gates too (F-J3, wave 8B); and `docs/PERMISSIONS.md`'s introduction describes argument-scoped rules (F-D1, wave 8B). What remains:
-   - The TUI engine path refuses every Ask (Part II #1), so the new asks are effectively refusals there.
-7. **Unbounded or stalled work inside `update()` (fixed).**
-   - A long streaming reply whose headings follow a closing code fence no longer re-renders whole on every frame: since wave 9 candy-shine's `SectionScanner` cuts there and `stream()` keeps its `render()` law across reference definitions, so sugar-crush dropped both workarounds (15b-30, 15b-31; 8/34/70 ms per frame at 20K/100K/200K).
-   - Transcript persistence no longer runs inside `update()`: since wave 10 a debounced writer saves a pending snapshot every 0.5 s, with synchronous flushes on a session switch, before `/branch` and `/fork`, and at shutdown (R2, `14f682fad`; noted on 15b-21 in Appendix R).
-8. **Sessions and persistence integrity (fixed; one roadmap item remains).**
-    - Each session has a single-writer lock: a second TUI on an open session opens it read-only, names the holder and offers `/branch` (SES-3, `14f682fad`, wave 10); since wave 11 the status bar marks it and it becomes writable by itself once the holder lets go (`d01fd0c60`, `1cb384982`). The checkpoint-index and blob-intern races were closed earlier (`698a1efff`).
-    - A `/fork` now copies the whole conversation, but the background daemon does not load it (Part II #30).
-    - UI-only command output and notices are kept off the wire and out of the compaction summary by `Message::$uiOnly`, and they render inline as dimmed `notice:` rows (15b-03, fixed in wave 8B; relates to Part II #2 and the DCP `uiOnly` proposal).
-9. **MCP interoperability and trust gaps (fixed).**
-    - Trust is bound to each server's command, args and env, and a changed or added server is refused until `sugarcrush mcp trust` re-records it (MCP-5, wave 8B).
-    - Dynamic client registration sends its metadata at the top level (MCP-10, wave 8B). The OAuth discovery, storage and expiry bugs (MCP-6/7/8) and the stale MCP.md ordering claim (DOC-2) were fixed in wave 7.
-10. **Cost accounting holes (fixed; live checks owed).**
-    - Task sub-agent spend reaches the parent, the session total and the cap; since wave 8B, parallel sibling Tasks share a spend ledger, so a batch stops at the cap, and a crashed tool child still bills. Since wave 9 Chat's calibration fallback reads `Usage::ownTokens()`, so sub-agent tokens no longer inflate it (B4, fixed).
-    - Vertex and Bedrock have list-price tables, flag unknown models unpriced and now receive the user's `modelPrices`, and the default Bedrock config sends the inference-profile id (A20, fixed). Since wave 10 cache read and write tokens are priced there, and both providers mark prompt-cache breakpoints (Vertex's Anthropic arm through the formerly dormant `CacheBreakpoints`, Bedrock through Converse `cachePoint` blocks) behind a user-tier `promptCache` key (A15, `fb0f0c1af`; needs one live Vertex Claude and one live Bedrock request). Since wave 11 the turn loop feeds `CacheBreakpoints`' cache-health check, so three zero-cache replies while marks are sent raise one notice (`2c38796f6`; needs a live reply with empty buckets).
-    - The OpenAI context window has a `contextWindow` override (A13, fixed), and a project can no longer choose the title and summary models (15d-24, fixed).
-    - `claude-code` turns sum the CLI's usage buckets, so they report their tokens (A25, fixed in wave 9).
-
-## IX.3 Critical and High findings: fix first
-
-The Critical item and all 20 High items are fixed on master, as is the latent High in the sub-agent path that was found while fixing them. Both Medium-High items are fixed too: F-E2 in waves 7 and 8A, and 15b-03 in wave 8B (`5d2aaae34`, `6fddd0d3a`: compaction reads agent-visible rows only, and notices render inline in a distinct dim style). No Critical, High, Medium-High or Medium finding remains: SES-3 was finished in wave 10, and A21 is fixed pending a live Gemini 2.5 check (B4 and 15d-03 were finished in wave 9).
-
-## IX.4 Where the audit fixes slot into the roadmap
-
-- **Before Wave 0, as an "audit hotfix" wave (mostly S):** this wave has landed on master in full (see the **Fixed since audit** list at the end of each of Appendices Q–U).
-- **With Wave 0:** nothing remains. A15's cache pricing and breakpoints, the served SGLang model label (15b-35) and the launch-notice cap (CLI-3) landed in wave 10, and the hosted Chat's status-bar model segment in wave 11 (`d01fd0c60`).
-- **Before Wave 1.C ships:** nothing remains. The permission modal's empty value for an invalid-UTF-8 argument (15b-27), bidi overrides in the text it shows (15b-28), and the dormant Chat-path mirrors of the F-H1 and F-H3 fixes were all fixed in waves 7 and 8A.
-- **With Wave 1.B:** stable unique ids. (15b-03, the `uiOnly` flag with its compaction filter and notice style, landed in full in wave 8B.)
-- **With Wave 4 (sub-agents and orchestration):** worktree isolation (Part II #23). `withWorktreeRoot()` already arms `BashEscapeDenyHook` and re-jails every path tool, so its first production caller gets both (F-J5, fixed in wave 10).
-- **With the sessions phase (VIII.4 A):**
-  - SES-3 (b) (the writer lock and read-only second TUI), CLI-2 (b) (leftover words as the TUI's initial prompt) and R2 (debounced transcript persistence) landed in wave 10; the server design's `session_leases` table can reuse the lock's semantics;
-  - session picker bugs B1–B3.
-- **With rendering work:** nothing remains; 15b-30 and 15b-31 landed in wave 9 and sugar-crush dropped its workarounds.
-- **Feature wave:** attachments (15b-15, `@file` mentions, image paste and Ctrl+V) landed in wave 11 (`768333da5`, `f9fd25dd4`, plus `71c4e38b2`, `42bd75e54`, `75fa2b003`).
-- **Deferred:** 15b-14 (i18n), until after the roadmap; F-J5's production caller waits on worktree isolation (Part II #23).
-- **Needs live verification:** A21 (b) (one Gemini 2.5 request), A15 (one Vertex Claude and one Bedrock request with cache marks) and the cache-health notice (a real Vertex or Bedrock reply that reports empty buckets).
-
-**Remaining open findings (1):** 15b-14 (Low: no i18n, deferred by decision). The audit remediation is otherwise complete. Needs live verification: A15, A21 (b) and the cache-health notice.
+- **Open finding:** 15b-14, sugar-crush has no i18n (Low). Deferred by decision until after the roadmap.
+- **Roadmap items the audit touched:**
+  - The TUI engine path refuses every Ask (Part II #1), so asks are effectively refusals there until Wave 1.C lands.
+  - The env block is still re-rendered inside the system message, which hurts cache stability (Part I #2, Part II #2).
+  - A `/fork` copies the whole conversation, but the background daemon does not load it (Part II #30).
+  - Worktree isolation (Part II #23) is still unwired; `withWorktreeRoot()` already arms `BashEscapeDenyHook` and re-jails every path tool, so its first production caller gets both.
+  - Session picker bugs B1–B3 (Part VIII.4).
+- **Needs live verification:**
+  - A15: Vertex/Bedrock prompt-cache marks need one live request each.
+  - A21 (b): the Gemini 2.5 output budget needs one live request.
+  - The cache-health notice needs a real Vertex or Bedrock reply that reports empty cache buckets.
 
 
 ---
@@ -18857,7 +18788,6 @@ None required. The deliverable is complete at `/home/sites/sugarcraft/prompt_kit
 - On by default. candy-mouse `Mark::zone()` / `Scanner` (`Renderer.php:18-20`).
 - Zone prefixes are `tab:`, `pane:`, `picker-item:`, `session-row:`, `toolcall:`, `divider:`, `stackdiv:` (`Renderer.php:543-604`). The id charset is `/\A[A-Za-z0-9._:-]+\z/` (`:696`); `Mark::MAX_ID_BYTES = 256`.
 - Clicks are dispatched by prefix in `Chat` (`:5334-5372`). `refuseMouseDispatch()` (`:5530-5555`) blocks clicks under modals. While a turn is in flight it hands tab clicks and the Agents-pane header to their handlers' own refusal (`midTurnRefusalOfItsOwn()` `:5560`).
-- **The image-marker / zone-sentinel collision noted in memory is fixed.** Image markers moved to U+E002+id, and `Renderer::maskImageMarkers()` (`:1187-1195`) blanks any non-sentinel Private-Use character in the copy the scanner reads. Session titles get PUA-stripped (`Chat::sanitizeSessionField()`).
 - **Implication:** any new agent-originated text (tool arguments, prose, agent names) must go through the same `Sanitize::untrustedForMarkedFrames()` plus PUA strip before it reaches a frame, or a hostile `\u{E000}…` in a Grep pattern can break every zone after it.
 
 #### 1.4 Server and web UI
@@ -19545,119 +19475,26 @@ Phase A is independent and ships first. Phases B and C together answer the secon
 ## 15a — Defect audit: agent engine, fork protocol, Runtime, providers, messages, support
 
 Scope: `sugar-crush/src/Backend/`, `src/Runtime.php`, `src/Providers/` (all providers, ProviderFactory, TransientFailure, usage parsing, SSE parsing, ToolCallParser/*), `src/Messages/`, `src/Support/`, `src/Usage.php`.
-Method: read every file in scope with comments stripped (line numbers preserved), then wrote throwaway repro scripts for each candidate under `/home/sites/crush-research-repos/_audit-scratch/15a/`. They use mocked Guzzle handlers, real forks and a fake MCP server. No source was changed.
-Known items from `99-synthesis.md` Part II are not repeated. Where a finding sharpens one of them, it says so.
+Method: read every file in scope with comments stripped (line numbers preserved), then wrote throwaway repro scripts for each candidate under `/home/sites/crush-research-repos/_audit-scratch/15a/`, using mocked Guzzle handlers, real forks and a fake MCP server. Known items from `99-synthesis.md` Part II are not repeated.
 
-**STATUS: FINAL.** Every file in scope was read. Every lead from the earlier checkpoint was either confirmed (and written up) or dropped with a reason. The `## Coverage` section at the end records what was and was not verified, and why.
-
-Confidence key: **Verified-by-repro** (a repro script showed the behaviour), **Verified-by-reading** (the code path is unambiguous but was not run), **Suspected** (verification still needed; the check that remains is named).
-
----
-
-### A. Providers: error handling, SSE parsing, wire format
-
-Every finding here has been fixed, the last (A15 and A21) in wave 10. Both still **need live verification** (one Vertex Claude and one Bedrock request for A15, one Gemini 2.5 request for A21 (b)); see **Fixed since audit**.
-
----
-
-### B. Engine fork protocol and process lifecycle
-
-Every finding here (B1 to B8) has been fixed, the last (B4 (iii) and B8) in wave 9; see **Fixed since audit**.
-
----
-
-### C. Runtime
-
-Every finding here (C1 to C4) has been fixed, the last (C4) in wave 9; see **Fixed since audit**. B4 (no usage channel on tool results) and B2 (deadline kill orphans) are listed under B.
-
----
-
-### Summary table (by severity)
-
-No finding in this appendix remains open: the last, A15 and A21, were closed in wave 10. Both need live verification (see **Fixed since audit**).
-
-New in the final pass: **A19, A20, A21, C2, C3**. Re-graded: B6 (Suspected → Verified-by-repro), A16 (Suspected → wire shape verified by repro), C1 (Low/Suspected → Info, not reachable). Sharpened: A13 (fix aligned with the `contextWindow()` contract). Items sharpened in that pass and since fixed are listed under **Fixed since audit**. Found while fixing A7 in wave 2: **A23**. Found while fixing C2 in wave 3: **C4**. Found while fixing A15 in wave 4: **A24**. Found while fixing A12 in wave 6: **A25**. Found while fixing A18 in wave 8A: **A26**. Found while fixing R14 in wave 8B: **B8**.
+**No finding from this audit remains open.** Fixed findings have been removed from this appendix. Live checks still owed are listed once, in `99-synthesis.md` Part IX.
 
 ---
 
 ### Coverage
 
-**Method.** Every line in scope was read with comments stripped (`/home/sites/crush-research-repos/_audit-scratch/15a/strip.php`, which keeps the original line numbers). Docblocks were consulted where they state a contract. Each candidate was confirmed with a throwaway script under `/home/sites/crush-research-repos/_audit-scratch/15a/` (real forks, mocked Guzzle handlers, a fake MCP server, reflection into private helpers), or confirmed by reading where the path is unambiguous. No source was modified, no phpunit run was needed, and every process the scripts started has exited.
-
 **Audited in full:**
 - `src/Backend/`: `EngineBackend.php`, `CommandBackend.php`, `StreamingCommandBackend.php`, `EchoBackend.php`, `ObservesReasoning.php`, `ReportsContextWindow.php`, `CancellationToken.php`, `TranscriptTurn.php`, `TurnInterrupted.php`.
 - `src/Runtime.php` (all code, including `systemPromptSections()`).
-- `src/Providers/`: `SglangProvider.php`, `CustomProvider.php`, `OpenAIProvider.php`, `VertexProvider.php` (all 2512 lines, including the gax predictor/streamer, the SSE decoder and the protobuf builders), `BedrockProvider.php` (all), `ClaudeCodeProvider.php`, `ClaudeCodeInvocation.php`, `ProviderFactory.php`, `TransientFailure.php`, `ProviderException.php`, `ProviderInterface.php`, `CompleteRequest.php`, `CompleteResponse.php`, `EchoProvider.php`, `EmbeddingsRequest.php`, `EmbeddingsResponse.php`, `CacheBreakpoints.php`, `Concerns/*` (HttpClientDefaults, ReasoningExtractor, SessionAffinity, ToolSchema), and `ToolCallParser/*` (OpenAiArray, Dsml, MinimaxXmlFallback, MarkupScanner).
-- `src/Messages/`: all six files.
-- `src/Support/`: all thirteen files (`AtomicFileWriter`, `ContainedPath`, `EnumSpelling`, `ForkedChild`, `Frontmatter`, `HomeDirectory`, `HookContextFiles`, `ParentProcessGuard`, `ProcessContainment`, `ProcessReaper`, `SystemClipboard`, `TimedFileLock`, `ToolIpcFiles`).
-- `src/Usage.php`.
-- Read outside scope, where a finding depended on it: `src/Agents/EngineExecutor.php`, `TaskTool.php:440-630`, `Tools/Concerns/CapturesProcessOutput.php`, `MCP/StdioMcpServer.php` with `sugar-mcp/src/StdioMcpServer.php`, `LSP/LspConnection.php` (id counter), `Context/InstructionFileLoader.php`, `Diagnostics/RuntimeNoticeSink.php`, `Cli/Bootstrap.php:6585-6627`, `Chat.php` (notice pump, 9240-9340), `candy-pty/src/SignalForwarder.php`, and `vendor/google/gax` (`ApiException`, `RestTransport`).
+- `src/Providers/`: `SglangProvider.php`, `CustomProvider.php`, `OpenAIProvider.php`, `VertexProvider.php` (including the gax predictor/streamer, the SSE decoder and the protobuf builders), `BedrockProvider.php`, `ClaudeCodeProvider.php`, `ClaudeCodeInvocation.php`, `ProviderFactory.php`, `TransientFailure.php`, `ProviderException.php`, `ProviderInterface.php`, `CompleteRequest.php`, `CompleteResponse.php`, `EchoProvider.php`, `EmbeddingsRequest.php`, `EmbeddingsResponse.php`, `CacheBreakpoints.php`, `Concerns/*` and `ToolCallParser/*`.
+- `src/Messages/` (all six files), `src/Support/` (all thirteen files), `src/Usage.php`.
 
-**Leads from the checkpoint, and how each was resolved:**
-1. LSP fork hazard: **same flaw, latent.** `LspTool` is wired with a null client and nothing calls `LspConnection::connect()`. Folded into B1 (now fixed; the LSP exchange lock that remained, B7, was fixed later in `d0f7cb6f6`).
-2. `ProviderException` exit code read as an HTTP status: **dropped.** `ProviderException` exposes `exitCode` as a property, not `getStatusCode()`, so `TransientFailure::statusCode()` returns null and a CLI failure is correctly non-transient. Following this lead turned up the real classification gap for Vertex `ApiException`, written up as **A19**.
-3. Vertex `defaultStreamer()` SSE parsing: **no new framing defect.** The streamer accepts `data:` without a space, CRLF via `trim`, and a trailing unterminated event. Errors arrive as `isError` chunks and so run into A1. The missing end-of-stream check was added to A3, and the classification gap is A19.
-4. Uncapped project instructions: **confirmed** as C3. The other half of the lead (`RuleLoader` re-reading disk every step) is a performance cost only and was not reported. `InstructionFileLoader::loadRoot()` is cached per session.
-5. A16 and A18 live validation: A16's wire shape is now verified by repro; the server rejection is not (no AWS credentials). A18 and A21 still need a live model. The SGLang and Vertex endpoints were not called from this audit, so both stay **Suspected**.
-6. C1 `SIGCHLD` reaper: **dropped to Info.** The only SIGCHLD handler in the monorepo (`candy-pty` `SignalForwarder::attachSigchld`) is never installed by sugar-crush. C1 was hardened later anyway (`c10717d8c`).
-7. `error_log()` from `flagTruncationRiskInLatestToolResults()`: **confirmed** and broadened to C2.
+**Checked and found sound (no finding):** Bedrock `AwsException` classification (`getStatusCode()` exists, the chain is preserved, 429/5xx retry); `ContainedPath` (realpath on both sides, separator-anchored prefix); `HookContextFiles` (owner/mode/symlink checks, umask, atomic rename; retention is deliberate); `SystemClipboard` (bounded write, terminate ladder); `HomeDirectory::owned()`; `Frontmatter` repair pass; `EchoProvider`/`EchoBackend`; `CancellationToken`; `TurnInterrupted`. A `ProviderException` exit code is not misread as an HTTP status (`TransientFailure::statusCode()` returns null, so a CLI failure is correctly non-transient).
 
-**Checked and found sound (no finding):** the A1 fix placement versus `ReasoningProgressTest` (compatible if the throw goes after the retry loop); Bedrock `AwsException` classification (`getStatusCode()` exists, the chain is preserved, 429/5xx retry); `ContainedPath` (realpath on both sides, separator-anchored prefix); `HookContextFiles` (owner/mode/symlink checks, umask, atomic rename; retention is deliberate); `SystemClipboard` (bounded write, terminate ladder); `HomeDirectory::owned()`; `Frontmatter` repair pass; `EchoProvider`/`EchoBackend`; `CancellationToken`; `TurnInterrupted`.
-
-**Not reported, because they are already known or out of scope:**
-- `CacheBreakpoints.php` was read in full. It is **dormant**: there are no callers outside its own test. That is already reported in `00-sugar-crush-baseline.md` §3.5 and in reports 01/02/07/08/10/11, so it is not repeated. No defect was found in the class itself, apart from the wiring note that its `role: system` turn has to be split out to Anthropic's top-level `system` by the caller.
-- Vertex's legacy `:predict` arm (PaLM / `chat-bison`) drops `parameters` (`VertexProvider.php:2126-2139`). The code itself admits this (docblock `:2429-2436`), and those models are retired by Google, so it was left as dead-arm debt.
-- Gemini tool calling is absent, but deliberately: `supportsFunctionCalling()` honestly returns false (`:241-256`).
-
-**Not verified, and why:**
-- Live provider behaviour: Bedrock's Converse rejection (A16), the bare-id on-demand refusal (A20, last sentence), SGLang reasoning-token use (A18) and Gemini thinking budget use (A21). They need credentials or a live model; this audit made no outbound model calls.
-- The real gax REST server-stream decoding of `streamRawPredict` SSE bodies. It is exercised only through `VertexProviderTest`'s seams, not against Google.
-- C2's on-screen corruption was established from code plus the fd-2 destination check, without a PTY capture of the running TUI.
-
----
-
-### Fixed since audit
-
-These findings were fixed on master after the audit. Their sections and table rows were removed.
-
-- **A1** Provider `isError` responses became silent empty replies — fixed on master in `ea81820fb`. Residual: `AgentManager::executeSubAgent()` swallowed provider errors the same way (15e AG-4), fixed later in `48e9a3f65`.
-- **A2** SGLang/Custom in-stream `{"error":…}` events ignored — fixed on master in `4c22a9b7a`.
-- **A3** A stream that ends without a finish signal treated as complete — fixed on master in `9105a64ae`. A5 (no-space `data:` framing) surfaced through this path as a premature-end error until it was fixed in `5781eb9f8`.
-- **A6** One non-UTF-8 byte in tool output failed every later request — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15c F-T1). Residual: the two command backends (A22), fixed later in `987c8d87f`.
-- **B1** MCP ids reset per fork; a killed call shifted every later result — fixed on master in `ea6e178fd` (process-unique ids, locked exchanges, shared read buffer); LSP ids in `e6f6aee54`. Residual: the LSP exchange lock (B7), fixed later in `d0f7cb6f6`; a lock file per MCP server was left behind if the TUI was killed; that leak (R14) is fixed since in sugar-mcp `8bd3e5a4f` (wave 8B: `ExchangeLock::sweepStale()`), and its LSP twin is B8.
-- **A5** `data:` with no space after the colon was ignored — fixed on master in `5781eb9f8` (new `Providers\SseData`, used by SglangProvider and CustomProvider; VertexProvider already accepted it). ClaudeCodeProvider's `data: ` check was A12's NDJSON framing fault, not this one (A12 is fixed since).
-- **A22** `CommandBackend`/`StreamingCommandBackend` encoded history without `JSON_INVALID_UTF8_SUBSTITUTE` — fixed on master in `987c8d87f` (`CommandBackend::encodeHistory()` substitutes; `StreamingCommandBackend` reuses it).
-- **B7** The LSP client had unique ids but no cross-process exchange lock — fixed on master in `d0f7cb6f6` (per-process `LspExchangeLock` flock with bounded polling, `LspExchangeState` sidecar, shared readahead, recovery from a holder killed mid-read or mid-write, notifications journaled and replayed, server-to-client requests answered -32601, only the connecting process stops the server).
-- **A4** Streamed tool calls were dropped on `finish_reason=stop` or `delta:null` — fixed on master in `90dc99dfc` (a null-delta finish frame is parsed with an empty delta; at end of stream a still-buffered call is flushed whatever the finish reason, with the decode-or-drop rule of the truncated flush; `CustomProvider` gains `flushBufferedToolCalls()`). Residual: the `error` finish reason deliberately does not flush (the server disowned its generation).
-- **A7** `formatToolCalls()` replayed every list argument as an object (`JSON_FORCE_OBJECT` is recursive) — fixed on master in `d2911641e` (only the top level is forced to an object, via an `(object)` cast; invalid UTF-8 is substituted instead of the old `?: '{}'` fallback; anything else `json_encode()` cannot represent throws). Remaining: nested empty maps in replayed arguments (`{"opts":{}}`) now go out as `[]`, because PHP cannot tell an empty map from an empty list after an associative `json_decode`. Lists are correct, maps are not; filed as **A23**.
-- **A14** OpenAI cost billed cached prompt tokens at the full input rate — fixed on master in `58d25cb3b` (fresh × input + cached × cached-input + completion × output, from a new `CACHED_INPUT_TABLE`; models with no cached rate bill cache hits at the input rate; an operator `modelPrices` entry may declare a `cached` rate, documented in `docs/SETTINGS.md`).
-- **B2** Esc or watchdog teardown killed only the turn process; the setsid'd shell command kept running — fixed on master in `c54372b2a` (new `ProcessContainment::killTree()`: freeze the root, walk `/proc` via the new `Support\ProcessTree` stopping every descendant, then SIGKILL every member's process group and pid, bounded to about 250 ms; wired into `EngineBackend` teardown and the `Runtime` parallel-deadline kill). Residual: `killTree()` blocked the event loop for about 110 ms on Escape (R3). R3 is partly fixed since in `775bfd1e6` (wave 9: the new `ProcessContainment::killTreeAsync()` runs the same freeze, walk and kill one `/proc` pass per loop tick, with timers in place of `usleep`, and `reapChildAsync()` replaces the bounded reap; EngineBackend teardown and both Chat cancel sites use it, and a shutdown sweep finishes a walk the loop abandoned; the longest loop block on Escape fell from about 120 ms to one snapshot, about 30 ms). R3 is fixed since in `28879e573` (wave 10: `ProcessContainment::killTreeAsync()` takes an optional SIGTERM grace, 15 + SIGCONT to the frozen set, polled every 5 ms, then 9; `AgentWorkerPool` detects a loop-driven run through a `futureTick` probe queued in `idle()`, and there `cancel()`, `cancelAll()`, the reset and the WF-1 deadline kill through `killTreeAsync` + `reapAsync`; off the loop and in `__destruct` the synchronous `killTree()` stays; the root stays unreaped until its walk settles). Known limits, not tracked as findings: each async pass still costs one `/proc` scan (about 30 ms), `EngineBackend::$finalize` keeps the synchronous `reapChild()`, and `BackgroundSessionRunner` still kills without `killTree()`. The remaining kill sites (15c F-E2) were fixed in waves 7 and 8A.
-- **B3** Both ends of the frame socketpair leaked into every process the turn spawned — fixed on master in `53da0a291` (the child closes the parent's end first; new `ProcessContainment::closeOnExec()` sets `FD_CLOEXEC` via FFI `fcntl` on both ends; `completeAsync` also polls the turn pid with `WNOHANG`, so a dead turn is noticed without waiting for EOF).
-- **B6** The frame writer gave up silently mid-frame and the reader resynced without teardown — fixed on master in `ee2e59b08` (the child's end carries a year-long write timeout and a failed write ends the child with `exitNow(1)`; `drainFrames()` reports corruption, and `completeAsync` delivers the frames decoded before it, then tears the turn down with "Provider worker frame stream corrupted").
-- **C1** `waitpid -1` never settled an exempt parallel job — fixed on master in `c10717d8c` (both wait sites go through `parallelJobHasExited()`, which treats any non-zero answer as gone; the payload file is still read, so the real result arrives).
-- **A17** `embeddings()` swallowed transport errors and returned an empty list — fixed on master in `106ea5253` (both providers throw `\RuntimeException` with the provider's own error text and the Guzzle exception as `previous`, so `TransientFailure` still classifies 5xx, 429 and connect failures as transient and 400 as permanent; a 2xx body that is not JSON, has no `data` list, or has an item without an `embedding` also throws; `data: []` still returns an empty result).
-- **C2** Engine-side `error_log()` diagnostics painted over the TUI frame — fixed on master in `9a827f4e3` + `520298b79` + `0c2bbd0a7` (new `Diagnostics\TuiErrorLog` points `error_log` at `~/.sugar-crush/logs/sugarcrush.log`, directory 0700 and file 0600, refusing a symlinked file, rotating one generation past 5 MiB and keeping an operator's own destination; `bin/sugarcrush` arms it on the TUI path just before `Program::run`; `RuntimeNoticeSink::warn()` skips `error_log()` while armed with a transport and the destination is still stderr) and `080fac09d` (the SGLang `</parameter>` truncation-risk warning is logged once per tool-call id per provider instance, an empty id keyed by a content hash, at most 1024 entries). Residual: if the log cannot be set up, the parsers' direct `error_log()` calls can still reach the tty (R16); the notice-sink strings and TROUBLESHOOTING.md still say "full text on stderr" (C4). Both are fixed since in `1fe969e8e` (wave 9): `TuiErrorLog::install()` falls back to a private `<tmp>/sugarcrush-<euid>/sugarcrush.log` (owned, 0700, no symlinks) and then to the null device, never to fd 2, and `bin/sugarcrush`'s fatal line carries the message itself when the destination is the null device; a temp-dir or null-device fallback raises a launch notice (`d1416fb86`).
-- **B5** `withPermissionApprover()` and `withMemoryStore()` silently dropped the spend cap — fixed on master in `d4ecedcea` (every `EngineBackend` wither goes through one private `mutate()`, so both withers keep `spendCapUsd` and `sessionSpendAtStartUsd`).
-- **A19** Vertex `ApiException` 429/503 were never classified transient, so they got no retry — fixed on master in `a26489378` (`TransientFailure::isTransient()` judges a Vertex `ApiException` by its gRPC status, so `RESOURCE_EXHAUSTED` (429) and `UNAVAILABLE` (503) retry and `UNAUTHENTICATED` (401) does not, falling back to the numeric code; the `VertexProvider` docblock that claimed this already worked is corrected).
-- **A16** Bedrock did not merge consecutive same-role turns and sent blank text blocks — fixed on master in `9c706ed39` (a new `conversationTurns()` step, used by both `converse` and `converseStream`, merges adjacent same-role turns and drops blank text blocks).
-- **C3** Project instructions (`CLAUDE.md`/`AGENTS.md` + every `@import`) had no byte budget, while rules had 64 KiB — fixed on master in `dd8be915d` (with 15d 15d-09: `Runtime::systemPromptSections()` prices instruction documents in framed, escaped bytes against 64 KiB per document and 128 KiB combined, kept apart from the rule budget; a document that does not fit becomes a pointer line in a `<project-instructions>` deferral fence and is recorded in `InstructionFileLoader::refusedPaths()`; every document and `@import` read is stat-checked first and bounded at 60 KiB, and an import that does not fit what is left of its document's ceiling gets an `import-deferred` pointer at its import site; enabled skill bodies are held to `CompactorConfig`'s per-skill and combined budgets, measured with `TokenEstimate`; a prompt under budget is byte-identical). Residual: there is no user-visible notice for a deferred instruction file yet, because nothing drains `refusedPaths()`; skill budgets use the `CompactorConfig` defaults, because App carries no compactor config (R1); `SkillLoader` read skill files uncapped (15d-27), fixed in wave 8A (`9e69d6c9e`). R1 is partly fixed since in `d1416fb86` (wave 9: `Runtime::planInstructionDocuments()` and `planEnabledSkills()` are shared static planners, and `Bootstrap::reportPromptBudgetDeferrals()` prices a launch loader through them, raising one launch notice for the instruction files left out of the prompt and one for enabled skill bodies over the skill budget, on the TUI and on `-p`; skill deferrals are recorded in `Runtime::skillDeferrals()`; `App` gains `withCompactorConfig()`, and the skill budget reads it). R1's compactor half is fixed since in `2fc25bef1` + `5d2229e76` (wave 10: `EngineBackend` carries a `CompactorConfig`, `withCompactorConfig()`, defaulting to the `CompactorConfig::new()` the launch notice prices against, and `runTurn()` installs it on the per-turn `App`; `Chat::scheduleBackendCompletion()` hands the Chat's own config to the dispatched clone, so one object prices both budgets; no settings key feeds one yet, so in production both are the defaults). R1's last half is fixed since in `459326393` + `6e742aa15` (wave 11: `loadForPath()` diffs `refusedPaths()` around its walk and raises one UI-only `RuntimeNoticeSink::warn()` per newly refused nested file, using `InstructionFileLoader::MID_SESSION_REFUSAL_NOTICE_FORMAT`; the announced set rides the Read, Glob and Grep session exports). Known limit, not a finding: the turn child sends no loader state back, so a refusal can be re-announced at most once per later turn that touches it.
-- **A9** The MiniMax XML fallback turned any JSON-looking parameter value into a PHP array, regardless of the tool schema — fixed on master in `df3663220` (the parser coerces parameters by the tool schema through new `ToolParameterTypes` and `ToolSchemaAware`, so a JSON-looking value for a string-typed parameter stays a string).
-- **A11** Malformed tool-call argument JSON ran the tool with `[]`, and the model was never told why — fixed on master in `16b9d6750` (the Custom, Sglang and OpenAiArray parsers stamp the call through new `ToolCall::argumentsError()`, and Runtime refuses such a call with an error result on both the sequential and the concurrent arms instead of running the tool).
-- **A8** When textual (DSML or MiniMax-XML) tool calls were recovered, the markup stayed in the assistant content, painted to the UI and replayed alongside the structured call — fixed on master in `57f806a6a` (provider side, with Runtime unchanged: a new `EnvelopeAware` capability, an `EnvelopeHoldBack` stream split and `TextualRecovery`; `SglangProvider::completeStream()` holds text back from the first byte that could start a marker, cuts recovered envelopes and releases anything else verbatim, and a structured `tool_calls` chunk releases held text; the batch `parseResponse()` cuts too; the default openai parser holds nothing). The repro now yields the content "Let me read it." plus one call.
-- **A12** The `claude-code` provider's streaming path could not work — fixed on master in `46cf9c71b` (`--verbose --include-partial-messages` are added for stream-json only; NDJSON lines are parsed, taking `stream_event` text and thinking deltas plus the `result` line and skipping `system` and whole `assistant` lines; the prompt goes on stdin, fed non-blocking in the select loop; a system prompt over 64 KiB is spilled to a 0600 temp file passed with `--system-prompt-file` and deleted after reap; a failed run's reason comes from the `result` line; `execute()` shares the select loop, which removes its stderr deadlock). API change: `ClaudeCodeInvocation::printModeArgs(array $options)` no longer takes the prompt. Residual: a real run reports 0 total tokens, because the CLI's `result` line has no `usage.total_tokens` (A25).
-- **A18** The default SGLang provider sent `max_tokens: 4096`, which a max-effort think could use up — fixed on master in `46ba82a7d` (new `Providers/SglangServerInfo` reads `/model_info` and `/server_info` at the server root once per provider, concurrently, with a 3 s connect-and-total bound through the shared `HttpClientDefaults` seam, fail-soft and memoised, construction staying I/O-free; `contextWindow()` is `min(context_length, max_req_input_len − 4096)`, 995,898 on skynet2; the default `max_tokens` is `min(262144, window − estimate − max(8192, estimate/4))`, floored at 4096, on `complete()` and `completeStream()`, and an explicit `maxOutputTokens` is sent unchanged; the family fallback table gives DeepSeek-V4 and Qwen3.8 the same cap when discovery fails, and unknown models keep 4096; one-time notices for a null `tool_call_parser` with no fallback armed and for a served-model family that differs from the configured one; new optional provider key `discoverServerInfo`). The live `qwen3_coder` parser returns OpenAI `tool_calls[]`, which `defaultToolCallParserFor()` already maps to `openai`. Residual: discovery can delay the first TUI frame by up to 3 s, once, when the server accepts connections and stalls; an explicit `maxOutputTokens: 262144` (as in the user's `~/.sugar-crush/config.json`) bypasses the room clamp and can draw SGLang's context-length 400 past about 737k prompt tokens; the stale DeepSeek `DEFAULT_MODEL` was A26, fixed since in `dec931022`.
-- **A10** `CustomProvider` sent a literal top-level `extra_body` key — fixed on master in `4f8869c63` (no literal key; an opt-in constructor `array $extraBody`) and `91cd21afe` (wave 8B: the new user-tier `extraBody` key feeds it through `createCustom()`, a provider block's value winning; the constructor still refuses `extra_body` and the reserved keys by name).
-- **A13** `OpenAIProvider::contextWindow()` returned 8,192 for gpt-4o-mini and gpt-4.1 — fixed on master in `58d25cb3b` (the ids are sized, an unknown model answers 0) and `91cd21afe` (wave 8B: a new user-tier `contextWindow` key, a number for whatever model runs or a `{"<model>": tokens}` map, reaches a new `OpenAIProvider` constructor parameter that refuses values below 1; the factory reads 0, negatives, fractions, huge and non-numeric values as no override, and a provider block's `contextWindow` wins).
-- **A20** Bedrock's tables matched only bare model ids — fixed on master in `c9772c065` (ids normalised; an unknown model gets window 0 and is unpriced; the profile-id `DEFAULT_MODEL`) and `04131a937` (wave 8B: `defaultConfig('bedrock')` sources the now-public `BedrockProvider::DEFAULT_MODEL`, the `us.` inference-profile id, and the user's `modelPrices` reaches Bedrock, see A15).
-- **A26** `SglangProvider::DEFAULT_MODEL` still named DeepSeek-V4 — fixed on master in `dec931022` (the static fallback is `Qwen/Qwen3.8-Flash-Next-FP8`; a provider built on the default id with discovery armed re-addresses a default-id request to the served model name before `buildParams()`, so sampling, effort and the output cap follow the served family, and it raises no family-mismatch notice; a named model is sent as named; the public `SglangProvider::defaultToolCallParserFor()` is the one parser rule the factory uses too, so a served DeepSeek-V4 still gets DSML; the inert repo-root `.sugar-crush/config.dev.json` mirrors the effective one). Residual: `Bootstrap::backend()` passes `--model` only to `EngineBackend`, so with adoption on, the family-mismatch notice stays silent for an explicit `--model` of a family other than the served one (before the fix it judged the default id, so that path was wrong either way); fixed since in `9ef6f0819` (wave 9: `backendFor()` writes the resolved model into the provider config, as `provider()` and `toollessBackend()` already did, so A18's mismatch notice can fire). The status bar and `defaultConfig('sglang')['model']` still show the static id, filed as 15b-35.
-- **A23** Replayed tool-call arguments sent a nested empty map (`{"opts":{}}`) as `[]` — fixed on master in `21e64b374` (wave 9: `ToolCall` keeps the provider's raw `function.arguments` string when it is a JSON object that decodes identically to the arguments, carried by `withArgumentsError()`, `toArray()`/`fromArray()` and serialization; `ToolSchema::formatToolCalls()` sends it verbatim and re-encodes only calls without one, such as recovered textual calls; Sglang, Custom and OpenAI pass it through on the batch, stream-finish and flush paths; `{"opts":{},"paths":[]}` replays byte-equal. `OpenAIProvider::parseResponse` no longer throws a TypeError on a scalar arguments payload).
-- **C4** The notice sink's clip and overflow strings, and TROUBLESHOOTING.md, sent the user to stderr for the full text — fixed on master in `1fe969e8e` (wave 9: `RuntimeNoticeSink::clipSuffix()` and `overflowNotice()` name the live destination through the new `TuiErrorLog::describeDestination()` — the log file with the home spelled `~`, "stderr" for `-p` and embedders, or "full text not kept" for the null device — bounded at 160 bytes with no control bytes; TROUBLESHOOTING.md has a "Where diagnostics go" section).
-- **A25** `claude-code` turns reported 0 total tokens — fixed on master in `2dac6ebc2` (wave 9: `ClaudeCodeProvider::parseUsage()` sums input, output and both cache buckets from the `result` line and the batch path, an explicit `total_tokens` still winning, and carries the split on `CompleteResponse::$usage`; the `Usage` docblock and `UsageTest`'s split census moved with it).
-- **A24** A `UsageWiringTest` comment still called Vertex's rate table a placeholder — fixed on master in `a56ddc0e5` (wave 9: the cost is 0.0 because no positive token count was reported).
-- **B8** A killed TUI left `LspExchangeLock`'s lock file and its three sidecars in the temp dir — fixed on master in `54dedf193` (wave 9: lock files are named `sugar-crush-lsp-lock-<pidns>-<ownerpid>-<rand>`, created exclusively at 0600; `create()` first runs the new `sweepStale()`, which removes a set only when its owner pid is gone, it came from the same pid namespace and nobody holds its flock, sidecars first and the lock last, and removes an orphan sidecar on the same terms; `acquire()` refuses when the path no longer names the inode it locked, so a waiter cannot exchange on a swept set).
-- **B4** Task sub-agent spend was invisible to the parent turn, the session total and the spend cap — fixed on master in `badb3353e` (usage on `ToolResult`, folded per settled result; the parent's spend so far reaches the Task engine's cap), `1dcba6776` (wave 8B: sibling Tasks share a spend ledger, a crashed tool child still bills, `Usage::ownTokens()`) and `306f0fe7e` (wave 9: Chat's E17 calibration falls back to `promptTokens() ?? ownTokens()`, so sub-agent tokens no longer inflate it, and a turn whose tokens were all delegated observes nothing and keeps the existing factor).
-- **A15** Claude on Vertex was priced at $0.00 and Bedrock invented $0.01/1k for unknown models — fixed on master in `587a30d68` (Vertex) and `c9772c065` (Bedrock): list-price tables, an unknown model costs $0 and is flagged unpriced, a `modelPrices` parameter; `04131a937` (wave 8B: the factory passes the user's `modelPrices`); and `fb0f0c1af` (wave 10: cache read and write tokens are priced on both providers through a new `CACHE_PRICE_TABLE` and `cacheCostPer1kTokens()`, Claude reads at 0.1× and writes at 1.25× input, Gemini 2.5 reads at 0.1× and 2.0 Flash at 0.25×, Gemini's `cachedContentTokenCount` billed at the cache rate as a subset of the prompt; a `modelPrices` entry may carry `cached` and `cacheWrite`; the Vertex Anthropic arm's `message_start` gate bills an all-cached start; the formerly dormant `CacheBreakpoints` marks the system prompt, last tool and conversation tail on the Vertex Anthropic arm, and Bedrock appends Converse `cachePoint` blocks after `system` and the last message for caching-capable Claude and Nova families; a new user-tier `promptCache` key, on unless false, with `SUGARCRUSH_DISABLE_PROMPT_CACHE` winning). **Needs live verification:** one Anthropic-on-Vertex request with marks, reading `cache_creation_input_tokens` and `cache_read_input_tokens`, and one Bedrock Converse request on `us.anthropic.claude-sonnet-4-6` confirming the `cachePoint` is accepted and `cacheWriteInputTokens` is reported (no AWS or GCP credentials were available). The cache-health diagnostic is wired since `2c38796f6` (wave 11: a backend-owned `CacheHealthWatch`, fed from `runTurn()` and `summariseStoppedTurn()` for providers implementing the new `MarksPromptCache`, raises one notice after three zero-cache replies, its state carried across the turn fork on a `cacheHealth` frame key; **needs live verification** against a real Vertex or Bedrock reply that reports empty buckets). Residual: Bedrock sends no `toolConfig`, so there is no tools cache point (a Claude-only one is owed when tools are added).
-- **A21** Gemini 2.5 on Vertex thought by default, with thinking tokens left out of Usage and sharing the 4,096 `maxOutputTokens` default — fixed on master in `ade4d444a` (part (a): `thoughtsTokenCount` counted as output and priced, streaming too) and `91cd21afe` (part (b), wave 8B: no default output ceiling on the Gemini arm, so the model maximum applies; a user-tier `thinkingBudget` key sent as `generationConfig.thinkingConfig.thinkingBudget`). **Needs live verification:** one `streamGenerateContent` on gemini-2.5-pro and -flash with no `maxOutputTokens` and with `thinkingBudget`, reading `finishReason` and `thoughtsTokenCount` (no GCP credentials were available).
+**Not reported, because they are known or out of scope:**
+- Vertex's legacy `:predict` arm (PaLM / `chat-bison`) drops `parameters` (`VertexProvider.php:2126-2139`). The docblock admits it and Google has retired those models, so it is dead-arm debt.
+- Gemini tool calling is absent by design: `supportsFunctionCalling()` honestly returns false (`:241-256`).
+- The real gax REST server-stream decoding of `streamRawPredict` SSE bodies is exercised only through `VertexProviderTest`'s seams, not against Google.
 
 
 ---
@@ -19671,167 +19508,42 @@ These findings were fixed on master after the audit. Their sections and table ro
 ## 15b — Audit: sugar-crush interactive UI state machine and rendering
 
 Scope: `src/Chat.php`, `src/Renderer.php`, `src/App/`, `src/Tui/`, `src/Commands/`, `src/CommandParser.php`, the `*Msg.php` classes, `src/Attachment*.php`.
-Status: **Final.** What was and was not audited is listed in [Coverage](#coverage).
-Excluded: everything in `99-synthesis.md` Part II. Where a finding adds evidence to a known item, it says so.
+Excluded: everything in `99-synthesis.md` Part II.
 
-Repro scripts are in `/home/sites/crush-research-repos/_audit-scratch/15b/`. They use `harness.php`, a recording `Backend`, a synchronous Cmd runner and helpers to type and press Enter. Run them with `php <script>`. Local vendor was in **linked** mode (symlinked siblings), so the results reflect the current monorepo source.
+Repro scripts are in `/home/sites/crush-research-repos/_audit-scratch/15b/`. They use `harness.php`, a recording `Backend`, a synchronous Cmd runner and helpers to type and press Enter.
 
-Confidence labels:
-- **Verified-by-repro**: a script reproduced the failure.
-- **Verified-by-reading**: the code path was traced, but no script was run.
-- **Suspected**: the check is not finished.
+Fixed findings have been removed from this appendix. **One finding remains open.**
 
 ---
 
-### A. Turn state machine and queue
-
-Every finding here has been fixed, the last (15b-34) in wave 9; see **Fixed since audit**.
-
-### B. Terminal injection and frame geometry
-
-Every finding here has been fixed: 15b-26, 15b-28 and 15b-29 in wave 8A, and 15b-30 and 15b-31 in wave 9; see **Fixed since audit**.
-
-### C. Commands and parsing
-
-Every finding here has been fixed, the last (15b-24, 15b-25) in wave 9; see **Fixed since audit**.
-
-### D. Estimation, i18n, dormant wiring (lower priority)
-
-15b-13 was fixed in waves 8A to 9 and 15b-15 in wave 11; see **Fixed since audit**. One finding remains.
+### Open finding
 
 #### 15b-14 — sugar-crush has no i18n: every user-facing string is hard-coded
-- **Severity:** Low (convention gap) · **Confidence:** Verified-by-reading
+- **Severity:** Low (convention gap) · **Confidence:** Verified-by-reading · **Status:** deferred by decision until after the roadmap
 - **Where:** `grep -rl 'Lang::t' src/` finds no PHP file. There is no `lang/` directory. `Renderer.php:987-992` acknowledges this.
 - **Conflict:** CLAUDE.md requires `Lang::t()`. This is recorded for completeness; it is a large job and not a defect in any one string.
 
-### E. Repository-supplied and model-supplied text in overlays and panes
-
-Both findings here (15b-17, 15b-27) were fixed, in waves 7 and 8A; see **Fixed since audit**.
-
-### F. Custom commands, session commands and persistence
-
-Both findings here (15b-20, 15b-21) were fixed in wave 4; see **Fixed since audit**.
-
 ---
 
-### Summary table (sorted by severity)
+### Checked and dropped
 
-| ID | Sev | Conf | Title |
-|---|---|---|---|
-| 15b-14 | Low | Reading | No i18n in sugar-crush |
-
-**Checked and dropped:**
 - **Documented and intentional:** `/HELP`, `/clear all`, `/exit now` and unknown `/foo` fall through to the model (`docs/COMMANDS.md` "Two guards…"). The held queue after Esc Esc goes out after the next prompt (`InFlightInputQueueTest::testAQueueHeldThroughACancelGoesOutOnTheNextSettle`).
-- **Lead 1, a parked compaction whose summarization rejects:**
-  - `buildSummarizationRequest()` maps the rejection to `HistoryCompactedMsg($id, [], $e->getMessage(), null, $parkedSubmission)` (`src/Chat.php:10848`). `applyModelCompaction()` then compacts on the heuristic and dispatches the parked turn.
-  - `EngineBackend::completeAsync()` rejects (it does not resolve an error Message) on cancellation, worker failure and provider error (`:1334`, `:1415`, `:1821`, `:1827`, `:2020`).
-  - Esc Esc remains the release route if the promise never settles.
-  - The only residual hazard is generic, not specific to this route: a backend that **throws synchronously** inside the `Cmd::promise` factory escapes candy-core's `futureTick` callback (`Program::scheduleCmd()`), and Chat has no `ExceptionMsg` arm. No shipped backend does this.
-- **Lead 2, `App::feedChat()` keeping only the last Cmd:** `r11_feedchat_cmds.php` replays the exact key sequence `runRegistryCommand()` synthesizes for every `CommandRegistry` row (slash rows and Ctrl+P palette rows) into an idle Chat. No key before Enter returns a Cmd, so nothing is dropped today. The contract is undocumented and fragile; for example, a cursor-blink Cmd from the input widget would be lost.
-- **Lead 5, `--continue` after `/clear`:** `/clear` keeps the session id and saves an empty transcript on purpose. `loadTranscript()` honouring that empty transcript over older checkpoints is correct; resuming the pre-clear conversation would undo the user's `/clear`. `/rewind` still reaches the checkpoints.
-- **Lead 6:** confirmed and folded into 15b-10 (`r13_stream_cost.php`).
-- **Lead 7, `backgroundStatuses` growth:** `BackgroundSupervisor::getSession()` is an in-memory array read (`src/Sessions/BackgroundSupervisor.php:134-137`), so the per-tick cost per finished session is negligible.
-- **Stale mouse zones after a resize** (next step 4 of the checkpoint): candy-core renders on its framerate tick and zones are recorded from the frame actually painted. A click is hit-tested against what the user saw, which is the correct semantics; a resize and a click inside the same tick (≈16 ms) is not a realistic sequence.
-- **Skills pane, agent panes, MCP panel and diff box with hostile text:** clean. `SkillsPane`'s `Width::truncate()` strips escapes (verified with an OSC 52 directory name and description, `r18_skill_pane.php`). `AgentSplitColumn`, `AgentDashboardPane`, `FilesPane` and `ToolsPane` go through `PaneLabel`. `McpPanel` sanitizes. `renderDiff()` splits on CR and truncates per row.
-
-**Existing suites rerun** (local vendor, guarded): `InFlightInputQueueTest` (25 tests), `SessionStartHookWireTest` (14), `AutomaticCompactionModelSummaryTest` (37) and `SlashMenuTabCompletionTest` (15) are all green. None of them pins the behaviour reported in 15b-01, 15b-16 or 15b-18. `RendererTest`'s three tab-strip tests check presence and brackets only, not width.
+- **A parked compaction whose summarization rejects:** `buildSummarizationRequest()` maps the rejection to a `HistoryCompactedMsg` carrying the error and the parked submission; `applyModelCompaction()` then compacts on the heuristic and dispatches the parked turn. `EngineBackend::completeAsync()` rejects on cancellation, worker failure and provider error. Esc Esc remains the release route if the promise never settles. The only residual hazard is generic: a backend that **throws synchronously** inside the `Cmd::promise` factory escapes candy-core's `futureTick` callback, and Chat has no `ExceptionMsg` arm. No shipped backend does this.
+- **`App::feedChat()` keeping only the last Cmd:** replaying the key sequence `runRegistryCommand()` synthesizes for every `CommandRegistry` row shows no key before Enter returns a Cmd, so nothing is dropped today. The contract is undocumented and fragile; a cursor-blink Cmd from the input widget would be lost.
+- **`--continue` after `/clear`:** `/clear` keeps the session id and saves an empty transcript on purpose; resuming the pre-clear conversation would undo the user's `/clear`. `/rewind` still reaches the checkpoints.
+- **`backgroundStatuses` growth:** `BackgroundSupervisor::getSession()` is an in-memory array read, so the per-tick cost per finished session is negligible.
+- **Stale mouse zones after a resize:** zones are recorded from the frame actually painted, so a click is hit-tested against what the user saw.
+- **Skills pane, agent panes, MCP panel and diff box with hostile text:** clean. `SkillsPane`'s `Width::truncate()` strips escapes; `AgentSplitColumn`, `AgentDashboardPane`, `FilesPane` and `ToolsPane` go through `PaneLabel`; `McpPanel` sanitizes; `renderDiff()` splits on CR and truncates per row.
 
 ---
 
 ### Coverage
 
-**Audited:**
-- **Chat turn machinery:** `submit()`, the queue and refusal paths, `dispatchTurn()`, every `route()` arm listed in 15b-01…06, the Escape cancel arm, the permission flow (`beginToolCalls()` … `handlePermissionKey()`), tool-event pumping and placeholder replacement, backend completion, the titler and suggestions, the parked and model compaction routes (`scheduleParkedCompaction()`, `buildSummarizationRequest()`, `applyModelCompaction()`, `compactionChanges()`, `messagesFromWire()`), `persistTranscript()` and `switchToSession()`, `/clear`, palette New session, `subscriptions()` and the background/runtime pumps, and token estimation.
-- **Chat input and commands:** `CommandParser`; `dispatchCommand()` with `/rewind`, `/rename`, `/branch`, `/theme`, `/workflow` (dispatch and help), `/help` and the `mcp auth` routing; `expandCustomCommand()`, `commandDirective()` and `refuseCommandShell()`; the slash popup model (`slashMenuMatches()` and related); the palette dispatch (`runSelectedPaletteAction()`, `runRootPaletteAction()`, `runSelectedPaletteActionWhileInFlight()`); input-history recall and recording; `cappedOsc52()` and `relayWidgetCmd()`; and the paste arm.
-- **Chat mouse handling:** text selection (`trackTextSelection()`), `SystemClipboard`, and zone lifecycle (`scanRoot()`, `maskImageMarkers()`).
-- **`src/Commands/`:** `CommandLoader` (tiers, symlink containment, control-plane reservation) and `CommandSpec` (`fromFile()`, `expandTemplate()`, `runShellSubstitution()`, `includeFile()`).
-- **`src/Renderer.php`:** `renderView()`, the status bar, history, assistant, streaming and tool rows, the tool body, the diff, `renderToolImage()`, the slash menu, the session picker entry, the session tab strip, `renderAgentView()`, `renderPermissionPrompt()` and `wrapPermissionText()`, `fitToPane()`, and the `untrusted()` wrapper. Overlay width was fuzzed at 16-48 columns and 8-24 rows (`r17`).
-- **Hosted App and TUI:** `App::view()`, `consumeShellCmd()`, `runRegistryCommand()`, `feedChat()`; `Tui\Renderer::renderView()`; `ChatPane`, `FilesPane`, `SkillsPane`, `AgentsPane`, `AgentOutputPane` and the agent split/dashboard sanitization; `PaneLabel`; `KeyboardHandler` (claims, ownership, handle); and the `KeyBindingRegistry` roster.
-- **candy-core seams relied on:** `Cmd::promise()`/`AsyncCmd` dispatch, `Program::renderFrame()` image resolution, and `ImageOverlay`; candy-mosaic `ImageLayer` id allocation.
-- **Persistence:** `EnhancedSessionStore::saveTranscript()`, `internMessages()` and `loadTranscript()` (cost measured); `SessionStore::listSessions()` memoisation; `PromptHistory` file mode.
+**Audited:** Chat turn machinery (submit, queue, dispatch, every `route()` arm, Escape cancel, the permission flow, tool-event pumping, backend completion, titler and suggestions, parked and model compaction, persistence, session switching, subscriptions, token estimation); Chat input and commands (`CommandParser`, `dispatchCommand()`, custom-command expansion, slash popup, palette dispatch, input history, OSC 52, paste); Chat mouse handling; `src/Commands/`; `src/Renderer.php` (overlay width fuzzed at 16-48 columns and 8-24 rows); the hosted App and TUI panes, `PaneLabel`, `KeyboardHandler` and the `KeyBindingRegistry` roster; the candy-core seams relied on; persistence (`EnhancedSessionStore`, `SessionStore::listSessions()`, `PromptHistory`).
 
-**Read only for reachability or skimmed (no defects claimed):**
-- `invokeTool()`, `forkToolCalls()`, `gateToolCall()` and `collectToolResult()`. This is Chat's local tool path and is unreachable in production because `Bootstrap::chat()` passes no `tools:`. That is also why 15b-19 is latent.
-- `/memory` (known #14), `/sessions` picker internals beyond `sanitizeSessionRows()`, `/bg` and `/fork` (known #30), `/websearch` (known #22), `/budget`, and the `/pane` / `/layout` handlers.
-- `intraExchangeTruncation()` and `compactNow()` (mostly covered by known #15-#20).
-- `handlePaletteKey()`'s cluster caret helpers.
-- `selectPaletteProvider()` and `selectPaletteTheme()` (known #32).
-- `SessionPicker`, `SessionTabs` (`Tui/`), `SplitLayout`, `PaneDragController`, `TextSelection` extraction, `DiffGutter`, `McpPanel`, `StallDetector`, `TerminalBackground`, `MenuBar`, `MultiplexerSplitPane`, `Theme.php` and `Palette/*`. These were scanned for blocking I/O and unsanitized external text only; nothing was found beyond the items above.
+**Read only for reachability or skimmed (no defects claimed):** Chat's local tool path (`invokeTool()`, `forkToolCalls()`, `gateToolCall()`, `collectToolResult()`), unreachable in production because `Bootstrap::chat()` passes no `tools:`; `/memory`, `/bg`, `/fork`, `/websearch`, `/budget`, `/pane`, `/layout`; `intraExchangeTruncation()` and `compactNow()`; `SessionPicker`, `SessionTabs`, `SplitLayout`, `PaneDragController`, `TextSelection`, `DiffGutter`, `McpPanel`, `StallDetector`, `TerminalBackground`, `MenuBar`, `MultiplexerSplitPane`, `Theme.php` and `Palette/*` (scanned for blocking I/O and unsanitized external text only).
 
-**Not audited:**
-- Pixel-level PaneDrag/SplitLayout geometry under resize.
-- `KeyboardHandler`'s full chord table against the docs (pinned separately by `KeyBindingDriftTest`).
-- `renderKeyHelp()` content.
-- `/workflow run` execution internals (WorkflowEngine is in report 15e's scope).
-
-**Repro scripts** (`/home/sites/crush-research-repos/_audit-scratch/15b/`, each run with `php <script>` and autoloaded via `sugar-crush/vendor/autoload.php`):
-
-| Script | Shows |
-|---|---|
-| `harness.php` | Shared helpers: `RecBackend`, `runCmd` / `pump` / `type` / `enter` / `dumpHist` |
-| `md_inject.php` | U+009B passes CandyShine (15b-08) |
-| `r1_wire.php` | Command output and notices on the wire (15b-03) |
-| `r2_stale_placeholder.php` | Placeholder after cancel; result mis-attached (15b-02) |
-| `r3_width.php` / `r3b.php` | Status bar overwidth; 25-column overflow; CR in frame (15b-07, 15b-09) |
-| `r4_app.php` (+ `prov.php`) | Hosted App frame with CR (15b-07) |
-| `r5_cmdparse.php` | `mcp auth` prefix capture (15b-11) |
-| `r6_hook_bypass.php` | Hook bypass on the parked route (15b-01) |
-| `r7_perf.php` / `r7b.php` | History render cost (15b-10) |
-| `r8_menu_draft.php` | Draft erased by menu (15b-05) |
-| `r9_toolinj.php` | Per-field tool-row injection matrix (15b-07, 15b-08) |
-| `r10_forged_marker.php` | Forged image marker gives a second paint; PUA glyphs blanked (15b-17) |
-| `r11_feedchat_cmds.php` | No intermediate Cmd in any registry key sequence (lead 2, dropped) |
-| `r12_persist_cost.php` | Transcript save cost, branch re-intern (15b-21) |
-| `r13_stream_cost.php` | Streaming partial render cost (15b-10) |
-| `r14_cmd_shell.php` | 10 s blocking `` !`…` ``; orphaned grandchild (15b-20) |
-| `r15_overlay_inject.php` | OSC 52 / CSI 2J / CR from a project command file in the "/" popup (15b-16) |
-| `r16_wordwrap_utf8.php` | Byte-wrapped permission text; CR survives (15b-19) |
-| `r17_overlay_width.php` | Overlay width and height fuzz (15b-09) |
-| `r18_skill_pane.php` | Skills pane strips hostile names (dropped) |
-| `r19_tabstrip.php` / `r19b_tabstrip_noevil.php` | Tab strip width and escapes, standalone and hosted (15b-18) |
-| `r20_rewind_args.php` | `/rewind help` rewinds; `/rename:x` stores `:x` (15b-22) |
-| `dbg.php` / `dbg2.php` | Scratch only |
-
----
-
-### Fixed since audit
-
-These findings were fixed on master after the audit. Their sections and table rows were removed; the repro and coverage lists above still name them.
-
-- **15b-01** UserPromptSubmit hook skipped on the parked 85% compaction route — fixed on master in `9c13a918e`. Residual: if the summary later refuses the turn (spend cap or the 95% tier), the hook has already seen the prompt.
-- **15b-16** A cloned repository's command-file description wrote OSC 52 and screen clears to the terminal on "/" — fixed on master in `cb3dee7fd`.
-- **15b-02** After a double-Escape cancel, tool placeholders stayed "running" forever and later same-id results landed on the old row — fixed on master in `855e42673` (the cancel arm maps every pending row to the "interrupted" row `reviveCheckpointMessage()` builds, with an error tool result under the same id; `replaceToolRunningPlaceholder()` and `finishToolCalls()` search newest first, and each result claims only its own rows). Residual: the healed row reused the `INTERRUPTED_TOOL_CALL` text ("…interrupted by restart") even after a user cancel (R15); fixed since in `bdd1f6eae` (wave 9: the cancel heal writes the new `CANCELLED_TOOL_CALL`, "Tool call interrupted: the user cancelled the turn", through one shared `interruptedToolCallMessage()` builder; checkpoint and resume revival keep the restart text, and `isInterruptedResult()` matches both). A per-placeholder generation stamp was deferred; it is moot given the heal and the existing generation guards.
-- **15b-06** Switching session kept the compaction thrash counter — fixed on master in `b16819b13` (`switchToSession()` and palette New session share `sessionChangeResets()`; `lastActivityAt` goes to null).
-- **15b-07** Raw CR reached the terminal from user/system rows, tool names and descriptions and expanded tool output — fixed on master in `74ae88c2a` (new candy-core `Sanitize::untrustedForDisplay()` maps CRLF and lone CR to LF; the Renderer's `untrusted()` wrapper uses it, and one-line rows go through a new `oneLine()` before truncation).
-- **15b-08** UTF-8-encoded C1 controls passed every sanitizer — fixed on master in `af42238fc` (candy-core `Sanitize::untrusted()` and candy-shine `Renderer::stripControls()` remove `\xC2[\x80-\x9F]`). Lone raw C1 bytes in candy-shine (15b-29) and bidi and zero-width characters (15b-28) were fixed later, in wave 8A.
-- **15b-11** Any prompt starting "mcp auth" was captured by the MCP command — fixed on master in `373e7d953` (both sites use `isBareMcpAuthCommand()`, `/^mcp\s+auth(?:\s|$)/`; `docs/COMMANDS.md` states the whole-word rule).
-- **15b-19** The latent permission modal wrapped by bytes and kept CR — fixed on master in `e4fd37010` (new candy-core `Sanitize::visibleControls()` renders every control byte visibly in caret or `<U+…>` notation; CR maps to LF, zone sentinels are spelled out, and the text wraps by cells with `Width::wrap()`). Found while fixing it: `Width::wrap()` hangs at a 1-column budget (15b-26), and an invalid-UTF-8 argument is described as empty (15b-27).
-- **15b-22** `/rewind help` (any non-numeric argument) performed a rewind, and `/name:arg` reached handlers with a literal `:` — fixed on master in `0d094ff25` (`/rewind` accepts only an empty or `ctype_digit` count ≥ 1; the raw-text handlers take `Chat::commandArgument()`, which drops one space or `:` separator). Residual: `/pane`, `/layout` and `/mcp` still split the whole draft on whitespace (documented in `docs/COMMANDS.md`; 15b-24), and the command table's `/rewind` *Takes* column still shows `—` (15b-25).
-- **15b-23** Positional `$N` splitting: an apostrophe swallowed the rest of the line and `""` shifted the arguments — fixed on master in `0147c5f7a` + `1173b2ada` (a quote opens a span only at a token start, an unterminated quote stays literal, and an empty quoted span yields an empty token). Residual: `/model ""` now answers "Could not switch to provider ''" instead of opening the palette, because the user typed an explicit empty name.
-- **15b-10** Every frame re-rendered the whole history through CandyShine — fixed on master in `05f86a2a9` (exact memos in `src/Renderer.php`: settled CandyShine bodies in an LRU per width and content hash, scoped to one theme object; incremental streaming through CandyShine's `SectionScanner`, re-rendering only the open tail; per-row SGR transitions in `balanceSgr()`; the line count of collapsed tool bodies; the tool-zone dedup is a keyed lookup and labels are styled once per frame; 529 frames of a differential corpus are byte-identical to the old Renderer). At 120×40: 50/200/800 exchanges 182/698/2949 → 15/52/211 ms per frame, 300 warm markdown exchanges 965 → 38 ms (target was under 50), a 200K streaming partial 2197 → 81 ms. Residual: `r13_stream_cost.php` as written (headings straight after a closing fence) was only partly faster, 207/2526 → 112/1120 ms at 20K/200K, because `SectionScanner` found no boundary there (15b-31), and the memo worked around two candy-shine bugs (15b-30, 15b-31). Both are fixed since in wave 9 (`d35d99ed1`, `af6a5cce1`): the frame is now 8/34/70 ms at 20K/100K/200K, and the memo holds a candy-shine `SectionStream` with both workarounds dropped.
-- **15b-12** Session titling fell back to the main, tool-armed backend — fixed on master in `37ff6d54f` (titling is skipped when `titleBackend` is null, the same gate prompt suggestions use; no other `?? backend` fallback exists).
-- **15b-04** UserPromptSubmit and SessionStart hook chains ran synchronously inside `update()` — fixed on master in `f1b6862e9` (script turn hooks run off `update()` in a forked child, and the turn is dispatched from the resolved `TurnHooksResolvedMsg`).
-- **15b-20** A custom command's `` !`…` `` ran synchronously inside `update()` for up to 10 s, and on timeout its grandchildren survived — fixed on master in `2826f5cf3` (the expansion runs off `update()` through a forked child, `forkedPayloadCmd()`, and resolves to `CustomCommandExpandedMsg`; on timeout `ProcessContainment::killTree()` plus a SIGKILL to the process group also catch `&` background jobs; gate checks made in the child are replayed into the session gate).
-- **15b-21** `/branch` and any first save of a long history froze the TUI for seconds, one autocommitted INSERT per message — fixed on master in `698a1efff` (with 15e SES-2: save, checkpoint and restore each run in one `BEGIN IMMEDIATE` transaction, and a fork copies the blobs, so the first save on a `/branch` re-interns nothing). Measured at 800 messages: first save 6519 → 233 ms, first save on a branch 5996 → 17 ms; the fork itself takes about 470 ms (the fsync of the copied blobs). Residual: persistence still ran synchronously from `Chat::update()` (`persistTranscript()`) (R2); fixed since in `14f682fad` (wave 10: `persistTranscript()` hands its snapshot to a new `Session\DebouncedTranscriptWriter`, flushed by a keyed `crush.transcript-flush` subscription tick every 0.5 s while a snapshot is pending, not a resetting debounce; synchronous flushes on a session switch, before `/branch` and `/fork`, at shutdown and in the writer's destructor; a snapshot pending for more than four windows is written by the next change for hosts that never run `subscriptions()`; a read-only session never saves). Remaining: a SIGKILL can lose at most one 0.5 s window, and `dispatchTurn()`'s submit-time checkpoint is still synchronous (once per prompt).
-- **15b-09** The chat status bar was never clipped to the terminal width, and the content width (with every overlay) was floored at 20 plus chrome — fixed on master in `66d0651ac` (the status-bar hint shortens step by step, keeping the "Ctrl+P menu" click zone longest; a `fitStatusBar()` backstop strips zone markers before it cuts, so a cut never splits one; the content-width floor is `max(1, cols-6)`, the image box and diff box floors drop to 1, and the slash popup is capped at the terminal width; at 6 columns or fewer `clipFrameToCols()` cuts the bordered shell, with every `Width::wrap` budget kept at 2 or more for 15b-26). The new width test exposed a second bug, fixed in the same commit: Veil counted zone markers as screen cells, so rows under an overlay were split at the wrong column and overflowed; zones are now lifted out before compositing and put back afterwards. Measured: `r3b` last row 54 → 38 cells at 40 columns and 54 → 29 at 30; `r3_width` at 25 columns 45 over-wide rows → 0; `r17_overlay_width` 21 over-wide cases → 0. Residual: `src/Commands/TranscriptTable.php` copied the old `max(20, cols-6)` floor, and the permission modal's inner width was floored at 20, so below 26 columns it lost its right border (R4); fixed since in `3de2c30a4` (wave 9: the modal's inner width is `max(1, min(60, cols-6))` and keeps its right border from 7 columns up; `TranscriptTable::paneWidth()` is `max(1, cols-6)`) and `dac19d6f4` (Chat's `/help` listing floors at 1, and its heading is clipped too).
-- **15b-18** The session tab strip was neither width-clipped nor sanitized — fixed on master in `01cae6d21` (each name goes through `Sanitize::untrustedForDisplay()` and `PaneLabel::safe()`, which removes escapes and control bytes, folds CR/LF/TAB to a space and drops Private-Use characters, and an empty name falls back to the cleaned id; names are capped at 20 cells with an ellipsis, the current tab is always shown, tabs that do not fit collapse into `… +N`, only visible tabs get click zones, and the strip stays one row). Measured at 80 columns: 8 long names 383 → 73 cells; a hostile name 402 → 69 cells with no OSC 52, `\e[2J` or CR; hosted App at 100 columns 433 → 100 cells.
-- **15b-05** Menu-bar and shell commands erased the user's draft, then mid-turn refused with "Your draft is still in the box" — fixed on master in `ecca2b606` + `c1e836427` (new `Chat::runCommand()` and `Chat::runPaletteAction()` run a command without touching the draft, and `App::runRegistryCommand()` uses them instead of feeding synthetic Backspace, Delete and Enter keys). Still open nearby: Chat's own Ctrl+A arm still types `/agents` into the box (15b-34).
-- **15b-17** Model or tool text containing U+E002+n painted a copy of on-screen image n and blanked Nerd Font glyphs — fixed on master in `b38bf8403` (`ImageOverlay::marker()` is a zero-width authenticating OSC, `ESC ] candy-image ; <id> ESC \`, plus the U+E002+id cell, and `resolve()` paints only that pair; untrusted text cannot carry the escape because every untrusted sink deletes ESC, and an escape whose cell a layout pass cut off is dropped; bare Private-Use codepoints are left alone, so Powerline and Nerd Font glyphs survive; `Program::renderFrame()` resolves every frame, so a marker on a frame with no image layer never reaches the terminal; `r10_forged_marker.php`: `paints=2` before, `paints=1` after, and U+E002, U+E0B0 and U+F115 survive in the line). Marker rows stay 1 cell wide (the OSC is zero-width to `Width`, `truncateAnsi`, `wrapAnsi` and candy-mouse `Scan`). Residual: stale marker prose in candy-core and ChatPane (15b-32).
-- **15b-26** candy-core `Width::wrap()` never terminated when a 2-cell cluster met a 1-column budget — fixed on master in `758f098c1` (when `truncate()` fits nothing, the leading cluster is emitted alone on an over-wide row, as `wrapAnsi()` does, so every pass consumes at least one cluster; `WidthWrapOverWideClusterTest` runs each case under a SIGALRM deadline).
-- **15b-28** Bidi overrides and zero-width characters passed every sanitizer — fixed on master in `531a0941f` + `dd4e4aa05` + `e3f6756ac` (new public `Sanitize::markInvisibleFormatting()` marks U+202A–202E, U+2066–2069, U+200B, U+2060 and U+FEFF always, and ZWNJ, ZWJ, LRM, RLM and ALM only at the start, after ASCII or after another such mark, so emoji ZWJ sequences, Persian and Indic ZWNJ and RTL marks still work; `untrustedForDisplay()` applies it and `visibleControls()` marks all of them; candy-shine `stripControls()` applies it too, covering assistant markdown and code blocks). `untrusted()` and `untrustedForMarkedFrames()` are unchanged for paste fidelity. Behaviour change: display policies now emit `<U+XXXX>` markers for these codepoints, a leading BOM included.
-- **15b-29** candy-shine `stripControls()` kept lone raw 0x80–0x9F bytes — fixed on master in `dd4e4aa05` (lone C1 bytes outside well-formed UTF-8 are removed before the C0 sweep, so no `\xC2\x9B` pair can be spliced together). On master `render("a\x9B2Jb")` actually threw CommonMark's `UnexpectedEncodingException`; with sanitising on (the default), `render()` and `renderSection()` now also scrub before the parse, removing lone C1 and repairing other malformed UTF-8 to U+FFFD, and `stream() === render()` still holds.
-- **15b-27** The permission modal showed an empty value for an argument that was not valid UTF-8 — fixed on master in `a0f07cd5a` (`Message::describeToolCall()` encodes with `JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE`, falls back to `visibleControls()` and never to `''`, and re-escapes C1 and bidi/zero-width characters so the label stays inert; a non-string `0` is no longer dropped by `?:`). The headless prompt got the same treatment in `e1acd6f0f` (15e lead 6, R17).
-- **15b-03** Command output, mid-turn notices and background and runtime notices went to the model as real turns — fixed on master in `2a3a8f91c` (`Message::$uiOnly`, filtered at every wire encoder, in the titler and in the suggester), `5d2aaae34` (wave 8B: every compaction call site reads agent-visible rows only through `compactionWire()`, on both sides of the exchange-key alignment; `messagesFromWire()` and `intraExchangeTruncation()` put the UI-only rows back through `withUiOnlyRowsRestored()`, in place from the first preserved row on and verbatim ahead of the summary for the condensed region; the 95% refusal's "each further attempt drops the oldest" is made explicit by `Chat::blockedAttempts()` and `ContextCompactor::withRecentPreserveReducedBy()`, because with the filter it would otherwise have been a wedge only `/clear` escaped) and `6fddd0d3a` (N1: notices stay inline, by decision, and a UI-only `Role::System` row renders as `notice: …` in the dim `systemLabel` colour plus italic). Left visible on purpose: `/websearch` results (known #22), hook `additionalContext`, the 70% reminder and the permission-refusal note. Behaviour change: UI-only rows are no longer condensed by compaction, and a session blocked at 95% gets out on the second retry, or with `/compact` and one retry (before, the first retry escaped by accident).
-- **15b-30** candy-shine `stream()` broke its "equals `render()`" law when the text had link reference definitions — fixed on master in `d35d99ed1` (wave 9: new `candy-shine/src/Render/SectionStream.php` is the one incremental section renderer that `stream()`, `Writer` and sugar-crush's frame memo share; definitions are carried forward into each section's parse, first one winning, and a section that still holds an unresolved reference is held back until a later definition resolves it or `finish()`) and `af6a5cce1` (sugar-crush drops its whole-render fallback for `LINK_REFERENCE_DEFINITION`).
-- **15b-31** candy-shine `SectionScanner::finish()` dropped the closed section before a trailing heading, and no boundary was found after a closing fence — fixed on master in `d35d99ed1` (wave 9: `finish()` returns the closed section with the unterminated heading; a heading straight after a closing fence is a boundary; every scanner boundary is now a proposal the parser confirms, which also fixed three law breaks found by probing — an outdented fence close inside a list item, a multi-line HTML comment across a blank line, and a backtick in a fence's info string; `r13_stream_cost.php` is 8/34/70 ms per frame at 20K/100K/200K, was 113/557/1150) and `af6a5cce1` (sugar-crush drops its byte-offset tail cut).
-- **15b-34** Ctrl+A ran `/agents` by typing it into the input box, wiping an idle draft — fixed on master in `0f0366592` (wave 9: Ctrl+A calls `runCommand('/agents')` idle and mid-turn, the mid-turn arm still closes overlays, the draft is never replaced, and the mid-turn notice says "Your draft was not touched").
-- **15b-24** `/pane:x`, `/layout:x` and `/mcp:x` colon spellings were not handled — fixed on master in `ec6848667` (wave 9: new `Chat::commandTokens()` splits `commandArgument()`'s result; `/pane`, `/layout` and `/mcp` (through `parseMcpArgs()`) use it, and the `docs/COMMANDS.md` caveat is gone).
-- **15b-25** The registry-derived command table showed `/rewind` as taking no argument — fixed on master in `90fbd4de4` (wave 9: `/rewind` carries the hint `[n]`; the new `CommandsTableTakesColumnDriftTest` derives every *Takes* and description cell from `CommandRegistry::all()`, and caught a second drift: the `/mcp` row now carries `<list|add|remove|login> [server]`) and `207dfbab1` (a slash-popup test no longer uses `/rewind` as its hintless row).
-- **15b-32** Stale comments: launch notices "re-sent every turn", Doctor's old mosaic idiom, and the one-codepoint image marker — fixed on master in `904d365c9` (wave 9: the Bootstrap and `SessionStore` rationales give the transcript-clutter reason, `DetectsCapabilities` points at `ToolResult::mosaic()`, candy-core `Sanitize`/`View` and `ChatPane` describe the two-part marker, and `docs/SETTINGS.md` no longer says launch notices reach the model).
-- **15b-33** A `/fork` docblock named `SessionStore::forkSession()` as the transcript copy — fixed on master in `67440e5ec` (wave 9: the `@see` cites `EnhancedSessionStore::forkSession()`).
-- **15b-13** The token proxy counted codepoints/4, underestimating CJK and emoji 3-6× — fixed on master in `8341a37c1` (script-weighted `TokenEstimate` for Chat's estimate, the 85/95% tiers and the status bar), `eb8d3b2a5` (wave 8B: the compactor counts the same way) and `2dac6ebc2` (wave 9: the two chars/4 comments in `Usage.php` describe `TokenEstimate`).
-- **15b-35** The status bar showed the static default model id, not the model the SGLang server serves — fixed on master in `42bbb28c5` (wave 10: a new `Providers\ReportsServedModel` interface, implemented by `SglangProvider`, I/O-free `servedModel()` plus `noteServedModel()`; the forked turn child puts `servedModel` on its result frame on success and failure, and `settleFromResultFrame()` notes it on the parent's shared provider; `Tui\Renderer::modelLabel()` prefers the hosted Chat backend's served model, then the App provider's, then `App::$model`, and the shell status bar and the Settings pane's Model row read it). The hosted Chat's own status bar gained the segment in `d01fd0c60` (wave 11: `Renderer::modelIndicator()`, the lowest-priority piece, shows `servedModel()` else the configured id, shrinking to the part after the last `/`, then ellipsised, then dropped; sanitized through `oneLine()`). Residual: `Bootstrap::openSession()` still records the static id on the session row.
-- **15b-15** Message attachments were dead weight: `attachFile()`/`attachImage()` had no callers and `toTypedMessages()` dropped them — fixed on master in `768333da5` + `f9fd25dd4` (wave 11: `Attachment` carries a `data`/`mimeType` snapshot, persisted as base64; `UserMessage` gains `wireText()`, `textOnly()` and `images()`; `EngineBackend::toTypedMessages()` maps every attachment through `withAttachment()`, and a provider whose `supportsVision()` is false gets a named text placeholder plus an `attachmentNotice` carried on a new result-frame key; new `Providers\AttachmentEncoding` builds `image_url` parts (OpenAI, SGLang, Custom, `anthropic`), Anthropic `image` blocks (Vertex Claude), `inlineData` (Gemini) and Converse `image` blocks (Bedrock); per-provider `supportsVision()` with a `supportsVision` block key on `sglang` and `custom`; `Chat::userTurnMessage()` resolves `@file` mentions through new `Attachments\FileMentions` (20 files, 256 KiB text, 5 MiB per image, binaries refused, path-shaped misses noticed, never read from a file-based command's expansion); Tab completes the `@` path; a paste that is only an image path becomes a mention; Ctrl+V reads the clipboard image through new `Support\ClipboardImage`; a `📎` chip row under user turns; key rows `chat.mention-complete` and `chat.paste-image`), and three residuals in the integration: `71c4e38b2` (pasted images older than a day are swept, owner- and shape-checked), `42bd75e54` (`OpenAIProvider` claims vision only for its vision model families, with an `openai` block `supportsVision` override) and `75fa2b003` (headless `-p` resolves mentions from the typed prompt only, never piped stdin, with notices on stderr). Remaining, by decision: the draft shows no chip, and an accepted model-written suggestion can carry an `@path` the user sees before sending.
+**Not audited:** pixel-level PaneDrag/SplitLayout geometry under resize; `KeyboardHandler`'s full chord table against the docs (pinned by `KeyBindingDriftTest`); `renderKeyHelp()` content; `/workflow run` execution internals (report 15e's scope).
 
 
 ---
@@ -19845,56 +19557,11 @@ These findings were fixed on master after the audit. Their sections and table ro
 ## 15c — sugar-crush audit: tool execution and the safety layer
 
 Scope: `src/Tools/` (built-ins, Concerns, PathJail, IgnoreRules, McpToolBridge), `src/Permissions/`, `src/Hooks/`, `src/Support/ProcessContainment.php`, `docs/PERMISSIONS.md`, `docs/HOOKS.md`.
-Checkout: master @ `05db616f3`, PHP 8.3.6 CLI, `memory_limit=-1`.
-Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`. Every repro runs against `.../15c/root` and never against the real repo.
+Repro scripts: `/home/sites/crush-research-repos/_audit-scratch/15c/rNN_*.php`, run against a scratch root, never the real repo.
 
-Status: **final.** All scoped files were read, and every lead from the checkpoint was confirmed or dropped (see **Coverage** at the end). 31 findings at audit time: 4 High, 1 Med-High, 13 Medium, 3 Low-Medium, 10 Low. Twenty-nine have since been fixed on master (see **Fixed since audit** at the end), so 2 remain, both partly fixed: F-J3 (Medium) and F-J5 (Low). Two more found in waves 2 and 3 (F-E4, F-E5) are fixed too. One was found during wave 8A (F-D1, Low, docs), so 3 are open.
+**No finding from this audit remains open.** Fixed findings have been removed from this appendix.
 
-> **Correction to the known list. Read this first.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny now **denies**, and `Bash(git *)` allow no longer grants all of Bash (`r11_rules.php`). Two sources described older code: synthesis Part II row #23 ("`Bash(git *)` grants all of Bash") and `docs/PERMISSIONS.md` §"Pattern matching is name-only — measured" (which said `Bash(rm *)` "never matched → Allow"). Both are now corrected; the PERMISSIONS.md section was rewritten in `d3d90fece` to describe argument-scoped matching, and since `c8fc573a5` it describes the fail-closed allow rules that closed F-P5. The real defects in the new matcher were narrower. F-P5 (`$(…)`, backticks and redirection slipping past an allow rule) is now fixed. F-J3 covers path rules missing respellings; it is partly fixed (`3b7d2fd33`, the live hook chain), and the callers that pass no root are still open.
-
-**Relation to the known list (99-synthesis Part II).** Nothing below repeats a known item. Where a finding touches one, the overlap is stated.
-
----
-
-### A. Tool output and encoding
-
-Every finding here (F-T1 to F-T7) has been fixed, the last (F-T3) in wave 6; see **Fixed since audit**.
-
----
-
-### B. Path jail and file-protection bypasses
-
-Every finding here has been fixed, the last (F-J5) in wave 10; see **Fixed since audit**.
-
----
-
-### C. Permission gate and modes
-
-Every finding here (F-P1 to F-P9) has been fixed, the last (F-P3 (b), F-P4, F-P6, F-P7, F-P8, F-P9) in waves 7 and 8A; see **Fixed since audit**.
-
----
-
-### D. Processes and environment
-
-Every finding here (F-E1 to F-E5) has been fixed, the last (F-E1, F-E2, F-E4, F-E5) in waves 7 and 8A; see **Fixed since audit**.
-
----
-
-### E. Hooks and audit
-
-All four findings here (F-H1 to F-H4) were fixed in wave 3; see **Fixed since audit**.
-
----
-
-### F. WebFetch / WebSearch
-
-Every finding here (F-W1 to F-W3) has been fixed, the last (F-W3 (b)) in wave 8A; see **Fixed since audit**.
-
----
-
-### Summary (sorted by severity)
-
-No finding in this appendix remains open: the last, F-J5, was closed in wave 10. See **Fixed since audit**.
+> **Correction to the known list.** Argument-scoped permission rules **are implemented**, in `PermissionRule::matches()` / `matchesShellSubject()`. `Bash(rm *)` deny denies, `Bash(git *)` allow does not grant all of Bash, and allow rules fail closed on `$(…)`, backticks and redirection. Sub-agent **preset grants** still match by name (synthesis Part II #23, roadmap 4.2).
 
 ---
 
@@ -19903,81 +19570,25 @@ No finding in this appendix remains open: the last, F-J5, was closed in wave 10.
 **Read end-to-end (code):**
 - Tools: `src/Tools/PathJail.php`, `IgnoreRules.php` (including the gitignore→PCRE compiler), `McpToolBridge.php`, `src/ToolRegistry.php` (legacy viewport registry, not on the engine path). Built-ins: `Read`, `Write`, `Edit`, `Bash`, `Grep`, `Glob`, `WebFetch`, `WebSearch`, `SkillTool`, `TaskTool`, `LspTool`, `Doctor`. Concerns: `CapturesProcessOutput`, `BuildsUnifiedDiff`, `TruncatesOutput`.
 - Permissions: `PermissionGate`, `PermissionRule`, `SafetyClassifier`, `PermissionMode`, `DenialKind`, `ToolRefusal`, `PermissionDecision`/`Action`/`Reply`/`PromptStage`, `ToolDeclaration`.
-- Hooks: `HookRegistry`, `HookManager`, `HookDispatcher` (dormant), `HookConfig`, `HookResult`, `HookContext`, `ScriptHook`. Built-ins: `ProtectFilesHook`, `ConfirmRemoveHook`, `AuditHook`, `BashEscapeDenyHook`, `PermissionGateHook`.
+- Hooks: `HookRegistry`, `HookManager`, `HookDispatcher` (dormant), `HookConfig`, `HookResult`, `HookContext`, `ScriptHook`, and the built-in hooks.
 - Support: `ProcessContainment`, `ContainedPath`, `HookContextFiles`, `ParentProcessGuard`. Agents: `PathJail`, `PathJailConfig`, `SuspendedDelegations`.
-- Docs: `docs/PERMISSIONS.md` (all), `docs/HOOKS.md` (all).
+- Docs: `docs/PERMISSIONS.md`, `docs/HOOKS.md`.
 
-**Read in part (the parts that bear on this scope):**
-- `src/Runtime.php`: `executeConcurrently` 1853-2120 in full, gate 2120-2260, settle 2300-2380, child/IPC 2393-2425, dispatch helpers 2440-2760. `executeSequentially` (~1748) was skimmed only, for the shared gate/settle calls.
-- `src/Chat.php`: `beginToolCalls` 2635-2650, `answerPermission` 2972-3070, `gateToolCall`/`applyRewrite`/`applyPostToolUse` 4272-4440, tool IPC 4670-4685, `isDeniedResult` 6644, `registerTool` 6987. `src/Backend/EngineBackend.php`: 640-670, 1395-1430. `src/Cli/Bootstrap.php`: the Chat construction 1190-1300, `hooks()` 4108-4138, tool roster 6860-6900. `src/Cli/NonInteractive.php`: 1205-1260. `candy-mosaic/src/Detect.php`: probe paths.
-
-**Leads from the checkpoint, and how each was resolved:**
-1. Provider test expecting `/Malformed UTF-8/`: **resolved**. It pins the throw for caller-supplied `jsonSchema` only. The F-T1 fix note was updated to repair at `settle()` and drop the provider-wide backstop.
-2. WebFetch relative `Location` / 3xx returned as success: **confirmed** as F-W2 (repro).
-3. CR/LF in the WebFetch URL: **dropped**. `parse_url()` replaces control characters in every component with `_` (measured: `/a\r\nX-Injected: 1` → `/a__X-Injected: 1`), and `Location:` values arrive already split into lines by the wrapper. A space in the path reaches the request line unencoded, but at worst that is a malformed request to the attacker's own host.
-4. gitignore ReDoS / fail-open: **confirmed** as F-T5 (repro: 139 s).
-5. `Chat::gateToolCall()` parity: **resolved**. That path is unreachable from `bin/sugarcrush` (no `registerTool()` caller). F-H1 and F-H3 apply there too, but dormant. It adds F-P9.
-6. Task orphan cascade: **confirmed by reading**, folded into F-E2.
-7. Write/Edit atomicity: **confirmed by reading** as F-T7.
-8. Glob/Grep without a worktree jail: **confirmed by reading**, folded into F-J5 (Lsp is also affected).
-- F-H3's pending impact check: **confirmed** (`r18_hook_slash.php`) and the severity raised to Low-Medium. The `{}` arm is not model-reachable.
+**Read in part:** the gate, settle, child/IPC and dispatch parts of `src/Runtime.php`; the permission and tool-gate parts of `src/Chat.php`, `EngineBackend.php`, `Bootstrap.php` and `NonInteractive.php`; `candy-mosaic/src/Detect.php` probe paths.
 
 **Checked and found sound (no finding):**
 - `PathJail::resolve`/`resolveForCreate`/`resolveDir`, `ContainedPath::within`/`below`, and `Agents\PathJail` (which delegates to them).
-- WebFetch's DNS pinning: one resolution, every answer checked, the literal dialled, SNI and Host kept on the name, every hop re-checked, non-http(s) redirects refused. Only the range list is short (F-W1).
-- `SuspendedDelegations`: id regex, `0600` files, `unserialize` with a class allow-list, and an owner/mode-verified directory. A foreign-owned `/tmp/sugarcrush-suspended-delegations` or `/tmp/sc-hook-ctx` disables resume and context retention, failing closed. That is DoS only.
-- `HookContextFiles::bound()`: UTF-8-safe cut, `0600` plus rename, symlink/owner/mode refusal. Note: retained files are never deleted, by design (HOOKS.md), and can hold tool output containing secrets in the user's temp directory.
-- `TruncatesOutput`: the `mb_strcut` cuts are UTF-8-safe on valid input, and the markers carry exact byte counts. It does not repair invalid input, which is F-T1's job.
-- `HookConfig`: strict schema, finite timeouts. Project `hooks.yaml` is trust-gated in `Bootstrap` (config trust itself is 15d's scope). Matchers are case-insensitive and unanchored, which errs toward running deny hooks.
+- CR/LF in the WebFetch URL: `parse_url()` replaces control characters with `_`, and `Location:` values arrive already split into lines.
+- WebFetch's DNS pinning: one resolution, every answer checked, the literal dialled, SNI and Host kept on the name, every hop re-checked, non-http(s) redirects refused.
+- `SuspendedDelegations`: id regex, `0600` files, `unserialize` with a class allow-list, and an owner/mode-verified directory. A foreign-owned `/tmp/sugarcrush-suspended-delegations` or `/tmp/sc-hook-ctx` disables resume and context retention, failing closed (DoS only).
+- `HookContextFiles::bound()`: UTF-8-safe cut, `0600` plus rename, symlink/owner/mode refusal. Retained files are never deleted, by design (HOOKS.md), and can hold tool output containing secrets in the user's temp directory.
+- `TruncatesOutput`: the `mb_strcut` cuts are UTF-8-safe on valid input, and the markers carry exact byte counts.
+- `HookConfig`: strict schema, finite timeouts; project `hooks.yaml` is trust-gated. Matchers are case-insensitive and unanchored, which errs toward running deny hooks.
 - `HookDispatcher`: not constructed anywhere in `src/`. Its `[exit-1]` "non-blocking deny" arm is unreachable because `ScriptHook` no longer emits the prefix.
-- `ScriptHook` exit-code table: matches HOOKS.md (`r04_hook_exit.php`).
-- `LspTool`: jail applied, `is_file` check, JSON output capped. Only nit: a non-UTF-8 server answer makes `json_encode` return `false` and an empty body, with no finding filed.
-- The filtered phpunit run (`PermissionGate|ProtectFilesHook|GrepTest|SafetyClassifier|PermissionRule|ConfirmRemove|WebFetch`): **510 tests OK**. No test pins any repro'd behaviour as intended, except that `PermissionModeDescriptionTest` pins the Plan description quoted in F-P2.
+- `ScriptHook` exit-code table: matches HOOKS.md.
+- `LspTool`: jail applied, `is_file` check, JSON output capped. Only nit: a non-UTF-8 server answer makes `json_encode` return `false` and an empty body.
 
-**Out of scope, pointed elsewhere:** nested `CLAUDE.md`/`AGENTS.md` bodies that Grep/Glob/Edit/Write append to tool results through `InstructionFileLoader` (size and encoding: 15a C3 and 15d-08); MCP stdio env (known #34); `LspClient` internals.
-
-**Repro scripts** (`/home/sites/crush-research-repos/_audit-scratch/15c/`): `r01_binary` (F-T1), `r02_orphan` (F-E2), `r03_grep_optinj` (F-J1), `r04_hook_exit` (exit-code table), `r05_ssrf` (F-W1), `r06_edit_big` (F-T2; the 35 MB `big.txt` fixture has been deleted, and the script recreates it), `r07_env_grep` (F-J2), `r08_gate` (F-P1/F-P2), `r09_accept` (F-P4/F-J4), `r10_auto` (F-P3), `r11_rules` (F-P5/F-J3), `r12_post_block` (F-H1), `r13_hook_env` (F-E1), `r14_escape` (F-J5), `r15_redirect` + `web/router.php` (F-W2; start `php -S 127.0.0.1:8765 web/router.php` first), `r16_gitignore_redos` (F-T5; it builds its own `redos/` fixture, with an optional file count argument), `r17_forged_refusal` (F-P8), `r18_hook_slash` (F-H3). Fixtures: `root/` (latin1.txt, .env, .gitignore, innocent_link→../outside, orphan_marker), `outside/creds.txt`, `fifo/`.
-
----
-
-### Fixed since audit
-
-These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
-
-- **F-T1** A non-UTF-8 byte in any tool result killed the turn — fixed on master in `f33cd55fd` (scrub at `Runtime::settle()`, shared with 15a A6). Residual: the command backends still encode without `JSON_INVALID_UTF8_SUBSTITUTE` (15a A22), fixed later in `987c8d87f`.
-- **F-J1** Grep option injection (`-Re…`) followed symlinks out of the jail — fixed on master in `3673614b1`.
-- **F-J2** `.env` / `.git/config` secret guard bypassed by Grep and quoted Bash spellings — fixed on master in `36f139c50` (+ docs follow-up `3b04aefe8`).
-- **F-J4** `.git/hooks/*` unprotected; accept-edits auto-ran `cp ./x ./.git/hooks/pre-commit` — fixed on master in `a948c3da3` (+ docs follow-up `3b04aefe8`). Known limit: `git config core.hooksPath x` (and similar config keys) redirects hooks without naming `.git/hooks`; the permission mode is the boundary there.
-- **F-P1** Quoted-flag `rm '-rf' ~` bypassed the step-0 breaker and ConfirmRemoveHook — fixed on master in `a87b95aa3`.
-- **F-P2** Plan mode allowed `>f`, `2> f`, `sed -i`, `rm`, `git push --force` — fixed on master in `d3d90fece` (plan Bash is now an allow-list of read-only commands, fail closed; the same commit rewrote the stale PERMISSIONS.md matching section).
-- **F-W1** WebFetch SSRF blocklist missed 100.64/10, 198.18/15, NAT64 and 6to4 — fixed on master in `0594e0e17`.
-- **F-P5** Argument-scoped allow rules accepted `$(…)`, backticks and redirects — fixed on master in `c8fc573a5` (the Allow arm is fail-closed via `ShellWords`: it refuses incomplete lines, `$(`, backticks, `<(`/`>(`, `${…}`/`$[…]` and non-inert redirection, and every unquoted-operator segment must match; Deny and Ask also match quote-removed and per-command readings, so `true; 'rm' -rf x` hits `Deny Bash(rm *)`; PERMISSIONS.md now describes the fail-closed allow rules). F-J3 (path respellings) was separate and is fixed since. Allow matching is still per rule (`Allow git *` + `Allow grep *` does not grant `git log | grep x`); that is documented, not a bug.
-- **F-T5** A hostile `.gitignore` made Glob spend about 70 ms per file, and backtrack errors failed open — fixed on master in `bae0297ce` (`IgnoreRules` builds patterns as tokens; PCRE is kept for safe shapes, and every other pattern, and any PCRE error, goes to a cached DFA that never backtracks; an undecidable rule fails closed, so a hide applies and a negation does not re-include; verdicts are cached per directory). The repro Glob over 2,000 files went from 139 s to 0.34 s. Residual: `IgnoreRules::undecidablePatterns()` was not surfaced to the model by Glob or Grep; fixed since in `f83da04aa` (R5, wave 8B: `IgnoreRules::undecidableNote()` gives one bounded line naming at most 3 undecidable rules by root-relative file and clipped pattern, with the `include_ignored` hatch, which Glob appends after its gitignored note and Grep after its hidden-hits note).
-- **F-T6** The `doctor` tool probed the terminal from inside the turn fork — fixed on master in `977179c1e` (Doctor reads the boot-time `ToolResult::mosaic()` probe and never touches the tty). Residual: `Bootstrap::backend()` does not warm `ToolResult::mosaic()`, so headless runs still probe lazily from the tool (harmless with no TUI); the `DetectsCapabilities` docblock still cites Doctor's old `self::$mosaic ??=` idiom (15b-32).
-- **F-E3** Bash's `cd ROOT && CMD` ran later `;`-separated commands in the wrong directory when `cd` failed — fixed on master in `750ffdd13` (the prefix is `cd ROOT || exit 1` plus a newline, so a missing root runs nothing; `proc_open`'s `cwd` was rejected because on PHP 8.3.6 a missing cwd only warns and returns false). `ProcessContainment::interactiveSpawnCommand()` kept the old prefix (F-E5), fixed in `4f204982b`.
-- **F-H1** A PostToolUse block or deny was a silent no-op — fixed on master in `19f25de74` (in `Runtime::settle()`, any PostToolUse verdict that does not permit the call — deny or exit 2, timeout, ask, unknown action — replaces what the model and the UI see with `[output withheld by PostToolUse hook: <reason>] The call ran; its output is not shown.`; image and diff are stripped, `isError` is kept as the tool set it, the refusing hook's own `additionalContext` is dropped; HOOKS.md's `continueOnBlock` claim and the "discarded by both consumers" sentence are corrected). Residual: the text named no hook, because `HookResult` did not carry which hook refused, and a hook that threw was still only an annotation (R6); fixed since in `7b16e98f5` (wave 9: `HookResult` gains a `refusedBy` origin tag stamped by `HookRegistry::scan()` with the hook that actually ran; `HookResult::withheldNotice()` builds `[output withheld by PostToolUse hook "<name>": <reason>]`, or names the hook chain when no single hook owns the refusal, for Runtime and the Chat mirror alike; a throwing PostToolUse hook is now a DENY that names it — `HookManager::postToolUse()` runs fail-closed on throw, the hooks behind it do not run and the output is withheld — while PreToolUse, SessionStart and UserPromptSubmit still propagate a throw). The dormant `Chat::applyPostToolUse()` mirror was fixed in `83a92e36d` (wave 7).
-- **F-H2** The audit log recorded only completed calls, could be forged and logged unbounded input — fixed on master in `fd3b9e861` (new `AuditHook::recordDenial()` and `recordWithheld()`; Runtime logs from `gate()`'s refusal arm — hook deny, gate deny, refused or unanswered ask, PreToolUse timeout — and from the F-H3 encode refusal and the F-H1 withheld arm, as `=! DENY <hook|refused|unanswered>: <reason>` and `=! WITHHELD: <reason>`; every field is control-character escaped, the 200-byte excerpt is cut on a UTF-8 boundary, and input is capped at 4 KiB with a `[truncated: N bytes]` marker; HOOKS.md gains "What the audit log records"). Residual: built-ins ran first, so a withheld call usually also got the ordinary `=>` line, whose excerpt might still hold the secret (R7); fixed since in `7b16e98f5` (wave 9: `HookRegistry::findMatches()` runs `BuiltIn\AuditHook` after every other matching hook of its event, whatever the registration order, so a withheld or hook-failed call gets exactly one record, `=! WITHHELD "<hook>": <reason>`, and no excerpt of the withheld output).
-- **F-H3** Hook input JSON escaped `/`, and an encode failure gave hooks `{}` — fixed on master in `fa74a16be` (encoded with `JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR`; arguments that cannot be encoded are refused as `Hook denied:` before any hook runs, on both the sequential and concurrent paths; HOOKS.md states the encoding). The dormant `Chat.php` mirrors were fixed in `83a92e36d` (wave 7): `gateToolCall()` encodes through `Runtime::hookInput()` and refuses arguments it cannot encode, and `turnHookContext()` uses the same flags.
-- **F-H4** SkillTool's `args` was advertised and silently dropped — fixed on master in `299e945d0` (`$ARGUMENTS` in the skill body is substituted from `args`, or `ARGUMENTS: <args>` is appended when the body has no placeholder; a non-string name or `args` returns a tool error instead of a `TypeError`; `docs/SKILLS.md` "Invoking a skill" updated).
-- **F-T4** Read, Edit and Write blocked forever on a FIFO (or device) inside the root — fixed on master in `c339b3682` (all three return `Error: not a regular file` for a FIFO, socket or device instead of blocking in open(2); a symlink to a regular file still works and a dangling link behaves as before; Edit also refuses a directory).
-- **F-T2** Edit ignored its own `$maxBytes`, so a large file cost about 18× its size in RAM — fixed on master in `139864c7d` (Edit checks `$maxBytes` with `filesize()` before it reads and caps the read at maxBytes+1 bytes, so a file that grows after the check is refused too; `BuildsUnifiedDiff` trims the common prefix and suffix on the raw strings and splits only the changed middle plus 3 context lines, byte-identical to the old diff; a changed region over 20k lines or 4 MiB gets a "+N -M lines; diff preview omitted" summary; Write gains a trailing optional `maxDiffBytes`, default 1 MiB, and does not read a previous file bigger than that, overwriting it without a diff). Measured on a 36 MB file: before, the edit succeeded at 651 MB peak; after, it is refused at 10 MB peak, and with the cap raised it succeeds at 79 MB. Behaviour change: Edit now refuses files over 1 MiB, the existing `DEFAULT_MAX_BYTES` that was never enforced (Bootstrap passes no override).
-- **F-T7** Edit and Write rewrote files in place, so a kill mid-write left a truncated file — fixed on master in `103a497a5` (new `AtomicFileWriter::replace()` writes a temp file beside the target and renames it over the target, copying the mode before writing, trying to copy uid/gid, and calling fsync; a symlink is resolved and its target replaced, so the link survives; a hard link (nlink > 1), or a directory where no temp can be created or renamed, falls back to an in-place write that writes first and truncates after, so the file is never empty; a non-writable file is still refused; Edit and Write take a trailing optional `?\Closure $writeSeam`, null in production). Residual: ACLs and xattrs are not copied, and a real SIGKILL can leave an orphan `.<name>.tmp.<hex>` file. Both are addressed since in `1020714d8` (R8, wave 8B: `AtomicFileWriter::publish()` sweeps this target's own `.<name>.tmp.<16 hex>` orphans after every successful rename, touching only regular files this euid owns that are over an hour old; `replace()`'s docblock states the ACL and xattr limit; the `tests/RuntimeTest.php` docblock near line 6757 is corrected). Remaining by design: an orphan is swept only by a later successful publish of the same file.
-- **F-T3** WebFetch returned up to 2 MiB raw into context, 32× Bash's cap — fixed on master in `a8209382c` (the result goes through `TruncatesOutput` with a 64 KiB default, set by a new trailing constructor parameter `$maxOutputBytes`, and ends with the shared "[truncated: N of M bytes omitted]" marker; the wire read is still bounded at 2 MiB). Residual: the default was spelled `WebFetch::MAX_OUTPUT_BYTES` rather than the trait constant; fixed since in `919e544da` (R9, wave 8B: the private constant is gone, the default is `self::DEFAULT_MAX_OUTPUT_BYTES`, and the `TruncatesOutput` docblock names WebFetch in `TruncatesOutputNudgeMarginDocTest`'s census).
-- **F-W2** WebFetch returned 3xx/4xx/5xx bodies as successful results, and a relative `Location:` silently ended the redirect chain — fixed on master in `a8209382c` (`Location` is resolved per RFC 3986 §5.2 and every hop re-runs the full guard chain; a non-2xx result gets an `HTTP <code>` first line; `isError` is set for codes of 400 and above, for a 3xx with no usable `Location`, after more than 3 hops, and when there is no status line).
-- **F-P8** Any failing tool could forge a "refused by policy" verdict with output starting `Permission denied:` — fixed on master in `c0e7626fe` (`ToolResult` carries `?DenialKind $denial`, set through `ToolResult::denied()` only by the party that refused the call; `ToolRefusal::fromEvent()` and `Chat::isDeniedResult()` read that field and never the text; it rides the Runtime fork frame, the `EngineBackend` event frame and `Message` checkpoints; repro `r17_forged_refusal.php` now classifies as null). Residual: a tool or Chat callback can still declare a refusal through the field, deliberately (E348); a checkpoint written before the fix revives its refusals as plain errors; the field is not carried on `ToolResultMessage`, the provider wire.
-- **F-P7** The per-turn Task grant memo silenced user-hook asks for later Task calls — fixed on master in `7faef11be` (`HookResult` gains an `askedBy` origin tag, stamped by `HookRegistry::executeHooks()` with every hook that asked on any pass, so a hook cannot forge it; `Runtime::taskGrantMemoKey()` memoises only when the gate was the sole asker).
-- **F-P9** (Dormant Chat path) "Always allow" was keyed by tool name and answered any hook's ask — fixed on master in `05353ea2f` (grants are keyed `<tool> <canonical-JSON args>` and recorded only for a gate-only ask; on a user hook's ask "Always" acts as "Once"; the `permission.always` key help reads "Ask to allow this call for the whole session"). Deliberate choice: the grant scope is the exact arguments, not a prefix pattern.
-- **F-E2** Killing a tool child orphaned the setsid'd `bash` — fixed on master in `c54372b2a` (turn teardown and the parallel deadline, wave 2), `83a92e36d` (the dormant Chat site: `waitForToolChildrenAsync()` uses `ProcessContainment::killTree()`, wave 7) and `2b136d35a` (`AgentWorkerPool::terminateWorker()` calls `killTree($pid, 0.5)` for `cancel()`, `cancelAll()`, `__destruct()` and a reused pool's reset, and a cancelled agent settles `Stopped` "was cancelled"; wave 8A). `EngineExecutor` has no kill site of its own: it runs inside the pool's fork, whose tree kill covers it. Residual: `killTree()` blocked the event loop for about 110 ms on both the engine and the Chat path (R3); partly fixed since in `775bfd1e6` (wave 9: `ProcessContainment::killTreeAsync()` and `reapChildAsync()` keep the loop live on EngineBackend teardown and both Chat cancel sites; see 15a B2). The pool half of R3 is fixed since in `28879e573` (wave 10: on a loop-driven run, `AgentWorkerPool`'s cancel, cancel-all, reset and deadline kills go through `killTreeAsync()` with a SIGTERM grace and `reapAsync`; see 15a B2). Known limit, not tracked as a finding: `BackgroundSessionRunner` still kills without `killTree()` (`ParentProcessGuard`'s docblock lists it).
-- **F-P3** `auto` classified only Bash, and the classifier had unescaped `|` bugs — part (a) fixed in `b2c2058c5` (wave 3), part (b) in `a9c5edbdd` (wave 8A: `SafetyClassifier::classify($call, ?$projectRoot)` classifies Edit/Write as `protected-path-write` or `outside-root-write`, and WebFetch with a query string, userinfo or an unparseable URL as `external-endpoint`; under `auto` every `mcp__*` call asks and the circuit breaker is untouched; `r10_auto.php`: Write, WebFetch and `mcp__db__drop_table` went from Allow to Deny, Deny and Ask). Residual: the TUI engine path still fails closed on Ask (Part II #1), so under `auto` an MCP call is effectively refused there until an approver reaches it.
-- **F-P4** accept-edits asked for Edit and Write but allowed `rm`, `mv` and `cp` — fixed on master in `a9c5edbdd` (Edit/Write are allowed when `file_path` is strictly inside the root and not under `.git`, `.sugar-crush` or `.mcp.json`, resolved the way the tool resolves it via `PathJail::resolveForCreate`; without a root only a lexically contained relative path qualifies; the Bash grant is `mkdir`/`touch`/`rmdir` only, so `rm`/`mv`/`cp` ask; the shared judgement is the new `Permissions/WritePathScope`; `r09_accept.php`: Edit/Write Ask→Allow, `rm ./src/Main.php` Allow→Ask).
-- **F-P6** WebFetch was classed read-only, so data could leave unprompted — fixed on master in `a9c5edbdd` (`WebFetch` left `isReadOnlyTool()`: it asks under default, accept-edits and plan, is denied under dont-ask and allowed under bypass; `WebFetch(domain:…)` rules match the URL's host through the new `Permissions/FetchTarget`, which parses the way WebFetch dials, so `user@host` resolves to the real host; an allow covers exactly the host it names and `*.x` its subdomains, while a deny or ask also covers subdomains and fires on an unparseable URL). Residual: on the TUI engine path a WebFetch under default or plan is effectively refused until an approver reaches it (Part II #1).
-- **F-E1** Bash and every hook inherited the full environment, provider keys included — fixed on master in `4f204982b` (`ProcessContainment::scrubbedEnv()` drops `*_API_KEY`, `*_TOKEN`, `*_SECRET`, `AWS_*` and `PROVIDER_SECRET_ENV_NAMES` for Bash, Grep, the env block's git reads and `ScriptHook`; the new user-tier key `secretEnvAllowlist` releases names or globs, and a glob never releases a provider key; the HOOKS.md env section was re-measured and is pinned by `HookEnvironmentDocumentationDriftTest`). Behaviour change: a script that relies on `GITHUB_TOKEN`, `GH_TOKEN` or `AWS_*` in Bash or a hook needs `secretEnvAllowlist`. Residual: `env()` is unchanged, so MCP, LSP, claude-code and the command backends still get the full environment (the MCP stdio env is known #34).
-- **F-E5** `interactiveSpawnCommand()` kept the `cd X && cmd` prefix — fixed on master in `4f204982b` (the shared `ProcessContainment::cdGuard()`, `cd DIR || exit 1` plus a newline, is used by it and by Bash).
-- **F-E4** `ParallelSafe`'s docblock described two orphan hazards B2 and B3 had fixed — fixed on master in `c020b0540` (it describes `killTree()` and the close-on-exec frame socket, keeps the no-`/proc` caveat and the "must terminate on its own" rule; pinned by `ParallelSafeDocblockTest`).
-- **F-W3** WebSearch had a cleartext default endpoint, unchecked redirects and an unbounded read — part (a) fixed in `9c28ac0e8` (wave 6), part (b) in `adbb3df16` (wave 8A: no default endpoint; it comes from the constructor or `SUGARCRUSH_SEARCH_ENDPOINT`, empty counts as unset, and with neither every call returns an error naming the variable and dials nothing). Behaviour change: WebSearch does nothing until an endpoint is configured.
-- **F-J3** Path-scoped deny rules missed relative and absolute respellings and symlinks — fixed on master in `3b7d2fd33` (the live hook chain passes the root; deny and ask rules match the raw, root-anchored, resolved and symlinked-root spellings, and allow must match both a plain and the resolved spelling) and `a5b6e3d78` (wave 8B: `AgentManager` takes the root, from `Bootstrap::agentManager()`, and passes it to the session gate and to both halves of a preset's own grant in `refuseCallOutsideGrant()`, so a symlink can no longer launder a `tools: ['Write(src/*)']` grant; `PermissionGate::refuses()` stays root-less on purpose, because a declaration has no path subject, which `PermissionGateDeclarationRootTest` pins across every mode). Residual: Chat's two `!` gate calls still pass no root, but they judge only Bash calls, where the root changes nothing (`PermissionRule` reads it only for path subjects, `SafetyClassifier` only for Edit and Write), so F-J3-rem (b) is judged moot and `docs/PERMISSIONS.md` says so. Closed as moot in wave 9 (`e76e8a93e`): `PermissionRule::matchesSubject()` passes the root only to `matchesPathSubject()` (Read, Edit, Write, Glob, Grep, Lsp), `evaluateAcceptEdits()` reads it only for Edit and Write, `isScopedWriteTool()` takes no root, and `SafetyClassifier::classify()` reads it only for Edit and Write; the new `ChatBashGateRootTest` pins that `decide()` answers the same with and without a root for every mode, three rule sets and seven commands over a symlinked tree, with a Read control where the root does change the verdict, and both Chat call sites carry a comment saying so. Behaviour change: a sub-agent grant no longer covers a symlink under its path that points outside it.
-- **F-D1** `docs/PERMISSIONS.md`'s introduction said rule patterns match tool names only — fixed on master in `6f19d403d` (the introduction says a pattern names a tool plus, optionally, the argument it acts on — `Bash(rm *)` the shell command, `Read(.env)` the file under the root with symlinks followed, `WebFetch(domain:…)` the host — and links to the matching section; the new `PermissionsIntroDriftTest` keeps the name-only claim out and replays each quoted example through the matcher).
-- **F-J5** `BashEscapeDenyHook` was unwired, trivially bypassed and denied `> /dev/null`; `withWorktreeRoot()` mutated the shared hook manager; Glob, Grep and Lsp took no worktree jail — fixed on master in `586dceec3` + `53b066202` (the hook judges `ShellWords` tokens with `~`/`$HOME`/`$PWD` expanded and substitutions recursed into; `/dev/null`, `/dev/std*` and absolute executables in command position allowed; `withWorktreeRoot()` registers on a clone of the manager; Glob, Grep and `LspTool` take an optional `worktreeJail`; `Agents\PathJail::jailPath()` enforces containment) and `fe93dcf38` (wave 10: a new `Tools\AcceptsWorktreeJail` seam, implemented through the shared `Tools\Concerns\RebindsWorktreeJail` trait by Glob, Grep, LspTool, Bash, Read, Edit and Write; `withWorktreeRoot()` maps its tools onto jailed copies, leaving the receiver's tools untouched, and re-jails even with hooks disabled; a census test requires every built-in with a `worktreeJail` parameter to implement the seam). Residual: `withWorktreeRoot()` still has no production caller and `Bootstrap::tools()` builds tools with no jail; both wait on worktree isolation (Part II #23), and a future caller gets jailed tools automatically. `DelegatesToEngine` tools (Task) and MCP bridges are not re-jailed; they resolve no workspace path.
+**Out of scope, pointed elsewhere:** MCP stdio env (known #34); `LspClient` internals.
 
 
 ---
@@ -19991,159 +19602,40 @@ These findings were fixed on master after the audit. Their sections and table ro
 ## 15d — Audit: prompt/context assembly, memory, skills, configuration
 
 Auditor scope: `src/Context/`, `src/Memory/`, `src/Skills/`, `src/Config/`, the config/trust half of `src/Cli/Bootstrap.php`, `src/Util/PathGlob.php`, `src/Compactor.php`, plus `docs/{SETTINGS,MEMORY,SKILLS,PROMPT_ENGINEERING}.md`.
-Baseline: `99-synthesis.md` Part II. Nothing below repeats an item listed there; where a finding touches a known item, the new part is called out.
+Baseline: `99-synthesis.md` Part II. Nothing below repeats an item listed there.
+Repro scripts are in `/home/sites/crush-research-repos/_audit-scratch/15d/`.
 
-Tree state: master @ `05db616f3` (the working tree has unrelated uncommitted `candy-palette` edits). Vendor mode: `sugar-crush linked 20/20 symlinked` (`php scripts/refresh-deps.php --status`).
-Repro scripts are in `/home/sites/crush-research-repos/_audit-scratch/15d/` (`rN.php`). Each takes about 1 s with `php rN.php` (`r14.php` is a timed race and takes as many seconds as its argument).
-
-This report is final. What was read, what was only skimmed, and how each open lead was settled is listed under **Coverage** at the end.
-
----
-
-### A. Skills (loader, registry, listing, nudges)
-
-Its last open finding, 15d-03, was fixed in wave 9; see **Fixed since audit**.
-
----
-
-### B. Memory store
-
-Its only open finding, 15d-05, was fixed in wave 8B; see **Fixed since audit**.
-
----
-
-### C. Instruction files and prompt-wide encoding/size
-
-Its only open finding, 15d-25, was fixed in wave 8A; see **Fixed since audit**.
-
----
-
-### D. Environment block (git)
-
-Its only open finding, 15d-13, was fixed in waves 1 and 8B; see **Fixed since audit**.
-
----
-
-### E. Configuration and trust
-
-Both findings here (15d-15, 15d-16) were fixed in wave 6; see **Fixed since audit**.
-
----
-
-### F. Lower-priority observations (Verified by reading; nondeterminism and caps)
-
-Its only entry, 15d-17, was fixed in wave 3; see **Fixed since audit**.
-
----
-
-### G. Findings from the resumed pass
-
-Its only open finding, 15d-24, was fixed in wave 8B; see **Fixed since audit**.
-
----
-
-### Summary table (by severity)
-
-No finding in this appendix remains open: the last, 15d-03, was fixed in wave 9. See **Fixed since audit**.
+**No finding from this audit remains open.** Fixed findings have been removed from this appendix.
 
 ---
 
 ### Coverage
 
-**Status:** final. No source was modified, nothing was committed, and the only repository file written is this report. Every process started for the audit (repro scripts, the `r14.php` race, the phpunit run and its watchdog) was waited for or killed.
-
 #### Read end to end
-- **Context:** `PromptFence.php`, `MemoryBlock.php`, `InstructionFileLoader.php`, `ImportResolver.php`, `RuleLoader.php`, `Rule.php`, `RulesState.php`, `RulePathNudge.php`, `Triggers/{Trigger,KeywordTrigger,PathTrigger,IntentTrigger}.php`, `EnvironmentBlock.php`, `RepoMapBlock.php`, `ProjectMemoryWriter.php`, `CompactorConfig.php`, `Sections/MaximsSection.php`, `ContextWindow.php`, `IdleCompactionPolicy.php`, `Stability.php`, `PromptSection.php` (all under `src/Context/`)
+- **Context:** `PromptFence.php`, `MemoryBlock.php`, `InstructionFileLoader.php`, `ImportResolver.php`, `RuleLoader.php`, `Rule.php`, `RulesState.php`, `RulePathNudge.php`, `Triggers/*`, `EnvironmentBlock.php`, `RepoMapBlock.php`, `ProjectMemoryWriter.php`, `CompactorConfig.php`, `Sections/MaximsSection.php`, `ContextWindow.php`, `IdleCompactionPolicy.php`, `Stability.php`, `PromptSection.php`
 - **Memory:** `src/Memory/{MemoryStore,ForeignMemoryImporter,MemoryEntry}.php`
-- **Skills:** `src/Skills/{Skill,SkillLoader,SkillRegistry,SkillManager,SkillMatcher,ForeignSkillDiscovery,SkillPathNudge,SkillDiscovery,SkillSource}.php`; frontmatter of all 12 `src/Skills/BuiltIn/*/SKILL.md`, plus the bodies of `worktree-workflow`, `matchups-sync`, `mcp-authoring` and `explore-codebase`
+- **Skills:** `src/Skills/*` and the frontmatter of all 12 built-in `SKILL.md` files
 - **Config:** `src/Config/LayeredSettings.php`, `src/Config/StatusLineCommand.php`
 - **Support and util:** `src/Support/Frontmatter.php`, `src/Util/PathGlob.php`, `src/Util/Exporter.php`, `src/Util/TokenTracker.php`, `src/Compactor.php`, `src/CompactedGroup.php`, `src/Registry/{Tool,ToolSignature}.php`
-- **`src/Cli/Bootstrap.php`:** `:2945-2970`, `:3000-3040` (`availableProviders`), `:3040-3680` (config paths, readUserConfig/mergedConfig/rawUserConfig, writeUserConfig), `:3758-3900`, `:4216-4247`, `:4636-4712`, `:4790-5330` (permissionGate, permissionConfigLayers, withoutEmptyPermissionOverrides, permissionSettingsLayer, readPolicyFile), `:6835-6900` (nudge and tool wiring), `:6995-7300` (filterToolSet, toolSetUnder, reportProjectTierToolRemovals, instructionLoader, forcedInstructions), `:7619-7800` (selectedProviderName, backend-command tier, title/summary toollessBackend), `:7830-8042`
-- **Elsewhere:** `src/Providers/ProviderFactory.php:60-330` (config.dev.json path and reader); `src/Agents/WorktreeConfig.php` (config read); `src/Chat.php:12860-13040` (`/memory` locate/delete/clear/edit); `src/Runtime.php:2806-3260`, `:3312-3370`, `:3580-3625`, `:1185-1215`, `:1780-1800`; `src/Backend/EngineBackend.php:740-800`, `:1114-1269`
-- **Docs:** `docs/SETTINGS.md` and `docs/ENVIRONMENT.md` in full (the env tables were compared against `src/`), `docs/SKILLS.md` (all), `docs/MEMORY.md` (all except 275-end), `docs/PROMPT_ENGINEERING.md` (1-275)
+- **`src/Cli/Bootstrap.php`:** the config paths, user-config read/merge/write, permission layers, policy file, nudge and tool wiring, tool-set filtering, instruction loader and title/summary backend ranges
+- **Docs:** `docs/SETTINGS.md`, `docs/ENVIRONMENT.md` (env tables compared against `src/`), `docs/SKILLS.md`, most of `docs/MEMORY.md` and `docs/PROMPT_ENGINEERING.md`
 - **Root `.sugar-crush/`:** `config.json`, `config.dev.json`, `agents/{coder,reviewer,security-auditor}.md`
 
 #### Skimmed, or deliberately left to other reports
-- **`src/Context/ContextCompactor.php`:** read `:100-200`, `:448-760`, `:1037-1200`. The rest is the compaction-quality surface already covered by known items #15-#19.
-- **`src/Chat.php` and `Bootstrap::chat()/app()`:** only the wiring ranges above. The TUI and turn loop belong to other audit slices.
+- **`src/Context/ContextCompactor.php`:** the rest is the compaction-quality surface already covered by known items #15-#19.
+- **`src/Chat.php` and `Bootstrap::chat()/app()`:** wiring ranges only.
 
-#### How each lead was settled
-1. **15d-10 special tokens:** still Suspected. skynet2 was unreachable from the audit host (curl `000`), so the tokenizer probe could not run. The exact probe to run is written into 15d-10.
-2. **`index.lock` contention:** **confirmed and widened** (`r14.php`). Folded into 15d-12. `git diff` takes the lock even with `GIT_OPTIONAL_LOCKS=0`.
-3. **`filterToolSet()` non-string entries:** dropped. `toolSetUnder()` checks `is_string($pattern)` before `PermissionRule::matchesToolName()` (`Bootstrap.php:7055-7057`) for both `allowedTools` and `disabledTools`.
-4. **`forcedInstructions()`:** dropped as stated. Non-list values and non-string or blank entries are filtered (`:7281-7296`). The key is user-tier only. PHP `glob()` has no `**` globstar, and every match is containment-checked (`InstructionFileLoader.php:527`). **New finding instead:** the unescaped root prefix passed to `glob()` (15d-22).
-5. **`LayeredSettings::merge()` null-vs-absent:** dropped. Only layer 4 (`config.json`) passes through unfiltered, and the CLI writes only string `provider`/`theme` and the `layout` manifest there, so a JSON `null` can come only from the user's own hand edit. The permission keys, where null-vs-absent matters for safety, are already guarded by `withoutEmptyPermissionOverrides()` (`:5036-5069`), and `[]` outranking `settings.json` is documented and deliberate (SETTINGS.md "Only those two spellings count as empty").
-6. **`MemoryStore::update()` id mismatch:** the `/memory edit` call site (`Chat.php:13023`) passes the id the user typed and the entry read from that file, so the literal mismatch cannot happen there. The broader frontmatter-id vs filename split is real and is reported as 15d-23.
-7. **`boundHeadAssistantForSummary()` `## Skill: ` exemption:** dropped. The authors document it as an accepted residual in the method's docblock (`ContextCompactor.php:686-700`, "ACCEPTED AS A DOCUMENTED RESIDUAL").
-8. **Drift-test coverage:**
-   - `TrustKeyDocumentationDriftTest` pins the SETTINGS.md key table to `LAYERED_KEYS`/`PROJECT_TIER_KEYS`, and `EnvRosterDriftTest` pins the env roster.
-   - "Native always wins" (foreign vs native) is pinned by `SkillManagerTest:246` and `:366`, but native project vs native user is not pinned (added to 15d-03).
-   - "A bad skill is a bounded notice, never a launch crash" (SKILLS.md:132) is scoped to `enabledSkills` entries and holds there. It does not cover frontmatter typing, so it does not contradict 15d-01.
-   - The three stale sentences in 15d-19 are unpinned.
+#### Leads dropped
+- **`filterToolSet()` non-string entries:** `toolSetUnder()` checks `is_string($pattern)` before matching, for both `allowedTools` and `disabledTools`.
+- **`forcedInstructions()`:** non-list values and non-string or blank entries are filtered, the key is user-tier only, and every match is containment-checked.
+- **`LayeredSettings::merge()` null-vs-absent:** only layer 4 (`config.json`) passes through unfiltered, and a JSON `null` there can come only from the user's own hand edit. The permission keys are guarded by `withoutEmptyPermissionOverrides()`.
+- **`boundHeadAssistantForSummary()` `## Skill: ` exemption:** documented by the authors as an accepted residual (`ContextCompactor.php:686-700`).
 
 #### Other checks with no finding
-- **Root `.sugar-crush/` (step 4):**
-  - `config.dev.json` is read only from the **package** root (`ProviderFactory::readableDefaultConfigPath()`, `dirname(__DIR__, 2)` plus containment), never from a project, so a cloned repo cannot point the provider at its own endpoint. ENVIRONMENT.md:32 calls it "a project `.sugar-crush/config.dev.json`", which reads as the cwd project but means the package (wording only).
-  - The monorepo root's `.sugar-crush/config.json` carries `"trustedProjectMcp": ["/home/sites/sugarcraft"]`. That key is inert there: trust keys are read only from the user's layer-4 file, and project files are filtered to `PROJECT_TIER_KEYS`. It is misleading but harmless.
-  - The agent presets' `model`/`permissionMode`/`isolation` keys are known item #23.
-- **`KeywordTrigger`:** keywords with a non-word edge (`.env`, `C++`, `--force`, `@deprecated`) can never fire, and a prompt containing one invalid UTF-8 byte fires no keyword (`r15.php`). Both are documented in the class docblock, and the matcher has no consumer today (15d-19). When it is wired, `Rule::new()` should refuse such keywords loudly (known #37).
-- **`RulePathNudge`:** budget, escape and clip logic are correct. Deferral pointers are bounded at 1,024 B and escaped.
+- **Root `.sugar-crush/`:** `config.dev.json` is read only from the **package** root, never from a project, so a cloned repo cannot point the provider at its own endpoint (ENVIRONMENT.md's "a project `.sugar-crush/config.dev.json`" means the package; wording only). The monorepo root's `"trustedProjectMcp"` key is inert there, because trust keys are read only from the user's layer-4 file. The agent presets' `model`/`permissionMode`/`isolation` keys are known item #23.
+- **`KeywordTrigger`:** keywords with a non-word edge (`.env`, `C++`, `--force`, `@deprecated`) can never fire, and a prompt containing one invalid UTF-8 byte fires no keyword. Both are documented in the class docblock, and the matcher has no consumer today. When it is wired, `Rule::new()` should refuse such keywords loudly (known #37).
+- **`RulePathNudge`:** budget, escape and clip logic are correct; deferral pointers are bounded at 1,024 B and escaped.
 - **`Exporter::toJson()`:** returns `json_encode()`'s `false` through a `: string` return type on invalid UTF-8 (a TypeError), but its only caller is `ShareSession` (`/share`, a stub per known #35).
-- **Guard suites:** `vendor/bin/phpunit --filter 'SkillManager|SkillLoader|MemoryStore|PromptSection|EnvironmentBlock|ForeignMemoryImporter|RulePathNudge|KeywordTrigger|LayeredSettings'` passed with 356 tests and 1,377 assertions (vendor mode `linked`). No test pins any reported defect as intended behaviour, except the colour control in `PromptStabilityTest` noted under 15d-12.
-
-#### Repro scripts and fixtures (`/home/sites/crush-research-repos/_audit-scratch/15d/`)
-- **Viewer:** `code.php` strips comments and keeps the original line numbers (`php code.php <file> [from] [to]`).
-- **15d-01:** `r1.php`, `r1b.php`, `proj0..4/`, `proj1/` (live `bin/sugarcrush -p` fatal), `proj12/` (non-string `paths` → nudge TypeError).
-- **15d-02:** `r5.php` + `proj5/`.
-- **15d-03:** `r6.php`, `r6b.php` + `home6/`, `proj6/`, `empty/`.
-- **15d-04:** `r3.php` + `proj3/`, `proj4/`, `umem/` (live per-turn failure in `proj3/`).
-- **15d-05:** `r10.php` + `homemem10/`, `projA/`, `projB/`.
-- **15d-06:** `r8.php` + `ch8/`, `mem8/`.
-- **15d-08:** `r2.php` + `proj2/`.
-- **15d-09:** `r9.php` + `proj9/`.
-- **15d-12:** `r4.php` + `gitrepo/`, `gitcfg`, `extdiff.sh`; `r14.php` + `lockrepo/` (index.lock race: `php r14.php 8 &` while looping `git -C lockrepo add f1`).
-- **15d-13:** `gitrepo/sub`.
-- **15d-15:** `cfg7/`.
-- **15d-20:** `r16.php` + `proj16/`.
-- **15d-21:** `r17.php` + `empty17/`.
-- **15d-22:** `r18.php` + `br[1]/`.
-- **15d-23:** `r13.php` + `mem13/`.
-- **Dropped KeywordTrigger lead:** `r15.php`.
-- **Scratch HOMEs:** `home1/`, `home11/`.
-
----
-
-### Fixed since audit
-
-These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
-
-- **15d-01** Mistyped SKILL.md frontmatter crashed sugar-crush at launch — fixed on master in `d1c1822a9` (mistyped skills are skipped and reported).
-- **15d-04** One malformed memory file broke every turn — fixed on master in `d26c38cdd`. Residual (skipped notes announced only in the prompt, with no user-facing display) fixed later in `0171ed120` (launch notice plus an "Unreadable notes" section in `/memory list`/`/memory search`); the `-p` path does not raise the launch notice (see 15d-02).
-- **15d-08** A non-UTF-8 byte in an instruction, rule, memory or skill file made every request throw — fixed on master in `218384747` (scrub at load time).
-- **15d-02** Repo skill descriptions reached the system prompt unfenced, uncapped, multi-line and in harness voice — fixed on master in `a2d3dfcf3` (each line escaped, one-line, capped; enabled bodies escaped) and `da2930fbd` (the listing is fenced as `<available-skills>` under `Runtime::SKILL_LISTING_AUTHORITY_PREAMBLE`, the ninth `PromptFence` tag, and each line carries a provenance badge `[built-in]`/`[user]`/`[project]` (+ `foreign: claude|opencode`) from the new `Skills\SkillOrigin`; untiered skills default to project), with the memory follow-up `0171ed120` (unreadable memory notes shown to the user: `MemoryStore::unreadable()`, `Memory\UnreadableNotes`, `Bootstrap::reportMemorySkips()` launch notice, and an "Unreadable notes" section in `/memory list`/`/memory search`). `SkillPathNudge` lines are deliberately not badged. Residual: the `-p` path (`src/Cli/NonInteractive.php`) did not call `reportMemorySkips()`, so non-interactive runs raised no unreadable-memory launch notice (R10); fixed since in `17a50bbeb` (wave 9: `reportMemorySkips()` is public, resolves a null root to the cwd, and `NonInteractive` calls it beside `reportSkillSkips()`; `docs/MEMORY.md` notes it).
-- **15d-10** PromptFence let attribute-bearing roster tags through and did nothing about chat-template control tokens — fixed on master in `161d60881` (the roster pattern is a lookahead on the `<` alone, so attribute lists, split lists and unterminated openers are matched; the same rewrite defangs `<|` and `<｜` openers, listed in `PromptFence::CONTROL_TOKEN_PIPES`). The special-token half was never confirmed live (the tokenizer probe stays unrun). Residual: the docs do not describe the defang (15d-25).
-- **15d-21** The built-in skills shipped SugarCraft-monorepo procedures to every project — fixed on master in `cadba57fd` + `d70017a2f` (the four monorepo skills moved to `<repo root>/.sugar-crush/skills/`, the project tier, so they load only in this monorepo; `worktree-workflow`'s dirty-tree step now stops and reports instead of discarding; `docs/SKILLS.md` and `README.md` list eight built-ins; `BuiltInSkillsTest` scans both trees for discard-work commands, walking directories instead of globbing). Residual: `CHANGELOG.md` still lists them as built-ins (15d-26).
-- **15d-18** `skillKeyFor()` broke on a trailing slash or a foreign path spelling — fixed on master in `0f971f954` (the base is `rtrim`med, a leftover leading `/` is trimmed, and a path not spelled under the base is keyed through both realpaths, then by the skill's own name).
-- **15d-17** Count caps were applied in readdir order, and the repo-map walk was unbounded for non-PHP files — fixed on master in `7e2e08492` (`RuleLoader` and `RepoMapBlock` walk each directory with `scandir()` + `sort()` and cap after sorting; a visit budget counts every entry, `MAX_WALK_ENTRIES = 4096` for rules and 100,000 for the repo map, and a cut is recorded).
-- **15d-14** The git subprocesses in prompt assembly had no time bound — fixed on master in `6e2df9a26` (`runCaptured()` gains an optional 4th `?float $timeoutSeconds`, default null so Bash and Grep are unchanged; on expiry the group gets SIGTERM then SIGKILL, the result carries `timedOut` and exit 124; the env block bounds each git read at 2 s, renders `unavailable (git timed out after 2s)`, and one timeout skips the rest of the git section; the branch read is bounded through `runCaptured()` too, keeping the `shell_exec` fallback).
-- **15d-12** Env-block git calls honoured the user's git config and took `index.lock` — fixed on master in `da6674686` (every call runs as `git --no-pager --no-optional-locks -c color.ui=false -c core.quotepath=false`; `log` adds `--no-color --no-show-signature`; diffs use the plumbing `diff-index --cached` and `diff-files` with `--no-ext-diff --no-textconv --no-color`, so the index is never written; an unborn HEAD diffs against the empty tree; `GIT_OPTIONAL_LOCKS=0` is set through a new optional 5th `runCaptured()` parameter, `array $envOverrides`; `PromptStabilityTest`'s colour control is rewritten so its fixture must yield zero escapes). Residual: a stat-dirty binary file still counts in the shortstat, and with no stat refresh a heavily stat-dirty tree renders slower (about 0.5 s per 3,000 files) until the user's own git refreshes the index.
-- **15d-20** A `paths:`-scoped rule added or edited mid-session was never delivered: the splice skipped it and the boot-time nudge never learned of it — fixed on master in `d1157349b` (`RulePathNudge::fromLoader()` re-walks the rules on each consult; the announced ledger holds a digest of each rule's body, so a rule added mid-session is delivered, an edited rule is re-announced with its current body, and a rule whose `paths:` is removed is no longer nudged; Bootstrap changes only the construction line).
-- **15d-09** CLAUDE.md, AGENTS.md and forced instruction files had no size cap (a 3 MB file went into every request whole), and enabled skill bodies were uncapped — fixed on master in `dd8be915d` (with 15a C3: instruction documents are priced in framed, escaped bytes against 64 KiB per document and 128 KiB combined; a document or `@import` that does not fit becomes a pointer line and is recorded in `InstructionFileLoader::refusedPaths()`; every document read is stat-checked and bounded at 60 KiB; enabled skill bodies are held to `CompactorConfig`'s per-skill and combined budgets via `TokenEstimate`; a prompt under budget is byte-identical; `ContextCompactor::filterSkills()` is left dormant). Residual: there was no user-visible notice for a deferred instruction file, skill deferrals were recorded nowhere, and skill budgets used the `CompactorConfig` defaults because App carried no compactor config (R1); `SkillLoader` read skill files uncapped (15d-27, fixed in wave 8A). R1 is partly fixed since in `d1416fb86` (wave 9: launch notices for deferred instruction files and over-budget skill bodies through shared `Runtime` planners, `Runtime::skillDeferrals()`, `App::withCompactorConfig()`; see 15a C3). R1's compactor half is fixed since in `2fc25bef1` + `5d2229e76` (wave 10: `EngineBackend::withCompactorConfig()` reaches the per-turn `App`, and Chat hands it its own config; see 15a C3). R1's last half is fixed since in `459326393` + `6e742aa15` (wave 11: mid-session `loadForPath()` refusals raise one UI-only notice per file; see 15a C3).
-- **15d-19** Stale, unpinned doc statements: rule `paths:` scoping "not applied", and "only two keys" re-applied per turn — fixed on master in `232013284` (`docs/PROMPT_ENGINEERING.md`, `docs/SKILLS.md` and `docs/SETTINGS.md` corrected; SETTINGS.md now names three re-applied keys, adding `maxOutputTokens`; a fourth stale claim, the `<system-reminder>` emitter list, is fixed too; each is pinned by a derived assertion in `DocFigureProseDriftTest`).
-- **15d-15** `writeUserConfig()` replaced a symlinked `config.json` with a regular file, ran an unlocked read-merge-write and overwrote an unparsable config — fixed on master in `66f2f760a` (it writes through a symlinked config to its regular, policy-checked target, and writes nothing for a dangling or unsafe link; it refuses to persist over an unparsable or non-object config through a new `userConfigForMerge()`, where a missing or empty file counts as `{}`; and the read-merge-write runs under a 5 s `TimedFileLock` on a `.<name>.lock` sidecar, skipping the write on timeout).
-- **15d-16** Huge numeric values for `maxToolSteps` and `maxOutputTokens` wrapped negative through `(int)` casts — fixed on master in `987caa2cf` (values at or above 2**63 resolve to null, the default, instead of wrapping negative; `maxToolSteps` refuses non-integral values such as 1.5, while 8.0 is accepted; `maxOutputTokens` keeps its documented truncation; `docs/SETTINGS.md` updated). Residual: there was no user notice for a nonsense value (R12); fixed since in `d1416fb86` (wave 9: `Bootstrap::reportNonsenseLimits()` raises one launch row per bad `maxToolSteps`/`maxOutputTokens` value on the TUI and on `-p`, the resolvers still answering null; absent, `null` and `""` count as unset; a differential test pins the token verdict to EngineBackend's resolver). No ceiling constant was added.
-- **15d-22** A checkout path containing `[`, `*` or `?` silently dropped forced instructions and every repository memory note — fixed on master in `98ec1dd66` (the checkout root is glob-escaped in `InstructionFileLoader::loadForced()`, and every `MemoryStore` glob is replaced by one sorted `scandir()` helper).
-- **15d-06** `/memory import claude` built the Claude Code project slug wrongly and imported nothing for any path containing `.` — fixed on master in `f26a4733b` (`claudeProjectSlug()` reproduces Claude Code's algorithm, turning every non-alphanumeric character into `-` and cutting a slug over 200 characters with a hash suffix, and falls back to the legacy `/`-only spelling; the importer lists with `scandir()`). Residual: `CLAUDE_CODE_PROJECT_DIR_NAME` and `CLAUDE_CONFIG_DIR` were not consulted; fixed in `e4f278ca5` (wave 8A, R11).
-- **15d-07** Repo-shipped memory was presented as the user's own notes — fixed on master in `6a609f594` (`MemoryBlock` lists repo-store and home-store notes under separate provenance labels inside one `<project-memory>` fence; the cap, byte budget and omission count stay one newest-first walk; a home-only block is byte-identical to before; `docs/MEMORY.md` updated).
-- **15d-11** MEMORY.md said `@~/…` imports resolve against home, while in practice every one was refused — fixed on master in `a4dc54c9d` (`ImportResolver` resolves `~` through `HomeDirectory::owned()`, so there is no more `/x.md` when `HOME` is unset and no world-writable home; with no owned home the reference is left as written; `docs/MEMORY.md` now says a `~/` import is blocked as `outside-repo-root` unless the home directory is inside the checkout).
-- **15d-23** Repository memory notes could become unaddressable, and every write rewrote a git-tracked `MEMORY.md` — fixed on master in `18206b703` (wave 6: the id is the filename stem; the index is byte-stable with no timestamp) and `51efe5642` (wave 8A, N2: the repo store no longer writes `MEMORY.md`; `MemoryStore::forRepository()` builds a store whose `generateIndex()` writes nothing and whose `loadIndex()` derives the same bytes from the notes through the shared `renderIndex()`; every repo-store reader and writer goes through `ProjectMemoryWriter`, which builds it that way; a legacy generated index is removed on the next mutation of its scope, while a hand-written `MEMORY.md` is left alone). The home store is unchanged.
-- **15d-25** MEMORY.md and PROMPT_ENGINEERING.md did not describe PromptFence's chat-template-token defang — fixed on master in `e4f278ca5` (both pages describe the `<|` / `<｜` defang and the attribute-bearing and unterminated tag match, with worked examples; the new `MemoryDocumentationDriftTest` replays each page's examples through the live `PromptFence`, requires every `CONTROL_TOKEN_PIPES` glyph to be named, and pins the new ENVIRONMENT.md "Claude Code variables" table against the importer's `*_ENV` constants).
-- **15d-26** `CHANGELOG.md` still listed the four moved skills as built-ins — fixed on master in `9e69d6c9e` (a new subsection, "Skills — precedence, bounded reads, the moved monorepo skills (2026-10)", corrects the record; the historical entry is unchanged).
-- **15d-27** `SkillLoader` read skill files with no size limit — fixed on master in `9e69d6c9e` (the new `Skills/SkillFileReader` handles every skill read — `Skill::fromFile`, the manifest head, the body and assets: it stats first and refuses files over 1 MiB, reads at most the ceiling plus one byte, and the manifest stage reads only the first 64 KiB and refuses frontmatter that does not close inside it; a refused skill is not listed and is recorded in `skipped()`; a 50 MB sparse `SKILL.md` loads with a peak memory rise under 8 MB).
-- **15d-05** Home-store `project` notes were global, so they reached every repository's prompt — fixed on master in `0484a28c3` (`MemoryStore::forProject()` and `projectKeyFor()` keep the home store's `project` scope at `project/<slug>-<sha256[0:16] of the canonical root>/`, and list, search, get, the index, the skip map and the unreadable scan see only that directory; `Bootstrap::memoryStore($root)` builds the keyed store from the `ProjectRoot` answer, so Chat's `memoryStore->add()` fallback is keyed without a Chat edit; unkeyed legacy notes are moved, never overwriting, into the first keyed store that touches the scope, and a `.bound-legacy` record makes the next interactive launch show `MEMORY_LEGACY_BOUND_NOTICE_FORMAT` once). Residual (Chat edits): the `/memory add` reply did not say when a note fell back to the home store, and the `/memory import` sentinel was written under the cwd rather than `ProjectRoot::resolve()`; both fixed since in `aa7813a98` (wave 9: the sentinel and its containment root use `ProjectRoot::resolve(projectRoot())`, and a project note that falls back to the home store says so in its reply).
-- **15d-13** A subdirectory launch reported "Is directory a git repo: No", dropped the git state and missed `.sugar-crush/*` — part (a) fixed in `119bc86d2` (a bounded `git rev-parse --show-toplevel`, the "repo root:" line and the full git section) and part (b) in `f2c1f0445` (wave 8B: the new `Support\ProjectRoot` resolves the root for `.sugar-crush/*` and `.mcp.json` lookups — the launch directory when it holds `.sugar-crush/`, `.mcp.json` or `.git`; otherwise, inside a work tree, the nearest directory up to the work-tree root holding `.sugar-crush/` or `.mcp.json`, else the work-tree root; outside a work tree, or for a work tree at or above `$HOME`, the launch directory — and it is wired into the settings layer and its trust, command-shell trust, workflows, agent presets, `hooks.yaml`, the `.mcp.json` decision, CommandLoader, SkillLoader, SkillDiscovery, RuleLoader and ProjectMemoryWriter; tools, hooks and spawned sessions still run in the launch directory, and `docs/SETTINGS.md` documents the rule). Not walked up, because they are not `.sugar-crush/*`: foreign `.claude` and `.opencode` skills and agents, InstructionFileLoader (it already walks) and `WorktreeConfig`. Behaviour change: trust entries must name the repository root.
-- **15d-24** A trusted project could choose the title and summary model on the operator's credential — fixed on master in `7ec5a7a58` (`titleModel` and `summaryModel` left `PROJECT_TIER_KEYS`; the LayeredSettings docblocks retract the "cost is bounded by that choice" argument and say why; the SETTINGS.md tier column and the README refusal list name them).
-- **15d-03** A repository's native skill silently replaced the user's own skill (and built-ins) of the same name — fixed on master in `9105feb48` (every shadowing reported in `skipped()`), `9e69d6c9e` (wave 8A: precedence built-in < project < user, decided by tier first; foreign-convention shadowing reported) and `32340e1b5` (wave 9: the launch notice's wording, `SKILL_SKIP_NOTICE_FORMAT`, now reads "N skill files were not loaded (unreadable, or shadowed by a same-named skill)", quoted in `docs/SKILLS.md` and pinned by a launch whose only skip is a shadowed skill).
 
 
 ---
@@ -20158,172 +19650,30 @@ These findings were fixed on master after the audit. Their sections and table ro
 
 Scope: `src/Agents/`, `src/Workflows/`, `src/Session*`, `src/Sessions/`, `src/MCP/` (+ `sugar-mcp` transport it delegates to), `src/ClaudeCodeMcpClient.php`, `src/Cli/`, `bin/`.
 Baseline excluded: everything in `99-synthesis.md` Part II (not re-reported).
-Status: **FINAL.** Sections A–D are from the first pass. Sections E–H were added when the audit resumed. What was read, what was only skimmed, and how each open lead was settled is listed under **Coverage** at the end.
+Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/`, run with a scratch `HOME` (never the real `~/.sugar-crush`).
 
-Repro scripts live in `/home/sites/crush-research-repos/_audit-scratch/15e/` (each named per finding below). All repros were run against the working tree at 2026-10-01 (PHP 8.3, sugar-mcp symlinked from the monorepo), with a scratch `HOME` (never the real `~/.sugar-crush`). Every server, daemon and child process the repros started was killed afterwards.
+**No finding from this audit remains open.** Fixed findings have been removed from this appendix.
 
----
-
-### A. MCP transports
-
-Both findings here (MCP-3, MCP-4) were fixed in wave 5; see **Fixed since audit**.
-
----
-
-### B. Sessions and persistence
-
-Every finding here has been fixed, the last (SES-3) in wave 10; see **Fixed since audit**.
-
----
-
-### C. Background sessions and daemons
-
-Its only finding, TMP-1, was fixed in wave 7; see **Fixed since audit**.
-
----
-
-### D. CLI / headless
-
-Its only finding, CLI-1, was fixed in wave 3; see **Fixed since audit**.
-
----
-
-### E. Forked sub-agents (workflows and Task fan-out)
-
-Every finding here has been fixed: AG-1 to AG-4, the last (AG-2, AG-3) in wave 7, and AG-5 in wave 9; see **Fixed since audit**.
-
----
-
-### F. Workflows
-
-The baseline item "only the first task of a stage runs" (`WorkflowEngine.php:1069`) was run down and is **not a separate defect**. `executeStage()` and `executePipelineStage()` (`:1185`) take `$tasks[0]` on purpose (comment at `:1067`). No public constructor can build a multi-task `stage`: `WorkflowBuilder::stage()` takes exactly one `TaskBuilder` (`WorkflowBuilder.php:53-60`), and a non-parallel YAML stage yields exactly one task (`WorkflowRegistry.php:1382-1392`). `docs/WORKFLOWS.md:195-203` documents the limit. Only a hand-built `Workflow` can hit it. Every real workflow defect (WF-1 to WF-4) has been fixed, the last (WF-4) in wave 9; see **Fixed since audit**.
-
----
-
-### G. MCP configuration trust and OAuth
-
-Every finding here is fixed: MCP-6, MCP-7 and MCP-8 in wave 7, MCP-5 and MCP-10 in wave 8B; see **Fixed since audit**.
-
----
-
-### H. CLI and docs
-
-Every finding here has been fixed, the last (CLI-2 and CLI-3) in wave 10; see **Fixed since audit**.
-
----
-
-### Summary table (sorted by severity)
-
-No finding in this appendix remains open: the last, SES-3, CLI-2 and CLI-3, were closed in wave 10. See **Fixed since audit**.
+**Workflows, not a defect:** the baseline item "only the first task of a stage runs" (`WorkflowEngine.php:1069`) is intentional. `executeStage()` and `executePipelineStage()` take `$tasks[0]` on purpose, no public constructor can build a multi-task `stage` (`WorkflowBuilder::stage()` takes exactly one `TaskBuilder`; a non-parallel YAML stage yields exactly one task), and `docs/WORKFLOWS.md:195-203` documents the limit. Only a hand-built `Workflow` can hit it.
 
 ---
 
 ### Coverage
 
-**Read end to end:**
-- `src/Session/EnhancedSessionStore.php`, `src/Session/SessionStore.php`
-- `src/Sessions/BackgroundSupervisor.php`, `src/Sessions/BackgroundSessionRunner.php`
-- `src/Agents/SuspendedDelegations.php`, `src/Agents/EngineExecutor.php`, `src/Agents/AgentPresetRegistry.php` (parse/list/load)
-- `src/MCP/McpClient.php`, `src/MCP/StdioMcpServer.php`, `sugar-mcp/src/StdioMcpServer.php`, `sugar-mcp/src/McpMessage.php`, `src/MCP/McpRouter.php`, `src/MCP/McpAuthStore.php`, `src/MCP/OAuthPkce.php`, `src/MCP/OAuthLoopbackFlow.php`, `src/MCP/OAuthClientRegistration.php` (storage, refresh and re-registration paths)
-- `src/Cli/NonInteractive.php`, `src/Cli/HeadlessPermissionPrompt.php`, `src/Cli/ArgvParser.php`, `bin/sugarcrush`
-- `src/Workflows/WorkflowEngine.php`: stage loop `:878-1040`, all four stage executors `:1051-1665`, run/pause/resume/status `:400-760`, interpolation, ids and interrupt handlers `:1900-2258`
-- `src/Workflows/WorkflowRegistry.php`: YAML parsing `:1086-1470`
-- `src/Workflows/WorkflowBuilder.php`
+**Read end to end:** `src/Session/EnhancedSessionStore.php`, `src/Session/SessionStore.php`; `src/Sessions/BackgroundSupervisor.php`, `BackgroundSessionRunner.php`; `src/Agents/SuspendedDelegations.php`, `EngineExecutor.php`, `AgentPresetRegistry.php`; `src/MCP/McpClient.php`, `StdioMcpServer.php`, `sugar-mcp/src/StdioMcpServer.php`, `sugar-mcp/src/McpMessage.php`, `McpRouter.php`, `McpAuthStore.php`, `OAuthPkce.php`, `OAuthLoopbackFlow.php`, `OAuthClientRegistration.php`; `src/Cli/NonInteractive.php`, `HeadlessPermissionPrompt.php`, `ArgvParser.php`, `bin/sugarcrush`; `src/Workflows/WorkflowEngine.php` (stage loop, stage executors, run/pause/resume/status, interpolation and interrupt handlers), `WorkflowRegistry.php` (YAML parsing), `WorkflowBuilder.php`.
 
-**Read in part:**
-- `src/Agents/AgentWorkerPool.php`: `executeAll`/`executeOne`/`cancel*`/`startAgent`/`runStreaming`/`waitForCompletion`/`idle`, result and progress files, and `makeResultDirPath`/`ensureResultDir` `:378-1020`, `:1197-1430`, `:1700-1707`.
-- `src/Agents/AgentManager.php`: `executeAll`/`drain`/`settleAbandoned` and batch grant/prompt resolution `:1581-1860`, plus the `$subAgents` writers.
-- `src/Agents/ProcessExecutor.php`: `spawnWorker()` `:576-735` only. It is the no-provider fallback that refuses; the live path is `EngineExecutor`. Its 5 s ready loop busy-spins on a non-blocking `fgets` (a CPU hot loop of at most 5 s). Not filed.
-- `src/MCP/GitMcpServer.php`: schemas and `callTool()` dispatch `:290-455`. `src/MCP/GitCommandHandlers.php`: `:620-1100` checked for argv shapes only; every arm shares GIT-1's missing `--` (worktree add/remove also take arbitrary on-disk paths).
-- `src/Cli/Bootstrap.php`: `workflowEngine()` `:1453-1540`, `agentManager()` `:1718-1775`, preset loading `:2215-2245`, session open/find `:3150-3216`, MCP trust/decision/digest/client/tools `:5759-6081`, `:6262-6340`, `:6470-6520`, `tools()`/`unfilteredTools()` around `:6900-6930`, `sessionStore()`/retention `:7349-7495`, `ensureDir()` `:8036-8040`.
-- `src/Cli/Subcommands.php`: `session list|delete`, `mcp import`, `mcp auth` dispatch.
-- `src/Tools/McpToolBridge.php`: `name()`, `sanitize()`, `execute()`.
-- `src/ClaudeCodeMcpClient.php`: `:340-520`, `:753-830`.
-- `src/Chat.php` workflow handlers `:9454-9830` and the session handlers listed in SES-1/SES-2.
-- `src/Diagnostics/RuntimeNoticeSink.php` (code only).
-- Docs: `docs/MCP.md` (transports, trust, auth, serving), `docs/WORKFLOWS.md` (whole), `docs/TROUBLESHOOTING.md` MCP section, `docs/PERMISSIONS.md` rules section, `docs/ARCHITECTURE.md` grep for agents/MCP/workflow claims.
+**Read in part:** `AgentWorkerPool.php`, `AgentManager.php`, `ProcessExecutor.php` (`spawnWorker()` only — the no-provider fallback, whose 5 s ready loop busy-spins on a non-blocking `fgets`; not filed), `GitMcpServer.php`, `GitCommandHandlers.php`, the relevant `Bootstrap.php` and `Subcommands.php` ranges, `McpToolBridge.php`, `ClaudeCodeMcpClient.php`, Chat's workflow and session handlers, `RuntimeNoticeSink.php`, and `docs/MCP.md`, `docs/WORKFLOWS.md`, `docs/TROUBLESHOOTING.md`, `docs/PERMISSIONS.md`, `docs/ARCHITECTURE.md`.
 
 **Not audited, with reason:**
 - `src/LSP/*`: dormant per the baseline; no live caller.
 - `src/Share/*`: a known stub (Part II #35).
-- `src/Agents/WorktreeManager.php`, `PathJail.php`, `PathJailConfig.php`, `TeamManager.php`, `Mailbox.php`, `Team*.php`: nothing outside `src/Agents/` constructs them (`grep 'new Mailbox|new TeamManager|new PathJail'`), so they are dormant (baseline §2.6).
-- `AgentManager::executeSubAgent()` `:678-940`: no `src/` caller (also noted at `src/Renderer.php:166-167`). AG-4 was found in it later, during the 15a A1 fix, and fixed in `48e9a3f65`.
-- `ForeignAgentPresetRegistry.php`: function list only.
-- `src/Events/*`: not reached.
-- `McpForeignTranslate.php`: used only by `mcp import`, which prints and writes nothing.
+- `src/Agents/WorktreeManager.php`, `PathJail.php`, `PathJailConfig.php`, `TeamManager.php`, `Mailbox.php`, `Team*.php`: nothing outside `src/Agents/` constructs them, so they are dormant (baseline §2.6).
+- `ForeignAgentPresetRegistry.php`: function list only. `src/Events/*`: not reached. `McpForeignTranslate.php`: used only by `mcp import`, which prints and writes nothing.
 
-**Leads from the checkpoint, settled:**
-1. *Only the first task of a stage runs* (`WorkflowEngine.php:1069`): **dropped as a defect.** It is intentional and documented, and no builder or YAML path can produce a multi-task `stage` (see the section F preamble). The real workflow defects are WF-1, WF-2 and WF-3.
-2. *`/tmp/sc_pool_<pid>_*` predictable name* (`AgentWorkerPool.php:1368`): **dropped.** The suffix is `bin2hex(random_bytes(8))` (`:1360-1366`), the directory is created 0700 (`:1380-1393`), and files inside are named by sha256 of the agent id.
-3. *`callToolByName` first-match across servers*: **dropped.** `McpToolBridge::execute()` `:397-410` calls `McpClient::callTool($serverName, …)` by server, and `callToolByName()` has no caller in `src/` (the bridge docblock `:366-379` records the earlier mis-routing as fixed). The sanitiser is injective (`_XX` escapes), so two servers cannot share a wire name. *Unconfirmed side note:* the escape doubles `_` into `_5F`, and no 64-character cap is applied to wire names. A long `server__tool` pair can exceed the limit OpenAI-style APIs enforce. The default SGLang path does not enforce it, so this was not tested.
-4. *Blob intern TOCTOU*: **folded into SES-3.** Blobs are per session, so the race needs the two-writers setup SES-3 already describes.
-5. *Daemon inherits the TUI's fds*: **mechanism confirmed, not filed.** `fdleak.php` shows PHP `proc_open` passes every non-CLOEXEC `fopen`/socket fd to the child (SQLite's fd is CLOEXEC and was not inherited). The `/bg` daemon therefore holds copies of TUI sockets and pipes, including the `RuntimeNoticeSink` socketpair and MCP stdio pipes. I could not show user-visible harm: the TUI's `stopMcpServers()` still terminates servers explicitly on exit. The same class was filed in 15a (B3) for the turn fork's frame socket, and fixed there in `53da0a291` (close-on-exec on both ends); the `/bg` daemon's inherited fds are untouched by that fix.
-6. *ESC injection through `HeadlessPermissionPrompt::question()`*: **dropped.** Arguments go through `json_encode`, which always escapes C0 controls (ESC becomes `\u001b`). The built-in Ask message is `"Allow {$toolName} to run? …"` (`PermissionGateHook.php:137-139`), and tool names are registry names (MCP names are sanitised to `[A-Za-z0-9_-]`). A ScriptHook's ask text is operator-authored. Residual: `JSON_UNESCAPED_UNICODE` emitted UTF-8 C1 controls (U+009B) raw. Fixed in `e1acd6f0f` (wave 8A, R17): the encoded arguments, the tool name and the ask message go through `Sanitize::visibleControls()` on both the tty question and the no-tty refusal.
-7. *`--resume ''` / prefix match* (`Bootstrap::findSession` `:3150-3162`): **dropped.** `--resume ''` and `--resume=` become "no target", which opens the picker (`ArgvParser.php:497-518`). Prefix matching requires a unique match, and an ambiguous prefix reports "no stored session" (wording only). Name resolution's non-determinism is already in SES-2.
-8. *Daemon permission mode*: **dropped (by design).** `BackgroundSessionRunner::backend()` `:580-611` passes `consolePermissionPrompt=true`. With stdin `/dev/null`, every Ask is refused with the full refusal text written to the daemon's log (`BackgroundSupervisor.php:254-258` routes stderr to `<ipc>.buffer.log`). The permission mode is whatever the config resolves, which defaults to bypass (Part II #1). The stop gap was BG-1 (fixed since in `0214944fc`; since BG-2's fix a settled session's `.buffer.log` is deleted).
-
-**CLI-1:** confirmed. It was Suspected and is now Verified-by-repro.
-
-**Repro scripts and fixtures** (all in `/home/sites/crush-research-repos/_audit-scratch/15e/`):
-
-| Script(s) | Finding | What it shows |
-|---|---|---|
-| `rewind.php` | SES-1 | |
-| `fork.php` | SES-2 | |
-| `blobs.php` | SES-4 | |
-| `mcp_everything.php`, `pyserver.py`, `mcp_py.php` | MCP-1 | |
-| `mcp_http.php` | MCP-2 | |
-| `ccmcp.php` | MCP-3 | |
-| `git_handlers.php` + `gitrepo/` | GIT-1, GIT-2 | Recreate `gitrepo/` before re-running GIT-2 |
-| `mcp_fork.php`, `fake_mcp_server.php`, `mcp_fork_exit.php`, `fork_http.php`, `ka_server.py` | AG-1 | |
-| `preset_list.php` + `presets/` | AG-2 | |
-| `wf_pause.php`, `wf_ctx.php` + `wf/home/.sugar-crush/workflows/{three,fan}.yaml` | WF-2, WF-3 | |
-| `oauth_discovery.php` | MCP-6 | Network: discovery GET to mcp.notion.com only |
-| `oauth_store.php` | MCP-7, MCP-8 | |
-| `argv.php` | CLI-2 | |
-| `cli_warn.sh` | CLI-1 | |
-| `fdleak.php` | lead 5 | |
-
-`ps` after the last run showed no leftover node, python, php, MCP or daemon processes.
-
----
-
-### Fixed since audit
-
-These findings were fixed on master after the audit. Their sections and table rows were removed; the coverage and repro lists above still name them.
-
-- **MCP-1** stdio MCP sent `[]` for empty maps; official TS/Python SDK servers started with 0 tools — fixed on master in `44ba1a20b` (+ `b80b267f1` for `claude-mcp` tool arguments). Residual: nested empty maps (MCP-9), fixed later in `f84a97364`.
-- **MCP-2** Streamable HTTP MCP: no `Accept`, no `Mcp-Session-Id`, no SSE — fixed on master in `72eaf4642`.
-- **GIT-1** Git MCP option injection (`gitShow --output=`) and an uncontained per-call `path` — fixed on master in `43fe9cd06`. Residual: checkout and reset cannot take `--end-of-options`.
-- **GIT-2** `execGit()` deadlock on more than 64 KiB of stderr; no timeout; env stripped — fixed on master in `4c341ef6a`. Residual: the git timeout could not be configured from `.mcp.json`; fixed since in `0c856c75e` (R18, wave 8B: a `"type": "git"` entry takes `timeout` in seconds through `GitCommandHandlers::configuredTimeout()`, honoured only when positive and finite, else 300 s, so the config cannot switch the bound off).
-- **SES-1** `/rewind` kept the undone prompt in history and in the input box — fixed on master in `abd65fd16`. Residual: checkpoints saved before the fix are restored by dropping a trailing user row that matches the restored draft.
-- **AG-1** Forked sub-agents shared the parent's MCP pipes, ids and keep-alive sockets — fixed on master in `ea6e178fd` (stdio: process-unique ids, locked exchanges, shared read buffer) and `2d96e2edb` (HTTP: pid-unique ids, fresh connection per process). Residual: parallel agents now serialise their calls to one stdio server. The lock file per MCP server left behind when the TUI was killed (R14) is fixed since in sugar-mcp `8bd3e5a4f` (wave 8B: lock files are named `sugar-mcp-lock-<pidns>-<ownerpid>-<rand>`, and `create()` first runs `ExchangeLock::sweepStale()`, which unlinks a file only when its owner is gone, it comes from the same pid namespace and nobody holds its flock; legacy `tempnam()` names are never touched). Its LSP twin is 15a B8.
-- **AG-4** `AgentManager::executeSubAgent()` swallowed provider errors the way 15a A1 did — fixed on master in `48e9a3f65` (it throws `ProviderResponseException` after the retry loops; the sub-agent ends `STATUS_FAILED` carrying the provider text). `TaskTool::runOnEngine` and the workflow `EngineExecutor` were checked: they go through `EngineBackend`/`Runtime`, which A1 fixed, and are pinned by regression tests.
-- **MCP-9** Empty maps nested inside a tool's arguments went on the wire as `[]` — fixed on master in `f84a97364` (new sugar-mcp `ArgumentShape::conform()` walks the arguments against the tool's `inputSchema`; applied in sugar-mcp `StdioMcpServer`, crush `HttpMcpServer` and `ClaudeCodeMcpServer`).
-- **CLI-1** Headless JSON stdout was not protected from PHP diagnostics — fixed on master in `0c2bbd0a7` (`display_errors=stderr` is the first statement of `bin/sugarcrush`; `Bootstrap::ensureDir()` reports the `mkdir` reason in its own exception through a handler scoped to the call, because `@` plus `error_get_last()` loses it under a host handler; on the TUI with the 15a C2 log file in place, `display_errors` is 0 and a fatal prints one "details in <log>" line to stderr).
-- **SES-2** `forkSession()` copied only the dead legacy tables, so a fork had no transcript, checkpoints or meta and shared its parent's name — fixed on master in `698a1efff` (`EnhancedSessionStore::forkSession()` copies the transcript, checkpoints, blobs (re-keyed to the fork, with checkpoint envelope ids remapped) and meta in one transaction; the fork is named `<name> (branch)`, then `<name> (branch N)`; `getSessionByName()` is deterministic). Still open nearby: the `/fork` background daemon does not load the copied transcript (Part II #30), and a `/fork` docblock still names the old method (15b-33).
-- **SES-6** `getMessages()` ordered by `created_at` with no tiebreak — fixed on master in `698a1efff` (folded into SES-2: `ORDER BY created_at, id`).
-- **SES-4** Checkpoint blobs were garbage-collected only on `/rewind` — fixed on master in `698a1efff` (`pruneOldCheckpoints()` runs the blob GC, and the GC drops only the deleted ids from the intern cache).
-- **SES-5** Checkpoint and meta timestamps mixed local time and UTC — fixed on master in `698a1efff` (checkpoint `created_at` and `last_activity` are written and read as UTC). Residual: rows written in local time before the fix are not converted.
-- **MCP-4** One stray non-JSON stdout line aborted the in-flight MCP request — fixed on master in `e97fe5e5b` (sugar-mcp `StdioMcpServer::readResponse()` skips unparseable lines, banners and blank keep-alives alike, and gives up only on EOF or the deadline; an envelope with our id but neither `result` nor `error` fails the call instead of hanging it; the fork-safety fragment recovery is subsumed by the skip).
-- **MCP-3** `ClaudeCodeMcpClient::callTool()` gave up after about 1 s, and `initialize` was sent as a notification — fixed on master in `0ed1b0f70` (the 100 × 10 ms poll is replaced by a `stream_select` read, `readFrame()`, that ends on the reply, the deadline, EOF or the child's death; `tools/call` has no total deadline; `initialize` and `tools/list` are bounded at 60 s, `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS`, which a new optional `handshakeTimeoutSeconds` constructor argument can override; `initialize` is a real request followed by `notifications/initialized`; a failed handshake or `tools/list` shuts the child down; id matching is strict and a malformed reply to our own id fails fast; `ExchangeLock` and `RequestIdSequence` fork safety are kept). Measured with `ccmcp.php`: before, the call threw after 1.01 s; after, the 3 s operation completes.
-- **WF-2** `/workflow pause` could not pause a running workflow, resuming a failed run skipped the failed stage and reported success, and the pause file was never cleared — fixed on master in `efdfe79f8` (one pause-file writer saves only the stages that succeeded; a live run can be paused: the file is written at once, the current stage finishes, and the run returns `Paused` before the next one; resume restores the earlier successful stages, tokens, cost and start time, re-runs the failed stage and deletes the pause file, and a second resume throws `WorkflowNotRunningException`; `getStatus()` checks a live run, then the pause file, then a finished run the engine remembers; Chat's `/workflow resume` runs in a Fiber through `driveWorkflowFiber()`, so it no longer freezes the TUI, and its reply says completed, failed or paused). Pausing a completed run is still allowed: resuming it runs nothing and deletes the file. Still open nearby: the TUI refuses `/workflow pause` while the run is in flight (WF-4).
-- **WF-3** `{{agent.results}}` never resolved for a parallel agent, and a run-context key equal to an agent type crashed the stage — fixed on master in `98821a7a2` (results live under a reserved `$context['@results']` key and every stage type writes them, named by the task name, else the stage name, `<stage>_<n>` for a parallel agent (1-based), the step name for a pipeline step, and `<stage>_verifier` for a verifier; parallel results are matched to their agents by SubAgent id, since they come back in completion order; context keys starting with `@` are refused with `InvalidArgumentException`, so the `coder=x` crash is gone, and tokens from agents that ran are kept on a failed stage). Behaviour change: the agent-type alias is gone, so `{{coder.results}}` resolves only for a task named `coder` (nothing in the repository used it).
-- **DOC-1** Smaller doc/code drift: TROUBLESHOOTING's startup-ordering advice and the doc halves of WF-1 and WF-3 — fixed on master in three commits: item 2 (WF-1's timeout and retries semantics in `docs/WORKFLOWS.md` and `examples/workflows/lint-then-fix.yaml`) in `4fa805970` (wave 4); item 1 in `bc5c3dd3b` (the ordering paragraph in `docs/TROUBLESHOOTING.md` is rewritten: every entry is attempted, and the error line names the entries that failed; pinned by the new `McpStartupOrderingDocDriftTest`); item 3 in `98821a7a2` (with WF-3: the Interpolation table in `docs/WORKFLOWS.md` is rewritten, with new sections on how results are named and on pause, resume and status). Item 4 had resolved itself earlier. `docs/MCP.md:97-100` made the same stale claim (DOC-2), fixed in `ec0640ee8`.
-- **BG-1** Nothing could stop a background session, because the daemon's `STOP` command had no sender — fixed on master in `0214944fc` (new `/bg stop <id>`: `BackgroundSupervisor::stopSession()` tries the authenticated `STOP`, then SIGTERM, then a tree kill, sending each signal only after re-checking the pid's `/proc` start time; the daemon traps SIGTERM; a stopped session settles as `Stopped`; `docs/COMMANDS.md` documents the command).
-- **BG-2** Per-launch IPC directories under `/tmp` were never removed — fixed on master in `2c12e9c9a` + `f7a6ac85b` (a settled session releases its `.sock`, `.buffer`, `.buffer.log` and `.token`, and the private directory when the last one settles, only inside the supervisor's own directory; `BackgroundSupervisor::sweepStaleIpcDirs()`, run from `ToolIpcFiles::sweepOnce()` at boot, removes stale IPC directories: older than 86400 s, with the exact minted name, owned by the user, holding only files and sockets). Behaviour change: a settled session's `.buffer.log` (the daemon's stderr) is deleted too, so a failed `/bg` task no longer leaves that log behind. Residual: the `/bg` tests in `tests/ChatTest.php` never ticked, so each full run left about two `sugar_crush_bg_*` directories in `/tmp` (R13); fixed since in `aa3251ea8` (wave 9: the two tests run under a `SUGARCRUSH_BACKEND_CMD` that answers at once, tick Chat until the session settles, and assert the IPC files and the directory are gone; measured 2 leaked dirs per run before, 0 after).
-- **AG-2** One preset file in the Claude Code `tools:` spelling disabled every agent preset in every tier — fixed on master in `7c74ea7d7` (`AgentPresetRegistry::list()` parses each file on its own; a bad file is skipped and recorded in the new `skippedFiles()`; `tools`, `disallowedTools`, `skills` and `mcpServers` accept comma strings; a scalar string field that is not a string is refused naming the file and field; `Bootstrap::agentPresets()` shows one launch notice per skip, `AGENT_PRESET_SKIP_NOTICE_FORMAT`).
-- **TMP-1** Fixed, shared `/tmp` directory names let the first user disable Task resume for everyone — fixed on master in `b468ef96e` (`sugarcrush-suspended-delegations-<euid>` and `sc-hook-ctx-<euid>`, with a `-noposix` form when ext-posix is missing, following `AuditHook::directoryFor()`; `verifiedDirectory()`'s checks are unchanged; `docs/HOOKS.md` names the new path).
-- **AG-3** `AgentManager` never forgot a sub-agent — fixed on master in `54a3f4d52` (at most 64 finished sub-agents are kept, `RETAINED_TERMINAL_SUB_AGENTS`, oldest dropped through the formerly uncalled `removeSubAgent()`; pending and running agents are never dropped; pruning runs on creation and in `executeAll()`'s `finally`, so a batch larger than 64 still returns every result; dropped agents' tokens, cost and elapsed time are folded into per-agent totals).
-- **MCP-7** The OAuth store wrote back a stale per-process cache and was not atomic — fixed on master in `1f3df682e` (every write takes an exclusive lock on a `<file>.lock` sidecar, re-reads the file, merges one row and publishes through `AtomicJsonFile` at 0600; `deleteAuth()` takes the same path; the cache follows the disk; a write over a corrupt file refuses instead of dropping every credential).
-- **MCP-8** An expired login with no refresh token stored the client id as a never-expiring bearer — fixed on master in `0b748df43` + `909703a7d` + `164d6cf9a` (such an entry throws a "re-run `sugarcrush mcp auth login`" error, or names `/mcp add` for client-credentials entries, sends no request and leaves the store unchanged; `updateRegistration()` is off the token path and RFC 7592-correct, using `registration_client_uri` with the full body, kept on the new `AuthEntry::registrationClientUri` (legacy rows still load); a missing `expires_in` is accepted as an unknown expiry). Residual: `HttpMcpServer` has no refresh-on-401, so an unknown-expiry token is sent until the user logs in again; a client-credentials entry with no refresh token needs a manual re-add when it expires.
-- **MCP-6** `mcp auth login` could not log in to a path-bearing MCP URL — fixed on master in `0687c8dc8` (new `OAuthDiscovery`: RFC 9728 protected-resource metadata first, then the RFC 8414 path-inserted and origin-only forms, at most 6 fetches, deduplicated; shared by login and `/mcp add`; `fetchOAuthMetadata()` throws on non-2xx; login takes a fourth `[registration-url]` operand; explicit `/mcp add` endpoints beat discovered ones; the stored key stays the exact URL the user gave). Residual: the `WWW-Authenticate` `resource_metadata` hint is not read, and only `authorization_servers[0]` is tried. The registration body's `client_metadata` envelope (MCP-10) is fixed since in `0aad80376`.
-- **DOC-2** `docs/MCP.md` still said an unknown server `type` made startup ordering-dependent — fixed on master in `ec0640ee8` + `1360cbd01` (the sentence is gone, the bold **throws** that `DocFigureProseDriftTest` pins is kept, the page says `startTimeout` is stdio-only and that `claude-mcp` uses the fixed 60 s `DEFAULT_START_TIMEOUT_SECONDS`; `McpStartupOrderingDocDriftTest` now scans MCP.md too).
-- **WF-1** Workflow and task timeouts and retries were never enforced, and a stage had no wall-clock bound — part (a) fixed in `4fa805970` (a per-agent deadline with `killTree()`, `withTimeBudget()`, and `Workflow::$timeout` reaching every stage) and `2b136d35a` (wave 8A: inline runs honour the agent's own timeout and the cancel path kills the tree); part (b) and the inline-budget gap in `553cf059a` (wave 8B: `AgentWorkerPool::executeAll()` re-queues a Failed or TimedOut attempt while the agent has retries left — the higher of `SubAgent::$maxRetries` and the pool floor `withMaxRetries()`, fed from `AgentPoolConfig::$maxRetries` at every pool built from the config, whose default is now 0 and whose "DORMANT SEAM" note is retired; a Stopped agent, a cancelled run and a spent budget are never retried; each attempt gets a fresh timeout under the shared stage budget; there is one result per agent, carrying every attempt's tokens and cost and the new `AgentResult::$attempts`; YAML `retries:` is accepted on a stage and on a parallel agent; an inline agent is handed the budget's remainder as its timeout when that is tighter). Residual: `EngineExecutor` enforces the timeout cooperatively, so a provider call or tool already running finishes first (documented); Chat did not show `attempts` in a workflow result; fixed since in `16fc401ae` (wave 9: `describeWorkflowResult()` adds "Stage 'x': N attempts" for a stage whose agent needed more than one run).
-- **MCP-5** Project MCP trust was bound to the root path, not to what `.mcp.json` says — fixed on master in `53a97179e` (the new `MCP/McpTrustPins` keeps `~/.sugar-crush/mcp-trust.json`, 0600 and atomic, with one sha256 fingerprint and summary per server per canonical root, over the entry as McpClient builds it minus `enabled`, `startTimeout`, `timeout` and `description`, env pinned unresolved; `McpClient` gains an `admit` closure that judges the bytes it loaded before build or spawn, so there is no TOCTOU window; the first trusted launch records, and afterwards a changed or added server is refused and named in one `MCP_SERVER_REFUSED_NOTICE_FORMAT` notice while unchanged servers start; `sugarcrush mcp trust` reviews each entry, adds the root to `trustedProjectMcp` when missing and re-records the pins). Residual: `mcp list` shows no pin status; `mcp trust` is the review surface.
-- **MCP-10** Dynamic client registration wrapped the metadata in a `client_metadata` envelope — fixed on master in `0aad80376` (the metadata is the top-level JSON body, RFC 7591 §3.1; only `client_id` is required in the response, §3.2.1, and `client_secret`, `registration_access_token` and `registration_client_uri` become `''` when absent, so a server without RFC 7592 no longer breaks login; the `McpAuthStoreLoginTest` pin asserts there is no envelope).
-- **WF-4** While a workflow ran, Chat refused every slash command, so a live `/workflow pause` or `/workflow status` got through only after Esc Esc — fixed on master in `2fc6da1eb` (wave 9: a new Chat field `workflowTurnInFlight`, set by `/workflow run` and `/workflow resume` and cleared by the settle and by the Esc Esc cancel arm, lets `/workflow pause|status` through the in-flight refusal in any spelling unless a custom `workflow.md` overrides the command; `workflowResponse()` no longer writes `inFlight=false`, which mid-run would have released the turn; `docs/COMMANDS.md` and `docs/WORKFLOWS.md` describe the rule).
-- **AG-5** Two dormant sub-agent paths would have killed their agents at 300 s — fixed on master in `3afe07a42` (wave 9, Chat half: when `executeAgents()` builds its pool from `AgentPoolConfig`, each SubAgent is dispatched as a copy carrying `defaultTimeoutSeconds`, 0 meaning no bound; an explicit `withWorkerPool()` pool gets its agents as given) and `d1416fb86` (App half: `App::dispatchSkill(…, int $timeoutSeconds = 0)` passes the value as the SubAgent's `timeout:`). Both paths still have no production caller.
-- **SES-3** No single-writer guard per session: two TUIs on one session clobbered each other's transcript and interleaved checkpoints — part (a) fixed in `698a1efff` (`UNIQUE(session_id, "index")`, index allocation and every save, checkpoint and restore in one `BEGIN IMMEDIATE` transaction, closing the index and blob-intern races); part (b) in `14f682fad` (wave 10: a new `Session\SessionLock` takes a non-blocking `flock()` on `<configDir>/sessions/<id>.lock`, opened close-on-exec, released and unlinked only by the owner pid, inode re-checked on acquire, failing open; `EnhancedSessionStore::lockSession()`/`sessionLockHolder()`; `Bootstrap::chat()` calls `Chat::withSessionLocking()` last; a second TUI opens the session read-only with `READ_ONLY_SESSION_NOTICE` naming the holder's pid and offering `/branch`, refuses prompts and every command outside the fail-closed `READ_ONLY_COMMANDS` allowlist, refuses `/workflow run|resume` before `workflowTurnInFlight` is set, persists nothing and stashes the refused draft for `/branch` to restore; `update()` re-locks on every session-id change, so `/branch` out of a read-only window is writable). Two residuals are fixed since in wave 11: the status bar carries a read-only marker (`d01fd0c60`), and a read-only window retries the lock every second and, on success, reloads the stored transcript, restores the refused draft and says it is writable (`1cb384982`). Residuals: at launch the transcript is loaded before the lock is taken, so a holder that saves and exits in that window leaves a slightly stale load; a forked turn child that outlives a crashed parent holds the lock until it ends.
-- **CLI-2** `sugarcrush <dir>` ignored a bare directory name and dropped every other positional word — part (a) fixed in `b899773a6` (an existing-directory positional is the root; `--root` refuses a flag-shaped value); part (b) in `5560c305c` + `14f682fad` (wave 10: on a TUI launch `ArgvParser::resolveOperands()` joins the leftover words into the new `ParsedArgs::$initialPrompt`, and only the first operand can be the root, so `sugarcrush explain src/Chat.php` is a prompt; a lone second directory, leftovers on `-p`/`run`, words before a subcommand and an empty operand still exit 2; `bin/sugarcrush` passes it on the existing `Program` line through `Bootstrap::app(..., initialPrompt:)` to `Chat::withInitialPrompt()`, and `Chat::init()` sends an `InitialPromptMsg` that `update()` submits as if typed; with the picker open it becomes the draft, and in a read-only window it is refused and stashed). Residual: `--resume fix it` still takes `fix` as the resume target.
-- **CLI-3** The launch-notice cap (24) was below the worst case a launch could raise — fixed on master in `216d77566` (wave 10: `Bootstrap::LAUNCH_NOTICE_BOUNDED_SOURCES` lists 18 sources with their bounded row counts; the recount found 31, not 26, because the narrowed-grant aggregate, the MCP partial-start and refused rows and the `enabledSkills` shape row had never been counted; `LAUNCH_NOTICE_LIMIT` is 36; the new `BootstrapLaunchNoticeCapCensusTest` requires every method that reaches the notice seam to be on the roster and the sum to stay below the cap, and `BootstrapLaunchNoticeRoutingTest` derives its counts from the constant). Chat's read-only-session notice is a Chat row, not a launch notice.
+**Leads dropped:**
+- *`/tmp/sc_pool_<pid>_*` predictable name* (`AgentWorkerPool.php:1368`): the suffix is `bin2hex(random_bytes(8))`, the directory is created 0700, and files inside are named by sha256 of the agent id.
+- *`callToolByName` first-match across servers*: `McpToolBridge::execute()` calls `McpClient::callTool($serverName, …)` by server, and `callToolByName()` has no caller in `src/`. The sanitiser is injective (`_XX` escapes). *Unconfirmed side note:* the escape doubles `_` into `_5F`, and no 64-character cap is applied to wire names, so a long `server__tool` pair can exceed the limit OpenAI-style APIs enforce. The default SGLang path does not enforce it, so this was not tested.
+- *Daemon inherits the TUI's fds*: **mechanism confirmed, not filed.** PHP `proc_open` passes every non-CLOEXEC `fopen`/socket fd to the child, so the `/bg` daemon holds copies of TUI sockets and pipes, including the `RuntimeNoticeSink` socketpair and MCP stdio pipes. No user-visible harm was shown: the TUI's `stopMcpServers()` still terminates servers explicitly on exit.
+- *ESC injection through `HeadlessPermissionPrompt::question()`*: arguments go through `json_encode`, which escapes C0 controls; tool names are registry names, and a ScriptHook's ask text is operator-authored.
+- *`--resume ''` / prefix match*: `--resume ''` and `--resume=` open the picker, and prefix matching requires a unique match (an ambiguous prefix reports "no stored session", wording only).
+- *Daemon permission mode*: by design. `BackgroundSessionRunner::backend()` passes `consolePermissionPrompt=true`; with stdin `/dev/null`, every Ask is refused with the refusal text written to the daemon's log. The permission mode is whatever the config resolves, which defaults to bypass (Part II #1).
