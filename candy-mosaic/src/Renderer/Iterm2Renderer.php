@@ -24,11 +24,12 @@ final class Iterm2Renderer implements Renderer
     {
         $effectiveHeight = $this->prepareRender($image, $width, $height);
 
-        // Use the stored bytes directly if already PNG, otherwise re-encode.
-        if ($image->format === 'image/png') {
+        // Use the stored bytes directly if they really are PNG (checked by
+        // signature, not by the format label), otherwise re-encode.
+        if ($image->isPng()) {
             $pngBytes = $image->bytes;
         } else {
-            $img = imagecreatefromstring($image->bytes);
+            $img = @imagecreatefromstring($image->bytes);
             if ($img === false) {
                 throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
             }
@@ -40,10 +41,13 @@ final class Iterm2Renderer implements Renderer
                 // capture the bytes via an output buffer instead (otherwise the
                 // raw PNG is dumped to the terminal and the image is empty).
                 ob_start();
-                imagepng($img);
+                $ok = imagepng($img);
                 $pngBytes = (string) ob_get_clean();
             } finally {
                 imagedestroy($img);
+            }
+            if ($ok === false || $pngBytes === '') {
+                throw new \RuntimeException(Lang::t('renderer.gd_encode_failed'));
             }
         }
 

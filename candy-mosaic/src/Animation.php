@@ -28,8 +28,8 @@ final class Animation
     public const MAX_FRAMES = 10_000;
 
     /**
-     * @param list<ImageSource> $frames   Ordered frames, non-empty
-     * @param list<int>        $delaysMs  Per-frame delay in milliseconds, same length as $frames
+     * @param list<ImageSource> $frames    Ordered frames, non-empty
+     * @param list<int>         $delaysMs  Per-frame delay in milliseconds, same length as $frames
      */
     public function __construct(
         public readonly array $frames,

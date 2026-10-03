@@ -13,8 +13,10 @@ use SugarCraft\Mosaic\Tests\Support\AnimatedImageFixtures as F;
 /**
  * Round-2 review regressions for the animated-file ingress (PR #1442). These pin the
  * bypasses the adversarial re-attack demonstrated survived round 1: candy-flip's
- * mis-skipped header walk buying a multi-hundred-MB decode before any reconcile could
- * stop it (NEW-1), a FIFO/device swapped into the read path blocking the caller
+ * header walk landing on positions the container does not describe (NEW-1 — since
+ * flip's `2d5117e1e` resync only its blind fixed-8-byte GCE skip and one-byte advance
+ * on an unknown block remain; the clone's parity with flip is pinned in
+ * {@see ImageSourceGifFlipWalkParityTest}), a FIFO/device swapped into the read path blocking the caller
  * (NEW-5), absurd geometry reaching `str_repeat()` as a raw `TypeError` once the pixel
  * budget is disabled (NEW-6), and a non-PNG stream decoding past a missing signature
  * check (NEW-7).
@@ -96,36 +98,6 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
     }
 
     /**
-     * round-1 C2-GIF / R3-3: candy-flip's mis-skipped walk silently returns FEWER
-     * frames than a valid multi-frame GIF carries (its documented sibling bug — a real
-     * 10-frame ffmpeg GIF decodes to ~2). fromAnimatedFile must NEVER emit that
-     * silently-short animation. Since round-4 the refusal is structural and happens
-     * BEFORE flip runs: flip's descriptor offset list is shorter than (so ≠) the honest
-     * container walk, which the offset-list reconcile rejects as a frame-layout
-     * mismatch. The same 8-frame GIF that under round-3 relied on the post-decode count
-     * reconcile now trips the pre-decode layout gate, so nothing is ever materialised.
-     *
-     * An 8-frame GIF is the honest-but-desyncing case: the container carries 8 image
-     * descriptors, flip re-synchronises on only a few, so the two offset lists differ.
-     */
-    public function testGifDesyncRefusedNotSilentlyTruncated(): void
-    {
-        $colors = [[0, 0, 0], [255, 0, 0], [0, 255, 0]];
-        $frames = [];
-        for ($i = 0; $i < 8; $i++) {
-            $frames[] = ['pixels' => array_fill(0, 4, ($i % 3) + 1), 'delay' => 10 + $i];
-        }
-        $gif = F::gif(2, 2, $colors, $frames);
-
-        $predicted = ($this->gifCountProbe('countGifFramesAsFlipWalks'))($gif);
-        self::assertLessThan(8, $predicted, "flip's mis-skipped walk finds fewer than the honest 8 frames (got {$predicted})");
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/disagrees with the container on 8 frame positions/');
-        ImageSource::fromAnimatedFile($this->write('desync8.gif', $gif));
-    }
-
-    /**
      * Round-4 CRITICAL-2: a phantom descriptor that preserves the frame COUNT while
      * shifting a frame POSITION must be refused. candy-flip skips a Graphics Control
      * Extension by a BLIND fixed 8 bytes regardless of its declared sub-block length, so
@@ -159,30 +131,6 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/disagrees with the container on 2 frame positions/');
         ImageSource::fromAnimatedFile($this->write('phantom.gif', $b));
-    }
-
-    /**
-     * R3-1: candy-flip's walk reads the descriptor's left/top/width/height (bytes
-     * i+1..i+8) UNGUARDED but the packed byte (i+9) with `?? ''`, so it RECORDS a
-     * descriptor truncated to exactly nine bytes before terminating. The clone must
-     * count that frame too — an earlier revision gated on i+9 and under-counted, which
-     * is precisely the direction that could let a real over-production slip past the
-     * cost bound. A GIF ending in one full descriptor plus a trailing nine-byte
-     * descriptor must therefore predict it as a frame. Isolated: a header followed by a
-     * single nine-byte truncated descriptor counts as 1 (matching flip), not 0.
-     */
-    public function testPredictorCountsTruncatedDescriptorLikeFlip(): void
-    {
-        // Header (6) + logical screen descriptor (7, no global colour table) = 13 bytes.
-        // Then one image descriptor truncated to nine bytes: 0x2C + 8 geometry bytes,
-        // with NO packed byte present (the stream ends at i+8).
-        $bytes = 'GIF89a'
-            . pack('v', 4) . pack('v', 4) . chr(0x00) . chr(0x00) . chr(0x00)
-            . chr(0x2C) . pack('v', 0) . pack('v', 0) . pack('v', 1) . pack('v', 1);
-        self::assertSame(22, strlen($bytes)); // i=13, descriptor spans 13..21 (nine bytes)
-
-        $predicted = ($this->gifCountProbe('countGifFramesAsFlipWalks'))($bytes);
-        self::assertSame(1, $predicted, 'flip records the nine-byte truncated descriptor; the bound must not under-shoot it');
     }
 
     /**

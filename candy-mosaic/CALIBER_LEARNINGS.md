@@ -159,31 +159,36 @@ kept as design rationale for what shipped._
    on `strlen() === $expected` (PNG scanline matrices are exact) so an oversized
    stream is refused rather than materialised. The loader caps the file READ at
    `ImageSource::MAX_BYTES` (a pixel budget cannot, because bytes must be resident
-   before geometry is inspectable). **candy-flip GIF gotcha (blocking sibling
-   finding, NOT fixable from candy-mosaic):** `Flip\Decoder::parseHeader` skips a
-   frame's image data starting at the LZW min-code-size byte rather than the byte
-   AFTER it (`$j = $i + 10` at `candy-flip/src/Decoder.php:371`, should be `+ 11`),
-   so it desyncs on most real multi-frame GIFs and silently returns too few frames
-   with shuffled delays — this is also why GIF test fixtures are generated from GD
-   `imagegif()` per frame (shared 4-slot GCT, `imagecreate` reserves index 0 as
-   black) rather than hand-rolled LZW (see `tests/Support/AnimatedImageFixtures.php`).
+   before geometry is inspectable). **candy-flip GIF walk (resynced upstream in
+   `2d5117e1e` — keep the clone in lockstep):** `Flip\Decoder::parseHeader` used to
+   skip image data from descriptor+10 (reading the LZW min-code-size byte as a
+   sub-block length, no LCT skip); it now skips `$i + 11 + $lctBytes` and throws on a
+   GCT or image descriptor truncated by EOF. mosaic's clone kept the OLD walk after
+   that fix and the offset-equality gate then refused every valid GIF with full
+   255-byte sub-blocks (real encoder output) — GD's tiny fixtures happened to re-sync
+   the old walk, so the suite stayed green. `tests/ImageSourceGifFlipWalkParityTest.php`
+   now pins the clone against flip's own `parseHeader()` offsets (via reflection) on
+   every committed GIF fixture plus encoder-shaped 255-byte-sub-block and LCT GIFs: if
+   flip's walk changes again that test goes red first. Remaining flip quirks the clone
+   mirrors: blind fixed-8-byte GCE skip, one-byte advance on an unknown block, 256-frame
+   slice. Known sibling bug (out of mosaic's reach): flip's `assembleFrameGif()` writes
+   a frame's LCT BEFORE its image descriptor, so GD rejects LCT frames — mosaic then
+   fails loud (`gif_decode_failed`), never with a layout-mismatch.
       mosaic walks GIF image descriptors TWICE with byte-only structural passes (no
       LZW decode), each returning the ORDERED LIST of descriptor byte offsets:
       `ImageSource::gifHonestDescriptorOffsets()` — the spec-correct walk (skips the
       LCT AND the mandatory LZW min-code-size byte, throws on a truncated or unknown
       block) — and `ImageSource::gifFlipWalkDescriptorOffsets()`, a byte-exact clone of
-      flip's own walk (same LZW mis-skip, same one-byte advance on an unknown block,
-      same 256-frame slice). `countGifFrames`/`countGifFramesAsFlipWalks` are now thin
-      `count()` wrappers kept only for tests that assert the count relationship; the
-      production loader reconciles the OFFSET LISTS. The clone records every descriptor
-      it reaches UNCONDITIONALLY at a `0x2C` (matching flip, which reads the packed byte
-      with `?? ''` and records even a nine-byte truncated tail) — an earlier clone gated
-      on `i+9` and thus under-counted (round-4 MED). **The authoritative gate is ORDERED
+      flip's own walk. `countGifFrames`/`countGifFramesAsFlipWalks` are thin `count()`
+      wrappers kept for tests that assert the count relationship; the production loader
+      reconciles the OFFSET LISTS. **The authoritative gate is ORDERED
       OFFSET-LIST EQUALITY run BEFORE flip (round-4 CRITICAL-2)**, not a count compare:
       `$honestOffsets !== $flipOffsets` → `animation.gif_frame_layout_mismatch`. A phantom
-      descriptor forged into a GCE region can preserve the frame COUNT while replacing a
-      real frame's bytes (honest `{33,68,91}` vs flip `{33,56,91}`), which a count-only
-      check would wave through and emit as authentic; equality refuses it. This SUPERSEDES
+      descriptor planted inside a GCE body (reached by flip's blind 8-byte GCE skip) makes
+      flip emit a frame the container does not describe — pre-resync it REPLACED a real
+      frame at the same count (honest `{33,68,91}` vs flip `{33,56,91}`), post-resync it is
+      ADDED (`{33,56,68,91}`). The replacement variant is what a count-only check
+      would wave through and emit as authentic; equality refuses both. This SUPERSEDES
       the round-3 stance (count-only reconcile, clone as a loose `[real, real+1]` upper
       bound): demanding equality of the full OFFSET list, not just the count, is sound
       precisely because flip is only trustworthy when it lands on the exact positions a

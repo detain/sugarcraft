@@ -94,9 +94,12 @@ final class ImageSourceGifRound4SecurityTest extends TestCase
     }
 
     /**
-     * CRITICAL-2: phantom.gif keeps the frame COUNT at 3 (honest {..68..} vs flip {..56..})
-     * while a phantom descriptor replaces a real frame's bytes. A count-only reconcile
-     * shipped the phantom as authentic; the offset-list reconcile refuses it.
+     * CRITICAL-2: phantom.gif plants a 0x2C inside a GCE body that flip's blind
+     * fixed-8-byte GCE skip lands on. Under flip's pre-resync walk the phantom REPLACED a
+     * real frame at the same COUNT (honest {33,68,91} vs flip {33,56,91}); since flip's
+     * `2d5117e1e` resync it re-joins the real chain and the phantom is ADDED
+     * ({33,56,68,91}). Either way flip would emit the phantom frame as authentic, and the
+     * offset-list reconcile refuses it.
      */
     public function testPhantomDescriptorGifIsRefusedByLayoutReconcile(): void
     {
@@ -104,8 +107,8 @@ final class ImageSourceGifRound4SecurityTest extends TestCase
 
         $honest = $this->offsets('gifHonestDescriptorOffsets', $bytes);
         $flip   = $this->offsets('gifFlipWalkDescriptorOffsets', $bytes);
-        self::assertSame(count($honest), count($flip), 'the attack preserves the frame COUNT');
-        self::assertNotSame($honest, $flip, '...while shifting a frame POSITION');
+        self::assertSame([33, 68, 91], $honest);
+        self::assertSame([33, 56, 68, 91], $flip, 'flip lands on the phantom descriptor at 56');
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/disagrees with the container on 3 frame positions/');
@@ -114,8 +117,8 @@ final class ImageSourceGifRound4SecurityTest extends TestCase
     }
 
     /**
-     * CRITICAL-2 (delay/disposal forgery): delayforge.gif rides the same fixed-offset GCE
-     * mis-skip to forge per-frame attributes while the counts line up. Refused by the same
+     * CRITICAL-2 (delay/disposal forgery): delayforge.gif rides the same blind fixed-8-byte
+     * GCE skip to forge per-frame attributes while the counts line up. Refused by the same
      * structural offset reconcile, before flip reads the forged bytes.
      */
     public function testDelayForgeGifIsRefusedByLayoutReconcile(): void

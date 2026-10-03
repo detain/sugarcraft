@@ -208,11 +208,12 @@ final class KittyRenderer implements Renderer
      */
     private function ensurePng(ImageSource $image): string
     {
-        if ($image->format === 'image/png') {
+        // Trust the bytes, not the label: f=100 tells the terminal the payload is PNG.
+        if ($image->isPng()) {
             return $image->bytes;
         }
 
-        $src = imagecreatefromstring($image->bytes);
+        $src = @imagecreatefromstring($image->bytes);
         if ($src === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
         }
@@ -222,12 +223,16 @@ final class KittyRenderer implements Renderer
 
         $tmp = fopen('php://temp', 'w+b');
         try {
-            imagepng($src, $tmp, 9);
+            $ok = imagepng($src, $tmp, 9);
             rewind($tmp);
             $bytes = stream_get_contents($tmp);
         } finally {
             fclose($tmp);
             imagedestroy($src);
+        }
+
+        if ($ok === false || $bytes === false || $bytes === '') {
+            throw new \RuntimeException(Lang::t('renderer.gd_encode_failed'));
         }
 
         return $bytes;

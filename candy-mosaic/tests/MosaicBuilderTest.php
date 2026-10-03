@@ -6,6 +6,7 @@ namespace SugarCraft\Mosaic\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mosaic\Dither;
+use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Mosaic\MosaicBuilder;
 use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
@@ -192,12 +193,39 @@ final class MosaicBuilderTest extends TestCase
     public function testWithResizeCarriesWidthAndHeightIntoBuiltMosaic(): void
     {
         $mosaic = Mosaic::builder()
-            ->withResize(40, 20)
+            ->withRenderer(new HalfBlockRenderer())
+            ->withResize(7, 3)
             ->build();
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
 
-        // Mosaic stores forcedWidth/forcedHeight and applies them in render().
-        // Verify the mosaic was built and is usable.
-        $this->assertInstanceOf(Mosaic::class, $mosaic);
+        // The builder's box is render()'s default when no width is passed —
+        // it used to be stored and silently ignored.
+        $this->assertSame($mosaic->render($image, 7, 3), $mosaic->render($image));
+        $this->assertNotSame($mosaic->render($image, 7), $mosaic->render($image));
+    }
+
+    public function testWithResizeHeightOnlyAppliesWithTheDefaultWidth(): void
+    {
+        $mosaic = Mosaic::builder()
+            ->withRenderer(new HalfBlockRenderer())
+            ->withResize(6, 2)
+            ->build();
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
+
+        // An explicit width means the caller is sizing: height derives from aspect.
+        $this->assertSame(
+            (new HalfBlockRenderer())->render($image, 8),
+            $mosaic->render($image, 8),
+        );
+        // An explicit height overrides the default box height.
+        $this->assertSame($mosaic->render($image, 6, 1), $mosaic->render($image, null, 1));
+    }
+
+    public function testRenderWithoutWidthOrDefaultBoxThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/withResize/');
+        Mosaic::halfBlock()->render(ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png'));
     }
 
     public function testWithScaleReturnsNewBuilderInstance(): void

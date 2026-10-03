@@ -30,9 +30,13 @@ enum Scale
     case Stretch;
 
     /**
-     * No resize is applied.  If the image is larger than the target
-     * bounds it is clipped; if smaller it is rendered at its native
-     * size with no padding.
+     * No resize is applied by the scale step: the source keeps its native
+     * resolution and the renderer samples it into the cell box. With an
+     * explicit height the box is exactly the caller's; with a null height an
+     * image narrower than the requested width renders at its native size
+     * (one cell per source pixel column, no padding), and a wider one is
+     * bounded by the requested width — the box never grows past what the
+     * caller asked for.
      */
     case None;
 

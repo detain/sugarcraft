@@ -466,7 +466,9 @@ final class Detect
             return Capability::kitty(null, $inTmux);
         }
 
-        // iTerm2: iTerm.app, iTerm2, mintty, or LC_TERMINAL=iTerm2.
+        // iTerm2: iTerm.app, iTerm2, mintty, or LC_TERMINAL=iTerm2. mintty
+        // implements the iTerm2 OSC 1337 File= inline-image protocol (as well as
+        // Sixel); OSC 1337 carries PNG bytes at full fidelity, so it is preferred.
         // Note: WezTerm is handled exclusively in the Kitty block above
         // (Kitty protocol family takes precedence; WezTerm is not iTerm2).
         $termProgram = (string) getenv('TERM_PROGRAM');
@@ -479,7 +481,7 @@ final class Detect
             return Capability::iterm2(null, $inTmux);
         }
 
-        // Sixel: strong env-var hints (mlterm, foot, xterm with XTERM_VERSION).
+        // Sixel: strong env-var hints ($TERM mlterm/foot, or xterm with XTERM_VERSION).
         if (self::hasSixelEnvHints()) {
             return Capability::sixel(null, $inTmux);
         }
@@ -489,16 +491,24 @@ final class Detect
     }
 
     /**
-     * Terminals known to support Sixel based purely on $TERM + $XTERM_VERSION.
+     * Terminals known to support Sixel based purely on environment variables.
+     *
+     * mlterm and foot are identified by their own `$TERM` entries alone — neither
+     * sets `$XTERM_VERSION`, so gating them on it (as an earlier revision did) left
+     * them reachable only through the DA1 round-trip, which a non-interactive stdin
+     * (pipe, daemon, harness) never gets to make. `$TERM=xterm*` is claimed by
+     * nearly every emulator, so only real xterm — which exports `$XTERM_VERSION` —
+     * counts there.
      */
     private static function hasSixelEnvHints(): bool
     {
-        $term        = (string) getenv('TERM');
+        $term         = (string) getenv('TERM');
         $xtermVersion = (string) getenv('XTERM_VERSION');
 
-        return (
-            ($xtermVersion !== '')
-            && preg_match('/^(mlterm|foot|xterm(-256color)?)$/i', $term) === 1
-        );
+        if (preg_match('/^(mlterm(-256color)?|foot(-extra|-direct)?)$/i', $term) === 1) {
+            return true;
+        }
+
+        return $xtermVersion !== '' && preg_match('/^xterm(-256color)?$/i', $term) === 1;
     }
 }

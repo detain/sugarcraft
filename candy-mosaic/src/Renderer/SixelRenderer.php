@@ -118,6 +118,20 @@ final class SixelRenderer implements Renderer
         $pixelW = max(1, $width * $this->cellWidth);
         $pixelH = max(1, $cellH * $this->cellHeight);
 
+        // The canvas is cells × font-cell pixels, so an oversized cell box multiplies
+        // into a canvas far beyond the SOURCE's pixel budget. Hold it to the same
+        // ceiling the image was loaded under (<= 0 disables, as everywhere else)
+        // BEFORE imagecreatetruecolor() attempts the allocation.
+        if ($image->maxPixels > 0 && $pixelW * $pixelH > $image->maxPixels) {
+            throw new \InvalidArgumentException(Lang::t('sixel.canvas_too_large', [
+                'width'  => $pixelW,
+                'height' => $pixelH,
+                'cols'   => $width,
+                'rows'   => $cellH,
+                'max'    => $image->maxPixels,
+            ]));
+        }
+
         // Load and resize the image to the pixel canvas. GD raises a PHP warning on
         // unrecognised bytes; the falsy result is the real signal and is turned into
         // a typed exception below, so the warning is suppressed rather than sprayed

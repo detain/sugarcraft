@@ -380,14 +380,31 @@ final class Mosaic
     /**
      * Render the image to ANSI bytes at the given cell dimensions.
      *
+     * When `$width` is omitted the default cell box configured through
+     * {@see MosaicBuilder::withResize()} applies as a unit — its width, and its
+     * height unless `$height` is given. An explicit `$width` means the caller is
+     * sizing the render, so a null `$height` then derives from the aspect ratio
+     * exactly as on a Mosaic built without a default box.
+     *
      * @param ImageSource $image  Source image
-     * @param int         $width  Width in terminal cells
+     * @param int|null    $width  Width in terminal cells (the builder's default
+     *                            box width when null)
      * @param int|null    $height Height in terminal cells
      *                            (auto-derived from aspect ratio when null)
      * @return string             Raw ANSI escape bytes
+     * @throws \InvalidArgumentException when `$width` is null and no default
+     *                                   cell box was configured
      */
-    public function render(ImageSource $image, int $width, ?int $height = null): string
+    public function render(ImageSource $image, ?int $width = null, ?int $height = null): string
     {
+        if ($width === null) {
+            if ($this->forcedWidth === null) {
+                throw new \InvalidArgumentException(Lang::t('mosaic.no_render_width'));
+            }
+            $width = $this->forcedWidth;
+            $height ??= $this->forcedHeight;
+        }
+
         $w = $width > 0 ? $width : 1;
         $h = $height;
 
@@ -402,10 +419,15 @@ final class Mosaic
                 $h = (int) round($w / $image->aspectRatio());
             }
 
-            // None: use source native size when no explicit height was given.
+            // None: use the source's native size when no explicit height was given —
+            // but never a cell box WIDER than the caller asked for. The native size is
+            // in PIXELS; handing it on as a cell count unclamped let a 5000 px source
+            // asked for at 40 cells render 5000 cells wide, and pixel renderers then
+            // multiply cells by the font cell size (Sixel: 10×20 px), turning an
+            // in-budget image into a multi-GB canvas allocation.
             if ($this->scale === Scale::None && $height === null) {
-                $w = $image->width;
-                $h = $image->height;
+                $w = min($image->width, $w);
+                $h = $w === $image->width ? $image->height : (int) round($w / $image->aspectRatio());
             }
 
             $image = $this->applyScale($image, $w, $h);

@@ -156,13 +156,13 @@ final class ImageSourceAnimatedFileTest extends TestCase
     }
 
     /**
-     * Round-1 review C2: candy-flip's header walk mis-skips image data on many
-     * real multi-frame GIFs, so it silently returns FEWER frames (and shuffled
-     * delays) than the file carries. fromAnimatedFile must reconcile a structural
-     * descriptor count against flip's output and REFUSE — never hand back a short,
-     * wrong animation. A 10-frame GIF is the demonstrated break point.
+     * Round-1 review C2 pinned this 10-frame GIF as REFUSED because candy-flip's header
+     * walk then mis-skipped image data and silently returned fewer frames. flip's walk
+     * was resynced in `2d5117e1e`, and mosaic's clone of it (the offset-equality gate)
+     * now mirrors the fix — so the valid file must load whole, every frame and delay
+     * intact, instead of being refused as a phantom layout.
      */
-    public function testGifDecoderFrameDesyncIsRefusedNotSilentlyTruncated(): void
+    public function testTenFrameGifLoadsEveryFrameAndDelay(): void
     {
         $colors = [[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255], [0, 255, 255], [200, 120, 40]];
         $frames = [];
@@ -171,9 +171,10 @@ final class ImageSourceAnimatedFileTest extends TestCase
         }
         $gif = F::gif(6, 4, $colors, $frames);
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/disagrees with the container on 10 frame positions/');
-        ImageSource::fromAnimatedFile($this->write('desync.gif', $gif));
+        $anim = ImageSource::fromAnimatedFile($this->write('ten.gif', $gif));
+
+        self::assertSame(10, $anim->frameCount());
+        self::assertSame(array_map(static fn(int $i): int => (10 + $i) * 10, range(0, 9)), $anim->delaysMs);
     }
 
     /**

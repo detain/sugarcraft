@@ -171,11 +171,38 @@ final class DetectTest extends TestCase
         $this->assertTrue($cap->sixel);
     }
 
-    public function testSixelRequiresXtermVersion(): void
+    /**
+     * mlterm and foot never export XTERM_VERSION, so their own $TERM entry must be
+     * enough — an earlier revision ANDed the two and left them on half-block
+     * whenever the DA1 round-trip could not run (non-interactive stdin).
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function sixelTermsWithoutXtermVersion(): iterable
     {
-        putenv('TERM=mlterm');
+        yield 'mlterm'          => ['mlterm'];
+        yield 'mlterm-256color' => ['mlterm-256color'];
+        yield 'foot'            => ['foot'];
+        yield 'foot-extra'      => ['foot-extra'];
+        yield 'foot-direct'     => ['foot-direct'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('sixelTermsWithoutXtermVersion')]
+    public function testSixelViaTermAloneWithoutXtermVersion(string $term): void
+    {
+        putenv('TERM=' . $term);
         $cap = Detect::probe();
-        // No sixel without XTERM_VERSION.
+        $this->assertTrue($cap->sixel, "TERM={$term} alone must select Sixel");
+        $this->assertFalse($cap->kitty);
+        $this->assertFalse($cap->iterm2);
+    }
+
+    public function testXtermSixelRequiresXtermVersion(): void
+    {
+        // $TERM=xterm* is claimed by nearly every emulator; only real xterm exports
+        // XTERM_VERSION, so without it the env table must not claim Sixel.
+        putenv('TERM=xterm-256color');
+        $cap = Detect::probe();
         $this->assertFalse($cap->sixel);
     }
 

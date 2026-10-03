@@ -73,8 +73,11 @@ final class ImageSource
     private const STAT_REGULAR_BIT = 0100000;
 
     /**
-     * @param string $bytes    Raw image bytes (PNG/JPEG/GIF)
-     * @param string $format   MIME type: 'image/png', 'image/jpeg', 'image/gif'
+     * @param string $bytes    Raw image bytes (PNG/JPEG/GIF, or any other format
+     *                         GD decodes when built via fromString())
+     * @param string $format   MIME type: 'image/png', 'image/jpeg', 'image/gif',
+     *                         'image/webp', the MIME GD sniffed for another format
+     *                         (e.g. 'image/bmp'), or 'application/octet-stream'
      * @param int    $width    Pixel width
      * @param int    $height   Pixel height
      * @param int    $maxPixels  Decompression-bomb ceiling carried forward
@@ -215,8 +218,6 @@ final class ImageSource
             throw new \RuntimeException(Lang::t('image_source.no_gd'));
         }
 
-        $format = self::detectImageFormat($bytes);
-
         // Decompression-bomb guard: read dimensions from the header (no full
         // decode) and reject oversized images BEFORE imagecreatefromstring
         // allocates the pixel buffer. For inputs getimagesizefromstring cannot
@@ -225,6 +226,8 @@ final class ImageSource
         if ($info !== false) {
             self::guardPixelCount((int) $info[0], (int) $info[1], $maxPixels);
         }
+
+        $format = self::detectImageFormat($bytes, $info === false ? null : (string) $info['mime']);
 
         // Validate the bytes are a supported image and read dimensions.
         $img = @imagecreatefromstring($bytes);
@@ -251,9 +254,17 @@ final class ImageSource
      * Detect image MIME type from magic bytes.
      *
      * Mirrors the format detection in fromFile() so fromString() produces
-     * identical results for the same image bytes without hitting disk.
+     * identical results for the same image bytes without hitting disk. A
+     * format GD decodes but the magic-byte list does not name (BMP, WBMP,
+     * AVIF, …) keeps the MIME getimagesizefromstring() reported, or
+     * `application/octet-stream` when even that could not identify it — never
+     * a guessed `image/png`: the `format` field is what the Kitty/iTerm2
+     * renderers and crop()/resize() branch on, so a mislabel would ship
+     * non-PNG bytes to a terminal told they are PNG.
+     *
+     * @param string|null $sniffedMime getimagesizefromstring()'s `mime`, if any
      */
-    private static function detectImageFormat(string $bytes): string
+    private static function detectImageFormat(string $bytes, ?string $sniffedMime = null): string
     {
         if (strlen($bytes) >= 8 && $bytes[0] === "\x89" && $bytes[1] === 'P'
             && $bytes[2] === 'N' && $bytes[3] === 'G'
@@ -278,9 +289,26 @@ final class ImageSource
             return 'image/webp';
         }
 
-        // Fall back to GD's auto-detection; it will throw if unsupported.
-        // This handles formats GD supports but we haven't explicitly listed.
-        return 'image/png'; // dummy — fromString will validate via imagecreatefromstring
+        // Not one of the named formats: fromString() still lets GD validate the
+        // bytes via imagecreatefromstring(), but the label must stay truthful.
+        if ($sniffedMime !== null && $sniffedMime !== '') {
+            return $sniffedMime;
+        }
+
+        return 'application/octet-stream';
+    }
+
+    /**
+     * True when {@see self::$bytes} carry the PNG signature.
+     *
+     * Renderers that can pass PNG through verbatim (Kitty `f=100`, iTerm2
+     * OSC 1337) check the BYTES, not just {@see self::$format}: a public
+     * constructor accepts any label, and a mislabelled payload would otherwise
+     * reach the terminal as a silently blank image.
+     */
+    public function isPng(): bool
+    {
+        return str_starts_with($this->bytes, "\x89PNG\r\n\x1a\n");
     }
 
     /**
@@ -317,10 +345,18 @@ final class ImageSource
                 ),
             };
 
+            if ($ok === false) {
+                throw new \RuntimeException(Lang::t('image_source.gd_encode_failed', ['mime' => $format]));
+            }
+
             rewind($tmp);
             $bytes = stream_get_contents($tmp);
         } finally {
             fclose($tmp);
+        }
+
+        if ($bytes === false || $bytes === '') {
+            throw new \RuntimeException(Lang::t('image_source.gd_encode_failed', ['mime' => $format]));
         }
 
         return new self($bytes, $format, $width, $height, $maxPixels);
@@ -636,9 +672,9 @@ final class ImageSource
         //                    minimum-code-size byte. This is the container's true frame
         //                    layout (count + positions).
         //   • $flipOffsets   — a mirror of candy-flip's OWN header walk, reproducing its
-        //                    mis-skip (image data begins at the LZW minimum-code-size
-        //                    byte), its one-byte-advance on an unknown block, and its
-        //                    unconditional record of every reached descriptor.
+        //                    blind fixed-8-byte GCE skip, its one-byte advance on an
+        //                    unknown block, and its 256-frame slice (byte-exact parity
+        //                    with flip is pinned by ImageSourceGifFlipWalkParityTest).
         //
         // candy-flip only emits trustworthy pixels when its walk lands on EXACTLY the
         // same descriptor positions a correct walk does. So the authoritative gate is
@@ -735,8 +771,9 @@ final class ImageSource
      * The byte offsets of every image-descriptor block in a GIF, found by walking the
      * container structure (extension/data sub-blocks) WITHOUT decoding LZW. This is the
      * spec-correct walk: it skips the local colour table AND the mandatory LZW
-     * minimum-code-size byte before following the image-data sub-blocks — the exact byte
-     * the sibling header walk fails to skip. The offsets (not just the count) let the
+     * minimum-code-size byte before following the image-data sub-blocks, and — unlike the
+     * sibling header walk — follows a GCE by its declared sub-block length and throws on
+     * an unknown block. The offsets (not just the count) let the
      * loader reconcile frame POSITIONS against candy-flip's walk, so a phantom
      * descriptor that happens to preserve the frame count cannot masquerade as a valid
      * frame (round-4 CRITICAL-2: `{33,68,91}` vs flip's `{33,56,91}`).
@@ -785,7 +822,7 @@ final class ImageSource
                 if (($packed & 0x80) !== 0) {
                     $j += 3 * (2 << ($packed & 0x07)); // local colour table
                 }
-                ++$j; // LZW minimum code size — the byte flip fails to skip
+                ++$j; // LZW minimum code size
                 $j = self::skipGifSubBlocks($bytes, $j, $len);
                 $i = $j;
                 if (count($offsets) > Animation::MAX_FRAMES) {
@@ -833,25 +870,37 @@ final class ImageSource
 
     /**
      * The exact image-descriptor byte offsets candy-flip's header walk lands on — a
-     * byte-only clone of `SugarCraft\Flip\Decoder::parseHeader()`, reproducing its
-     * quirks (image-data skipping begins at the LZW minimum-code-size byte rather than
-     * after it, an unrecognised byte advances one byte instead of failing, and a
-     * descriptor is recorded unconditionally on reaching a 0x2C, even truncated) and its
-     * 256-frame slice.
+     * byte-only clone of `SugarCraft\Flip\Decoder::parseHeader()` as of flip's walk
+     * resync (`2d5117e1e`). Since that fix flip skips image data correctly (LCT sized
+     * from the descriptor's packed byte, then the LZW minimum-code-size byte, then the
+     * sub-blocks), and it throws on a global colour table or an image descriptor that
+     * runs past EOF. The quirks that remain — and that this clone must reproduce — are:
+     * a Graphics Control Extension is skipped by a BLIND fixed 8 bytes whatever its
+     * declared sub-block length, an unrecognised block byte advances one byte instead
+     * of failing, a sub-block length overrunning EOF ends the walk, and frameInfos are
+     * sliced to {@see self::FLIP_FRAME_CAP}.
      *
      * Load-bearing role (round-4): the ORDERED OFFSET LIST is reconciled against the
      * honest {@see self::gifHonestDescriptorOffsets()}. candy-flip only emits trustworthy
      * pixels when its walk lands on exactly the same descriptor positions a spec-correct
      * walk does. A phantom descriptor that preserves the frame COUNT while shifting a
-     * POSITION (round-4 CRITICAL-2: honest `{33,68,91}` vs flip `{33,56,91}`) makes the
-     * lists differ, so the animation is refused — BEFORE flip runs — instead of emitting
-     * the phantom frame as if authentic. Once the two lists are equal, flip's frame count
-     * necessarily equals the honest count, so the aggregate cost budget computed
-     * downstream from that count is EXACT, not merely an upper bound (round-4
-     * CRITICAL-1 — the ceiling, not a mis-estimate, is what stops the cell-array bomb).
-     * Keep the walk byte-exact with the sibling so the reconciliation never mis-signals.
+     * POSITION (round-4 CRITICAL-2: honest `{33,68,91}` vs flip `{33,56,91}`, reachable
+     * through the blind GCE skip) makes the lists differ, so the animation is refused —
+     * BEFORE flip runs — instead of emitting the phantom frame as if authentic. Once the
+     * two lists are equal, flip's frame count necessarily equals the honest count, so the
+     * aggregate cost budget computed downstream from that count is EXACT, not merely an
+     * upper bound (round-4 CRITICAL-1).
+     *
+     * Keep the walk byte-exact with the sibling: a clone that drifts from flip makes the
+     * gate refuse valid GIFs (an earlier revision kept flip's pre-resync `+10` image-data
+     * skip and rejected every real encoder's 255-byte sub-block output) or, worse, accept
+     * a layout flip actually walks differently. `ImageSourceGifFlipWalkParityTest` pins
+     * this clone against flip's real decode output.
      *
      * @return list<int>
+     *
+     * @throws \InvalidArgumentException where flip's own walk throws (a colour table or
+     *                                   image descriptor truncated by EOF)
      */
     private static function gifFlipWalkDescriptorOffsets(string $bytes): array
     {
@@ -861,11 +910,13 @@ final class ImageSource
             return $offsets;
         }
 
-        $i = 13;
         $packed = ord($bytes[10]);
-        if (($packed & 0x80) !== 0) {
-            $i += 3 * (1 << (($packed & 0x07) + 1)); // global colour table, as flip sizes it
+        $gctBytes = ($packed & 0x80) !== 0 ? 3 * (1 << (($packed & 0x07) + 1)) : 0;
+        if ($gctBytes > 0 && 13 + $gctBytes > $len) {
+            // flip: `decoder.truncated` on a GCT reaching past EOF.
+            throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => 'GIF']));
         }
+        $i = 13 + $gctBytes;
 
         while ($i < $len) {
             $blockType = ord($bytes[$i]);
@@ -882,16 +933,15 @@ final class ImageSource
                 continue;
             }
             if ($blockType === 0x2C) {
-                // flip records the descriptor offset UNCONDITIONALLY on reaching a 0x2C:
-                // it reads left/top/width/height (bytes i+1..i+8) and the packed byte
-                // with `?? ''`, so even a nine-byte truncated tail descriptor is recorded
-                // (round-4 MED — an earlier clone gated on i+9 and so under-counted). It
-                // then walks image data from $i+10 WITHOUT skipping the LCT or the LZW
-                // minimum-code-size byte. Mirroring the exact offsets flip lands on is
-                // what lets the loader reject a phantom descriptor that preserves the
-                // frame COUNT but not the frame POSITIONS (round-4 CRITICAL-2).
+                if ($i + 10 > $len) {
+                    // flip: `decoder.truncated` on a descriptor cut short by EOF.
+                    throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => 'GIF']));
+                }
                 $offsets[] = $i;
-                $i = self::flipSkipSubBlocks($bytes, $i + 10, $len);
+                $descPacked = ord($bytes[$i + 9]);
+                $lctBytes = ($descPacked & 0x80) !== 0 ? 3 * (1 << (($descPacked & 0x07) + 1)) : 0;
+                // Image data: past the LCT and the LZW minimum-code-size byte.
+                $i = self::flipSkipSubBlocks($bytes, $i + 11 + $lctBytes, $len);
                 if (count($offsets) >= self::FLIP_FRAME_CAP) {
                     break; // flip slices frameInfos to FLIP_FRAME_CAP
                 }
@@ -1770,7 +1820,7 @@ final class ImageSource
         }
 
         try {
-            return $this->fromGd($cropped, $this->format, $this->maxPixels);
+            return $this->fromGd($cropped, $this->reencodeFormat(), $this->maxPixels);
         } finally {
             imagedestroy($cropped);
         }
@@ -1782,13 +1832,19 @@ final class ImageSource
      *
      * @param int $w  Target width in pixels (must be > 0)
      * @param int $h  Target height in pixels (must be > 0)
-     * @throws \InvalidArgumentException  if dimensions are not positive
+     * @throws \InvalidArgumentException  if dimensions are not positive, or w × h
+     *                                    exceeds the carried maxPixels ceiling
      */
     public function resize(int $w, int $h): self
     {
         if ($w <= 0 || $h <= 0) {
             throw new \InvalidArgumentException("Resize dimensions must be positive, got {$w}×{$h}");
         }
+
+        // Bound the PEAK, not just the result: the destination canvas is allocated
+        // below, so the ceiling must be checked before imagecreatetruecolor() —
+        // fromGd()'s own guard only fires after that allocation already happened.
+        self::guardPixelCount($w, $h, $this->maxPixels);
 
         $src = imagecreatefromstring($this->bytes);
         if ($src === false) {
@@ -1812,9 +1868,21 @@ final class ImageSource
         imagedestroy($src);
 
         try {
-            return $this->fromGd($dst, $this->format, $this->maxPixels);
+            return $this->fromGd($dst, $this->reencodeFormat(), $this->maxPixels);
         } finally {
             imagedestroy($dst);
         }
+    }
+
+    /**
+     * The container crop()/resize() re-encode into: the source's own format when
+     * {@see self::fromGd()} can write it, PNG otherwise (a BMP/WebP/AVIF source
+     * decodes through GD but cannot be written back by fromGd()).
+     */
+    private function reencodeFormat(): string
+    {
+        return in_array($this->format, ['image/png', 'image/jpeg', 'image/gif'], true)
+            ? $this->format
+            : 'image/png';
     }
 }

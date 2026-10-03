@@ -33,6 +33,7 @@ return [
     'image_source.gd_load_failed_from_string' => 'GD failed to decode image bytes',
     'image_source.crop_failed'          => 'GD failed to crop the image',
     'image_source.gd_create_failed'     => 'GD failed to create an image buffer',
+    'image_source.gd_encode_failed'     => 'GD failed to encode the image as {mime}',
 
     // DiskCache
     'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',
@@ -48,6 +49,7 @@ return [
     'renderer.invalid_height' => 'Height must be positive, got {height}',
     'renderer.gd_load_failed' => 'GD failed to load image',
     'renderer.gd_resize_failed' => 'GD failed to resize the image',
+    'renderer.gd_encode_failed' => 'GD failed to re-encode the image as PNG',
     'renderer.gzcompress_failed' => 'gzcompress() failed — image data could not be compressed',
 
     // Chafa
@@ -56,6 +58,10 @@ return [
 
     // Sixel
     'sixel.max_colors_out_of_range' => 'maxColors must be 1-256, got {maxColors}',
+    'sixel.canvas_too_large'        => 'Sixel canvas {width}×{height} px for a {cols}×{rows}-cell box exceeds the {max}-pixel ceiling',
+
+    // Mosaic
+    'mosaic.no_render_width' => 'render() needs a width: pass one, or configure a default cell box with MosaicBuilder::withResize()',
 
     // tmux passthrough
     'tmux.stream_not_sixel' => 'Band streaming is only available for the Sixel renderer, not {name}',

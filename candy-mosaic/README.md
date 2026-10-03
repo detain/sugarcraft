@@ -43,11 +43,14 @@ $mosaic = Mosaic::halfBlock();
 // Render — returns ANSI bytes
 $ansi = $mosaic->render($image, width: 40, height: 20);
 
-// Builder for fine-grained control
+// Builder for fine-grained control; withResize() sets the default cell box
+// render() uses when called without a width
 $mosaic = Mosaic::builder()
     ->withRenderer(new QuarterBlockRenderer())
     ->withResize(width: 40, height: 20)
     ->build();
+$ansi = $mosaic->render($image);          // 40×20 cells
+$ansi = $mosaic->render($image, 60);      // explicit width wins; height from aspect
 
 // Kitty: virtual-image placement (transmit once, place at multiple offsets)
 // Step 1 — transmit with a specific id and store as virtual (a=p)
@@ -67,8 +70,13 @@ $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 
 - PNG, JPEG, static GIF — via ext-gd (`imagecreatefrompng`,
   `imagecreatefromjpeg`, `imagecreatefromgif`)
+- `ImageSource::fromString()` additionally accepts anything GD's
+  `imagecreatefromstring()` decodes (WebP, BMP, …); `format` carries the real
+  MIME (or `application/octet-stream`), and the Kitty/iTerm2 renderers
+  re-encode any payload that is not PNG by signature.
 - Palette PNGs are automatically converted to truecolor before
   processing.
+- Animated GIF and APNG via `ImageSource::fromAnimatedFile()`.
 
 ## Remote images
 
