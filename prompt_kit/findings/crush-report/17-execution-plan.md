@@ -226,21 +226,6 @@ Columns:
 - **Hotspot regions**: listed only where another group in the same wave also touches that file.
 - **Order**: the integration cherry-pick order for the wave.
 
-### W2 (order: a, c, b, e, d, g, h, i, f, j)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 1.B-2 | `src/Backend/EngineBackend.php`, `src/Chat.php`, `src/Renderer.php`, `src/Messages/{AssistantMessage,ToolResultMessage,HistorySanitizer}.php`, `src/Message.php` | EB: `runTurn` (`return`), `runCompleteInChild` (result frame), `settleFromResultFrame`, `toTypedMessages`. Chat: `route` AssistantMsg arm, `replaceToolRunningPlaceholder`, `toolResultMessage`. RN: `renderHistory` | ARCHITECTURE turn pipeline / result frame | — | M |
-| b | 1.C-2 | `src/Chat.php`, `src/Runtime.php`, `src/Permissions/PermissionGate.php`, `src/Hooks/HookManager.php` (verdict type only), `src/PermissionRequestMsg.php`, `src/Agents/AgentManager.php`, `src/Cli/{HeadlessPermissionPrompt,NonInteractive}.php`, new `src/Permissions/{SessionPermissionMemo,ApprovalVerdict}.php` | Chat: `requestPermission`, `answerPermission`, `handlePermissionKey`, `scheduleBackendCompletion`, `pumpLiveToolEvents`. RT: `settleAsk` | README "Permission prompts" :1326, Limitations :1357; PERMISSIONS "`Ask` needs somewhere to ask" | sugar-veil (no change) | M |
-| c | 1.A-1 | `src/Context/EnvironmentBlock.php`, `src/Runtime.php`, `src/Providers/{SglangProvider,CustomProvider}.php`, new `src/Context/{TurnContextBlock,SessionPromptMemo}.php` | RT: `systemPromptSections` + snapshots. SG: `formatMessages`. CU: `formatMessages`, system prepend in `complete`/`completeStream` | PROMPT_ENGINEERING slot list; ARCHITECTURE assembly order | — | M |
-| d | N-P0-1, N-P0-2, N-DOC-2, DH-KEYS (generated docs; per-category definitions) | new `src/Config/Settings/**`, `tools/gen-settings-doc.php`, `src/Config/LayeredSettings.php`, `src/Cli/Bootstrap.php` | BS: `promptEnabledSkills`. **R-KEYS** | SETTINGS (generated block + layered table + count); ENVIRONMENT (new last column); README layered roster (becomes generated); SKILLS :213 | — | M |
-| e | O-2a (+ `WorkspaceContext::service()` locator, so O-2b…h add no Chat state) | `src/Cli/Bootstrap.php`, `src/Chat.php`, `src/Backend/EngineBackend.php`, `src/Diagnostics/RuntimeNoticeSink.php`, new `src/Host/WorkspaceContext.php`, `src/Diagnostics/NoticeSink.php` | BS: `chat` (non-UI half), `backendFor`. Chat: **CS**, `selectPaletteProvider`, `handleModelCommand`, `runtimeNoticeWake`, `pumpRuntimeNotices`. EB: `completeAsync` child branch (sink arm) | ARCHITECTURE "Cli\Bootstrap" | — | M |
-| f | P-A2 | `src/Chat.php`, `src/Renderer.php`, `src/Tui/{SessionPicker,SessionRow}.php`, `src/Commands/KeyBindingRegistry.php` | Chat: picker block, `handlePointer` session zone arm, `selectSessionRow`. RN: `renderSessionPicker`, `markSessionRows`, zone constants. **R-KEYBIND** | README "Keys" (picker rows) | candy-forms, candy-fuzzy (consume only) | M |
-| g | 4.2, 4.7-1 | `src/Agents/{AgentManager,AgentDefinition,SuspendedDelegations}.php`, `src/Backend/EngineBackend.php`, `src/Tools/BuiltIn/TaskTool.php`, new `src/Hooks/BuiltIn/SubAgentGrantHook.php` | EB: ctor + withers, `resolveHookManager`. TT: `setup`, `finish` | AGENTS_AUTHORING (grant enforcement) | — | M |
-| h | 3.A-1 | `src/Chat.php`, `src/Session/EnhancedSessionStore.php`, new `src/Workspace/{GitRunner,WorkspaceCheckpointer,ShadowRepo}.php` | Chat: `dispatchTurn` checkpoint block. ESS: checkpoint save/restore/prune/copy/delete. **R-STATE** | ARCHITECTURE "Sessions and state"; README "Sessions" :137 | — | M |
-| i | 2.8, 3.I-1 | `src/Tools/Concerns/TruncatesOutput.php`, `src/Tools/PathJail.php`, `src/Support/HookContextFiles.php`, `src/Runtime.php`, `src/Tools/BuiltIn/Edit.php`, new `src/Support/{ToolOutputSpill,PrivateRetainedDir}.php`, new matcher stages | RT: `settle`, `resultMessage`, `basePrompt` (Edit paragraph) | ARCHITECTURE "Tools" :366; PERMISSIONS (jail exception) | — | M–L |
-| j | 5.14j, 5.5-3, 5.14e, 5.14h | `src/Runtime.php`, `src/Context/InstructionFileLoader.php`, new `src/RepoMap/{SymbolGraph,PageRank,RepoMapRenderer}.php`, `src/Chat.php`, `src/Commands/CommandRegistry.php` | RT: `planInstructionDocuments`. Chat: `dispatchCommand` arms (`init`, `editor`), `READ_ONLY_COMMANDS`. **R-CMDS** | MEMORY "Instruction files"; README slash roster; COMMANDS table; ENVIRONMENT "OS variables" (EDITOR) | candy-core `Cmd::exec` (use) | M |
-
 ### W3 (order: a, b, c, d, e, f, g, h, i, j)
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
@@ -389,7 +374,7 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (157 steps)
+## 5. Step index (140 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -398,11 +383,8 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - X-37a M · — · W3-h
 
 **Foundations**
-- 1.A-1 M · 0.1 · W2-c
 - 1.A-2 M · 1.A-1, 1.B-2 · W4-a
-- 1.B-2 M · 1.B-1 · W2-a
 - 1.B-3 M · 1.B-2 · W3-c
-- 1.C-2 M · 1.C-1 · W2-b
 - 1.C-3 M · 1.C-1 · W4-a
 - 1.C-4a S–M · 1.C-1 · W3-a
 - 1.C-4b S · 1.C-1, RELAY · W5-g
@@ -423,14 +405,12 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 2.7-1b M · 2.7-1a, 2.4-1 · W6-a
 - 2.7-2 M · 2.7-1b · W6-a
 - 2.7-3 S · 2.7-2 · W6-a
-- 2.8 S–M · 0.4, 0.5, 0.12 · W2-i
 - 2.9 S · 2.1 · W4-i
 - 2.10 M · 2.9, 2.5, O-2g · W8-b
 - 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
 - 2.12 S–M · 1.B-3, O-2e · W5-c
 
 **Safety and self-management**
-- 3.A-1 M · — · W2-h
 - 3.A-2 M · 3.A-1, DH-CMDS · W4-d
 - 3.B-2 S–M · 2.2-2, 2.3 · W6-d
 - 3.B-3 M · 3.B-2, 1.C-1, 2.12 · W7-d
@@ -444,21 +424,18 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 3.F M · — · W6-g
 - 3.G M · 3.A-1, 0.3 · W6-g
 - 3.H M · 3.D-2 · W8-i
-- 3.I-1 M · 0.11 · W2-i
 - 3.I-2 S–M · 3.I-1, 1.B-2 · W7-g
 - 3.I-3 M · 3.I-1, DH-TOOLS · W10-a
 
 **Sub-agents**
 - 4.1-1 S–M · N-P0, N-P3b · W6-e
 - 4.1-2 M · 4.1-1, 4.2 · W6-e
-- 4.2 M · — · W2-g
 - 4.3-1 M · X-30 · W4-i
 - 4.3-2 M–L · 4.3-1, P-B1, 1.A-2 · W8-e
 - 4.3-3 M · 4.3-1 · W5-i
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
 - 4.5 M · RELAY · W10-c
 - 4.6-2 M–L · 4.6-1, 4.3-2, P-D1 · W9-g
-- 4.7-1 S · — · W2-g
 - 4.7-2 S–M · 1.C-4a · W9-a
 - 4.7-3 M · 4.1-1 · W8-e
 - 4.9 M · 4.1-1, 4.3-2 · W9-b
@@ -474,7 +451,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.4-2 M · 5.1-2 · W5-f
 - 5.4-3 M · 5.4-1, 5.4-2, 5.2 · W7-i
 - 5.5-2 S–M · 5.5-1 · W5-h
-- 5.5-3 M · 5.5-1 · W2-j
 - 5.5-4 S · 5.5-3, DH-TOOLS · W5-h
 - 5.5-5 S · 5.5-4, 1.A-2 · W6-f
 - 5.6 S · 2.1, DH-CMDS · W5-e
@@ -493,18 +469,12 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.14b S–M · O-2g · W8-j
 - 5.14c M · 2.5, P-A1 · W10-e
 - 5.14d S · 0.8 · W10-e
-- 5.14e S · — · W2-j
 - 5.14g S–M · — · W5-i
-- 5.14h S · — · W2-j
 - 5.14i M · 1.A-2 · W10-f
-- 5.14j S–M · — · W2-j
 - 5.14l S–M · O-2g · W10-f
 
 **Settings**
-- N-P0-1 S · — · W2-d
-- N-P0-2 S · N-P0-1 · W2-d
-- N-DOC-2 S · N-P0-1 · W2-d
-- DH-KEYS S–M · N-P0-2 (generated docs), N-P2 (derived keys) · W2-d / W4-g
+- DH-KEYS S–M · N-P2 (derived keys) · W4-g
 - N-P1 M · N-P0-1, D7 · W3-i
 - DH-CMDS M · — · W3-i
 - N-P2 M · N-P0, N-P1, D9 · W4-g
@@ -520,7 +490,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-A2 M · P-A1 · W2-f
 - P-A3 S–M · P-A1 · W3-g
 - P-A4 S–M · P-A1, O-2d · W5-e
 - P-B1 M · — · W3-b
@@ -536,7 +505,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-2a M · 1.B-1, N-P3a · W2-e
 - O-2b M · O-2a, P-A1 · W3-d
 - O-2c S–M · O-2a · W3-e
 - O-2d S · O-2a, B2 · W3-f
@@ -584,7 +552,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 | V.1 / Part II #35 "WebSearch private default host", "no default endpoint" as a defect | No default endpoint by design (audit F-W3(b)); only the settings key remains (N-P4e). |
 | 0.8, 0.14 ".env*"/"settings protection" as all-new | `.env*` and `.sugar-crush/{hooks.yaml,config.json,agents/}` are already protected. |
 | 1.B "give Message `uiOnly`" | Done (`Message::$uiOnly`, `agentVisible()`). |
-| 1.C "always-allow", "rejection feedback" as new | Exact-call session grants and `HookManager::resolveAsk($feedback)` exist; pattern grants and the widened verdict type are new. |
 | 3.C "dormant `TaskList`" | `TaskList` is the team queue; only `SessionMeta::$tasks` fits a todo. |
 | 3.D JSON hook stdout as wholly new | Exit-code equivalents and `refusedBy` exist (3.D is PARTIAL). |
 | 4.3 "wire `reconnect()`" | Wiring alone is a no-op: it reads in-memory sessions and the IPC dir is per-process random (4.3-3). |
@@ -597,8 +564,4 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 | DCP §13.1 "`observeCacheHealth` dormant", "Task runs ≤50 steps with no context management" | Wired per step; Task runs ≤200 steps through `runTurn`, so 2.1/2.2-1/2.4-1 cover sub-agents. |
 | O §4.8 "`session_leases` table" | Superseded by the existing flock `SessionLock`. |
 | O §4.2 "`/workflow resume` runs synchronously" | Fixed (Fiber). |
-| O §6.10 `SettingsRegistry` vs N `SettingsSchema` | One class: `SettingsSchema` (D11). |
 | README :966-968 "`/bg` result comes back"; :1307 "`context: fork` enforced"; :1139-1143 "85% tier is heuristic-only" | All three are false today; fixed by 4.3-1, X-37a and 2.4-2 respectively. |
-
-**New defects found during research:**
-- A preset `Bash(git *)` grant does not restrict Bash on the live Task path (4.2, a security gap).
