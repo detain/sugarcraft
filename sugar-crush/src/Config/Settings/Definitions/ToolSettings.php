@@ -12,6 +12,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lint\TestRunner;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\Sandbox\Bubblewrap;
 
@@ -62,6 +63,26 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp('Linux only: run Bash inside bubblewrap, writable only in the working root (`no-network` also cuts the network). Refuses commands when bwrap cannot start.')
                 ->withReaderSymbol(Bash::class . '::fromCatalog')
                 ->withReadBy('`Bash::fromCatalog()` → `Bubblewrap::fromSetting()`'),
+            // Step 3.H. Both user tier only: the command is shell the
+            // after-the-turn run executes with no tool call and no gate in
+            // the path, so a checkout must neither name it nor switch it on
+            // (`lintCommands`' argument).
+            SettingDefinition::new(TestRunner::SETTINGS_KEY, SettingType::String)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                ->withLabel('Test command')
+                ->withHelp('Shell command that runs the project\'s tests, in the project root (`composer test`, `pytest -q`); what `autoTest` runs.')
+                ->withReaderSymbol(Bootstrap::class . '::hooks')
+                ->withReadBy('`Bootstrap::hooks()` → `TestRunner::withCommand()`'),
+            SettingDefinition::new(TestRunner::AUTO_TEST_SETTINGS_KEY, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                ->withLabel('Auto-test')
+                ->withHelp('After a turn that edited a file, run `testCommand`; on failure the output goes back to the model, at most 3 times a turn.')
+                ->withReaderSymbol(Bootstrap::class . '::hooks')
+                ->withReadBy('`Bootstrap::hooks()` → `AutoTestHook`'),
         ];
     }
 }

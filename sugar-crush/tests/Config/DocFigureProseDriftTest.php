@@ -2110,7 +2110,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
         $hooks = self::markdownProse($hooksRaw);
-        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9];
+        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
 
         $live = [];
         // The wildcard rides as its own literal on purpose: a single-quoted
@@ -2126,7 +2126,7 @@ final class DocFigureProseDriftTest extends TestCase
             ];
         }
         ksort($live);
-        self::assertCount(11, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
+        self::assertCount(13, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
 
         self::assertSame(
             1,
@@ -2206,7 +2206,17 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit lint, registered by `Bootstrap::(\w+)\(\)`\s*on every launch, after the three above and ahead of the hook files/', $bullets, $lintRow), 'the post-edit lint bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.E)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit diagnostics, registered by `Bootstrap::(\w+)\(\)`\s*when a language server is configured under `lsp` and started, right after the\s*post-edit lint and ahead of the hook files/', $bullets, $diagnosticsRow), 'the post-edit diagnostics bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.F)');
         self::assertSame(1, preg_match('/`(\w+)` — the auto-commit of each edit, registered by `Bootstrap::(\w+)\(\)`\s*when `autoCommit` is `edit`, after the post-edit diagnostics and ahead of the\s*hook files/', $bullets, $commitRow), 'the auto-commit bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.G)');
-        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1], $diagnosticsRow[1], $commitRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — auto-test reflection, registered by `Bootstrap::(\w+)\(\)`\s*when `autoTest` is on and `testCommand` is set, after the auto-commit and ahead of the\s*hook files/', $bullets, $testRow), 'the auto-test bullet no longer names its two classes, its Bootstrap seam and its place in the chain (step 3.H)');
+        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1], $diagnosticsRow[1], $commitRow[1], $testRow[1], $testRow[2]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertSame(HookEvent::Stop->value, $live[$testRow[1]]['event'], "the auto-test bullet names {$testRow[1]} first as the hook that runs the tests — it no longer fires on Stop");
+        self::assertSame(HookEvent::PostToolUse->value, $live[$testRow[2]]['event'], "the auto-test bullet names {$testRow[2]} as the edit half — it no longer fires on PostToolUse");
+        $testSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $testRow[3], 9000);
+        foreach ([$testRow[1], $testRow[2]] as $testClass) {
+            $testAt = strpos($testSeam, 'Hooks\\BuiltIn\\' . $testClass);
+            self::assertIsInt($testAt, "Bootstrap::{$testRow[3]}() no longer names {$testClass} — the bullet names the wrong seam");
+            self::assertGreaterThan((int) strpos($testSeam, 'Hooks\\BuiltIn\\' . $commitRow[1] . '('), $testAt, "{$testClass} is no longer registered after the auto-commit, as the bullet says");
+            self::assertLessThan((int) strpos($testSeam, 'loadEntries('), $testAt, "{$testClass} is no longer registered ahead of the hook files, as the bullet says");
+        }
         $commitSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $commitRow[2], 9000);
         $commitAt = strpos($commitSeam, 'Hooks\\BuiltIn\\' . $commitRow[1] . '(');
         self::assertIsInt($commitAt, "Bootstrap::{$commitRow[2]}() no longer constructs {$commitRow[1]} — the bullet names the wrong seam");
@@ -6128,6 +6138,7 @@ final class DocFigureProseDriftTest extends TestCase
             'twenty-three' => 23, 'twenty-four' => 24, 'twenty-five' => 25, 'twenty-six' => 26,
             'twenty-seven' => 27, 'twenty-eight' => 28, 'twenty-nine' => 29, 'thirty' => 30,
             'thirty-one' => 31, 'thirty-two' => 32, 'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
+            'thirty-six' => 36, 'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
         ];
 
         self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+(?:-[a-z]+)?)/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');

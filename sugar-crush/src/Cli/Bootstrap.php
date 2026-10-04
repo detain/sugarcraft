@@ -5544,6 +5544,23 @@ final class Bootstrap
             ));
         }
 
+        // Auto-test reflection (step 3.H): with `autoTest` on and a
+        // `testCommand` set, a turn that edited a file runs the tests before
+        // it ends and hands a failure back to the model (≤3 times). Both keys
+        // are user tier only — the command is shell run with no tool call in
+        // the path. The edit half notes Write/Edit on PostToolUse; the Stop
+        // half runs the tests, bounded inside the turn's idle ceiling because
+        // it runs in the turn's process. Ahead of the hook files, for the
+        // lint hook's reason.
+        $testRunner = \SugarCraft\Crush\Lint\TestRunner::new()
+            ->withCommand($userConfig[\SugarCraft\Crush\Lint\TestRunner::SETTINGS_KEY] ?? null)
+            ->withinTurnIdleCeiling($userConfig['turnIdleTimeoutSeconds'] ?? null);
+        if ($root !== null && ($userConfig[\SugarCraft\Crush\Lint\TestRunner::AUTO_TEST_SETTINGS_KEY] ?? false) === true && $testRunner->command() !== null) {
+            $testEdits = \SugarCraft\Crush\Hooks\BuiltIn\AutoTestEditHook::new();
+            $hooks->register($testEdits);
+            $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\AutoTestHook($testRunner, $testEdits));
+        }
+
         foreach (self::hookFiles($root) as $path) {
             try {
                 $hooks->loadEntries(self::hookFileEntries($path), $path);

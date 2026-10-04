@@ -892,7 +892,7 @@ it runs only once the rest of the chain has permitted that output — see
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
-Eight more exist and are **not** registered by default:
+Ten more exist and are **not** registered by default:
 
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
@@ -931,6 +931,9 @@ Eight more exist and are **not** registered by default:
 - `AutoCommitHook` — the auto-commit of each edit, registered by `Bootstrap::hooks()`
   when `autoCommit` is `edit`, after the post-edit diagnostics and ahead of the
   hook files. See [Auto-commit](#auto-commit).
+- `AutoTestHook` and `AutoTestEditHook` — auto-test reflection, registered by `Bootstrap::hooks()`
+  when `autoTest` is on and `testCommand` is set, after the auto-commit and ahead of the
+  hook files. See [Auto-test](#auto-test).
 
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
 source as **heuristics, not security boundaries**. Neither can see through
@@ -1094,6 +1097,57 @@ Either way:
   is a merge or the first commit, a file it changed has uncommitted changes now,
   a file it changed did not exist before it, or it is already on a remote. A
   session that never auto-committed gets the checkpoint `/undo` instead.
+
+### Auto-test
+
+With `autoTest` on and a `testCommand` set (both in your own
+`~/.sugar-crush/config.json` or `settings.json` — user tier only, since the
+command is shell run with no tool call in the path), a turn that edited a file
+runs your tests before it ends, Aider's way:
+
+```json
+{"testCommand": "composer test", "autoTest": true}
+```
+
+- `AutoTestEditHook` (`PostToolUse` on `^(Write|Edit)$`) notes each edit and
+  never changes a result. `AutoTestHook` (`Stop`) runs the command only when an
+  edit was noted since its last run, so a turn that only read and answered ends
+  exactly as before. A `Task` sub-agent's edits count toward its caller's turn;
+  the tests do not run at each `SubagentStop`.
+- A failing run keeps the turn going through the [stop events](#the-stop-events)'
+  continuation: the model's next prompt is the run in Aider's `run_output` shape,
+
+  ```text
+  Stop hook "auto-test" did not let you finish yet: I ran this command:
+
+  composer test
+
+  And got this output:
+
+  FAILURES!
+  Tests: 12, Assertions: 30, Failures: 1.
+  ```
+
+  with stderr folded into stdout as the command wrote it, terminal escapes
+  removed, and the last 10,000 bytes kept when the output is longer. Each one is
+  a step under the turn's step ceiling and spend cap.
+- **At most three reflections a turn** (`AutoTestHook::MAX_REFLECTIONS`). If the
+  tests still fail after the third, the turn ends on its last answer and the
+  reply closes with
+
+  ```text
+  [turn stopped by hook "auto-test": the test command `composer test` still fails (exit 1) after 3 attempts to fix it]
+  ```
+
+  A command that cannot start (exit 126 or 127) or runs past its bound ends the turn the
+  same way at once: neither is something the model's next edit can fix.
+- The run happens in the project root, in the turn's own process, through the
+  same bounded spawn as `Bash` (credential-scrubbed environment, no terminal,
+  the whole process group stopped at the bound). That process sends the TUI
+  nothing while the tests run, so the bound sits 10 seconds inside
+  `turnIdleTimeoutSeconds` (110 seconds by default): raise that setting for a
+  slower suite. It is also charged against the chain deadline
+  (`BoundedHookInterface`).
 
 ### What the audit log records
 

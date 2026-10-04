@@ -276,14 +276,14 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these thirty-four keys are layered — `provider`, `models`, `titleModel`,
+Only these thirty-six keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `contextWindow`, `secretEnvAllowlist`, `allowedTools`,
-`disabledTools`, `bashSandbox`, `instructions`, `disabledRules`,
-`embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
-`includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `theme`,
-`statusLine`, `layout`, `lintCommands`, `connectTimeoutSeconds`,
+`disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `instructions`,
+`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
+`subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`,
+`theme`, `statusLine`, `layout`, `lintCommands`, `connectTimeoutSeconds`,
 `providerRetryAttempts`, `providerRetryBaseBackoffMs`.
 <!-- settings:layered:end -->
 
@@ -321,7 +321,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, twenty-five keys are **never** taken from a project file:
+Even for a trusted project, twenty-seven keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -329,7 +329,9 @@ the same reason — each value is a lint command the post-edit hook runs after a
 edit; `lsp`, for the same reason again — each entry is a language server this app
 starts at launch; `autoCommit`, because a commit runs the repository's own git
 hooks and writes into the operator's history, and a checkout must not be able to
-switch that on;
+switch that on; `testCommand` and `autoTest`, for the lint reason — the first is
+a shell command auto-test runs at the end of a turn that edited a file, the
+second switches that run on;
 `provider`, because it decides which host every prompt in the session is sent
 to; `instructions`, because it decides which files become authoritative
 system-prompt text; `disabledRules`, because its value is a list of names

@@ -490,6 +490,8 @@ final class LayeredSettings
         'allowedTools',
         'disabledTools',
         'bashSandbox',
+        'testCommand',
+        'autoTest',
         'instructions',
         'disabledRules',
         'embeddingModel',
