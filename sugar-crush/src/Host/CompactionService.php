@@ -8,6 +8,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Context\Compaction\HistoryFingerprint;
 use SugarCraft\Crush\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextCompactor;
@@ -1026,7 +1027,22 @@ final class CompactionService
      * PreCompact chain's note as `$hookGuidance`, which joins the focus there —
      * the chain runs before the request is sent, so its note is only known then.
      *
-     * @return array{id:string,count:int,promise:\Closure(string=): PromiseInterface<HistoryCompactedMsg>}|null
+     * $background marks an AHEAD-OF-NEED request (roadmap 2.10): the 70%
+     * reminder tier asks for the summaries a later 85% compaction will need, so
+     * that compaction never has to park the prompt. It lands as a background
+     * {@see HistoryCompactedMsg} and applies nothing; its PreCompact trigger and
+     * its journal entry are `auto`, like the parked tier it stands in for.
+     * $conversation, when given, is what the cache-reusing route sends in place
+     * of the probe: on the background route the probe ends on the prompt whose
+     * turn is being dispatched beside it, which is neither summarised nor the
+     * model's to answer here.
+     *
+     * Every request carries the {@see HistoryFingerprint} of what it summarises
+     * — on the result and on the message — so a caller holding the summaries for
+     * later can tell whether they still describe the history.
+     *
+     * @param ?list<Message> $conversation
+     * @return array{id:string,count:int,fingerprint:HistoryFingerprint,promise:\Closure(string=): PromiseInterface<HistoryCompactedMsg>}|null
      */
     public function buildSummarizationRequest(
         ?Backend $backend,
@@ -1035,6 +1051,8 @@ final class CompactionService
         ?string $parkedSubmission,
         ?CancellationToken $cancellation = null,
         string $focus = '',
+        bool $background = false,
+        ?array $conversation = null,
     ): ?array {
         if ($backend === null) {
             return null;
@@ -1085,13 +1103,18 @@ final class CompactionService
         // the instruction is the prefix the provider cached on the last turn.
         // The parked prompt has not been sent yet and is not part of what is
         // summarised, so it stays out (it goes out after the landing).
-        $conversation = $parkedSubmission === null
+        $conversation ??= $parkedSubmission === null
             ? $probeHistory
             : self::withoutParkedSubmission($probeHistory, $parkedSubmission);
 
         $journal = $this->journal;
+        // Roadmap 2.10: what these summaries are about, carried home so a
+        // summary held for later is used only while it still describes the
+        // history (see HistoryFingerprint).
+        $fingerprint = HistoryFingerprint::of($exchanges, $priorSummaries);
+        $trigger = $parkedSubmission === null && !$background ? self::TRIGGER_MANUAL : self::TRIGGER_AUTO;
 
-        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback, $journal): PromiseInterface {
+        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback, $journal, $fingerprint, $trigger, $background): PromiseInterface {
             $steer = self::renderFocusForSummary($focus, $hookGuidance);
             if ($steer !== '') {
                 $prompt[] = Message::user($steer);
@@ -1111,11 +1134,11 @@ final class CompactionService
                 // routinely the largest single prompt this app sends; a readout
                 // that silently omitted it was under-reporting its own biggest
                 // call.
-                static function (Message $msg) use ($compactionId, $keys, $parkedSubmission, $sourceChars, $stateFallback, $journal): HistoryCompactedMsg {
+                static function (Message $msg) use ($compactionId, $keys, $parkedSubmission, $sourceChars, $stateFallback, $journal, $fingerprint, $trigger, $background): HistoryCompactedMsg {
                     $rejection = self::summaryRejection($msg, $sourceChars);
                     if ($rejection !== null) {
                         // Billed all the same: the usage still rides along.
-                        return new HistoryCompactedMsg($compactionId, [], $rejection, $msg->usage, $parkedSubmission);
+                        return new HistoryCompactedMsg($compactionId, [], $rejection, $msg->usage, $parkedSubmission, fingerprint: $fingerprint, background: $background);
                     }
 
                     $summaries = self::parseCompactionReply($msg->content, $keys, $stateFallback);
@@ -1123,11 +1146,7 @@ final class CompactionService
                     // as it is produced — here, off update(), as the promise
                     // settles. A journal that cannot be written never costs the
                     // compaction anything.
-                    $journal?->append(
-                        $compactionId,
-                        $summaries,
-                        [$parkedSubmission === null ? self::TRIGGER_MANUAL : self::TRIGGER_AUTO],
-                    );
+                    $journal?->append($compactionId, $summaries, [$trigger]);
 
                     return new HistoryCompactedMsg(
                         $compactionId,
@@ -1135,6 +1154,8 @@ final class CompactionService
                         null,
                         $msg->usage,
                         $parkedSubmission,
+                        fingerprint: $fingerprint,
+                        background: $background,
                     );
                 },
                 // Reported, not swallowed: unlike the session-title call this
@@ -1153,11 +1174,55 @@ final class CompactionService
                     $e->getMessage(),
                     null,
                     $parkedSubmission,
+                    fingerprint: $fingerprint,
+                    background: $background,
                 ),
             );
         };
 
-        return ['id' => $compactionId, 'count' => count($exchanges), 'promise' => $promise];
+        return ['id' => $compactionId, 'count' => count($exchanges), 'fingerprint' => $fingerprint, 'promise' => $promise];
+    }
+
+    /**
+     * The fingerprint of the compaction $compactor would run over $history now
+     * (roadmap 2.10): the exchanges and prior summaries
+     * {@see buildSummarizationRequest()} derives from the same history, so a
+     * held summary's fingerprint and this one compare like for like.
+     *
+     * @param list<Message> $history
+     */
+    public function historyFingerprint(ContextCompactor $compactor, array $history): HistoryFingerprint
+    {
+        $wire = self::compactionWire($history);
+
+        return HistoryFingerprint::of(
+            $this->attemptCompactor($compactor, $history)->exchangesToSummarize($wire),
+            self::priorSummariesFromHistory($wire),
+        );
+    }
+
+    /**
+     * An ahead-of-need summary map (roadmap 2.10) made ready for a compaction
+     * of $history: the per-exchange records as the model wrote them, and the
+     * state block re-audited against $history — its derived headings (the
+     * files, the latest unresolved request) re-read off the transcript as it
+     * stands NOW rather than as it stood when the summary was requested, and
+     * any heading the model left empty filled the same way. A map with no
+     * state block gets the heuristic one, as every other route does.
+     *
+     * @param array<string, string> $summaries
+     * @param list<Message> $history
+     * @return array<string, string>
+     */
+    public static function splicedSummaries(array $summaries, array $history): array
+    {
+        $fresh = self::heuristicState($history);
+        $state = $summaries[StateSummaryTemplate::SUMMARY_KEY] ?? '';
+        $summaries[StateSummaryTemplate::SUMMARY_KEY] = $state === ''
+            ? $fresh->render()
+            : StateSummaryTemplate::parse($state)->filledFrom($fresh)->render();
+
+        return $summaries;
     }
 
     /** The opening of each user request the exchange index quotes, in characters. */

@@ -1084,7 +1084,14 @@ final class TurnController
      *
      * @param list<Message> $history
      * @param list<array<string, mixed>> $wireHistory {@see CompactionService::compactionWire()} of $history
+     * $summaries are model-written records to condense with (roadmap 2.10: an
+     * ahead-of-need summary the caller has checked still describes $history,
+     * passed through {@see CompactionService::splicedSummaries()}); empty is
+     * the heuristic route. Any exchange they do not cover gets the heuristic
+     * line, and with no state block in them the heuristic block is used.
+     *
      * @param \Closure(list<Message>): int $estimate the session's calibrated estimate
+     * @param array<string, string> $summaries
      * @return array{outcome: string, history: list<Message>, tokenCount: int, compactionNotice: ?Message, truncationNotice: ?Message, refilled: bool}
      */
     public function inlineTier(
@@ -1095,6 +1102,7 @@ final class TurnController
         int $tokenLimit,
         int $tokenCount,
         \Closure $estimate,
+        array $summaries = [],
     ): array {
         $baseHistory = $history;
         $compactionNotice = null;
@@ -1102,7 +1110,7 @@ final class TurnController
 
         // One instance for both calls: savingsPercentage() reads the state
         // compact() just left on it.
-        $attemptCompactor = $compaction->attemptCompactor($compactor, $history)->withExchangeSummaries([
+        $attemptCompactor = $compaction->attemptCompactor($compactor, $history)->withExchangeSummaries($summaries + [
             StateSummaryTemplate::SUMMARY_KEY => CompactionService::heuristicState($history)->render(),
         ]);
         $compactedWire = $attemptCompactor->compact($wireHistory);

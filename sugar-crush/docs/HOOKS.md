@@ -333,7 +333,9 @@ nothing fires there. The session server (`serve`) does not fire it yet.
 `Chat::preCompactGate()` fires `PreCompact` for every compaction that would
 condense the history through the TUI: `/compact` (`trigger: manual`), and the
 automatic 85% tier when it parks a prompt behind a model-written summary
-(`trigger: auto`). `Chat::postCompactCmd()` fires `PostCompact` once such a
+(`trigger: auto`) — or, ahead of need, when the 70% tier requests that summary
+in the background (`trigger: auto` too; the 85% tier that later splices it in
+does not ask again). `Chat::postCompactCmd()` fires `PostCompact` once such a
 compaction has been applied. Inside a turn, `EngineBackend::runTurn()` fires
 `PreCompact` (`trigger: auto`) before the model's own `Prune` call changes what
 it is sent — a block refuses the call, and the model reads why — and around

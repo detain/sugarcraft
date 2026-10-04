@@ -1322,9 +1322,11 @@ a percentage, and the budget it is measured against is the **live model's own
 context window** as its provider reports it (a backend with no model behind it,
 such as the offline echo default, falls back to 100,000 estimated tokens). That
 budget also drives compaction, per turn and without an idle gate: at 70% a
-system-role reminder rides along with the turn, at 85% older exchanges are
-summarized first and the rewrite is reported in the transcript, and at 95% the
-turn is refused rather than spent on a request the provider would reject. Each
+system-role reminder rides along with the turn (and, with a provider configured,
+the summaries the next tier will need are requested in the background beside
+it), at 85% older exchanges are summarized first and the rewrite is reported in
+the transcript, and at 95% the turn is refused rather than spent on a request
+the provider would reject. Each
 tier can also carry an **absolute** token cap beside its percentage, firing at
 whichever is lower, so a 1M-token window need not reach 700,000 tokens before
 the first reminder: `CompactorConfig::withReminderTokens()` and its two
@@ -1408,8 +1410,15 @@ because the two are different claims and the cap is inert in that state.
 
 When you type `/compact` and a provider is configured, the older exchanges are
 summarized **by a model** rather than by the local truncate-and-placeholder
-heuristic — and so is the automatic 85% tier, which parks the prompt you just
-sent until the summaries arrive. The request is the conversation's own: the same
+heuristic — and so is the automatic 85% tier. That tier usually does not wait:
+the summaries were already requested in the background when the session
+crossed 70%, so at 85% they are spliced in and your prompt goes out at once.
+They are used only while they still describe the conversation — the exchanges
+they summarised must still be the oldest ones being condensed, so a `/rewind`,
+`/clear`, session switch or other compaction in between discards them — and an
+exchange that left the verbatim tail after they were requested gets the
+heuristic line. When there is no usable background summary yet, the tier parks
+the prompt you just sent until the summaries arrive. The request is the conversation's own: the same
 system prompt, tools and history the next turn would send, plus one final
 instruction not to call tools, so everything before that instruction is a prefix
 the provider has already cached. The tools are advertised but never run — the

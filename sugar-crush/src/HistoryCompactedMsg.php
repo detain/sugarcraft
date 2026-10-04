@@ -18,6 +18,10 @@ use SugarCraft\Core\Msg;
  * the second — a parked tier holds `inFlight` true precisely so a second turn
  * cannot be submitted on top of the one it is about to send.
  *
+ * A THIRD ROUTE, the ahead-of-need summary of roadmap 2.10 (`$background`),
+ * schedules one at the 70% reminder tier and applies nothing when it lands: the
+ * summaries are held until the 85% tier uses them — see `$background`.
+ *
  * Carried by the Cmd either of those returns. The
  * compaction itself happens in {@see Chat::applyModelCompaction()}, when this
  * lands — NOT when `/compact` was typed. That ordering is the whole point: a
@@ -125,6 +129,21 @@ final class HistoryCompactedMsg implements Msg
      *                             is the model route, whose preface
      *                             {@see Host\CompactionService::modelSummaryFallbackPrefix()}
      *                             derives from $error and $summaries.
+     * @param ?Context\Compaction\HistoryFingerprint $fingerprint What the
+     *                             summaries were written about — the condensed
+     *                             exchanges and the merged prior summaries at
+     *                             request time — or null on a route that does not
+     *                             need to know (roadmap 2.10).
+     * @param bool $background     True for an AHEAD-OF-NEED summary (roadmap
+     *                             2.10): requested at the 70% reminder tier
+     *                             ({@see Chat::dispatchTurn()}) and condensing
+     *                             NOTHING when it lands. {@see Chat::update()}
+     *                             keeps it under its own latch
+     *                             (`$backgroundSummary`, not
+     *                             `$pendingCompactionId`), and the 85% tier in
+     *                             {@see Chat::submit()} splices it in only while
+     *                             $fingerprint still matches the history — so the
+     *                             tier compacts without parking the prompt.
      */
     public function __construct(
         public readonly string $compactionId,
@@ -134,5 +153,7 @@ final class HistoryCompactedMsg implements Msg
         public readonly ?string $parkedSubmission = null,
         public readonly ?string $blockedBy = null,
         public readonly ?string $heuristicNotice = null,
+        public readonly ?Context\Compaction\HistoryFingerprint $fingerprint = null,
+        public readonly bool $background = false,
     ) {}
 }

@@ -1475,6 +1475,31 @@ final class Chat implements Model
         private readonly ?\SugarCraft\Toast\Toast $settingsToast = null,
         /** Stamp of {@see $settingsToast}: an older toast's expiry tick must not clear a newer one. */
         private readonly int $settingsToastGeneration = 0,
+        /**
+         * The AHEAD-OF-NEED compaction summary (roadmap 2.10), or null when
+         * none is out or held.
+         *
+         * {@see dispatchTurn()} requests it when the 70% reminder tier fires,
+         * so that by the time the 85% tier fires in {@see submit()} the
+         * summaries are usually already here and the tier compacts without
+         * parking the prompt behind a summarization round-trip. `summaries`
+         * is null while the request is out, the model's map once it landed,
+         * and `[]` when it landed with nothing usable (a failure, a rejection,
+         * a PreCompact block) — held, not dropped, so a failing summariser is
+         * asked once per compaction cycle rather than once per turn.
+         *
+         * Its own latch, NOT `$pendingCompactionId`: a background summary
+         * starts no turn and parks nothing, so the routes that release that
+         * latch have nothing to abandon here. What guards it instead is the
+         * `fingerprint` ({@see Context\Compaction\HistoryFingerprint}) — a
+         * `/clear`, `/rewind`, session switch or landed compaction changes what
+         * the history would condense, and the summary is then discarded rather
+         * than spliced — plus `sessionId`, so a summary of one session is never
+         * held for another.
+         *
+         * @var array{id: string, sessionId: ?string, fingerprint: Context\Compaction\HistoryFingerprint, summaries: ?array<string, string>}|null
+         */
+        private readonly ?array $backgroundSummary = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -2448,6 +2473,28 @@ final class Chat implements Model
             // whether or not its answer is still wanted. Dropping the summaries
             // is right; forgetting the money is not.
             $this->accountUsage($msg->usage);
+
+            // Roadmap 2.10: an ahead-of-need summary condenses nothing when it
+            // lands - it is held for the 85% tier in submit(), under its own
+            // latch. One that is no longer the one out (superseded, or asked
+            // for in another session) is dropped like a stale /compact; one
+            // that came back unusable is held as `[]`, so this cycle does not
+            // ask again (see the property's docblock).
+            if ($msg->background) {
+                $held = $this->backgroundSummary;
+                if ($held === null || $held['id'] !== $msg->compactionId) {
+                    return [$this, null];
+                }
+                if ($held['sessionId'] !== $this->currentSessionId) {
+                    return [$this->mutate(['backgroundSummary' => null]), null];
+                }
+                $usable = $msg->error === null && $msg->blockedBy === null;
+
+                return [$this->mutate(['backgroundSummary' => [
+                    ...$held,
+                    'summaries' => $usable ? $msg->summaries : [],
+                ]]), null];
+            }
 
             // Superseded: a second /compact was issued, or one of the FOUR
             // release routes abandoned this one - /clear, /rewind, the palette's
@@ -9265,6 +9312,9 @@ final class Chat implements Model
             'pendingSettingsApply' => $this->pendingSettingsApply,
             'settingsToast' => $this->settingsToast,
             'settingsToastGeneration' => $this->settingsToastGeneration,
+            // Dropped here, the summary fetched at 70% would be forgotten on
+            // the first keystroke and the 85% tier would park after all.
+            'backgroundSummary' => $this->backgroundSummary,
         ];
 
         // P-A4: who named the session, and a half-typed title, both belong to
@@ -9724,6 +9774,9 @@ final class Chat implements Model
         // announced only as "N messages reached the 95% blocking tier" — the
         // rewrite adopted in silence (review cycle 4, finding 1).
         $truncationNotice = null;
+        // The PostCompact chain for a compaction spliced from an ahead-of-need
+        // summary (roadmap 2.10), which rides out beside whatever this returns.
+        $postCompact = null;
 
         if ($this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
             // THE CIRCUIT BREAKER FIRST, ahead of both routes it can stop, because
@@ -9759,7 +9812,33 @@ final class Chat implements Model
             // its refusal when the hook blocked): parking submits the prompt, so
             // the hook fires there, and this early return skips the tail call below
             // so it never fires twice (audit 15b-01).
-            $parked = $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice, $mentionsAreTheUsers);
+            //
+            // AN AHEAD-OF-NEED SUMMARY COMES FIRST (roadmap 2.10): when the 70%
+            // tier's background request ({@see dispatchTurn()}) has landed and
+            // its fingerprint still matches this history - the exchanges it
+            // summarised are still the leading run of the ones condensed now,
+            // under the same prior summaries, in this session - its records are
+            // spliced into the synchronous route below and the prompt is NOT
+            // parked: the summarization was already paid for and its PreCompact
+            // chain already ran (`auto`) when it was requested. Exchanges that
+            // slid out of the verbatim tail since get the heuristic line, and the
+            // state block's derived headings are re-read off this history
+            // ({@see \SugarCraft\Crush\Host\CompactionService::splicedSummaries()}).
+            // A summary still out, failed, or stale falls through to the parked
+            // route exactly as before.
+            $spliced = null;
+            $held = $this->backgroundSummary;
+            if ($held !== null
+                && ($held['summaries'] ?? []) !== []
+                && $held['sessionId'] === $this->currentSessionId
+                && $held['fingerprint']->matches($this->compactionService()->historyFingerprint($this->compactor, $this->history))
+            ) {
+                $spliced = \SugarCraft\Crush\Host\CompactionService::splicedSummaries($held['summaries'], $this->history);
+            }
+
+            $parked = $spliced === null
+                ? $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice, $mentionsAreTheUsers)
+                : null;
             if ($parked !== null) {
                 return $parked;
             }
@@ -9787,14 +9866,25 @@ final class Chat implements Model
                 $tokenLimit,
                 $tokenCount,
                 $this->estimateTokenCount(...),
+                $spliced ?? [],
             );
             $baseHistory = $tier['history'];
             $tokenCount = $tier['tokenCount'];
             $compactionNotice = $tier['compactionNotice'];
             $truncationNotice = $tier['truncationNotice'];
+            if ($spliced !== null) {
+                // Used up either way: the history it described is rewritten
+                // below, and the next 70% dispatch asks afresh.
+                $turnCarrier = $turnCarrier->mutate(['backgroundSummary' => null]);
+                $postCompact = $this->postCompactCmd(
+                    \SugarCraft\Crush\Host\CompactionService::TRIGGER_AUTO,
+                    $this->history,
+                    $baseHistory,
+                );
+            }
 
             if ($tier['outcome'] === 'blocked') {
-                return $this->withCompactionOutcome($tier['refilled'], turnSent: false)
+                [$blocked] = $turnCarrier->withCompactionOutcome($tier['refilled'], turnSent: false)
                     ->foregroundBlockedResponse(
                         $text,
                         $baseHistory,
@@ -9802,6 +9892,8 @@ final class Chat implements Model
                         $tokenLimit,
                         $compactionNotice,
                     );
+
+                return [$blocked, $postCompact];
             }
 
             if ($tier['outcome'] === 'sent') {
@@ -9809,7 +9901,7 @@ final class Chat implements Model
                 // run; over it the run holds, because the prompt reached the model —
                 // the no-path-forward case is the blocking refusal above, and only
                 // that case (ruling P8.S5-R6).
-                $turnCarrier = $this->withCompactionOutcome($tier['refilled'], turnSent: true);
+                $turnCarrier = $turnCarrier->withCompactionOutcome($tier['refilled'], turnSent: true);
             }
             // 'rescued': THE RESCUE EXEMPTION (ruling P8.S5-R6) — $turnCarrier
             // stays `$this`, so the run is neither extended nor broken by this
@@ -9885,7 +9977,7 @@ final class Chat implements Model
         }
         $newTurnMessages[] = $userTurn;
 
-        return $turnCarrier->dispatchTurn(
+        [$sent, $turnCmd] = $turnCarrier->dispatchTurn(
             $baseHistory,
             $newTurnMessages,
             $tokenLimit,
@@ -9893,6 +9985,8 @@ final class Chat implements Model
             $this->inputBuf,
             $this->inputCursorOffset(),
         );
+
+        return [$sent, $postCompact === null ? $turnCmd : ($turnCmd === null ? $postCompact : Cmd::batch($turnCmd, $postCompact))];
     }
 
     /**
@@ -10837,6 +10931,55 @@ final class Chat implements Model
             $newTurnMessages[] = $this->contextReminderMessage($this->estimateTokenCount($preStrip));
         }
 
+        // AHEAD-OF-NEED SUMMARISATION (roadmap 2.10), at the same 70% tier as
+        // the reminder: the summaries the 85% tier will need are requested NOW,
+        // beside the turn, so when that tier fires submit() splices them in
+        // and compacts without parking the prompt. Off update() like every
+        // summarization (a Cmd batched with the turn), on the same cache-reusing
+        // route and record/state template as /compact and the parked tier.
+        //
+        // The probe is the history being dispatched, so the condensed set is
+        // the one a later compaction's leading run will be; the conversation
+        // the cache-reusing route sends stops before this turn's prompt, which
+        // is neither summarised nor the summariser's to answer.
+        //
+        // One per compaction cycle: a request still out is left alone, and a
+        // landed one is kept while its fingerprint still matches - a failed
+        // one included, so a failing summariser is not re-asked every turn.
+        // One that no longer matches (a compaction, /rewind, /clear or session
+        // switch since) is dropped, and below the tier a landed one is dropped
+        // too: nothing will need it. Not while a /compact or parked
+        // summarization is out (that one is about to rewrite the history), nor
+        // with the spend cap reached.
+        $backgroundSummary = $this->backgroundSummary;
+        $backgroundCmd = null;
+        $dispatched = [...$baseHistory, ...$newTurnMessages];
+        if ($backgroundSummary !== null && (
+            $backgroundSummary['sessionId'] !== $this->currentSessionId
+            || ($backgroundSummary['summaries'] !== null && (
+                !$dueForReminder
+                || !$backgroundSummary['fingerprint']->matches($this->compactionService()->historyFingerprint($this->compactor, $dispatched))
+            ))
+        )) {
+            $backgroundSummary = null;
+        }
+        if ($dueForReminder
+            && $backgroundSummary === null
+            && $this->pendingCompactionId === null
+            && !$this->spendCapReached()
+        ) {
+            $request = $this->buildSummarizationRequest($dispatched, null, null, '', true, $baseHistory);
+            if ($request !== null) {
+                $backgroundSummary = [
+                    'id' => $request['id'],
+                    'sessionId' => $this->currentSessionId,
+                    'fingerprint' => $request['fingerprint'],
+                    'summaries' => null,
+                ];
+                $backgroundCmd = $request['cmd'];
+            }
+        }
+
         $generation = $this->generation + 1;
         $cancellation = new CancellationToken();
         $next = $this->mutate([
@@ -10865,6 +11008,7 @@ final class Chat implements Model
             // factor IS the correction, so consecutive turns against a
             // steady provider CONVERGE instead of alternating.
             'promptEstimateAtDispatch' => $this->rawTokenProxy($baseHistory),
+            'backgroundSummary' => $backgroundSummary,
         ]);
 
         $turns = $this->turnController();
@@ -10912,8 +11056,11 @@ final class Chat implements Model
         // Batched, not sequenced: the title call must never delay the reply
         // the user is actually waiting on. Only wrap when there IS a title
         // Cmd so the common (unnamed-store-less) path keeps returning the
-        // completion Cmd itself.
-        return [$next, $titleCmd === null ? $completion : Cmd::batch($completion, $titleCmd)];
+        // completion Cmd itself. The background summary (above) rides the
+        // same way, and for the same reason.
+        $sideCmds = array_values(array_filter([$titleCmd, $backgroundCmd]));
+
+        return [$next, $sideCmds === [] ? $completion : Cmd::batch($completion, ...$sideCmds)];
     }
 
     /**
@@ -12846,10 +12993,15 @@ final class Chat implements Model
      * `blockedBy` before any summarization is paid for, and a permitting chain's
      * note steers the summary beside `/compact`'s $focus.
      *
+     * $background and $conversation are the ahead-of-need route's (roadmap
+     * 2.10, {@see dispatchTurn()}); its PreCompact trigger is `auto`, the
+     * tier it stands in for.
+     *
      * @param list<Message> $probeHistory
-     * @return array{id:string,count:int,cmd:\Closure}|null
+     * @param ?list<Message> $conversation
+     * @return array{id:string,count:int,fingerprint:Context\Compaction\HistoryFingerprint,cmd:\Closure}|null
      */
-    private function buildSummarizationRequest(array $probeHistory, ?string $parkedSubmission, ?CancellationToken $cancellation = null, string $focus = ''): ?array
+    private function buildSummarizationRequest(array $probeHistory, ?string $parkedSubmission, ?CancellationToken $cancellation = null, string $focus = '', bool $background = false, ?array $conversation = null): ?array
     {
         $request = $this->compactionService()->buildSummarizationRequest(
             $this->summaryBackend,
@@ -12858,35 +13010,38 @@ final class Chat implements Model
             $parkedSubmission,
             $cancellation,
             $focus,
+            $background,
+            $conversation,
         );
         if ($request === null) {
             return null;
         }
 
         $gate = $this->preCompactGate(
-            $parkedSubmission === null
+            $parkedSubmission === null && !$background
                 ? \SugarCraft\Crush\Host\CompactionService::TRIGGER_MANUAL
                 : \SugarCraft\Crush\Host\CompactionService::TRIGGER_AUTO,
             $focus,
             $cancellation ?? new CancellationToken(),
         );
+        $fingerprint = $request['fingerprint'];
         if ($gate === null) {
-            return ['id' => $request['id'], 'count' => $request['count'], 'cmd' => Cmd::promise($request['promise'])];
+            return ['id' => $request['id'], 'count' => $request['count'], 'fingerprint' => $fingerprint, 'cmd' => Cmd::promise($request['promise'])];
         }
 
         $summarize = $request['promise'];
         $compactionId = $request['id'];
 
-        return ['id' => $compactionId, 'count' => $request['count'], 'cmd' => Cmd::promise(
+        return ['id' => $compactionId, 'count' => $request['count'], 'fingerprint' => $fingerprint, 'cmd' => Cmd::promise(
             static fn (): PromiseInterface => $gate()->then(
-                static function (?\SugarCraft\Crush\Hooks\HookResult $verdict) use ($summarize, $compactionId, $parkedSubmission): mixed {
+                static function (?\SugarCraft\Crush\Hooks\HookResult $verdict) use ($summarize, $compactionId, $parkedSubmission, $fingerprint, $background): mixed {
                     if ($verdict === null) {
                         return null;
                     }
 
                     $refusal = \SugarCraft\Crush\Host\CompactionService::preCompactRefusal($verdict);
                     if ($refusal !== null) {
-                        return new HistoryCompactedMsg($compactionId, parkedSubmission: $parkedSubmission, blockedBy: $refusal);
+                        return new HistoryCompactedMsg($compactionId, parkedSubmission: $parkedSubmission, blockedBy: $refusal, fingerprint: $fingerprint, background: $background);
                     }
 
                     return $summarize($verdict->additionalContext);
