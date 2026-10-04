@@ -348,6 +348,8 @@ edit it by hand.
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
 | `/fork` | ✓ | | `<prompt>` | Clone this conversation into a background session |
 | `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |
+| `/goal` | ✓ | | `[<condition>\|clear]` | Work until a condition is met, judged by the title model after every turn |
+| `/grind` | ✓ | | `[<condition>\|clear]` | Like /goal, with a much longer budget of follow-up rounds |
 <!-- commands:table:end -->
 
 **S** is blank on `new`, `session-pin`, `session-delete`, `docs`,
@@ -483,7 +485,7 @@ because that spelling predates the discoverable `/mcp` row and the palette's MCP
 list action still uses it. Both must be whole words — "mcp authentication keeps
 failing" is prose and goes to the model (or is queued mid-turn).
 
-`/init` is the one built-in that starts a turn. It is a canned prompt — study
+`/init` is one of three built-ins that start a turn. It is a canned prompt — study
 the checkout, then write `AGENTS.md` at the root or improve the one that is
 there — sent as if typed, so the spend cap, the compaction tiers and the
 `UserPromptSubmit` hook apply to it, and the file is written through the
@@ -491,6 +493,25 @@ ordinary `Write`/`Edit` tools under this session's permission mode. Anything
 after the name (`/init focus on the test setup`) is appended as a focus
 instruction. The new file reaches the system prompt from the next session on;
 see [`MEMORY.md`](MEMORY.md#instruction-files).
+
+`/goal <condition>` and `/grind <condition>` are the other two. Each sets a goal
+for the session and sends its first turn at once: a prompt naming the goal and
+telling the agent that only evidence counts. After every turn — the agent's or
+one you typed — the title model (`titleModel`, `SUGARCRUSH_TITLE_MODEL`; never
+the main model) reads the transcript and answers in strict JSON whether the goal
+is met, scoring it and listing what is still missing. A requirement the agent
+only *claims* is not met: the judge cannot run anything, so it takes command
+output, test results and file contents it can see as evidence and nothing else.
+Until the goal is met, the agent gets a follow-up prompt quoting what is missing,
+sent as if typed, so the spend cap, the compaction tiers and the
+`UserPromptSubmit` hook apply to it. `/goal` sends at most 10 follow-ups and
+`/grind` at most 50; then the loop stops and says what was still missing. The
+judging holds the turn like a running reply: a prompt you queue meanwhile goes
+first, and Esc Esc cancels the round in progress (the goal itself stays set and
+is judged again after your next turn). A bare `/goal` reports the goal and its
+rounds; `/goal clear` (also `off` or `stop`) ends it. With no title model
+configured, `/goal` sets nothing and says so. The goal lives in the session's
+transcript, so a resumed session resumes it and `/clear` drops it.
 
 `/editor` composes the next prompt in your own editor: `$VISUAL`, else
 `$EDITOR`, else `vi` (`notepad` on Windows), run as a shell command line with

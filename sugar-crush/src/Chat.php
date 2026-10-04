@@ -2340,10 +2340,20 @@ final class Chat implements Model
                 'inFlightCancellation' => null,
             ]), null]);
 
+            // Step 3.D-3: a session with a live `/goal` is not done yet — the
+            // title model judges this turn (below, once the per-turn side
+            // calls are scheduled) and the agent goes back to work until the
+            // goal is met. Only when nothing queued took the turn's place: the
+            // user's own message carries the conversation on, and the turn it
+            // starts is judged when it settles.
+            $goal = $done->inFlight ? null : \SugarCraft\Crush\Goal\GoalState::activeIn($done->history);
+
             // The turn is over and nothing queued took its place: guess the
             // user's next message in the background (→ accepts it). Batched
-            // beside, never before, whatever the drain scheduled.
-            $suggest = $done->inFlight ? null : $done->schedulePromptSuggestion();
+            // beside, never before, whatever the drain scheduled. Not while a
+            // goal keeps the conversation going: the guess would be stale
+            // before the box is free to show it.
+            $suggest = $done->inFlight || $goal !== null ? null : $done->schedulePromptSuggestion();
 
             // Roadmap 5.2, same seam and same rule: auto-memory consolidation
             // on the tool-less summary backend, throttled on disk to one run
@@ -2370,12 +2380,17 @@ final class Chat implements Model
                 : \SugarCraft\Crush\Memory\DreamPass::new(
                     \SugarCraft\Crush\Memory\MemoryWriter::new($done->memoryStore, $done->projectRoot()),
                 )->call($done->backend, $done->spendCapReached(), $done->currentSessionId);
+            $judge = null;
+            if ($goal !== null) {
+                [$done, $judge] = $done->scheduleGoalJudge($goal);
+            }
             $cmds = array_values(array_filter([
                 $doneCmd,
                 $suggest,
                 $consolidate === null ? null : Cmd::promise($consolidate),
                 $autoCommit,
                 $dream === null ? null : Cmd::promise($dream),
+                $judge,
             ]));
 
             return [$done, match (count($cmds)) {
@@ -2383,6 +2398,9 @@ final class Chat implements Model
                 1 => $cmds[0],
                 default => Cmd::batch(...$cmds),
             }];
+        }
+        if ($msg instanceof GoalJudgedMsg) {
+            return $this->landGoalVerdict($msg);
         }
         if ($msg instanceof DreamPassCompletedMsg) {
             // Roadmap 5.4-3: the notes, the memory-history commit and the
@@ -3503,6 +3521,236 @@ final class Chat implements Model
         }
 
         return $this->dispatchToolCalls($message, $gated);
+    }
+
+    /**
+     * `/goal <condition>` and `/grind <condition>` (roadmap 3.D-3): set a goal
+     * the session keeps working toward. The goal's first turn starts at once;
+     * after every turn the title model judges the transcript
+     * ({@see \SugarCraft\Crush\Goal\GoalJudge}) and, until it is met, the agent
+     * is sent back to work — up to the mode's follow-up budget.
+     *
+     * A bare `/goal` reports the goal; `/goal clear` (`off`, `stop`) ends it.
+     * The state is a marker row in the transcript
+     * ({@see \SugarCraft\Crush\Goal\GoalState}), so it is the session's: a
+     * resumed session resumes it and `/clear` drops it.
+     *
+     * NO TITLE MODEL, NO GOAL: the main model is never asked to judge its own
+     * work (audit 15b-12's rule for every side call), so without one `/goal`
+     * says how to configure it rather than set a goal nothing can check.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleGoalCommand(string $text): array
+    {
+        $mode = \SugarCraft\Crush\Goal\GoalMode::tryFrom(ltrim(self::commandTokens($text)[0], '/'))
+            ?? \SugarCraft\Crush\Goal\GoalMode::Goal;
+        $condition = self::commandArgument($text);
+        $current = \SugarCraft\Crush\Goal\GoalState::fromHistory($this->history);
+        $live = $current !== null && $current->isActive() ? $current : null;
+
+        if ($condition === '') {
+            return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::reply(
+                $text,
+                $live === null
+                    ? sprintf(
+                        'No goal is set. `%1$s <condition>` sets one: the agent starts on it at once, and after '
+                        . 'every turn the title model checks the transcript for evidence that it is met, sending the '
+                        . 'agent back to work until it is (up to %2$d follow-up rounds).',
+                        $mode->command(),
+                        $mode->maxRounds(),
+                    )
+                    : sprintf(
+                        'Goal (%1$s, %2$d of %3$d follow-up rounds used): %4$s. `%1$s clear` stops it.',
+                        $live->mode->command(),
+                        $live->round,
+                        $live->mode->maxRounds(),
+                        $live->condition,
+                    ),
+            ));
+        }
+
+        if (\in_array(strtolower($condition), ['clear', 'off', 'stop'], true)) {
+            $result = \SugarCraft\Crush\Host\Commands\CommandResult::new(Message::user($text)->withUiOnly());
+
+            return $this->applyCommandResult($live === null
+                ? $result->withRows(Message::assistant('No goal is set, so there is nothing to clear.')->withUiOnly())
+                : $result->withRows(
+                    Message::notice(sprintf('Goal cleared: %s', $live->condition)),
+                    $live->withStatus(\SugarCraft\Crush\Goal\GoalState::CLEARED)->toMessage(),
+                ));
+        }
+
+        if ($this->titleBackend === null) {
+            return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::reply(
+                $text,
+                sprintf(
+                    '%s needs a title model to judge the goal, and none is configured: set `titleModel` '
+                    . '(or `SUGARCRUSH_TITLE_MODEL`). The main model is never asked to judge its own work.',
+                    $mode->command(),
+                ),
+            ));
+        }
+
+        if ($this->spendCapReached()) {
+            return $this->spendCapRefusal() ?? [$this, null];
+        }
+
+        $goal = \SugarCraft\Crush\Goal\GoalState::new($mode, $condition);
+        $set = $this->mutate(['history' => [
+            ...$this->history,
+            Message::notice(sprintf(
+                'Goal set: %s. After every turn the title model checks the transcript for evidence that it is '
+                . 'met; until it is, the agent is sent back to work, up to %d follow-up rounds. `%s clear` stops it.',
+                $goal->condition,
+                $mode->maxRounds(),
+                $mode->command(),
+            )),
+            $goal->toMessage(),
+        ]]);
+
+        [$next, $cmd] = $set->withInputBuf(\SugarCraft\Crush\Goal\GoalJudge::kickoffPrompt($goal))->submit();
+        if (!$next->inFlight) {
+            // The first turn did not go out (a UserPromptSubmit hook refused
+            // it): the goal never started, and says so beside the refusal.
+            $next = $next->mutate(['history' => [
+                ...$next->history,
+                $goal->withStatus(\SugarCraft\Crush\Goal\GoalState::STOPPED)->toMessage(),
+            ]]);
+        }
+
+        return [$next->withInputBuf(''), $cmd];
+    }
+
+    /**
+     * Start judging the turn that just settled against $goal (roadmap 3.D-3),
+     * or end the goal when it can no longer be judged.
+     *
+     * The judging HOLDS THE TURN SLOT — `inFlight` under its own cancellation
+     * and a bumped generation, as a `!cmd` does — so from the user's side the
+     * goal loop is one long turn: the spinner keeps running, a prompt typed now
+     * waits behind it, and Esc Esc stops it (the bump strands the verdict).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function scheduleGoalJudge(\SugarCraft\Crush\Goal\GoalState $goal): array
+    {
+        $judge = $this->titleBackend;
+        $stop = match (true) {
+            $judge === null => 'no title model is configured to judge it',
+            $this->spendCapReached() => 'the spend cap is reached',
+            default => null,
+        };
+        if ($stop !== null || $judge === null) {
+            return [$this->endGoal($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, sprintf(
+                'Goal check stopped: %s. The goal is no longer live; `%s <condition>` starts it again.',
+                $stop,
+                $goal->mode->command(),
+            )), null];
+        }
+
+        $generation = $this->generation + 1;
+
+        return [
+            $this->mutate([
+                'inFlight' => true,
+                'inFlightCancellation' => new CancellationToken(),
+                'generation' => $generation,
+                'lastEscapeAt' => null,
+            ]),
+            Cmd::promise(\SugarCraft\Crush\Goal\GoalJudge::new()->call(
+                $judge,
+                $goal->condition,
+                $this->history,
+                $generation,
+                $this->currentSessionId,
+            )),
+        ];
+    }
+
+    /**
+     * Land the `/goal` judge's verdict (roadmap 3.D-3): give back the turn slot
+     * the judging held, then end the goal (met, budget spent, or no usable
+     * verdict) or send the agent back to work with what is still missing.
+     *
+     * A prompt the user queued while the turn ran goes first and the goal
+     * waits: the user's own message is the conversation carrying on, and the
+     * turn it starts is judged when it settles like any other. The follow-up
+     * prompt is sent as typed text is — through {@see submit()}, so every gate
+     * applies to it — and the user's unsent draft is put back in the box.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function landGoalVerdict(GoalJudgedMsg $msg): array
+    {
+        $this->accountUsage($msg->usage);
+        if ($msg->generation !== $this->generation || !$this->inFlight || $msg->sessionId !== $this->currentSessionId) {
+            return [$this, null];
+        }
+
+        $released = $this->mutate(['inFlight' => false, 'inFlightCancellation' => null]);
+        $goal = \SugarCraft\Crush\Goal\GoalState::activeIn($this->history);
+        if ($goal === null) {
+            return self::releaseQueuedPrompts([$released, null]);
+        }
+
+        $verdict = $msg->verdict;
+        if ($verdict === null) {
+            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, sprintf(
+                'Goal check stopped: %s. The goal is no longer live; `%s <condition>` starts it again.',
+                $msg->error ?? 'the judge gave no verdict',
+                $goal->mode->command(),
+            ));
+        }
+
+        $score = $verdict->score === null ? '' : ' (' . $verdict->scoreLabel() . ')';
+        if ($verdict->complete) {
+            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::MET, sprintf('Goal met%s: %s', $score, $goal->condition));
+        }
+
+        if ($goal->exhausted()) {
+            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, sprintf(
+                'Goal not met after %d follow-up rounds%s: %s.%s The loop stopped; `%s <condition>` starts it again.',
+                $goal->round,
+                $score,
+                $goal->condition,
+                $verdict->missing === [] ? '' : ' Still missing: ' . implode('; ', $verdict->missing) . '.',
+                $goal->mode->command(),
+            ));
+        }
+
+        if ($released->queuedPrompts !== []) {
+            return self::releaseQueuedPrompts([$released, null]);
+        }
+
+        $next = $goal->withRound($goal->round + 1);
+        $draft = $released->input;
+        [$sent, $cmd] = $released->mutate(['history' => [...$released->history, $next->toMessage()]])
+            ->withInputBuf(\SugarCraft\Crush\Goal\GoalJudge::followupPrompt($next, $verdict))
+            ->submit();
+
+        return [$sent->mutate(['input' => $draft]), $cmd];
+    }
+
+    /**
+     * End $goal with $status and say so in $notice, releasing whatever the
+     * user queued meanwhile.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function goalEnded(\SugarCraft\Crush\Goal\GoalState $goal, string $status, string $notice): array
+    {
+        return self::releaseQueuedPrompts([$this->endGoal($goal, $status, $notice), null]);
+    }
+
+    /** This model with $goal recorded as ended ($status) and $notice beside it. */
+    private function endGoal(\SugarCraft\Crush\Goal\GoalState $goal, string $status, string $notice): self
+    {
+        return $this->mutate(['history' => [
+            ...$this->history,
+            Message::notice($notice),
+            $goal->withStatus($status)->toMessage(),
+        ]]);
     }
 
     /**
