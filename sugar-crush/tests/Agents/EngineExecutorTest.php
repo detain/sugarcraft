@@ -114,6 +114,55 @@ final class EngineExecutorTest extends TestCase
         $this->assertStringContainsString('No provider configured', $result->error?->getMessage() ?? '');
     }
 
+    /**
+     * Step 3.D-2: a stage agent is a delegated run, so its turn ends on
+     * `SubagentStop` — never on the session's own `Stop` — on both the plain
+     * and the streamed path, and a refusal keeps the STAGE working.
+     */
+    public function testAStageAgentEndsOnSubagentStopAndARefusalKeepsItWorking(): void
+    {
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'first try'),
+            new CompleteResponse(content: 'with tests'),
+            new CompleteResponse(content: 'streamed answer'),
+        ]);
+        $fired = [];
+        $hooks = new \SugarCraft\Crush\Hooks\HookManager(new \SugarCraft\Crush\Hooks\HookRegistry());
+        foreach ([\SugarCraft\Crush\Hooks\HookEvent::Stop, \SugarCraft\Crush\Hooks\HookEvent::SubagentStop] as $event) {
+            $hooks->register(new class ($event, $fired) implements \SugarCraft\Crush\Hooks\HookInterface {
+                public function __construct(private \SugarCraft\Crush\Hooks\HookEvent $event, private array &$fired) {}
+
+                public function name(): string { return 'gate-' . $this->event->value; }
+
+                public function event(): \SugarCraft\Crush\Hooks\HookEvent { return $this->event; }
+
+                public function matcher(): string { return '.*'; }
+
+                public function execute(\SugarCraft\Crush\Hooks\HookContext $context): \SugarCraft\Crush\Hooks\HookResult
+                {
+                    $input = json_decode($context->toolInput, true);
+                    $this->fired[] = [$this->event->value, $input['agent_type'] ?? null, $input['stop_hook_active']];
+
+                    return $input['last_assistant_message'] === 'first try'
+                        ? \SugarCraft\Crush\Hooks\HookResult::deny('add the tests')
+                        : \SugarCraft\Crush\Hooks\HookResult::allow();
+                }
+            });
+        }
+        $executor = new EngineExecutor(EngineBackend::new($provider, 'm')->withRoot($this->emptyRoot())->withHooks($hooks));
+
+        $result = $executor->execute(self::subAgent(), self::request());
+        $streamed = iterator_to_array($executor->executeStream(self::subAgent(), self::request()), false);
+
+        $this->assertSame('with tests', $result->output);
+        $this->assertSame('streamed answer', array_pop($streamed)->output);
+        $this->assertSame(
+            [['SubagentStop', 'coder', false], ['SubagentStop', 'coder', true], ['SubagentStop', 'coder', false]],
+            $fired,
+        );
+        $this->assertNull(\SugarCraft\Crush\Hooks\HookManager::currentSubagent());
+    }
+
     public function testTheStreamIsAnActivityLogFollowedByTheFinalAnswer(): void
     {
         $provider = new ScriptedProvider([

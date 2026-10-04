@@ -163,10 +163,10 @@ already run:
 |---|---|---|
 | `PreToolUse` | before a tool runs — the one that can stop it | `Runtime::gate()`, `Chat::gateToolCall()` |
 | `PostToolUse` | after a tool ran, in provider order | `Runtime::settle()`, `Chat::applyPostToolUse()` |
-| `Stop` | the agent is about to stop | — |
-| `SubagentStop` | a sub-agent is about to stop | — |
+| `Stop` | the agent answered without calling a tool and is about to stop — the one that can keep it going | `EngineBackend::runTurn()` |
+| `SubagentStop` | a sub-agent (a `Task` run, or a workflow stage's agent) is about to stop | `EngineBackend::runTurn()` |
 | `SessionStart` | the first prompt submitted into an empty history | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
-| `SessionEnd` | the session is ending | — |
+| `SessionEnd` | the process is exiting: the TUI closed, or a `-p` run printed its answer | `NonInteractive::fireSessionEnd()` |
 | `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
 | `PreCompact` | before a compaction condenses the history — the one that can skip it | `Chat::preCompactGate()` |
 | `PostCompact` | after a compaction was applied | `Chat::postCompactCmd()` |
@@ -175,21 +175,24 @@ already run:
 
 The `—` rows are **dormant, not removed**: an entry naming one of them parses
 from `hooks.yaml`, registers, and keeps the block semantics below — but nothing
-in `src/` reaches them at this tip, and the two halves are worth telling apart.
-`Stop`, `SubagentStop` and `SessionEnd` have no dispatch call site
-at all: `HookDispatcher` carries a method for each and nothing in `src/` calls
-it. `TaskCreated`, `TaskCompleted` and `TeammateIdle` do have call sites, all
-three in `TaskList`, but each is guarded on an injected `HookDispatcher`, and
-`src/` constructs that class nowhere — `Team.php`, the only production
-`new TaskList(…)`, leaves the parameter at its default. So the operative reason
-a script written against one will never run is the dispatcher that is never
-built, not a call site that was left out. Wiring them is open work.
+in `src/` reaches them at this tip. `TaskCreated`, `TaskCompleted` and
+`TeammateIdle` do have call sites, all three in `TaskList`, but each is guarded
+on an injected `HookDispatcher`, and `src/` constructs that class nowhere —
+`Team.php`, the only production `new TaskList(…)`, leaves the parameter at its
+default. So the operative reason a script written against one will never run is
+the dispatcher that is never built, not a call site that was left out. Wiring
+them is open work. (`HookDispatcher` also carries a method for `Stop`,
+`SubagentStop` and `SessionEnd`; nothing calls those either — the live chain
+dispatches all three through `HookManager`, see *The stop events* below.)
 
 What a **block** (exit 2) does depends on the event, because for some of them
 the action has already happened:
 
-- `PreToolUse`, `Stop`, `TaskCreated` — stops the action outright, and stderr
-  goes back to the agent.
+- `PreToolUse`, `TaskCreated` — stops the action outright, and stderr goes
+  back to the agent.
+- `Stop`, `SubagentStop` — the action is the agent *stopping*, so a block
+  **keeps the turn going**: the reason goes back to the agent as its next
+  prompt, at most eight times a turn. See *The stop events* below.
 - `PostToolUse` — too late to stop, so it **withholds the output** instead:
   on both tool paths (`Runtime::settle()`, and `Chat::applyPostToolUse()` on
   the dormant Chat path) the model and the UI get
@@ -215,9 +218,10 @@ the action has already happened:
   characters blanked. A refusal no single hook owns — a chain that ran out of
   its time budget, or kept rewriting — reads `[output withheld by the
   PostToolUse hook chain: <reason>]` instead of guessing a name.
-- `SubagentStop`, `TaskCompleted` — too late to stop; surfaces through
-  `continueOnBlock` on the `HookDispatcher`, which `src/` never builds (see
-  above).
+- `TaskCompleted` — too late to stop; surfaces through `continueOnBlock` on
+  the `HookDispatcher`, which `src/` never builds (see above).
+- `SessionEnd` — nothing is left to stop, so the reason is one line on stderr
+  and the exit is unchanged.
 - `PreCompact` — **skips the compaction**: the history is left as it was, and
   stderr reaches **you only**. See *The two compaction events* below.
 - `PostCompact`, `SessionStart` — stderr reaches **you only**; there is no agent
@@ -289,6 +293,40 @@ from the tool gates:
 Hook notes go onto **history**, never into the prompt assembler — `role: system`
 is the non-spoofable operator channel — which is why wiring these two events
 moves no prompt golden.
+
+### The stop events
+
+`EngineBackend::runTurn()` fires `Stop` when the model answers without calling a
+tool — the step that would end the turn — and `SubagentStop` instead when the
+turn is a delegated run: a `Task` sub-agent, or an agent a workflow stage runs.
+It runs in the turn's own process (the forked turn child on the TUI path), only
+when a hook for the event is wired, so an unhooked turn ends exactly as before.
+
+- **A block keeps the turn going.** Any verdict that does not permit — exit `1`
+  or `2`, an ask (there is nobody to ask), a timeout, a hook that throws —
+  appends the hook's reason as the next prompt, `Stop hook "<name>" did not let
+  you finish yet: <reason>`, and the turn takes another step. The answer it
+  refused stays in the history ahead of it.
+- **Bounded three ways.** At most eight continuations a turn
+  (`HookManager::MAX_STOP_CONTINUATIONS`), each one a step under the turn's
+  step ceiling, and none once the spend cap is reached or a soft cancel is
+  pending. Past any of them the turn ends on its last answer.
+- **`"continue": false` ends it.** A JSON envelope with `"continue": false` (see
+  *JSON on stdout*) ends the turn, as it was about to, and its `stopReason`
+  closes the reply: `[turn stopped by hook "<name>": <stopReason>]`.
+- **Context.** `toolName` carries the event name (write the `matcher:` against
+  it), and `toolInput` is JSON `{"stop_hook_active": …, "last_assistant_message":
+  "<the answer>"}` — `stop_hook_active` is `true` once a block has already kept
+  this turn going, so a hook can let go. `SubagentStop` adds `agent_id` and
+  `agent_type`.
+
+`SessionEnd` fires once as the process exits, from
+`NonInteractive::fireSessionEnd()`: after the TUI's program loop returns
+(`bin/sugarcrush`, with the session's own chain, id and root; `toolInput`
+`{"reason": "prompt_input_exit"}`) and after a `-p` run's answer is printed
+(`{"reason": "other"}`) — never from the TUI's quit paths, which only leave the
+loop. A `-p` caller that supplies its own backend owns its session's end, so
+nothing fires there. The session server (`serve`) does not fire it yet.
 
 ### The two compaction events
 
@@ -476,7 +514,7 @@ one hook say several things at once:
 | `reason` | stderr on exit `2`, stdout on exit `3` | the refusal or the question, bounded exactly as its exit-code twin is |
 | `updatedInput` | exit `4` | a JSON object replacing the tool's arguments, refused over the same ceiling; with `ask` it rides the question as a proposal the chain re-scans |
 | `additionalContext` | stdout on exit `0` | the model-visible note, capped at 10,000 bytes |
-| `continue` + `stopReason` | — | `"continue": false` refuses the call and marks the verdict as asking the run to stop (`HookResult::haltsTurn()`); `stopReason` is the operator-facing reason |
+| `continue` + `stopReason` | — | `"continue": false` refuses the call and ends the turn (`HookResult::haltsTurn()`); `stopReason` is the operator-facing reason the reply closes with |
 
 The same keys are accepted under `hookSpecificOutput`, where
 `permissionDecision` and `permissionDecisionReason` spell `decision` and
@@ -499,10 +537,13 @@ Rules worth knowing before you rely on it:
   `PreToolUse` `allow` skips that tool's permission prompt. Here the chain still
   reaches the permission gate after your hook, so a hook file cannot widen the
   session's permission mode by printing a word.
-- **`continue: false` refuses the call today; ending the turn rides the `Stop`
-  hook work.** The refusal carries the flag through `HookRegistry::executeHooks()`
-  unchanged, and the model reads the stop reason in the `"Hook denied: …"`
-  line. No consumer ends the turn on the flag yet.
+- **`continue: false` ends the turn.** On a `PreToolUse` or `PostToolUse` hook
+  it refuses the call (the model reads the reason in the `"Hook denied: …"` or
+  withheld-output line), the step's other calls settle, and the engine's turn
+  ends at that step boundary with no further provider call; the reply closes
+  with `[turn stopped by hook "<name>": <stopReason>]`. On `Stop` and
+  `SubagentStop` it ends the turn the same way (see *The stop events*). The
+  TUI's own tool path (`Chat::gateToolCall()`) still only refuses the call.
 - `suppressOutput` and `systemMessage` are not read.
 
 ### Environment handed to the script

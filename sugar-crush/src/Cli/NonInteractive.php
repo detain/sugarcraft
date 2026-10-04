@@ -9,6 +9,8 @@ use SugarCraft\Crush\Attachments\FileMentions;
 use SugarCraft\Crush\AttachmentType;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Hooks\HookEvent;
+use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\ToolRefusal;
@@ -172,6 +174,11 @@ final class NonInteractive
             );
         }
 
+        // Step 3.D-2: only a run that built its own backend owns the session
+        // whose end it reports — a caller that supplied one (the tests, a
+        // headless host) owns that session's lifecycle, SessionEnd included.
+        $ownsSession = $backend === null;
+
         if ($backend === null) {
             $providerName = Bootstrap::selectedProviderName();
 
@@ -324,7 +331,64 @@ final class NonInteractive
 
         echo $rendered . "\n";
 
+        // Step 3.D-2: the run is over and its answer is out — the one point
+        // a successful `-p` session ends, so SessionEnd fires here, once,
+        // after stdout carries the whole document.
+        // The chain is rebuilt from the launch's own sources (the hook files
+        // are read once per launch, so it is the chain the run used); a chain
+        // that cannot be built now changes nothing about a run that is done.
+        if ($ownsSession) {
+            try {
+                $hooks = Bootstrap::hooks(null, $args->root);
+            } catch (\Throwable) {
+                $hooks = null;
+            }
+            self::fireSessionEnd(
+                $hooks,
+                $backend instanceof \SugarCraft\Crush\Backend\EngineBackend ? ($backend->sessionId() ?? '') : '',
+                $args->root ?? (getcwd() ?: ''),
+                'other',
+            );
+        }
+
         return self::EXIT_OK;
+    }
+
+    /**
+     * Run the `SessionEnd` chain (step 3.D-2) as the process is about to
+     * exit: after a `-p` run's answer ({@see run()}), and after the TUI's
+     * program loop returns (`bin/sugarcrush`, with the hosted Chat's own
+     * chain). Once per process, never from the TUI's `Cmd::quit()` sites,
+     * which are ways OUT of the loop rather than the end of the session.
+     *
+     * $reason is Claude Code's vocabulary: `prompt_input_exit` when the
+     * person left the interactive prompt, `other` otherwise. Observe-only —
+     * nothing is left to stop — so a refusal, a timeout or a hook that threw
+     * is one line on stderr (by now the terminal is the operator's again),
+     * and an unhooked session does nothing at all. Returns that line, or
+     * null when nothing was written.
+     */
+    public static function fireSessionEnd(?HookManager $hooks, string $sessionId, string $root, string $reason): ?string
+    {
+        $event = HookEvent::SessionEnd;
+        if ($hooks === null || !$hooks->hasHooksFor($event, $event->value)) {
+            return null;
+        }
+
+        $verdict = $hooks->sessionEnd(HookManager::eventContext($event, ['reason' => $reason], $sessionId, $root));
+        if ($verdict->permitsExecution()) {
+            return null;
+        }
+
+        $hook = $verdict->refusingHook();
+        $line = \sprintf(
+            "sugarcrush: SessionEnd hook%s refused: %s\n",
+            $hook === null ? '' : ' "' . HookManager::displayName($hook) . '"',
+            \trim($verdict->message) === '' ? 'no reason given' : \trim($verdict->message),
+        );
+        \fwrite(\STDERR, $line);
+
+        return $line;
     }
 
     /**

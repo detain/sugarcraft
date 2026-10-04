@@ -2318,11 +2318,15 @@ final class DocFigureProseDriftTest extends TestCase
         $paraEnd = strpos($hooksRaw, 'What a **block**');
         self::assertIsInt($paraEnd);
         $para = self::markdownProse(substr($hooksRaw, $sectionEnd, $paraEnd - $sectionEnd));
-        self::assertSame(1, preg_match('/`(\w+)`, `(\w+)` and `(\w+)` have no dispatch call site\s+at all/', $para, $trioNone), 'the no-call-site half of the dormancy split moved');
-        self::assertSame(1, preg_match('/`(\w+)`, `(\w+)` and `(\w+)` do have call sites, all three in `(\w+)`, but each is guarded on an injected `HookDispatcher`, and `src\/` constructs that class nowhere/', $para, $trio), 'the guarded-trio half of the dormancy split moved');
-        self::assertEqualsCanonicalizing($dashes, [$trioNone[1], $trioNone[2], $trioNone[3], $trio[1], $trio[2], $trio[3]], 'the two dormancy halves no longer split the dash rows');
-        foreach ([$trioNone[1], $trioNone[2], $trioNone[3]] as $event) {
-            self::assertSame([], self::srcOccurrences('->dispatch' . $event . '('), "{$event} gained a dispatch call site — the page still lists it under no-call-site-at-all");
+        // Step 3.D-2 wired Stop / SubagentStop / SessionEnd through HookManager,
+        // so the guarded trio is now every dash row; the page's aside says the
+        // dispatcher's own methods for the wired three are still uncalled.
+        self::assertSame(1, preg_match('/`(\w+)`, `(\w+)` and `(\w+)` do have call sites, all three in `(\w+)`, but each is guarded on an injected `HookDispatcher`, and `src\/` constructs that class nowhere/', $para, $trio), 'the guarded-trio sentence of the dormancy paragraph moved');
+        self::assertEqualsCanonicalizing($dashes, [$trio[1], $trio[2], $trio[3]], 'the guarded trio no longer is every dash row');
+        self::assertSame(1, preg_match('/`HookDispatcher` also carries a method for `(\w+)`,\s+`(\w+)` and `(\w+)`; nothing calls those either/', $para, $wiredAside), 'the aside on the dispatcher\'s methods for the wired events moved');
+        foreach ([$wiredAside[1], $wiredAside[2], $wiredAside[3]] as $event) {
+            self::assertArrayHasKey($event, $citations, "{$event} is named as wired through HookManager, but its table row is a dash");
+            self::assertSame([], self::srcOccurrences('->dispatch' . $event . '('), "{$event} gained a HookDispatcher call site — the aside says nothing calls it");
         }
         $trioFile = $trio[4];
         foreach ([$trio[1], $trio[2], $trio[3]] as $event) {

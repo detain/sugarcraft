@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Agents;
 
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Backend\TranscriptTurn;
 use SugarCraft\Crush\Backend\TurnInterrupted;
 use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\SystemMessage;
@@ -221,16 +223,22 @@ final class EngineExecutor implements ExecutorInterface
 
         $messages = self::messages($agent, $request);
 
+        $engine = $this->engine->withTools($tools)->withMaxSteps($maxTurns);
+
         try {
-            $turn = $this->engine
-                ->withTools($tools)
-                ->withMaxSteps($maxTurns)
-                ->completeTranscript(
+            // A delegated run (step 3.D-2): the turn ends on `SubagentStop`,
+            // not on the session's `Stop` — this engine is the session's own
+            // and carries nothing else that says so.
+            $turn = HookManager::runAsSubagent(
+                $agent->id,
+                $agent->agent->name,
+                static fn (): TranscriptTurn => $engine->completeTranscript(
                     $messages,
                     onEvent: $onEvent,
                     onReasoning: $onProgress,
                     onToken: $onToken,
-                );
+                ),
+            );
         } catch (TurnInterrupted $failure) {
             // A run that failed part-way still billed the steps it completed
             // (same bug class as audit B4): the interrupted transcript carries

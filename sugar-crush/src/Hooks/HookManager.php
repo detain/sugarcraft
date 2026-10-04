@@ -11,6 +11,32 @@ use SugarCraft\Crush\Permissions\ApprovalVerdict;
  */
 final class HookManager
 {
+    /**
+     * How many times one turn's `Stop` / `SubagentStop` chain may refuse to
+     * let it end (step 3.D-2) before the turn ends anyway. Each refusal costs
+     * a provider call, so a hook that never lets go is bounded here as well
+     * as by the turn's step ceiling and spend cap.
+     */
+    public const MAX_STOP_CONTINUATIONS = 8;
+
+    /**
+     * The first tool verdict this manager returned that asked the RUN to
+     * stop ({@see HookResult::haltsTurn()}), or null — see {@see turnHalt()}.
+     */
+    private ?HookResult $turnHalt = null;
+
+    /**
+     * Delegated runs in progress, per fiber — see {@see runAsSubagent()}.
+     * The `null` fiber (code running outside any fiber) is kept apart in
+     * {@see $subagentOutsideFibers} because a WeakMap cannot key on null.
+     *
+     * @var \WeakMap<\Fiber, list<array{agent_id: string, agent_type: string}>>|null
+     */
+    private static ?\WeakMap $subagentFibers = null;
+
+    /** @var list<array{agent_id: string, agent_type: string}> */
+    private static array $subagentOutsideFibers = [];
+
     public function __construct(
         private HookRegistry $registry,
     ) {}
@@ -23,10 +49,16 @@ final class HookManager
      * The registry's state is arrays of hook instances, so a shallow registry
      * clone is a full copy of the chain; the hook objects themselves are
      * shared, exactly as they are between two turns on one manager.
+     *
+     * A clone also starts with no {@see turnHalt()}: the engine takes a
+     * per-turn copy of the launch's manager, and a halt the launch's own
+     * gate recorded (Chat's tool path) must not end the next turn before it
+     * has made a call.
      */
     public function __clone()
     {
         $this->registry = clone $this->registry;
+        $this->turnHalt = null;
     }
 
     /**
@@ -173,7 +205,35 @@ final class HookManager
      */
     public function preToolUse(HookContext $context): HookResult
     {
-        return $this->registry->executeHooks(HookEvent::PreToolUse->value, $context);
+        return $this->noteHalt($this->registry->executeHooks(HookEvent::PreToolUse->value, $context));
+    }
+
+    /**
+     * The first verdict {@see preToolUse()} or {@see postToolUse()} returned
+     * that asked the run to stop — a script hook's JSON `"continue": false`
+     * (step 3.D-1, {@see HookResult::haltsTurn()}) — or null when none has.
+     *
+     * The verdict itself already refused the call it was raised on; this is
+     * how the turn loop that owns the chain learns the hook wanted MORE than
+     * that ({@see \SugarCraft\Crush\Backend\EngineBackend::runTurn()} ends the
+     * turn at the step boundary and shows the stop reason). Recorded here,
+     * beside the chain, because both tool gates run through this manager in
+     * the turn's own process ({@see \SugarCraft\Crush\Runtime}'s gate and
+     * settle run in the parent of any forked tool child), so no other seam
+     * sees every verdict. First one wins: it is the reason the run stopped.
+     */
+    public function turnHalt(): ?HookResult
+    {
+        return $this->turnHalt;
+    }
+
+    private function noteHalt(HookResult $result): HookResult
+    {
+        if ($this->turnHalt === null && $result->haltsTurn()) {
+            $this->turnHalt = $result;
+        }
+
+        return $result;
     }
 
     /**
@@ -256,7 +316,7 @@ final class HookManager
      */
     public function postToolUse(HookContext $context): HookResult
     {
-        return $this->registry->executeHooks(HookEvent::PostToolUse->value, $context, failClosedOnThrow: true);
+        return $this->noteHalt($this->registry->executeHooks(HookEvent::PostToolUse->value, $context, failClosedOnThrow: true));
     }
 
     /**
@@ -342,6 +402,205 @@ final class HookManager
     public function postCompact(HookContext $context): HookResult
     {
         return $this->registry->executeHooks(HookEvent::PostCompact->value, $context);
+    }
+
+    /**
+     * Stop hook execution (step 3.D-2): the agent answered without calling a
+     * tool and is about to end its turn.
+     *
+     * Context smuggling follows {@see self::sessionStart()}: `toolName` is the
+     * `'Stop'` sentinel the matcher tests, `toolInput` is JSON
+     * `{"stop_hook_active": bool, "last_assistant_message": "<the answer>"}`
+     * (Claude Code's field names; `stop_hook_active` is true once a Stop
+     * refusal has already kept this turn going, so a hook can let go).
+     *
+     * A verdict that does not permit KEEPS THE TURN GOING: its reason goes
+     * back to the agent as a new prompt, at most
+     * {@see MAX_STOP_CONTINUATIONS} times a turn. A `"continue": false`
+     * verdict ({@see HookResult::haltsTurn()}) ends it and shows the stop
+     * reason. Both are the caller's to act on
+     * ({@see \SugarCraft\Crush\Backend\EngineBackend::runTurn()}); the verdict
+     * passes through verbatim.
+     *
+     * FAIL-CLOSED ON A THROW, as {@see postToolUse()} is: a hook that throws
+     * is reported as a refusal naming it rather than escaping into the turn
+     * loop, whose step budget and continuation cap bound what it can cost.
+     */
+    public function stop(HookContext $context): HookResult
+    {
+        return $this->registry->executeHooks(HookEvent::Stop->value, $context, failClosedOnThrow: true);
+    }
+
+    /**
+     * SubagentStop hook execution (step 3.D-2): a delegated run — a `Task`
+     * sub-agent, or an agent a workflow stage runs ({@see runAsSubagent()}) —
+     * answered without calling a tool and is about to end. Same verdict
+     * contract as {@see stop()}, applied to the SUB-AGENT's turn: a refusal
+     * keeps it working, `"continue": false` ends it with the stop reason in
+     * its report. `toolInput` adds `agent_id` and `agent_type` to
+     * {@see stop()}'s fields.
+     */
+    public function subagentStop(HookContext $context): HookResult
+    {
+        return $this->registry->executeHooks(HookEvent::SubagentStop->value, $context, failClosedOnThrow: true);
+    }
+
+    /**
+     * SessionEnd hook execution (step 3.D-2): the process is about to exit —
+     * once, after the TUI's program loop returns (`bin/sugarcrush`) or after
+     * a `-p` run's answer is printed
+     * ({@see \SugarCraft\Crush\Cli\NonInteractive::fireSessionEnd()}).
+     * `toolInput` is JSON `{"reason": …}` in Claude Code's vocabulary
+     * (`prompt_input_exit` for the TUI, `other` for `-p`).
+     *
+     * Observe-only: nothing is left to stop, so a refusal's reason reaches
+     * the operator only (on stderr), and a hook that throws is reported the
+     * same way instead of failing the exit.
+     */
+    public function sessionEnd(HookContext $context): HookResult
+    {
+        return $this->registry->executeHooks(HookEvent::SessionEnd->value, $context, failClosedOnThrow: true);
+    }
+
+    /**
+     * The line a turn ended by a hook's `"continue": false` closes its reply
+     * with: the hook's `stopReason` (its operator-facing reason), else the
+     * refusal it carried, and the hook's name when the registry recorded one
+     * ({@see HookResult::refusingHook()} — never the hook's own say-so).
+     */
+    public static function stopNotice(HookResult $halt): string
+    {
+        $reason = trim($halt->stopReason !== '' ? $halt->stopReason : $halt->message);
+        $hook = $halt->refusingHook();
+
+        return sprintf(
+            '[turn stopped by %s%s]',
+            $hook === null ? 'a hook' : sprintf('hook "%s"', self::displayName($hook)),
+            $reason === '' ? '' : ': ' . $reason,
+        );
+    }
+
+    /**
+     * The prompt a `Stop` / `SubagentStop` refusal sends back to the agent
+     * (step 3.D-2): the hook's reason, said to be the hook's and not the
+     * user's, so the model knows why it is asked to carry on.
+     */
+    public static function stopFeedback(HookResult $verdict, HookEvent $event): string
+    {
+        $reason = trim($verdict->message);
+        $hook = $verdict->refusingHook();
+
+        return sprintf(
+            '%s hook%s did not let you finish yet%s',
+            $event->value,
+            $hook === null ? '' : sprintf(' "%s"', self::displayName($hook)),
+            $reason === '' ? '. Continue the task.' : ': ' . $reason,
+        );
+    }
+
+    /**
+     * A hook's name as model- and operator-visible text: a YAML entry without
+     * `name:` is named after its whole `command`, so it is clipped and has its
+     * control characters blanked, as {@see HookResult::withheldNotice()} does.
+     */
+    public static function displayName(string $name): string
+    {
+        $name = (string) preg_replace('/[\x00-\x1F\x7F]/', ' ', mb_scrub($name, 'UTF-8'));
+
+        return mb_strlen($name) <= HookResult::MAX_NAMED_HOOK_CHARS
+            ? $name
+            : mb_substr($name, 0, HookResult::MAX_NAMED_HOOK_CHARS) . '…';
+    }
+
+    /**
+     * The tool-shaped context a non-tool event is dispatched with — see
+     * {@see self::sessionStart()} for why: `toolName` is the event's name (the
+     * slot a matcher is tested against) and `toolInput` is $payload as JSON.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public static function eventContext(
+        HookEvent $event,
+        array $payload,
+        string $sessionId,
+        string $projectRoot,
+        string $model = '',
+        string $provider = '',
+    ): HookContext {
+        return new HookContext(
+            sessionId: $sessionId,
+            toolName: $event->value,
+            toolArgs: $payload,
+            toolInput: (string) json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            toolOutput: '',
+            model: $model,
+            provider: $provider,
+            projectRoot: $projectRoot,
+        );
+    }
+
+    /**
+     * Run $run as a DELEGATED run, so a turn it drives ends on `SubagentStop`
+     * rather than `Stop` (step 3.D-2).
+     *
+     * WHY A SCOPE AND NOT A FLAG ON THE ENGINE: a `Task` sub-agent's engine
+     * already carries its grant, which is how
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::runTurn()} tells it
+     * apart; an agent a workflow stage runs
+     * ({@see \SugarCraft\Crush\Agents\EngineExecutor}) is handed the session's
+     * own engine and carries nothing that says it is delegated. The run is
+     * synchronous in the code that calls this, so it is scoped to the call.
+     *
+     * Keyed by FIBER, because a streamed stage run suspends its fiber
+     * mid-run ({@see \SugarCraft\Crush\Agents\EngineExecutor::executeStream()})
+     * and whatever runs while it is suspended — the session's own next turn
+     * on a host without a forked turn child — is not the delegated run and
+     * must still end on `Stop`.
+     *
+     * @template T
+     * @param \Closure(): T $run
+     * @return T
+     */
+    public static function runAsSubagent(string $agentId, string $agentType, \Closure $run): mixed
+    {
+        $frame = ['agent_id' => $agentId, 'agent_type' => $agentType];
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            self::$subagentOutsideFibers[] = $frame;
+        } else {
+            self::$subagentFibers ??= new \WeakMap();
+            self::$subagentFibers[$fiber] = [...(self::$subagentFibers[$fiber] ?? []), $frame];
+        }
+
+        try {
+            return $run();
+        } finally {
+            if ($fiber === null) {
+                array_pop(self::$subagentOutsideFibers);
+            } else {
+                $frames = self::$subagentFibers[$fiber] ?? [];
+                array_pop($frames);
+                if ($frames === []) {
+                    unset(self::$subagentFibers[$fiber]);
+                } else {
+                    self::$subagentFibers[$fiber] = $frames;
+                }
+            }
+        }
+    }
+
+    /**
+     * The innermost delegated run the current fiber is inside
+     * ({@see runAsSubagent()}), or null.
+     *
+     * @return array{agent_id: string, agent_type: string}|null
+     */
+    public static function currentSubagent(): ?array
+    {
+        $fiber = \Fiber::getCurrent();
+        $frames = $fiber === null ? self::$subagentOutsideFibers : (self::$subagentFibers[$fiber] ?? []);
+
+        return $frames === [] ? null : $frames[array_key_last($frames)];
     }
 
     /**

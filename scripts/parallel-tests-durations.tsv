@@ -22,7 +22,7 @@ sugar-crush/tests/Agents/AgentManagerTest.php	11.792	140
 sugar-crush/tests/ClaudeCodeMcpClientStdinWedgeTest.php	11.427	14
 sugar-crush/tests/Support/ForkedChildExitConventionTest.php	11.069	4
 sugar-crush/tests/Support/ProcessUniqueTempNameTest.php	11.026	17
-sugar-crush/tests/Agents/EngineExecutorTest.php	10.995	15
+sugar-crush/tests/Agents/EngineExecutorTest.php	10.995	16
 sugar-crush/tests/Tui/AgentSplitCompositorTest.php	10.745	27
 sugar-crush/tests/Cli/StderrEmitterCensusTest.php	10.523	95
 sugar-crush/tests/SymbolCitationDriftTest.php	10.372	9
@@ -184,6 +184,7 @@ sugar-crush/tests/Config/DocFigureProseDriftTest.php	1.767	89
 sugar-crush/tests/Support/ContainedPathInventoryTest.php	1.733	49
 sugar-crush/tests/Support/HomeDirectoryPathReaderInventoryTest.php	1.721	7
 sugar-crush/tests/Cli/SessionLaunchFlagsTest.php	1.702	25
+sugar-crush/tests/Backend/StopHookContinuesTurnTest.php	1.700	8
 sugar-crush/tests/Workflows/WorkflowIdentifierTest.php	1.695	10
 sugar-crush/tests/Tools/ToolPromptGuidanceTest.php	1.633	6
 sugar-crush/tests/Session/ContextLedgerPersistenceTest.php	1.600	7
@@ -556,6 +557,7 @@ sugar-crush/tests/RepoMap/RepoMapRendererBudgetTest.php	0.070	9
 sugar-crush/tests/Host/CompactionServiceParityTest.php	0.070	7
 sugar-crush/tests/Context/Pruning/PathKeyedPruningTest.php	0.070	5
 sugar-crush/tests/Providers/FallbackProviderTest.php	0.070	20
+sugar-crush/tests/Cli/SessionEndHookTest.php	0.070	4
 sugar-crush/tests/Hooks/RuntimeHookInputEncodingTest.php	0.069	6
 sugar-crush/tests/Backend/PendingAskTest.php	0.069	13
 sugar-crush/tests/Providers/ProviderFactoryTest.php	0.067	100
@@ -649,6 +651,7 @@ sugar-crush/tests/Context/Pruning/RefTagTest.php	0.040	7
 sugar-crush/tests/Context/Pruning/PruningModeTest.php	0.040	5
 sugar-crush/tests/Commands/SweepCommandTest.php	0.040	5
 sugar-crush/tests/Protocol/JsonRpcTest.php	0.040	11
+sugar-crush/tests/Hooks/HookManagerStopEventsTest.php	0.040	8
 sugar-crush/tests/Host/SpendLedgerTest.php	0.039	8
 sugar-crush/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.038	10
 sugar-crush/tests/Context/InstructionFileLoaderContainmentTest.php	0.037	29

@@ -52,12 +52,12 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
- * `src/` and `bin/` is SEVENTEEN" — is CORRECT, and this file asserts that it
+ * `src/` and `bin/` is EIGHTEEN" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — seventeen sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — eighteen sites. The channel that census describes.
  *     (O-3a: `Serve::stderr()`, `serve`'s one funnel for its startup lines,
  *     request log and stop notice. E710: `Subcommands::mcpImportLine()` joined it — the import verb's
  *     notes and post-read failures, one funnel site, stderr-only by design.
@@ -67,7 +67,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     on the tty once PHP's own diagnostics go to the log file.
  *     Audit 15b-15: `NonInteractive::noticeAttachment()`, the `-p` path's
  *     mention and unseen-image notices, stderr-only because stdout is the
- *     answer.)
+ *     answer. Step 3.D-2: `NonInteractive::fireSessionEnd()`'s one line when
+ *     a SessionEnd hook refuses, stderr-only because the session is over.)
  *  2. `STDERR` captured into a variable or property and written through later —
  *     ONE site, {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
@@ -288,7 +289,11 @@ final class StderrEmitterCensusTest extends TestCase
         // headless twin of the TUI's UI-only attachment notices - a `-p`
         // mention that matched nothing, a refused file, an image the model
         // could not see. Stderr alone: stdout is the answer.
-        'src/Cli/NonInteractive.php' => 8,
+        // +1 in step 3.D-2: fireSessionEnd()'s one line when a SessionEnd
+        // hook refuses or throws. Stderr alone: the session is over, so no
+        // transcript is left to carry it, and on the TUI path the terminal
+        // is the operator's again by the time it is written.
+        'src/Cli/NonInteractive.php' => 9,
         // O-3a: `serve`'s one funnel (Serve::stderr()) for its startup lines,
         // request log and stop notice. Stderr alone: no session exists to
         // carry a transcript notice, and the terminal running the server is
@@ -429,7 +434,8 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/Bootstrap.php' => 6,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         // +1 in wave 11: noticeAttachment()'s prefix literal (channel 1's note).
-        'src/Cli/NonInteractive.php' => 8,
+        // +1 in step 3.D-2: fireSessionEnd()'s refusal line (channel 1's note).
+        'src/Cli/NonInteractive.php' => 9,
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door

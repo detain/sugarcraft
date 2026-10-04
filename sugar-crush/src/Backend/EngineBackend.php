@@ -1789,6 +1789,36 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // @endregion step-top
 
             // @region no-tools
+            // Step 3.D-2: the chain the Runtime gated this step's calls with
+            // (resolveHookManager() keeps one per turn).
+            $turnHooks ??= $this->resolveHookManager($loopGuard);
+
+            // A hook asked the RUN to stop — a script hook's JSON
+            // `"continue": false` on a tool call (3.D-1). That verdict already
+            // refused its call; this ends the turn at the step boundary, once
+            // the step's other calls have settled and before another provider
+            // call is made. Deliberate, like the soft cancel: no step-ceiling
+            // notice and no summary request — the hook said stop.
+            //
+            // The stop reason rides the reply, where the operator reads it
+            // (and a delegating Task reads why its sub-agent stopped); the
+            // step's own row in the transcript keeps the model's words as
+            // they were.
+            $halt = $turnHooks->turnHalt();
+            if ($halt !== null) {
+                $notice = HookManager::stopNotice($halt);
+                $said = $lastAssistant?->content() ?? '';
+                $lastAssistant = new AssistantMessage(
+                    $said === '' ? $notice : $said . "\n\n" . $notice,
+                    $lastAssistant?->toolCalls(),
+                    $lastAssistant?->reasoning(),
+                    $lastAssistant?->usage(),
+                    $lastAssistant?->lengthStopped() ?? false,
+                );
+                $stoppedSoftly = true;
+                break;
+            }
+
             if ($toolResults === []) {
                 // Step 0.10: a reply with no tool calls AND no text is not an
                 // answer — the turn used to end there silently, handing the
@@ -1827,6 +1857,81 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     }
 
                     continue;
+                }
+
+                // Step 3.D-2: the Stop chain — SubagentStop when this turn is
+                // a delegated run (a Task sub-agent carries its grant; a
+                // workflow stage's agent runs inside
+                // HookManager::runAsSubagent()). Only when something is wired,
+                // so an unhooked turn ends exactly as before. Run here, in the
+                // turn's own process (the forked turn child on the TUI path).
+                $subagent = $this->subAgentGrant !== null
+                    ? ['agent_id' => $this->subAgentGrant->subAgent()->id, 'agent_type' => $this->subAgentGrant->subAgent()->agent->name]
+                    : HookManager::currentSubagent();
+                $stopEvent = $subagent !== null
+                    ? \SugarCraft\Crush\Hooks\HookEvent::SubagentStop
+                    : \SugarCraft\Crush\Hooks\HookEvent::Stop;
+                $stopContinuations ??= 0;
+                if ($turnHooks->hasHooksFor($stopEvent, $stopEvent->value)) {
+                    $stopContext = HookManager::eventContext(
+                        $stopEvent,
+                        [
+                            'stop_hook_active' => $stopContinuations > 0,
+                            'last_assistant_message' => $assistant?->content() ?? '',
+                            ...($subagent ?? []),
+                        ],
+                        $this->sessionId ?? '',
+                        $this->root ?? '',
+                        $this->model,
+                        $this->provider->name(),
+                    );
+                    $verdict = $subagent !== null ? $turnHooks->subagentStop($stopContext) : $turnHooks->stop($stopContext);
+
+                    // `"continue": false`: the turn ends, as it was about to,
+                    // and the reply says why.
+                    if ($verdict->haltsTurn()) {
+                        $notice = HookManager::stopNotice($verdict);
+                        $said = $assistant?->content() ?? '';
+                        $stopped = new AssistantMessage(
+                            $said === '' ? $notice : $said . "\n\n" . $notice,
+                            $assistant?->toolCalls(),
+                            $assistant?->reasoning(),
+                            $assistant?->usage(),
+                            $assistant?->lengthStopped() ?? false,
+                        );
+                        // The reply IS this step's row, so the row carries
+                        // the notice too and the reply is not sent twice.
+                        if ($assistant !== null) {
+                            $transcript[array_key_last($transcript)] = $stopped;
+                        } else {
+                            $transcript[] = $stopped;
+                        }
+                        $lastAssistant = $stopped;
+                        $answeredWithoutTools = true;
+                        break;
+                    }
+
+                    // A refusal keeps the turn going: the answer stands in
+                    // the history and the hook's reason follows it as the
+                    // next prompt. Each one is a step — so it shares the step
+                    // ceiling and the spend cap with every other call — and
+                    // at most MAX_STOP_CONTINUATIONS a turn.
+                    if (!$verdict->permitsExecution()
+                        && $stopContinuations < HookManager::MAX_STOP_CONTINUATIONS
+                        && $step + 1 < $this->maxSteps
+                        && ($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd)
+                        && ($stopRequested === null || !$stopRequested())
+                    ) {
+                        $stopContinuations++;
+                        $app = $app->withMessages([
+                            ...$app->messages,
+                            ...($assistant !== null ? [$assistant] : []),
+                            new UserMessage(HookManager::stopFeedback($verdict, $stopEvent)),
+                        ]);
+                        $transcript = $app->messages;
+
+                        continue;
+                    }
                 }
 
                 $answeredWithoutTools = true;
@@ -4401,6 +4506,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      */
     private function resolveHookManager(ToolCallLoopGuard $loopGuard): HookManager
     {
+        // ONE manager per turn (step 3.D-2): the turn's loop guard is made
+        // once per turn, so it keys the copy built for it. The step loop asks
+        // again for the chain the Runtime gates with — to read a hook's
+        // "continue": false off it and to run the Stop chain on it — and must
+        // get that same instance, not a fresh clone with an empty halt record.
+        static $perTurn = null;
+        $perTurn ??= new \WeakMap();
+        if (isset($perTurn[$loopGuard])) {
+            return $perTurn[$loopGuard];
+        }
+
         $manager = $this->hookManager;
 
         if ($manager === null) {
@@ -4446,7 +4562,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $manager->register(new RepeatCallGuardHook($loopGuard));
         $manager->register(new RepeatCallCountHook($loopGuard));
 
-        return $manager;
+        return $perTurn[$loopGuard] = $manager;
     }
 
     /**

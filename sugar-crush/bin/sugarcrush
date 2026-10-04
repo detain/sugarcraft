@@ -502,7 +502,7 @@ if ($tuiErrorLog !== null) {
 // Audit CLI-2(b): the words left on the command line ride Bootstrap::app()'s
 // arguments — no Bootstrap call of their own may sit between the TUI log
 // redirect above and Program — and the hosted Chat submits them from init().
-(new Program(Bootstrap::app($args->root, tuiErrorLog: $tuiErrorLog, initialPrompt: $args->initialPrompt), Chat::programOptions()))->run();
+$finalModel = (new Program(Bootstrap::app($args->root, tuiErrorLog: $tuiErrorLog, initialPrompt: $args->initialPrompt), Chat::programOptions()))->run();
 
 // E705: the Kitty keyboard push rides App::init() as a Cmd; the pop cannot.
 // Every way out of run() — QuitMsg, SIGINT's InterruptMsg, kill() — stops the
@@ -512,6 +512,16 @@ if ($tuiErrorLog !== null) {
 // have its base flags popped below default. The one uncovered exit is an
 // exception thrown out of run() — which also skips Program's own teardown.
 fwrite(STDOUT, Ansi::popKittyKeyboard());
+
+// Step 3.D-2: the session ends HERE, once, after every way out of run() has
+// funnelled through teardown — not at the Chat's Cmd::quit() sites, which are
+// only ways out of the loop. The hosted Chat's own chain, session and root, so
+// a SessionEnd hook sees the session it ran in; after the pop above, so a line
+// it prints lands on a terminal that is the operator's again.
+$finalChat = $finalModel instanceof \SugarCraft\Crush\App\App ? $finalModel->chat : ($finalModel instanceof Chat ? $finalModel : null);
+if ($finalChat !== null) {
+    NonInteractive::fireSessionEnd($finalChat->hooks(), $finalChat->currentSessionId() ?? '', $finalChat->projectRoot(), 'prompt_input_exit');
+}
 
 } catch (PermissionConfigException $e) {
     exit(NonInteractive::failUsage(

@@ -113,8 +113,8 @@ final class BootstrapHookFileTest extends TestCase
         $this->writeUserHooks("hooks:\n  PreToolUse:\n    - name: from-home\n      command: 'true'\n");
         $this->writeProjectHooks("hooks:\n  PreToolUse:\n    - name: from-project\n      command: 'true'\n");
 
-        // hooks() is private and every public caller supplies a root, so the
-        // null-root contract is asserted on the method itself.
+        // The null-root contract is asserted on the method itself: a `-p` run
+        // with no --root reaches it that way (step 3.D-2's SessionEnd chain).
         $hooks = (new \ReflectionMethod(Bootstrap::class, 'hooks'))->invoke(null, null, null);
         $this->assertInstanceOf(HookManager::class, $hooks);
 

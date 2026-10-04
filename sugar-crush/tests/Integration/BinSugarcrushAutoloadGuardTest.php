@@ -26,9 +26,9 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is SEVENTEEN:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is EIGHTEEN:
  *
- *  - {@see \SugarCraft\Crush\Cli\NonInteractive}, eight —
+ *  - {@see \SugarCraft\Crush\Cli\NonInteractive}, nine —
  *    `run()` twice (a thrown backend error, and an answer that would not encode
  *    as JSON), `failUsage()`, `failUnusableProvider()`,
  *    `noticeOfflineDefault()`, `readStdinIfPiped()`, and — added by E219 —
@@ -37,7 +37,8 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  *    elsewhere: see its own doc-block for why it is on stderr rather than on
  *    the transcript seam, and why it could not be put in `Runtime`. And —
  *    added by audit 15b-15's headless residual — `noticeAttachment()`, one
- *    line per `-p` mention notice or unseen image.
+ *    line per `-p` mention notice or unseen image. And — added by step 3.D-2 —
+ *    `fireSessionEnd()`, one line when a SessionEnd hook refuses or throws.
  *  - {@see \SugarCraft\Crush\Cli\Subcommands}, four — `sessionDelete()`'s "no
  *    such session", `mcp()`'s inventory error, — added by E710 —
  *    `mcpImportLine()`, the single funnel for the import verb's notes, and —

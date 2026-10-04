@@ -5469,9 +5469,14 @@ final class Bootstrap
      *        is what a caller with no root of its own to give should get
      *        rather than a hook file resolved against the process directory.
      *
+     * Public for {@see NonInteractive::run()} (step 3.D-2), whose `SessionEnd`
+     * chain is this launch's chain: a `-p` run's hooks live inside the engine
+     * it built, so the chain is rebuilt here from the same once-per-launch
+     * hook-file read rather than reached through the engine.
+     *
      * @throws PermissionConfigException when a hook file is present and unusable
      */
-    private static function hooks(?PermissionGate $gate = null, ?string $root = null): HookManager
+    public static function hooks(?PermissionGate $gate = null, ?string $root = null): HookManager
     {
         // Script hooks spawn through ProcessContainment::scrubbedEnv(), so the
         // operator's credential allowlist must be in force before any runs.

@@ -48,7 +48,7 @@ final class BinSugarcrushTuiErrorLogTest extends TestCase
     {
         $code = self::binCode();
         $install = strpos($code, self::INSTALL);
-        $program = strpos($code, '(new Program(Bootstrap::app(');
+        $program = strpos($code, '$finalModel = (new Program(Bootstrap::app(');
 
         self::assertIsInt($install);
         self::assertIsInt($program);
@@ -152,7 +152,7 @@ final class BinSugarcrushTuiErrorLogTest extends TestCase
     private static function displayBlock(string $code): string
     {
         $install = strpos($code, self::INSTALL);
-        $program = strpos($code, '(new Program(Bootstrap::app(');
+        $program = strpos($code, '$finalModel = (new Program(Bootstrap::app(');
         self::assertIsInt($install);
         self::assertIsInt($program);
 
