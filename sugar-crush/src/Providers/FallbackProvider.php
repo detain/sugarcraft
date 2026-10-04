@@ -49,7 +49,7 @@ use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
  *
  * No total-request timeout is added here or anywhere on a provider call.
  */
-final class FallbackProvider implements ProviderInterface, ReportsServedModel, MarksPromptCache
+final class FallbackProvider implements ProviderInterface, ReportsServedModel, MarksPromptCache, RebindsModel
 {
     /** How long a transient switch keeps the fallback first in line. */
     public const PIN_SECONDS = 60.0;
@@ -121,6 +121,33 @@ final class FallbackProvider implements ProviderInterface, ReportsServedModel, M
     public function primary(): ProviderInterface
     {
         return $this->primary;
+    }
+
+    /**
+     * This chain answering for $model (roadmap 4.1-1 / N-P3b): the primary is
+     * rebound when it can be ({@see RebindsModel}), so the window and rates a
+     * `/model` switch or a preset's model reads are the new model's, and the
+     * fallback list, the fallbacks already built and a live pin carry over —
+     * wrapping a provider must not cost it a capability it had. A primary
+     * whose model its server fixes (SGLang) is kept as is, exactly as an
+     * unwrapped one would be.
+     */
+    public function withModel(string $model): static
+    {
+        $rebinds = $this->primary instanceof RebindsModel;
+        $copy = new self(
+            $rebinds ? $this->primary->withModel($model) : $this->primary,
+            $rebinds ? $model : $this->primaryModel,
+            $this->fallbacks,
+            $this->clock,
+            $this->notice,
+        );
+        $copy->built = $this->built;
+        $copy->pinnedModel = $this->pinnedModel;
+        $copy->pinnedFor = $this->pinnedFor;
+        $copy->pinnedUntil = $this->pinnedUntil;
+
+        return $copy;
     }
 
     public function name(): string

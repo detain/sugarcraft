@@ -232,6 +232,7 @@ final class ContextOverflowClassificationTest extends TestCase
             ContextOverflow::describe("This model's maximum context length is 8192 tokens."),
             $response->errorMessage,
         );
+        self::assertTrue($response->errorContextOverflow, 'the verdict rides as a field, not only in the text');
         self::assertTrue(ContextOverflow::matches($response));
         self::assertTrue(ProviderResponseException::fromResponse($response)->contextOverflow);
         self::assertTrue(ContextOverflow::matches(ProviderResponseException::fromResponse($response)));
@@ -249,6 +250,7 @@ final class ContextOverflowClassificationTest extends TestCase
 
         self::assertTrue($response->isError);
         self::assertStringContainsString('401 Unauthorized', (string) $response->errorMessage);
+        self::assertFalse($response->errorContextOverflow);
         self::assertFalse(ContextOverflow::matches($response));
         self::assertFalse(ProviderResponseException::fromResponse($response)->contextOverflow);
     }

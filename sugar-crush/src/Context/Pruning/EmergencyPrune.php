@@ -62,7 +62,12 @@ final class EmergencyPrune
         ];
     }
 
-    private static function oncePerCall(LedgerDelta $delta): LedgerDelta
+    /**
+     * $delta with one prune per call id, the first rule's — the ledger keys
+     * by id, so a second entry would only double-count {@see LedgerDelta::freedTokens()}.
+     * Shared with {@see TurnStartPruning}, which runs the same rules.
+     */
+    public static function oncePerCall(LedgerDelta $delta): LedgerDelta
     {
         $kept = LedgerDelta::new();
         $seen = [];

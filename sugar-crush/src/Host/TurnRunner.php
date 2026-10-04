@@ -704,11 +704,32 @@ final class TurnRunner
     }
 
     /**
+     * Record a session event that no turn of this runner produced — the
+     * prompt's own `message.created` (roadmap O-2g), written by
+     * {@see TurnController::recordMessagesCreated()} before the turn starts —
+     * through the same log-then-broadcast path the turn's events take, so a
+     * listener hears it and a replay reads it under one seq.
+     *
+     * Returns the event as heard (a durable one stamped with the seq the log
+     * gave it), or null when a durable event could not be written and so was
+     * not broadcast either. A store that persists nothing, or no session id,
+     * logs nothing and still broadcasts, as a turn's events do.
+     */
+    public function announce(SessionEvent $event, ?TranscriptStore $transcripts, ?string $sessionId): ?SessionEvent
+    {
+        return $this->record([
+            'sessionId' => $sessionId,
+            'transcripts' => $sessionId !== null && $transcripts?->persists() === true ? $transcripts : null,
+        ], $event);
+    }
+
+    /**
      * Log a durable event (first), then tell the listeners.
      *
      * @param array{sessionId: ?string, transcripts: ?TranscriptStore} $state
+     * @return SessionEvent|null the event as broadcast; null when a durable write failed
      */
-    private function record(array $state, SessionEvent $event): void
+    private function record(array $state, SessionEvent $event): ?SessionEvent
     {
         if ($event->isDurable()) {
             $log = $state['transcripts']?->events();
@@ -718,7 +739,7 @@ final class TurnRunner
                 } catch (\Throwable) {
                     // Not written, so not broadcast either (EventLog's
                     // contract): a listener must never get ahead of a replay.
-                    return;
+                    return null;
                 }
             }
         }
@@ -730,5 +751,7 @@ final class TurnRunner
                 unset($this->listeners[$key]);
             }
         }
+
+        return $event;
     }
 }

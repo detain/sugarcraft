@@ -160,13 +160,11 @@ final class TurnRunnerEventLogTest extends TestCase
         ($backend->deferred)()->resolve(Message::assistant('there it is'));
         self::apply($running, self::settled($settled));
 
-        // `message.created` is logged ahead of the turn but not yet broadcast:
-        // TurnController writes it straight to the EventLog until the runner
-        // grows a seam to announce it (O-2g handoff), so it is compared apart.
-        [$created, $turnEvents] = self::splitCreated(EventLog::new($this->store)->since('s'));
-        self::assertCount(1, $created);
-        $logged = array_column($turnEvents, 'type');
+        // `message.created` is announced through the runner ahead of the
+        // turn (TurnRunner::announce()), so it is logged AND heard, seq 1.
+        $logged = array_column(EventLog::new($this->store)->since('s'), 'type');
         self::assertSame([
+            SessionEvent::MESSAGE_CREATED,
             SessionEvent::TURN_STARTED,
             SessionEvent::PERMISSION_REQUESTED,
             SessionEvent::PERMISSION_RESOLVED,
@@ -182,8 +180,8 @@ final class TurnRunnerEventLogTest extends TestCase
         self::assertSame('there ', $delta[0]->data['text']);
         $durable = array_values(array_filter($heard, static fn (SessionEvent $e): bool => $e->isDurable()));
         self::assertSame($logged, array_map(static fn (SessionEvent $e): string => $e->type, $durable));
-        self::assertSame(range(2, 8), array_map(static fn (SessionEvent $e): ?int => $e->seq, $durable), 'heard after the log numbered it');
-        self::assertSame('once', $durable[2]->data['reply']);
+        self::assertSame(range(1, 8), array_map(static fn (SessionEvent $e): ?int => $e->seq, $durable), 'heard after the log numbered it');
+        self::assertSame('once', $durable[3]->data['reply']);
     }
 
     /** A turn cancelled before it settled records its end and no reply. */

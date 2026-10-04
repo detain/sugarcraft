@@ -9,10 +9,14 @@ use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog;
 use SugarCraft\Crush\Agents\SuspendedDelegations;
+use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\SubAgentActivity;
+use SugarCraft\Crush\Host\SessionEvent;
+use SugarCraft\Crush\Host\TurnRunner;
+use SugarCraft\Crush\Host\WorkspaceContext;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
@@ -87,6 +91,46 @@ final class ChildSessionCreatedOnFinishTest extends TestCase
         $this->assertContains('Map the login flow', $contents);
         $this->assertContains('Wired in routes/web.php.', $contents);
         $this->assertContains('routes/web.php:12', $contents, 'the tool result is a finished row');
+    }
+
+    /**
+     * The frame the manager stamps is the one passed on: the session event a
+     * host broadcasts for the finished run names the child session it became.
+     */
+    public function testTheBroadcastFinishedEventNamesTheChildSession(): void
+    {
+        $manager = $this->manager();
+        $log = SubAgentTranscriptLog::forRun('parent-1', 'run_c', $this->dir . '/subagents');
+        $log->user('Trace the cache');
+        $log->status('complete', 'complete', null);
+
+        $runner = TurnRunner::new();
+        $heard = [];
+        $runner->listen(static function (SessionEvent $event) use (&$heard): void {
+            $heard[] = $event;
+        });
+        $turn = new CancellationToken();
+        $runner->start(backend: new EchoBackend(), history: [Message::user('go')], inbox: new \ArrayObject(), generation: self::GENERATION, cancellation: $turn);
+
+        $inbox = new \ArrayObject();
+        AgentLiveRegistry::of($inbox, static fn (): float => 1000.0);
+        $chat = new Chat(
+            history: [Message::user('go')],
+            backend: new EchoBackend(),
+            inFlight: true,
+            inFlightCancellation: $turn,
+            generation: self::GENERATION,
+            liveToolEvents: $inbox,
+            agentManager: $manager,
+            workspace: WorkspaceContext::new()->withService(TurnRunner::class, $runner),
+        );
+        $inbox[] = [self::GENERATION, new SubAgentActivity('finished', 'run_c', 'coder', '', 1, 'cached', parentCallId: 'tc_3', outcome: 'complete', transcriptLog: $log->path(), parentSessionId: 'parent-1')];
+        [$chat] = $chat->update(new ToolEventPumpMsg());
+
+        $finished = array_values(array_filter($heard, static fn (SessionEvent $e): bool => $e->type === SessionEvent::SUBAGENT_FINISHED));
+        $this->assertCount(1, $finished);
+        $this->assertNotNull($manager->childSessionIdOf('run_c'));
+        $this->assertSame($manager->childSessionIdOf('run_c'), $finished[0]->data['childSessionId'] ?? null);
     }
 
     public function testAFailedRunIsStoredFailedAndTheFrameNamesItsChild(): void

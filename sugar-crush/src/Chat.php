@@ -375,14 +375,16 @@ final class Chat implements Model
     private const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
 
     /**
-     * Checkpoint state key {@see dispatchTurn()} sets to true on every
-     * auto-save since audit SES-1, meaning "`messages` is the transcript from
-     * BEFORE the prompt". Its absence is how {@see handleRewindCommand()} tells
-     * an older checkpoint — whose `messages` end on the very prompt its draft
-     * re-seeds — from a current one, whose last user row may legitimately equal
-     * the draft (the same prompt sent twice in a row).
+     * Checkpoint state key the dispatch auto-save sets to true since audit
+     * SES-1, meaning "`messages` is the transcript from BEFORE the prompt".
+     * Its absence is how {@see handleRewindCommand()} tells an older
+     * checkpoint — whose `messages` end on the very prompt its draft re-seeds —
+     * from a current one, whose last user row may legitimately equal the
+     * draft (the same prompt sent twice in a row). Alias of
+     * {@see \SugarCraft\Crush\Host\TurnController::CHECKPOINT_PRE_TURN_KEY},
+     * whose checkpointState() writes it, so writer and reader cannot drift.
      */
-    private const CHECKPOINT_PRE_TURN_KEY = 'messagesPrecedePrompt';
+    private const CHECKPOINT_PRE_TURN_KEY = \SugarCraft\Crush\Host\TurnController::CHECKPOINT_PRE_TURN_KEY;
 
     /** Alias of {@see \SugarCraft\Crush\Host\CompactionService::PARK_NOTICE_PREFIX}, which documents it. */
     private const PARK_NOTICE_PREFIX = \SugarCraft\Crush\Host\CompactionService::PARK_NOTICE_PREFIX;
@@ -4466,8 +4468,11 @@ final class Chat implements Model
             // the chain continues in order. No transcript row: the ToolStarted
             // for the Task call is the transcript-visible story of this run;
             // the mirror's audience is the dashboard, and it reads the
-            // manager, not the transcript.
-            $this->agentManager?->projectRemoteSubAgent($event);
+            // manager, not the transcript. The manager hands back the beat
+            // as it stored it — a finished run stamped with its child
+            // session id (P-C1) — and that frame is what the live line and
+            // the server's `agent.status` see.
+            $event = $this->agentManager?->projectRemoteSubAgent($event) ?? $event;
             // Roadmap P-B2: and the live line under that Task row. On this
             // path (the settled queue — a turn whose beats the live pump
             // never got to, which is every turn without ext-pcntl) the beats
@@ -4899,8 +4904,9 @@ final class Chat implements Model
             // generation-stale beats were dropped by the guard above, so what
             // lands here belongs to the turn on screen. The pump consumes ONE
             // entry per tick and re-arms itself via $more; the mirror update
-            // costs the transcript nothing.
-            $this->agentManager?->projectRemoteSubAgent($event);
+            // costs the transcript nothing. The stamped frame it returns
+            // (child session id, P-C1) is the one passed on.
+            $event = $this->agentManager?->projectRemoteSubAgent($event) ?? $event;
 
             // Roadmap P-B2: the live line under the Task row. Five parallel
             // runs beat up to twenty times a second between them, and one
@@ -4914,8 +4920,7 @@ final class Chat implements Model
             while (($peek = $queue[$taken] ?? null) !== null
                 && $peek[1] instanceof SubAgentActivity
                 && $peek[0] === $generation) {
-                $this->agentManager?->projectRemoteSubAgent($peek[1]);
-                $batch[] = $peek[1];
+                $batch[] = $this->agentManager?->projectRemoteSubAgent($peek[1]) ?? $peek[1];
                 $taken++;
             }
             if ($taken > 0) {
@@ -8071,7 +8076,35 @@ final class Chat implements Model
      */
     public function withBackend(Backend $backend): self
     {
-        return $this->mutate(['backend' => $backend]);
+        return $this->mutate(['backend' => $backend, 'summaryBackend' => $this->summaryBackendFollowing($backend)]);
+    }
+
+    /**
+     * The summary backend after a switch to $backend (roadmap 2.4-2). The
+     * launch's {@see \SugarCraft\Crush\Backend\CacheReusingSummaryBackend}
+     * sends the conversation's own request, and its engine half is the
+     * engine it was built from — left alone, a `/model` or provider switch
+     * kept summarising on the LAUNCH model, whose cache the switched
+     * conversation no longer shares. Rebuilt on the new engine, carrying the
+     * launch-time summary model (never re-read here: that key is read at
+     * launch). A summary backend that does not reuse the cache, or a new
+     * backend that cannot, is kept as it is.
+     */
+    private function summaryBackendFollowing(Backend $backend): ?Backend
+    {
+        $current = $this->summaryBackend;
+        if (!$current instanceof \SugarCraft\Crush\Backend\CacheReusingSummaryBackend
+            || !$backend instanceof \SugarCraft\Crush\Backend\SummarisesWithCache) {
+            return $current;
+        }
+        $launch = $current->engine();
+
+        return \SugarCraft\Crush\Backend\CacheReusingSummaryBackend::new(
+            $current->toolless(),
+            $backend instanceof Backend\EngineBackend
+                ? $backend->withSummaryModel($launch instanceof Backend\EngineBackend ? $launch->summaryModel() : null)
+                : $backend,
+        );
     }
 
     /**
@@ -10804,7 +10837,7 @@ final class Chat implements Model
         // The prompt's row, announced to the session's durable event log
         // (Appendix O §6.5 `message.created`) BEFORE the dispatch below writes
         // `turn.started`, whose `messageId` names this same row.
-        $turns->recordMessagesCreated($next->transcripts(), $this->currentSessionId, $newTurnMessages);
+        $turns->recordMessagesCreated($next->transcripts(), $this->currentSessionId, $newTurnMessages, $next->turnRunner());
 
         $completion = $this->scheduleBackendCompletion($next, $cancellation, $generation);
         if ($workspaceCapture !== null) {
@@ -18240,6 +18273,7 @@ final class Chat implements Model
         return [$this->mutate([
             'palette' => null,
             'backend' => $backend,
+            'summaryBackend' => $this->summaryBackendFollowing($backend),
             // The pool {@see executeAgents()} builds from this config forks
             // workers that construct `workerProvider` themselves — the launch
             // provider's spec, until now, so after a switch away from it an
@@ -19975,10 +20009,12 @@ final class Chat implements Model
      * claimed here reduces to the argv the handler expects. One helper serves
      * both {@see submit()}'s mid-turn refusal and {@see dispatchCommand()}'s idle
      * dispatch, so what is refused mid-turn and what runs idle cannot drift.
+     * Delegates to {@see \SugarCraft\Crush\Host\TurnController::isBareMcpAuthCommand()},
+     * which the mid-turn route and the headless host classify with.
      */
     private static function isBareMcpAuthCommand(string $text): bool
     {
-        return preg_match('/^mcp\s+auth(?:\s|$)/', $text) === 1;
+        return \SugarCraft\Crush\Host\TurnController::isBareMcpAuthCommand($text);
     }
 
     /**

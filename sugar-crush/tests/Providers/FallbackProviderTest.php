@@ -19,6 +19,7 @@ use SugarCraft\Crush\Providers\ModelMetadata;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\ProviderResponseException;
+use SugarCraft\Crush\Providers\RebindsModel;
 use SugarCraft\Crush\Providers\ReportsServedModel;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
@@ -318,6 +319,28 @@ final class FallbackProviderTest extends TestCase
 
         $wrapped->noteServedModel('big-model');
         self::assertSame(200_000, $wrapped->contextWindow(), 'while pinned, the window is the answering model\'s');
+    }
+
+    /** Roadmap 4.1-1: a model rebind reaches the wrapped primary, so the chain keeps the capability. */
+    public function testAModelRebindReachesThePrimaryAndKeepsTheChain(): void
+    {
+        $factory = new ProviderFactory(ModelMetadata::fromTable([
+            'small-model' => ['max_input_tokens' => 8_000],
+            'mid-model' => ['max_input_tokens' => 50_000],
+            'big-model' => ['max_input_tokens' => 200_000],
+        ]));
+        $wrapped = $factory->create([
+            'type' => 'custom', 'name' => 'gw', 'baseUrl' => 'http://127.0.0.1:9',
+            'model' => 'small-model', 'fallbackModels' => ['big-model'],
+        ]);
+        self::assertInstanceOf(FallbackProvider::class, $wrapped);
+        self::assertInstanceOf(RebindsModel::class, $wrapped);
+
+        $rebound = $wrapped->withModel('mid-model');
+        self::assertInstanceOf(FallbackProvider::class, $rebound);
+        self::assertSame(50_000, $rebound->contextWindow(), 'the window is the new model\'s');
+        self::assertSame(['big-model'], $rebound->fallbackModels());
+        self::assertSame(8_000, $wrapped->contextWindow(), 'the receiver is untouched');
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────

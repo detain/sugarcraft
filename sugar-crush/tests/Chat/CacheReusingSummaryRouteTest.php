@@ -67,6 +67,31 @@ final class CacheReusingSummaryRouteTest extends TestCase
         exec('rm -rf ' . escapeshellarg($this->sandbox));
     }
 
+    /** A switched engine takes the summaries with it, keeping the launch's summary model. */
+    public function testABackendSwitchRebuildsTheCacheReusingSummaryOnTheNewEngine(): void
+    {
+        $launch = EngineBackend::new(new ScriptedProvider([]), 'launch-model')->withSummaryModel('cheap-model');
+        $toolless = new EchoBackend();
+        $chat = new Chat(backend: $launch, summaryBackend: CacheReusingSummaryBackend::new($toolless, $launch));
+
+        $switched = $chat->withBackend(EngineBackend::new(new ScriptedProvider([]), 'other-model'));
+
+        $summary = (new \ReflectionProperty(Chat::class, 'summaryBackend'))->getValue($switched);
+        self::assertInstanceOf(CacheReusingSummaryBackend::class, $summary);
+        $engine = $summary->engine();
+        self::assertInstanceOf(EngineBackend::class, $engine);
+        self::assertSame('other-model', $engine->model(), 'summaries follow the switched engine');
+        self::assertSame('cheap-model', $engine->summaryModel(), 'the launch-time summary model is carried');
+        self::assertSame($toolless, $summary->toolless());
+
+        $echo = $chat->withBackend(new EchoBackend());
+        self::assertSame(
+            (new \ReflectionProperty(Chat::class, 'summaryBackend'))->getValue($chat),
+            (new \ReflectionProperty(Chat::class, 'summaryBackend'))->getValue($echo),
+            'a backend that cannot reuse the cache keeps the summary backend it had',
+        );
+    }
+
     public function testCompactSendsTheConversationItselfPlusAnIndexInstruction(): void
     {
         $seen = new \ArrayObject();

@@ -138,6 +138,7 @@ final class BinSugarcrushWiringTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Crush\Host\CompactionService::class, $workspace->service(\SugarCraft\Crush\Host\CompactionService::class));
         $this->assertInstanceOf(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry::class, $workspace->service(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry::class));
         $this->assertInstanceOf(\SugarCraft\Crush\Host\TurnRunner::class, $workspace->service(\SugarCraft\Crush\Host\TurnRunner::class));
+        $this->assertInstanceOf(\SugarCraft\Crush\Host\TurnController::class, $workspace->service(\SugarCraft\Crush\Host\TurnController::class));
         $this->assertInstanceOf(\SugarCraft\Crush\Config\Settings\SettingsWriter::class, $workspace->service(\SugarCraft\Crush\Config\Settings\SettingsWriter::class));
 
         $transcripts = $workspace->service(\SugarCraft\Crush\Host\TranscriptStore::class);

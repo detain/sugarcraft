@@ -11,7 +11,10 @@ use SugarCraft\Crush\Context\Pruning\PruningMode;
 use SugarCraft\Crush\Context\Pruning\PruningPolicy;
 use SugarCraft\Crush\Context\Pruning\TurnStartPruning;
 use SugarCraft\Crush\Context\TurnContextBlock;
+use SugarCraft\Crush\Messages\AssistantMessage;
+use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
+use SugarCraft\Crush\Tools\ToolCall;
 
 /**
  * Roadmap 3.B-2: a session's pruning mode — its own (`/pruning`, kept on the
@@ -81,6 +84,24 @@ final class PruningModeTest extends TestCase
         $small = [self::contextRow('one', 100), self::contextRow('now', 10)];
         $this->assertNull(TurnStartPruning::propose($small, ContextLedger::new(), $policy), 'under the floor nothing is rewritten');
         $this->assertNotNull(TurnStartPruning::propose($small, ContextLedger::new(), $policy->withMinFreedTokens(0)));
+    }
+
+    /** Roadmap 2.3 at the turn start: a re-read file's older output goes too, once. */
+    public function testATurnStartRunsThePathKeyedRulesAndPrunesEachCallOnce(): void
+    {
+        $output = str_repeat('line of a.php ', 400);
+        $rows = [
+            new UserMessage('go'),
+            new AssistantMessage('', [new ToolCall('r1', 'Read', ['file_path' => 'a.php'])]),
+            new ToolResultMessage('r1', $output),
+            new AssistantMessage('', [new ToolCall('r2', 'Read', ['file_path' => 'a.php'])]),
+            new ToolResultMessage('r2', $output),
+        ];
+
+        $delta = TurnStartPruning::propose($rows, ContextLedger::new(), PruningPolicy::new()->withMinFreedTokens(0));
+
+        $this->assertNotNull($delta);
+        $this->assertSame(['r1'], array_map(static fn ($e): string => $e->toolCallId, $delta->prunes), 'the newest read stays; the older one is pruned once');
     }
 
     private static function contextRow(string $state, int $bytes): UserMessage

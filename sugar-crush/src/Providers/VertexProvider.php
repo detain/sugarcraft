@@ -84,7 +84,7 @@ use SugarCraft\Crush\Usage;
  * what selects between the two bodies. A `gemini-*` id used to be handed the
  * PaLM 2 envelope; it now gets its own.
  */
-final readonly class VertexProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill
+final readonly class VertexProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel
 {
     use ToolSchema;
 
@@ -393,6 +393,17 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
     public function model(): string
     {
         return $this->defaultModel;
+    }
+
+    /**
+     * This provider answering for $model (roadmap 4.1-1): the capability
+     * flags below read the configured id, so a model switch through
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::withModel()} rebinds
+     * them here instead of leaving them the old model's.
+     */
+    public function withModel(string $model): static
+    {
+        return new self(...array_merge(get_object_vars($this), ['defaultModel' => $model]));
     }
 
     /**

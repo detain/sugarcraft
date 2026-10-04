@@ -127,7 +127,9 @@ re-prefills the whole conversation behind it.
   the newest is left out, as its own preamble says it supersedes them. Both are
   pure functions of the rows and the ledger, and the ledger moves only at a
   few deliberate points — that over-budget point, a turn's start in the `auto`
-  pruning mode (`Context\Pruning\TurnStartPruning`, superseded rows only), and
+  pruning mode (`Context\Pruning\TurnStartPruning`: superseded rows only —
+  repeated calls, reads an edit made stale, replaced write content, long-failed
+  inputs, old `<turn-context>` rows), and
   a person's `/sweep` — each in one batch, the automatic ones only once they
   free at least 20k tokens: the bytes before the first pruned row are the bytes
   the previous request sent. The ledger is the session's, so the next turn

@@ -367,6 +367,9 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
                 // re-derived from the message downstream. See
                 // CompleteResponse::$errorTransient.
                 errorTransient: TransientFailure::isTransient($e),
+                // Roadmap 2.7-1b: the overflow verdict rides as a field too,
+                // not only in the text (CompleteResponse::$errorContextOverflow).
+                errorContextOverflow: ContextOverflow::matches($e),
             );
         }
     }
@@ -520,6 +523,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
                                     ? ContextOverflow::describe($streamError->getMessage())
                                     : $streamError->getMessage(),
                                 errorTransient: TransientFailure::isTransient($streamError),
+                                errorContextOverflow: $streamError->contextOverflow,
                             );
 
                             return;
@@ -645,6 +649,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
                 // what makes the retry decision at the consumer conditional
                 // rather than automatic.
                 errorTransient: TransientFailure::isTransient($e),
+                errorContextOverflow: ContextOverflow::matches($e),
             );
         }
     }

@@ -74,7 +74,7 @@ final class TurnController
      * §6.5 `message.created`), written ahead of the turn's own `turn.started`
      * so that event's `messageId` names a row a replay has already seen.
      */
-    public const MESSAGE_CREATED = 'message.created';
+    public const MESSAGE_CREATED = SessionEvent::MESSAGE_CREATED;
 
     /**
      * Longest excerpt of the user's own text a notice quotes back.
@@ -1325,10 +1325,14 @@ final class TurnController
      * persists nothing, a session with no id, or a write that fails records
      * nothing and the prompt goes out regardless.
      *
+     * Written through $runner's {@see TurnRunner::announce()} — log first,
+     * then broadcast — so a host's listeners hear the row the replay reads;
+     * a caller with no runner of its own gets a listenerless one (log only).
+     *
      * @param list<Message> $newTurnMessages
      * @return list<array{messageId: string, seq: int}> what was written
      */
-    public function recordMessagesCreated(?TranscriptStore $transcripts, ?string $sessionId, array $newTurnMessages): array
+    public function recordMessagesCreated(?TranscriptStore $transcripts, ?string $sessionId, array $newTurnMessages, ?TurnRunner $runner = null): array
     {
         $log = $transcripts?->events();
         if ($log === null || $sessionId === null || $transcripts?->persists() !== true) {
@@ -1346,15 +1350,17 @@ final class TurnController
                 if ($identity === null) {
                     continue;
                 }
-                $seq = $log->append($sessionId, self::MESSAGE_CREATED, [
+                $heard = ($runner ??= TurnRunner::new())->announce(SessionEvent::new(self::MESSAGE_CREATED, [
                     'messageId' => $identity[0],
                     'ref' => $identity[1],
                     'role' => $row->role->value,
                     'kind' => 'user',
                     'content' => $row->content,
                     'createdAt' => (int) floor(microtime(true) * 1000),
-                ]);
-                $written[] = ['messageId' => $identity[0], 'seq' => $seq];
+                ], $sessionId), $transcripts, $sessionId);
+                if ($heard?->seq !== null) {
+                    $written[] = ['messageId' => $identity[0], 'seq' => $heard->seq];
+                }
             } catch (\Throwable) {
                 // Not written; the turn does not wait on its audience.
             }

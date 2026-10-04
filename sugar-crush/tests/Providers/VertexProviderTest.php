@@ -351,6 +351,17 @@ final class VertexProviderTest extends TestCase
         $this->assertFalse($this->providerWithPredictor()->supportsJsonSchema());
     }
 
+    /** Roadmap 4.1-1: a rebound copy answers for its own model; the receiver keeps its own. */
+    public function testWithModelRebindsTheConfiguredModel(): void
+    {
+        $provider = $this->providerWithPredictor(model: self::LEGACY_GOOGLE_MODEL);
+
+        $this->assertInstanceOf(\SugarCraft\Crush\Providers\RebindsModel::class, $provider);
+        $rebound = $provider->withModel(self::GEMINI_MODEL);
+        $this->assertSame(self::GEMINI_MODEL, $rebound->model());
+        $this->assertSame(self::LEGACY_GOOGLE_MODEL, $provider->model());
+    }
+
     public function testContextWindowReturns200000(): void
     {
         $this->assertSame(200_000, $this->providerWithPredictor()->contextWindow());

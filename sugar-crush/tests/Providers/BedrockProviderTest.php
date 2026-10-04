@@ -153,6 +153,17 @@ final class BedrockProviderTest extends TestCase
     // 7. contextWindow() returns correct values for known models
     // -------------------------------------------------------------------------
 
+    /** Roadmap 4.1-1: a rebound copy answers for its own model; the receiver keeps its own. */
+    public function testWithModelRebindsTheWindow(): void
+    {
+        $client = $this->createMock(BedrockRuntimeClient::class);
+        $provider = new BedrockProvider($client, 'us-east-1', 'meta.llama3-70b-instruct');
+
+        $this->assertInstanceOf(\SugarCraft\Crush\Providers\RebindsModel::class, $provider);
+        $this->assertSame(1_000_000, $provider->withModel('anthropic.claude-opus-4-6')->contextWindow());
+        $this->assertSame(8_192, $provider->contextWindow());
+    }
+
     public function testContextWindowForClaudeOpus(): void
     {
         $client = $this->createMock(BedrockRuntimeClient::class);

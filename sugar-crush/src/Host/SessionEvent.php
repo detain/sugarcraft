@@ -39,6 +39,7 @@ final class SessionEvent
     public const TURN_STARTED = 'turn.started';
     public const TURN_COMPLETED = 'turn.completed';
     public const TURN_STEP = 'turn.step';
+    public const MESSAGE_CREATED = 'message.created';
     public const ASSISTANT_DELTA = 'assistant.delta';
     public const REASONING_DELTA = 'reasoning.delta';
     public const ASSISTANT_COMPLETED = 'assistant.completed';
@@ -57,6 +58,7 @@ final class SessionEvent
      * produces; every other type is ephemeral.
      */
     public const DURABLE_TYPES = [
+        self::MESSAGE_CREATED,
         self::TURN_STARTED,
         self::TURN_COMPLETED,
         self::ASSISTANT_COMPLETED,

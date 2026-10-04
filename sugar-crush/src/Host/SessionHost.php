@@ -721,7 +721,7 @@ final class SessionHost
         );
         $turns->recordTurn($this->workspace->sessionStore, $this->sessionId, $newTurnMessages);
         $this->save();
-        $created = $turns->recordMessagesCreated($this->transcripts, $this->sessionId, $newTurnMessages);
+        $created = $turns->recordMessagesCreated($this->transcripts, $this->sessionId, $newTurnMessages, $this->runner());
 
         $run = $this->runner()->start(
             backend: TurnRunner::backendForTurn(

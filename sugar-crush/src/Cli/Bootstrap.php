@@ -1800,6 +1800,9 @@ final class Bootstrap
             // O-2f: the runner a server host listen()s on; without it every
             // Chat lineage falls back to a runner of its own (TurnRunner::of()).
             ->withService(\SugarCraft\Crush\Host\TurnRunner::class, \SugarCraft\Crush\Host\TurnRunner::new())
+            // O-2g: the submit/queue/dispatch controller the TUI and SessionHost
+            // share; stateless today, registered so both resolve one instance.
+            ->withService(\SugarCraft\Crush\Host\TurnController::class, \SugarCraft\Crush\Host\TurnController::new())
             // N-P3b: `/model <provider> <model>` persists through this writer,
             // and app() hands the SAME instance to the settings editor — one
             // writer per launch, so the two doors cannot disagree on trust.

@@ -865,7 +865,9 @@ Eight more exist and are **not** registered by default:
   `Task` sub-agent runs on (`TaskTool` binds it), ahead of the permission gate
   and on a `withoutHooks()` turn too. It denies a call outside the preset's
   `tools` grant or matched by its `disallowedTools`, argument halves included,
-  so `Bash(git *)` refuses `rm x`. See
+  so `Bash(git *)` refuses `rm x`, and, when the preset's `permissionMode` is
+  stricter than the session's, holds each admitted call to that mode as well
+  (see [`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). See
   [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#how-a-grant-is-enforced). Its
   name, `subagent-grant`, is reserved like the gate's
   (`HookRegistry::isReserved()`): no other hook may register under it, and a

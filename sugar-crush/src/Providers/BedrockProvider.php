@@ -36,7 +36,7 @@ use SugarCraft\Crush\Usage;
  * and out of the provider unwrapped. Every Bedrock completion failed, always,
  * before a single byte reached AWS.
  */
-final readonly class BedrockProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill
+final readonly class BedrockProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel
 {
     use HttpClientDefaults;
 
@@ -283,6 +283,17 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         private array $modelPrices = [],
         private bool $promptCache = true,
     ) {}
+
+    /**
+     * This provider answering for $model (roadmap 4.1-1): the window reads
+     * the configured id ({@see CONTEXT_WINDOWS}), so a model switch through
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::withModel()} rebinds
+     * it here instead of leaving it the old model's.
+     */
+    public function withModel(string $model): static
+    {
+        return new self(...array_merge(get_object_vars($this), ['defaultModel' => $model]));
+    }
 
     /**
      * @param array<string, array{input?: float|int, output?: float|int}> $modelPrices see {@see __construct()}
