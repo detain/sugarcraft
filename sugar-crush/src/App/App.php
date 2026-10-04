@@ -303,6 +303,16 @@ final class App implements Model
          * none) means the view can stage and preview but every save is refused.
          */
         public readonly ?SettingsWriter $settingsWriter = null,
+        /**
+         * The reasoning effort every request built off this App asks for
+         * (roadmap 4.1-1) — a delegated sub-agent's preset `effort:`, carried
+         * by {@see \SugarCraft\Crush\Backend\EngineBackend::withReasoningEffort()}
+         * onto each turn's App and by {@see \SugarCraft\Crush\Runtime::run()}
+         * onto {@see \SugarCraft\Crush\Providers\CompleteRequest::$reasoningEffort}.
+         * Null — every App but a sub-agent's — asks nothing, and the provider's
+         * own tiers answer exactly as before.
+         */
+        public readonly string|float|null $reasoningEffort = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -373,6 +383,12 @@ final class App implements Model
     public function withSessionId(?string $v): self
     {
         return $this->mutate(sessionId: $v);
+    }
+
+    /** @see $reasoningEffort */
+    public function withReasoningEffort(string|float|null $v): self
+    {
+        return $this->mutate(reasoningEffort: $v);
     }
 
     public function withContextFiles(array $v): self
@@ -2906,6 +2922,7 @@ final class App implements Model
             settingsEditor: array_key_exists('settingsEditor', $changes) ? $changes['settingsEditor'] : $this->settingsEditor,
             settingsSources: array_key_exists('settingsSources', $changes) ? $changes['settingsSources'] : $this->settingsSources,
             settingsWriter: array_key_exists('settingsWriter', $changes) ? $changes['settingsWriter'] : $this->settingsWriter,
+            reasoningEffort: array_key_exists('reasoningEffort', $changes) ? $changes['reasoningEffort'] : $this->reasoningEffort,
         );
     }
 }

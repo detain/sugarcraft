@@ -35,7 +35,7 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  * (`docs/SKILLS.md`'s field table, `docs/COMMANDS.md`'s frontmatter table,
  * `docs/AGENTS_AUTHORING.md`'s field table) are pinned to it by
  * `InertFrontmatterDocumentationDriftTest`, so the step that finally honours
- * a field (4.1 for a preset's `model`/`effort`/`permissionMode`) deletes its
+ * a field (as 4.1-1 did for a preset's `model`/`effort`) deletes its
  * entry here and the docs go red until they stop calling it inert.
  */
 final class FrontmatterKeyAudit
@@ -73,10 +73,11 @@ final class FrontmatterKeyAudit
      * of those is not reported: `model: inherit` and `context: thread` ask for
      * exactly what happens.
      *
-     * - agent preset: `Task` runs on the session's provider and model and
-     *   under the session's permission gate ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool});
-     *   `effort`, `memory`, `background`, `isolation` and `color` are carried
-     *   onto the roster row and read by nothing.
+     * - agent preset: `Task` honours `model` and `effort` since roadmap 4.1-1
+     *   ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}) but still runs
+     *   under the session's permission gate; `memory`, `background`,
+     *   `isolation` and `color` are carried onto the roster row and read by
+     *   nothing.
      * - skill: no tool-scoping code reads `allowed-tools`/`disallowed-tools`;
      *   `model` is read only by `App::dispatchSkill()`, which has no
      *   production caller; `effort` is read by nothing; `context: fork` has no
@@ -88,9 +89,7 @@ final class FrontmatterKeyAudit
      */
     public const INERT = [
         self::AGENT => [
-            'model' => ['inherit', ''],
             'permissionMode' => ['default'],
-            'effort' => [],
             'memory' => [],
             'background' => ['false'],
             'isolation' => ['none'],

@@ -493,6 +493,7 @@ final class LayeredSettings
         'disabledRules',
         'disabledSkills',
         'enabledSkills',
+        'subagentModel',
         'includeGitInstructions',
         'attribution',
         'theme',

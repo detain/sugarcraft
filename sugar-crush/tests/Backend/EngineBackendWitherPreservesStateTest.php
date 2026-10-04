@@ -130,6 +130,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withContextLedger(\SugarCraft\Crush\Context\Pruning\ContextLedger::new()->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('other', 'x')])),
                 ['contextLedger'],
             ],
+            // Roadmap 4.1-1: a delegated run's preset reasoning effort.
+            'withReasoningEffort' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withReasoningEffort('low'),
+                ['reasoningEffort'],
+            ],
             // Audit R1: the per-turn App's compaction budgets.
             'withCompactorConfig' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 7)),
@@ -277,6 +282,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             maxConcurrentDelegations: 3,
             sessionId: 'populated-session',
             contextLedger: \SugarCraft\Crush\Context\Pruning\ContextLedger::new()->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('populated', 'x')]),
+            reasoningEffort: 'xhigh',
         );
     }
 

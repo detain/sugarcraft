@@ -508,7 +508,7 @@ final class ForeignAgentPresetRegistry
             mcpServers: (array) ($data['mcpServers'] ?? []),
             memory: $this->enum(MemoryScope::class, $data['memory'] ?? null) ?? MemoryScope::User,
             background: (bool) ($data['background'] ?? false),
-            effort: $this->enum(Effort::class, $data['effort'] ?? null) ?? Effort::Medium,
+            effort: $this->enum(Effort::class, $data['effort'] ?? null),
             isolation: $this->enum(Isolation::class, $data['isolation'] ?? null),
             color: isset($data['color']) ? (string) $data['color'] : null,
             initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),

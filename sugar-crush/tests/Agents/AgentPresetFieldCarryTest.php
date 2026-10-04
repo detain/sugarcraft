@@ -359,7 +359,7 @@ final class AgentPresetFieldCarryTest extends TestCase
         $this->assertNull($agent->maxTurns);
         $this->assertNull($agent->isolation);
         $this->assertSame(MemoryScope::User, $agent->memory);
-        $this->assertSame(Effort::Medium, $agent->effort);
+        $this->assertNull($agent->effort, 'no effort is the provider default, not medium (4.1-1)');
         $this->assertSame(SkillSource::Native, $agent->source);
     }
 
@@ -383,7 +383,7 @@ final class AgentPresetFieldCarryTest extends TestCase
         $this->assertSame('weird', $agent->name);
         $this->assertSame(4, $agent->maxTurns, 'a bad enum must not cost a good neighbour');
         $this->assertSame(PermissionMode::Default, $agent->permissionMode);
-        $this->assertSame(Effort::Medium, $agent->effort);
+        $this->assertNull($agent->effort);
         $this->assertNull($agent->isolation);
         $this->assertSame(MemoryScope::User, $agent->memory);
         $this->assertSame(SkillSource::Native, $agent->source);

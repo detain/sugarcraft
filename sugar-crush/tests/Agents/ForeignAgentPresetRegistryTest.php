@@ -219,7 +219,7 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $preset = $registry->discoverClaude($projectRoot)['odd'];
 
         $this->assertSame(PermissionMode::Default, $preset->permissionMode);
-        $this->assertSame(Effort::Medium, $preset->effort);
+        $this->assertNull($preset->effort, 'an unspellable effort is no effort, never an implied medium (4.1-1)');
         $this->assertSame(MemoryScope::User, $preset->memory);
         $this->assertNull($preset->isolation);
     }

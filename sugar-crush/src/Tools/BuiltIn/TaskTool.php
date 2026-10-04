@@ -101,11 +101,19 @@ use SugarCraft\Crush\Usage;
  * cap. `Task` itself is withheld from the sub-agent, so delegation is one
  * level deep. The pool path stays as the unbound fallback.
  *
- * THE PROVIDER AND MODEL ARE THE SESSION'S. A preset's `model:` (`sonnet`,
- * `inherit`, …) is not re-resolved on the engine path: the sub-agent talks to
- * whatever provider the calling turn is on, because a preset alias has no
- * meaning to, say, a self-hosted SGLang endpoint — sending it there is a
- * failed request, not a model choice.
+ * THE PROVIDER IS THE SESSION'S; THE MODEL AND EFFORT ARE THE AGENT'S
+ * (roadmap 4.1-1). The sub-agent talks to whatever provider the calling turn
+ * is on, on the first of: the call's own `model` argument, the agent's model
+ * when it names one (a preset's non-`inherit` `model:`, or the
+ * `subagentModel` setting `Bootstrap::agentManager()` pins onto every agent
+ * that would inherit), and the session's current model. A model the provider
+ * cannot serve is REFUSED, never relabelled: a single-model server that
+ * reports what it serves ({@see EngineBackend::servedModel()}) is held to it,
+ * and a Claude Code tier alias (`sonnet`, `opus`, `haiku`) is accepted only
+ * where the session's own model is of that tier, since on any other provider
+ * it names nothing. A preset's `effort:` rides every request as the
+ * reasoning effort, and is refused on a provider that would silently drop it
+ * ({@see EngineBackend::honoursReasoningEffort()}).
  *
  * THE PERMISSION MODE IS THE SESSION'S. A preset's `permissionMode:` is not
  * applied on the engine path: the session's gate governs every call the
@@ -174,6 +182,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * delegation (the tools sidebar leaves them to the Agents pane).
      */
     public const NAME = 'Task';
+
+    /**
+     * Claude Code's model TIER names (roadmap 4.1-1). A preset copied from
+     * `.claude/agents` routinely says `model: sonnet`; no engine provider
+     * serves an id by that name, so it resolves only where the session's own
+     * model is of that tier, and is refused everywhere else.
+     */
+    public const CLAUDE_MODEL_ALIASES = ['sonnet', 'opus', 'haiku'];
 
     /** The instruction a resume continues with when the caller gives no better one. */
     public const DEFAULT_RESUME_PROMPT = 'Continue the task from where you stopped. When it is done, reply with your final report.';
@@ -407,6 +423,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     'description' => 'Optional alias of `agent` accepted for callers that emit this name instead;'
                         . ' `agent` wins when both are present. Prefer `agent`.',
                 ],
+                'model' => [
+                    'type' => 'string',
+                    'description' => 'Optional. The model id to run this sub-agent on, overriding the agent\'s own'
+                        . ' and the session\'s; omit it to use the agent\'s model (or the session\'s, for an agent'
+                        . ' that inherits). A model this session\'s provider cannot serve is refused',
+                ],
                 'resume' => [
                     'type' => 'string',
                     'description' => 'Optional. The resume id an earlier Task result named — a finished report,'
@@ -496,6 +518,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             return $this->refusal($toolCallId, $refusal->getMessage());
         }
 
+        // Roadmap 4.1-1: the call's own model, when it names one.
+        $requestedModel = is_string($args['model'] ?? null) ? trim($args['model']) : '';
+
         if ($this->engine !== null) {
             return $this->runOnEngine(
                 $this->engine,
@@ -505,11 +530,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $startedAt,
                 $suspension === null ? null : ['id' => $resumeId] + $suspension,
                 is_string($args['description'] ?? null) ? $args['description'] : '',
+                $requestedModel,
             );
         }
 
         $request = new CompleteRequest(
-            model: $subAgent->agent->model,
+            model: $requestedModel !== '' ? $requestedModel : $subAgent->agent->model,
             messages: [],
             tools: null,
             systemPrompt: $subAgent->agent->prompt,
@@ -588,9 +614,40 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         float $startedAt,
         ?array $suspension = null,
         string $description = '',
+        string $requestedModel = '',
     ): ToolResult {
         // @region setup
         $agentName = $subAgent->agent->name;
+
+        // Roadmap 4.1-1: the run's model and reasoning effort, both refused
+        // up front — before anything is billed — when the session's provider
+        // cannot honour them, rather than relabelled or silently dropped.
+        [$runModel, $modelRefusal] = self::chooseModel($engine, $subAgent->agent, $requestedModel);
+        if ($modelRefusal !== null) {
+            $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $modelRefusal);
+
+            return $this->refusal($toolCallId, $modelRefusal);
+        }
+        if ($runModel !== null) {
+            $engine = $engine->withModel($runModel);
+        }
+        $effort = $subAgent->agent->effort;
+        if ($effort !== null) {
+            if (!$engine->honoursReasoningEffort()) {
+                $why = sprintf(
+                    'agent "%s" declares `effort: %s`, but provider "%s" sends no reasoning effort, so the run'
+                    . ' would silently ignore it; remove `effort:` from the preset, or delegate on a provider that'
+                    . ' honours it (sglang)',
+                    $agentName,
+                    $effort->value,
+                    $engine->provider()->name(),
+                );
+                $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $why);
+
+                return $this->refusal($toolCallId, $why);
+            }
+            $engine = $engine->withReasoningEffort($effort->value);
+        }
 
         try {
             $granted = $manager->grantedToolsFor($subAgent);
@@ -689,8 +746,8 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         };
 
         $emit = $this->subAgentEmitter;
-        // The run executes on THIS engine's model whatever the preset's
-        // `model:` says, so that is the model its row names.
+        // The engine above is already on the run's model (4.1-1), so the row
+        // names the model the requests actually go to.
         $subAgent->runModel = $engine->model();
         $subAgent->status = SubAgent::STATUS_RUNNING;
         $subAgent->startedAt = new \DateTimeImmutable();
@@ -1081,6 +1138,64 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             usage: $spent,
         );
         // @endregion finish
+    }
+
+    /**
+     * The model a delegated run must be pinned to, or null to stay on the
+     * session's current one — and, when the session's provider cannot serve
+     * the model the call or the agent asked for, why not (roadmap 4.1-1).
+     *
+     * First of: the call's own `model` argument, the agent's model when it
+     * names one ({@see \SugarCraft\Crush\Agents\Agent::$inheritsModel}),
+     * the session's model.
+     *
+     * @return array{0: ?string, 1: ?string} [model to pin, refusal]
+     */
+    private static function chooseModel(EngineBackend $engine, \SugarCraft\Crush\Agents\Agent $agent, string $requested): array
+    {
+        $model = trim($requested);
+        $origin = 'the Task call\'s `model`';
+        if ($model === '' || $model === 'inherit') {
+            if ($agent->inheritsModel || trim($agent->model) === '' || $agent->model === 'inherit') {
+                return [null, null];
+            }
+            $model = trim($agent->model);
+            $origin = sprintf('agent "%s"\'s model', $agent->name);
+        }
+
+        $session = $engine->model();
+        if ($model === $session) {
+            return [null, null];
+        }
+
+        if (\in_array(strtolower($model), self::CLAUDE_MODEL_ALIASES, true)) {
+            if (str_contains(strtolower($session), strtolower($model))) {
+                return [null, null];
+            }
+
+            return [null, sprintf(
+                '%s is "%s", a Claude Code tier name that no %s model answers to (this session runs "%s");'
+                . ' name a model id this provider serves, or `inherit`',
+                $origin,
+                $model,
+                $engine->provider()->name(),
+                $engine->servedModel() ?? $session,
+            )];
+        }
+
+        $served = $engine->servedModel();
+        if ($served !== null && $served !== $model) {
+            return [null, sprintf(
+                '%s is "%s", but this session\'s %s server serves only "%s", so the run cannot be moved to it;'
+                . ' use that model or `inherit`',
+                $origin,
+                $model,
+                $engine->provider()->name(),
+                $served,
+            )];
+        }
+
+        return [$model, null];
     }
 
     /**

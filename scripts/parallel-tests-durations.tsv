@@ -203,6 +203,7 @@ sugar-crush/tests/Agents/TeamTest.php	1.317	28
 sugar-crush/tests/SessionTabClickTest.php	1.307	13
 sugar-crush/tests/Host/TurnRunnerEventLogTest.php	1.300	5
 sugar-crush/tests/Host/SessionHubTest.php	1.300	5
+sugar-crush/tests/Tools/TaskToolPresetModelTest.php	1.300	9
 sugar-crush/tests/Workflows/WorkflowResumeReportingTest.php	1.288	4
 sugar-crush/tests/Tools/OutputTruncationTest.php	1.283	24
 sugar-crush/tests/Integration/SystemPromptWiringTest.php	1.275	14
@@ -289,6 +290,7 @@ sugar-crush/tests/Workspace/ShadowRepoTest.php	0.600	6
 sugar-crush/tests/Backend/InTurnPruneTest.php	0.600	4
 sugar-crush/tests/Server/WsUpgradeTest.php	0.600	7
 sugar-crush/tests/Memory/CompactionJournalTest.php	0.600	8
+sugar-crush/tests/Backend/EngineBackendWithModelTest.php	0.600	7
 sugar-crush/tests/Tools/McpToolBridgeResultCapTest.php	0.587	4
 sugar-crush/tests/Tools/IgnoreRulesBacktrackingTest.php	0.564	112
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.555	10
@@ -507,6 +509,7 @@ sugar-crush/tests/Chat/EditorCommandTest.php	0.080	8
 sugar-crush/tests/Context/MemoryIndexInjectionTest.php	0.080	9
 sugar-crush/tests/Permissions/MemoryToolClassificationTest.php	0.080	34
 sugar-crush/tests/Tui/Settings/SettingsFieldFactoryTest.php	0.080	10
+sugar-crush/tests/Cli/SubagentModelSettingTest.php	0.080	2
 sugar-crush/tests/Providers/BedrockModelIdTest.php	0.079	30
 sugar-crush/tests/Support/ProjectRootTest.php	0.079	6
 sugar-crush/tests/Support/SubAgentActivityRelayTest.php	0.078	6
@@ -576,6 +579,7 @@ sugar-crush/tests/Permissions/SessionPermissionMemoTest.php	0.050	28
 sugar-crush/tests/Support/FrontmatterKeyAuditTest.php	0.050	22
 sugar-crush/tests/Runtime/SteerSkipsUnstartedSequentialCallsTest.php	0.050	3
 sugar-crush/tests/Tui/Components/AgentDashboardPerInstanceTest.php	0.050	3
+sugar-crush/tests/Agents/PresetUnsupportedFieldFailsLoudTest.php	0.050	5
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5

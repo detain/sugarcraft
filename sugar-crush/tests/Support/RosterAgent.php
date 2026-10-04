@@ -30,6 +30,9 @@ final class RosterAgent
             hooks: [],
             isActive: true,
             maxTurns: $maxTurns,
+            // A roster entry that names no model of its own: the delegated
+            // run stays on the calling engine's (4.1-1).
+            inheritsModel: true,
         );
     }
 }

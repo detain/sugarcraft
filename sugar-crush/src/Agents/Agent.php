@@ -26,13 +26,13 @@ final readonly class Agent
      * WHAT CARRYING THEM DOES AND DOES NOT BUY, said plainly because the
      * field names imply more than is true today:
      *
-     *  - NONE of them changes this process's behaviour yet. `Agent` is what
-     *    {@see AgentManager::register()} stores and what
-     *    {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane::agentEntry()} renders;
-     *    neither reads any of the ten. `$permissionMode`'s downstream
-     *    consumer is {@see AgentManager::createSubAgent()}, which takes the
-     *    mode as its OWN argument and has no `src/` caller at all — the
-     *    delegation path that would call it is not wired.
+     *  - Two of them now change what a delegated run does (roadmap 4.1-1):
+     *    {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} runs the
+     *    sub-agent on `$model` (unless it {@see $inheritsModel}) and sends
+     *    `$effort` as the request's reasoning effort. `$permissionMode`'s
+     *    downstream consumer is {@see AgentManager::createSubAgent()}, which
+     *    takes the mode as its OWN argument. `memory`, `background`,
+     *    `isolation` and `color` are still read by nothing.
      *  - What they buy is that the value has somewhere to put them. Before
      *    this, a consumer that wanted a registered agent's `maxTurns` had to
      *    go back to the registry and re-read the preset, which is only
@@ -68,6 +68,19 @@ final readonly class Agent
      * root `Bootstrap::chat()` already resolved, never a second resolver. It
      * is absent from `fromArray()`, `fromDefinition()`, `fromPreset()` and
      * `toArray()` for the reason the block is: per-session, not agent config.
+     *
+     * @param ?Effort $effort The preset's declared reasoning effort, or null
+     *        when it declared none (roadmap 4.1-1). NULL IS NOT MEDIUM: a
+     *        delegated run sends the declared value as the request's
+     *        `reasoning_effort`, and a `medium` default would override the
+     *        provider's own per-model default on every sub-agent (Qwen3.8's
+     *        template default is `xhigh`).
+     * @param bool $inheritsModel Whether `$model` is the session's model by
+     *        inheritance — a preset's `model: inherit` (or none), or a
+     *        built-in definition, which carries no model of its own — rather
+     *        than one the agent named. `Task` follows the session's CURRENT
+     *        model for an inheriting agent, so a `/model` switch reaches it,
+     *        and pins a named one (roadmap 4.1-1).
      */
     public function __construct(
         public string $name,
@@ -86,11 +99,12 @@ final readonly class Agent
         public array $mcpServers = [],
         public MemoryScope $memory = MemoryScope::User,
         public bool $background = false,
-        public Effort $effort = Effort::Medium,
+        public ?Effort $effort = null,
         public ?Isolation $isolation = null,
         public ?string $color = null,
         public SkillSource $source = SkillSource::Native,
         public ?string $environmentRoot = null,
+        public bool $inheritsModel = false,
     ) {}
 
     /**
@@ -148,10 +162,13 @@ final readonly class Agent
             mcpServers: $data['mcp_servers'] ?? [],
             memory: MemoryScope::tryFrom((string) ($data['memory'] ?? '')) ?? MemoryScope::User,
             background: $data['background'] ?? false,
-            effort: Effort::tryFrom((string) ($data['effort'] ?? '')) ?? Effort::Medium,
+            // Null, not Medium, for an absent or unknown value: no effort is a
+            // real state (the provider's own default), see the constructor.
+            effort: Effort::tryFrom((string) ($data['effort'] ?? '')),
             isolation: Isolation::tryFrom((string) ($data['isolation'] ?? '')),
             color: $data['color'] ?? null,
             source: $source,
+            inheritsModel: (bool) ($data['inherits_model'] ?? false),
         );
     }
 
@@ -198,6 +215,8 @@ final readonly class Agent
             skillNames: $definition->defaultSkills,
             hooks: [],
             isActive: $isActive,
+            // A definition names no model: $model is the session's.
+            inheritsModel: true,
         );
     }
 
@@ -291,6 +310,7 @@ final readonly class Agent
             isolation: $preset->isolation,
             color: $preset->color,
             source: $preset->source,
+            inheritsModel: $preset->model === 'inherit' || $preset->model === '',
         );
     }
 
@@ -328,65 +348,22 @@ final readonly class Agent
             'mcp_servers' => $this->mcpServers,
             'memory' => $this->memory->value,
             'background' => $this->background,
-            'effort' => $this->effort->value,
+            'effort' => $this->effort?->value,
             'isolation' => $this->isolation?->value,
             'color' => $this->color,
             'source' => $this->source->value,
+            'inherits_model' => $this->inheritsModel,
         ];
     }
 
     public function withName(string $name): self
     {
-        return new self(
-            name: $name,
-            description: $this->description,
-            prompt: $this->prompt,
-            model: $this->model,
-            provider: $this->provider,
-            tools: $this->tools,
-            skillNames: $this->skillNames,
-            hooks: $this->hooks,
-            isActive: $this->isActive,
-            environment: $this->environment,
-            disallowedTools: $this->disallowedTools,
-            permissionMode: $this->permissionMode,
-            maxTurns: $this->maxTurns,
-            mcpServers: $this->mcpServers,
-            memory: $this->memory,
-            background: $this->background,
-            effort: $this->effort,
-            isolation: $this->isolation,
-            color: $this->color,
-            source: $this->source,
-            environmentRoot: $this->environmentRoot,
-        );
+        return $this->mutate(['name' => $name]);
     }
 
     public function withActive(bool $isActive): self
     {
-        return new self(
-            name: $this->name,
-            description: $this->description,
-            prompt: $this->prompt,
-            model: $this->model,
-            provider: $this->provider,
-            tools: $this->tools,
-            skillNames: $this->skillNames,
-            hooks: $this->hooks,
-            isActive: $isActive,
-            environment: $this->environment,
-            disallowedTools: $this->disallowedTools,
-            permissionMode: $this->permissionMode,
-            maxTurns: $this->maxTurns,
-            mcpServers: $this->mcpServers,
-            memory: $this->memory,
-            background: $this->background,
-            effort: $this->effort,
-            isolation: $this->isolation,
-            color: $this->color,
-            source: $this->source,
-            environmentRoot: $this->environmentRoot,
-        );
+        return $this->mutate(['isActive' => $isActive]);
     }
 
     /**
@@ -395,29 +372,7 @@ final readonly class Agent
      */
     public function withEnvironment(?EnvironmentBlock $environment): self
     {
-        return new self(
-            name: $this->name,
-            description: $this->description,
-            prompt: $this->prompt,
-            model: $this->model,
-            provider: $this->provider,
-            tools: $this->tools,
-            skillNames: $this->skillNames,
-            hooks: $this->hooks,
-            isActive: $this->isActive,
-            environment: $environment,
-            disallowedTools: $this->disallowedTools,
-            permissionMode: $this->permissionMode,
-            maxTurns: $this->maxTurns,
-            mcpServers: $this->mcpServers,
-            memory: $this->memory,
-            background: $this->background,
-            effort: $this->effort,
-            isolation: $this->isolation,
-            color: $this->color,
-            source: $this->source,
-            environmentRoot: $this->environmentRoot,
-        );
+        return $this->mutate(['environment' => $environment]);
     }
 
     /**
@@ -428,29 +383,38 @@ final readonly class Agent
      */
     public function withEnvironmentRoot(?string $environmentRoot): self
     {
-        return new self(
-            name: $this->name,
-            description: $this->description,
-            prompt: $this->prompt,
-            model: $this->model,
-            provider: $this->provider,
-            tools: $this->tools,
-            skillNames: $this->skillNames,
-            hooks: $this->hooks,
-            isActive: $this->isActive,
-            environment: $this->environment,
-            disallowedTools: $this->disallowedTools,
-            permissionMode: $this->permissionMode,
-            maxTurns: $this->maxTurns,
-            mcpServers: $this->mcpServers,
-            memory: $this->memory,
-            background: $this->background,
-            effort: $this->effort,
-            isolation: $this->isolation,
-            color: $this->color,
-            source: $this->source,
-            environmentRoot: $environmentRoot,
-        );
+        return $this->mutate(['environmentRoot' => $environmentRoot]);
+    }
+
+    /**
+     * The same agent, pinned to $model — no longer following the session's
+     * (roadmap 4.1-1). `Bootstrap::agentManager()` applies the `subagentModel`
+     * setting this way to every agent that would otherwise inherit.
+     *
+     * @throws \InvalidArgumentException for a blank id
+     */
+    public function withModel(string $model): self
+    {
+        if (trim($model) === '') {
+            throw new \InvalidArgumentException('A model id cannot be empty.');
+        }
+
+        return $this->mutate(['model' => $model, 'inheritsModel' => false]);
+    }
+
+    /**
+     * Rebuild with the named constructor fields replaced, carrying every other
+     * field forward BY NAME — so a field added to the constructor cannot be
+     * dropped by a wither that forgot to spell it (each wither used to repeat
+     * the full argument list). Every property is constructor-promoted, so
+     * get_object_vars() is the field roster, and a misspelled key is an
+     * "Unknown named parameter" Error rather than a silent no-op.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...array_merge(get_object_vars($this), $changes));
     }
 
     /**

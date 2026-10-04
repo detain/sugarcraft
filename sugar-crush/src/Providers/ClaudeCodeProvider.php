@@ -14,7 +14,7 @@ use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Usage;
 
-final readonly class ClaudeCodeProvider implements ProviderInterface
+final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsModel
 {
     /**
      * How much of a failing child's stderr is kept for the exception message.
@@ -52,6 +52,17 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
     public function supportsJsonSchema(): bool
     {
         return true;
+    }
+
+    /**
+     * This provider answering for $model (roadmap N-P3b remainder): the
+     * window and the rates below read the configured id, so a model switch
+     * through {@see \SugarCraft\Crush\Backend\EngineBackend::withModel()}
+     * rebinds it here instead of leaving them the old model's.
+     */
+    public function withModel(string $model): static
+    {
+        return new self(...array_merge(get_object_vars($this), ['defaultModel' => $model]));
     }
 
     public function contextWindow(): int

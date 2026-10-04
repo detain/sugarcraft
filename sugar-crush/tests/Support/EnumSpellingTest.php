@@ -121,11 +121,17 @@ final class EnumSpellingTest extends TestCase
         $this->assertSame(PermissionMode::AcceptEdits, $preset->permissionMode);
     }
 
-    public function testNativePresetReaderStillDefaultsAnUnknownPermissionMode(): void
+    /**
+     * Roadmap 4.1-1: a mode no spelling resolves is REFUSED, no longer read as
+     * `default` — the mode now narrows a delegated run, so a typo silently
+     * becoming the default is a preset doing what its author did not write.
+     */
+    public function testNativePresetReaderRefusesAnUnknownPermissionMode(): void
     {
-        $preset = $this->loadNative('permissionMode: no-such-mode');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('`permissionMode: no-such-mode` is not a value sugar-crush knows');
 
-        $this->assertSame(PermissionMode::Default, $preset->permissionMode);
+        $this->loadNative('permissionMode: no-such-mode');
     }
 
     public function testNativePresetReaderHonoursCamelCaseAcrossTheOtherThreeFields(): void
@@ -137,13 +143,23 @@ final class EnumSpellingTest extends TestCase
         $this->assertSame(Isolation::Worktree, $preset->isolation);
     }
 
+    /**
+     * `memory` keeps its documented fallback (nothing reads it yet); `effort`
+     * and `isolation` refuse an unknown spelling since roadmap 4.1-1.
+     */
     public function testNativePresetReaderKeepsEachFieldsDocumentedFallback(): void
     {
-        $preset = $this->loadNative("memory: nonsense\neffort: nonsense\nisolation: nonsense");
-
+        $preset = $this->loadNative('memory: nonsense');
         $this->assertSame(MemoryScope::User, $preset->memory);
-        $this->assertSame(Effort::Medium, $preset->effort);
-        $this->assertNull($preset->isolation);
+
+        foreach (['effort: nonsense', 'isolation: nonsense'] as $line) {
+            try {
+                $this->loadNative($line);
+                $this->fail("`{$line}` loaded instead of being refused");
+            } catch (\InvalidArgumentException $refused) {
+                $this->assertStringContainsString("`{$line}` is not a value sugar-crush knows", $refused->getMessage());
+            }
+        }
     }
 
     /**

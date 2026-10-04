@@ -42,6 +42,7 @@ use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Providers\MarksPromptCache;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Providers\RebindsModel;
 use SugarCraft\Crush\Providers\ReportsServedModel;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
@@ -580,6 +581,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          * through {@see Runtime::withSessionPromptMemo()}.
          */
         private readonly SessionPromptMemo $sessionPromptMemo = new SessionPromptMemo(),
+        /**
+         * Roadmap 4.1-1: the reasoning effort every request of this backend's
+         * turns asks for — set ONLY on the copy
+         * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} runs a sub-agent
+         * on, from its preset's `effort:`. It reaches the wire through each
+         * turn's {@see App::$reasoningEffort} and
+         * {@see \SugarCraft\Crush\Providers\CompleteRequest::$reasoningEffort},
+         * the per-call tier the provider resolves before its own. Null — every
+         * top-level turn — asks nothing. @see withReasoningEffort()
+         */
+        private readonly string|float|null $reasoningEffort = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -677,18 +689,21 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
-     * A copy that sends every request to `$model` (roadmap N-P3b; roadmap 4.1
-     * reuses it for a preset's `model`).
+     * A copy that sends every request to `$model` (roadmap N-P3b; roadmap
+     * 4.1-1 reuses it for a sub-agent's model).
      *
      * The id reaches the wire through {@see App::$model}, which every turn's
-     * App is built from ({@see sessionApp()}), so this is the whole switch for
-     * the requests themselves. The PROVIDER is not rebuilt: one constructed
-     * for another model keeps answering {@see contextWindow()} and its own
-     * pricing for the model it was built with. A caller that can rebuild
-     * should — `Chat`'s `/model <provider> <model>` persists the choice first
-     * and rebuilds through the launch factory, which builds the provider on
-     * the persisted id — and apply this on top, so the explicit choice wins
-     * even where `--model` or `$SUGARCRUSH_MODEL` outrank the persisted one.
+     * App is built from ({@see sessionApp()}). THE PROVIDER MOVES WITH IT when
+     * it can ({@see RebindsModel}): {@see contextWindow()} — the denominator
+     * of every context tier — and any rate the provider reads off its own
+     * configured id then answer for `$model`, not for the model it was built
+     * with. A provider whose model is fixed by its server (SGLang) cannot
+     * rebind and keeps answering for what it serves; a caller that must not
+     * relabel such a model compares {@see servedModel()} first, as `Task`
+     * does. `Chat`'s `/model <provider> <model>` still rebuilds through the
+     * launch factory first and applies this on top, so the explicit choice
+     * wins even where `--model` or `$SUGARCRUSH_MODEL` outrank the persisted
+     * one.
      *
      * @throws \InvalidArgumentException for an empty or blank id
      */
@@ -698,7 +713,48 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             throw new \InvalidArgumentException('A model id cannot be empty.');
         }
 
-        return $this->mutate(['model' => $model]);
+        if ($model === $this->model) {
+            return $this;
+        }
+
+        return $this->mutate([
+            'model' => $model,
+            'provider' => $this->provider instanceof RebindsModel ? $this->provider->withModel($model) : $this->provider,
+        ]);
+    }
+
+    /**
+     * The same engine, asking every request for `$effort` (roadmap 4.1-1) —
+     * see {@see $reasoningEffort}. Null asks nothing.
+     */
+    public function withReasoningEffort(string|float|null $effort): self
+    {
+        return $this->mutate(['reasoningEffort' => $effort]);
+    }
+
+    /** @see $reasoningEffort */
+    public function reasoningEffort(): string|float|null
+    {
+        return $this->reasoningEffort;
+    }
+
+    /**
+     * Whether a request's {@see \SugarCraft\Crush\Providers\CompleteRequest::$reasoningEffort}
+     * reaches this backend's provider at all. Only SGLang reads it today;
+     * every other provider drops the field, so `Task` refuses a preset that
+     * declares an effort there rather than run it as if honoured.
+     */
+    public function honoursReasoningEffort(): bool
+    {
+        return $this->provider instanceof \SugarCraft\Crush\Providers\SglangProvider;
+    }
+
+    /**
+     * The session this backend's turns run as, or null — see {@see $sessionId}.
+     */
+    public function sessionId(): ?string
+    {
+        return $this->sessionId;
     }
 
     /**
@@ -1300,6 +1356,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
 
         $app = $this->sessionApp()
+            // Roadmap 4.1-1: a sub-agent's preset effort, per request.
+            ->withReasoningEffort($this->reasoningEffort)
             ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd))
             ->withMessages($messages);
 

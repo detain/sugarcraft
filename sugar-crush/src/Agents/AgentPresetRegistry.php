@@ -496,14 +496,14 @@ final class AgentPresetRegistry
             tools: self::nameList($data, 'tools', $filePath),
             disallowedTools: self::nameList($data, 'disallowedTools', $filePath),
             model: self::stringField($data, 'model', $filePath) ?? 'inherit',
-            permissionMode: $this->parsePermissionMode(self::stringField($data, 'permissionMode', $filePath) ?? 'default'),
+            permissionMode: self::parsePermissionMode(self::stringField($data, 'permissionMode', $filePath), $filePath),
             maxTurns: isset($data['maxTurns']) ? (int) $data['maxTurns'] : null,
             skills: self::nameList($data, 'skills', $filePath),
             mcpServers: self::nameList($data, 'mcpServers', $filePath),
             memory: $this->parseMemoryScope(self::stringField($data, 'memory', $filePath) ?? 'user'),
             background: (bool) ($data['background'] ?? false),
-            effort: $this->parseEffort(self::stringField($data, 'effort', $filePath) ?? 'medium'),
-            isolation: $this->parseIsolation(self::stringField($data, 'isolation', $filePath)),
+            effort: self::parseEffort(self::stringField($data, 'effort', $filePath), $filePath),
+            isolation: self::parseIsolation(self::stringField($data, 'isolation', $filePath), $filePath),
             color: self::stringField($data, 'color', $filePath),
             initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),
         );
@@ -637,14 +637,23 @@ final class AgentPresetRegistry
      *    been losing its permission mode for as long as it had existed.
      *
      * {@see EnumSpelling::resolve()} is the sibling reader's camel-to-kebab
-     * retry, extracted so both readers share one answer. The `?? Default`
-     * tails keep each field's documented fall-back exactly where it was: what
-     * changed is which spellings reach the enum, not what an unknown value
-     * does.
+     * retry, extracted so both readers share one answer.
+     *
+     * THE THREE FIELDS A DELEGATED RUN ACTS ON REFUSE AN UNKNOWN SPELLING
+     * (roadmap 4.1-1). `permissionMode` and `effort` change what `Task` does,
+     * and `isolation` will (4.9), so a typo there is no longer a harmless
+     * no-op: `effort: maximum` silently becoming `medium` — or `permissionMode:
+     * plna` silently becoming the session's mode — is a preset that does
+     * something its author did not write. The refusal names the file, the
+     * field and the accepted values, and {@see list()} turns it into a
+     * one-file skip the launch reports. `memory` still falls back: nothing
+     * reads it yet, and the launch audit names a value it ignores.
+     *
+     * @throws \InvalidArgumentException for a declared value no case spells
      */
-    private function parsePermissionMode(string $value): PermissionMode
+    private static function parsePermissionMode(?string $value, string $filePath): PermissionMode
     {
-        return EnumSpelling::resolve(PermissionMode::class, $value) ?? PermissionMode::Default;
+        return $value === null ? PermissionMode::Default : self::declaredCase(PermissionMode::class, 'permissionMode', $value, $filePath);
     }
 
     private function parseMemoryScope(string $value): MemoryScope
@@ -652,17 +661,47 @@ final class AgentPresetRegistry
         return EnumSpelling::resolve(MemoryScope::class, $value) ?? MemoryScope::User;
     }
 
-    private function parseEffort(string $value): Effort
+    /**
+     * Null when the file declares no effort — the provider's own default
+     * stands, never an implied `medium` (see {@see AgentPreset}).
+     *
+     * @throws \InvalidArgumentException for a declared value no case spells
+     */
+    private static function parseEffort(?string $value, string $filePath): ?Effort
     {
-        return EnumSpelling::resolve(Effort::class, $value) ?? Effort::Medium;
+        return $value === null ? null : self::declaredCase(Effort::class, 'effort', $value, $filePath);
     }
 
-    private function parseIsolation(?string $value): ?Isolation
+    /**
+     * @throws \InvalidArgumentException for a declared value no case spells
+     */
+    private static function parseIsolation(?string $value, string $filePath): ?Isolation
     {
-        if ($value === null) {
-            return null;
+        return $value === null ? null : self::declaredCase(Isolation::class, 'isolation', $value, $filePath);
+    }
+
+    /**
+     * The case of $enum that $value spells, or a refusal naming the file, the
+     * field and every accepted value.
+     *
+     * @template T of \BackedEnum
+     * @param class-string<T> $enum
+     * @return T
+     * @throws \InvalidArgumentException
+     */
+    private static function declaredCase(string $enum, string $field, string $value, string $filePath): \BackedEnum
+    {
+        $case = EnumSpelling::resolve($enum, $value);
+        if ($case !== null) {
+            return $case;
         }
 
-        return EnumSpelling::resolve(Isolation::class, $value);
+        throw new \InvalidArgumentException(sprintf(
+            '%s: `%s: %s` is not a value sugar-crush knows; use one of %s',
+            $filePath,
+            $field,
+            $value,
+            implode(', ', array_map(static fn (\BackedEnum $c): string => (string) $c->value, $enum::cases())),
+        ));
     }
 }

@@ -151,14 +151,19 @@ final class AgentPresetTest extends TestCase
         $this->assertFalse($preset->background);
     }
 
-    public function testDefaultEffortIsMedium(): void
+    /**
+     * Roadmap 4.1-1: no declared effort is NO effort — the provider's own
+     * per-model default stands — never an implied `medium` that every
+     * delegated request would then carry.
+     */
+    public function testDefaultEffortIsNull(): void
     {
         $preset = new AgentPreset(
             name: 'default-effort-test',
             description: 'Test default effort',
         );
 
-        $this->assertSame(Effort::Medium, $preset->effort);
+        $this->assertNull($preset->effort);
     }
 
     public function testDefaultIsolationIsNull(): void

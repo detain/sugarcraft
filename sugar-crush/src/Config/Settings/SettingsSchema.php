@@ -43,6 +43,7 @@ final class SettingsSchema
         Definitions\ToolSettings::class,
         Definitions\MemoryRuleSettings::class,
         Definitions\SkillSettings::class,
+        Definitions\SubagentSettings::class,
         Definitions\GitSettings::class,
         Definitions\InterfaceSettings::class,
         Definitions\HooksMcpSettings::class,

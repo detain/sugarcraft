@@ -194,6 +194,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | **no** |
 | `disabledSkills` | `Bootstrap::chat()` → `skillRegistry()` | yes |
 | `enabledSkills` | `Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()` | **no** |
+| `subagentModel` | `Bootstrap::agentManager()` | **no** |
 | `includeGitInstructions` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | yes |
 | `attribution` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | **no** |
 | `theme` | `Bootstrap::chat()` | yes |
@@ -203,7 +204,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-six, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-seven, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -843,6 +844,7 @@ project-settable.
 | `disabledRules` | Memory & Rules | list | `[]` | U C | — | restart | prompt |
 | `disabledSkills` | Skills | list | `[]` | P U C | — | restart | narrowing |
 | `enabledSkills` | Skills | list | `[]` | U C | — | restart | prompt |
+| `subagentModel` | Sub-agents | string | unset | U C | — | restart | spend |
 | `includeGitInstructions` | Git & Automation | bool | `true` | P U C | — | restart | narrowing |
 | `attribution` | Git & Automation | object | unset | U C | — | restart | prompt |
 | `theme` | Interface | enum | `dark` | P U C | — | live | cosmetic |
@@ -1010,13 +1012,14 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only seven of the twenty-six layered keys have an
+  They do not cover it: only seven of the twenty-seven layered keys have an
   env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`). `maxOutputTokens`,
   `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`, `contextWindow`,
   `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `instructions`,
-  `disabledRules`, `disabledSkills`, `enabledSkills`, `includeGitInstructions`,
-  `attribution`, `theme`, `statusLine`, `layout` and `lintCommands` have none.
+  `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`,
+  `includeGitInstructions`, `attribution`, `theme`, `statusLine`, `layout` and
+  `lintCommands` have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.

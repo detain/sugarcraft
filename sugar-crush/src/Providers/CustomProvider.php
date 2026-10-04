@@ -20,7 +20,7 @@ use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Providers\Concerns\ToolSchema;
 use SugarCraft\Crush\Usage;
 
-final readonly class CustomProvider implements ProviderInterface
+final readonly class CustomProvider implements ProviderInterface, RebindsModel
 {
     use ToolSchema;
 
@@ -261,6 +261,17 @@ final readonly class CustomProvider implements ProviderInterface
     public function supportsJsonSchema(): bool
     {
         return false;
+    }
+
+    /**
+     * This provider answering for $model (roadmap N-P3b remainder): the
+     * window and the rates below read the configured id, so a model switch
+     * through {@see \SugarCraft\Crush\Backend\EngineBackend::withModel()}
+     * rebinds it here instead of leaving them the old model's.
+     */
+    public function withModel(string $model): static
+    {
+        return new self(...array_merge(get_object_vars($this), ['model' => $model]));
     }
 
     /**

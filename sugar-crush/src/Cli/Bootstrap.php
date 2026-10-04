@@ -2218,7 +2218,18 @@ final class Bootstrap
         // EnvironmentBlock::render() is not memoised, so its git shell-out
         // happens once per systemPrompt() call whichever instance it is called
         // on, and capture() itself only stores three values.
+        // Roadmap 4.1-1: `subagentModel` is the model every agent that would
+        // otherwise inherit the session's runs on — a preset's `model:
+        // inherit` (or none) and the built-in definitions. An agent that names
+        // its own model keeps it, and a Task call's `model` argument still
+        // wins over both (TaskTool::chooseModel()).
+        $subagentModel = self::readUserConfig()['subagentModel'] ?? null;
+        $subagentModel = is_string($subagentModel) && trim($subagentModel) !== '' ? trim($subagentModel) : null;
+
         foreach (self::agentRoster($root, self::selectedProviderName() ?? 'echo', $model) as $agent) {
+            if ($subagentModel !== null && $agent->inheritsModel) {
+                $agent = $agent->withModel($subagentModel);
+            }
             $manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)));
         }
 

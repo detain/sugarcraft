@@ -1371,6 +1371,9 @@ final class Runtime
             // Step 0.13-a: the turn's session, which a SessionAffinity
             // provider hashes into its routing header per request.
             sessionId: $app->sessionId,
+            // Roadmap 4.1-1: a delegated run's preset `effort:`. Null on
+            // every other App, so the provider's own tiers answer.
+            reasoningEffort: $app->reasoningEffort,
         );
 
         if ($onRequest !== null) {

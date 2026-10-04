@@ -15,6 +15,11 @@ use SugarCraft\Crush\Skills\SkillSource;
  * preset imported by {@see ForeignAgentPresetRegistry} from `.claude/agents/`
  * or `.opencode/agents/` can be badged as foreign; presets written for
  * sugar-crush itself keep the SkillSource::Native default.
+ *
+ * `$effort` is null when the file declares none (roadmap 4.1-1): a delegated
+ * run sends the declared effort with its requests, and an implied `medium`
+ * would override the provider's own per-model default for every preset that
+ * never asked for one.
  */
 final class AgentPreset
 {
@@ -30,7 +35,7 @@ final class AgentPreset
         public readonly array $mcpServers = [],
         public readonly MemoryScope $memory = MemoryScope::User,
         public readonly bool $background = false,
-        public readonly Effort $effort = Effort::Medium,
+        public readonly ?Effort $effort = null,
         public readonly ?Isolation $isolation = null,
         public readonly ?string $color = null,
         public readonly ?string $initialPrompt = null,

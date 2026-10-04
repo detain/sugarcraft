@@ -124,14 +124,14 @@ name: reviewer                  # optional; defaults to the filename stem
 description: Reviews a diff for correctness and style.
 tools: [Read, Grep, Glob, Bash]
 disallowedTools: [Write, Edit]
-model: inherit                  # or a concrete model id
+model: inherit                  # or a model id the session's provider serves
 permissionMode: plan
 maxTurns: 12
 skills: [php-best-practices]
 mcpServers: [git]
 memory: project                 # user | project | local
 background: false
-effort: high                    # low | medium | high | xhigh | max
+effort: high                    # low | medium | high | xhigh | max (sglang only)
 isolation: worktree             # worktree | none
 color: "#ffb86c"
 initialPrompt: |                # optional; the body is used when absent
@@ -189,18 +189,19 @@ wiring one.
 ### Which fields act
 
 Reaching the roster is not the same as changing what a delegated run does.
-`Task` runs every sub-agent on the session's provider and model and under the
-session's permission gate (`TaskTool`), and several fields are carried onto
-the `Agent` row and read by nothing after that:
+`Task` runs every sub-agent on the session's provider and under the session's
+permission gate (`TaskTool`); its model and reasoning effort are the agent's,
+and several fields are carried onto the `Agent` row and read by nothing after
+that:
 
 | Field | Effect today |
 |---|---|
 | `name`, `description`, `initialPrompt` | Live: the roster entry and the sub-agent's prompt. |
 | `tools`, `disallowedTools` | Live: see [How a grant is enforced](#how-a-grant-is-enforced). |
 | `skills`, `mcpServers`, `maxTurns` | Live on the delegated run. |
-| `model` | **Inert.** `Task` uses the session's model; `inherit` is what happens anyway. |
+| `model` | Live: see [Which model a delegation runs on](#which-model-a-delegation-runs-on). |
+| `effort` | Live: sent with every request of the run as its reasoning effort. |
 | `permissionMode` | **Inert.** The session's gate judges every call; `default` is what happens anyway. |
-| `effort` | **Inert.** Carried, never sent with a request. |
 | `memory` | **Inert.** Carried; no memory tier is selected by it. |
 | `background` | **Inert.** `false` is what happens anyway. |
 | `isolation` | **Inert.** `none` is what happens anyway; see [Teams and worktrees](#teams-and-worktrees). |
@@ -213,6 +214,33 @@ preset that sets an inert field to anything but its no-op value — or declares
 a key outside this table, such as a misspelt `permisionMode` — is still
 loaded, and the launch names it in one aggregated row (stderr and transcript)
 with a did-you-mean for a near miss.
+
+### Which model a delegation runs on
+
+The provider is always the session's. The model is the first of:
+
+1. the `Task` call's own `model` argument;
+2. the agent's model, when it names one — a preset's `model:` other than
+   `inherit`;
+3. the `subagentModel` setting ([`SETTINGS.md`](SETTINGS.md)), for every agent
+   that would otherwise inherit, the built-in definitions included;
+4. the session's current model, so a `/model` switch reaches an inheriting
+   agent.
+
+A model the provider cannot serve is **refused**, never relabelled: an SGLang
+server serves one model, so naming another fails the call with the served name;
+and a Claude Code tier name (`sonnet`, `opus`, `haiku`) is accepted only when
+the session's own model is of that tier, because no other provider has a model
+by that name. The window and the rates the run is measured against follow the
+model where the provider can rebind (`RebindsModel`).
+
+`effort:` is sent as each request's reasoning effort, overriding the provider's
+own per-model default for this run only. Only the `sglang` provider sends a
+reasoning effort, so a preset that declares one is refused on any other
+provider rather than run as though it were honoured. An unknown spelling —
+`effort: maximum`, or a `permissionMode:` or `isolation:` no case matches — is
+refused when the file is read, as a malformed field is, rather than falling
+back to a default.
 
 ### How a grant is enforced
 

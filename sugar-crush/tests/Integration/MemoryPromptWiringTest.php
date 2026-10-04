@@ -447,6 +447,7 @@ final class MemoryPromptWiringTest extends TestCase
             'withSubAgentGrant' => fn(EngineBackend $b): EngineBackend => $b->withSubAgentGrant(null),
             'withMaxConcurrentDelegations' => fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(2),
             'withSessionId' => fn(EngineBackend $b): EngineBackend => $b->withSessionId('memory-session'),
+            'withReasoningEffort' => fn(EngineBackend $b): EngineBackend => $b->withReasoningEffort('low'),
             'withoutHooks' => fn(EngineBackend $b): EngineBackend => $b->withoutHooks(),
             // withMemoryStore() is the setter itself, so "preserves" is not a
             // meaningful question for it; it is exercised by every other case.
