@@ -107,7 +107,7 @@ final class SettingsEditorRenderTest extends TestCase
         $frame = TuiRenderer::render($this->app(), 120, 30);
         $plain = Ansi::strip($frame);
 
-        self::assertStringContainsString('settings · read-only', $plain);
+        self::assertStringContainsString('settings · nothing staged', $plain);
         self::assertStringNotContainsString('a chat line nobody should see', $plain);
 
         $lines = explode("\n", $frame);
@@ -146,7 +146,7 @@ final class SettingsEditorRenderTest extends TestCase
         $frame = explode("\n", Ansi::strip(TuiRenderer::render($app, 120, 30)));
         // The band starts where the view's top border is painted, under
         // however many lines the menu bar took.
-        $bandTop = (int) array_key_first(array_filter($frame, static fn (string $l): bool => str_contains($l, 'settings · read-only')));
+        $bandTop = (int) array_key_first(array_filter($frame, static fn (string $l): bool => str_contains($l, 'settings · nothing staged')));
         self::assertGreaterThan(0, $bandTop);
 
         $editor = $app->settingsEditor;

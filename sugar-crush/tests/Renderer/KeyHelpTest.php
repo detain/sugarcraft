@@ -1102,7 +1102,9 @@ final class KeyHelpTest extends TestCase
         // fitting at 100x117. The live agents strip (P-B3) declared
         // `chat.agents-strip` and five rows in an eleventh context — one header
         // and one separator more: 120 lines, 87 -> 95, fitting at 100x125.
-        foreach ([[100, 30, 95], [100, 125, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // The settings editor's ten keys (W4-g's save door, bound): 130 lines,
+        // 95 -> 105, fitting at 100x135.
+        foreach ([[100, 30, 105], [100, 135, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1166,8 +1168,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 125 rows, not 80: the list is 120 content lines now (99 live
-            // rows, 11 headers, 10 separators; 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
+            // 135 rows, not 80: the list is 130 content lines now (109 live
+            // rows, 11 headers, 10 separators; 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
             // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
@@ -1176,7 +1178,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 125))),
+                Width::of($this->footer($this->chat('', $cols, 135))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

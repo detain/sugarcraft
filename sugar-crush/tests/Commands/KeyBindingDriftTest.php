@@ -255,7 +255,7 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 103 declared rows — and THAT is the domain
+     * Zero false positives across all 113 declared rows — and THAT is the domain
      * of the zero. It says nothing about prose not yet written; it says those 92
      * rows are clean under this pattern.
      *
@@ -1622,6 +1622,70 @@ final class KeyBindingDriftTest extends TestCase
                 [$closed] = $cleared->update($k[0]);
                 $this->assertNull($closed->settingsEditor, 'the second closes the view');
             },
+            // The editor's keys (carried from W4-g). Each drives the shell's
+            // App::update(), so the keys the shell answers (`s`, `y`) are on
+            // the path, and writes land in a per-call sandbox file.
+            'settings.edit' => function (array $k): void {
+                [$app] = $this->settingsEditApp('max tool steps')->update($k[0]);
+                $this->assertNotNull($app->settingsEditor?->editing, 'the highlighted setting opens in its field');
+            },
+            'settings.stage' => function (array $k): void {
+                [$editing] = $this->settingsEditApp('max tool steps')->update(new KeyMsg(KeyType::Enter));
+                // The key is unset by default, so the field opens empty.
+                [$typed] = $editing->update(new KeyMsg(KeyType::Char, '7'));
+                [$app] = $typed->update($k[0]);
+                $this->assertNull($app->settingsEditor?->editing);
+                $this->assertSame(['maxToolSteps' => 7], $app->settingsEditor?->set, 'the value is staged');
+            },
+            'settings.cancel-edit' => function (array $k): void {
+                [$editing] = $this->settingsEditApp('max tool steps')->update(new KeyMsg(KeyType::Enter));
+                [$app] = $editing->update($k[0]);
+                $this->assertNotNull($app->settingsEditor, 'the view stays open');
+                $this->assertNull($app->settingsEditor->editing);
+                $this->assertFalse($app->settingsEditor->hasChanges());
+            },
+            'settings.reset' => function (array $k): void {
+                [$app] = $this->settingsEditApp('max tool steps')->update($k[0]);
+                $this->assertSame(['maxToolSteps'], $app->settingsEditor?->unset);
+            },
+            'settings.tier' => function (array $k): void {
+                [$app] = $this->settingsEditApp('max tool steps')->update($k[0]);
+                $this->assertSame(\SugarCraft\Crush\Config\Settings\SettingsTier::ProjectLocal, $app->settingsEditor?->tier);
+            },
+            'settings.save' => function (array $k): void {
+                [$app] = $this->settingsEditApp('max tool steps', stage: true)->update($k[0]);
+                $this->assertNotNull($app->settingsEditor?->preview, 'the save is previewed, not written');
+            },
+            'settings.confirm' => function (array $k): void {
+                $config = '';
+                [$previewing] = $this->settingsEditApp('max tool steps', stage: true, config: $config)->update(new KeyMsg(KeyType::Char, 's'));
+                [$app, $cmd] = $previewing->update($k[0]);
+                $this->assertInstanceOf(\Closure::class, $cmd, 'the write is a Cmd');
+                $app->update($cmd());
+                $this->assertSame(['maxToolSteps' => 40], json_decode((string) file_get_contents($config), true));
+            },
+            'settings.back' => function (array $k): void {
+                [$previewing] = $this->settingsEditApp('max tool steps', stage: true)->update(new KeyMsg(KeyType::Char, 's'));
+                [$app] = $previewing->update($k[0]);
+                $this->assertNull($app->settingsEditor?->preview);
+                $this->assertSame(['maxToolSteps' => 40], $app->settingsEditor?->set, 'nothing staged is lost');
+            },
+            'settings.trust' => function (array $k): void {
+                $config = '';
+                [$asking] = $this->settingsEditApp('trustedProjectSettings', config: $config)->update(new KeyMsg(KeyType::Enter));
+                [, $cmd] = $asking->update($k[0]);
+                $this->assertInstanceOf(\Closure::class, $cmd);
+                $cmd();
+                $this->assertCount(1, (array) (json_decode((string) file_get_contents($config), true)['trustedProjectSettings'] ?? []), 'the project was granted');
+            },
+            'settings.discard' => function (array $k): void {
+                $app = $this->settingsEditApp('max tool steps', stage: true);
+                [$app] = $app->update(new KeyMsg(KeyType::Escape));
+                [$asking] = $app->update(new KeyMsg(KeyType::Escape));
+                $this->assertNotNull($asking->settingsEditor?->confirm, 'Esc with changes asks first');
+                [$closed] = $asking->update($k[0]);
+                $this->assertNull($closed->settingsEditor);
+            },
 
             // ── Menu bar ─────────────────────────────────────────────────
             // Both directions, from a menu in the MIDDLE of the strip. The
@@ -2037,6 +2101,33 @@ final class KeyBindingDriftTest extends TestCase
     private function app(): App
     {
         return App::new($this->provider, 'test-model');
+    }
+
+    /**
+     * An App with the settings view open on `$query`, reading a per-call
+     * sandbox and saving into it (its `config.json` path comes back in
+     * `$config`); `$stage` stages `maxToolSteps = 40` first.
+     */
+    private function settingsEditApp(string $query, bool $stage = false, ?string &$config = null): App
+    {
+        $dir = $this->sandbox . '/settings-keys-' . ++$this->storeSeq;
+        $home = $dir . '/home/' . \SugarCraft\Crush\Config\LayeredSettings::dir();
+        @mkdir($home, 0o700, true);
+        @mkdir($dir . '/project', 0o700, true);
+        $configPath = $home . '/config.json';
+        $config = $configPath;
+        $sources = static fn (): SettingsSources => SettingsSources::fromLaunch($dir . '/project', false, $home, $configPath, []);
+
+        $app = $this->app()
+            ->withRoot($dir . '/project')
+            ->withSettingsSources($sources)
+            ->withSettingsWriter(\SugarCraft\Crush\Config\Settings\SettingsWriter::new($configPath, static function (array $set, array $unset) use ($configPath): void {
+                $data = is_file($configPath) ? (array) json_decode((string) file_get_contents($configPath), true) : [];
+                file_put_contents($configPath, (string) json_encode(\SugarCraft\Crush\Config\Settings\SettingsWriter::patched($data, $set, $unset)));
+            }))
+            ->openSettings($query);
+
+        return $stage ? $app->withSettingsEditor($app->settingsEditor?->stage('maxToolSteps', 40)) : $app;
     }
 
     /** An App whose settings view reads fixed, file-free sources. */

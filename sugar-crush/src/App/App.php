@@ -2203,6 +2203,14 @@ final class App implements Model
         // app drivable — Ctrl+C still quits (Chat's binding), and F10 and an
         // open menu keep the menu bar the view leaves on screen.
         if ($this->settingsEditor !== null && !self::settingsEditorYields($msg)) {
+            // The editor's keys that need the writer are the shell's, because
+            // the writer is: `s` (preview), `y`/Enter (save the preview) and
+            // `y` on the trust question (the confirmed trust action).
+            $shell = $this->settingsShellKey($msg);
+            if ($shell !== null) {
+                return $shell;
+            }
+
             $next = $this->settingsEditor->update($msg);
 
             return [$next === null ? $this->closeSettings() : $this->mutate(settingsEditor: $next), null];
@@ -2224,6 +2232,79 @@ final class App implements Model
         [$next, $cmd] = $handled;
 
         return $cmd === null ? [$next, null] : $next->consumeShellCmd($cmd);
+    }
+
+    /**
+     * The settings view's keys that reach the writer, or null for a key the
+     * editor answers itself.
+     *
+     * - `s` with changes staged (from the list, or as the answer to the
+     *   discard question): build the save preview ({@see previewSettings()}).
+     * - `y` or `Enter` on an open preview: save it ({@see confirmSettingsSave()}).
+     * - `y` on the trust question: the confirmed trust action
+     *   ({@see grantProjectTrust()}).
+     *
+     * @return array{0: self, 1: ?\Closure}|null
+     */
+    private function settingsShellKey(KeyMsg $msg): ?array
+    {
+        $editor = $this->settingsEditor;
+        if ($editor === null) {
+            return null;
+        }
+        $rune = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt ? $msg->rune : null;
+
+        if ($rune === 's' && $editor->hasChanges()
+            && ($editor->isIdle() || $editor->confirm === SettingsEditor::CONFIRM_DISCARD)) {
+            return [$this->previewSettings(), null];
+        }
+
+        if ($editor->preview !== null && $editor->confirm === null && ($rune === 'y' || $msg->type === KeyType::Enter)) {
+            return $this->confirmSettingsSave();
+        }
+
+        if ($editor->confirm === SettingsEditor::CONFIRM_TRUST && $rune === 'y') {
+            return $this->grantProjectTrust();
+        }
+
+        return null;
+    }
+
+    /**
+     * The confirmed trust action (N-P2's dormant
+     * {@see SettingsWriter::grantTrust()}, wired): add this launch's project
+     * root to the trust list the view is asking about, in the user's
+     * `config.json`. The write is a Cmd, answered with a
+     * {@see SettingsSavedMsg} like a save; it applies from the next launch.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function grantProjectTrust(): array
+    {
+        $editor = $this->settingsEditor;
+        $key = $editor?->pendingTrustKey();
+        if ($editor === null || $key === null) {
+            return [$this, null];
+        }
+
+        $editor = $editor->withConfirm(null);
+        $writer = $this->settingsWriter;
+        $root = $this->root;
+        if ($writer === null || $root === null || $root === '') {
+            return [$this->mutate(settingsEditor: $editor->withSaved(SettingsSavedMsg::failed(
+                SettingsTier::You,
+                [$key],
+                $writer === null ? 'settings cannot be saved from this session' : 'this launch has no project root to trust',
+            ))), null];
+        }
+
+        return [$this->mutate(settingsEditor: $editor), static function () use ($writer, $key, $root): SettingsSavedMsg {
+            try {
+                return SettingsSavedMsg::saved(SettingsTier::You, [$key], $writer->grantTrust($key, $root));
+            } catch (\Throwable $e) {
+                return SettingsSavedMsg::failed(SettingsTier::You, [$key], $e->getMessage());
+            }
+        }];
     }
 
     /**

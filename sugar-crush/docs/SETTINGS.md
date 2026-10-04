@@ -884,6 +884,22 @@ you; an explicit `null` is refused, because in a settings file `null` is a value
 that masks every lower layer. A `config.json` that exists but is not a JSON
 object is never overwritten.
 
+The keys, all plain letters (no `Ctrl+S`/`Ctrl+R`: both are already taken):
+
+| Key | Does |
+|---|---|
+| `Enter` | Edit the highlighted setting in its field; `Enter` again stages the value, `Esc` drops it |
+| `r` | Stage a reset of the highlighted setting (the save deletes the key) |
+| `t` | Switch the tier the save writes to |
+| `s` | Show the save preview of everything staged |
+| `y` / `Enter` | In the preview: write it. `n` / `Esc` goes back with everything still staged |
+| `Enter` on a `trustedProject*` list | Ask whether to trust this project for it; `y` runs the confirmed trust action, `n` cancels |
+| `Esc` with changes staged | Ask before closing: `d` discards them, `k` keeps editing, `s` previews the save |
+
+The confirmed trust action adds this launch's project root to that list in your
+`config.json` (`SettingsWriter::grantTrust()`), and like every trust grant it
+applies from the next launch.
+
 Saved is not applied: see the next section for when each key takes effect.
 
 ## When a change takes effect

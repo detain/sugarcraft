@@ -4063,7 +4063,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 99 live rows across 11 contexts — 103 in all, four of them
+     * declares 109 live rows across 11 contexts — 113 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *

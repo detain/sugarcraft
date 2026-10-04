@@ -31,11 +31,16 @@ use SugarCraft\Sprinkles\Style;
  * {@see withPreview()} shows the {@see SettingsSavePreview} the shell built for
  * them. Nothing here writes a file — the write is the shell's Cmd
  * ({@see \SugarCraft\Crush\App\App::confirmSettingsSave()}), answered with a
- * {@see SettingsSavedMsg} ({@see withSaved()}). No key is bound to those yet
- * (decision D7: no Ctrl+S / Ctrl+R — both are shell chords already), so until
- * the editor's keys land the view still says "read-only". Labels are literal
- * English (D7): the schema's `labelKey`/`helpKey` are kept for i18n, which
- * arrives later.
+ * {@see SettingsSavedMsg} ({@see withSaved()}). The editor's keys are plain
+ * letters (decision D7: no Ctrl+S / Ctrl+R — both are shell chords already):
+ * `Enter` edits the highlighted key (`Enter` stages, `Esc` cancels), `r`
+ * stages a reset, `t` switches the tier, `s` asks the shell for the save
+ * preview and `y` confirms it. `Enter` on a trust list opens the confirmed
+ * trust action instead ({@see CONFIRM_TRUST}), and `Esc` with changes staged
+ * asks before it throws them away ({@see CONFIRM_DISCARD}). The keys that
+ * need the writer (`s`, `y`) are the shell's, because the writer is. Labels
+ * are literal English (D7): the schema's `labelKey`/`helpKey` are kept for
+ * i18n, which arrives later.
  *
  * HELD BY THE SHELL ({@see \SugarCraft\Crush\App\App::$settingsEditor}), not by
  * `Chat`: it writes no history and sends nothing to the model, which is also
@@ -49,6 +54,12 @@ final class SettingsEditor
     public const ZONE_PREFIX = 'settings:';
     public const TAB_ZONE = 'settings:tab:';
     public const ROW_ZONE = 'settings:row:';
+
+    /** {@see $confirm}: `Esc` with changes staged — discard them, or keep editing. */
+    public const CONFIRM_DISCARD = 'discard';
+
+    /** {@see $confirm}: grant this project the highlighted trust list (the confirmed trust action). */
+    public const CONFIRM_TRUST = 'trust';
 
     /** The last tab: the files the layers come from, not a schema category. */
     public const FILES_TAB = 'Files';
@@ -77,6 +88,12 @@ final class SettingsEditor
         public readonly ?SettingsSavePreview $preview = null,
         public readonly ?string $status = null,
         public readonly ?Field $editing = null,
+        /**
+         * The question the view is waiting on, or null: {@see CONFIRM_DISCARD}
+         * or {@see CONFIRM_TRUST}. Every other change of state drops it — a
+         * question is answered or abandoned, never carried along.
+         */
+        public readonly ?string $confirm = null,
     ) {
     }
 
@@ -187,6 +204,42 @@ final class SettingsEditor
     public function cancelEdit(): self
     {
         return $this->editing === null ? $this : $this->withEditing(null, $this->status);
+    }
+
+    /** Stage a reset of the highlighted setting; a files row or an empty list stays as it is. */
+    public function resetSelected(): self
+    {
+        $selected = $this->selected();
+
+        return $selected instanceof SettingDefinition ? $this->stageReset($selected->key) : $this;
+    }
+
+    /** The trust list the confirmed trust action would grant, while that question is up. */
+    public function pendingTrustKey(): ?string
+    {
+        $selected = $this->selected();
+
+        return $this->confirm === self::CONFIRM_TRUST && $selected instanceof SettingDefinition && self::isTrustKey($selected)
+            ? $selected->key
+            : null;
+    }
+
+    /** Whether the view is between questions: no search, edit, preview or confirmation open. */
+    public function isIdle(): bool
+    {
+        return !$this->searching && $this->editing === null && $this->preview === null && $this->confirm === null;
+    }
+
+    /** Ask (or with null, stop asking) one of the CONFIRM_* questions. */
+    public function withConfirm(?string $confirm): self
+    {
+        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, $this->status, $this->editing, $confirm);
+    }
+
+    /** A trust list: written only through the confirmed trust action, never staged. */
+    private static function isTrustKey(SettingDefinition $definition): bool
+    {
+        return \in_array($definition->key, \SugarCraft\Crush\Config\Settings\SettingsWriter::trustKeys(), true);
     }
 
     /** The staged value of a key, else the value this launch resolved. */
@@ -348,12 +401,40 @@ final class SettingsEditor
      */
     public function update(KeyMsg $msg): ?self
     {
+        $plainRune = $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt ? $msg->rune : null;
+
+        // An open question owns the keyboard. The answers that need the
+        // writer (`y` on a trust grant, `s` on the discard question) are the
+        // shell's ({@see \SugarCraft\Crush\App\App}), which reaches them first.
+        if ($this->confirm !== null) {
+            if ($msg->type === KeyType::Escape || $plainRune === 'n' || $plainRune === 'k') {
+                return $this->withConfirm(null);
+            }
+
+            return $this->confirm === self::CONFIRM_DISCARD && $plainRune === 'd' ? null : $this;
+        }
+
+        // An open field takes every key: Enter stages it, Esc drops it.
+        if ($this->editing !== null) {
+            return match ($msg->type) {
+                KeyType::Enter => $this->commitEdit(),
+                KeyType::Escape => $this->cancelEdit(),
+                default => $this->editKey($msg),
+            };
+        }
+
+        // The save preview: `y`/Enter saves (the shell's), Esc/`n` goes back.
+        if ($this->preview !== null) {
+            return $msg->type === KeyType::Escape || $plainRune === 'n' ? $this->withPreview(null) : $this;
+        }
+
         if ($msg->type === KeyType::Escape) {
             if ($this->searching || $this->query !== '') {
                 return $this->mutate(query: '', searching: false, cursor: 0);
             }
 
-            return null;
+            // Closing would throw the edit set away, so it asks first.
+            return $this->hasChanges() ? $this->withConfirm(self::CONFIRM_DISCARD) : null;
         }
 
         if ($msg->type === KeyType::Up) {
@@ -386,6 +467,14 @@ final class SettingsEditor
             return $this;
         }
 
+        if ($msg->type === KeyType::Enter) {
+            $selected = $this->selected();
+
+            return $selected instanceof SettingDefinition && self::isTrustKey($selected)
+                ? $this->withConfirm(self::CONFIRM_TRUST)
+                : $this->beginEdit();
+        }
+
         if ($msg->type === KeyType::Left) {
             return $this->switchTab(-1);
         }
@@ -404,6 +493,8 @@ final class SettingsEditor
             'j' => $this->move(1),
             'h' => $this->switchTab(-1),
             'l' => $this->switchTab(1),
+            'r' => $this->resetSelected(),
+            't' => $this->withTier($this->tier->next()),
             default => $this,
         };
     }
@@ -455,7 +546,7 @@ final class SettingsEditor
 
         $title = $this->hasChanges()
             ? sprintf(' ⚙ settings · %d unsaved · %s ', \count($this->set) + \count($this->unset), $this->tier->label())
-            : ' ⚙ settings · read-only ';
+            : ' ⚙ settings · nothing staged ';
         $topFill = max(0, $cols - 3 - Width::string($title));
         $lines = [$border->render('╭─' . $title . str_repeat('─', $topFill) . '╮')];
 
@@ -471,6 +562,8 @@ final class SettingsEditor
             $body = array_pad(\array_slice($this->preview->lines($theme, $w), 0, \count($body)), \count($body), '');
         } elseif ($this->editing !== null) {
             $body = array_pad(\array_slice(explode("\n", $this->editing->view()), 0, \count($body)), \count($body), '');
+        } elseif ($this->confirm !== null) {
+            $body = array_pad(\array_slice($this->confirmLines($theme, $w), 0, \count($body)), \count($body), '');
         }
 
         foreach ($body as $line) {
@@ -736,9 +829,52 @@ final class SettingsEditor
 
     private function footer(): string
     {
-        return $this->searching
-            ? 'type to filter · Enter keep matches · ↑↓ move · Esc clear'
-            : '↑↓ move · ←→ category · / search · Esc close · read-only — /theme and /model change live';
+        return match (true) {
+            $this->searching => 'type to filter · Enter keep matches · ↑↓ move · Esc clear',
+            $this->confirm === self::CONFIRM_TRUST => 'y trust this project · n cancel',
+            $this->confirm === self::CONFIRM_DISCARD => 'd discard · k keep editing · s save',
+            $this->editing !== null => 'Enter stage · Esc cancel',
+            $this->preview !== null => 'y save · n back',
+            default => '↑↓ move · ←→ category · / search · Enter edit · r reset · t tier · s save · Esc close',
+        };
+    }
+
+    /**
+     * The question's own rows, in the body's place: what is about to be
+     * thrown away, or what the trust grant does.
+     *
+     * @return list<string>
+     */
+    private function confirmLines(Theme $theme, int $width): array
+    {
+        $head = Style::new()->foreground($theme->shellWarning)->bold();
+        $text = Style::new()->foreground($theme->shellForeground);
+        $muted = Style::new()->foreground($theme->shellMuted);
+        $cut = static fn (Style $style, string $line): string => $style->render(Width::truncate($line, $width));
+
+        if ($this->confirm === self::CONFIRM_DISCARD) {
+            $count = \count($this->set) + \count($this->unset);
+            $keys = [...array_keys($this->set), ...$this->unset];
+
+            return [
+                $cut($head, sprintf('Close with %d unsaved change%s?', $count, $count === 1 ? '' : 's')),
+                $cut($text, implode(', ', $keys)),
+                '',
+                $cut($muted, 'd discards them and closes · k keeps editing · s previews the save'),
+            ];
+        }
+
+        $key = $this->pendingTrustKey() ?? '';
+        $definition = SettingsSchema::byKey($key);
+
+        return [
+            $cut($head, 'Trust this project: ' . $key),
+            $cut($text, 'Adds this project to the ' . $key . ' list in your config.json.'),
+            $cut($text, $definition?->help ?? ''),
+            $cut($muted, 'Trust applies from the next launch; this one keeps what it started with.'),
+            '',
+            $cut($muted, 'y grants it · n cancels'),
+        ];
     }
 
     // ── helpers ─────────────────────────────────────────────────────────

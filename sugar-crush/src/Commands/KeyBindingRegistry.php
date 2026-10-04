@@ -715,6 +715,19 @@ final class KeyBindingRegistry
             KeyBinding::new('settings.search-keep', 'Enter', 'Stop typing the search, keep its matches', $c),
             KeyBinding::new('settings.erase', 'Backspace', 'Erase the last character of the search', $c),
             KeyBinding::new('settings.close', 'Esc', 'Clear the search, then close the view', $c),
+            // The editor's own keys (W4-g built the save door; decision D7:
+            // plain letters, no Ctrl+S / Ctrl+R). `s` and `y` are answered by
+            // the shell (App::settingsShellKey()), which holds the writer.
+            KeyBinding::new('settings.edit', 'Enter', 'Edit the highlighted setting', $c),
+            KeyBinding::new('settings.stage', 'Enter', 'Stage the value being edited', $c),
+            KeyBinding::new('settings.cancel-edit', 'Esc', 'Drop the value being edited', $c),
+            KeyBinding::new('settings.reset', 'r', 'Stage a reset to the default', $c),
+            KeyBinding::new('settings.tier', 't', 'Switch the file a save writes', $c),
+            KeyBinding::new('settings.save', 's', 'Preview the save of what is staged', $c),
+            KeyBinding::new('settings.confirm', 'y', 'Save the previewed changes (or Enter)', $c),
+            KeyBinding::new('settings.back', 'n', 'Leave the preview unsaved (or Esc)', $c),
+            KeyBinding::new('settings.trust', 'y', 'Confirm a project trust grant', $c),
+            KeyBinding::new('settings.discard', 'd', 'Discard unsaved changes and close', $c),
         ];
     }
 
