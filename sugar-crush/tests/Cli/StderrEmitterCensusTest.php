@@ -52,13 +52,14 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
- * `src/` and `bin/` is SIXTEEN" — is CORRECT, and this file asserts that it
+ * `src/` and `bin/` is SEVENTEEN" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — sixteen sites. The channel that census describes.
- *     (E710: `Subcommands::mcpImportLine()` joined it — the import verb's
+ *  1. `fwrite(STDERR, …)` — seventeen sites. The channel that census describes.
+ *     (O-3a: `Serve::stderr()`, `serve`'s one funnel for its startup lines,
+ *     request log and stop notice. E710: `Subcommands::mcpImportLine()` joined it — the import verb's
  *     notes and post-read failures, one funnel site, stderr-only by design.
  *     Audit MCP-5: `Subcommands::mcpTrust()`'s one failure line, stderr-only
  *     because the verb runs no session to carry a transcript row.
@@ -288,6 +289,11 @@ final class StderrEmitterCensusTest extends TestCase
         // mention that matched nothing, a refused file, an image the model
         // could not see. Stderr alone: stdout is the answer.
         'src/Cli/NonInteractive.php' => 8,
+        // O-3a: `serve`'s one funnel (Serve::stderr()) for its startup lines,
+        // request log and stop notice. Stderr alone: no session exists to
+        // carry a transcript notice, and the terminal running the server is
+        // its log.
+        'src/Cli/Serve.php' => 1,
         'src/Cli/Subcommands.php' => 4,
     ];
 
@@ -765,7 +771,7 @@ final class StderrEmitterCensusTest extends TestCase
         'one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5,
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15,
-        'sixteen' => 16,
+        'sixteen' => 16, 'seventeen' => 17,
         'eighteen' => 18, 'nineteen' => 19,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23, 'twenty-four' => 24,
         'twenty-five' => 25,

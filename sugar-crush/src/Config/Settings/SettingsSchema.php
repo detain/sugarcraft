@@ -46,6 +46,7 @@ final class SettingsSchema
         Definitions\GitSettings::class,
         Definitions\InterfaceSettings::class,
         Definitions\HooksMcpSettings::class,
+        Definitions\ServerSettings::class,
     ];
 
     /** @var list<SettingDefinition>|null */

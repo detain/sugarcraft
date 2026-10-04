@@ -607,7 +607,9 @@ refresh ahead of, and a server's 401 does not trigger a refresh yet.
 `src/MCP/` also contains the *server* halves — `McpServer`, `GitMcpServer` with
 `GitCommandHandlers`, `HttpMcpServer`, `StdioMcpServer`. `GitMcpServer` is
 reachable as a `type: git` entry in your own `.mcp.json`, i.e. SugarCrush
-serving git operations to itself. There is no `sugarcrush serve` subcommand.
+serving git operations to itself. `sugarcrush serve` is not one of them: it is
+the WebSocket server the web UI drives ([SERVER.md](SERVER.md)), and nothing in
+it speaks MCP.
 
 Every git tool argument comes from the model, so the git server bounds what
 the model can aim it at:
@@ -656,13 +658,13 @@ Git itself, hooks included, runs under three guarantees:
   `git rev-parse --local-env-vars` lists are removed. Every call runs against
   the contained root.
 
-`sugarcrush --help` lists exactly five under its **Subcommands** heading —
-`doctor`, `models`, `session list|delete`, `mcp list|import`,
-`completion bash|zsh|fish` — and those five are the ones that answer and exit
-without a provider, an API key or a terminal.
+`sugarcrush --help` lists exactly six under its **Subcommands** heading —
+`doctor`, `models`, `session list|delete`, `mcp list|import`, `serve`,
+`completion bash|zsh|fish` — and none of those six needs a provider, an API key
+or a terminal; five answer and exit, and `serve` runs until it is stopped.
 
-Five is the subcommand count, not the count of bare words argv treats specially:
-`run` is a sixth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
+Six is the subcommand count, not the count of bare words argv treats specially:
+`run` is a seventh (the `$arg === 'run'` arm in `Cli\ArgvParser`,
 `sugarcrush run "<prompt>"` in the help's Usage block), but it is an alias for
 `-p` and therefore a turn of conversation rather than a question about the
 install.

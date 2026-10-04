@@ -508,13 +508,24 @@ sugarcrush mcp list                  # what .mcp.json declares — without start
 sugarcrush mcp trust                 # approve .mcp.json as it is now (command/args/env pinned per server)
 sugarcrush mcp import claude|opencode <path>
                                      # translate a foreign MCP config, print the block — writes nothing
+sugarcrush serve                     # WebSocket + HTTP server for the web UI, until Ctrl+C
+                                     #   [--host IP] [--port N] [--allow-remote] [--allowed-origin LIST]
+                                     #   [--web-root DIR] [--no-web] [--allow-bypass] [--allow-root]
 sugarcrush completion bash|zsh|fish  # a shell completion script on stdout
 ```
 
 Every one of these is dispatched in the same pre-flight place `--help` and
 `--version` are, **before** `Program` is constructed: they answer on a machine
 with no provider, no API key and no TTY, and none of them enters the
-alt-screen. `doctor` is the sharpest case — it is a health check for an install
+alt-screen. `serve` is the one that keeps running: it binds `127.0.0.1:7420`,
+prints a one-time sign-in URL, and answers until `Ctrl+C` or `SIGTERM`. Every
+client must authenticate — loopback is not trusted on its own — and a
+non-loopback `--host`, the bypass permission modes and running as root are each
+refused unless their `--allow-*` flag is given; it also refuses to start
+without `ext-pcntl`, `ext-posix` and `ext-ffi` (`doctor` reports all three).
+The flags belong to `serve` (before it they are unknown options). Its
+transport, auth flow and security model are in
+[docs/SERVER.md](docs/SERVER.md). `doctor` is the sharpest case — it is a health check for an install
 that may be broken, so it must not require the thing it is diagnosing. A
 config whose `permissionMode` is unusable makes the launch refuse to start
 (exit `2`, above); `doctor` still runs, names that as the failing check, and
@@ -541,7 +552,7 @@ no operands and reject one at exit `2` rather than ignoring it.
 registered in `Bootstrap::tools()`, advertised to the LLM, and answers a
 completely different question — which image protocol this terminal speaks, with
 a PNG capability swatch attached. The CLI subcommand reports PHP, the
-extensions the session store needs, the config file, the permission policy, the
+extensions the session store and `serve` need, the config file, the permission policy, the
 selected provider, the session database and the project MCP config, takes no
 model, and cannot be reached by a tool call.
 

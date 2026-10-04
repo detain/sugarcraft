@@ -2495,6 +2495,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         }
 
         if ($pid === 0) {
+            // O-3a: under `sugarcrush serve` this child inherited the
+            // listener and every browser socket. They go before anything
+            // else: held here, the listener keeps the port bound after the
+            // server closes it and accepts into a backlog nobody reads
+            // (o0-spikes (c)). A no-op in the TUI and `-p`, which register
+            // nothing.
+            \SugarCraft\Crush\Support\ForkedChild::closeInheritedServerFds();
             // B3. The parent's end goes FIRST: a copy of it held here would
             // keep the socket half-open after the parent closes its own, so a
             // child whose parent is gone would never see EPIPE. Then the

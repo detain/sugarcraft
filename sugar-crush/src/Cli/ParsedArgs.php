@@ -52,7 +52,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['completion', 'doctor', 'mcp', 'models', 'session'];
+    public const SUBCOMMANDS = ['completion', 'doctor', 'mcp', 'models', 'serve', 'session'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -70,6 +70,20 @@ final readonly class ParsedArgs
      * @var array<string, array<string, bool>>
      */
     public const SUBCOMMAND_FLAGS = [
+        // `serve` (Appendix O §4.7): every flag scoped, none global — a
+        // `--port` before the verb is an unknown option, not a server setting.
+        // `--allowed-origin` takes a comma-separated list; a repeat keeps the
+        // last one, as every value flag here does.
+        'serve' => [
+            '--allow-bypass' => false,
+            '--allow-remote' => false,
+            '--allow-root' => false,
+            '--allowed-origin' => true,
+            '--host' => true,
+            '--no-web' => false,
+            '--port' => true,
+            '--web-root' => true,
+        ],
         'session' => [
             '--all' => false,
             '--archived' => false,

@@ -188,6 +188,7 @@ final class ContainedPathInventoryTest extends TestCase
         'MCP/GitCommandHandlers.php' => 2,
         'Memory/ForeignMemoryImporter.php' => 2,
         'Providers/ProviderFactory.php' => 2,
+        'Server/Http/StaticFiles.php' => 1,
         'Skills/SkillLoader.php' => 3,
         'Workflows/WorkflowRegistry.php' => 3,
     ];
@@ -338,7 +339,7 @@ final class ContainedPathInventoryTest extends TestCase
     {
         $words = [
             'ELEVEN' => 11, 'TWELVE' => 12, 'THIRTEEN' => 13, 'FOURTEEN' => 14,
-            'FIFTEEN' => 15, 'SIXTEEN' => 16, 'SEVENTEEN' => 17, 'EIGHTEEN' => 18,
+            'FIFTEEN' => 15, 'SIXTEEN' => 16, 'SEVENTEEN' => 17, 'EIGHTEEN' => 18, 'NINETEEN' => 19,
             'TWENTY-SEVEN' => 27, 'TWENTY-EIGHT' => 28, 'TWENTY-NINE' => 29,
             'THIRTY' => 30, 'THIRTY-ONE' => 31, 'THIRTY-TWO' => 32,
             'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34, 'THIRTY-FIVE' => 35,

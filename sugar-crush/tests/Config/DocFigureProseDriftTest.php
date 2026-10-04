@@ -717,7 +717,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/and the (five)\s+subcommands \(([^)]*)\)/s', $arch, $m),
+            preg_match('/and the (six)\s+subcommands \(([^)]*)\)/s', $arch, $m),
             'the pre-flight paragraph no longer spells its subcommand word-count and list together',
         );
         preg_match_all('/`([^`]+)`/', $m[2], $listed);
@@ -3886,18 +3886,19 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E686 tranche-9 (AZ): the commands surface — /mcp's three sub-commands
-     * against the command's own match, the five help-listed subcommands
+     * against the command's own match, the six help-listed subcommands
      * against ParsedArgs::SUBCOMMANDS (the second-class-in-file ParsedArgs is
      * touched through ArgvParser, per the lane-be autoload law), the server
-     * halves the page enumerates, the no-`serve` negative, and `run` as the
-     * sixth word argv treats specially (with the line-number anchor the page
+     * halves the page enumerates, `serve` named as not an MCP server (O-3a
+     * replaced the old no-`serve` negative), and `run` as the seventh word
+     * argv treats specially (with the line-number anchor the page
      * carried until this tranche deleted).
      */
     public function testMcpCommandsSurfaceCountsHelpRowsAndTheRunArm(): void
     {
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $mcp = self::markdownProse($raw);
-        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
+        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7];
 
         self::assertSame(
             1,
@@ -3918,13 +3919,13 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(class_exists(ArgvParser::class), 'ArgvParser vanished — ParsedArgs has no loader without it');
         $commands = constant('SugarCraft\Crush\Cli\ParsedArgs::SUBCOMMANDS');
         sort($commands);
-        self::assertCount($wordNumbers['five'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
+        self::assertCount($wordNumbers['six'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
 
         $helpSource = self::sourceOf('Cli/Help.php');
         self::assertSame(
             1,
-            preg_match('/lists exactly five under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
-            'the exactly-five sentence reworded — the help block below must keep carrying five rows',
+            preg_match('/lists exactly six under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
+            'the exactly-six sentence reworded — the help block below must keep carrying six rows',
         );
         $block = (string) preg_replace('/^.*Subcommands \(/s', '', $helpSource);
         $block = explode("\n\n", $block)[0];
@@ -3938,13 +3939,16 @@ final class DocFigureProseDriftTest extends TestCase
         // rows (list, show, rename, delete, and one pin|unpin|archive|unarchive
         // line) — eleven.
         self::assertSame(11, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the eleven leaf rows the code dispatches (session and mcp hold their own second words)');
-        foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'completion bash|zsh|fish'] as $row) {
+        foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'serve', 'completion bash|zsh|fish'] as $row) {
             self::assertStringContainsString('  ' . $row, $block, "the help block lost the `{$row}` row the page's list quotes");
         }
-        self::assertStringContainsString('each answers and exits; none of them opens the TUI or needs a provider, an API key or a terminal', self::markdownProse($block), 'the help heading lost the promise the page repeats verbatim ("answer and exit without a provider, an API key or a terminal")');
+        self::assertStringContainsString('none of them opens the TUI or needs a provider, an API key or a terminal; each answers and exits except serve, which runs until stopped', self::markdownProse($block), 'the help heading lost the promise the page repeats ("none of those six needs a provider, an API key or a terminal; five answer and exit")');
 
-        self::assertFalse(in_array('serve', $commands, true), 'a serve subcommand arrived — the page states there is none');
-        self::assertStringContainsString('There is no `sugarcrush serve` subcommand', $mcp, 'the no-serve claim left the page');
+        // O-3a: `serve` arrived, and it is the web UI's WebSocket server, not an
+        // MCP one — the page says which, rather than the old "there is none".
+        self::assertTrue(in_array('serve', $commands, true), 'the serve subcommand left the roster — the page still describes it');
+        self::assertStringContainsString('`sugarcrush serve` is not one of them', $mcp, 'the serve-is-not-MCP claim left the page');
+        self::assertStringContainsString('five answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the one subcommand that does not exit');
         foreach (['McpServer', 'GitMcpServer', 'GitCommandHandlers', 'HttpMcpServer', 'StdioMcpServer'] as $class) {
             $half = 'SugarCraft\Crush\MCP\\' . $class;
             self::assertTrue(interface_exists($half) || class_exists($half), "the page enumerates {$class} among the server halves and it is gone");
@@ -3952,19 +3956,19 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/`run` is a sixth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
-            'the run-is-a-sixth sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
+            preg_match('/`run` is a seventh \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
+            'the run-is-a-seventh sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
         );
         self::assertSame(0, preg_match('/ArgvParser` line \d+/', $mcp), 'a bare line-number anchor came back into the page — E686 law: symbols by name, never by line');
         self::assertStringContainsString("\$arg === 'run' && !\$promptRequested", self::sourceOf('Cli/ArgvParser.php'), 'the bare-run arm the sentence cites is no longer shaped this way');
-        self::assertFalse(in_array('run', $commands, true), 'run joined the subcommand roster — the five-vs-six split the page draws collapses');
+        self::assertFalse(in_array('run', $commands, true), 'run joined the subcommand roster — the six-vs-seven split the page draws collapses');
         self::assertSame(
             1,
             preg_match('/sugarcrush run "<prompt>".*Alias for -p/s', $helpSource),
             'the Usage block stopped labelling run as an alias for -p',
         );
         self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
-        self::assertCount($wordNumbers['six'], array_merge($commands, ['run']), 'the five-plus-run-is-a-sixth arithmetic broke against the live roster');
+        self::assertCount($wordNumbers['seven'], array_merge($commands, ['run']), 'the six-plus-run-is-a-seventh arithmetic broke against the live roster');
 
         // E695 in-step: the auth section's new attachment truth, bound to the
         // code that makes it true — the page may only claim what the request
@@ -4997,7 +5001,7 @@ final class DocFigureProseDriftTest extends TestCase
         $seenExemptions = [];
 
         $pages = array_values(array_filter(scandir($root . '/docs') ?: [], static fn(string $f): bool => str_ends_with($f, '.md')));
-        self::assertCount(13, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+        self::assertCount(14, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
         $patterns = [
             '/[A-Za-z0-9_\/\\\\.\-]+\.php:[0-9]+(?:-[0-9]+)?/',

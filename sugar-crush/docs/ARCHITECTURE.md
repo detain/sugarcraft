@@ -15,7 +15,7 @@ subsystem that is documented and does nothing, a stderr line inside a frame.
 bin/sugarcrush                argv → pre-flight → dispatch
       │
       ├─ ArgvParser / Help / NonInteractive / Subcommands
-      │      --help --version, five subcommands, -p one-shot
+      │      --help --version, six subcommands, -p one-shot
       │
       └─ Cli\Bootstrap              ALL wiring lives here
              │
@@ -43,15 +43,17 @@ which is the whole of the next warning.
 
 The order in it is deliberate, and its size is whatever `wc -l bin/sugarcrush`
 says today — this sentence used to carry a line count and quotes none on
-purpose (E686: the figure rotted within rounds). `--help`, `--version` and the five
+purpose (E686: the figure rotted within rounds). `--help`, `--version` and the six
 subcommands (`doctor`, `models`, `session list|delete`, `mcp list`,
-`completion bash|zsh|fish`) are answered **before** `Program`, `Bootstrap::app()`
+`serve`, `completion bash|zsh|fish`) are answered **before** `Program`, `Bootstrap::app()`
 or `NonInteractive` is reached, because every one of them is a question about
 the *install* rather than a turn of conversation: they must answer on a machine
-with no provider, no API key and no TTY.
+with no provider, no API key and no TTY. `serve` is the one that does not exit:
+it runs the WebSocket server ([SERVER.md](SERVER.md)) on the same ReactPHP loop
+the engine's forked turns use, and still never constructs `Program`.
 
 `doctor` is the sharpest case — it diagnoses an install that may be broken, so it
-must not require the thing it is diagnosing. Each of its nine probes catches its
+must not require the thing it is diagnosing. Each of its ten probes catches its
 own throws, so an unreadable `config.json` becomes a reported line rather than
 taking the report down.
 
@@ -1018,7 +1020,8 @@ believes it owns.
 
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
-`react/promise`), fourteen SugarCraft siblings: `candy-core` (TEA runtime,
+`react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
+`sugarcrush serve`'s HTTP + WebSocket transport), fourteen SugarCraft siblings: `candy-core` (TEA runtime,
 `Program`, `Model`, `Cmd`), `candy-forms`, `candy-sprinkles` (styles),
 `candy-shine`, `candy-fuzzy`, `sugar-veil`, `sugar-mcp` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),

@@ -50,13 +50,14 @@ Usage:
   sugarcrush run "<prompt>"        Alias for -p "<prompt>" (one-shot mode)
   sugarcrush --output-format json  Output machine-readable JSON (one-shot)
 
-Subcommands (each answers and exits; none of them opens the TUI or needs a
-provider, an API key or a terminal):
+Subcommands (none of them opens the TUI or needs a provider, an API key or a
+terminal; each answers and exits except serve, which runs until stopped):
   doctor                 Check this installation and report every problem it
                          finds: PHP version, the extensions the session store
-                         needs, the config file, the permission policy, the
-                         selected provider, the session database and the
-                         project MCP config. Exits 1 if any check FAILS.
+                         and serve need, the config file, the permission
+                         policy, the selected provider, the session database
+                         and the project MCP config. Exits 1 if any check
+                         FAILS.
                          Distinct from the model-callable "doctor" tool, which
                          reports the terminal's image protocol to the model.
   models                 List the providers this install can select and the
@@ -96,6 +97,33 @@ provider, an API key or a terminal):
                          equivalent .mcp.json block to stdout. Prints only
                          the document and writes no file; the renames the
                          translation made are listed on stderr.
+  serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-origin <list>]
+        [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root]
+                         Run the WebSocket + HTTP server the web UI talks to,
+                         in the foreground until Ctrl+C. Binds 127.0.0.1:7420
+                         by default and prints a sign-in URL whose one-time
+                         code is exchanged for a browser cookie; every client
+                         needs it or the token in ~/.sugar-crush/server/token,
+                         loopback included. Options:
+      --host <ip>        Address to bind (default 127.0.0.1; localhost and ::1
+                         also count as loopback). Any other address is refused
+                         unless --allow-remote is given too.
+      --port <n>         Port to bind (default 7420; 0 picks a free one).
+      --allow-remote     Permit a non-loopback --host. There is no built-in
+                         TLS: put a reverse proxy in front of it.
+      --allowed-origin <list>
+                         Comma-separated extra browser origins
+                         (http(s)://host[:port]) allowed beside the server's
+                         own.
+      --web-root <dir>   Serve the web UI from <dir> instead of the installed
+                         sugarcraft/sugar-crush-web package.
+      --no-web           Serve the API and WebSocket only, no UI files.
+      --allow-bypass     Let sessions run in bypass-permissions or dont-ask
+                         (refused by default; the server's sessions start in
+                         default unless --permission-mode says otherwise).
+      --allow-root       Permit running as root (refused by default).
+                         Refuses to start without ext-pcntl, ext-posix and
+                         ext-ffi (see doctor). Exits 1 if the port is taken.
   completion bash|zsh|fish
                          Write a shell completion script to stdout, e.g.
                          eval "$(sugarcrush completion bash)".
@@ -250,6 +278,20 @@ Environment variables:
                           Any value other than empty or 0 keeps Chat's
                           "onToken observer threw" line on stderr. The
                           detach itself happens either way.
+   SUGARCRUSH_SERVER_HOST The address `serve` binds (--host wins).
+   SUGARCRUSH_SERVER_PORT The port `serve` binds (--port wins).
+   SUGARCRUSH_SERVER_ALLOWED_ORIGINS
+                          Comma-separated extra origins `serve` accepts
+                          (--allowed-origin wins).
+   SUGARCRUSH_SERVER_WEB_ROOT
+                          Directory `serve` serves the web UI from (--web-root
+                          wins).
+   SUGARCRUSH_SERVER_TOKEN
+                          The token `serve` requires, instead of the one in
+                          its state directory (at least 32 characters; for
+                          containers).
+   SUGARCRUSH_SERVER_DIR  The directory `serve` keeps its token in (default
+                          ~/.sugar-crush/server; created 0700).
    SUGARCRUSH_MCP_DISABLE
                           1, true or yes (case-insensitive) silences project
                           MCP entirely: .mcp.json is treated as absent, no
@@ -291,6 +333,7 @@ Examples:
   sugarcrush doctor
   sugarcrush models --output-format json | jq '.result.providers'
   eval "$(sugarcrush completion bash)"
+  sugarcrush serve --port 7420
 
 For more information, see the README:
   https://github.com/detain/sugarcraft/tree/master/sugar-crush

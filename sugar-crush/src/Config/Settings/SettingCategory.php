@@ -30,6 +30,7 @@ enum SettingCategory: string
     case Git = 'git';
     case Interface = 'interface';
     case HooksMcp = 'hooks';
+    case Server = 'server';
     case Advanced = 'advanced';
 
     public function label(): string
@@ -46,6 +47,7 @@ enum SettingCategory: string
             self::Git => 'Git & Automation',
             self::Interface => 'Interface',
             self::HooksMcp => 'Hooks & MCP',
+            self::Server => 'Server',
             self::Advanced => 'Advanced',
         };
     }

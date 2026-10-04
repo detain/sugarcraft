@@ -851,6 +851,12 @@ project-settable.
 | `claudeMcpBinary` | Hooks & MCP | path | unset | C | — | next launch | exec |
 | `claudeMcpArgs` | Hooks & MCP | list | unset | C | — | next launch | exec |
 | `claudeMcpEnv` | Hooks & MCP | object | unset | C | — | next launch | security |
+| `server.host` | Server | string | `127.0.0.1` | C | `SUGARCRUSH_SERVER_HOST` | restart | security |
+| `server.port` | Server | int | `7420` | C | `SUGARCRUSH_SERVER_PORT` | restart | security |
+| `server.allowedOrigins` | Server | list | `[]` | C | `SUGARCRUSH_SERVER_ALLOWED_ORIGINS` | restart | security |
+| `server.allowedHosts` | Server | list | `[]` | C | — | restart | security |
+| `server.trustedProxies` | Server | list | `[]` | C | — | restart | security |
+| `server.allowBypass` | Server | bool | `false` | C | — | restart | security |
 <!-- settings:end -->
 
 ## Saving from the settings view

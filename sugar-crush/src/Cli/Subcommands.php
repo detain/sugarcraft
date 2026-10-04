@@ -14,9 +14,11 @@ use SugarCraft\Crush\Util\Exporter;
 
 /**
  * The real CLI subcommands — `mcp list`, `session list|show|rename|delete|
- * pin|unpin|archive|unarchive`, `models`, `doctor` and `completion
+ * pin|unpin|archive|unarchive`, `models`, `doctor`, `serve` and `completion
  * bash|zsh|fish` (crush_code.md Phase 4 item 6; the session verbs past
- * `list`/`delete` are Appendix P §3.4).
+ * `list`/`delete` are Appendix P §3.4; `serve` is Appendix O §4.7, its body in
+ * {@see Serve} — the one verb that keeps running rather than answering, and
+ * still constructs no `Program`).
  *
  * EVERY ONE ANSWERS WITHOUT A SESSION. `bin/sugarcrush` dispatches these in the
  * same pre-flight place it dispatches `--help` and `--version`, before
@@ -87,6 +89,7 @@ final class Subcommands
             'doctor'     => self::doctor($args),
             'models'     => self::models($args),
             'session'    => self::session($args),
+            'serve'      => Serve::run($args),
             'mcp'        => self::mcp($args),
             'completion' => self::completion($args),
             // Unreachable: ArgvParser only ever stores a ParsedArgs::SUBCOMMANDS
@@ -300,6 +303,19 @@ final class Subcommands
                     ? 'loaded'
                     : 'missing — the HTTP providers (openai, anthropic, sglang, custom) will fail',
             ],
+
+            'server mode' => static function (): array {
+                // WARN, never FAIL: an install without these runs the TUI and
+                // -p perfectly well; only `serve` refuses to start.
+                $missing = \SugarCraft\Crush\Server\Preflight::detect()->environmentProblems();
+
+                return [
+                    'status' => $missing === [] ? 'OK' : 'WARN',
+                    'detail' => $missing === []
+                        ? 'pcntl, posix and ffi available — `serve` can start'
+                        : '`serve` will refuse to start: ' . \implode('; ', $missing),
+                ];
+            },
 
             'config file' => static function (): array {
                 $path = Bootstrap::userConfigPath();
@@ -1449,6 +1465,7 @@ final class Subcommands
         'doctor' => 'Report on this installation and exit',
         'mcp' => 'Inspect the project MCP configuration',
         'models' => 'List the providers this install can select',
+        'serve' => 'Run the WebSocket server for the web UI',
         'session' => 'Manage stored sessions',
     ];
 

@@ -35,6 +35,9 @@
         "php": "^8.3",
         "ext-sqlite3": "*",
         "react/promise": "^3.3",
+        "react/http": "^1.11",
+        "react/socket": "^1.16",
+        "ratchet/rfc6455": "^0.4",
         "openai-php/client": "^0.10",
         "guzzlehttp/guzzle": "^7.12.1",
         "aws/aws-sdk-php": "^3.300",
@@ -57,10 +60,15 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
-        "mockery/mockery": "^1.6"
+        "mockery/mockery": "^1.6",
+        "ratchet/pawl": "^0.4"
     },
     "suggest": {
-        "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom)."
+        "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom).",
+        "ext-pcntl": "Required by `sugarcrush serve`: every turn runs in a forked child, and the blocking fallback would stall every session on the server.",
+        "ext-posix": "Required by `sugarcrush serve` (process identity and signals for the forked turn children).",
+        "ext-ffi": "Required by `sugarcrush serve`: a forked turn child closes the server's inherited sockets through libc close(2).",
+        "sugarcraft/sugar-crush-web": "The browser UI `sugarcrush serve` serves on its own port (Vite + Vue build shipped as a composer package)."
     },
     "config": {
         "allow-plugins": {

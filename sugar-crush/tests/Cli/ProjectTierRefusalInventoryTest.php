@@ -311,6 +311,13 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // around it -- and it is never read: nothing in src/ opens it, the
         // string exists only to tell the operator where to redirect stdout.
         'Cli/Subcommands.php|.config/fish' => self::USER,
+        // O-3a: `serve`'s state directory (the owner token today), rooted at
+        // HomeDirectory::owned() and overridable only by the user's own
+        // SUGARCRUSH_SERVER_DIR — Serve builds it, Help names it. A cloned
+        // repository cannot place it, and it is created 0700 and refused when
+        // loose or linked.
+        'Cli/Help.php|.sugar-crush/server' => self::USER,
+        'Cli/Serve.php|.sugar-crush/server' => self::USER,
         // Audit C2a: where the interactive TUI points `error_log` (written, never
         // read for content). The home is HomeDirectory::owned(), passed in by
         // bin/sugarcrush, so nobody but the user chose the location; a cloned
@@ -371,8 +378,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FORTY-FIVE occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY distinct paths. NINETEEN of those
+     * APPEARS IN. On this tree that is FORTY-SEVEN occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-ONE distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are FIFTEEN distinct paths — which is the figure
@@ -543,7 +550,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(30, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(31, $distinct, 'distinct dot-DIRECTORY paths in src/');
         self::assertCount(15, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
@@ -552,7 +559,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         );
 
         self::assertStringContainsString('FIFTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('THIRTY distinct', $enumeration);
+        self::assertStringContainsString('THIRTY-ONE distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -566,7 +573,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             46 => 'FORTY-SIX', 47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
-            28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY'];
+            28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN'];
 
