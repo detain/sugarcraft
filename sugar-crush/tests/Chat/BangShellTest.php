@@ -12,7 +12,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
-use SugarCraft\Crush\CancelledWorkflowReportMsg;
+use SugarCraft\Crush\BangShellResultMsg;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\BangShell;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
@@ -67,15 +67,17 @@ final class BangShellTest extends TestCase
         $this->assertLessThan(0.25, microtime(true) - $started, 'update(Enter) must not wait for the command');
 
         $this->assertNotNull($cmd);
-        $this->assertFalse($pending->inFlight, 'a shell command starts no turn');
+        $this->assertTrue($pending->inFlight, 'the command holds the turn while it runs');
         $this->assertSame('', $pending->inputBuf, 'the box is consumed');
         $this->assertStringContainsString('Running `sleep 0.3;', $this->last($pending)->content);
 
         $msg = $this->await($this->promiseOf($cmd));
-        $this->assertInstanceOf(CancelledWorkflowReportMsg::class, $msg, 'the append-only Msg: it settles no turn');
+        $this->assertInstanceOf(BangShellResultMsg::class, $msg, 'its own Msg, which releases the slot it held');
+        $this->assertFalse($msg->cancelled);
 
         [$after, $afterCmd] = $pending->update($msg);
-        $this->assertNull($afterCmd);
+        $this->assertNull($afterCmd, 'nothing was queued behind it');
+        $this->assertFalse($after->inFlight, 'the slot is given back');
         $row = $this->last($after);
         $this->assertSame(Role::User, $row->role, 'context the user put in front of the model');
         $this->assertFalse($row->uiOnly, 'that the model reads');
@@ -152,6 +154,52 @@ final class BangShellTest extends TestCase
 
         $this->assertNull($cmd);
         $this->assertSame(['!git status'], $queued->queuedPrompts(), 'queued to run once the turn settles');
+    }
+
+    public function testAPromptTypedWhileItRunsWaitsAndGoesOutWhenItLands(): void
+    {
+        $backend = new BangShellRecordingBackend();
+        [$running, $cmd] = $this->type($this->chat($backend), '!printf done')->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd);
+
+        [$queued, $none] = $this->type($running, 'now explain it')->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($none);
+        $this->assertSame(['now explain it'], $queued->queuedPrompts(), 'it waits behind the command like behind a turn');
+        $this->assertSame(0, $backend->calls);
+
+        [$landed, $next] = $queued->update($this->await($this->promiseOf($cmd)));
+
+        $this->assertNotNull($next, 'the queued prompt went out as the command landed');
+        $this->assertSame([], $landed->queuedPrompts());
+        $this->assertTrue($landed->inFlight, 'and now holds the turn itself');
+        $this->assertSame('now explain it', $this->last($landed)->content);
+        $this->assertStringStartsWith('[The user ran a shell command: printf done]', $landed->history[\count($landed->history) - 2]->content, 'the command\'s row lands first');
+    }
+
+    public function testEscEscKillsTheCommandAndItsLateRowIsDropped(): void
+    {
+        $marker = $this->project . '/still-running';
+        [$running, $cmd] = $this->type($this->chat(new BangShellRecordingBackend()), "!sleep 30; touch {$marker}")
+            ->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd);
+        $promise = $this->promiseOf($cmd);
+
+        [$once] = $running->update(new KeyMsg(KeyType::Escape, ''));
+        [$cancelled, $none] = $once->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($none);
+        $this->assertFalse($cancelled->inFlight, 'Esc Esc released the slot at once');
+        $this->assertSame('_Request cancelled._', $this->last($cancelled)->content);
+
+        $started = microtime(true);
+        $msg = $this->await($promise);
+        $this->assertLessThan(10.0, microtime(true) - $started, 'the command was killed, not waited out');
+        $this->assertInstanceOf(BangShellResultMsg::class, $msg);
+        $this->assertTrue($msg->cancelled);
+
+        [$after, $afterCmd] = $cancelled->update($msg);
+        $this->assertNull($afterCmd);
+        $this->assertSame('_Request cancelled._', $this->last($after)->content, 'a cancelled command\'s row is dropped');
+        $this->assertFileDoesNotExist($marker, 'and what it would have done next never ran');
     }
 
     public function testOnlyABangWithACommandIsAShellLine(): void

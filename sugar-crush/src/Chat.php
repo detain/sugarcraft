@@ -2340,6 +2340,9 @@ final class Chat implements Model
         if ($msg instanceof SessionLockRetryMsg) {
             return [$this->retakenSessionLock(), null];
         }
+        if ($msg instanceof BangShellResultMsg) {
+            return $this->landBangShellResult($msg);
+        }
         if ($msg instanceof CancelledWorkflowReportMsg) {
             // The report of a run Esc Esc cancelled: appended, and NOTHING
             // else — the turn it occupied was released by the cancel, and
@@ -9149,8 +9152,9 @@ final class Chat implements Model
         // file-based commands, which are `/`-prefixed and cannot collide.
         // Nothing asks permission — the person who would be asked typed it —
         // but a configured Deny rule, and plan mode's read-only rule, still
-        // refuse it ({@see Commands\BangShell::refusal()}). It starts no turn: the command runs off the
-        // update path and its row lands whenever it finishes.
+        // refuse it ({@see Commands\BangShell::refusal()}). It calls no model:
+        // the command runs off the update path, holding the turn slot until
+        // its row lands (see below).
         $bang = \SugarCraft\Crush\Commands\BangShell::commandOf($text);
         if ($bang !== null) {
             $root = $this->projectRoot();
@@ -9168,12 +9172,25 @@ final class Chat implements Model
                 ]), null];
             }
 
+            // THE COMMAND OCCUPIES THE TURN (the W5-i follow-up): `inFlight`
+            // is held under its own token and a bumped generation, so a prompt
+            // typed while it runs waits behind it like behind any turn, and
+            // Esc Esc cancels it — the token makes the Cmd's next poll kill the
+            // command's process tree, and the generation bump strands its
+            // result. {@see landBangShellResult()} releases the slot.
+            $cancellation = new CancellationToken();
+            $generation = $this->generation + 1;
+
             return [$this->mutate([
                 'history' => [...$this->history, Message::notice(
                     $this->turnController()->bangRunningNotice($bang),
                 )],
                 'inputBuf' => '',
-            ]), \SugarCraft\Crush\Commands\BangShell::cmd($bang, $root)];
+                'inFlight' => true,
+                'inFlightCancellation' => $cancellation,
+                'generation' => $generation,
+                'lastEscapeAt' => null,
+            ]), \SugarCraft\Crush\Commands\BangShell::cmd($bang, $root, $cancellation, $generation)];
         }
 
         // FILE-BASED COMMANDS ARE CHECKED FIRST, ahead of dispatchCommand()'s
@@ -9503,6 +9520,37 @@ final class Chat implements Model
             $this->sessionStore,
             $this->permissionGate(),
         );
+    }
+
+    /**
+     * Land a finished `!cmd` (roadmap 5.14g): append its row, give back the
+     * turn slot it occupied, and send whatever was queued behind it — the
+     * release every turn end does ({@see releaseQueuedPrompts()}).
+     *
+     * A result stamped with a generation that is no longer current belongs to
+     * a command Esc Esc already cancelled: that arm released the slot and said
+     * so, and the command's late row is dropped like a cancelled turn's reply.
+     * An unstamped result (an embedder's own {@see Commands\BangShell::cmd()}
+     * call) is only appended, the way it always was.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function landBangShellResult(BangShellResultMsg $msg): array
+    {
+        if ($msg->generation === null) {
+            return [$this->mutate(['history' => [...$this->history, $msg->message]]), null];
+        }
+
+        if ($msg->generation !== $this->generation || !$this->inFlight) {
+            return [$this, null];
+        }
+
+        return self::releaseQueuedPrompts([$this->mutate([
+            'history' => [...$this->history, $msg->message],
+            'inFlight' => false,
+            'inFlightCancellation' => null,
+            'lastActivityAt' => new \DateTimeImmutable(),
+        ]), null]);
     }
 
     /**
@@ -17843,6 +17891,20 @@ final class Chat implements Model
     }
 
     /**
+     * The idle clock of the live agents strip (roadmap P-B3): a finished
+     * delegated run stays on the strip for {@see \SugarCraft\Crush\Tui\AgentStrip::LINGER_SECONDS}
+     * after it ended, and that clock — {@see \SugarCraft\Crush\Agents\Live\AgentLiveRegistry::now()}
+     * — only moves when a {@see ToolEventPumpMsg} arrives. While a turn runs
+     * the tool-event tick sends one every {@see TOOL_EVENT_POLL_SECONDS}; once
+     * the turn ends nothing did, so a finished run stayed on the strip until
+     * the next turn. One second is the strip's own resolution (its elapsed
+     * figures are whole seconds).
+     */
+    private const AGENT_STRIP_SUBSCRIPTION = 'crush.agent-strip-linger';
+
+    private const AGENT_STRIP_TICK_SECONDS = 1.0;
+
+    /**
      * Declare the recurring work this model needs the runtime to drive
      * (crush_feat.md section 5 E4).
      *
@@ -17890,6 +17952,17 @@ final class Chat implements Model
             $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
                 self::TOOL_EVENT_POLL_SUBSCRIPTION,
                 self::TOOL_EVENT_POLL_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new ToolEventPumpMsg(),
+            );
+        } elseif ($this->agentStripLingers()) {
+            // Between turns, only while a FINISHED run is still lingering on
+            // the strip: each tick advances the strip's clock (the
+            // ToolEventPumpMsg arm), and the reconcile after the tick that
+            // ages the last one out drops this — so an idle session that
+            // never delegated pays nothing.
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                self::AGENT_STRIP_SUBSCRIPTION,
+                self::AGENT_STRIP_TICK_SECONDS,
                 static fn (): \SugarCraft\Core\Msg => new ToolEventPumpMsg(),
             );
         }
@@ -17972,7 +18045,13 @@ final class Chat implements Model
             );
         }
 
-        if ($this->drainsRuntimeNotices && ($this->inFlight || RuntimeNoticeSink::hasPending())) {
+        // THIS SESSION'S inbox (W2-e): the workspace's sink when there is one,
+        // the process's current one otherwise — the same sink
+        // {@see pumpRuntimeNotices()} drains, so the poll is armed exactly
+        // when that drain has something to take.
+        if ($this->drainsRuntimeNotices
+            && ($this->inFlight || ($this->workspace?->notices ?? RuntimeNoticeSink::current())->hasPending())
+        ) {
             $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
                 self::RUNTIME_NOTICE_SUBSCRIPTION,
                 self::RUNTIME_NOTICE_POLL_SECONDS,
@@ -18001,6 +18080,25 @@ final class Chat implements Model
         }
 
         return $subscriptions;
+    }
+
+    /**
+     * Whether a finished delegated run is still lingering on the live agents
+     * strip ({@see AGENT_STRIP_SUBSCRIPTION}). Read against the strip's own
+     * clock, which is exactly what the tick advances: a run whose linger the
+     * stale clock has not yet aged out arms one more tick, and that tick ages
+     * it out. A run still "running" with no turn to finish it keeps nothing
+     * armed — there is no spinner to turn between turns.
+     */
+    private function agentStripLingers(): bool
+    {
+        foreach (\SugarCraft\Crush\Tui\AgentStrip::items($this->agentLive()) as $state) {
+            if ($state->isFinished()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

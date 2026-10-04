@@ -608,6 +608,7 @@ sugar-crush/tests/MCP/GitMcpServerTest.php	0.035	26
 sugar-crush/tests/Chat/ParkedCompactionHookTest.php	0.035	7
 sugar-crush/tests/Config/ReadmeSettingsTierClaimTest.php	0.035	6
 sugar-crush/tests/Permissions/WritePathScopeTest.php	0.035	23
+sugar-crush/tests/Chat/IdleSubscriptionsTest.php	0.035	3
 sugar-crush/tests/Cli/BootstrapTrustedHomeOwnershipTest.php	0.034	5
 sugar-crush/tests/Cli/BootstrapLaunchNoticeCapCensusTest.php	0.034	4
 sugar-crush/tests/Tools/BuiltIn/LspToolTest.php	0.034	38

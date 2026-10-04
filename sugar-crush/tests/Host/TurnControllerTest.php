@@ -322,6 +322,15 @@ final class TurnControllerTest extends TestCase
         self::assertLessThan(\count($history), \count(Message::agentVisible($tier['history'])), 'the model reads fewer rows');
     }
 
+    /** The controller is a workspace service, type-checked where it is registered. */
+    public function testTheControllerIsAWorkspaceService(): void
+    {
+        $registered = TurnController::new();
+        $workspace = WorkspaceContext::new()->withService(TurnController::class, $registered);
+
+        self::assertSame($registered, $workspace->service(TurnController::class));
+    }
+
     // ── helpers ────────────────────────────────────────────────────────
 
     /** @return array{0: Chat, 1: mixed} */
@@ -335,14 +344,5 @@ final class TurnControllerTest extends TestCase
         $history = $chat->history;
 
         return $history[\count($history) - 1];
-    }
-
-    /** Keep WorkspaceContext referenced for the service-locator note above. */
-    public function testChatReachesTheControllerThroughTheWorkspaceLocator(): void
-    {
-        $registered = TurnController::new();
-        $workspace = WorkspaceContext::new()->withService(TurnController::class, $registered);
-
-        self::assertSame($registered, $workspace->service(TurnController::class));
     }
 }

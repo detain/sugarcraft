@@ -1014,8 +1014,10 @@ Start a line with `!` to run it as a shell command yourself: `!git status`,
 runs, as `bash -c` in the project root, in the background so the TUI stays live.
 It is bounded at 600 s and at the tool's output cap. When it finishes, its exit
 code and output land in the transcript as context the model reads on your next
-prompt. It starts no turn and costs nothing until then. Escape sequences are
-stripped from the output.
+prompt. It calls no model and costs nothing until then. While it runs it holds
+the turn the way a reply does: what you send meanwhile waits behind it, and
+Esc Esc stops it, killing the command and everything it started. Escape
+sequences are stripped from the output.
 
 Nothing asks permission, because you typed it. Policy you configured still
 applies: a `Deny` rule that matches the command refuses it in every mode, plan

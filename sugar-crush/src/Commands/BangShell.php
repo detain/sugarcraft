@@ -8,7 +8,8 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
-use SugarCraft\Crush\CancelledWorkflowReportMsg;
+use SugarCraft\Crush\Backend\CancellationToken;
+use SugarCraft\Crush\BangShellResultMsg;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionDecision;
 use SugarCraft\Crush\Permissions\PermissionGate;
@@ -50,11 +51,13 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * agent's `Bash` see the same shell. Without pcntl, or when the fork fails, it
  * runs in-process and blocks, never wrong.
  *
- * THE RESULT MSG. The row comes back as a {@see CancelledWorkflowReportMsg},
- * whose route arm appends one finished row and does nothing else — precisely
- * the semantics this needs: a `!cmd` does not occupy the turn, so its result
- * must not settle, clear or release whatever turn is running when it lands.
- * (A dedicated Msg needs a route arm of its own; see the W5-i handoff.)
+ * IT OCCUPIES THE TURN. `Chat` holds `inFlight` for it under its own
+ * {@see CancellationToken}, so a prompt typed meanwhile waits behind it (as
+ * behind any turn) and Esc Esc cancels it: the next poll kills the child and
+ * every process under it through {@see ProcessContainment::killTreeAsync()}
+ * and reaps it on a bounded window, both on the loop. The row comes back as a
+ * {@see BangShellResultMsg} stamped with the turn generation it started
+ * under, whose route arm lands the row and releases the slot.
  */
 final class BangShell
 {
@@ -73,6 +76,12 @@ final class BangShell
 
     /** How often the parent looks for the child's result. */
     private const POLL_SECONDS = 0.05;
+
+    /** How long a cancelled command's reap may take, seconds. */
+    private const REAP_BUDGET_SECONDS = 0.1;
+
+    /** How often that reap looks, seconds. */
+    private const REAP_POLL_SECONDS = 0.005;
 
     private function __construct()
     {
@@ -123,15 +132,20 @@ final class BangShell
 
     /**
      * The Cmd that runs $command in $root off the update path and resolves
-     * with the Msg that appends its result row.
+     * with the {@see BangShellResultMsg} that lands its result row.
+     *
+     * With $cancellation, a cancel kills the command's whole process tree on
+     * the next poll and resolves with a cancelled result; $generation is
+     * stamped on the Msg so a result for a turn slot already released is
+     * recognisably stale.
      */
-    public static function cmd(string $command, string $root): \Closure
+    public static function cmd(string $command, string $root, ?CancellationToken $cancellation = null, ?int $generation = null): \Closure
     {
-        return Cmd::promise(static function () use ($command, $root): PromiseInterface {
+        return Cmd::promise(static function () use ($command, $root, $cancellation, $generation): PromiseInterface {
             $deferred = new Deferred();
 
             if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
-                $deferred->resolve(self::resultMsg($command, self::run($command, $root)));
+                $deferred->resolve(self::resultMsg($command, self::run($command, $root), $generation));
 
                 return $deferred->promise();
             }
@@ -141,12 +155,13 @@ final class BangShell
 
             if ($pid === -1) {
                 ToolIpcFiles::discard($file);
-                $deferred->resolve(self::resultMsg($command, self::run($command, $root)));
+                $deferred->resolve(self::resultMsg($command, self::run($command, $root), $generation));
 
                 return $deferred->promise();
             }
 
             if ($pid === 0) {
+                ForkedChild::closeInheritedServerFds();
                 $json = json_encode(self::run($command, $root), JSON_INVALID_UTF8_SUBSTITUTE);
                 ToolIpcFiles::write($file, $json === false ? '' : $json);
                 ForkedChild::exitNow(0);
@@ -154,16 +169,44 @@ final class BangShell
 
             $loop = Loop::get();
             $timer = null;
+            $settled = false;
             $timer = $loop->addPeriodicTimer(
                 self::POLL_SECONDS,
-                static function () use ($pid, $file, $command, $loop, &$timer, $deferred): void {
+                static function () use ($pid, $file, $command, $loop, &$timer, &$settled, $deferred, $cancellation, $generation): void {
+                    if ($settled) {
+                        return;
+                    }
+
+                    if ($cancellation?->isCancelled() === true) {
+                        $settled = true;
+                        $loop->cancelTimer($timer);
+                        ProcessContainment::killTreeAsync($pid, $loop)
+                            ->then(static fn (): PromiseInterface => ProcessContainment::reapAsync(
+                                [$pid],
+                                self::REAP_BUDGET_SECONDS,
+                                self::REAP_POLL_SECONDS,
+                                $loop,
+                            ))
+                            ->then(static function () use ($file, $command, $deferred, $generation): void {
+                                ToolIpcFiles::discard($file);
+                                $deferred->resolve(new BangShellResultMsg(
+                                    self::row($command, ['exitCode' => -1, 'output' => 'cancelled before it finished', 'timedOut' => false]),
+                                    $generation,
+                                    cancelled: true,
+                                ));
+                            });
+
+                        return;
+                    }
+
                     $status = 0;
                     if (pcntl_waitpid($pid, $status, WNOHANG) !== $pid) {
                         return;
                     }
 
+                    $settled = true;
                     $loop->cancelTimer($timer);
-                    $deferred->resolve(self::resultMsg($command, self::collect($file)));
+                    $deferred->resolve(self::resultMsg($command, self::collect($file), $generation));
                 },
             );
 
@@ -240,9 +283,9 @@ final class BangShell
     }
 
     /** @param array{exitCode: int, output: string, timedOut: bool} $result */
-    private static function resultMsg(string $command, array $result): CancelledWorkflowReportMsg
+    private static function resultMsg(string $command, array $result, ?int $generation): BangShellResultMsg
     {
-        return new CancelledWorkflowReportMsg(self::row($command, $result));
+        return new BangShellResultMsg(self::row($command, $result), $generation);
     }
 
     /**
