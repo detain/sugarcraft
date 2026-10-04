@@ -1,0 +1,5 @@
+{
+  "method": "permission.respond",
+  "params": {"sessionId": "a1b2c3d4e5f60718", "askId": "0123456789abcdef", "reply": "reject", "note": "not today", "cascade": true},
+  "result": {"applied": true, "askId": "0123456789abcdef", "reply": "reject", "cascaded": ["fedcba9876543210"]}
+}

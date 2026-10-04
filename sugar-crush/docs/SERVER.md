@@ -343,6 +343,7 @@ which is returned exactly as sent (string or integer).
 | `-32600` | invalid request (also `unsupported_protocol`) |
 | `-32601` | method not found |
 | `-32602` | invalid params |
+| `-32001` | unauthorized — reserved: a socket authenticates at the upgrade, so no request meets it today |
 | `-32002` | not initialized — `server.hello` first |
 | `-32003` | forbidden (scope, or a write the server does not allow remotely) |
 | `-32004` | not found (`session_not_found`, `ask_not_found`, …) |
@@ -362,53 +363,60 @@ second turn. Answers are kept five minutes, at most 1,000.
 
 Scope `read` is enough for everything that only looks; the owner holds all four
 scopes (`read`, `write`, `approve`, `admin`). "Idempotent" marks the methods
-that accept an `idempotencyKey`.
+that accept an `idempotencyKey`. Every request's params are checked against
+the method's schema before it runs — a field of the wrong type, or a missing
+required one, is `-32602` naming the field. The full schema of every params,
+result and event `data` is [`protocol/sugarcrush.v1.schema.json`](protocol/sugarcrush.v1.schema.json);
+it and the two tables below are generated from the code
+(`php scripts/gen-protocol-schema.php --write`), never edited by hand.
 
-| Method | Scope | Idempotent | What it does |
-|---|---|---|---|
-| `agents.list` | read |  | The agents a turn can delegate to. |
-| `agents.subtree` | read |  | The sub-agents a session's turns have delegated to, with their latest activity. |
-| `bg.list` | read |  | The background sessions this server supervises. |
-| `bg.output` | read |  | A background session's output from an offset. |
-| `bg.stop` | write | yes | Stop a background session. |
-| `client.viewing` | read |  | Say which sessions this client shows, and which is in front. |
-| `command.exec` | write | yes | Run a slash command in a session (command files; built-ins once they run headless). |
-| `command.list` | read |  | The slash commands a session knows, and where each runs. |
-| `files.changed` | read |  | The workspace's changed and untracked files. |
-| `files.diff` | read |  | The workspace's uncommitted changes to tracked files, as a unified diff. |
-| `files.read` | read |  | A file under the project root, read-only and size-capped. |
-| `memory.add` | write | yes | Add a note. |
-| `memory.delete` | write | yes | Delete a note. |
-| `memory.edit` | write | yes | Replace a note's text. |
-| `memory.list` | read |  | The notes of one memory scope. |
-| `memory.search` | read |  | Notes matching a query, best first, across every scope. |
-| `permission.pending` | read |  | The questions still open, for one session or all open sessions. |
-| `permission.respond` | approve | yes | Answer an open permission question; the first answer wins. |
-| `permission.rules` | read |  | The effective permission mode and rules, read-only. |
-| `server.health` | read |  | Liveness and load. |
-| `server.hello` | read |  | The handshake: protocol version, features, limits; optionally resume subscriptions. |
-| `server.info` | read |  | What this server offers: providers, agents, commands, tools, permission modes. |
-| `server.shutdown` | admin | yes | Stop the server, draining running turns first. |
-| `session.cancel` | write | yes | Cancel the running turn (hard, or soft at the next step boundary). |
-| `session.close` | write | yes | Release a session (refused while a turn runs unless force). |
-| `session.create` | write | yes | Create a session and open it. |
-| `session.delete` | write | yes | Delete a session and its history. |
-| `session.dequeue` | write | yes | Remove a queued prompt. |
-| `session.export` | read |  | A session's transcript as markdown, json or text. |
-| `session.fork` | write | yes | Branch a session into a new one carrying its transcript. |
-| `session.get` | read |  | A session's snapshot: rows, status, queue, open questions, usage. |
-| `session.list` | read |  | The workspace's sessions, newest activity first, paged. |
-| `session.queue` | read |  | The prompts queued behind the running turn. |
-| `session.rename` | write | yes | Rename a session. |
-| `session.send` | write | yes | Send a prompt: start a turn, or queue / steer / interrupt the running one. |
-| `session.setMode` | write | yes | The permission mode the session's next turns run in. |
-| `session.subscribe` | read |  | Follow a session's events from a cursor (replay) or from a snapshot. |
-| `session.unsubscribe` | read |  | Stop following a session. |
-| `settings.get` | read |  | Effective values and where each came from, or one tier's file; secrets masked. |
-| `settings.schema` | read |  | Every setting: type, default, help, and whether a client may write it. |
-| `settings.set` | admin | yes | Write an allowlisted setting to the user tier or a trusted project. |
-| `todo.get` | read |  | A session's todo list (reserved; answers todo_unavailable until sessions keep one). |
-| `tool.output` | read |  | A finished tool call's full output, from an offset. |
+<!-- protocol:methods:begin (generated by scripts/gen-protocol-schema.php — do not edit) -->
+| Method | Scope | Idempotent | Required params | What it does |
+|---|---|---|---|---|
+| `agents.list` | read |  | — | The agents a turn can delegate to. |
+| `agents.subtree` | read |  | `sessionId` | The sub-agents a session's turns have delegated to, with their latest activity. |
+| `bg.list` | read |  | — | The background sessions this server supervises. |
+| `bg.output` | read |  | `bgId` | A background session's output from an offset. |
+| `bg.stop` | write | yes | `bgId` | Stop a background session. |
+| `client.viewing` | read |  | — | Say which sessions this client shows, and which is in front. |
+| `command.exec` | write | yes | `sessionId`, `name` | Run a slash command in a session (command files; built-ins once they run headless). |
+| `command.list` | read |  | — | The slash commands a session knows, and where each runs. |
+| `files.changed` | read |  | — | The workspace's changed and untracked files. |
+| `files.diff` | read |  | — | The workspace's uncommitted changes to tracked files, as a unified diff. |
+| `files.read` | read |  | `path` | A file under the project root, read-only and size-capped. |
+| `memory.add` | write | yes | `content` | Add a note. |
+| `memory.delete` | write | yes | `id` | Delete a note. |
+| `memory.edit` | write | yes | `id`, `content` | Replace a note's text. |
+| `memory.list` | read |  | — | The notes of one memory scope. |
+| `memory.search` | read |  | `query` | Notes matching a query, best first, across every scope. |
+| `permission.pending` | read |  | — | The questions still open, for one session or all open sessions. |
+| `permission.respond` | approve | yes | `sessionId`, `askId`, `reply` | Answer an open permission question; the first answer wins. |
+| `permission.rules` | read |  | — | The effective permission mode and rules, read-only. |
+| `server.health` | read |  | — | Liveness and load. |
+| `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions. |
+| `server.info` | read |  | — | What this server offers: providers, agents, commands, tools, permission modes. |
+| `server.shutdown` | admin | yes | — | Stop the server, draining running turns first. |
+| `session.cancel` | write | yes | `sessionId` | Cancel the running turn (hard, or soft at the next step boundary). |
+| `session.close` | write | yes | `sessionId` | Release a session (refused while a turn runs unless force). |
+| `session.create` | write | yes | — | Create a session and open it. |
+| `session.delete` | write | yes | `sessionId` | Delete a session and its history. |
+| `session.dequeue` | write | yes | `sessionId`, `queueId` | Remove a queued prompt. |
+| `session.export` | read |  | `sessionId` | A session's transcript as markdown, json or text. |
+| `session.fork` | write | yes | `sessionId` | Branch a session into a new one carrying its transcript. |
+| `session.get` | read |  | `sessionId` | A session's snapshot: rows, status, queue, open questions, usage. |
+| `session.list` | read |  | — | The workspace's sessions, newest activity first, paged. |
+| `session.queue` | read |  | `sessionId` | The prompts queued behind the running turn. |
+| `session.rename` | write | yes | `sessionId`, `name` | Rename a session. |
+| `session.send` | write | yes | `sessionId`, `text` | Send a prompt: start a turn, or queue / steer / interrupt the running one. |
+| `session.setMode` | write | yes | `sessionId`, `permissionMode` | The permission mode the session's next turns run in. |
+| `session.subscribe` | read |  | `sessionId` | Follow a session's events from a cursor (replay) or from a snapshot. |
+| `session.unsubscribe` | read |  | `sessionId` | Stop following a session. |
+| `settings.get` | read |  | — | Effective values and where each came from, or one tier's file; secrets masked. |
+| `settings.schema` | read |  | — | Every setting: type, default, help, and whether a client may write it. |
+| `settings.set` | admin | yes | `key` | Write an allowlisted setting to the user tier or a trusted project. |
+| `todo.get` | read |  | `sessionId` | A session's todo list (reserved; answers todo_unavailable until sessions keep one). |
+| `tool.output` | read |  | `sessionId`, `toolCallId` | A finished tool call's full output, from an offset. |
+<!-- protocol:methods:end -->
 
 A session is opened on first use and holds the same lock a terminal session
 takes, so a session open in a `sugarcrush` TUI is refused `session_locked`
@@ -428,6 +436,7 @@ durable events, so a dropped delta is repaired by the durable
 `sessionId: null` and no `seq`: there is no server log, so a client that missed
 one re-reads what it describes (`session.list`).
 
+<!-- protocol:events:begin (generated by scripts/gen-protocol-schema.php — do not edit) -->
 | Type | Scope | Kind | What it says |
 |---|---|---|---|
 | `assistant.completed` | session | durable | The reply, complete; repairs any delta a client dropped. |
@@ -458,6 +467,7 @@ one re-reads what it describes (`session.list`).
 | `turn.steered` | session | durable | A steering message was handed to the running turn. |
 | `turn.step` | session | live | The running turn reached a step boundary. |
 | `usage.updated` | session | durable | Token and cost usage changed. |
+<!-- protocol:events:end -->
 
 ### Sending, queueing, steering, cancelling
 

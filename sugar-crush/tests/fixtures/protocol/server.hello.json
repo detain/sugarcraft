@@ -1,0 +1,27 @@
+{
+  "method": "server.hello",
+  "params": {
+    "minProtocol": 1,
+    "maxProtocol": 1,
+    "client": {"name": "sugar-crush-web", "version": "0.1.0", "instanceId": "tab-7f3a"},
+    "caps": ["deltas"],
+    "resume": {"a1b2c3d4e5f60718": 812}
+  },
+  "result": {
+    "protocol": 1,
+    "server": {"version": "1.0.0", "connectionId": "c1-9f3a1b2c", "root": "/home/me/project", "pid": 4242},
+    "features": {"methods": ["server.hello", "session.send"], "events": ["turn.started"]},
+    "limits": {
+      "maxClientFrameBytes": 1048576,
+      "maxServerFrameBytes": 4194304,
+      "maxInflight": 64,
+      "tickIntervalMs": 15000,
+      "softBufferedBytes": 1048576,
+      "maxBufferedBytes": 16777216,
+      "maxSubscribersPerSession": 50
+    },
+    "principal": {"kind": "owner", "via": "ticket", "scopes": ["read", "write", "approve", "admin"]},
+    "defaults": {"permissionMode": "default"},
+    "resumed": {"a1b2c3d4e5f60718": {"fromSeq": 813, "throughSeq": 820, "pendingAsks": []}}
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": -32009,
+    "message": "this question was already answered",
+    "data": {"kind": "already_resolved", "resolved": {"askId": "0123456789abcdef", "reply": "once"}}
+  }
+}

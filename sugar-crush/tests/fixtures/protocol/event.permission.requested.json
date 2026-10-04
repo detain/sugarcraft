@@ -1,0 +1,21 @@
+{
+  "event": {
+    "sessionId": "a1b2c3d4e5f60718",
+    "seq": 812,
+    "type": "permission.requested",
+    "ts": 1790000000123,
+    "turnId": "t_0123456789abcdef",
+    "durable": true,
+    "data": {
+      "askId": "0123456789abcdef",
+      "toolCallId": "call_1",
+      "tool": "Bash",
+      "arguments": {"command": "rm build.log"},
+      "reason": "Bash needs approval in default mode",
+      "source": "gate",
+      "mode": "default",
+      "options": ["once", "always", "reject"],
+      "alwaysScope": {"tool": "Bash"}
+    }
+  }
+}

@@ -18,6 +18,7 @@ use SugarCraft\Crush\Protocol\Methods\SettingsMethods;
 use SugarCraft\Crush\Protocol\Methods\TodoMethods;
 use SugarCraft\Crush\Protocol\Methods\ToolMethods;
 use SugarCraft\Crush\Protocol\Methods\TurnMethods;
+use SugarCraft\Crush\Protocol\Schema\ProtocolSchema;
 use SugarCraft\Crush\Server\ServerConfig;
 use SugarCraft\Crush\Server\Ws\Connection;
 use SugarCraft\Crush\Server\Ws\MessageHandler;
@@ -33,7 +34,8 @@ use SugarCraft\Crush\Server\Ws\Outbox;
  *     `-32002 not_initialized` and closed with {@see CLOSE_NOT_INITIALIZED};
  *  2. the JSON-RPC 2.0 decode ({@see JsonRpc}): depth-capped, id kept as sent;
  *  3. the client's request budget (50/s, burst 200) — `-32011 rate_limited`;
- *  4. the method's existence (`-32601`) and the scope it needs (`-32003`);
+ *  4. the method's existence (`-32601`), the scope it needs (`-32003`), and
+ *     its params against the published schema (`-32602`, naming the field);
  *  5. an `idempotencyKey` on a side-effecting method: a retry gets the
  *     original answer (5 min, 1,000 per principal — {@see IdempotencyCache});
  *  6. the method, whose {@see RpcError} becomes the error object and whose
@@ -304,6 +306,13 @@ final class Dispatcher implements MessageHandler
                 ?? throw RpcError::of(ErrorCode::MethodNotFound, \sprintf('method not found: %s', \substr($request->method, 0, 64)));
             $call = new CallContext($client, $request, $this->context, $this->methods);
             $call->requireScope($spec->scope);
+
+            // The published schema is the contract (O-3c): params that break
+            // it never reach the method. The errors name paths, never values.
+            $invalid = ProtocolSchema::paramErrors($spec->name, $request->params);
+            if ($invalid !== []) {
+                throw RpcError::of(ErrorCode::InvalidParams, 'invalid params: ' . $invalid[0], 'invalid_params', ['errors' => \array_slice($invalid, 0, 8)]);
+            }
 
             $params = Params::of($request->params);
             $key = $spec->sideEffects ? $params->optionalString('idempotencyKey', IdempotencyCache::MAX_KEY_LENGTH) : null;
