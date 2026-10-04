@@ -2284,13 +2284,26 @@ final class Chat implements Model
                 : \SugarCraft\Crush\Memory\AutoMemoryConsolidator::new(
                     \SugarCraft\Crush\Memory\MemoryWriter::new($done->memoryStore, $done->projectRoot()),
                 )->call($done->summaryBackend, $done->history, $done->spendCapReached(), $done->currentSessionId);
-            $cmds = array_values(array_filter([$doneCmd, $suggest, $consolidate === null ? null : Cmd::promise($consolidate)]));
+            // Step 3.G, same seam: `autoCommit: turn` commits what this turn
+            // changed, with a subject from the title model. Only when nothing
+            // queued took the turn's place — a queued prompt is the same
+            // conversation carrying on, and commits once it settles.
+            $autoCommit = $done->inFlight ? null : $done->scheduleAutoCommit();
+            $cmds = array_values(array_filter([$doneCmd, $suggest, $consolidate === null ? null : Cmd::promise($consolidate), $autoCommit]));
 
             return [$done, match (count($cmds)) {
                 0 => null,
                 1 => $cmds[0],
                 default => Cmd::batch(...$cmds),
             }];
+        }
+        if ($msg instanceof \SugarCraft\Crush\Workspace\AutoCommittedMsg) {
+            // Step 3.G: the commit is already made (or refused). Accounted
+            // first — the subject came from a model call on the user's key —
+            // then one display-only line saying what was committed, or why not.
+            $this->accountUsage($msg->usage);
+
+            return [$this->mutate(['history' => [...$this->history, Message::notice($msg->notice())]]), null];
         }
         if ($msg instanceof MemoryConsolidatedMsg) {
             // Roadmap 5.2: the notes are already written (in this process,
@@ -15034,22 +15047,168 @@ final class Chat implements Model
     }
 
     /**
-     * `/undo` (item 3.A-2) — take back the last turn: the conversation
-     * returns to the checkpoint taken before the last prompt, the prompt goes
-     * back into the box, and the files go back to how that turn found them
-     * (opencode's `/undo`). The same as `/rewind 1 --both`, and undone in turn
-     * by `/redo`.
+     * `/undo` — take back the last turn.
      *
-     * When auto-commit lands (3.G) this is the ONE `/undo`: it will first
-     * revert the last commit if HEAD is that commit, and fall back to this.
+     * WHEN THIS SESSION HAS AUTO-COMMITTED (step 3.G), it reverts the last
+     * commit, Aider's way: `git checkout HEAD~1 -- <files>` then
+     * `git reset --soft HEAD~1`, and the model is told the change was undone
+     * so it does not simply make it again. Aider's refusals apply — the commit
+     * is not this session's, it is a merge (or the root), a file it changed has
+     * uncommitted changes now, a file it changed did not exist before it, or it
+     * is already on a remote — and each is answered with why, changing nothing.
+     * The conversation stays where it is, as in Aider.
+     *
+     * OTHERWISE (item 3.A-2): the conversation returns to the checkpoint taken
+     * before the last prompt, the prompt goes back into the box, and the files
+     * go back to how that turn found them (opencode's `/undo`) — the same as
+     * `/rewind 1 --both`, and undone in turn by `/redo`.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleUndoCommand(): array
     {
+        $committer = $this->currentSessionId === null || $this->projectRoot === null
+            ? null
+            : \SugarCraft\Crush\Workspace\AutoCommitter::new($this->projectRoot)->withSessionId($this->currentSessionId);
+        if ($committer !== null && $committer->hasCommits()) {
+            return $this->undoAutoCommit($committer);
+        }
+
         $refusal = $this->checkpointCommandRefusal('/undo');
 
         return $refusal ?? $this->rewindConversation('/undo', 1, true);
+    }
+
+    /**
+     * The auto-commit half of {@see handleUndoCommand()}: revert the last
+     * commit or say which refusal stopped it. On success one row the MODEL
+     * sees (Aider's `send_undo_reply` wording) rides after the command's
+     * reply, so the next turn knows its change is gone.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function undoAutoCommit(\SugarCraft\Crush\Workspace\AutoCommitter $committer): array
+    {
+        try {
+            $outcome = $committer->undo();
+        } catch (\Throwable $e) {
+            return $this->sessionResponse('/undo', "Error during undo: {$e->getMessage()}");
+        }
+
+        $short = $outcome['sha'] === null ? '' : substr($outcome['sha'], 0, 7);
+        if (!$outcome['ok']) {
+            $hint = $outcome['refusal'] === \SugarCraft\Crush\Workspace\AutoCommitter::REFUSED_NOT_OURS
+                ? ' `/rewind --both` still restores the conversation and files to the last checkpoint.'
+                : '';
+
+            return $this->sessionResponse('/undo', 'Nothing was undone: ' . $outcome['reason'] . '.' . $hint);
+        }
+
+        $files = implode(', ', $outcome['files']);
+        if ($outcome['kind'] === 'snapshot') {
+            [$next] = $this->sessionResponse('/undo', "Un-committed {$short} ({$outcome['subject']}): your changes to {$files} are back to uncommitted, as they were.");
+
+            return [$next, null];
+        }
+
+        [$next] = $this->sessionResponse('/undo', "Reverted {$short} ({$outcome['subject']}): {$files} went back to the previous commit.");
+
+        return [$next->mutate(['history' => [...$next->history, Message::system(
+            "The user ran /undo: the commit {$short} \"{$outcome['subject']}\" was reverted with "
+            . '`git checkout HEAD~1 -- <files>` and `git reset --soft HEAD~1`, so the change to '
+            . "{$files} is gone. Wait for further instructions before attempting that change again; "
+            . 'ask if it is unclear why it was reverted.',
+        )]]), null];
+    }
+
+    /**
+     * The Cmd that makes a `turn`-mode auto-commit (step 3.G) once a turn has
+     * settled, or null when it should not: `autoCommit` is not `turn`, there is
+     * no session, store or project root, or the checkpoint taken before this
+     * turn's prompt holds no git snapshot to tell the turn's changes from what
+     * was there already.
+     *
+     * The git work runs in the Cmd, never in update(): it collects the files
+     * changed since that checkpoint, commits the user's own earlier changes to
+     * them first, and asks the cheap title model for the subject
+     * ({@see \SugarCraft\Crush\Workspace\CommitMessageWriter}) — or uses a
+     * plain one when there is no title model or the spend cap is reached. The
+     * commit is made as the answer settles, in this process, and reported by
+     * an {@see \SugarCraft\Crush\Workspace\AutoCommittedMsg}.
+     */
+    private function scheduleAutoCommit(): ?\Closure
+    {
+        $config = $this->workspace?->userConfig ?? [];
+        $mode = \SugarCraft\Crush\Workspace\AutoCommitter::modeFrom($config[\SugarCraft\Crush\Workspace\AutoCommitter::SETTINGS_KEY] ?? null);
+        $store = $this->sessionStore;
+        $sessionId = $this->currentSessionId;
+        if ($mode !== \SugarCraft\Crush\Workspace\AutoCommitter::MODE_TURN || !$store instanceof EnhancedSessionStore
+            || $sessionId === null || $this->projectRoot === null || $this->projectRoot === '') {
+            return null;
+        }
+
+        try {
+            $latest = $store->listCheckpoints($sessionId, 1)[0]['state_data'] ?? null;
+        } catch (\Throwable) {
+            return null;
+        }
+        $workspace = self::checkpointWorkspace($latest);
+        if (!\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($workspace) || !\is_array($workspace)) {
+            return null;
+        }
+
+        $committer = \SugarCraft\Crush\Workspace\AutoCommitter::new($this->projectRoot)
+            ->withSessionId($sessionId)
+            ->withTrailer(\SugarCraft\Crush\Workspace\AutoCommitter::trailerFor($config['attribution'] ?? null));
+        $checkpointer = $store->workspaceCheckpointer($this->projectRoot);
+        $backend = $this->spendCapReached() ? null : $this->titleBackend;
+        $context = '';
+        foreach (array_reverse(Message::agentVisible($this->history)) as $message) {
+            if ($message->role === Role::User) {
+                $context = $message->content;
+                break;
+            }
+        }
+
+        return Cmd::promise(static function () use ($committer, $checkpointer, $workspace, $backend, $context, $sessionId): PromiseInterface {
+            try {
+                $prepared = $committer->prepareTurn($checkpointer, $workspace);
+            } catch (\Throwable $e) {
+                $prepared = $e->getMessage();
+            }
+            if ($prepared === null) {
+                return \React\Promise\resolve(null);
+            }
+            if (\is_string($prepared)) {
+                return \React\Promise\resolve(new \SugarCraft\Crush\Workspace\AutoCommittedMsg(error: $prepared, sessionId: $sessionId));
+            }
+
+            $finish = static function (?string $reply, ?Usage $usage) use ($committer, $prepared, $sessionId): Msg {
+                $subject = ($reply === null ? null : \SugarCraft\Crush\Workspace\CommitMessageWriter::subjectFrom($reply))
+                    ?? \SugarCraft\Crush\Workspace\CommitMessageWriter::fallback($prepared['paths']);
+                $outcome = $committer->commit($prepared['paths'], $subject);
+
+                return new \SugarCraft\Crush\Workspace\AutoCommittedMsg(
+                    sha: $outcome['sha'],
+                    subject: $outcome['subject'],
+                    paths: $outcome['paths'],
+                    snapshot: $prepared['snapshot'],
+                    error: $outcome['ok'] ? null : $outcome['reason'],
+                    usage: $usage,
+                    sessionId: $sessionId,
+                );
+            };
+            if ($backend === null) {
+                return \React\Promise\resolve($finish(null, null));
+            }
+
+            return $backend->completeAsync(\SugarCraft\Crush\Workspace\CommitMessageWriter::request($prepared['diff'], $context))->then(
+                static fn (Message $reply): Msg => $finish($reply->content, $reply->usage),
+                // The commit still happens, with a plain subject: a title
+                // model that failed is no reason to leave the turn uncommitted.
+                static fn (\Throwable $e): Msg => $finish(null, null),
+            );
+        });
     }
 
     /**

@@ -5485,6 +5485,34 @@ final class Bootstrap
             $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\PostEditDiagnosticsHook($lsp));
         }
 
+        // Auto-commit, `edit` mode (step 3.G): every Write/Edit committed as
+        // it lands. User tier only (the key is not project-settable) — a
+        // checkout must not turn on commits into the operator's history. The
+        // closure reads the checkpoint taken before the session's current
+        // turn, which is what keeps the user's own earlier changes out of the
+        // model's commit; it runs in whichever process the hook does.
+        $userConfig = self::readUserConfig();
+        $autoCommit = \SugarCraft\Crush\Workspace\AutoCommitter::modeFrom($userConfig[\SugarCraft\Crush\Workspace\AutoCommitter::SETTINGS_KEY] ?? null);
+        if ($root !== null && $autoCommit === \SugarCraft\Crush\Workspace\AutoCommitter::MODE_EDIT) {
+            $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\AutoCommitHook(
+                \SugarCraft\Crush\Workspace\AutoCommitter::new($root)
+                    ->withTrailer(\SugarCraft\Crush\Workspace\AutoCommitter::trailerFor($userConfig['attribution'] ?? null)),
+                static function (string $sessionId): ?array {
+                    if ($sessionId === '') {
+                        return null;
+                    }
+                    try {
+                        $state = self::sessionStore(false)->listCheckpoints($sessionId, 1)[0]['state_data'] ?? null;
+                    } catch (\Throwable) {
+                        return null;
+                    }
+                    $workspace = \is_array($state) ? ($state[EnhancedSessionStore::CHECKPOINT_WORKSPACE_KEY] ?? null) : null;
+
+                    return \is_array($workspace) ? $workspace : null;
+                },
+            ));
+        }
+
         foreach (self::hookFiles($root) as $path) {
             try {
                 $hooks->loadEntries(self::hookFileEntries($path), $path);

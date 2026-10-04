@@ -706,6 +706,13 @@ final class ReadPathCensusTest extends TestCase
         'Workflows/WorkflowRegistry.php|Yaml::parseFile' => [
             'CONTAINED — a `.yaml` workflow, confined to the tier directory it was found in',
         ],
+        // Step 3.G: the session's auto-commit record, `<git dir>/sugar-crush/auto-commits.jsonl`,
+        // located by `git rev-parse --git-path` and written by this class alone.
+        'Workspace/AutoCommitter.php|file' => [
+            'SELF_LOCATED — record(): the record file this class appends to, re-read to trim it',
+            'SELF_LOCATED — records(): the same record file, read for this session\'s commits',
+            'SELF_LOCATED — forget(): the same record file, rewritten without an undone commit',
+        ],
     ];
 
     private string $srcDir;

@@ -843,7 +843,7 @@ it runs only once the rest of the chain has permitted that output — see
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
-Seven more exist and are **not** registered by default:
+Eight more exist and are **not** registered by default:
 
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
@@ -877,6 +877,9 @@ Seven more exist and are **not** registered by default:
   when a language server is configured under `lsp` and started, right after the
   post-edit lint and ahead of the hook files. See
   [Post-edit diagnostics](#post-edit-diagnostics).
+- `AutoCommitHook` — the auto-commit of each edit, registered by `Bootstrap::hooks()`
+  when `autoCommit` is `edit`, after the post-edit diagnostics and ahead of the
+  hook files. See [Auto-commit](#auto-commit).
 
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
 source as **heuristics, not security boundaries**. Neither can see through
@@ -1002,6 +1005,44 @@ ERROR [42:9] Undefined method 'totl'.
 
 The same servers answer the `Lsp` tool and give the `Read` tool its outline of
 a file too long for one page.
+
+### Auto-commit
+
+`autoCommit` (user tier only, default `off`) commits what sugar-crush changes,
+Aider's way:
+
+- `turn` — when a turn settles in the TUI, every file changed since the
+  checkpoint taken before its prompt is committed in one commit. The subject is
+  a one-line Conventional-Commits message (`fix: …`, `feat: …`, at most 72
+  characters) written by the cheap title model (`SUGARCRUSH_TITLE_MODEL` /
+  `titleModel`) from the diff, or a plain `chore: update …` when there is no
+  title model, the spend cap is reached, or its answer is unusable. One
+  transcript line says what was committed or why not. A turn that a queued
+  prompt follows at once is not committed on its own.
+- `edit` — `AutoCommitHook` commits each `Write`/`Edit` as it lands, with the
+  call's own `description` as the subject (`chore: rename the legacy config
+  helper`), and tells the model the commit it made. It never refuses; a commit
+  that fails leaves the change in the file, uncommitted, and says why.
+
+Either way:
+
+- **Your hooks run.** There is no `--no-verify`: a pre-commit hook that rejects
+  the commit fails it.
+- **Your work is never mixed in.** A file you had already changed before the
+  turn is first committed as you had it, in its own commit (`chore: snapshot
+  user changes before sugar-crush edit`), and the model's change goes on top.
+  What you had is read from the turn's checkpoint; a tracked file with changes
+  and no checkpoint to separate them is left uncommitted. Only the files
+  sugar-crush changed are committed — the rest of your index is untouched.
+- The author is you (`user.name`/`user.email`); the trailer is
+  `attribution.commit`, or `Co-authored-by: sugar-crush
+  <sugar-crush@noreply.invalid>` when that is unset (an empty string drops it).
+- `/undo` reverts the last commit this session made — `git checkout HEAD~1 --
+  <files>` then `git reset --soft HEAD~1` — and tells the model the change was
+  undone. It refuses, changing nothing, when HEAD is not this session's commit,
+  is a merge or the first commit, a file it changed has uncommitted changes now,
+  a file it changed did not exist before it, or it is already on a remote. A
+  session that never auto-committed gets the checkpoint `/undo` instead.
 
 ### What the audit log records
 

@@ -498,6 +498,7 @@ final class LayeredSettings
         'includeGitInstructions',
         'attribution',
         'lsp',
+        'autoCommit',
         'theme',
         'statusLine',
         'layout',

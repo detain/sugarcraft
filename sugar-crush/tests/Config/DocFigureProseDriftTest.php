@@ -2126,7 +2126,7 @@ final class DocFigureProseDriftTest extends TestCase
             ];
         }
         ksort($live);
-        self::assertCount(10, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
+        self::assertCount(11, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
 
         self::assertSame(
             1,
@@ -2205,7 +2205,13 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(1, preg_match('/`(\w+)` — the delegated run\'s own tool declaration, registered\s*by `EngineBackend::(\w+)\(\)`/', $bullets, $grantRow), 'the sub-agent grant bullet no longer names its class and the EngineBackend seam that registers it (step 4.2)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit lint, registered by `Bootstrap::(\w+)\(\)`\s*on every launch, after the three above and ahead of the hook files/', $bullets, $lintRow), 'the post-edit lint bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.E)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit diagnostics, registered by `Bootstrap::(\w+)\(\)`\s*when a language server is configured under `lsp` and started, right after the\s*post-edit lint and ahead of the hook files/', $bullets, $diagnosticsRow), 'the post-edit diagnostics bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.F)');
-        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1], $diagnosticsRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertSame(1, preg_match('/`(\w+)` — the auto-commit of each edit, registered by `Bootstrap::(\w+)\(\)`\s*when `autoCommit` is `edit`, after the post-edit diagnostics and ahead of the\s*hook files/', $bullets, $commitRow), 'the auto-commit bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.G)');
+        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1], $diagnosticsRow[1], $commitRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        $commitSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $commitRow[2], 9000);
+        $commitAt = strpos($commitSeam, 'Hooks\\BuiltIn\\' . $commitRow[1] . '(');
+        self::assertIsInt($commitAt, "Bootstrap::{$commitRow[2]}() no longer constructs {$commitRow[1]} — the bullet names the wrong seam");
+        self::assertGreaterThan((int) strpos($commitSeam, 'Hooks\\BuiltIn\\PostEditDiagnosticsHook('), $commitAt, 'the auto-commit is no longer registered after the post-edit diagnostics, as the bullet says');
+        self::assertLessThan((int) strpos($commitSeam, 'loadEntries('), $commitAt, 'the auto-commit is no longer registered ahead of the hook files, as the bullet says');
         $diagnosticsSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $diagnosticsRow[2], 6000);
         $diagnosticsAt = strpos($diagnosticsSeam, 'Hooks\\BuiltIn\\' . $diagnosticsRow[1] . '(');
         self::assertIsInt($diagnosticsAt, "Bootstrap::{$diagnosticsRow[2]}() no longer constructs {$diagnosticsRow[1]} — the bullet names the wrong seam");

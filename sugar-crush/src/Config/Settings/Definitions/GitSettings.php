@@ -12,6 +12,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\LSP\LspLauncher;
+use SugarCraft\Crush\Workspace\AutoCommitter;
 
 /**
  * The "Git & Automation" category's keys. One file per category so a step adding a
@@ -59,6 +60,18 @@ final class GitSettings implements SettingDefinitionSet
                 ->withHelp('{"php": {"command": "intelephense", "args": ["--stdio"]}}: servers for post-edit diagnostics, Read outlines and the Lsp tool.')
                 ->withReaderSymbol(Bootstrap::class . '::lspClient')
                 ->withReadBy('`Bootstrap::lspClient()` → `LspLauncher::fromConfig()`'),
+            // Step 3.G. Exec and never project-settable: a commit runs the
+            // repository's own hooks, and a checkout must not be able to turn
+            // on commits into the operator's history.
+            SettingDefinition::new(AutoCommitter::SETTINGS_KEY, SettingType::Enum, AutoCommitter::MODE_OFF)
+                ->withCategory(SettingCategory::Git)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                ->withEnumValues(AutoCommitter::MODES)
+                ->withLabel('Auto-commit')
+                ->withHelp('off, turn (one commit per turn, message from the title model) or edit (one per Write/Edit); /undo reverts it.')
+                ->withReaderSymbol(Bootstrap::class . '::hooks')
+                ->withReadBy('`Bootstrap::hooks()` → `AutoCommitHook`; `Chat` (turn mode)'),
         ];
     }
 }

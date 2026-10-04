@@ -339,7 +339,7 @@ edit it by hand.
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `[<name>\|--auto]` | Rename the current session |
 | `/rewind` | ✓ | | `[n] [--chat\|--files\|--both]` | Restore an earlier checkpoint: the conversation, the files, or both |
-| `/undo` | ✓ | | — | Take back the last turn: conversation and files |
+| `/undo` | ✓ | | — | Take back the last turn, or revert the last auto-commit |
 | `/redo` | ✓ | | — | Step forward again over what /rewind or /undo took back |
 | `/diff` | ✓ | | `[n]` | Show what changed in the files since a checkpoint |
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
