@@ -322,6 +322,8 @@ edit it by hand.
 | `/permissions` | ✓ | ✓ | — | Show this session's permission mode, its source, and the rules it decides by |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
 | `/context` | ✓ | | — | Show what fills the context window: prompt layers, tools, history, cache |
+| `/sweep` | ✓ | | `[n]` | Prune the tool outputs since your last prompt (or the last n) from what the model sees |
+| `/pruning` | ✓ | | `[auto\|manual\|off\|default]` | Show or set how this session prunes its context: auto, manual or off |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
 | `/pane` | ✓ | | `dock <left\|right>\|toggle [name]` | Dock a pane to a side, or toggle its docked state |
 | `/layout` | ✓ | | `reset` | Reset the pane layout to the launch default |

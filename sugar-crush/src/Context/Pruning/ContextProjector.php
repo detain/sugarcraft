@@ -35,14 +35,19 @@ use SugarCraft\Crush\Tools\ToolCall;
  *     that asked for it;
  *  4. a call whose INPUT is pruned (roadmap 2.3: a superseded write's
  *     content, a long-failed call's arguments) is rewritten on its assistant
- *     row by {@see PrunedInputPlaceholder}, keeping its id, name and keys.
+ *     row by {@see PrunedInputPlaceholder}, keeping its id, name and keys;
+ *  5. with ref tags on ({@see withRefTags()}, roadmap 3.B-2): every tool
+ *     result — pruned or not — ends with its `<ctx-ref r="N"/>` tag
+ *     ({@see RefTag}), the ref the ledger gives it ({@see ContextLedger::refsFor()},
+ *     numbered over the rows BEFORE step 1 drops any, so a block never shifts
+ *     a ref), and a tag the model echoed into its own text is stripped.
  *
  * Steps 1 and 2 remove rows only at step boundaries or rows that pair with
  * nothing, so every tool call that is sent keeps its result.
  */
 final class ContextProjector
 {
-    private function __construct()
+    private function __construct(private readonly bool $refTags = false)
     {
     }
 
@@ -51,14 +56,25 @@ final class ContextProjector
         return new self();
     }
 
+    /**
+     * A projector that tags every tool result with its ref (step 4) — what a
+     * request the model can name rows in is built with. Off by default: a
+     * strategy reading the projected conversation sizes outputs without tags.
+     */
+    public function withRefTags(bool $refTags = true): self
+    {
+        return new self($refTags);
+    }
+
     /** @param list<TypedMessage> $messages */
     public function project(array $messages, ContextLedger $ledger): ProjectedContext
     {
         $messages = array_values($messages);
-        if ($ledger->isEmpty()) {
+        if ($ledger->isEmpty() && !$this->refTags) {
             return new ProjectedContext($messages);
         }
 
+        $refs = $this->refTags ? $ledger->refsFor($messages) : [];
         $calls = self::callsById($messages);
         $block = $ledger->activeBlock();
         if ($block !== null) {
@@ -85,8 +101,27 @@ final class ContextProjector
                 if ($entry !== null && !$entry->kind->rewritesInput()) {
                     $message = self::pruned($message, $entry, $calls[$message->toolCallId()] ?? null);
                 }
-            } elseif ($message instanceof AssistantMessage && ($message->toolCalls() ?? []) !== []) {
-                $message = self::withPrunedInputs($message, $ledger);
+                $ref = $refs[$message->toolCallId()] ?? null;
+                if ($ref !== null) {
+                    $message = new ToolResultMessage(
+                        $message->toolCallId(),
+                        RefTag::appendTo($message->content(), $ref),
+                        $message->isError(),
+                        $message->imageBytes(),
+                        $message->imageProtocol(),
+                        $message->usage(),
+                    );
+                }
+            } elseif ($message instanceof AssistantMessage) {
+                if (($message->toolCalls() ?? []) !== []) {
+                    $message = self::withPrunedInputs($message, $ledger);
+                }
+                if ($this->refTags) {
+                    $stripped = RefTag::stripFrom($message->content());
+                    if ($stripped !== $message->content()) {
+                        $message = new AssistantMessage($stripped, $message->toolCalls(), $message->reasoning(), $message->usage(), $message->lengthStopped());
+                    }
+                }
             }
             $projected[] = $message;
         }

@@ -1167,7 +1167,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // on the reply itself, so it reaches Chat's settle arm on BOTH paths -
         // returned here in-process, or across the fork's result frame
         // ({@see runCompleteInChild()}'s `attachmentNotice` key).
-        return $this->runTurn($typed, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript)
+        // Roadmap 3.B-2: the turn starts from the session ledger with the
+        // turn-start strategies applied — on this path as on the forked one.
+        $engine = $this->contextLedger === null ? $this : $this->withContextLedger($this->turnStartLedger($typed));
+
+        return $engine->runTurn($typed, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript)
             ->withAttachmentNotice($attachmentNotice);
     }
 
@@ -3697,6 +3701,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             $transcript = [];
             $attachmentNotice = null;
             $typed = $engine->toTypedMessages($history, $attachmentNotice);
+            // Roadmap 3.B-2: the turn-start strategies run here, in the child,
+            // so the parent's update loop never projects a conversation.
+            if ($engine->contextLedger !== null) {
+                $engine = $engine->withContextLedger($engine->turnStartLedger($typed));
+            }
             // This is a forked child, so invoking the caller's callback
             // in-process would write into a copy of its state and vanish on
             // exit - the event has to cross the socket. It goes out
@@ -4470,6 +4479,33 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
 
         return $out;
+    }
+
+    /**
+     * The session ledger this turn starts from (roadmap 3.B-2): the one the
+     * host handed in, with {@see \SugarCraft\Crush\Context\Pruning\TurnStartPruning}'s
+     * batch applied when the session's mode runs the strategies. A turn
+     * boundary is the deliberate point to rewrite (DCP §13.2 D): the cache
+     * breaks once there and every step of the turn reuses the rewritten
+     * prefix, where a prune between steps would break it again and again.
+     * Null without a ledger.
+     *
+     * @param list<TypedMessage> $typed the turn's conversation, unprojected
+     */
+    private function turnStartLedger(array $typed): ?\SugarCraft\Crush\Context\Pruning\ContextLedger
+    {
+        $ledger = $this->contextLedger;
+        if ($ledger === null || !$ledger->effectiveMode()->runsStrategies()) {
+            return $ledger;
+        }
+
+        $delta = \SugarCraft\Crush\Context\Pruning\TurnStartPruning::propose(
+            \SugarCraft\Crush\Context\Pruning\ContextProjector::new()->project($typed, $ledger)->messages,
+            $ledger,
+            \SugarCraft\Crush\Context\Pruning\PruningPolicy::new(),
+        );
+
+        return $delta === null ? $ledger : $ledger->apply($delta);
     }
 
     /**

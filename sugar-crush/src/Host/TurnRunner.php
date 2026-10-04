@@ -16,6 +16,7 @@ use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\BackendToolEventsMsg;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
+use SugarCraft\Crush\Context\Pruning\PruningMode;
 use SugarCraft\Crush\Diagnostics\NoticeSink;
 use SugarCraft\Crush\Events\PermissionAsked;
 use SugarCraft\Crush\Events\PermissionResolved;
@@ -323,7 +324,13 @@ final class TurnRunner
             // first for every row the history no longer has.
             $carriesLedger = $backend instanceof EngineBackend;
             if ($carriesLedger) {
-                $backend = $backend->withContextLedger($runner->ledger($transcripts, $sessionId)->syncAgainstHistory($history));
+                // Roadmap 3.B-2: and following the configured pruning mode
+                // wherever the session chose none, read per turn.
+                $backend = $backend->withContextLedger(
+                    $runner->ledger($transcripts, $sessionId)
+                        ->syncAgainstHistory($history)
+                        ->withDefaultMode(PruningMode::configured()),
+                );
             }
 
             // The permission events (1.C-2) share the inbox: a question has to

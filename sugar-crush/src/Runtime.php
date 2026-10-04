@@ -3960,8 +3960,14 @@ final class Runtime
      * {@see \SugarCraft\Crush\Context\Pruning\ContextLedger} (roadmap
      * 2.2-1 — pruned tool output becomes its placeholder, superseded
      * `<turn-context>` rows are left out), then sanitised. The rows are never
-     * rewritten: an App with no ledger, or an empty one, sends them exactly
-     * as before, byte for byte.
+     * rewritten: an App with no ledger sends them exactly as before, byte for
+     * byte, and so does one whose ledger is empty and whose mode shows no
+     * refs.
+     *
+     * Roadmap 3.B-2: unless the session's pruning mode is `off`, every tool
+     * result ends with its ref tag (`<ctx-ref r="N"/>`), so the model and the
+     * person can name it; the tag is a pure function of the result's ref, so
+     * it costs the prompt cache nothing after its first request.
      */
     private function buildMessages(App $app): array
     {
@@ -3973,9 +3979,11 @@ final class Runtime
             }
         }
 
-        if ($app->contextLedger !== null && !$app->contextLedger->isEmpty()) {
+        $ledger = $app->contextLedger;
+        if ($ledger !== null) {
             $messages = \SugarCraft\Crush\Context\Pruning\ContextProjector::new()
-                ->project($messages, $app->contextLedger)
+                ->withRefTags($ledger->effectiveMode()->showsRefs())
+                ->project($messages, $ledger)
                 ->messages;
         }
 

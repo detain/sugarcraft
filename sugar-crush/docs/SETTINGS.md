@@ -829,6 +829,7 @@ project-settable.
 | `parallelToolDeadlineSeconds` | Agent loop | int | `90` | P U C | `SUGARCRUSH_PARALLEL_TOOL_DEADLINE` | next turn | tuning |
 | `maxToolSteps` | Agent loop | int | unset | U C | — | restart | spend |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
+| `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `SUGARCRUSH_CONTEXT_PRUNING` | next turn | tuning |
 | `permissionMode` | Permissions | enum | `default` (TUI); `bypass-permissions` (`-p`, daemon) | U C | `SUGARCRUSH_PERMISSION_MODE`, `--permission-mode` | restart | security |
 | `permissionRules` | Permissions | JSON | `[]` | U C | — | restart | security |
 | `secretEnvAllowlist` | Permissions | list | `[]` | U C | — | restart | security |

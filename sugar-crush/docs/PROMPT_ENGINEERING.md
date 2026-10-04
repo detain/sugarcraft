@@ -114,9 +114,22 @@ re-prefills the whole conversation behind it.
   — the tool and its main argument, on one line, bounded to 120 characters
   (`Context\Pruning\PrunedOutputPlaceholder`) — and every `<turn-context>` row but
   the newest is left out, as its own preamble says it supersedes them. Both are
-  pure functions of the rows and the ledger, and the ledger moves only at that
-  over-budget point, in one batch worth at least 20k tokens: the bytes before
-  the first pruned row are the bytes the previous request sent.
+  pure functions of the rows and the ledger, and the ledger moves only at a
+  few deliberate points — that over-budget point, a turn's start in the `auto`
+  pruning mode (`Context\Pruning\TurnStartPruning`, superseded rows only), and
+  a person's `/sweep` — each in one batch, the automatic ones only once they
+  free at least 20k tokens: the bytes before the first pruned row are the bytes
+  the previous request sent. The ledger is the session's, so the next turn
+  starts from it rather than from the full history.
+- **Ref tags.** Unless the session's pruning mode is `off` (`/pruning`,
+  `contextPruning.mode`, `SUGARCRUSH_CONTEXT_PRUNING`), every tool result ends
+  with its ref on a line of its own — `<ctx-ref r="17"/>`
+  (`Context\Pruning\RefTag`) — pruned placeholders included, so a result can
+  be named (`r17`). A ref is the session's: handed out once per result in the
+  order the model first read it and never reused or renumbered
+  (`ContextLedger::refsFor()`, fixed where the turn ends), so the tag is the
+  same bytes on every request. A tag the model copies into its own reply is
+  stripped from the assistant text before the next request is built.
 - **Step summaries.** When a request is still over its budget after that prune,
   the engine asks the turn's model for a summary with the request it last sent
   plus one user row, `StepSummarizer::INSTRUCTION` ("…Do not call any tools —

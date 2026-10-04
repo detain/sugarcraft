@@ -10981,6 +10981,82 @@ final class Chat implements Model
     }
 
     /**
+     * `/sweep [n]` (roadmap 3.B-2): prune by hand the tool outputs since the
+     * last prompt, or the last n — see {@see \SugarCraft\Crush\Commands\SweepCommand}.
+     * The session's ledger is the one {@see \SugarCraft\Crush\Host\TurnRunner}
+     * keeps, so the next turn sends the placeholders; the transcript is
+     * untouched. Never mid-turn: {@see submit()} refuses every slash command
+     * while one runs, so the turn's own ledger cannot overwrite the sweep.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleSweepCommand(string $inputText): array
+    {
+        $before = $this->sessionContextLedger();
+        [$ledger, $reply] = \SugarCraft\Crush\Commands\SweepCommand::run($this->history, $before, self::commandArgument($inputText));
+
+        return $this->contextLedgerCommandResponse($inputText, $before, $ledger, $reply);
+    }
+
+    /**
+     * `/pruning [auto|manual|off|default]` (roadmap 3.B-2): show or set this
+     * session's pruning mode — see {@see \SugarCraft\Crush\Commands\PruningCommand}.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handlePruningCommand(string $inputText): array
+    {
+        $before = $this->sessionContextLedger();
+        [$ledger, $reply] = \SugarCraft\Crush\Commands\PruningCommand::run($before, self::commandArgument($inputText));
+
+        return $this->contextLedgerCommandResponse($inputText, $before, $ledger, $reply);
+    }
+
+    /**
+     * This session's context ledger as its next turn would start from it
+     * (roadmap 2.2-2): the one its {@see \SugarCraft\Crush\Host\TurnRunner}
+     * keeps, synced against the history, following the configured pruning
+     * mode where the session chose none.
+     */
+    private function sessionContextLedger(): \SugarCraft\Crush\Context\Pruning\ContextLedger
+    {
+        return $this->turnRunner()
+            ->ledger($this->transcripts(), $this->currentSessionId)
+            ->syncAgainstHistory($this->history)
+            ->withDefaultMode(\SugarCraft\Crush\Context\Pruning\PruningMode::configured());
+    }
+
+    /**
+     * One exit for the ledger commands: keep $ledger as the session's when it
+     * is not $before, and append the command and its reply as UI-only rows.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function contextLedgerCommandResponse(
+        string $inputText,
+        \SugarCraft\Crush\Context\Pruning\ContextLedger $before,
+        \SugarCraft\Crush\Context\Pruning\ContextLedger $ledger,
+        string $reply,
+    ): array {
+        if ($ledger !== $before) {
+            $this->turnRunner()->saveLedger($this->transcripts(), $this->currentSessionId, $ledger);
+        }
+
+        return [
+            $this->mutate([
+                'history' => [
+                    ...$this->history,
+                    Message::user($inputText)->withUiOnly(),
+                    Message::assistant($reply)->withUiOnly(),
+                ],
+                'inputBuf' => '',
+                'inFlight' => false,
+            ]),
+            null,
+        ];
+    }
+
+    /**
      * `/notices` — every warning this launch raised, whole on the transcript.
      *
      * E653 Shape A capped what the transcript could carry (a ≤2-row grant

@@ -60,6 +60,24 @@ final readonly class ContextLedger
      * @param int                           $nextRef            the ref the next
      *                                                          result takes; never
      *                                                          reused
+     * @param PruningMode|null              $mode               the mode `/pruning`
+     *                                                          set for this session;
+     *                                                          null follows
+     *                                                          $defaultMode
+     * @param PruningMode                   $defaultMode        the configured mode
+     *                                                          ({@see PruningMode::configured()}),
+     *                                                          resolved by the host
+     *                                                          per turn — never
+     *                                                          persisted, so a
+     *                                                          changed setting reaches
+     *                                                          every session that did
+     *                                                          not choose its own.
+     *                                                          `off` until a host sets
+     *                                                          it: a ledger no host
+     *                                                          keeps (a turn's own
+     *                                                          relief, a sub-agent's)
+     *                                                          names no refs nobody
+     *                                                          will keep
      */
     private function __construct(
         public array $prunes,
@@ -68,6 +86,8 @@ final readonly class ContextLedger
         public int $nextBlockId = 1,
         public array $refs = [],
         public int $nextRef = 1,
+        public ?PruningMode $mode = null,
+        public PruningMode $defaultMode = PruningMode::Off,
     ) {
     }
 
@@ -125,6 +145,24 @@ final readonly class ContextLedger
         $blocks[$block->id] = $block->withConsumedBlockIds([...$block->consumedBlockIds, ...$consumed]);
 
         return $this->mutate(blocks: $blocks, nextBlockId: max($this->nextBlockId, $block->id + 1));
+    }
+
+    /** This ledger with the session's own mode set (null: follow the configured one). */
+    public function withMode(?PruningMode $mode): self
+    {
+        return $mode === $this->mode ? $this : $this->mutate(mode: $mode);
+    }
+
+    /** This ledger following $mode wherever the session set none. */
+    public function withDefaultMode(PruningMode $mode): self
+    {
+        return $mode === $this->defaultMode ? $this : $this->mutate(defaultMode: $mode);
+    }
+
+    /** The mode in force: the session's own, else the configured one. */
+    public function effectiveMode(): PruningMode
+    {
+        return $this->mode ?? $this->defaultMode;
     }
 
     /** The block the projection applies, or null. */
@@ -316,7 +354,7 @@ final readonly class ContextLedger
         return isset($this->droppedContextRows[self::contextRowKey($content)]);
     }
 
-    /** @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>,nextBlockId:int,refs:array<string,int>,nextRef:int} */
+    /** @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>,nextBlockId:int,refs:array<string,int>,nextRef:int,mode:?string} */
     public function toArray(): array
     {
         return [
@@ -326,6 +364,7 @@ final readonly class ContextLedger
             'nextBlockId' => $this->nextBlockId,
             'refs' => $this->refs,
             'nextRef' => $this->nextRef,
+            'mode' => $this->mode?->value,
         ];
     }
 
@@ -387,7 +426,9 @@ final readonly class ContextLedger
             $nextRef = max($nextRef, $ref + 1);
         }
 
-        return new self($ledger->prunes, $ledger->droppedContextRows, $blocks, $next, $refs, $nextRef);
+        $mode = is_string($raw['mode'] ?? null) ? PruningMode::tryFrom($raw['mode']) : null;
+
+        return new self($ledger->prunes, $ledger->droppedContextRows, $blocks, $next, $refs, $nextRef, $mode);
     }
 
     /** A copy with the named fields replaced; every other field carried. */

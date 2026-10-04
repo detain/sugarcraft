@@ -41,4 +41,10 @@ enum PruneReason: string
      * ({@see Strategies\ErroredInputStrategy}).
      */
     case Errored = 'errored';
+
+    /**
+     * Swept by hand with `/sweep` (roadmap 3.B-2): the person said the
+     * outputs are done with.
+     */
+    case Swept = 'swept';
 }

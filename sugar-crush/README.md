@@ -1031,8 +1031,9 @@ finishes. A lone `!` is an ordinary prompt.
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
 `/compact` `/context` (`/tokens`) `/diff` `/editor` `/exit` (`/quit`) `/fork`
 `/help` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/notices` `/pane`
-`/permissions` `/redo` `/rename` `/rewind` `/rules` `/sessions`
-`/settings` (`/config`) `/share` `/theme` `/undo` `/websearch` `/workflow`.
+`/permissions` `/pruning` `/redo` `/rename` `/rewind` `/rules` `/sessions`
+`/settings` (`/config`) `/share` `/sweep` `/theme` `/undo` `/websearch`
+`/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
