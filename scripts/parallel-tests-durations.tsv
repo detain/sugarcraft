@@ -104,7 +104,8 @@ sugar-crush/tests/Session/CheckpointRefLifecycleTest.php	3.612	9
 sugar-crush/tests/Chat/CustomCommandShellAsyncTest.php	3.562	10
 sugar-crush/tests/MCP/StdioMcpServerTest.php	3.502	19
 sugar-crush/tests/Session/SessionQueryTest.php	3.500	14
-sugar-crush/tests/Backend/EngineBackendStepBudgetTest.php	3.498	8
+sugar-crush/tests/Tools/BuiltIn/RepoMapToolTest.php	3.500	11
+sugar-crush/tests/Backend/EngineBackendStepBudgetTest.php	3.498	7
 sugar-crush/tests/Renderer/FrameWidthClipTest.php	3.498	328
 sugar-crush/tests/Chat/ReadOnlySessionTest.php	3.472	20
 sugar-crush/tests/Hooks/HookRegistryTest.php	3.191	71

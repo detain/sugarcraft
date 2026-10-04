@@ -4080,8 +4080,10 @@ DOC;
         // home store, or the repository's `.sugar-crush/memory/` notes, which
         // are harness state rather than the code the env block's diff is for —
         // so a Memory step does not re-arm that diff. Its own source calls no
-        // write primitive; MemoryWriter/MemoryStore do.
-        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory'];
+        // write primitive; MemoryWriter/MemoryStore do. `RepoMap` (roadmap
+        // 5.5-4) likewise: its one write is the tag cache under the home
+        // directory, made by TagCache, never a file in the checkout.
+        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap'];
     }
 
     /**

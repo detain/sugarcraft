@@ -617,6 +617,11 @@ final class ReadPathCensusTest extends TestCase
         'Tools/BuiltIn/Read.php|fopen' => [
             'PATH_JAIL — the read tool\'s one arm, streaming every read a page at a time (0.11)',
         ],
+        'Tools/BuiltIn/RepoMapTool.php|file_get_contents' => [
+            'PATH_JAIL — the renderer\'s line source (W2-j carry-over): a path from the tool\'s own '
+                . '`git ls-files` listing, re-resolved through PathJail against the jail root, a symlink '
+                . 'refused, and nothing read past PhpSymbolExtractor::MAX_FILE_BYTES',
+        ],
         'Tools/BuiltIn/WebFetch.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',
         ],

@@ -28,7 +28,7 @@ bin/sugarcrush                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              13 built-ins + MCP bridges
+                                         ├─ Tools\*              14 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
@@ -581,6 +581,22 @@ root's immediate children and the directories the root manifest names, so a
 nested layout that does not declare itself is not found. Its own docblock
 records that decision and what it costs.
 
+The **symbol-level** map is a different instrument and is not in the prompt:
+the `RepoMap` tool (`Tools\BuiltIn\RepoMapTool`, roadmap 5.5-4) builds it
+on demand, the way Aider's repo map is built. It lists the files
+`git ls-files` reports (so `.gitignore` decides what is code; symlinks are
+skipped and every path is re-resolved through `PathJail`), extracts
+definitions and references — PHP with `RepoMap\PhpSymbolExtractor` (the
+engine's own tokenizer, no binary) and every other language with
+`RepoMap\CtagsSymbolExtractor` when Universal Ctags built with `+json` is
+installed — caches them per project in `RepoMap\TagCache` under
+`~/.sugar-crush/cache/repomap/`, ranks files with `RepoMap\SymbolGraph`'s
+PageRank (biased toward the `focus_files` and `mentioned_idents` the model
+passes) and renders the outline to the caller's token budget with
+`RepoMap\RepoMapRenderer`. The ctags child runs with `--options=NONE`, so a
+checkout's `.ctags.d/` cannot steer it, and through the same bounded spawn
+path every tool child uses; `doctor` reports whether it is available.
+
 The ordering is a caching decision, not a stylistic one, and it is the P3.S1
 invariant recorded in `Runtime::buildSystemPrompt()` and restated in
 `MemoryBlock`'s own source: sections run stable-first, by mutation frequency,
@@ -683,14 +699,14 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **thirteen** concrete `Tool` classes: <!-- tools:class-list:begin -->`Bash`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `MemoryTool`, `Read`, `SkillTool`, `TaskTool`, `WebFetch`, `WebSearch`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships all thirteen —
+`src/Tools/BuiltIn/` holds **fourteen** concrete `Tool` classes: <!-- tools:class-list:begin -->`Bash`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `MemoryTool`, `Read`, `RepoMapTool`, `SkillTool`, `TaskTool`, `WebFetch`, `WebSearch`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships all fourteen —
 `Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool.
 
-Domain matters here: **thirteen is the count of *wired* tools, not of *usable*
+Domain matters here: **fourteen is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable and answers every call with a "no language server
 configured" error, because nothing in `src/` reads a server command. A figure
-saying "thirteen working tools" would be the wrong claim.
+saying "fourteen working tools" would be the wrong claim.
 
 The directory is the list. `Tools\Catalog\ToolCatalog` globs
 `src/Tools/BuiltIn/`, and every concrete `Tool` there carries a `#[BuiltInTool]`
@@ -1033,7 +1049,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
-4. **A count carries its domain.** "Thirteen tools" means wired built-ins.
+4. **A count carries its domain.** "Fourteen tools" means wired built-ins.
    "Twelve skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are
