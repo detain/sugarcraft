@@ -381,8 +381,13 @@ final readonly class RepoMapBlock implements PromptSection
      * PHP 8.3.6: green at one and at five added source files, RED at six. The
      * distance that replaced them is no longer prose either; it is asserted by
      * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()}.
+     *
+     * RAISED FROM 20,000 when this package's own `src/` grew past the slack
+     * that assertion demands (roadmap W6): the bound is a backstop, so it
+     * moves with the tree rather than becoming the policy it was argued not
+     * to be. {@see MAX_WALK_ENTRIES} moved with it, five times over.
      */
-    public const MAX_SOURCE_FILES = 20000;
+    public const MAX_SOURCE_FILES = 30000;
 
     /**
      * Ceiling on directory entries of ANY kind listed across all PSR-4 source
@@ -399,7 +404,7 @@ final readonly class RepoMapBlock implements PromptSection
      * non-PHP files a package may carry. The walk is sorted, so the cut lands
      * at the same entry on every filesystem.
      */
-    public const MAX_WALK_ENTRIES = 100000;
+    public const MAX_WALK_ENTRIES = 150000;
 
     /**
      * Appended to a line cut at {@see MAX_ENTRY_BYTES}, and paid for OUT OF

@@ -723,7 +723,7 @@ files (E172), the unreadable memory notes, the instruction files and enabled
 skill bodies the system prompt leaves out for budget (audit R1), a nonsense
 `maxToolSteps` or `maxOutputTokens` (audit R12) and the empty tool set — the
 reports that can raise several rows share one call site:
-**twenty-three** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
+**twenty-four** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
 src/Cli/Bootstrap.php`, which agrees with the token scan in
 `BootstrapTranscriptSeamCallSiteCensusTest` today; `grep` for the bare
 identifier does **not** — it reports roughly double, because most occurrences in
@@ -936,12 +936,13 @@ Saved is not applied: see the next section for when each key takes effect.
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout` |
-| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds` |
-| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `includeGitInstructions`, `attribution`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.allowBypass` |
+| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `embeddingModel` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.allowBypass` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
-`parallelToolDeadlineSeconds`, `maxToolSteps`, `theme` and `statusLine`.
+`parallelToolDeadlineSeconds`, `maxToolSteps`, `embeddingModel`, `theme` and
+`statusLine`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the

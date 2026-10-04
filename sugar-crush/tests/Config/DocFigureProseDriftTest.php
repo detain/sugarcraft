@@ -6113,6 +6113,7 @@ final class DocFigureProseDriftTest extends TestCase
             'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20, 'twenty-one' => 21, 'twenty-two' => 22,
             'twenty-three' => 23, 'twenty-four' => 24, 'twenty-five' => 25, 'twenty-six' => 26,
             'twenty-seven' => 27, 'twenty-eight' => 28, 'twenty-nine' => 29, 'thirty' => 30,
+            'thirty-one' => 31, 'thirty-two' => 32, 'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
         ];
 
         self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+(?:-[a-z]+)?)/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');

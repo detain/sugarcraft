@@ -205,7 +205,7 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 40 is that sum, 35, plus five rows of headroom. A launch that does hit
+     * 40 is that sum, 36, plus four rows of headroom. A launch that does hit
      * the cap loses nothing silently: the overflow is COUNTED and reported as
      * one trailing row — see {@see launchNotices()} — and stderr carries every
      * row, because a silently truncated warning list is the defect this seam
@@ -225,7 +225,9 @@ final class Bootstrap
      * fan-outs are what the cap is for. `reportProjectTierRefusals` raises one
      * row per refused path: it counts eight, one directory for each of the
      * eight subsystems its doc-block names, and its fan-out is the command
-     * loader's one row per refused command FILE.
+     * loader's one row per refused command FILE. `lspClient` counts its one
+     * whole-key row (a malformed `lsp` value, or the server cap reached); its
+     * one row per configured server that did not start is a fan-out too.
      *
      * Read by the census test only; nothing at runtime sums it.
      *
@@ -251,6 +253,7 @@ final class Bootstrap
         'drainNarrowedGrantWarnings' => 2,
         'mcpClient' => 2,
         'reportIgnoredFrontmatter' => 4,
+        'lspClient' => 1,
     ];
 
     /**
@@ -720,7 +723,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 23;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 24;
 
     /**
      * Project hook files this process has already reported as skipped, keyed
@@ -1469,7 +1472,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // TWENTY-THREE call sites now routed onto the transcript seam. This said
+        // TWENTY-FOUR call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -4893,7 +4896,7 @@ final class Bootstrap
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // twenty-two other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // twenty-three other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -8000,7 +8003,7 @@ final class Bootstrap
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // twenty-two call sites: {@see chat()} holds no `self::tools(` call of
+            // twenty-three call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

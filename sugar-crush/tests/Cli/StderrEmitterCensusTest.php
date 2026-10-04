@@ -128,8 +128,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-SEVEN
- *     of them, in TEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-NINE
+ *     of them, in TWELVE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -207,7 +207,7 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — THIRTY call sites in `src/Cli/Bootstrap.php`, each producing a
+ * it — THIRTY-ONE call sites in `src/Cli/Bootstrap.php`, each producing a
  * distinct `sugarcrush: ` line, against a channel-4 credit of six for that
  * file. Off by roughly five times, in the blind direction.
  *
@@ -471,7 +471,7 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const PREFIXED_WRITER_SITES = [
-        'src/Cli/Bootstrap.php' => 30,
+        'src/Cli/Bootstrap.php' => 31,
     ];
 
     /**
@@ -513,6 +513,12 @@ final class StderrEmitterCensusTest extends TestCase
         // for a cache it believes it has, which the user cannot see from
         // anywhere else. One site behind a once-per-process-tree latch.
         'src/Backend/CacheHealthWatch.php' => 1,
+        // Roadmap 5.3-2: a configured `embeddingModel` whose embeddings failed,
+        // so memory recall ranks by keyword only. The routing decision: the
+        // user opted into semantic recall and is silently not getting it,
+        // which nothing else on screen says. One site behind
+        // MemoryRecallBlock::firstReportOf(), so once per reason per process.
+        'src/Backend/EngineBackend.php' => 1,
         // Audit R1's last residual (wave 11): a nested CLAUDE.md/AGENTS.md
         // that loadForPath() refused or deferred mid-session. The routing
         // decision: a file the user wrote and expects obeyed is NOT being
@@ -790,7 +796,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-six' => 26,
         'twenty-seven' => 27,
         'twenty-eight' => 28,
-        'twenty-nine' => 29, 'thirty' => 30,
+        'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,

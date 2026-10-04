@@ -125,6 +125,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withSessionId('other-session'),
                 ['sessionId'],
             ],
+            // Roadmap 2.4-2: the launch-time model every summary goes to.
+            'withSummaryModel' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withSummaryModel('other-summary-model'),
+                ['summaryModel'],
+            ],
             // Roadmap 2.2-2: the session ledger the next turn starts from.
             'withContextLedger' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withContextLedger(\SugarCraft\Crush\Context\Pruning\ContextLedger::new()->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('other', 'x')])),
@@ -281,6 +286,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             stepUsageObserver: static function (): void {},
             maxConcurrentDelegations: 3,
             sessionId: 'populated-session',
+            summaryModel: 'populated-summary-model',
             contextLedger: \SugarCraft\Crush\Context\Pruning\ContextLedger::new()->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('populated', 'x')]),
             reasoningEffort: 'xhigh',
         );

@@ -376,6 +376,8 @@ final class UsageWiringTest extends TestCase
             // Roadmap 1.B-2: the turn's rows ride the reply that carries the
             // turn's bill.
             'withTurnTranscript' => $base->withTurnTranscript([Message::user('nudge')]),
+            // Roadmap 2.2-2: the session ledger rides the same reply.
+            'withContextLedger' => $base->withContextLedger(\SugarCraft\Crush\Context\Pruning\ContextLedger::new()),
         ];
 
         $reflected = [];

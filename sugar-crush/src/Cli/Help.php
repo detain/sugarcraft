@@ -243,6 +243,9 @@ Environment variables:
                           The model that writes compaction summaries;
                           defaults to the conversation's own, which reuses
                           the prompt cache.
+   SUGARCRUSH_CONTEXT_PRUNING
+                          auto, manual or off: how a session prunes its
+                          context when /pruning has not chosen (default auto).
    SUGARCRUSH_MAX_COST    A spend ceiling for this launch, in US dollars
                           (fractional allowed; a leading "$" is accepted).
                           A turn that crosses the ceiling is refused.

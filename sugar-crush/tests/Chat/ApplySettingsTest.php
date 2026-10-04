@@ -206,7 +206,7 @@ final class ApplySettingsTest extends TestCase
         self::assertStringContainsString('restart', (string) $writer->refusal(SettingsTier::Session, 'instructions', ['AGENTS.md']));
         self::assertStringContainsString('config.json', (string) $writer->refusal(SettingsTier::Session, 'permissionMode', 'plan'));
         self::assertNotNull($writer->refusal(SettingsTier::Session, 'trustedProjectHooks', ['/x']), 'trust never goes through a save');
-        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'theme', 'statusLine'], SettingsWriter::sessionKeys());
+        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'embeddingModel', 'theme', 'statusLine'], SettingsWriter::sessionKeys());
 
         $writer->write(SettingsTier::Session, ['maxOutputTokens' => 100]);
         self::assertSame(['maxOutputTokens' => 100], $writer->current(SettingsTier::Session));

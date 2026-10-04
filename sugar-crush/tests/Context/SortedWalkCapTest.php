@@ -227,7 +227,7 @@ final class SortedWalkCapTest extends TestCase
 
     public function testTheWalkBudgetIsTheLiteralItsDocBlockArgues(): void
     {
-        self::assertSame(100000, RepoMapBlock::MAX_WALK_ENTRIES);
+        self::assertSame(150000, RepoMapBlock::MAX_WALK_ENTRIES);
         self::assertSame(4096, self::ruleLoaderConstant('MAX_WALK_ENTRIES'));
         self::assertSame(
             5 * RepoMapBlock::MAX_SOURCE_FILES,

@@ -142,7 +142,14 @@ final class SettingsFieldFactoryTest extends TestCase
         file_put_contents($config, (string) json_encode(['provider' => 'sglang', 'models' => ['sglang' => 'qwen']]));
 
         try {
-            $editor = SettingsEditor::open(SettingsSources::fromLaunch(null, null, null, $config, []), 'model')->beginEdit();
+            $editor = SettingsEditor::open(SettingsSources::fromLaunch(null, null, null, $config, []), 'model');
+            // "model" also matches the other model keys (summary, sub-agent,
+            // embedding); walk the filtered rows to the `models` entry itself.
+            for ($i = 0; $i < \count($editor->rows()) && ($editor->selected()?->key ?? null) !== 'models'; $i++) {
+                $editor = $editor->update(new KeyMsg(KeyType::Down)) ?? $editor;
+            }
+            self::assertSame('models', $editor->selected()?->key);
+            $editor = $editor->beginEdit();
             self::assertNotNull($editor->editing);
             self::assertSame('qwen', $editor->editing->value());
         } finally {

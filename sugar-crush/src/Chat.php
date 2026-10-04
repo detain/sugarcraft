@@ -9335,7 +9335,7 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * TWENTY-THREE OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * TWENTY-FOUR OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
      * SITES ARE ROUTED HERE, and the rest deliberately are not.
      *
      * WHERE THAT NUMBER COMES FROM — do not `grep` for it. The identifier
