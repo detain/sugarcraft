@@ -150,6 +150,10 @@ final readonly class OpenAIProvider implements ProviderInterface
      *        provider block's `supportsVision` key. Null leaves the answer to
      *        {@see VISION_MODEL_FAMILIES}; a bool overrides it, for a model
      *        the table does not know.
+     * @param ModelMetadata|null $modelMetadata Roadmap 5.13a: the model
+     *        database, consulted after the operator's figures and before the
+     *        built-in tables ({@see contextWindow()}, {@see costPer1kTokens()}).
+     *        Null keeps the tables alone, the pre-5.13a behaviour.
      *
      * @throws \InvalidArgumentException when the override is not positive
      */
@@ -159,6 +163,7 @@ final readonly class OpenAIProvider implements ProviderInterface
         private array $modelPrices = [],
         private ?int $contextWindowOverride = null,
         private ?bool $supportsVision = null,
+        private ?ModelMetadata $modelMetadata = null,
     ) {
         if ($contextWindowOverride !== null && $contextWindowOverride < 1) {
             throw new \InvalidArgumentException(sprintf(
@@ -231,11 +236,19 @@ final readonly class OpenAIProvider implements ProviderInterface
      *
      * A configured `contextWindow` (the constructor's override) answers
      * first, for any model: the operator's figure is the narrower statement.
+     * The model database ({@see ModelMetadata}, roadmap 5.13a) answers next —
+     * it is refreshed daily, where this table is as old as the file — and
+     * the table last.
      */
     public function contextWindow(): int
     {
         if ($this->contextWindowOverride !== null) {
             return $this->contextWindowOverride;
+        }
+
+        $known = $this->modelMetadata?->contextWindow($this->defaultModel);
+        if ($known !== null) {
+            return $known;
         }
 
         return match ($this->defaultModel) {
@@ -251,10 +264,11 @@ final readonly class OpenAIProvider implements ProviderInterface
     }
 
     /**
-     * @return null|float USD per 1K tokens, or null when NEITHER the operator
-     *         `modelPrices` map nor {@see PRICE_TABLE} names a rate for the
-     *         model — the loud-unknown answer required by the billing audit
-     *         (no fabricated default, ever).
+     * @return null|float USD per 1K tokens, or null when NONE of the operator
+     *         `modelPrices` map, the model database ({@see ModelMetadata})
+     *         and {@see PRICE_TABLE} names a rate for the model — the
+     *         loud-unknown answer required by the billing audit (no
+     *         fabricated default, ever).
      */
     public function costPer1kTokens(string $model, string $direction): ?float
     {
@@ -269,6 +283,13 @@ final readonly class OpenAIProvider implements ProviderInterface
         // signal at all).
         if (array_key_exists($model, $this->modelPrices)) {
             return $this->declaredRate($model, $direction);
+        }
+
+        // Roadmap 5.13a: the model database before the shipped row — it is
+        // the fresher statement, and it prices models this table never named.
+        $known = $this->modelMetadata?->costPer1kTokens($model, $direction === 'input' ? 'input' : 'output');
+        if ($known !== null) {
+            return $known;
         }
 
         $row = self::PRICE_TABLE[$model] ?? null;
@@ -318,6 +339,14 @@ final readonly class OpenAIProvider implements ProviderInterface
             }
 
             return $this->declaredRate($model, 'cached');
+        }
+
+        // Roadmap 5.13a: the database's cache-read rate is quoted against the
+        // database's own input rate, so it applies only when that is the rate
+        // in use; otherwise the shipped discount, otherwise no discount.
+        $known = $this->modelMetadata?->costPer1kTokens($model, 'cached');
+        if ($known !== null && $this->modelMetadata?->costPer1kTokens($model, 'input') === $inputRate) {
+            return $known;
         }
 
         return self::CACHED_INPUT_TABLE[$model] ?? $inputRate;

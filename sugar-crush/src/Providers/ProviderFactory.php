@@ -22,6 +22,20 @@ final readonly class ProviderFactory
     use HttpClientDefaults;
 
     /**
+     * @param ModelMetadata|null $modelMetadata Roadmap 5.13a: the model
+     *        database the `openai`, `anthropic` and `custom` providers consult
+     *        between the operator's settings and their built-in fallbacks.
+     *        Null (every production construction) is {@see ModelMetadata::new()},
+     *        resolved per provider built — cheap, because it loads nothing
+     *        until a provider first asks and the parsed table is shared
+     *        process-wide. A test or an embedder passes its own.
+     */
+    public function __construct(
+        private ?ModelMetadata $modelMetadata = null,
+    ) {
+    }
+
+    /**
      * §12 D6 tool-call-parser names, mirroring SGLang's `--tool-call-parser`
      * flag: the default assumes the server was launched with a real parser
      * flag; the fallback is for one that was not.
@@ -79,7 +93,7 @@ final readonly class ProviderFactory
         ],
         'anthropic' => [
             'required' => ['apiKey'],
-            'optional' => ['baseUrl', 'model'],
+            'optional' => ['baseUrl', 'model', 'modelPrices', 'contextWindow'],
         ],
         'claude-code' => [
             'required' => ['claudePath'],
@@ -99,7 +113,7 @@ final readonly class ProviderFactory
         ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
-            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision'],
+            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision', 'modelPrices', 'contextWindow'],
         ],
     ];
 
@@ -648,7 +662,19 @@ final readonly class ProviderFactory
             // Audit 15b-15 residual: null leaves vision to the model table;
             // the block's key overrides it.
             self::configuredSupportsVision($config['supportsVision'] ?? null),
+            // Roadmap 5.13a: the model database, between the operator's
+            // figures above and the built-in tables.
+            $this->modelMetadata(),
         );
+    }
+
+    /**
+     * Roadmap 5.13a: the database handed to every provider that consults one
+     * — the injected instance, else the production one.
+     */
+    private function modelMetadata(): ModelMetadata
+    {
+        return $this->modelMetadata ?? ModelMetadata::new();
     }
 
     /**
@@ -830,6 +856,15 @@ final readonly class ProviderFactory
             // base64 `image_url` parts, and every current Claude model has
             // vision, so an attached image goes out as an image.
             supportsVision: true,
+            // Roadmap 5.13a: Anthropic bills, and Claude windows are not
+            // 128k, so this type is sized and priced like `custom`: the
+            // operator's settings, then the model database.
+            modelMetadata: $this->modelMetadata(),
+            modelPrices: self::modelPricesFor($config),
+            contextWindowOverride: self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $model,
+            ),
         );
     }
 
@@ -1331,6 +1366,16 @@ final readonly class ProviderFactory
             extraBody: self::configuredExtraBody($config['extraBody'] ?? self::userTierSetting('extraBody')),
             // Audit 15b-15: opt-in, per provider block - see the constructor.
             supportsVision: self::configuredSupportsVision($config['supportsVision'] ?? null) ?? false,
+            // Roadmap 5.13a: precedence is the operator's settings (the block's
+            // own keys, else the user tier — both user-only, so a checkout
+            // cannot inflate the window), then the model database, then the
+            // provider's built-in 128k / $0.
+            modelMetadata: $this->modelMetadata(),
+            modelPrices: self::modelPricesFor($config),
+            contextWindowOverride: self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $config['model'],
+            ),
         );
     }
 }

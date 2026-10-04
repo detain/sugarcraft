@@ -128,6 +128,17 @@ putenv('CLAUDE_CONFIG_DIR');
 putenv('CLAUDE_CODE_PROJECT_DIR_NAME');
 
 /*
+ * And for the model database (roadmap 5.13a). ProviderFactory hands the
+ * `openai`, `anthropic` and `custom` providers a ModelMetadata that reads
+ * `~/.sugar-crush/cache/` and, when that file is stale, downloads LiteLLM's
+ * model file in the background. Off for the whole suite, children included:
+ * no test may reach the network, or take a window or a price from a file in
+ * the developer's home. ModelMetadataTest drives the database through its
+ * explicit seams, which this switch does not reach.
+ */
+putenv('SUGARCRUSH_DISABLE_MODEL_METADATA=1');
+
+/*
  * A temp directory for the suite's own throwaway files, and the two things that
  * keep `vendor/bin/phpunit` from garbage-collecting the developer's real /tmp.
  *

@@ -320,6 +320,9 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Commands/ShareCommand.php|.sugar-crush/exports' => self::USER,
         // 5.5-1: the repo-map tag cache, `~/.sugar-crush/cache/repomap/`.
         'RepoMap/TagCache.php|.sugar-crush/cache' => self::USER,
+        // 5.13a: the model-database cache, `~/.sugar-crush/cache/`, under
+        // HomeDirectory::owned() — a checkout cannot place it.
+        'Providers/ModelMetadata.php|.sugar-crush/cache' => self::USER,
         'MCP/OAuthClientRegistration.php|.local/share' => self::USER,
         'Session.php|.config/sugarcraft-crush' => self::USER,
         'Skills/ForeignSkillDiscovery.php|.config/opencode' => self::USER,
@@ -368,7 +371,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FORTY-FOUR occurrences — one per entry
+     * APPEARS IN. On this tree that is FORTY-FIVE occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and

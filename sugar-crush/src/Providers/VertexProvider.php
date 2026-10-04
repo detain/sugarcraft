@@ -1451,8 +1451,9 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         // A `tool_use` block announces its id/name up front and then streams
         // its arguments as `input_json_delta` fragments that are only valid
         // JSON once the block closes - so the call has to be buffered until
-        // `content_block_stop`, exactly as the OpenAI shape is buffered in
-        // CustomProvider::resolveStreamedToolCalls().
+        // `content_block_stop`, exactly as the OpenAI shape is buffered by
+        // ReassemblesStreamedToolCalls::reassembleStreamedToolCalls(), the
+        // trait CustomProvider and SglangProvider share.
         if ($type === 'content_block_start') {
             $block = $event['content_block'] ?? [];
 

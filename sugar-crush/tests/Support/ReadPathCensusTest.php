@@ -446,6 +446,15 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — a scope index this store wrote',
             'SELF_LOCATED — an entry this store wrote',
         ],
+        'Providers/ModelMetadata.php|file_get_contents' => [
+            'OWNED_HOME — readCache(): `~/.sugar-crush/cache/model_prices_and_context_window.json` under '
+                . 'HomeDirectory::owned() on the production path, new(); cachedAt() is the test and embedder '
+                . 'seam whose caller names the file. Read as numbers only, never executed (roadmap 5.13a)',
+        ],
+        'Providers/ModelMetadata.php|fopen' => [
+            'OWNED_HOME — acquireLock(): the `.lock` sidecar beside that cache, opened `c` only for a '
+                . 'non-blocking LOCK_EX that keeps two processes from refreshing at once; no byte of it is read',
+        ],
         'Providers/ProviderFactory.php|file_get_contents' => [
             'CONTAINED — fromProjectConfig(), behind readableDefaultConfigPath()',
             'CONTAINED — projectProviderConfig(), behind the same pair',

@@ -120,6 +120,23 @@ final readonly class CustomProvider implements ProviderInterface
          * user gets a transcript notice ({@see \SugarCraft\Crush\Backend\EngineBackend::toTypedMessages()}).
          */
         private bool $supportsVision = false,
+        /**
+         * Roadmap 5.13a: the model database consulted for the window and the
+         * rates when the operator's own settings say nothing. Null (the
+         * default, and every direct construction) keeps the pre-5.13a
+         * answers: a 128,000-token window and a real $0.
+         */
+        private ?ModelMetadata $modelMetadata = null,
+        /**
+         * Roadmap 5.13a: the operator's `modelPrices` (USD per 1M tokens per
+         * model, the {@see OpenAIProvider} shape). Naming a model makes the
+         * declaration authoritative for it, as there.
+         *
+         * @var array<string, mixed>
+         */
+        private array $modelPrices = [],
+        /** Roadmap 5.13a: the operator's `contextWindow` for this model; null for none. */
+        private ?int $contextWindowOverride = null,
     ) {
         foreach (array_keys($extraBody) as $key) {
             if (!is_string($key) || $key === '') {
@@ -148,6 +165,8 @@ final readonly class CustomProvider implements ProviderInterface
     /**
      * @param array<string, mixed> $extraBody Top-level server-specific body
      *        fields; see the constructor's `$extraBody` for the contract.
+     * @param array<string, mixed> $modelPrices Roadmap 5.13a; see the
+     *        constructor's `$modelPrices`.
      */
     public static function openAiCompatible(
         string $name,
@@ -159,6 +178,9 @@ final readonly class CustomProvider implements ProviderInterface
         ?string $sessionAffinityId = null,
         array $extraBody = [],
         bool $supportsVision = false,
+        ?ModelMetadata $modelMetadata = null,
+        array $modelPrices = [],
+        ?int $contextWindowOverride = null,
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -190,6 +212,9 @@ final readonly class CustomProvider implements ProviderInterface
             sessionAffinityId: $sessionAffinityId,
             extraBody: $extraBody,
             supportsVision: $supportsVision,
+            modelMetadata: $modelMetadata,
+            modelPrices: $modelPrices,
+            contextWindowOverride: $contextWindowOverride,
         );
     }
 
@@ -238,14 +263,46 @@ final readonly class CustomProvider implements ProviderInterface
         return false;
     }
 
+    /**
+     * Roadmap 5.13a: the operator's `contextWindow` setting, else the model
+     * database's figure for this model ({@see ModelMetadata}), else 128,000 —
+     * the fixed answer this method gave for every model before, kept as the
+     * last resort for a self-hosted id no database lists.
+     */
     public function contextWindow(): int
     {
-        return 128_000;
+        return $this->contextWindowOverride
+            ?? $this->modelMetadata?->contextWindow($this->model)
+            ?? 128_000;
     }
 
-    public function costPer1kTokens(string $model, string $direction): float
+    /**
+     * Roadmap 5.13a: the operator's `modelPrices` row, else the model
+     * database's rate, else a real 0.0 — a self-hosted model no database
+     * lists costs nothing to run, which is a measurement, not a shrug (see
+     * {@see ProviderInterface::costPer1kTokens()}). The database matters for
+     * the `anthropic` type and for hosted OpenAI-compatible gateways, which
+     * this class also fronts and which do bill.
+     *
+     * A model the operator NAMED is answered from that row alone, as in
+     * {@see OpenAIProvider::costPer1kTokens()}: a rate that fails validation
+     * is null (unpriced, loudly), never silently re-priced at the database's
+     * figure the operator overrode.
+     */
+    public function costPer1kTokens(string $model, string $direction): ?float
     {
-        return 0.0; // Self-hosted, no cost
+        if (array_key_exists($model, $this->modelPrices)) {
+            $entry = $this->modelPrices[$model];
+            $declared = is_array($entry) ? ($entry[$direction] ?? null) : null;
+            if (!is_numeric($declared)) {
+                return null;
+            }
+            $rate = ((float) $declared) / 1000; // config speaks USD-per-1M
+
+            return $rate >= 0.0 && is_finite($rate) ? $rate : null;
+        }
+
+        return $this->modelMetadata?->costPer1kTokens($model, $direction) ?? 0.0;
     }
 
     public function complete(CompleteRequest $request): CompleteResponse
@@ -821,15 +878,59 @@ final readonly class CustomProvider implements ProviderInterface
             $cached = self::usageInt($details['cached_tokens'] ?? null);
         }
 
+        $completion = self::usageInt($usage['completion_tokens'] ?? null);
+        [$cost, $unpriced] = $this->usageCost($prompt ?? 0, $cached ?? 0, $completion ?? 0);
+
         return Usage::new(
             // The exact expression this replaces: absent-or-null total is 0.
             self::usageInt($usage['total_tokens'] ?? null) ?? 0,
-            0.0, // self-hosted, no cost - costPer1kTokens() is a real 0.0 here
+            $cost,
             $prompt !== null && $cached !== null ? max(0, $prompt - $cached) : $prompt,
-            self::usageInt($usage['completion_tokens'] ?? null),
+            $completion,
             $cached,
             null, // no cache-creation field exists on this protocol - never invented
+            unpricedModel: $unpriced,
         );
+    }
+
+    /**
+     * Roadmap 5.13a: the dollar figure for one usage document, priced at this
+     * provider's model through {@see costPer1kTokens()} — 0.0 for a model
+     * nothing prices, which is the pre-5.13a answer for every model.
+     *
+     * The formula is {@see OpenAIProvider}'s: the wire's prompt count
+     * INCLUDES the cached prefix, so cached tokens bill at the cache-read
+     * rate (the operator's `cached` key, else the database's, else the input
+     * rate — never an invented discount) and the rest at the input rate.
+     * Cached is capped at the prompt. A rate the operator declared and broke
+     * makes the whole bill unknown: 0.0 plus the model's name as the
+     * {@see Usage::$unpricedModel} signal.
+     *
+     * @return array{0: float, 1: ?string}
+     */
+    private function usageCost(int $prompt, int $cached, int $completion): array
+    {
+        $input = $this->costPer1kTokens($this->model, 'input');
+        $output = $this->costPer1kTokens($this->model, 'output');
+        if ($input === null || $output === null) {
+            return [0.0, $this->model];
+        }
+
+        $cached = max(0, min($cached, $prompt));
+        $cachedRate = $input;
+        if ($cached > 0) {
+            $entry = $this->modelPrices[$this->model] ?? null;
+            $cachedRate = is_array($entry) && array_key_exists('cached', $entry)
+                ? $this->costPer1kTokens($this->model, 'cached')
+                : (array_key_exists($this->model, $this->modelPrices)
+                    ? $input
+                    : ($this->modelMetadata?->costPer1kTokens($this->model, 'cached') ?? $input));
+            if ($cachedRate === null) {
+                return [0.0, $this->model];
+            }
+        }
+
+        return [(($prompt - $cached) * $input + $cached * $cachedRate + $completion * $output) / 1000, null];
     }
 
     /**

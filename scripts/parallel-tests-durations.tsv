@@ -357,6 +357,7 @@ sugar-crush/tests/Providers/SglangProviderEnvelopeHoldBackTest.php	0.202	11
 sugar-crush/tests/Integration/ParallelExemptJobStatusLostTest.php	0.200	1
 sugar-crush/tests/Session/TitleRaceTest.php	0.200	8
 sugar-crush/tests/Backend/SessionPromptMemoPrimeTest.php	0.200	3
+sugar-crush/tests/Providers/ModelMetadataTest.php	0.200	18
 sugar-crush/tests/Cli/BootstrapUserConfigTest.php	0.199	16
 sugar-crush/tests/Cli/BootstrapMcpLivenessTest.php	0.198	11
 sugar-crush/tests/Tui/Components/AgentDashboardPaneTest.php	0.196	38

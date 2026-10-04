@@ -78,6 +78,9 @@ final class ProviderConnectTimeoutTest extends TestCase
         // Audit 15a A18: `/model_info` + `/server_info`, read on the TUI's
         // first frame; a server that accepts and then stalls must not hold it.
         'SglangServerInfo.php' => 'two metadata GETs on the render path',
+        // Roadmap 5.13a: one download of LiteLLM's model database, normally in
+        // a detached grandchild, inline only on a build without ext-pcntl.
+        'ModelMetadata.php' => 'one model-database download, bounded so the inline path cannot stall a launch',
     ];
 
     // -------------------------------------------------------------------------
