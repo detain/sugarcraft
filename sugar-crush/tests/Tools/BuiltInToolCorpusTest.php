@@ -789,8 +789,10 @@ final class BuiltInToolCorpusTest extends TestCase
      * a listing would be "several times this whole block's budget". MEASURED on
      * this tree, on PHP 8.3.6: at fully-qualified width it OVERRUNS the cap but
      * does not come to several times it, and at BARE SHORT-NAME width the same
-     * listing FITS comfortably inside it. So the WIDTH the claim is made at is
-     * load-bearing and the sentence never stated it.
+     * listing then FIT inside it. So the WIDTH the claim was made at was
+     * load-bearing and the sentence never stated it. The tree has since grown
+     * until the short-name listing overruns the cap too (roadmap W4), so both
+     * widths now support "it does not fit" and the bound below says so.
      *
      * ⚠️ AND THE CORRECTION WAS ITSELF UNPINNED, which is the half worth
      * writing down. The commit that replaced "several times" wrote two RATIOS
@@ -847,20 +849,15 @@ final class BuiltInToolCorpusTest extends TestCase
             . 'times the cap, the corrected sentence is now the stale one',
         );
 
-        // The bound is FIT, not comfort, and the difference was measured rather
-        // than argued. Written first as two-thirds of the cap — an invented
-        // margin standing in for the word "comfortably" — this reddened after
-        // about sixty added source files, which would have re-imposed most of
-        // the coupling this file exists to remove. The design note rests on the
-        // listing FITTING; a ratio dressing that up is the same defect as the
-        // ratios this round retired, so the word came out of the prose instead.
-        $this->assertLessThan(
+        // The short-name half: the note used to argue the short-name listing
+        // FIT; the tree grew past the cap at that width too (roadmap W4), and
+        // the note now says the verdict no longer depends on the width. A tree
+        // only grows past this, so the bound cannot flap back.
+        $this->assertGreaterThan(
             RepoMapBlock::MAX_SECTION_BYTES,
             $shortNameListing,
-            'the same listing at BARE SHORT-NAME width is argued to FIT inside MAX_SECTION_BYTES — '
-            . 'that is the whole reason the design note has to state a width at all, and nothing '
-            . 'asserted it until this line. If it no longer fits, the WIDTH half of the note is '
-            . 'what needs rewriting, not the cap',
+            'the design note says the listing overruns MAX_SECTION_BYTES at BARE SHORT-NAME width '
+            . 'too; if it fits again, the WIDTH half of the note is what needs rewriting, not the cap',
         );
 
         [$files] = $this->declarationTotals($this->srcDir);
@@ -906,11 +903,10 @@ final class BuiltInToolCorpusTest extends TestCase
             . 'RepoMapBlock, and the upper bound asserted above now pins nothing anyone can read',
         );
         $this->assertStringContainsString(
-            'BARE SHORT-NAME width the same listing FITS inside the cap',
+            'the short-name listing now overruns the cap too',
             $prose,
-            'the WIDTH half of ARGUMENT 1 has left RepoMapBlock. It is the half that makes the '
-            . 'design note true rather than merely plausible — a listing that fits at short-name '
-            . 'width was NOT rejected for not fitting — and the short-name bound asserted above '
+            'the WIDTH half of ARGUMENT 1 has left RepoMapBlock. It is the half that says the '
+            . 'verdict holds at short-name width as well — and the short-name bound asserted above '
             . 'now pins nothing anyone can read',
         );
     }
@@ -1322,6 +1318,12 @@ final class BuiltInToolCorpusTest extends TestCase
             'a braced else-if is a chain, not an alt-syntax suspect' => [
                 "<?php\nnamespace N;\nif(1) {} else if(2) {}\nfinal class A {}\n",
                 ['N\\A'],
+            ],
+            // A keyword method name tokenizes as the keyword; its return-type
+            // colon is not an alt-syntax body opener.
+            'a method named for with a return type is not an alt-syntax scope' => [
+                "<?php\nnamespace N;\nfinal class A { public function for(\$d): array { return []; } }\nfinal class B {}\n",
+                ['N\\A', 'N\\B'],
             ],
         ];
     }

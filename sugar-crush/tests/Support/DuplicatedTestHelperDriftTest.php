@@ -215,6 +215,14 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'writeScript' =>
             'Different temp-name prefixes, and they must stay different for the same reason as '
             . '`isRaw` above.',
+        'plain' =>
+            'The permission-modal suite strips every CSI sequence (private `?` parameters and '
+            . 'intermediates included) because its frames carry cursor-mode toggles; the other '
+            . 'copies strip only the SGR/cursor shapes their frames hold. A wider pattern, not a '
+            . 'drifted one.',
+        'tempDir' =>
+            'Different temp-name prefixes (`crush-memo-`, `crush-tcrow-`, `crush-prefix-`), kept '
+            . 'apart so concurrent suites never share a directory — the `isRaw` reason.',
     ];
 
     /**
@@ -2654,6 +2662,9 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'SENTINEL' => 'Unrelated suites plant their own sentinel payload under one word; the values differ because the claims under test do.',
         'SECRET' =>
             'Two containment suites plant their own smuggled-secret sentinel under one word; the payloads differ because the suites test different imports.',
+        'GENERATION' => 'The live agent-lines suite stamps its own turn generation; any value works as long as each suite is self-consistent. The identical pair lives on the duplication map.',
+        'WINDOW' => 'The absolute-threshold suite sizes a 1M-token window, the case roadmap 2.9 exists for; the compaction suites drive a small one. The identical trio lives on the duplication map.',
+        'NOW' => 'Two unrelated fixed clocks: a Unix timestamp for the model-metadata cache age, a small float for the agent line\'s elapsed time.',
     ];
 
     /**

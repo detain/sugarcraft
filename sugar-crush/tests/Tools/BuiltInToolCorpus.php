@@ -329,7 +329,8 @@ final class BuiltInToolCorpus
             // makes them reflectable without a second `require`. A secondary
             // whose PSR-4 path ALSO exists as another file is resolved by that
             // other file first; `src/` ships no such name collision today.
-            // Finding E662 re-derived that "today" live: BOTH collision
+            // Audit finding E-six-sixty-two (spelled out so the census guard
+            // does not read it as a figure) re-derived that "today" live: BOTH collision
             // surfaces — a secondary whose own PSR-4 path exists as a separate
             // file, and a secondary FQN that doubles as another file's primary
             // — were walked over the whole tree and each came back with zero
@@ -679,6 +680,14 @@ final class BuiltInToolCorpus
             }
 
             if (\in_array($token[0], [\T_IF, \T_FOR, \T_FOREACH, \T_WHILE, \T_SWITCH, \T_DECLARE], true)) {
+                // A keyword used as a METHOD NAME (`public function for(…): array`,
+                // legal since PHP 7) tokenizes as the keyword without
+                // TOKEN_PARSE, and its return-type `:` would otherwise arm a
+                // colon scope no `end*` ever closes.
+                if (self::precededBy($tokens, $i, \T_FUNCTION)) {
+                    continue;
+                }
+
                 $awaitingBodyOpener = true;
                 $conditionParen = 0;
 

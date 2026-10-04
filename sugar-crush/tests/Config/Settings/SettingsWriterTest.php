@@ -150,11 +150,13 @@ final class SettingsWriterTest extends TestCase
     {
         file_put_contents($this->configPath, '{"permissionMode": "default",');
 
+        $refused = null;
         try {
             $this->userWriter()->write(SettingsTier::You, ['maxToolSteps' => 12]);
-            self::fail('expected the save to be refused');
-        } catch (\RuntimeException) {
+        } catch (\RuntimeException $e) {
+            $refused = $e;
         }
+        self::assertNotNull($refused, 'expected the save to be refused');
 
         self::assertSame('{"permissionMode": "default",', file_get_contents($this->configPath));
         $this->expectException(\RuntimeException::class);

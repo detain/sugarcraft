@@ -230,6 +230,10 @@ Environment variables:
    SUGARCRUSH_DISABLE_AUTO_MEMORY
                           Any value other than empty or 0 stops auto-memory
                           saving durable facts as notes after a turn.
+   SUGARCRUSH_DISABLE_MODEL_METADATA
+                          Any value other than empty or 0 stops reading and
+                          refreshing the LiteLLM model database that sizes and
+                          prices models with no built-in figure.
    SUGARCRUSH_BACKGROUND  light or dark — forces what the adaptive theme
                           believes about the terminal background, skipping
                           the OSC 11 probe and COLORFGBG.

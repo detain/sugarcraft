@@ -502,10 +502,17 @@ final class RulesStateWiringTest extends TestCase
     {
         $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Backend/EngineBackend.php');
 
+        // Step 1.A-2 moved the per-turn App's session half into sessionApp()
+        // (shared with the parent's prompt-memo prime); the turn builds on it.
         self::assertMatchesRegularExpression(
-            '/\$app = App::new\(.*?->withRulesState\(\$this->rulesState\).*?->withMessages\(/s',
+            '/\$app = \$this->sessionApp\(\).*?->withMessages\(/s',
             $source,
-            'EngineBackend::complete() must carry $this->rulesState onto the App it builds per turn, or the '
+            'EngineBackend::complete() must build its per-turn App on sessionApp()',
+        );
+        self::assertMatchesRegularExpression(
+            '/function sessionApp\(\): App\s*\{\s*return App::new\([^;]*?->withRulesState\(\$this->rulesState\)[^;]*;/s',
+            $source,
+            'EngineBackend::sessionApp() must carry $this->rulesState onto the App it builds per turn, or the '
                 . 'set the boot path injected is read once and frozen for the session',
         );
     }
