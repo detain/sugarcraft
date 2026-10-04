@@ -360,6 +360,7 @@ sugar-crush/tests/Integration/ParallelExemptJobStatusLostTest.php	0.200	1
 sugar-crush/tests/Session/TitleRaceTest.php	0.200	8
 sugar-crush/tests/Backend/SessionPromptMemoPrimeTest.php	0.200	3
 sugar-crush/tests/Providers/ModelMetadataTest.php	0.200	18
+sugar-crush/tests/Memory/AutoMemoryConsolidatorTest.php	0.200	9
 sugar-crush/tests/Cli/BootstrapUserConfigTest.php	0.199	16
 sugar-crush/tests/Cli/BootstrapMcpLivenessTest.php	0.198	11
 sugar-crush/tests/Tui/Components/AgentDashboardPaneTest.php	0.196	38
@@ -392,6 +393,7 @@ sugar-crush/tests/Commands/CommandDocsDriftTest.php	0.150	6
 sugar-crush/tests/Tools/BuiltIn/MemoryToolTest.php	0.150	8
 sugar-crush/tests/Memory/MemoryWriterTest.php	0.150	10
 sugar-crush/tests/Context/ModelFamilyPromptTest.php	0.150	32
+sugar-crush/tests/Chat/AutoMemoryConsolidationWiringTest.php	0.150	3
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23
@@ -448,6 +450,8 @@ sugar-crush/tests/Tui/SessionPickerFilterTest.php	0.100	15
 sugar-crush/tests/Commands/SettingsCommandTest.php	0.100	9
 sugar-crush/tests/Cli/PersistedModelResolutionTest.php	0.100	8
 sugar-crush/tests/Config/Settings/SettingsWriterTest.php	0.100	34
+sugar-crush/tests/Memory/SecretRedactorTest.php	0.100	21
+sugar-crush/tests/Memory/ConsolidationPlanTest.php	0.100	8
 sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
 sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35

@@ -227,6 +227,9 @@ Environment variables:
    SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS
                           Any value other than empty or 0 stops the grayed
                           next-message suggestion (→ takes it) after each turn.
+   SUGARCRUSH_DISABLE_AUTO_MEMORY
+                          Any value other than empty or 0 stops auto-memory
+                          saving durable facts as notes after a turn.
    SUGARCRUSH_BACKGROUND  light or dark — forces what the adaptive theme
                           believes about the terminal background, skipping
                           the OSC 11 probe and COLORFGBG.

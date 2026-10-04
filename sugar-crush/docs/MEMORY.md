@@ -408,6 +408,69 @@ home, and the refusal is named in the reply.
 
 ---
 
+## Auto-memory
+
+At the end of a turn, sugar-crush may save durable facts from the conversation
+as memory notes on its own (roadmap 5.2, after Kilo's typed consolidation).
+`Memory\AutoMemoryConsolidator` shows the conversation since its last run to the
+tool-less summary backend (`SUGARCRUSH_SUMMARY_MODEL`, the one `/compact` uses),
+which answers with JSON operations: `add` a note, `update` or `delete` one, or
+`skip` with a reason. They are applied through `Memory\MemoryWriter`, the router
+`/memory add` and the `Memory` tool use.
+
+**When it runs.** Only when a turn ends in a reply and nothing queued takes its
+place, at most once every five minutes per project (across every session and
+process: the throttle lives beside the home store's notes as
+`.auto-memory-<key>.json`), and only on conversation the previous run has not
+read: the last 24 messages and at most 24,000 bytes of them, user and assistant
+text only (tool output is never shown to it). Less than 400 bytes of new
+conversation is not worth a call. It never runs without a summary backend or a
+memory store, or once `SUGARCRUSH_MAX_COST` is reached; its cost counts towards
+the spend total either way. `SUGARCRUSH_DISABLE_AUTO_MEMORY=1` turns it off
+([ENVIRONMENT](ENVIRONMENT.md)).
+
+**Prefer saving nothing.** Every note is injected into later prompts, so the
+instructions tell the model that an empty operation list is the normal answer,
+and list what must never be saved: secrets and personal data, temporary task
+status, exact command output, large code snippets, guesses, what the
+repository's files already say, statements about memory itself, and "we looked
+at X" with no durable fact. Each thing it decides not to save is a `skip` with
+a reason: `duplicate`, `transient`, `unsupported`, `secret`, `too_specific`,
+`in_progress`, `policy_belongs_in_docs`, `out_of_scope` or `self_referential`.
+
+**Memory is context, not instruction.** The instructions rank the user's
+current instructions, `AGENTS.md` / `CLAUDE.md`, checked-in documentation, the
+repository and tool output above any note; a rule the whole team must follow
+belongs in `AGENTS.md` and is skipped as `policy_belongs_in_docs`. The
+conversation and the existing notes are fenced as data, and a request inside
+them to save or delete memory is to be ignored.
+
+**What it may change.** Every note it saves is tagged `auto-memory`, and it may
+`update` or `delete` only notes carrying that tag; one aimed at a note you
+wrote is refused (`not_auto`), so a correction to your note arrives as a new
+note. It saves `project` (the default) and `user` notes, never `agent`. A
+`project` note goes to the repository's `.sugar-crush/memory/` only when the
+checkout already has one; auto-memory never creates that directory, and
+without it the note goes to the home store's project directory. One run
+changes at most 16 notes, and a note over 1,024 bytes is refused as
+`too_specific`, as is an exact repeat of an existing note (`duplicate`).
+
+**Secrets.** `Memory\SecretRedactor` blanks credentials in the conversation
+before the request leaves (well-known key prefixes, JWTs, `Bearer` tokens,
+private-key blocks, a URL's password, and `password=` / `api_key:` style
+assignments whose value looks random), and a proposed note that still matches
+one is discarded rather than redacted (`secret`).
+
+**Where the work happens.** Scheduling is the only part that runs while the
+turn settles. The request runs in the summary backend's forked child, and the
+notes are written in the main process as its answer arrives, never in the
+child, so they cannot race your own `/memory` commands. When a run saved,
+changed or removed a note, one display-only line says so in the transcript
+(`/memory list` shows the notes, tagged `auto-memory`); a run that saved
+nothing says nothing.
+
+---
+
 ## Instruction files
 
 `InstructionFileLoader` (`src/Context/InstructionFileLoader.php`) loads
@@ -502,6 +565,7 @@ transcript notice the first time it happens.
 ├── session.db         SQLite session store
 ├── memory/<scope>/    the memory store (project/<key>/ per project)
 ├── memory/.search-<key>.sqlite  the search cache (derived; safe to delete)
+├── memory/.auto-memory-<key>.json  the auto-memory throttle
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md
 ├── skills/*/SKILL.md  skills                   → SKILLS.md
 ├── commands/*.md      custom slash commands    → COMMANDS.md

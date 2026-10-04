@@ -2249,11 +2249,38 @@ final class Chat implements Model
             // user's next message in the background (→ accepts it). Batched
             // beside, never before, whatever the drain scheduled.
             $suggest = $done->inFlight ? null : $done->schedulePromptSuggestion();
-            if ($suggest === null) {
-                return [$done, $doneCmd];
+
+            // Roadmap 5.2, same seam and same rule: auto-memory consolidation
+            // on the tool-less summary backend, throttled on disk to one run
+            // per project per five minutes. Only the gating runs here; the
+            // request runs in the backend's fork and the notes are written in
+            // this process as its promise settles (MemoryConsolidatedMsg).
+            $consolidate = $done->inFlight || $done->memoryStore === null ? null
+                : \SugarCraft\Crush\Memory\AutoMemoryConsolidator::new(
+                    \SugarCraft\Crush\Memory\MemoryWriter::new($done->memoryStore, $done->projectRoot()),
+                )->call($done->summaryBackend, $done->history, $done->spendCapReached(), $done->currentSessionId);
+            $cmds = array_values(array_filter([$doneCmd, $suggest, $consolidate === null ? null : Cmd::promise($consolidate)]));
+
+            return [$done, match (count($cmds)) {
+                0 => null,
+                1 => $cmds[0],
+                default => Cmd::batch(...$cmds),
+            }];
+        }
+        if ($msg instanceof MemoryConsolidatedMsg) {
+            // Roadmap 5.2: the notes are already written (in this process,
+            // as the call settled). Accounted first, on the rule every
+            // provider-call arm follows, then one display-only notice when a
+            // note was saved, changed or removed; a run that saved nothing
+            // says nothing. Shown even after a session switch: the notes are
+            // the project's, not the session's, and a write is never silent.
+            $this->accountUsage($msg->usage);
+            $notice = \SugarCraft\Crush\Memory\AutoMemoryConsolidator::notice($msg);
+            if ($notice === null) {
+                return [$this, null];
             }
 
-            return [$done, $doneCmd === null ? $suggest : Cmd::batch($doneCmd, $suggest)];
+            return [$this->mutate(['history' => [...$this->history, Message::notice($notice)]]), null];
         }
         if ($msg instanceof ToolResultsMsg) {
             return $this->finishToolCalls($msg);
