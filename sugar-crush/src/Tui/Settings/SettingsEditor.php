@@ -16,6 +16,7 @@ use SugarCraft\Crush\Config\Settings\SettingsTier;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
+use SugarCraft\Forms\Field;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -75,6 +76,7 @@ final class SettingsEditor
         public readonly array $unset = [],
         public readonly ?SettingsSavePreview $preview = null,
         public readonly ?string $status = null,
+        public readonly ?Field $editing = null,
     ) {
     }
 
@@ -122,6 +124,92 @@ final class SettingsEditor
     public function hasChanges(): bool
     {
         return $this->set !== [] || $this->unset !== [];
+    }
+
+    /**
+     * Start editing the highlighted setting in its candy-forms field
+     * ({@see SettingsFieldFactory}), pre-filled with its staged value, else the
+     * value this launch resolved. A key with no inline field leaves the view
+     * as it was and says why. `models` edits the entry for the provider this
+     * launch resolved.
+     */
+    public function beginEdit(): self
+    {
+        $selected = $this->selected();
+        if (!$selected instanceof SettingDefinition) {
+            return $this;
+        }
+
+        $field = SettingsFieldFactory::field($selected, $this->currentValue($selected), $this->sources->options, $this->activeProvider());
+        if ($field === null) {
+            return $this->withStatus($selected->label . ' is not edited here');
+        }
+
+        [$focused] = $field->focus();
+
+        return $this->withEditing($focused, null);
+    }
+
+    /** A key for the field being edited; ignored when nothing is. */
+    public function editKey(KeyMsg $msg): self
+    {
+        if ($this->editing === null) {
+            return $this;
+        }
+
+        [$field] = $this->editing->update($msg);
+
+        return $this->withEditing($field, $this->status);
+    }
+
+    /**
+     * Stage what the field holds. Text that is not a value of the key's type is
+     * refused here, the field stays open, and the status line says why; whether
+     * the value may be WRITTEN is the writer's call, at preview time.
+     */
+    public function commitEdit(): self
+    {
+        $field = $this->editing;
+        $selected = $this->selected();
+        if ($field === null || !$selected instanceof SettingDefinition || $field->key() !== $selected->key) {
+            return $this->cancelEdit();
+        }
+
+        try {
+            $value = SettingsFieldFactory::value($selected, $field, $this->currentValue($selected), $this->activeProvider());
+        } catch (\InvalidArgumentException $e) {
+            return $this->withEditing($field, 'Not staged: ' . $e->getMessage());
+        }
+
+        return $this->stage($selected->key, $value);
+    }
+
+    public function cancelEdit(): self
+    {
+        return $this->editing === null ? $this : $this->withEditing(null, $this->status);
+    }
+
+    /** The staged value of a key, else the value this launch resolved. */
+    private function currentValue(SettingDefinition $definition): mixed
+    {
+        return \array_key_exists($definition->key, $this->set) ? $this->set[$definition->key] : $this->resolvedFor($definition)->value;
+    }
+
+    private function activeProvider(): ?string
+    {
+        $provider = $this->resolved['provider']->value ?? null;
+
+        return \is_string($provider) && $provider !== '' ? $provider : null;
+    }
+
+    private function withEditing(?Field $field, ?string $status): self
+    {
+        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, $status, $field);
+    }
+
+    private function withStatus(string $status): self
+    {
+        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, $status, $this->editing);
     }
 
     /** Show (or, with null, close) the save preview. */
@@ -381,6 +469,8 @@ final class SettingsEditor
         if ($this->preview !== null) {
             // The preview takes the body's rows, exactly as many.
             $body = array_pad(\array_slice($this->preview->lines($theme, $w), 0, \count($body)), \count($body), '');
+        } elseif ($this->editing !== null) {
+            $body = array_pad(\array_slice(explode("\n", $this->editing->view()), 0, \count($body)), \count($body), '');
         }
 
         foreach ($body as $line) {

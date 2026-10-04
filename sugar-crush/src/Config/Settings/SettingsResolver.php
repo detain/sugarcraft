@@ -28,11 +28,13 @@ final class SettingsResolver
      * @param array<string, array{values: array<string, mixed>, path: ?string}> $layers by {@see SettingSource} value
      * @param array<string, string> $env
      * @param array<string, mixed> $flags by flag spelling, e.g. `--permission-mode`
+     * @param array<string, mixed> $defaults launch-specific defaults by key, over the schema's
      */
     private function __construct(
         private readonly array $layers,
         private readonly array $env,
         private readonly array $flags,
+        private readonly array $defaults = [],
     ) {
     }
 
@@ -92,7 +94,7 @@ final class SettingsResolver
         $layers = $this->layers;
         $layers[$source->value] = ['values' => $values, 'path' => $path];
 
-        return new self($layers, $this->env, $this->flags);
+        return new self($layers, $this->env, $this->flags, $this->defaults);
     }
 
     /**
@@ -103,13 +105,29 @@ final class SettingsResolver
      */
     public function withEnvironment(array $env): self
     {
-        return new self($this->layers, $env, $this->flags);
+        return new self($this->layers, $env, $this->flags, $this->defaults);
     }
 
     /** @param array<string, mixed> $flags parsed flag values, by spelling */
     public function withFlags(array $flags): self
     {
-        return new self($this->layers, $this->env, $flags);
+        return new self($this->layers, $this->env, $flags, $this->defaults);
+    }
+
+    /**
+     * Defaults that depend on WHICH LAUNCH is being explained, over the schema's.
+     *
+     * The schema holds one default per key, and for most keys that is the whole
+     * truth. `permissionMode` is the exception (decision D5): the TUI starts in
+     * `default` while `-p` and the daemon keep `bypass-permissions`, so a view
+     * explaining the TUI's own settings must say `default` where nothing set one
+     * — {@see \SugarCraft\Crush\Tui\Settings\SettingsSources::fromLaunch()} passes it.
+     *
+     * @param array<string, mixed> $defaults by key
+     */
+    public function withDefaults(array $defaults): self
+    {
+        return new self($this->layers, $this->env, $this->flags, $defaults);
     }
 
     public function resolve(SettingDefinition $definition): ResolvedSetting
@@ -128,7 +146,9 @@ final class SettingsResolver
         }
 
         if ($candidates === []) {
-            return ResolvedSetting::new($definition->key, $definition->default, SettingSource::Default);
+            $default = \array_key_exists($definition->key, $this->defaults) ? $this->defaults[$definition->key] : $definition->default;
+
+            return ResolvedSetting::new($definition->key, $default, SettingSource::Default);
         }
 
         [$source, $value, $path] = array_shift($candidates);

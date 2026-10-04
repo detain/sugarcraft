@@ -2926,6 +2926,12 @@ final class Bootstrap
                 self::userConfigPath(),
                 array_filter(getenv(), 'is_string'),
                 self::$permissionModeOverride === null ? [] : ['--permission-mode' => self::$permissionModeOverride],
+                // The editor's provider choices: the same list the Ctrl+P
+                // "Switch model" palette offers.
+                \SugarCraft\Crush\Config\Settings\OptionsProvider::new()->withList(
+                    \SugarCraft\Crush\Config\Settings\OptionsSource::Providers,
+                    array_keys(self::availableProviders()),
+                ),
             ))
             // N-P2: the settings editor's own write door, NOT `onConfigChange`
             // (whose census stays `provider` + `theme`). Its "You" tier goes

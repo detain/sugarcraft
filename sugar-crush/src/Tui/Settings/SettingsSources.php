@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Settings;
 
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\Config\Settings\OptionsProvider;
 use SugarCraft\Crush\Config\Settings\SettingsResolver;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
@@ -23,10 +25,22 @@ use SugarCraft\Crush\Support\HomeDirectory;
  */
 final class SettingsSources
 {
+    /**
+     * The defaults THIS launch runs with where they differ from the schema's:
+     * the settings view only ever explains the TUI, and the TUI's permission
+     * gate starts in `default` (decision D5; `Bootstrap`'s
+     * `INTERACTIVE_DEFAULT_PERMISSION_MODE`) while the schema default is the
+     * `-p` / daemon one. Without this the view said `bypass-permissions` for a
+     * session that was asking before every write.
+     * `SettingsSourcesLaunchDefaultsTest` pins it to the Bootstrap constant.
+     */
+    public const TUI_DEFAULTS = ['permissionMode' => PermissionMode::Default->value];
+
     /** @param list<SettingsFile> $files */
     private function __construct(
         public readonly SettingsResolver $resolver,
         public readonly array $files,
+        public readonly OptionsProvider $options,
     ) {
     }
 
@@ -36,6 +50,7 @@ final class SettingsSources
      * @param ?bool $projectTrusted the launch's answer for `$root`; null when unknown
      * @param array<string, string> $env the process environment
      * @param array<string, mixed> $flags parsed flag values, by spelling
+     * @param OptionsProvider|null $options the launch's pick-one lists (providers…); null = the built-in ones
      */
     public static function fromLaunch(
         ?string $root,
@@ -44,13 +59,14 @@ final class SettingsSources
         ?string $userConfigPath,
         array $env,
         array $flags = [],
+        ?OptionsProvider $options = null,
     ): self {
         $resolver = SettingsResolver::fromFiles(
             $projectTrusted === null ? null : $root,
             $projectTrusted ?? false,
             $userSettingsDir,
             $userConfigPath,
-        )->withEnvironment($env)->withFlags($flags);
+        )->withEnvironment($env)->withFlags($flags)->withDefaults(self::TUI_DEFAULTS);
 
         $files = [];
         if ($userConfigPath !== null) {
@@ -110,7 +126,7 @@ final class SettingsSources
             }
         }
 
-        return new self($resolver, $files);
+        return new self($resolver, $files, $options ?? OptionsProvider::new());
     }
 
     /**
