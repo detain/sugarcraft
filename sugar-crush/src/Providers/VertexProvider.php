@@ -638,6 +638,9 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
                 // 2.7-1a: classified while the exception (status, body) still
                 // exists, and carried in the text — see ContextOverflow::describe().
                 errorMessage: ContextOverflow::matches($e) ? ContextOverflow::describe($e->getMessage()) : $e->getMessage(),
+                // 2.7-1b: the same verdict as a field, so the turn loop's
+                // overflow recovery reads it rather than the prose.
+                errorContextOverflow: ContextOverflow::matches($e),
                 // Classified here, where the exception still exists: this
                 // provider reports a failure as a response rather than by
                 // throwing, so the verdict has to be carried rather than
@@ -742,6 +745,9 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
                 // 2.7-1a: classified while the exception (status, body) still
                 // exists, and carried in the text — see ContextOverflow::describe().
                 errorMessage: ContextOverflow::matches($e) ? ContextOverflow::describe($e->getMessage()) : $e->getMessage(),
+                // 2.7-1b: the same verdict as a field, so the turn loop's
+                // overflow recovery reads it rather than the prose.
+                errorContextOverflow: ContextOverflow::matches($e),
                 // See complete()'s catch. This catch sits OUTSIDE the chunk
                 // loop, so it can fire after real deltas have already been
                 // yielded - which is precisely the case
@@ -1279,6 +1285,7 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
                 // transience is visible. See
                 // TransientFailure::TRANSIENT_ANTHROPIC_ERROR_TYPES.
                 errorTransient: TransientFailure::anthropicErrorIsTransient($data['error']),
+                errorContextOverflow: ContextOverflow::errorObjectOverflows($data['error']),
             );
         }
 
@@ -1699,6 +1706,7 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
                 // only HTTP statuses and exceptions would leave the provider's
                 // most common transient failure unretried.
                 errorTransient: TransientFailure::anthropicErrorIsTransient($event['error'] ?? null),
+                errorContextOverflow: ContextOverflow::errorObjectOverflows($event['error'] ?? null),
             );
         }
 

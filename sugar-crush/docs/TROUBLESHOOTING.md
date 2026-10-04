@@ -347,8 +347,14 @@ sugarcrush models          # every selectable provider, "*" marks the selected o
   `anthropic`, `vertex`) put `Context window exceeded:` in front of the
   server's own message. A rate limit that mentions tokens ("tokens per min"),
   or a `max_tokens` larger than the model allows, is not this: dropping history
-  would not fix either. Automatic prune-and-retry is not wired yet, so make
-  room yourself: `/compact`, then send the message again.
+  would not fix either. The turn first recovers on its own: every older tool
+  output in the request becomes a one-line placeholder, what the model was
+  already sent is summarised on the turn's own model, and the step is sent
+  once more — the transcript keeps the full rows; only the request shrinks.
+  You see this error only when that retry is refused too, or when there was
+  nothing to take out (a prompt that is too big on its own). Make room
+  yourself: `/compact` (or `/clear`), then send the message again — smaller,
+  if it was the message itself that did not fit.
 - **A transcript notice says the SGLang server "serves" a different model.**
   The server's `served_model_name` is of another model family than your
   configured `model`. Sampling, reasoning effort, the default tool-call parser

@@ -24,18 +24,19 @@ use GuzzleHttp\Exception\RequestException;
  * ({@see ProviderStreamException::fromErrorEvent()} said so outright). This is
  * the sibling of {@see TransientFailure}: that one answers "retry as is?",
  * this one answers "retry smaller?". The recovery itself — prune maximally,
- * summarise, retry once — is step 2.7-1b's, in the turn loop; this only gives
- * it a verdict to act on.
+ * summarise, retry once — is {@see \SugarCraft\Crush\Backend\EngineBackend}'s
+ * turn loop (roadmap 2.7-1b); this only gives it a verdict to act on.
  *
  * HOW IT DECIDES, AND WHY TEXT IS PART OF IT
  * ------------------------------------------
  * There is no status code that means "too long": 400 is also a malformed
  * body, and an in-stream frame has no status at all. So:
  *
- *  1. An exception that carries an explicit verdict decides it —
- *     {@see ProviderStreamException::$contextOverflow} and
- *     {@see ProviderResponseException::$contextOverflow}, set where the
- *     failure was built.
+ *  1. An exception or response that carries an explicit verdict decides
+ *     it — {@see ProviderStreamException::$contextOverflow},
+ *     {@see ProviderResponseException::$contextOverflow} and
+ *     {@see CompleteResponse::$errorContextOverflow}, set where the failure
+ *     was built.
  *  2. A transient failure is never an overflow. A 429 "tokens per minute"
  *     message mentions tokens and limits; it is a rate limit, and retrying
  *     it smaller would throw history away for nothing.
@@ -96,9 +97,10 @@ final class ContextOverflow
     /**
      * What {@see describe()} puts in front of a provider's own text. It is
      * itself a {@see PATTERNS} match, so a message built with it classifies
-     * as an overflow wherever it travels — which is the point for the
-     * providers that report a failure as an `isError` {@see CompleteResponse}:
-     * that object has no field for the verdict, only the text.
+     * as an overflow wherever it travels — the user reads what happened, and
+     * a provider that reports a failure as an `isError` {@see CompleteResponse}
+     * without setting {@see CompleteResponse::$errorContextOverflow} is still
+     * classified by its text.
      */
     public const MESSAGE_PREFIX = 'Context window exceeded: ';
 
@@ -108,16 +110,18 @@ final class ContextOverflow
     /**
      * Whether $failure is a context-window overflow.
      *
-     * A {@see CompleteResponse} is judged on its `errorMessage` (the providers
-     * that report rather than throw carry the server's text there), never
-     * when it is not an error and never when it was classified transient.
+     * A {@see CompleteResponse} is judged on its explicit
+     * {@see CompleteResponse::$errorContextOverflow} verdict when the provider
+     * set one, else on its `errorMessage` (the providers that report rather
+     * than throw carry the server's text there) — never when it is not an
+     * error and never when it was classified transient.
      */
     public static function matches(\Throwable|CompleteResponse $failure): bool
     {
         if ($failure instanceof CompleteResponse) {
             return $failure->isError
                 && $failure->errorTransient !== true
-                && self::describesOverflow((string) $failure->errorMessage);
+                && ($failure->errorContextOverflow ?? self::describesOverflow((string) $failure->errorMessage));
         }
 
         $status = null;

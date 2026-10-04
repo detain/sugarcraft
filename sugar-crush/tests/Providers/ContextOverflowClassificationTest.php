@@ -262,6 +262,23 @@ final class ContextOverflowClassificationTest extends TestCase
         self::assertFalse(ContextOverflow::matches(new CompleteResponse(content: $text)));
     }
 
+    /**
+     * Roadmap 2.7-1b (carried from 2.7-1a): an error RESPONSE carries its own
+     * verdict, like the two exceptions do, and the verdict outranks the text —
+     * the wording is only the fallback for a provider that never sets it.
+     */
+    public function testAnErrorResponsesExplicitVerdictOutranksItsWording(): void
+    {
+        self::assertTrue(ContextOverflow::matches(new CompleteResponse(content: '', isError: true, errorMessage: 'request rejected', errorContextOverflow: true)));
+        self::assertFalse(ContextOverflow::matches(new CompleteResponse(content: '', isError: true, errorMessage: ContextOverflow::describe('prompt is too long'), errorContextOverflow: false)));
+        self::assertFalse(
+            ContextOverflow::matches(new CompleteResponse(content: '', isError: true, errorMessage: 'x', errorTransient: true, errorContextOverflow: true)),
+            'a transient failure is never an overflow, whatever the flag says',
+        );
+        self::assertFalse(ContextOverflow::matches(new CompleteResponse(content: 'ok', errorContextOverflow: true)), 'not an error');
+        self::assertTrue(ProviderResponseException::fromResponse(new CompleteResponse(content: '', isError: true, errorMessage: 'too big', errorContextOverflow: true))->contextOverflow);
+    }
+
     public function testVertexAnthropicErrorObjectsAndThrownFailuresCarryTheVerdict(): void
     {
         $tooLong = new VertexProvider('p', 'us-east5', 'claude-sonnet-4-6@20250514', static fn (): array => [
@@ -270,19 +287,23 @@ final class ContextOverflowClassificationTest extends TestCase
         ]);
         $response = $tooLong->complete(self::bareRequest());
         self::assertSame(ContextOverflow::describe('prompt is too long: 210000 tokens > 200000 maximum'), $response->errorMessage);
+        self::assertTrue($response->errorContextOverflow, 'the verdict rides as a field, not only in the text');
         self::assertTrue(ContextOverflow::matches($response));
 
         $overloaded = new VertexProvider('p', 'us-east5', 'claude-sonnet-4-6@20250514', static fn (): array => [
             'type' => 'error',
             'error' => ['type' => 'overloaded_error', 'message' => 'Overloaded'],
         ]);
-        self::assertFalse(ContextOverflow::matches($overloaded->complete(self::bareRequest())));
+        $busy = $overloaded->complete(self::bareRequest());
+        self::assertFalse($busy->errorContextOverflow);
+        self::assertFalse(ContextOverflow::matches($busy));
 
         $thrown = new VertexProvider('p', 'us-central1', 'gemini-2.5-pro', static function (): array {
             throw new \RuntimeException('The input token count (1200000) exceeds the maximum number of tokens allowed (1048576).');
         });
         $response = $thrown->complete(self::bareRequest());
         self::assertStringStartsWith(ContextOverflow::MESSAGE_PREFIX, (string) $response->errorMessage);
+        self::assertTrue($response->errorContextOverflow);
         self::assertTrue(ContextOverflow::matches($response));
     }
 

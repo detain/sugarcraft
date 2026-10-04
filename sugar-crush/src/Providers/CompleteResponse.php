@@ -125,6 +125,22 @@ final readonly class CompleteResponse
          * calibration honest about what it is actually measuring.
          */
         public ?\SugarCraft\Crush\Usage $usage = null,
+        /**
+         * Whether the failure behind {@see $isError} was a context-window
+         * overflow — {@see ContextOverflow}'s verdict, recorded where the
+         * failure was seen. The sibling of {@see $errorTransient}, for the
+         * same reason: {@see VertexProvider} (and {@see CustomProvider})
+         * report a failure as a response rather than by throwing, so without
+         * a field the verdict could only ride in the text
+         * ({@see ContextOverflow::MESSAGE_PREFIX}) and be re-derived from it.
+         * The overflow recovery in the turn loop (roadmap 2.7-1b) acts on it.
+         *
+         * Null means UNCLASSIFIED: {@see ContextOverflow::matches()} then
+         * falls back to the wording, which is how a provider that never sets
+         * this field keeps working. Last in the list, not beside
+         * `$errorTransient`, so no positional construction site moves.
+         */
+        public ?bool $errorContextOverflow = null,
     ) {}
 
     /**

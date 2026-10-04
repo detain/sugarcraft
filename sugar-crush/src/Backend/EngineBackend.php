@@ -1412,6 +1412,29 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // is sent as it stands.
             $pruneTried = false;
             $summaryTried = false;
+            // Roadmap 2.7-1b: a request the provider refused as too long for
+            // the context window is relieved as far as the machinery goes and
+            // sent ONCE more per step — see the ContextOverflow catch below.
+            $overflowRetried = false;
+            // A step summary is a provider call billed like a step: on the
+            // turn's usage sum, the sibling ledger and the step observers.
+            $billSummary = function (AssistantMessage $summary) use (&$stepUsages, $onStep, $step): void {
+                $stepUsages[] = $summary->usage();
+                $this->siblingSpend?->record($summary->usage());
+                if ($this->stepUsageObserver !== null) {
+                    ($this->stepUsageObserver)($summary->usage());
+                }
+                if ($onStep !== null) {
+                    $onStep(new \SugarCraft\Crush\Events\UsageUpdated($step + 1, $summary->usage(), Usage::sum($stepUsages)));
+                }
+                $this->observeCacheHealth($summary->usage());
+            };
+            // Liveness only: an empty reasoning delta is the frame the
+            // parent's idle deadline counts, and a summary's own text is
+            // never painted.
+            $summaryLiveness = $progressSink === null ? null : static function () use ($progressSink): void {
+                $progressSink('');
+            };
             while (true) {
                 $requestRows = $app->messages;
                 $mayRelieve = !($pruneTried && $summaryTried);
@@ -1501,23 +1524,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                                 // Everything is "sent" on a turn's first step:
                                 // the history came from earlier requests.
                                 $sentRows ?? count($app->messages),
-                                function (AssistantMessage $summary) use (&$stepUsages, $onStep, $step): void {
-                                    $stepUsages[] = $summary->usage();
-                                    $this->siblingSpend?->record($summary->usage());
-                                    if ($this->stepUsageObserver !== null) {
-                                        ($this->stepUsageObserver)($summary->usage());
-                                    }
-                                    if ($onStep !== null) {
-                                        $onStep(new \SugarCraft\Crush\Events\UsageUpdated($step + 1, $summary->usage(), Usage::sum($stepUsages)));
-                                    }
-                                    $this->observeCacheHealth($summary->usage());
-                                },
-                                // Liveness only: an empty reasoning delta is the
-                                // frame the parent's idle deadline counts, and
-                                // the summary's own text is never painted.
-                                $progressSink === null ? null : static function () use ($progressSink): void {
-                                    $progressSink('');
-                                },
+                                $billSummary,
+                                $summaryLiveness,
                                 $onHeartbeat,
                                 \SugarCraft\Crush\Context\Compaction\StepSummarizer::modelOverride(),
                             );
@@ -1532,6 +1540,68 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         // response re-anchors it.
                         $pressureAnchor = [null, 0];
                     }
+                } catch (\Throwable $failure) {
+                    // Roadmap 2.7-1b: the provider refused the request as too
+                    // long for its window (ContextOverflow, 2.7-1a) — the one
+                    // permanent failure a smaller request fixes. The budget
+                    // check above runs on an estimate, and a provider can
+                    // count differently or reserve more than it says; the
+                    // refusal is the provider's own count, so it is answered
+                    // with everything the in-turn machinery has, at once:
+                    // every older tool output pruned (no protected tail, no
+                    // batching floor — the request cannot be sent as it is),
+                    // then a step summary of what the model was already sent,
+                    // on the turn's own model and cached prefix. Then the step
+                    // goes out ONCE more; a second refusal, a refusal nothing
+                    // could relieve, or any other failure propagates as
+                    // before. Never after the step produced its reply: a
+                    // failure past that point is not this request's size.
+                    // The originals are untouched — only what the requests
+                    // carry shrinks, as the ledger always does.
+                    if ($overflowRetried
+                        || $assistant !== null
+                        || !\SugarCraft\Crush\Providers\ContextOverflow::matches($failure)
+                    ) {
+                        throw $failure;
+                    }
+                    $overflowRetried = true;
+
+                    $relieved = $contextLedger;
+                    $delta = \SugarCraft\Crush\Context\Pruning\EmergencyPrune::propose(
+                        \SugarCraft\Crush\Context\Pruning\ContextProjector::new()->project($app->messages, $contextLedger)->messages,
+                        $contextLedger,
+                        \SugarCraft\Crush\Context\Pruning\PruningPolicy::new()
+                            ->withProtectTokens(0)
+                            ->withProtectUserTurns(0)
+                            ->withMinFreedTokens(0),
+                    );
+                    if ($delta !== null) {
+                        $relieved = $relieved->apply($delta);
+                    }
+                    // Not past the spend cap: the summary is a provider call.
+                    if ($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd) {
+                        $block = \SugarCraft\Crush\Context\Compaction\StepSummarizer::summarise(
+                            $runtime,
+                            $app->withContextLedger($relieved),
+                            $relieved,
+                            $sentRows ?? count($app->messages),
+                            $billSummary,
+                            $summaryLiveness,
+                            $onHeartbeat,
+                            \SugarCraft\Crush\Context\Compaction\StepSummarizer::modelOverride(),
+                        );
+                        if ($block !== null) {
+                            $relieved = $relieved->withBlock($block);
+                        }
+                    }
+                    if ($relieved === $contextLedger) {
+                        // Nothing could be taken out: the identical request
+                        // would be refused again.
+                        throw $failure;
+                    }
+                    $contextLedger = $relieved;
+                    $app = $app->withContextLedger($contextLedger);
+                    $pressureAnchor = [null, 0];
                 }
             }
 
