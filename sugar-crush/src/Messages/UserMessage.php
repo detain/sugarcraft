@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Messages;
 
 use SugarCraft\Crush\Attachment;
 use SugarCraft\Crush\AttachmentType;
+use SugarCraft\Crush\Attachments\ContextMentions;
 
 final readonly class UserMessage implements Message
 {
@@ -52,7 +53,8 @@ final readonly class UserMessage implements Message
 
     /**
      * The text a provider sends for this turn: the prompt, then every FILE
-     * attachment inlined as a `<file>` block (audit 15b-15).
+     * attachment inlined as a `<file>` block (audit 15b-15) — or a
+     * `<context source="@diff">` block for a keyword mention (roadmap 5.8).
      *
      * Files travel as text on every provider - none of the wire formats this
      * app speaks has a portable "file" part, and an `@src/x.php` mention means
@@ -76,6 +78,16 @@ final readonly class UserMessage implements Message
                 if (!self::isSendableImage($attachment)) {
                     $blocks[] = "[Attached image {$path} could not be included: its bytes were not captured.]";
                 }
+
+                continue;
+            }
+            // A keyword mention (`@diff`, `@session:<id>`, `@https://…`,
+            // roadmap 5.8) is context, not a file on disk: it travels as a FILE
+            // snapshot so it survives a resume, and is named for what it is.
+            if (ContextMentions::isSourceLabel($attachment->path)) {
+                $blocks[] = $attachment->data === null
+                    ? "[Attached context {$path} could not be included: its contents were not captured.]"
+                    : "<context source=\"{$path}\">\n" . rtrim($attachment->data, "\n") . "\n</context>";
 
                 continue;
             }

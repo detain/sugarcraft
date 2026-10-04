@@ -556,6 +556,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * @var array<string, array{count:int, reason:string}>
      */
     private const NOT_A_SPAWN = [
+        'Attachments/ContextMentions.php::diff' => [
+            'count' => 1,
+            'reason' => 'function_exists() capability probe: with proc_open disabled an @diff mention is a notice, not a GitRunner spawn',
+        ],
         'Context/EnvironmentBlock.php::gitField' => [
             'count' => 1,
             'reason' => 'function_exists() capability probe for a build with proc_open disabled',

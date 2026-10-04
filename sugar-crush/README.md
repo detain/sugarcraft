@@ -965,6 +965,23 @@ taken as written. `Tab` completes the path under the cursor.
 - `@` forms inside a [file-based command](#your-own-slash-commands) are that
   command's own include syntax, resolved (or refused) by its trust tier — they are
   never read as attachments.
+- **Keyword mentions** attach context that is not a file, as a
+  `<context source="…">` block (at most five per prompt, each capped at 256 KiB):
+  - `@diff` — your staged and unstaged changes to tracked files against `HEAD`
+    (untracked files are not in it); `@diff:<ref>` against a branch, tag or commit.
+    Read with plumbing `git diff-index`, so it never rewrites your index, bounded
+    at 5 s.
+  - `@session:<id>` — another session's conversation, by id, name or a unique id
+    prefix (the `--resume` rule); a long one keeps its most recent 256 KiB.
+  - `@https://…` / `@http://…` — a web page, fetched through `WebFetch`'s guards
+    (loopback, private, link-local and metadata addresses are refused before any
+    connection, redirects and status codes are checked) and refused outright when a
+    `Deny WebFetch(domain:…)` rule names its host; the model is told the page is
+    untrusted data, and fence tags inside it are escaped.
+
+  The keywords are reserved **before** any path lookup: `@diff` is the diff even
+  when the project has a file named `diff`, which is still `@./diff` or `@"diff"`.
+  Like files, they are read once, on `Enter`, and survive a resume.
 
 ### Slash commands
 

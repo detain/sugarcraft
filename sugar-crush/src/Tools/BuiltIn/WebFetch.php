@@ -161,11 +161,17 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
      * @param (callable(string): bool)|null         $isBlockedAddress
      * @param int                                   $maxOutputBytes   result cap, marker included; a
      *                                                                non-positive value falls back to the wire bound
+     * @param bool                                  $saveOverflow     save what the cap cuts to a spill file
+     *                                                                and name it (roadmap 2.8). False for a
+     *                                                                caller with no next tool call to Read it
+     *                                                                from — the `@url` mention (roadmap 5.8),
+     *                                                                which attaches the page to the user's turn
      */
     public function __construct(
         ?callable $resolveAddresses = null,
         ?callable $isBlockedAddress = null,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
+        private bool $saveOverflow = true,
     ) {
         $this->resolveAddresses = $resolveAddresses === null
             ? static fn (string $host): array => self::resolveViaSystemDns($host)
@@ -403,7 +409,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
      */
     private function wireBound(): int
     {
-        return max(self::MAX_WIRE_BYTES, $this->captureBound($this->resultCap()) ?? 0);
+        return max(self::MAX_WIRE_BYTES, $this->saveOverflow ? $this->captureBound($this->resultCap()) ?? 0 : 0);
     }
 
     /**
@@ -457,7 +463,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
         // That was this tool's spill gap — the same one Bash had while its
         // capture stopped at the cap. Bytes the wire bound never read are not
         // in the file, and the pointer says so when their count is known.
-        $pointer = $this->spillPointerFor($body, $budget, $lowerBound ? 0 : $total - $received);
+        $pointer = $this->saveOverflow ? $this->spillPointerFor($body, $budget, $lowerBound ? 0 : $total - $received) : '';
         $budget = max(1, $budget - self::spillPointerReserve($pointer));
 
         $reserve = strlen($this->truncationMarker($total, $total)) + 1;

@@ -427,6 +427,22 @@ final class PermissionGate
     }
 
     /**
+     * The configured RULES' verdict on $call — the first matching rule's
+     * action, or null when none matches — and nothing else: no mode, no
+     * breaker, no session grant, no strike counter.
+     *
+     * Read-only, for a caller acting on the USER's behalf that still has to
+     * honour a policy the user wrote: the `@url` mention (roadmap 5.8) fetches
+     * a page the user typed, so the mode's questions do not apply, but a
+     * `Deny WebFetch(domain:intranet.example)` rule is the user's own word that
+     * the page must not be fetched at all.
+     */
+    public function ruleDecision(ToolCall $call): ?PermissionDecision
+    {
+        return $this->evaluateRules($call, argumentsKnown: true, projectRoot: null);
+    }
+
+    /**
      * Check rules in order; first match wins.
      *
      * @param bool $argumentsKnown threaded straight through to

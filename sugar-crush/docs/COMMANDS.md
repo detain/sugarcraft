@@ -215,6 +215,12 @@ all (`Chat::submit()`). A body is repository-authored, and a reference the rules
 above refuse can leave its path standing in the text; reading mentions out of the
 expansion would attach the very file the tier just refused to include.
 
+The keyword mentions (`@diff`, `@diff:<ref>`, `@session:<id>`, `@https://…`)
+are chat-prompt attachments too, and the same split holds: a command body's
+`@diff` is **not** an include and is never resolved — it has no `.extension`, so
+the include form leaves it as literal text, and the expansion is not read for
+mentions. The include syntax above is unchanged.
+
 ### Fenced code blocks are NOT exempt
 
 Unlike `@`-imports in instruction files, a `` !` `` or `@file` form inside a

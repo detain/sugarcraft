@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Cli;
 
+use SugarCraft\Crush\Attachments\ContextMentions;
 use SugarCraft\Crush\Attachments\FileMentions;
 use SugarCraft\Crush\AttachmentType;
 use SugarCraft\Crush\Backend;
@@ -222,11 +223,23 @@ final class NonInteractive
         // `cat untrusted.txt | sugarcrush -p '...'` must not attach whatever
         // file that text happens to name.
         $mentionNotices = [];
+        $mentionRoot = $args->root ?? (getcwd() ?: '');
+        // The keyword mentions: `@session:` opens the session store only when
+        // one is named (read-only - no retention sweep from a -p run), and a
+        // URL a permission rule denies WebFetch is not fetched.
+        $gate = $backend instanceof \SugarCraft\Crush\Backend\EngineBackend ? $backend->permissionGate() : null;
         $history = self::historyFrom(
             $args->prompt,
             self::readStdinIfPiped(),
-            $args->root ?? (getcwd() ?: ''),
+            $mentionRoot,
             $mentionNotices,
+            ContextMentions::new($mentionRoot)
+                ->withSessionStore(static fn () => Bootstrap::sessionStore(prune: false))
+                ->withUrlPolicy(static fn (string $url): ?string => $gate?->ruleDecision(
+                    new \SugarCraft\Crush\ToolCall('WebFetch', ['url' => $url]),
+                ) === \SugarCraft\Crush\Permissions\PermissionDecision::Deny
+                    ? 'a permission rule denies WebFetch for it.'
+                    : null),
         );
         foreach ($mentionNotices as $notice) {
             self::noticeAttachment($notice);
@@ -699,7 +712,12 @@ final class NonInteractive
      * @param string|null $mentionRoot Where the prompt's `@` mentions
      *   resolve; null resolves none.
      * @param list<string>|null $mentionNotices Set to the mention notices
-     *   ({@see FileMentions::resolve()}) for the caller to show.
+     *   ({@see FileMentions::resolve()}, {@see ContextMentions::resolve()})
+     *   for the caller to show.
+     * @param ContextMentions|null $contextMentions The keyword resolver
+     *   (`@diff`, `@session:<id>`, `@https://…`, roadmap 5.8); null builds a
+     *   bare one over $mentionRoot, which has no session store and applies no
+     *   permission rule to a URL.
      * @return list<Message>
      */
     public static function historyFrom(
@@ -707,6 +725,7 @@ final class NonInteractive
         ?string $stdinContext,
         ?string $mentionRoot = null,
         ?array &$mentionNotices = null,
+        ?ContextMentions $contextMentions = null,
     ): array {
         $content = ($stdinContext !== null && $stdinContext !== '')
             ? $stdinContext . "\n\n" . $prompt
@@ -721,12 +740,13 @@ final class NonInteractive
         // does not ask.
         if ($mentionRoot !== null && str_contains($prompt, '@')) {
             $resolved = FileMentions::resolve($prompt, $mentionRoot);
-            foreach ($resolved['attachments'] as $attachment) {
+            $context = ($contextMentions ?? ContextMentions::new($mentionRoot))->resolve($prompt);
+            foreach ([...$resolved['attachments'], ...$context['attachments']] as $attachment) {
                 $message = $attachment->type === AttachmentType::Image
                     ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
                     : $message->attachFile($attachment->path, $attachment->data);
             }
-            $mentionNotices = $resolved['notices'];
+            $mentionNotices = [...$resolved['notices'], ...$context['notices']];
         }
 
         return [$message];

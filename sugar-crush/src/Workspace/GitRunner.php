@@ -9,8 +9,9 @@ use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 
 /**
  * One bounded `git` invocation at a time, for the code that drives git on
- * the app's own behalf rather than the model's: workspace checkpoints
- * (item 3.A-1) today, auto-commit (3.G) next.
+ * the app's own behalf — workspace checkpoints (item 3.A-1), auto-commit
+ * (3.G) next — and for the reads it makes for the model: the environment
+ * block's git fields and the `@diff` mention ({@see capture()}).
  *
  * WHY IT RIDES {@see CapturesProcessOutput} INSTEAD OF SPAWNING ITS OWN
  * CHILD. That trait is the package's one bounded spawn path: `setsid -w`
@@ -82,6 +83,14 @@ final class GitRunner
         '-c', 'maintenance.auto=false',
     ];
 
+    private const BUDGET_SPENT = 'checkpoint time budget spent';
+
+    /**
+     * The lock rule as an environment variable too, for anything git runs on
+     * this runner's behalf that does not inherit `--no-optional-locks`.
+     */
+    private const ENV = ['GIT_OPTIONAL_LOCKS' => '0'];
+
     private function __construct(
         private readonly string $cwd,
         private readonly ?string $gitDir = null,
@@ -89,6 +98,7 @@ final class GitRunner
         private readonly ?string $indexFile = null,
         private readonly float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         private readonly ?float $deadline = null,
+        private readonly bool $inheritGitEnv = false,
     ) {}
 
     /** A runner whose calls start in $cwd and let git discover the repository. */
@@ -113,6 +123,19 @@ final class GitRunner
     public function withIndexFile(?string $indexFile): self
     {
         return $this->mutate(['indexFile' => $indexFile]);
+    }
+
+    /**
+     * Keep the inherited `GIT_*` location and config variables instead of
+     * scrubbing them. For a READ of the user's repository as the user would
+     * see it — the environment block, `@diff` — where an exported
+     * `GIT_CEILING_DIRECTORIES` (or `GIT_DIR`) is the user's own statement of
+     * where their repository is. A checkpoint pins its repository with
+     * {@see withGitDir()} and must not be redirected, so it never sets this.
+     */
+    public function withInheritedGitEnv(bool $inherit = true): self
+    {
+        return $this->mutate(['inheritGitEnv' => $inherit]);
     }
 
     /** Bound each call at $seconds. */
@@ -190,26 +213,78 @@ final class GitRunner
     }
 
     /**
-     * @param list<string> $args
-     * @return array{ok: bool, stdout: string, stderr: string, exitCode: int, timedOut: bool}
+     * Run `git <args>` retaining at most $maxBytes of each stream (null: no
+     * bound) and hand back the capture's OWN account of the cut — the bytes
+     * each stream dropped and whether the cut landed mid-line — for a caller
+     * that announces truncation itself rather than failing on it.
+     *
+     * The read path for code that reads the repository on the MODEL's behalf:
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock}'s per-request git
+     * fields (it used to carry a private copy of this spawn, with a shorter
+     * option list) and the `@diff` mention (roadmap 5.8). Same scrubbed
+     * environment, `-c` pins and bounded spawn as {@see run()}; only the
+     * result shape differs.
+     *
+     * @return array{stdout: string, stderr: string, exitCode: int, truncatedBytes: int, stdoutDropped: int, stderrDropped: int, stdoutMidLine: bool, stderrMidLine: bool, timedOut: bool}
      */
-    private function invoke(?string $stdinFile, array $args): array
+    public function capture(?int $maxBytes, string ...$args): array
+    {
+        $timeout = $this->callTimeout();
+        if ($timeout === null) {
+            return [
+                'stdout' => '',
+                'stderr' => self::BUDGET_SPENT,
+                'exitCode' => 124,
+                'truncatedBytes' => 0,
+                'stdoutDropped' => 0,
+                'stderrDropped' => 0,
+                'stdoutMidLine' => false,
+                'stderrMidLine' => false,
+                'timedOut' => true,
+            ];
+        }
+
+        return $this->runCaptured($this->commandLine(null, $args), $this->cwd, $maxBytes, $timeout, self::ENV);
+    }
+
+    /**
+     * The `sh` command line {@see run()} and {@see capture()} spawn, for a
+     * caller with no bounded spawn left to use — {@see \SugarCraft\Crush\Context\EnvironmentBlock}'s
+     * branch read on a build with `proc_open` disabled hands it to
+     * `shell_exec` — so even that fallback reads the repository under the
+     * same scrubbed environment and options. It does not change directory:
+     * such a caller passes `-C <dir>` in $args.
+     */
+    public function shellCommand(string ...$args): string
+    {
+        return $this->commandLine(null, $args);
+    }
+
+    /** This call's bound in seconds, or null when the shared deadline is already spent. */
+    private function callTimeout(): ?float
     {
         $timeout = $this->timeoutSeconds;
         if ($this->deadline !== null) {
             $remaining = $this->deadline - microtime(true);
             if ($remaining <= 0.0) {
-                return ['ok' => false, 'stdout' => '', 'stderr' => 'checkpoint time budget spent', 'exitCode' => 124, 'timedOut' => true];
+                return null;
             }
             $timeout = min($timeout, $remaining);
         }
 
-        $command = 'unset ' . implode(' ', self::SCRUBBED_GIT_ENV) . ' 2>/dev/null; ';
+        return $timeout;
+    }
+
+    /** @param list<string> $args */
+    private function commandLine(?string $stdinFile, array $args): string
+    {
+        $command = $this->inheritGitEnv ? '' : 'unset ' . implode(' ', self::SCRUBBED_GIT_ENV) . ' 2>/dev/null; ';
         $assign = [
             'GIT_AUTHOR_NAME' => self::IDENTITY_NAME,
             'GIT_AUTHOR_EMAIL' => self::IDENTITY_EMAIL,
             'GIT_COMMITTER_NAME' => self::IDENTITY_NAME,
             'GIT_COMMITTER_EMAIL' => self::IDENTITY_EMAIL,
+            ...self::ENV,
         ];
         if ($this->indexFile !== null) {
             $assign['GIT_INDEX_FILE'] = $this->indexFile;
@@ -233,7 +308,21 @@ final class GitRunner
             $command .= ' < ' . escapeshellarg($stdinFile);
         }
 
-        $captured = $this->runCaptured($command, $this->cwd, self::MAX_OUTPUT_BYTES, $timeout, ['GIT_OPTIONAL_LOCKS' => '0']);
+        return $command;
+    }
+
+    /**
+     * @param list<string> $args
+     * @return array{ok: bool, stdout: string, stderr: string, exitCode: int, timedOut: bool}
+     */
+    private function invoke(?string $stdinFile, array $args): array
+    {
+        $timeout = $this->callTimeout();
+        if ($timeout === null) {
+            return ['ok' => false, 'stdout' => '', 'stderr' => self::BUDGET_SPENT, 'exitCode' => 124, 'timedOut' => true];
+        }
+
+        $captured = $this->runCaptured($this->commandLine($stdinFile, $args), $this->cwd, self::MAX_OUTPUT_BYTES, $timeout, self::ENV);
         $ok = !$captured['timedOut'] && $captured['exitCode'] === 0 && $captured['truncatedBytes'] === 0;
 
         return [

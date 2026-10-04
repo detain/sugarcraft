@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Context;
 
 use DateTimeImmutable;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
+use SugarCraft\Crush\Workspace\GitRunner;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 
 /**
@@ -157,23 +158,22 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 final readonly class EnvironmentBlock implements PromptSection
 {
     /**
-     * Bounded process capture and the one truncation wording, reused rather
-     * than respelled.
+     * The one truncation wording, reused rather than respelled.
      *
-     * Both live under `Tools\Concerns` because tool results were the first
-     * thing here that needed them; neither touches `$this` state and
-     * {@see \SugarCraft\Crush\Commands\CommandSpec} already uses
-     * `TruncatesOutput` from outside `Tools`, so the namespace is where they
-     * were born rather than a statement about who may use them. Property-free,
-     * which is what lets a `readonly` class use them at all.
+     * It lives under `Tools\Concerns` because tool results were the first
+     * thing that needed it; it touches no `$this` state and
+     * {@see \SugarCraft\Crush\Commands\CommandSpec} already uses it from
+     * outside `Tools`, so the namespace is where it was born rather than a
+     * statement about who may use it. Property-free, which is what lets a
+     * `readonly` class use it at all.
      *
-     * The pairing is the whole reason a truthful cap is possible here:
-     * {@see CapturesProcessOutput::runCaptured()} drains the pipe to
+     * Its pairing with the bounded capture is the whole reason a truthful cap
+     * is possible here: {@see GitRunner::capture()} (over
+     * {@see CapturesProcessOutput::runCaptured()}) drains the pipe to
      * completion while RETAINING only $maxBytes, and returns the exact count of
      * what it discarded, so {@see TruncatesOutput::truncateOutput()} can name
      * the real size of the diff rather than the size of the part that fit.
      */
-    use CapturesProcessOutput;
     use TruncatesOutput;
 
     /**
@@ -430,31 +430,24 @@ final readonly class EnvironmentBlock implements PromptSection
     private const GIT_TIMEOUT_SECONDS = 2.0;
 
     /**
-     * Global options on every git read here (audit 15d-12): the block is a
-     * reading of the REPOSITORY, and the user's git config must not change
-     * what that reading is, run programs, or take the index lock.
-     *
-     * `--no-optional-locks`: without it `git status` takes `.git/index.lock`
-     * to write back its refreshed stat cache, so a `git add` the user runs
-     * in another terminal while a prompt is assembled fails with "Unable to
-     * create index.lock". The `-c` pins outrank every config file and the
-     * GIT_CONFIG_COUNT environment, so the bytes do not move with the host:
-     * `core.quotepath=false` prints a non-ASCII path as itself rather than
-     * as octal escapes the model would have to decode. `color.ui=false` is
-     * a backstop only — a per-command `color.diff=always` OUTRANKS it
-     * (measured: `log` still colours under `-c color.ui=false`), which is
-     * why the reads that can colour also carry `--no-color`.
+     * Every git read here goes through {@see GitRunner} (audit 15d-12 lives on
+     * there): the block is a reading of the REPOSITORY, and the user's git
+     * config must not change what that reading is, run programs, or take the
+     * index lock. `--no-optional-locks` (and `GIT_OPTIONAL_LOCKS=0`) keep `git
+     * status` from taking `.git/index.lock` to write back its stat cache, so a
+     * `git add` the user runs in another terminal while a prompt is assembled
+     * does not fail; `core.quotepath=false` prints a non-ASCII path as itself;
+     * `color.ui=false` is a backstop only — a per-command `color.diff=always`
+     * OUTRANKS it (measured: `log` still colours under `-c color.ui=false`),
+     * which is why the reads that can colour also carry `--no-color`. The
+     * runner keeps the inherited `GIT_*` environment
+     * ({@see GitRunner::withInheritedGitEnv()}): an exported
+     * `GIT_CEILING_DIRECTORIES` is the user's word on where discovery stops.
      */
-    private const GIT_GLOBAL_OPTIONS = ['--no-pager', '--no-optional-locks', '-c', 'color.ui=false', '-c', 'core.quotepath=false'];
-
-    /**
-     * The same lock rule as an environment variable, for anything git runs
-     * on our behalf that does not inherit the `--no-optional-locks` flag.
-     * Scoped to these reads rather than set in ProcessContainment::env(): an
-     * agent's own `git status` through Bash is the user's command, and
-     * keeping its index refresh is its business.
-     */
-    private const GIT_ENV = ['GIT_OPTIONAL_LOCKS' => '0'];
+    private function git(): GitRunner
+    {
+        return GitRunner::new($this->cwd)->withInheritedGitEnv()->withTimeout(self::GIT_TIMEOUT_SECONDS);
+    }
 
     /**
      * Flags on both diff reads. The diffs are PLUMBING (`diff-index`,
@@ -1325,40 +1318,22 @@ final readonly class EnvironmentBlock implements PromptSection
             return 'unavailable (shell_exec is disabled on this build)';
         }
 
-        $env = '';
-        foreach (self::GIT_ENV as $name => $value) {
-            $env .= $name . '=' . escapeshellarg($value) . ' ';
-        }
-
-        return trim((string) shell_exec($env . $this->gitCommand($argv) . ' 2>/dev/null'));
+        // The runner's own command line, so even this unbounded fallback reads
+        // under the same options and environment as every bounded read.
+        return trim((string) shell_exec($this->git()->shellCommand('-C', $this->cwd, ...$argv) . ' 2>/dev/null'));
     }
 
     /**
-     * The shell command for one git read: {@see GIT_GLOBAL_OPTIONS}, the
-     * captured cwd, then $argv — every word escaped on its own.
-     *
-     * @param list<string> $argv
-     */
-    private function gitCommand(array $argv): string
-    {
-        $command = 'git';
-        foreach ([...self::GIT_GLOBAL_OPTIONS, '-C', $this->cwd, ...$argv] as $word) {
-            $command .= ' ' . escapeshellarg($word);
-        }
-
-        return $command;
-    }
-
-    /**
-     * One bounded git read with {@see GIT_ENV}; callers have already checked
-     * that proc_open exists.
+     * One bounded git read in the captured cwd, through {@see GitRunner}
+     * (roadmap 5.8 moved it there so `@diff` reads the repository the same
+     * way); callers have already checked that proc_open exists.
      *
      * @param list<string> $argv
      * @return array{stdout: string, stderr: string, exitCode: int, truncatedBytes: int, stdoutDropped: int, stderrDropped: int, stdoutMidLine: bool, stderrMidLine: bool, timedOut: bool}
      */
     private function runGit(array $argv, ?int $maxBytes): array
     {
-        return $this->runCaptured($this->gitCommand($argv), null, $maxBytes, self::GIT_TIMEOUT_SECONDS, self::GIT_ENV);
+        return $this->git()->capture($maxBytes, ...$argv);
     }
 
     /**

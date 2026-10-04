@@ -230,6 +230,7 @@ sugar-crush/tests/Tools/TaskToolResumeFinishedRunTest.php	1.000	6
 sugar-crush/tests/Backend/PerStepUsageFrameTest.php	1.000	4
 sugar-crush/tests/Backend/SteerAtStepBoundaryTest.php	1.000	5
 sugar-crush/tests/Integration/MultiAgentRefactorTest.php	0.999	4
+sugar-crush/tests/Attachments/ContextMentionsTest.php	0.990	13
 sugar-crush/tests/SuiteChildStdinPrependResidualTest.php	0.975	1
 sugar-crush/tests/Workflows/WorkflowEngineCancellationTest.php	0.952	6
 sugar-crush/tests/VhsTapeContractTest.php	0.947	118
@@ -554,6 +555,7 @@ sugar-crush/tests/Cli/BootstrapTrustedHomeOwnershipTest.php	0.034	5
 sugar-crush/tests/Cli/BootstrapLaunchNoticeCapCensusTest.php	0.034	4
 sugar-crush/tests/Tools/BuiltIn/LspToolTest.php	0.034	38
 sugar-crush/tests/Providers/ToolCallParser/DsmlToolCallParserTest.php	0.033	39
+sugar-crush/tests/Attachments/UrlMentionSsrfTest.php	0.033	10
 sugar-crush/tests/Providers/SystemPromptTransmissionMatrixTest.php	0.032	20
 sugar-crush/tests/Cli/ArgvParserPositionalTest.php	0.032	37
 sugar-crush/tests/Cli/BootstrapSecretEnvAllowlistTest.php	0.032	9

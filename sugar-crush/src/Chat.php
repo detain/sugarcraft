@@ -9520,6 +9520,12 @@ final class Chat implements Model
      * `$resolveMentions` is false for a file-based command's expansion; see
      * {@see submit()} for why its `@` forms are never read here.
      *
+     * The keyword mentions (`@diff`, `@session:<id>`, `@https://…`, roadmap
+     * 5.8) are resolved beside the files by
+     * {@see \SugarCraft\Crush\Attachments\ContextMentions}: this session's
+     * store answers `@session:`, and a URL a permission rule denies `WebFetch`
+     * is refused rather than fetched.
+     *
      * @return array{0: Message, 1: list<Message>}
      */
     private function userTurnMessage(string $text, bool $resolveMentions = true): array
@@ -9530,13 +9536,26 @@ final class Chat implements Model
         }
 
         $resolved = FileMentions::resolve($text, $this->projectRoot());
-        foreach ($resolved['attachments'] as $attachment) {
+        $store = $this->sessionStore;
+        $gate = $this->permissionGate();
+        $context = \SugarCraft\Crush\Attachments\ContextMentions::new($this->projectRoot())
+            ->withSessionStore(static fn () => $store)
+            ->withUrlPolicy(static fn (string $url): ?string => $gate?->ruleDecision(
+                new \SugarCraft\Crush\ToolCall('WebFetch', ['url' => $url]),
+            ) === \SugarCraft\Crush\Permissions\PermissionDecision::Deny
+                ? 'a permission rule denies WebFetch for it.'
+                : null)
+            ->resolve($text);
+        foreach ([...$resolved['attachments'], ...$context['attachments']] as $attachment) {
             $message = $attachment->type === AttachmentType::Image
                 ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
                 : $message->attachFile($attachment->path, $attachment->data);
         }
 
-        return [$message, array_map(static fn (string $notice): Message => Message::notice($notice), $resolved['notices'])];
+        return [$message, array_map(
+            static fn (string $notice): Message => Message::notice($notice),
+            [...$resolved['notices'], ...$context['notices']],
+        )];
     }
 
     /**

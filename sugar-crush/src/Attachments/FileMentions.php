@@ -18,6 +18,11 @@ use SugarCraft\Crush\AttachmentType;
  * user typed it, so it is the user's own choice of what to show the model,
  * the same as pasting the file's text would be.
  *
+ * `@diff`, `@diff:<ref>`, `@session:<id>` and `@https://…` are NOT paths:
+ * they are keywords {@see ContextMentions} resolves (roadmap 5.8), reserved
+ * before any lookup here, so a file named `diff` is reached as `@./diff` (or
+ * `@"diff"`).
+ *
  * WHAT IS NOT A MENTION STAYS TEXT. An `@name` that names no file ("ask
  * @team") is prose and is sent as typed, silently; one that LOOKS like a path
  * (a `/` or an extension) and resolves to nothing gets a notice, because that
@@ -78,6 +83,15 @@ final class FileMentions
         foreach ($matches as $match) {
             $quoted = ($match[1] ?? '') !== '';
             $written = $quoted ? $match[1] : $match[2];
+
+            // `@diff`, `@session:<id>` and `@https://…` are keywords, reserved
+            // BEFORE any path lookup — {@see ContextMentions} resolves them. A
+            // file that really is named `diff` is `@./diff`. A QUOTED mention is
+            // always a path: `@"diff"` is the file.
+            if (!$quoted && ContextMentions::isReserved($written)) {
+                continue;
+            }
+
             $path = self::locate($written, $root, $quoted);
 
             if ($path === null) {
