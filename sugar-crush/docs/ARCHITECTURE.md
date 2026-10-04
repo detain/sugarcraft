@@ -778,20 +778,30 @@ its own runner and supervisor. `Context\ContextCompactor` +
 `IdleCompactionPolicy` drive `/compact` and automatic compaction against
 `ContextWindow`.
 
+**`Host\CompactionService` owns compaction logic.** What a compaction
+condenses, the summarization request and the parse of its reply, the row
+layout, and every notice the tiers write (the park notice, the 85% report,
+the 95% refusal and rescue, the thrash breaker) live there. It is stateless
+and registered on the workspace, so a headless host compacts exactly as the
+TUI does. `Chat` keeps the Msg plumbing: it parks a turn behind the
+summarization (`inFlight`, the `pendingCompactionId` latch, the cancellation
+token), applies the landing, and dispatches the parked turn.
+
 **Compaction hides rows, it does not delete them.** Every compaction route
 (`/compact` on the heuristic, `/compact` landing a model's summaries, the
 automatic 85% tier) lays its result out through
-`Chat::withCompactedRowsHidden()`. The rows it condensed stay in the history
-where they were, flagged `uiOnly` so the model no longer reads them. What the
-model reads in their place (`[summary]` lines, file stubs) goes in with
-`userVisible` false. One `Chat::COMPACTION_BOUNDARY` notice sits between them
-and the preserved rows. So the scrollback and the saved transcript keep the
+`Host\CompactionService::withCompactedRowsHidden()`. The rows it condensed
+stay in the history where they were, flagged `uiOnly` so the model no longer
+reads them. What the model reads in their place (`[summary]` lines, file
+stubs) goes in with `userVisible` false. One
+`Host\CompactionService::COMPACTION_BOUNDARY` notice sits between them and the
+preserved rows. So the scrollback and the saved transcript keep the
 conversation as it happened, with its ids and step ids. `Renderer` paints the
 boundary as a rule and dims the labels of the turns above the newest one.
 The compaction reports count agent-visible rows, because the history as a
 whole never shrinks. The 95% intra-exchange rescue is the exception: it still
-shortens the oversized row in place (`Chat::messageWithContent()`, every other
-field kept).
+shortens the oversized row in place (`Host\CompactionService::messageWithContent()`,
+every other field kept).
 
 ---
 
