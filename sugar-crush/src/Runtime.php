@@ -1556,8 +1556,10 @@ final class Runtime
             return true;
         };
 
-        for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
-            $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+        // N-P4a: `providerRetryAttempts`, read once per sequence.
+        $maxAttempts = TransientFailure::maxAttempts();
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $lastAttempt = $attempt === $maxAttempts;
 
             // Per-attempt, not per-call: a retry must start from an empty
             // accumulator set or it concatenates the failed attempt's partial
@@ -1759,8 +1761,10 @@ final class Runtime
     {
         $response = null;
 
-        for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
-            $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+        // N-P4a: `providerRetryAttempts`, read once per sequence.
+        $maxAttempts = TransientFailure::maxAttempts();
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $lastAttempt = $attempt === $maxAttempts;
 
             try {
                 $response = $this->provider->complete($request);

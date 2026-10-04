@@ -110,6 +110,13 @@ use Psr\Http\Client\NetworkExceptionInterface;
  * derives that sum so a test can assert the relationship rather than a
  * literal.
  *
+ * Both knobs are settings now (`providerRetryAttempts`,
+ * `providerRetryBaseBackoffMs`) and so is that ceiling
+ * (`turnIdleTimeoutSeconds`), which moves the relationship from two constants
+ * to two RANGES: the settings' maxima are capped so that
+ * {@see maxTotalBackoffMicroseconds()} stays at or under half the smallest
+ * idle ceiling an operator may choose, whatever pair they pick.
+ *
  * THE SLEEP IS SLICED AGAINST A DEADLINE, BECAUSE `usleep()` IS INTERRUPTIBLE
  * ---------------------------------------------------------------------------
  * This paragraph used to read "the sleep is a plain `usleep()` and is NOT
@@ -169,6 +176,8 @@ final class TransientFailure
      * is usually gone by the second attempt and essentially always by the
      * third, while a fourth mostly adds latency to outages that are not
      * transient at all.
+     *
+     * The DEFAULT of `providerRetryAttempts`; readers ask {@see maxAttempts()}.
      */
     public const MAX_ATTEMPTS = 3;
 
@@ -178,8 +187,36 @@ final class TransientFailure
      * 500ms is long enough for a rotating upstream to finish rotating and
      * short enough that a recovered turn does not read as a hang. See the
      * class docblock for the idle-timer ceiling this sits under.
+     *
+     * The DEFAULT of `providerRetryBaseBackoffMs`; readers ask
+     * {@see baseBackoffMicroseconds()}.
      */
     public const BASE_BACKOFF_MICROSECONDS = 500_000;
+
+    /**
+     * The settings keys that replace the two defaults above (roadmap N-P4a).
+     * Dotted, and flat on disk like every dotted key. Read per provider call
+     * off the merged config ({@see maxAttempts()}), so a save applies from
+     * the next call — in practice the next turn, since a turn runs in a
+     * child forked after the save.
+     */
+    public const RETRY_ATTEMPTS_CONFIG_KEY = 'providerRetryAttempts';
+
+    public const RETRY_BASE_BACKOFF_CONFIG_KEY = 'providerRetryBaseBackoffMs';
+
+    /**
+     * The largest `providerRetryAttempts` honoured. With
+     * {@see MAX_BASE_BACKOFF_MS_SETTING} it bounds the longest silence a retry
+     * sequence can produce ({@see maxTotalBackoffMicroseconds()}): no frame
+     * is written while this class sleeps, so that silence has to stay well
+     * under the SMALLEST idle ceiling an operator may set
+     * (`EngineBackend::MIN_TURN_IDLE_TIMEOUT_SECONDS`), not only the default
+     * one — a test holds it to half.
+     */
+    public const MAX_RETRY_ATTEMPTS_SETTING = 5;
+
+    /** The largest `providerRetryBaseBackoffMs` honoured; see above. */
+    public const MAX_BASE_BACKOFF_MS_SETTING = 1000;
 
     /**
      * Whether this thrown failure is worth another attempt.
@@ -355,10 +392,12 @@ final class TransientFailure
      *        before; a test can count calls to prove the no-debt path never
      *        sleeps at all, instead of bounding a zero-work return by wall
      *        time a loaded scheduler can violate.
+     * @param ?array<string, mixed> $config the already-read merged config;
+     *        null reads it (see {@see maxAttempts()})
      */
-    public static function backoff(int $attempt, ?callable $sleeper = null): void
+    public static function backoff(int $attempt, ?callable $sleeper = null, ?array $config = null): void
     {
-        $owed = self::backoffMicroseconds($attempt);
+        $owed = self::backoffMicroseconds($attempt, $config);
         if ($owed <= 0) {
             return;
         }
@@ -395,14 +434,18 @@ final class TransientFailure
      * The wait owed after `$attempt` failed attempts (1-based), in
      * microseconds. Zero once no attempts remain, so an exhausted sequence
      * does not pay for a retry it will not make.
+     *
+     * @param ?array<string, mixed> $config the already-read merged config;
+     *                                      null reads it
      */
-    public static function backoffMicroseconds(int $attempt): int
+    public static function backoffMicroseconds(int $attempt, ?array $config = null): int
     {
-        if ($attempt < 1 || $attempt >= self::MAX_ATTEMPTS) {
+        $config ??= self::config();
+        if ($attempt < 1 || $attempt >= self::maxAttempts($config)) {
             return 0;
         }
 
-        return self::BASE_BACKOFF_MICROSECONDS * (2 ** ($attempt - 1));
+        return self::baseBackoffMicroseconds($config) * (2 ** ($attempt - 1));
     }
 
     /**
@@ -413,15 +456,109 @@ final class TransientFailure
      * ceiling this silence is measured against (see the class docblock) — and
      * a literal here would stop tracking the constants above the first time
      * one of them moved.
+     *
+     * @param ?array<string, mixed> $config the already-read merged config;
+     *                                      null reads it
      */
-    public static function totalBackoffMicroseconds(): int
+    public static function totalBackoffMicroseconds(?array $config = null): int
     {
+        $config ??= self::config();
         $total = 0;
-        for ($attempt = 1; $attempt < self::MAX_ATTEMPTS; $attempt++) {
-            $total += self::backoffMicroseconds($attempt);
+        for ($attempt = 1; $attempt < self::maxAttempts($config); $attempt++) {
+            $total += self::backoffMicroseconds($attempt, $config);
         }
 
         return $total;
+    }
+
+    /**
+     * The longest silence any honoured pair of retry settings can produce —
+     * {@see totalBackoffMicroseconds()} at both settings' maxima. What the
+     * smallest permitted idle ceiling is measured against.
+     */
+    public static function maxTotalBackoffMicroseconds(): int
+    {
+        return self::totalBackoffMicroseconds([
+            self::RETRY_ATTEMPTS_CONFIG_KEY => self::MAX_RETRY_ATTEMPTS_SETTING,
+            self::RETRY_BASE_BACKOFF_CONFIG_KEY => self::MAX_BASE_BACKOFF_MS_SETTING,
+        ]);
+    }
+
+    /**
+     * Total provider calls per seam, including the first: the
+     * `providerRetryAttempts` setting, else {@see MAX_ATTEMPTS}.
+     *
+     * Every retry loop reads this ONCE, before its first attempt, so one
+     * sequence cannot change length halfway. `1` is a real answer — no
+     * retries at all — for an operator whose own proxy already retries.
+     * Anything that is not a whole number in `1..`{@see MAX_RETRY_ATTEMPTS_SETTING}
+     * falls back to the default rather than being clamped, the doctrine
+     * every numeric setting in this package follows.
+     *
+     * @param ?array<string, mixed> $config the already-read merged config;
+     *                                      null reads it
+     */
+    public static function maxAttempts(?array $config = null): int
+    {
+        $attempts = self::wholeNumberSetting(
+            ($config ?? self::config())[self::RETRY_ATTEMPTS_CONFIG_KEY] ?? null,
+            1,
+            self::MAX_RETRY_ATTEMPTS_SETTING,
+        );
+
+        return $attempts ?? self::MAX_ATTEMPTS;
+    }
+
+    /**
+     * The wait after the first failed attempt, in microseconds: the
+     * `providerRetryBaseBackoffMs` setting (milliseconds, `0..`{@see MAX_BASE_BACKOFF_MS_SETTING}),
+     * else {@see BASE_BACKOFF_MICROSECONDS}. `0` retries at once.
+     *
+     * @param ?array<string, mixed> $config the already-read merged config;
+     *                                      null reads it
+     */
+    public static function baseBackoffMicroseconds(?array $config = null): int
+    {
+        $ms = self::wholeNumberSetting(
+            ($config ?? self::config())[self::RETRY_BASE_BACKOFF_CONFIG_KEY] ?? null,
+            0,
+            self::MAX_BASE_BACKOFF_MS_SETTING,
+        );
+
+        return $ms === null ? self::BASE_BACKOFF_MICROSECONDS : $ms * 1000;
+    }
+
+    /**
+     * A whole number in `$min..$max` — a JSON int, an integral float or a
+     * numeric string from a hand-edited file — or null for anything else.
+     */
+    private static function wholeNumberSetting(mixed $raw, int $min, int $max): ?int
+    {
+        if (\is_string($raw)) {
+            $raw = is_numeric($raw) ? $raw + 0 : null;
+        }
+
+        if (\is_float($raw) && is_finite($raw) && $raw === floor($raw) && $raw >= $min && $raw <= $max) {
+            return (int) $raw;
+        }
+
+        return \is_int($raw) && $raw >= $min && $raw <= $max ? $raw : null;
+    }
+
+    /**
+     * The merged settings, or nothing. Guarded like
+     * `EngineBackend::userConfig()`: a missing, unreadable or malformed file
+     * costs the DEFAULT retry policy, never the provider call it governs.
+     *
+     * @return array<string, mixed>
+     */
+    private static function config(): array
+    {
+        try {
+            return \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**

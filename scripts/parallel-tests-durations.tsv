@@ -218,6 +218,7 @@ sugar-crush/tests/SessionTabClickTest.php	1.307	13
 sugar-crush/tests/Host/TurnRunnerEventLogTest.php	1.300	5
 sugar-crush/tests/Host/SessionHubTest.php	1.300	5
 sugar-crush/tests/Tools/TaskToolPresetModelTest.php	1.300	9
+sugar-crush/tests/Backend/TurnIdleTimeoutSettingTest.php	1.300	23
 sugar-crush/tests/Workflows/WorkflowResumeReportingTest.php	1.288	4
 sugar-crush/tests/Tools/OutputTruncationTest.php	1.283	24
 sugar-crush/tests/Integration/SystemPromptWiringTest.php	1.275	14
@@ -318,6 +319,7 @@ sugar-crush/tests/Tools/IgnoreRulesBacktrackingTest.php	0.564	112
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.555	10
 sugar-crush/tests/Commands/SlashDispatchTest.php	0.550	18
 sugar-crush/tests/Providers/RuntimeUsageFoldTest.php	0.541	6
+sugar-crush/tests/Providers/RetrySettingsTest.php	0.520	22
 sugar-crush/tests/Tools/BashPromptGuidanceTest.php	0.517	7
 sugar-crush/tests/Diagnostics/RuntimeNoticeSinkStderrTest.php	0.517	5
 sugar-crush/tests/Agents/AgentManagerRetentionTest.php	0.514	7
@@ -530,6 +532,7 @@ sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35
 sugar-crush/tests/ChatScrollTest.php	0.091	13
 sugar-crush/tests/Server/ForkFdHygieneTest.php	0.090	5
+sugar-crush/tests/Providers/ProviderTuningSettingsTest.php	0.090	11
 sugar-crush/tests/Tools/BuiltIn/GrepOptionInjectionTest.php	0.087	16
 sugar-crush/tests/Tools/BuiltIn/EditUniformIndentTest.php	0.087	10
 sugar-crush/tests/Tools/BuiltIn/GitignoreAwarenessTest.php	0.085	26

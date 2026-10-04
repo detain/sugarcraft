@@ -92,7 +92,8 @@ use Psr\Http\Message\RequestInterface;
  * (SGLang, vLLM, anything on Starlette) emits `http.response.start` before it
  * begins generating, so the head is not gated on model work - but a
  * deployment that queues at the HTTP layer for longer than this wants
- * `SUGARCRUSH_CONNECT_TIMEOUT` raised. Nothing here bounds token gaps, total
+ * `SUGARCRUSH_CONNECT_TIMEOUT` (or the `connectTimeoutSeconds` setting)
+ * raised. Nothing here bounds token gaps, total
  * completion length, or a curl-path request's body.
  *
  * Bedrock is not routed through this middleware: the AWS SDK never passes
@@ -151,6 +152,26 @@ trait HttpClientDefaults
      * mechanism for one scalar.
      */
     private const CONNECT_TIMEOUT_ENV = 'SUGARCRUSH_CONNECT_TIMEOUT';
+
+    /**
+     * The settings key under that env var (roadmap N-P4a): the persisted form
+     * of the same bound, outranked by the env var when the env var actually
+     * says something. Read when a client is BUILT — at launch and on a
+     * provider switch — because both transports take it from the client.
+     */
+    private const CONNECT_TIMEOUT_CONFIG_KEY = 'connectTimeoutSeconds';
+
+    /**
+     * The settings key that replaces {@see STREAM_READ_IDLE_TIMEOUT_SECONDS}.
+     * Read per streaming REQUEST by {@see streamTransportBounds()}, so a save
+     * applies from the next turn. Values under
+     * {@see MIN_STREAM_READ_IDLE_TIMEOUT_SECONDS} fall back to the default: a
+     * per-read bound that short would abort a model that is merely thinking,
+     * which is the failure this whole seam exists to prevent.
+     */
+    private const STREAM_READ_IDLE_CONFIG_KEY = 'streamIdleTimeoutSeconds';
+
+    private const MIN_STREAM_READ_IDLE_TIMEOUT_SECONDS = 30.0;
 
     /**
      * Named so a second pass through {@see guzzleClient()} on a shared stack
@@ -271,8 +292,10 @@ trait HttpClientDefaults
                     return $handler($request, $options);
                 }
 
-                $options['timeout'] ??= self::connectTimeoutSeconds();
-                $options['read_timeout'] ??= self::STREAM_READ_IDLE_TIMEOUT_SECONDS;
+                // The client's own connect bound when it has one, so the two
+                // transports agree on the value the client was built with.
+                $options['timeout'] ??= $options['connect_timeout'] ?? self::connectTimeoutSeconds();
+                $options['read_timeout'] ??= self::streamReadIdleTimeoutSeconds();
 
                 return $handler($request, $options);
             };
@@ -305,16 +328,68 @@ trait HttpClientDefaults
      */
     private static function connectTimeoutSeconds(): float
     {
-        $raw = getenv(self::CONNECT_TIMEOUT_ENV);
-
         // A non-numeric, non-positive or sub-millisecond override is operator
-        // error; falling back to the default beats disabling the bound, since
-        // every transport in play reads 0 as "use my own default" - which is
-        // the exact hang being fixed. See MIN_CONNECT_TIMEOUT_SECONDS.
-        if ($raw === false || !is_numeric($raw) || (float) $raw < self::MIN_CONNECT_TIMEOUT_SECONDS) {
-            return self::CONNECT_TIMEOUT_SECONDS;
+        // error; falling back beats disabling the bound, since every
+        // transport in play reads 0 as "use my own default" - which is the
+        // exact hang being fixed. See MIN_CONNECT_TIMEOUT_SECONDS. A rejected
+        // env value falls through to the `connectTimeoutSeconds` setting,
+        // exactly as an absent one does: the env var outranks the persisted
+        // value only when it actually says something.
+        $env = getenv(self::CONNECT_TIMEOUT_ENV);
+
+        return self::honourableSeconds($env === false ? null : $env, self::MIN_CONNECT_TIMEOUT_SECONDS)
+            ?? self::honourableSeconds(self::settingsConfig()[self::CONNECT_TIMEOUT_CONFIG_KEY] ?? null, self::MIN_CONNECT_TIMEOUT_SECONDS)
+            ?? self::CONNECT_TIMEOUT_SECONDS;
+    }
+
+    /**
+     * The per-read idle bound for a streaming body: the
+     * `streamIdleTimeoutSeconds` setting, else
+     * {@see STREAM_READ_IDLE_TIMEOUT_SECONDS}. Per READ, never a total - PHP
+     * re-arms it on every read - so no value of it can bound a completion's
+     * length.
+     */
+    private static function streamReadIdleTimeoutSeconds(): float
+    {
+        return self::honourableSeconds(
+            self::settingsConfig()[self::STREAM_READ_IDLE_CONFIG_KEY] ?? null,
+            self::MIN_STREAM_READ_IDLE_TIMEOUT_SECONDS,
+        ) ?? self::STREAM_READ_IDLE_TIMEOUT_SECONDS;
+    }
+
+    /**
+     * A finite number of seconds at or above `$min` - a JSON number or a
+     * numeric string (an env var has no other type) - or null for anything
+     * that has not usably asked for one.
+     */
+    private static function honourableSeconds(mixed $raw, float $min): ?float
+    {
+        if (\is_string($raw)) {
+            $raw = is_numeric($raw) ? (float) $raw : null;
         }
 
-        return (float) $raw;
+        if (!\is_int($raw) && !\is_float($raw)) {
+            return null;
+        }
+
+        $seconds = (float) $raw;
+
+        return is_finite($seconds) && $seconds >= $min ? $seconds : null;
+    }
+
+    /**
+     * The merged settings, or nothing: guarded like
+     * `EngineBackend::userConfig()`, because a missing or malformed settings
+     * file must cost the DEFAULT bounds, never a provider client.
+     *
+     * @return array<string, mixed>
+     */
+    private static function settingsConfig(): array
+    {
+        try {
+            return \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 }

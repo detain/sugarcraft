@@ -38,6 +38,23 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
     use ReassemblesStreamedToolCalls;
 
     /**
+     * The `temperature` sent when neither the request nor the `temperature`
+     * setting names one — what this class has always sent.
+     */
+    public const DEFAULT_TEMPERATURE = 0.7;
+
+    /**
+     * Roadmap N-P4a: the operator's sampling temperature for this provider,
+     * read per request ({@see temperature()}), so a save applies from the
+     * next turn. `custom` only, like `extraBody`: SGLang keeps its per-family
+     * defaults, which a model card prescribes and a global value would undo.
+     */
+    private const TEMPERATURE_CONFIG_KEY = 'temperature';
+
+    /** The range every OpenAI-compatible server accepts for `temperature`. */
+    public const MAX_TEMPERATURE = 2.0;
+
+    /**
      * E707 (round 81): the `finish_reason` strings on this OpenAI-compatible
      * wire that mark a capacity cut rather than a clean end. `length` is the
      * protocol's own; `abort` is what the vLLM/SGLang-family servers this
@@ -316,6 +333,28 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
         return $this->modelMetadata?->costPer1kTokens($model, $direction) ?? 0.0;
     }
 
+    /**
+     * The temperature for a request that names none: the `temperature`
+     * setting when it is a finite number in `0..`{@see MAX_TEMPERATURE},
+     * else {@see DEFAULT_TEMPERATURE}. Out-of-range values fall back rather
+     * than being clamped, the doctrine every numeric setting follows — a
+     * server would reject them, and a silently different number is one the
+     * operator never chose.
+     */
+    private static function temperature(): float
+    {
+        $raw = self::settingsConfig()[self::TEMPERATURE_CONFIG_KEY] ?? null;
+        if (\is_string($raw)) {
+            $raw = is_numeric($raw) ? (float) $raw : null;
+        }
+
+        if ((\is_int($raw) || \is_float($raw)) && is_finite((float) $raw) && $raw >= 0 && $raw <= self::MAX_TEMPERATURE) {
+            return (float) $raw;
+        }
+
+        return self::DEFAULT_TEMPERATURE;
+    }
+
     public function complete(CompleteRequest $request): CompleteResponse
     {
         $params = [
@@ -325,7 +364,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
             // unset, so an empty prompt earns no wire turn) and renders later
             // system rows in place - see SglangProvider::placeSystemRows().
             'messages' => $this->formatMessages($request->messages, $request->systemPrompt),
-            'temperature' => $request->temperature ?? 0.7,
+            'temperature' => $request->temperature ?? self::temperature(),
             'max_tokens' => $request->maxTokens ?? 4096,
             // No reasoning-splitting flag by default (audit 15a A10): the old
             // literal `extra_body` wrapper was never parsed by SGLang (the
@@ -429,7 +468,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel
             // unset, so an empty prompt earns no wire turn) and renders later
             // system rows in place - see SglangProvider::placeSystemRows().
             'messages' => $this->formatMessages($request->messages, $request->systemPrompt),
-            'temperature' => $request->temperature ?? 0.7,
+            'temperature' => $request->temperature ?? self::temperature(),
             'max_tokens' => $request->maxTokens ?? 4096,
             'stream' => true,
             // Billing fix (audit-crush-core finding 1), set next to `stream`

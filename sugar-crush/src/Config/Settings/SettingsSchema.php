@@ -48,6 +48,7 @@ final class SettingsSchema
         Definitions\InterfaceSettings::class,
         Definitions\HooksMcpSettings::class,
         Definitions\ServerSettings::class,
+        Definitions\EngineSettings::class,
     ];
 
     /** @var list<SettingDefinition>|null */

@@ -1037,8 +1037,10 @@ final class AgentManager
                 // one Write's tool_calls priced at two prompts and two strikes
                 // for the same call). A discarded attempt now costs the gate
                 // nothing it can see.
-                for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
-                    $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+                // N-P4a: `providerRetryAttempts`, read once per sequence.
+                $maxAttempts = TransientFailure::maxAttempts();
+                for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                    $lastAttempt = $attempt === $maxAttempts;
 
                     // Per-attempt: a rollback rewinds this alongside the
                     // output, so only the ACCEPTED attempt's calls are ever
@@ -1136,8 +1138,10 @@ final class AgentManager
 
                 // See the streaming branch. Nothing is observable until
                 // complete() returns, so this half has nothing to roll back.
-                for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
-                    $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+                // N-P4a: `providerRetryAttempts`, read once per sequence.
+                $maxAttempts = TransientFailure::maxAttempts();
+                for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                    $lastAttempt = $attempt === $maxAttempts;
 
                     try {
                         $response = $this->provider->complete($request);

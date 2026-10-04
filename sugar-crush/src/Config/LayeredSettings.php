@@ -504,6 +504,9 @@ final class LayeredSettings
         'statusLine',
         'layout',
         'lintCommands',
+        'connectTimeoutSeconds',
+        'providerRetryAttempts',
+        'providerRetryBaseBackoffMs',
         // settings:layered-keys:end
     ];
 
@@ -736,6 +739,9 @@ final class LayeredSettings
         'disabledSkills',
         'includeGitInstructions',
         'theme',
+        'connectTimeoutSeconds',
+        'providerRetryAttempts',
+        'providerRetryBaseBackoffMs',
         // settings:project-tier-keys:end
     ];
 

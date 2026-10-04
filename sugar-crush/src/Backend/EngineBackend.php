@@ -112,8 +112,44 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
       * drain discards a corrupt buffer whole, costing the turn. What does tick
       * through a stalled transfer is an HTTP progress callback, and its seam
       * lives in the providers, not below this ceiling.
+      *
+      * A DEFAULT SINCE N-P4a, not a fixed number: the `turnIdleTimeoutSeconds`
+      * setting replaces it per turn ({@see turnIdleTimeoutSeconds()}), resolved
+      * in the PARENT before the fork so the timer the parent arms and the
+      * ceiling the child holds its parallel-group deadline under are the same
+      * value. Public so the schema's default is this constant, not a copy.
+      * Still an IDLE ceiling whatever it is set to — there is no total
+      * deadline on a turn, and the setting cannot make one.
       */
-    private const COMPLETE_TIMEOUT_SECONDS = 120;
+    public const COMPLETE_TIMEOUT_SECONDS = 120;
+
+    /**
+     * The smallest `turnIdleTimeoutSeconds` honoured. Below it the watchdog
+     * would kill a provider's ordinary time-to-first-token on a loaded
+     * server, and it must stay above every silence the engine itself
+     * produces: an exhausted retry sequence sleeps at most
+     * {@see \SugarCraft\Crush\Providers\TransientFailure::maxTotalBackoffMicroseconds()}
+     * with no frame written, which is held to half of this.
+     */
+    public const MIN_TURN_IDLE_TIMEOUT_SECONDS = 30;
+
+    /** The settings key {@see turnIdleTimeoutSeconds()} reads. */
+    private const TURN_IDLE_TIMEOUT_CONFIG_KEY = 'turnIdleTimeoutSeconds';
+
+    /**
+     * The idle ceiling the PARENT armed for the turn this process is the
+     * forked child of — set only inside {@see completeAsync()}'s child branch,
+     * so it exists only in that child's copy of memory and dies with it.
+     *
+     * Why the child needs the parent's number rather than its own read: the
+     * parallel-group deadline must sit under the ceiling that will actually
+     * kill the turn ({@see parallelToolDeadlineSeconds()}), and that ceiling
+     * is the timer the parent armed. A settings save landing between the
+     * fork and the child's own config read would otherwise let the two
+     * disagree. Static rather than per-instance because a Task sub-agent's
+     * engine runs inside the same child and is bounded by the same timer.
+     */
+    private static ?int $forkIdleCeilingSeconds = null;
 
     /**
      * The user message of {@see summariseStoppedTurn()}'s request when the
@@ -2654,16 +2690,68 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The turn's idle ceiling in whole seconds: the `turnIdleTimeoutSeconds`
+     * setting, else {@see COMPLETE_TIMEOUT_SECONDS} - roadmap N-P4a.
+     *
+     * Read by the PARENT, once per turn, before the fork
+     * ({@see completeAsync()}, {@see summariseAsync()}), which is what makes
+     * the key next-turn with no plumbing: a save lands in the merged config
+     * and the next fork arms the new timer. The running turn keeps the timer
+     * it was born with.
+     *
+     * IT BOUNDS SILENCE, NEVER A TOTAL: the timer is re-armed on every frame
+     * the child writes, so a larger value buys a slow provider more quiet
+     * between chunks, not a deadline on the turn. There is no "off": a turn
+     * whose child hangs must still die, so values under
+     * {@see MIN_TURN_IDLE_TIMEOUT_SECONDS}, non-numbers and non-finite floats
+     * fall back to the default rather than being clamped (the same doctrine
+     * as {@see parallelToolDeadlineSeconds()}). A fraction is truncated: the
+     * timer the parent arms takes whole seconds of silence as well as any.
+     *
+     * @param ?array<string, mixed> $config the already-read user config;
+     *                                      null reads it
+     */
+    private static function turnIdleTimeoutSeconds(?array $config = null): int
+    {
+        $config ??= self::userConfig();
+        $raw = $config[self::TURN_IDLE_TIMEOUT_CONFIG_KEY] ?? null;
+
+        if (is_string($raw)) {
+            $raw = is_numeric($raw) ? $raw + 0 : null;
+        }
+
+        if (!is_int($raw) && !(is_float($raw) && is_finite($raw))) {
+            return self::COMPLETE_TIMEOUT_SECONDS;
+        }
+
+        // Judged before the cast, on the value's own magnitude: an
+        // overflowing (int) would wrap rather than saturate.
+        if ($raw < self::MIN_TURN_IDLE_TIMEOUT_SECONDS || (is_float($raw) && $raw >= (float) PHP_INT_MAX)) {
+            return self::COMPLETE_TIMEOUT_SECONDS;
+        }
+
+        return (int) $raw;
+    }
+
+    /**
      * The wall-clock budget one concurrent group gets, as configured.
      *
      * The ceiling is not a preference: the group deadline is enforced INSIDE
      * the forked completion child, and no frame reaches the parent while a
-     * group is executing, so a group allowed to outlive
-     * {@see COMPLETE_TIMEOUT_SECONDS} would have the whole turn SIGKILLed from
-     * above — losing every sibling's result — instead of the one stuck call
-     * being reported as a failed call. A configured value at or past that
-     * ceiling therefore cannot be honoured, and neither can a zero or negative
-     * one.
+     * group is executing, so a group allowed to outlive the turn's idle
+     * ceiling ({@see turnIdleTimeoutSeconds()}; {@see COMPLETE_TIMEOUT_SECONDS}
+     * by default) would have the whole turn SIGKILLed from above — losing
+     * every sibling's result — instead of the one stuck call being reported
+     * as a failed call. A configured value at or past that ceiling therefore
+     * cannot be honoured, and neither can a zero or negative one.
+     *
+     * THE CEILING IS THE ONE THE PARENT ARMED (N-P4a): inside a forked turn
+     * it is {@see $forkIdleCeilingSeconds}, the value the parent resolved
+     * before the fork; anywhere else (a sync turn, a test) it is resolved off
+     * the same config this reads. And the fallback is held under it too: an
+     * operator who lowered the idle ceiling below
+     * {@see Runtime::PARALLEL_TOOL_DEADLINE_SECONDS} gets a group deadline one
+     * second under their ceiling, not a default that would outlive it.
      *
      * Nonsense falls back to {@see Runtime::PARALLEL_TOOL_DEADLINE_SECONDS}
      * rather than being clamped, matching how
@@ -2686,16 +2774,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      */
     private static function parallelToolDeadlineSeconds(?array $config = null): int
     {
+        $config ??= self::userConfig();
+        $ceiling = self::$forkIdleCeilingSeconds ?? self::turnIdleTimeoutSeconds($config);
+
         $env = getenv(self::PARALLEL_TOOL_DEADLINE_ENV);
-        $seconds = self::honourableDeadline($env === false ? null : $env);
+        $seconds = self::honourableDeadline($env === false ? null : $env, $ceiling);
         if ($seconds !== null) {
             return $seconds;
         }
 
-        $config ??= self::userConfig();
-
-        return self::honourableDeadline($config[self::PARALLEL_TOOL_DEADLINE_CONFIG_KEY] ?? null)
-            ?? Runtime::PARALLEL_TOOL_DEADLINE_SECONDS;
+        return self::honourableDeadline($config[self::PARALLEL_TOOL_DEADLINE_CONFIG_KEY] ?? null, $ceiling)
+            ?? min(Runtime::PARALLEL_TOOL_DEADLINE_SECONDS, $ceiling - 1);
     }
 
     /**
@@ -2711,8 +2800,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * honouring it in the environment was an artifact of where the value came
      * from, not a judgement about the value.) Sub-second precision is dropped
      * rather than honoured because {@see Runtime} takes whole seconds.
+     *
+     * @param int $ceiling the turn's idle ceiling; the deadline must be under it
      */
-    private static function honourableDeadline(mixed $raw): ?int
+    private static function honourableDeadline(mixed $raw, int $ceiling = self::COMPLETE_TIMEOUT_SECONDS): ?int
     {
         if (is_string($raw)) {
             // "" is the shape an env var that is set-but-empty arrives in, and
@@ -2728,7 +2819,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
         // Compared before the cast, so an out-of-range float is rejected on its
         // own value rather than on whatever an overflowing (int) produced.
-        if ($raw < 1 || $raw >= self::COMPLETE_TIMEOUT_SECONDS) {
+        if ($raw < 1 || $raw >= $ceiling) {
             return null;
         }
 
@@ -2950,6 +3041,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning, $interactive);
         }
 
+        // N-P4a: this turn's idle ceiling, resolved HERE in the parent before
+        // the fork — the timer below is armed with it and the child holds its
+        // parallel-group deadline under it ($forkIdleCeilingSeconds), so a
+        // save mid-turn applies to the next turn and never splits the two.
+        $idleSeconds = self::turnIdleTimeoutSeconds();
+
         $sockets = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         if ($sockets === false) {
             return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning, $interactive);
@@ -3002,6 +3099,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // Chat-side drain here and read the parent's inbox dry (see
             // RuntimeNoticeSink::enterForkedChild()).
             \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::enterForkedChild($noticeSink);
+            self::$forkIdleCeilingSeconds = $idleSeconds;
             $this->runCompleteInChild($childSocket, $history, $interactive);
         }
 
@@ -3158,7 +3256,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // Restart the idle clock. Called once up front and again for every
         // frame the child streams, so the ceiling measures silence rather
         // than total turn length.
-        $resetTimeout = function () use (&$settled, $loop, &$timeoutTimer, $teardown, &$pendingAsks): void {
+        $resetTimeout = function () use (&$settled, $loop, &$timeoutTimer, $teardown, &$pendingAsks, $idleSeconds): void {
             if ($settled) {
                 return;
             }
@@ -3173,8 +3271,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             if ($pendingAsks !== []) {
                 return;
             }
-            $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, static function () use ($teardown): void {
-                $teardown('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's without progress');
+            $timeoutTimer = $loop->addTimer($idleSeconds, static function () use ($teardown, $idleSeconds): void {
+                $teardown('Provider request timed out after ' . $idleSeconds . 's without progress');
             });
         };
         $resetTimeout();
@@ -3539,7 +3637,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * It is {@see \SugarCraft\Crush\Context\Compaction\StepSummarizer::summaryStep()},
      * the request the in-turn step summary already makes, run off the render
      * loop in a forked child exactly as a turn is: the same idle ceiling
-     * ({@see COMPLETE_TIMEOUT_SECONDS} of SILENCE, reset by every frame the
+     * ({@see turnIdleTimeoutSeconds()} of SILENCE, reset by every frame the
      * child writes — each streamed chunk and each transport heartbeat), no
      * total deadline, the same hard-cancel and tree teardown, the same reap.
      * So a summary is never killed sooner, or later, than a turn of the same
@@ -3582,6 +3680,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             ? @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP)
             : false;
         $noticeSink = \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::current();
+        // N-P4a: the same per-turn idle ceiling a turn gets, read pre-fork.
+        $idleSeconds = self::turnIdleTimeoutSeconds();
         $pid = $sockets === false ? -1 : pcntl_fork();
         if ($pid === -1) {
             // A loop, not an `if`: the fork-exit guard reads the branches
@@ -3662,15 +3762,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             }
             $this->settleFromResultFrame($result, $deferred, null);
         };
-        $resetTimeout = static function () use (&$settled, $loop, &$timeoutTimer, $teardown): void {
+        $resetTimeout = static function () use (&$settled, $loop, &$timeoutTimer, $teardown, $idleSeconds): void {
             if ($settled) {
                 return;
             }
             if ($timeoutTimer !== null) {
                 $loop->cancelTimer($timeoutTimer);
             }
-            $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, static function () use ($teardown): void {
-                $teardown('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's without progress');
+            $timeoutTimer = $loop->addTimer($idleSeconds, static function () use ($teardown, $idleSeconds): void {
+                $teardown('Provider request timed out after ' . $idleSeconds . 's without progress');
             });
         };
         $resetTimeout();
