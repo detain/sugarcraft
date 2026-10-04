@@ -469,6 +469,10 @@ final class Runtime
      *    prompt while listing them would spend a judgement that class cannot
      *    make. "Did the working tree move" and "may this call be denied
      *    without asking" are different questions, and the answers differ.
+     *    The no-ask tools — `Memory`, `Prune`, `Todo` — diverge too, for the
+     *    opposite reason: they move no file, so they are read-only here, but
+     *    the gate classes them no-ask rather than read, because each writes
+     *    harness-owned state (memory notes, the context ledger, the todo list).
      *
      *    NEITHER THE NAMES NOR THE DIVERGENCE ARE ASSERTED HERE ANY MORE, and
      *    that is the second correction to this bullet. It first stated the
@@ -5274,7 +5278,9 @@ final class Runtime
      * The volatile per-step context (step 1.A-1): the git section of this
      * Runtime's environment snapshot — so the write signal
      * {@see markWriteSinceLastRender()} sets still decides whether the diffs
-     * render — plus the files this conversation's Edit/Write calls touched.
+     * render — plus the files this conversation's Edit/Write calls touched,
+     * and the files changed on disk since the turn's tools read them (step
+     * 3.I-2, from the {@see Tools\ReadLedger} those tools share).
      *
      * Public so the owner that persists the row into the history (step 1.A-2,
      * EngineBackend::runTurn) builds it from the same source {@see run()}
@@ -5287,7 +5293,8 @@ final class Runtime
         return Context\TurnContextBlock::new()
             ->withGitState($this->environmentSnapshot($app)->renderVolatile())
             ->withRecentlyModifiedFiles(Context\TurnContextBlock::recentlyModifiedIn($app->messages))
-            ->withMemoryRecall($this->memoryRecall($app)->render());
+            ->withMemoryRecall($this->memoryRecall($app)->render())
+            ->withChangedSinceRead(Tools\ReadLedger::in($app->tools)?->notice() ?? '');
     }
 
     /**

@@ -309,9 +309,9 @@ final class KeyBindingRegistry
      * {@see shellCtrlRunes()} is read only when `shellOwnsKeyboard()` is FALSE
      * (`claims()` returns before reaching that read otherwise), and
      * {@see chatCtrlRunesYieldedToShell()} only when it is TRUE. The two reads
-     * are mutually exclusive. Swept exhaustively over 2 menu states × 9 panes ×
-     * 95 printable runes × Ctrl on/off = 3420 keypresses: 1710 derive nothing,
-     * 936 derive one set, 774 derive two, none derive three.
+     * are mutually exclusive. Swept exhaustively over 2 menu states × 10 panes ×
+     * 95 printable runes × Ctrl on/off = 3800 keypresses: 1900 derive nothing,
+     * 1031 derive one set, 869 derive two, none derive three.
      *
      * That sweep visits the panes at their DEFAULT sub-state, and a sub-state is
      * not neutral here: opening the skill picker in `Pane::Skills` flips
@@ -344,7 +344,7 @@ final class KeyBindingRegistry
      *
      * `KeyboardHandlerTest::testTheHotPathNeverDerivesMoreThanTwoRuneSets()` is
      * what keeps this accounting from drifting back into prose: it re-measures
-     * the table rows and re-runs both sweeps, the 3420 and the 1520.
+     * the table rows and re-runs both sweeps, the 3800 and the 1520.
      *
      * @var array<string, list<string>>
      */

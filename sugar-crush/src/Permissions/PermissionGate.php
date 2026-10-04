@@ -409,7 +409,7 @@ final class PermissionGate
         ?string $projectRoot,
     ): PermissionDecision {
         // A no-ask tool writes only harness-owned state (the memory
-        // directories), so every mode lets it run: a prompt would protect
+        // directories, the context ledger, the todo list), so every mode lets it run: a prompt would protect
         // nothing, and before the TUI can answer an Ask it would be a deny.
         // Rules were already consulted in decide(), so a Deny rule still wins.
         if ($this->isNoAskTool($call)) {

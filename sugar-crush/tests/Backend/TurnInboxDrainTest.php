@@ -197,6 +197,45 @@ final class TurnInboxDrainTest extends TestCase
         );
     }
 
+    public function testAFinishedTaskRunNamesTheUsersMessageOutsideItsReportFence(): void
+    {
+        $session = 'p-d1-' . bin2hex(random_bytes(4));
+        $this->sessions[] = $session;
+        $manager = new AgentManager(new ScriptedProvider([]), new SkillRegistry());
+        $manager->register(RosterAgent::named('coder', maxTurns: 5));
+        $workspaceInbox = \SugarCraft\Crush\Host\WorkspaceContext::new()->agentInbox($session);
+        self::assertNotNull($workspaceInbox, 'the suite pins an owned root');
+
+        $probe = self::tool('probe', static function () use ($manager, $workspaceInbox): string {
+            $running = $manager->subAgentsOf('coder');
+            $workspaceInbox->send($running[0]->id, AgentMessage::fromUser('skip the vendor directory'));
+
+            return 'probed';
+        });
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('c1', 'probe', [])]),
+            new CompleteResponse(content: 'Audited; vendor skipped.'),
+        ]);
+        $engine = EngineBackend::new($provider, 'm')->withoutHooks()->withSessionId($session)->withTools([$probe]);
+
+        $result = (new TaskTool($manager))->withEngine($engine)->execute([
+            'description' => 'Audit',
+            'prompt' => 'Audit the module',
+            'agent' => 'coder',
+        ]);
+
+        self::assertFalse($result->isError());
+        $content = $result->content();
+        self::assertStringEndsWith(
+            "Note: during this run the user sent the sub-agent 1 direct message:\n  - \"skip the vendor directory\" (delivered at step 2)",
+            $content,
+        );
+        self::assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::HEADER . "\nAudited; vendor skipped.", $content);
+        $harnessLine = strpos($content, '[sub-agent "coder" finished;');
+        self::assertNotFalse($harnessLine);
+        self::assertGreaterThan($harnessLine, strpos($content, 'Note: during this run'), 'the harness\'s note, after the fenced report');
+    }
+
     /**
      * The rows of a request, without the `<turn-context>` row.
      *

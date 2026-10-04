@@ -347,11 +347,11 @@ which is returned exactly as sent (string or integer).
 | `-32002` | not initialized — `server.hello` first |
 | `-32003` | forbidden (scope, or a write the server does not allow remotely) |
 | `-32004` | not found (`session_not_found`, `ask_not_found`, …) |
-| `-32009` | conflict (`already_resolved`, `session_locked`, `refused`, …) |
+| `-32009` | conflict (`already_resolved`, `session_locked`, `refused`, `command_refused`, …) |
 | `-32010` | busy, retryable (`too_many_turns`, `turn_running`, `draining`, …) |
 | `-32011` | rate limited, retryable |
 | `-32020` | permission mode refused |
-| `-32030` | unsupported in server (`ui_only`, `todo_unavailable`, …) |
+| `-32030` | unsupported in server (`ui_only`, `remember_user_unavailable`, …) |
 | `-32099` | internal — the cause is in the server's log, never in the answer |
 
 Every method that changes something takes an optional `idempotencyKey` (up to
@@ -379,7 +379,7 @@ it and the two tables below are generated from the code
 | `bg.output` | read |  | `bgId` | A background session's output from an offset. |
 | `bg.stop` | write | yes | `bgId` | Stop a background session. |
 | `client.viewing` | read |  | — | Say which sessions this client shows, and which is in front. |
-| `command.exec` | write | yes | `sessionId`, `name` | Run a slash command in a session (command files; built-ins once they run headless). |
+| `command.exec` | write | yes | `sessionId`, `name` | Run a slash command in a session (command files, and the built-ins that run headless). |
 | `command.list` | read |  | — | The slash commands a session knows, and where each runs. |
 | `files.changed` | read |  | — | The workspace's changed and untracked files. |
 | `files.diff` | read |  | — | The workspace's uncommitted changes to tracked files, as a unified diff. |
@@ -414,7 +414,7 @@ it and the two tables below are generated from the code
 | `settings.get` | read |  | — | Effective values and where each came from, or one tier's file; secrets masked. |
 | `settings.schema` | read |  | — | Every setting: type, default, help, and whether a client may write it. |
 | `settings.set` | admin | yes | `key` | Write an allowlisted setting to the user tier or a trusted project. |
-| `todo.get` | read |  | `sessionId` | A session's todo list (reserved; answers todo_unavailable until sessions keep one). |
+| `todo.get` | read |  | `sessionId` | A session's todo list, as its Todo tool last wrote it. |
 | `tool.output` | read |  | `sessionId`, `toolCallId` | A finished tool call's full output, from an offset. |
 <!-- protocol:methods:end -->
 
@@ -497,10 +497,19 @@ the way Esc Esc does; `mode: "soft"` at the next step boundary, letting the
 tool in flight finish. `clearQueue: true` also drops the queue.
 `session.status` follows the session: `idle`, `busy`, `waiting_permission`.
 
-Built-in slash commands still run in the terminal UI only: `command.list` lists
-them with `runsIn: "client"`, and `command.exec` refuses them `-32030`
+A built-in slash command whose body lives on the host (`Host\Commands` —
+`/clear`, `/rewind`, `/memory`, `/permissions`, `/workflow`, …) runs on the
+server: `command.list` lists it with `runsIn: "server"`, and `command.exec`
+answers the `rows` it appended to the transcript and the `effects` it applied.
+It is refused `-32009` (`command_refused`, with the reason) while a turn holds
+the session, `/workflow pause|status` inside its own run excepted. The
+screen-only ones (`/theme`, `/pane`, the pickers) and those whose logic is
+still the TUI's are listed `runsIn: "client"` and refused `-32030`
 (`ui_only`). A project's or your own command files (`.sugar-crush/commands/`)
 run on the server exactly as typing `/name args` would.
+
+`todo.get` answers the session's todo list as its `Todo` tool last wrote it:
+`{items: [{content, status}]}`, empty when the agent has kept none.
 
 ### Permissions over the wire
 

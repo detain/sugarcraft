@@ -227,6 +227,12 @@ final class SessionHost
         return $this->sessionId;
     }
 
+    /** The session's todo list (roadmap 3.C), as its `Todo` tool last wrote it. */
+    public function todos(): \SugarCraft\Crush\Todo\TodoList
+    {
+        return $this->runner()->todos($this->transcripts, $this->sessionId);
+    }
+
     public function workspace(): WorkspaceContext
     {
         return $this->workspace;
@@ -515,7 +521,7 @@ final class SessionHost
         $text = trim('/' . $name . ' ' . trim($args));
 
         if ($this->isBusy() && !$this->isWorkflowControl($text)) {
-            return CommandResult::refused($this->turns()->hostCommandNotice($text, true));
+            return CommandResult::refused($this->turns()->hostCommandNotice($text));
         }
 
         $result = $this->dispatchCommand($text)
@@ -578,11 +584,11 @@ final class SessionHost
             case TurnController::ROUTE_WORKFLOW_CONTROL:
                 // `/workflow pause|status` inside the run they control (audit
                 // WF-4): run, and leave the run holding the session.
-                return $this->command($text) ?? TurnTicket::refused($turns->hostCommandNotice($text, true));
+                return $this->command($text) ?? TurnTicket::refused($turns->hostCommandNotice($text));
 
             case TurnController::ROUTE_QUIT:
             case TurnController::ROUTE_REFUSE_COMMAND:
-                return TurnTicket::refused($turns->hostCommandNotice($text, true));
+                return TurnTicket::refused($turns->hostCommandNotice($text));
 
             case TurnController::ROUTE_STEER:
                 $steerId = $this->workspace->backend instanceof InteractiveTurn

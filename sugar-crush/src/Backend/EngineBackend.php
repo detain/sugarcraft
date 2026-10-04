@@ -1523,14 +1523,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // diff-less copy of the row that would differ from its neighbours
             // only by the diffs it withheld. A change made outside the agent
             // between two read-only steps shows on the next write or turn.
+            // The stale-read paragraph (3.I-2) is re-read on every step,
+            // reused row or not: it is a stat per read file, and a file that
+            // changed under a read-only step must say so before the next.
             $turnContext = $turnContext === null || $lastAssistant === null || Runtime::stepRequestedAWrite($lastAssistant->toolCalls())
                 ? $runtime->turnContext($app)
-                : $turnContext->withRecentlyModifiedFiles(TurnContextBlock::recentlyModifiedIn($app->messages));
+                : $turnContext->withRecentlyModifiedFiles(TurnContextBlock::recentlyModifiedIn($app->messages))
+                    ->withChangedSinceRead(\SugarCraft\Crush\Tools\ReadLedger::in($app->tools)?->notice() ?? '');
             $turnContext = $turnContext->withContextPercent(
                 $this->contextPercentAtStepTop($app->messages, $pressureAnchor ?? [null, 0], $contextWindow),
             );
             if ($turnContext->changedSince($app->messages)) {
                 $app = $app->withMessages([...$app->messages, $turnContext->message()]);
+            }
+
+            // Roadmap 3.C: the todo list is re-shown between steps too, not
+            // only at dispatch (Host\TurnRunner), so a turn running past
+            // TodoReminder::INTERVAL_STEPS steps still sees it. The row rides
+            // the transcript back as a hidden user row, like the one above.
+            $todos = \SugarCraft\Crush\Todo\TodoReminder::latestIn($app->messages);
+            if ($todos !== null && \SugarCraft\Crush\Todo\TodoReminder::due($todos, $app->messages)) {
+                $app = $app->withMessages([...$app->messages, new UserMessage(\SugarCraft\Crush\Todo\TodoReminder::render($todos))]);
             }
 
             // Roadmap 2.1: the step-level pressure check. Chat judges the
@@ -2625,9 +2638,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // Nor this session's context ledger (roadmap 2.2-2): a delegated
             // run's conversation is its own, and its refs and prunes must
             // never be read against — or handed back as — the parent's.
+            // Nor this run's mailbox (P-D1): a message sent to this run is
+            // not one sent to the run it delegates, which binds its own.
             $bound ??= $spentSoFarUsd === null
-                ? $this->mutate(['siblingSpend' => null, 'contextLedger' => null])
-                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null, 'contextLedger' => null]);
+                ? $this->mutate(['siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null])
+                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null]);
             $tools[] = $tool->withEngine($bound, $heartbeat, $subAgentEmitter);
         }
 

@@ -923,6 +923,7 @@ completion can legitimately run for tens of minutes.
 |---|---|---|
 | `~/.sugar-crush/session.db` | `Session\EnhancedSessionStore` (PDO/SQLite) | transcripts, checkpoints, titles |
 | `~/.sugar-crush/session.db` | `Session\EnhancedSessionStore` (`context_ledgers` table) | each session's context ledger: what earlier turns pruned or summarised out of the model's view, and the refs its tool results keep |
+| `~/.sugar-crush/session.db` | `Session\EnhancedSessionStore` (`session_meta.tasks`) | each session's todo list as its `Todo` tool last wrote it, saved by `Host\TranscriptStore::saveTodos()` |
 | `~/.sugar-crush/memory/` | `Memory\MemoryStore` | markdown + frontmatter, per scope |
 | `~/.sugar-crush/memory/.compaction-journal-<key>.jsonl` | `Memory\CompactionJournal` | every model-written compaction summary, one JSON line each, per project (`shared` without a root) |
 | `~/.sugar-crush/teams/` | `Agents\TeamManager` | team state |

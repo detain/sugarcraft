@@ -30,11 +30,13 @@ use SugarCraft\Crush\Tools\ToolCall;
  * Edit/Write calls touched ({@see recentlyModifiedIn()}), the memory notes
  * recalled for the latest user message ({@see MemoryRecallBlock}, roadmap
  * 5.3-2 — query-dependent, so it can only live here and never in message 0),
- * and the share of the context window in use once it reaches
+ * the files that changed on disk since the model read them
+ * ({@see \SugarCraft\Crush\Tools\ReadLedger::notice()}, roadmap 3.I-2), and
+ * the share of the context window in use once it reaches
  * {@see CONTEXT_NOTICE_PERCENT}. Each is
  * optional; a block with nothing to say renders `''` and {@see message()} is
- * null, so no empty row is ever sent. Later steps add fields here (todo list,
- * turn budget, files changed since read) rather than to message 0.
+ * null, so no empty row is ever sent. Later steps add fields here (turn
+ * budget) rather than to message 0.
  *
  * WHEN IT IS SENT: only when it changed. {@see changedSince()} compares the
  * rendered bytes against the most recent `<turn-context>` row the history
@@ -83,12 +85,14 @@ final readonly class TurnContextBlock
      * @param list<string> $recentlyModified Files the agent wrote, most recent first.
      * @param ?int         $contextPercent   Context-window share in use (0-100+), or null when unknown.
      * @param string       $memoryRecall     The rendered {@see MemoryRecallBlock}; '' for none.
+     * @param string       $changedSinceRead The read ledger's stale-file paragraph; '' for none.
      */
     public function __construct(
         private string $gitState = '',
         private array $recentlyModified = [],
         private ?int $contextPercent = null,
         private string $memoryRecall = '',
+        private string $changedSinceRead = '',
     ) {
     }
 
@@ -128,6 +132,21 @@ final readonly class TurnContextBlock
     public function withMemoryRecall(string $memoryRecall): self
     {
         return $this->mutate(memoryRecall: $memoryRecall);
+    }
+
+    /** The stale-read paragraph this row carries, or '' for none. */
+    public function changedSinceRead(): string
+    {
+        return $this->changedSinceRead;
+    }
+
+    /**
+     * @param string $notice {@see \SugarCraft\Crush\Tools\ReadLedger::notice()}'s
+     *                       paragraph; '' clears it
+     */
+    public function withChangedSinceRead(string $notice): self
+    {
+        return $this->mutate(changedSinceRead: $notice);
     }
 
     public function withGitState(string $gitState): self
@@ -176,6 +195,11 @@ final readonly class TurnContextBlock
                 $lines[] = '- ' . self::escapeOwnFence(PromptFence::escape($path));
             }
             $parts[] = implode("\n", $lines);
+        }
+
+        // Canonical paths from the ledger: escaped like the paths above.
+        if (trim($this->changedSinceRead) !== '') {
+            $parts[] = self::escapeOwnFence(PromptFence::escape($this->changedSinceRead));
         }
 
         // Already escaped and fenced by MemoryRecallBlock; this row's own
@@ -362,12 +386,14 @@ final readonly class TurnContextBlock
         ?int $contextPercent = null,
         bool $contextPercentSet = false,
         ?string $memoryRecall = null,
+        ?string $changedSinceRead = null,
     ): self {
         return new self(
             $gitState ?? $this->gitState,
             $recentlyModified ?? $this->recentlyModified,
             $contextPercentSet ? $contextPercent : $this->contextPercent,
             $memoryRecall ?? $this->memoryRecall,
+            $changedSinceRead ?? $this->changedSinceRead,
         );
     }
 }

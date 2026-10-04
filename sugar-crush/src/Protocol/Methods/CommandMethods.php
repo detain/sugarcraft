@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Protocol\Methods;
 use SugarCraft\Crush\Backend\QueueMode;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
+use SugarCraft\Crush\Commands\Specs\BuiltInCommands;
 use SugarCraft\Crush\Protocol\CallContext;
 use SugarCraft\Crush\Protocol\ErrorCode;
 use SugarCraft\Crush\Protocol\MethodRegistry;
@@ -22,9 +23,12 @@ use SugarCraft\Crush\Protocol\Scope;
  * workspace's command FILES — and says where each runs. A command file is a
  * prompt template, so `command.exec` runs it exactly as typing `/name args`
  * would: expanded by the session's host, then admitted like `session.send`.
- * The built-ins are TUI handlers today; until they move to the host
- * (roadmap O-2h, `Host\Commands`) they are listed with `runsIn: "client"`
- * and refused `-32030` (`unsupported_in_server`) rather than half-run.
+ * A built-in with a host body (roadmap O-2h, `Host\Commands`) runs on the
+ * server through {@see \SugarCraft\Crush\Host\SessionHost::runCommand()}
+ * and answers its `CommandResult` rows and effects; it is listed
+ * `runsIn: "server"`. The rest are screen-only (`/theme`, the pickers) or
+ * still Chat's, listed `runsIn: "client"` and refused `-32030` (`ui_only`)
+ * rather than half-run.
  */
 final class CommandMethods
 {
@@ -38,7 +42,7 @@ final class CommandMethods
     public static function register(MethodRegistry $registry): void
     {
         $registry->add(MethodSpec::new('command.list', Scope::Read, 'The slash commands a session knows, and where each runs.', self::list(...)));
-        $registry->add(MethodSpec::new('command.exec', Scope::Write, 'Run a slash command in a session (command files; built-ins once they run headless).', self::exec(...), true));
+        $registry->add(MethodSpec::new('command.exec', Scope::Write, 'Run a slash command in a session (command files, and the built-ins that run headless).', self::exec(...), true));
     }
 
     /** @return array<string, mixed> */
@@ -47,7 +51,7 @@ final class CommandMethods
         $items = [];
         foreach (CommandRegistry::all() as $spec) {
             if ($spec->slashVisible) {
-                $items[$spec->name] = self::describe($spec, 'builtin', self::RUNS_IN_CLIENT);
+                $items[$spec->name] = self::describe($spec, 'builtin', self::runsIn($spec->name));
             }
         }
         foreach (self::files($call) as $name => $spec) {
@@ -72,12 +76,7 @@ final class CommandMethods
         if ($file === null) {
             foreach (CommandRegistry::all() as $spec) {
                 if ($spec->name === $name) {
-                    throw RpcError::of(
-                        ErrorCode::UnsupportedInServer,
-                        \sprintf('/%s runs in the terminal UI only for now', $name),
-                        'ui_only',
-                        ['command' => $name],
-                    );
+                    return self::runBuiltIn($host, $name, $args);
                 }
             }
 
@@ -87,6 +86,37 @@ final class CommandMethods
         $ticket = TurnMethods::admit($call, $host, '/' . $name . ($args === '' ? '' : ' ' . $args), QueueMode::Followup, $params->optionalString('idempotencyKey', 64));
 
         return ['rows' => [], 'effects' => [], ...$ticket];
+    }
+
+    /**
+     * A built-in, run by the session's host: its rows and effects, or the
+     * reason it did not run — `-32030` (`ui_only`) for a screen-only one,
+     * `-32009` (`command_refused`) when a turn holds the session.
+     *
+     * @return array<string, mixed>
+     */
+    private static function runBuiltIn(\SugarCraft\Crush\Host\SessionHost $host, string $name, string $args): array
+    {
+        $result = $host->runCommand($name, $args);
+        if ($result->isClientOnly()) {
+            throw RpcError::of(
+                ErrorCode::UnsupportedInServer,
+                \sprintf('/%s runs in the terminal UI only', $name),
+                'ui_only',
+                ['command' => $name],
+            );
+        }
+        if ($result->isRefused()) {
+            throw RpcError::of(ErrorCode::Conflict, (string) $result->error, 'command_refused', ['command' => $name]);
+        }
+
+        return $result->toArray();
+    }
+
+    /** Where built-in $name runs: on the server when it has a host body. */
+    private static function runsIn(string $name): string
+    {
+        return BuiltInCommands::forSpelling($name)?->hostCommand !== null ? self::RUNS_IN_SERVER : self::RUNS_IN_CLIENT;
     }
 
     /**

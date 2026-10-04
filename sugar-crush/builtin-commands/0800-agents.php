@@ -10,7 +10,7 @@ use SugarCraft\Crush\Palette\PaletteAction;
 // old prefix chain, so it stays reachable.
 return BuiltInCommand::new(CommandSpec::new(
     'agents',
-    'List active agents, or inspect one by name',
+    'List active agents, inspect one by name, or open a running one\'s Agent View',
     'Agents',
     paletteAction: PaletteAction::SwitchAgent,
     paletteLabel: 'Switch agent',

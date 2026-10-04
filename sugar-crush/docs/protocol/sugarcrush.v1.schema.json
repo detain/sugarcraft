@@ -748,7 +748,7 @@
             }
         },
         "command.exec": {
-            "description": "Run a slash command in a session (command files; built-ins once they run headless).",
+            "description": "Run a slash command in a session (command files, and the built-ins that run headless).",
             "scope": "write",
             "idempotent": true,
             "params": {
@@ -777,8 +777,51 @@
                 ]
             },
             "result": {
-                "$ref": "#/$defs/Admission",
-                "description": "Plus `rows` and `effects` (empty while only command files run here)."
+                "oneOf": [
+                    {
+                        "$ref": "#/$defs/Admission",
+                        "description": "A command file: admitted like session.send, plus empty `rows` and `effects`."
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "rows": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "role": {
+                                            "type": "string"
+                                        },
+                                        "content": {
+                                            "type": "string"
+                                        },
+                                        "uiOnly": {
+                                            "type": "boolean"
+                                        }
+                                    },
+                                    "required": [
+                                        "role",
+                                        "content",
+                                        "uiOnly"
+                                    ]
+                                }
+                            },
+                            "effects": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "required": [
+                            "rows",
+                            "effects"
+                        ],
+                        "additionalProperties": false,
+                        "description": "A built-in run on the server: the rows it appended and the kinds of the effects it applied."
+                    }
+                ]
             }
         },
         "command.list": {
@@ -2339,7 +2382,7 @@
             }
         },
         "todo.get": {
-            "description": "A session's todo list (reserved; answers todo_unavailable until sessions keep one).",
+            "description": "A session's todo list, as its Todo tool last wrote it.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -2360,11 +2403,29 @@
                         "type": "array",
                         "items": {
                             "type": "object",
-                            "additionalProperties": {}
+                            "properties": {
+                                "content": {
+                                    "type": "string"
+                                },
+                                "status": {
+                                    "enum": [
+                                        "pending",
+                                        "in_progress",
+                                        "completed",
+                                        "cancelled"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "content",
+                                "status"
+                            ]
                         }
                     }
                 },
-                "description": "Reserved: answers todo_unavailable today."
+                "required": [
+                    "items"
+                ]
             }
         },
         "tool.output": {

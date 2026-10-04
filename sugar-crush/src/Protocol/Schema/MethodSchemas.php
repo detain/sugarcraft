@@ -202,7 +202,17 @@ final class MethodSchemas
             ], ['name', 'source', 'runsIn']))],
             'command.exec' => [
                 Schema::object([...$sid, 'name' => Schema::string(128), 'args' => Schema::string(65_536)], ['sessionId', 'name']),
-                Schema::ref(D::ADMISSION)->describe('Plus `rows` and `effects` (empty while only command files run here).'),
+                Schema::oneOf(
+                    Schema::ref(D::ADMISSION)->describe('A command file: admitted like session.send, plus empty `rows` and `effects`.'),
+                    Schema::object([
+                        'rows' => Schema::arrayOf(Schema::object([
+                            'role' => Schema::string(),
+                            'content' => Schema::string(),
+                            'uiOnly' => Schema::boolean(),
+                        ], ['role', 'content', 'uiOnly'])),
+                        'effects' => Schema::arrayOf(Schema::string()),
+                    ], ['rows', 'effects'], open: false)->describe('A built-in run on the server: the rows it appended and the kinds of the effects it applied.'),
+                ),
             ],
 
             'settings.schema' => [$empty, $items(Schema::object([
@@ -293,7 +303,7 @@ final class MethodSchemas
                     'more' => Schema::boolean(),
                 ], ['toolCallId', 'offset', 'content', 'total', 'isError', 'more']),
             ],
-            'todo.get' => [$sessionOnly, Schema::object(['items' => Schema::arrayOf(Schema::map(Schema::any()))])->describe('Reserved: answers todo_unavailable today.')],
+            'todo.get' => [$sessionOnly, Schema::object(['items' => Schema::arrayOf(Schema::object(['content' => Schema::string(), 'status' => Schema::enum(\SugarCraft\Crush\Todo\TodoStatus::values())], ['content', 'status']))], ['items'])],
         ];
         \ksort($schemas);
 

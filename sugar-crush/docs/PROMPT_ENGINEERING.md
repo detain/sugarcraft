@@ -127,7 +127,8 @@ re-prefills the whole conversation behind it.
   ledger crosses a parallel `Read` child through `CarriesSessionState` and the turn child through
   the `result` frame's `readLedger` key, so it lives as long as the session's tool set; at most 256
   paths are kept. `ReadLedger::notice()` renders the matching "files changed on disk since you last
-  read them" paragraph for the `<turn-context>` row, which does not carry it yet.
+  read them" paragraph for the `<turn-context>` row (`TurnContextBlock::withChangedSinceRead()`),
+  re-read at the top of every step.
 - **Pruned tool output and superseded turn-context rows.** When a step's request
   is over its budget, `EngineBackend::runTurn()` prunes before sending
   (`Context\Pruning\EmergencyPrune`), and `Runtime::buildMessages()` projects every

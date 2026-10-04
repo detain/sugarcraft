@@ -50,17 +50,13 @@ use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\PermissionGate;
-use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
-use SugarCraft\Crush\Commands\AgentsCommand;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\McpAuthCommand;
-use SugarCraft\Crush\Commands\NoticesCommand;
-use SugarCraft\Crush\Commands\RulesCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Commands\WebSearchCommand;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
@@ -73,25 +69,16 @@ use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 use SugarCraft\Mouse\ZoneClickTracker;
 use SugarCraft\Fuzzy\MatchResult;
-use SugarCraft\Crush\Workflows\StageResult;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
-use SugarCraft\Crush\Workflows\WorkflowLoadException;
-use SugarCraft\Crush\Workflows\WorkflowNotFoundException;
-use SugarCraft\Crush\Workflows\WorkflowNotRunningException;
 use SugarCraft\Crush\Workflows\WorkflowResult;
-use SugarCraft\Crush\Workflows\WorkflowStatus;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
-use SugarCraft\Crush\Context\ProjectMemoryWriter;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Memory\MemoryStore;
-use SugarCraft\Crush\Memory\ForeignMemoryImporter;
-use SugarCraft\Crush\Memory\UnreadableNotes;
-use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Session\DebouncedTranscriptWriter;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\PromptHistory;
@@ -373,18 +360,6 @@ final class Chat implements Model
      * Exit action for that.
      */
     private const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
-
-    /**
-     * Checkpoint state key the dispatch auto-save sets to true since audit
-     * SES-1, meaning "`messages` is the transcript from BEFORE the prompt".
-     * Its absence is how {@see handleRewindCommand()} tells an older
-     * checkpoint — whose `messages` end on the very prompt its draft re-seeds —
-     * from a current one, whose last user row may legitimately equal the
-     * draft (the same prompt sent twice in a row). Alias of
-     * {@see \SugarCraft\Crush\Host\TurnController::CHECKPOINT_PRE_TURN_KEY},
-     * whose checkpointState() writes it, so writer and reader cannot drift.
-     */
-    private const CHECKPOINT_PRE_TURN_KEY = \SugarCraft\Crush\Host\TurnController::CHECKPOINT_PRE_TURN_KEY;
 
     /** Alias of {@see \SugarCraft\Crush\Host\CompactionService::PARK_NOTICE_PREFIX}, which documents it. */
     private const PARK_NOTICE_PREFIX = \SugarCraft\Crush\Host\CompactionService::PARK_NOTICE_PREFIX;
@@ -2547,11 +2522,7 @@ final class Chat implements Model
             // Unlike the title call above this is NOT session-scoped: the
             // user asked for it out loud with a slash command, so the answer
             // belongs in whatever transcript is in front of them now.
-            $notice = $msg->error !== null
-                ? "Could not start background session '{$msg->name}': {$msg->error}"
-                : ($msg->command === '/fork'
-                    ? "Forked into background session {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel."
-                    : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel.");
+            $notice = \SugarCraft\Crush\Host\Commands\BackgroundCommand::spawnedNotice($msg);
 
             return [$this->mutate(['history' => [...$this->history, Message::assistant($notice)->withUiOnly()]]), null];
         }
@@ -10317,7 +10288,9 @@ final class Chat implements Model
      * only way through was Esc Esc, which releases the turn instead of pausing
      * the run. Neither command rewrites history the run is appending to: pause
      * writes the pause file, status reads state, and both answer with UI-only
-     * rows that leave the turn running ({@see workflowResponse()}).
+     * rows that leave the turn running
+     * ({@see \SugarCraft\Crush\Host\Commands\WorkflowCommand}, whose results
+     * hold the turn).
      *
      * Narrow on purpose: only while the work in flight IS a workflow run (a
      * model turn still refuses), only those two verbs (`run`/`resume` would
@@ -12142,11 +12115,46 @@ final class Chat implements Model
      * A Chat built without an agent manager (an embedder; a launch always has
      * one) answers "not configured" rather than throwing out of `update()`.
      *
+     * `/agent <id|name>` naming a run this launch knows — its run id, or an
+     * agent name with exactly one run in {@see agentLive()} — opens that
+     * run's Agent View (roadmap P-C2) instead of printing the preset. The
+     * view is a TUI surface, so this half stays here rather than on the host.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleAgentsCommand(string $inputBuf): array
     {
+        $runId = $this->liveAgentRunFor(\SugarCraft\Crush\Host\Commands\CommandText::words($inputBuf)[0] ?? '');
+        if ($runId !== null) {
+            // The echo row, as CommandResult's own echo builds it.
+            [$chat] = $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::new(Message::user($inputBuf)->withUiOnly()));
+
+            return [$chat, static fn (): OpenAgentViewMsg => new OpenAgentViewMsg($runId)];
+        }
+
         return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\AgentsHostCommand(), $inputBuf);
+    }
+
+    /**
+     * The run `/agent <arg>` names: a run id {@see agentLive()} holds, or the
+     * one run of the agent named $arg — null when none, or when the name is
+     * ambiguous (the preset inspection answers it instead).
+     */
+    private function liveAgentRunFor(string $arg): ?string
+    {
+        if ($arg === '') {
+            return null;
+        }
+        $live = $this->agentLive();
+        if ($live->get($arg) !== null) {
+            return $arg;
+        }
+        $named = array_values(array_filter(
+            $live->all(),
+            static fn (\SugarCraft\Crush\Agents\Live\AgentLiveState $state): bool => $state->name === $arg,
+        ));
+
+        return \count($named) === 1 ? $named[0]->id : null;
     }
 
     /**

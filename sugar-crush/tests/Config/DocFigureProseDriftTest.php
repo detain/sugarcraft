@@ -2821,8 +2821,9 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($tableEnd);
         $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
         preg_match_all('/\| `([^`]+)` \| `([^`]+)`/', $segment, $rows, \PREG_SET_ORDER);
-        self::assertCount(9, $rows, 'the sessions table no longer has its nine directory/class rows');
+        self::assertCount(10, $rows, 'the sessions table no longer has its ten directory/class rows');
         $orderedDirs = [
+            '~/.sugar-crush/session.db',
             '~/.sugar-crush/session.db',
             '~/.sugar-crush/session.db',
             '~/.sugar-crush/memory/',
@@ -2841,6 +2842,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("configDir() . '/session.db'", $bootstrap, 'session.db is no longer the store file under the config dir — table cell drifted');
         self::assertStringContainsString("configDir() . '/memory'", $bootstrap, 'memory/ is no longer the store directory under the config dir — table cell drifted');
         self::assertStringContainsString('CREATE TABLE IF NOT EXISTS context_ledgers', self::sourceOf('Session/EnhancedSessionStore.php'), 'the session store no longer keeps a context_ledgers table — table row drifted');
+        self::assertStringContainsString('->withTasks($todos->toArray())', self::sourceOf('Host/TranscriptStore.php'), 'the todo list is no longer saved into session_meta.tasks — table row drifted');
         self::assertStringContainsString("'/.compaction-journal-' . (\$home->projectKey() ?? 'shared') . '.jsonl'", self::sourceOf('Memory/CompactionJournal.php'), 'the compaction journal is no longer .compaction-journal-<key>.jsonl in the memory directory — table row drifted');
         self::assertStringContainsString("'~/.sugar-crush/teams'", self::sourceOf('Agents/TeamManager.php'), 'TeamManager no longer defaults to ~/.sugar-crush/teams — table cell drifted');
         self::assertSame('subagents', \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::DIR_NAME, 'the transcript log directory no longer spells subagents — table cell drifted');

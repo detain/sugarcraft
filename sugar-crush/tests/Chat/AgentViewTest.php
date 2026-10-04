@@ -44,8 +44,8 @@ use SugarCraft\Mouse\Mark;
  */
 final class AgentViewTest extends TestCase
 {
-    private const COLS = 120;
-    private const ROWS = 30;
+    private const VIEW_COLS = 120;
+    private const VIEW_ROWS = 30;
 
     /** @var list<string> */
     private array $logs = [];
@@ -191,7 +191,7 @@ final class AgentViewTest extends TestCase
                 ['role' => 'assistant', 'content' => 'Every POST route carries the token.'],
             ]);
             $chat = (new Chat(history: [Message::user('hi')], backend: new EchoBackend(), sessionStore: $store, currentSessionId: 'parent'))
-                ->withSize(self::COLS, self::ROWS);
+                ->withSize(self::VIEW_COLS, self::VIEW_ROWS);
             $app = App::new($this->createMock(ProviderInterface::class), 'm')->withChat($chat);
 
             [$open] = $app->update(new OpenAgentViewMsg($child, $child, 'reviewer'));
@@ -222,7 +222,7 @@ final class AgentViewTest extends TestCase
             isActive: true,
         ));
         $chat = (new Chat(history: [Message::user('hi')], backend: new EchoBackend(), agentManager: $manager))
-            ->withSize(self::COLS, self::ROWS);
+            ->withSize(self::VIEW_COLS, self::VIEW_ROWS);
         $app = App::new($this->createMock(ProviderInterface::class), 'm')
             ->withChat($chat)
             ->withPane(Pane::Agents)
@@ -293,6 +293,31 @@ final class AgentViewTest extends TestCase
         }
     }
 
+    public function testSlashAgentNamingALiveRunOpensItsView(): void
+    {
+        $events = new \ArrayObject();
+        $manager = new AgentManager($this->createMock(ProviderInterface::class), new SkillRegistry());
+        $typed = static fn (string $text): Chat => new Chat(inputBuf: $text, agentManager: $manager, liveToolEvents: $events);
+        $typed('')->agentLive()->apply(self::started('run-1', 'explore', 'call_1'));
+        $typed('')->agentLive()->apply(self::started('run-2', 'review', 'call_1'));
+
+        [$byId, $cmd] = $typed('/agent run-2')->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame('', $byId->inputBuf);
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $msg = $cmd();
+        $this->assertInstanceOf(OpenAgentViewMsg::class, $msg);
+        $this->assertSame('run-2', $msg->agentId, 'by run id');
+
+        [, $cmd] = $typed('/agent explore')->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertSame('run-1', $cmd()->agentId, 'by the name of the one run it has');
+
+        $typed('')->agentLive()->apply(self::started('run-3', 'explore', 'call_2'));
+        [$ambiguous] = $typed('/agent explore')->update(new KeyMsg(KeyType::Enter, ''));
+        $rows = $ambiguous->history;
+        $this->assertStringContainsString('explore', $rows[\count($rows) - 1]->content, 'two runs of one name: the preset answer');
+    }
+
     // ── fixtures ─────────────────────────────────────────────────────────
 
     /**
@@ -306,7 +331,7 @@ final class AgentViewTest extends TestCase
             backend: new EchoBackend(),
             inFlight: true,
             generation: 1,
-        ))->withSize(self::COLS, self::ROWS);
+        ))->withSize(self::VIEW_COLS, self::VIEW_ROWS);
 
         $tasks = ['run-1' => ['map the login flow', 'Login goes through AuthManager.'], 'run-2' => ['look at the session layer', 'The store keeps sessions in SQLite.']];
         foreach ($tasks as $id => [$task, $reply]) {
@@ -321,7 +346,7 @@ final class AgentViewTest extends TestCase
 
         [$app] = App::new($this->createMock(ProviderInterface::class), 'm')
             ->withChat($chat)
-            ->update(new WindowSizeMsg(self::COLS, self::ROWS));
+            ->update(new WindowSizeMsg(self::VIEW_COLS, self::VIEW_ROWS));
 
         return $app;
     }

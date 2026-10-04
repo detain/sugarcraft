@@ -19,8 +19,9 @@ namespace SugarCraft\Crush\Tools\Catalog;
  * - `Ask`: neither of the above, but reaches something the gate cannot judge
  *   (an outbound request, a capability probe, a skill body). Asks under
  *   `default`, `accept-edits` and `plan`; denied under `dont-ask`.
- * - `NoAsk`: writes only state the harness owns (the memory directories), so
- *   a prompt would protect nothing. Allowed in every mode. Explicit rules and
+ * - `NoAsk`: writes only state the harness owns (the memory directories,
+ *   the turn's context ledger, the session's todo list), so a prompt would
+ *   protect nothing. Allowed in every mode. Explicit rules and
  *   hooks still run first.
  */
 enum ToolPermissionClass: string

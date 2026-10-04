@@ -279,7 +279,9 @@ Environment variables:
                           next-message suggestion (→ takes it) after each turn.
    SUGARCRUSH_DISABLE_AUTO_MEMORY
                           Any value other than empty or 0 stops auto-memory
-                          saving durable facts as notes after a turn.
+                          saving durable facts as notes after a turn, and
+                          the dream pass folding the compaction journal
+                          into them.
    SUGARCRUSH_DISABLE_MODEL_METADATA
                           Any value other than empty or 0 stops reading and
                           refreshing the LiteLLM model database that sizes and

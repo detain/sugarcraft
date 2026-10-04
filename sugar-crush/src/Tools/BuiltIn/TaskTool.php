@@ -1179,6 +1179,11 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // Saved before the finished frame goes out, so the frame can name
         // the id a later Task call resumes it by (every path below saves).
         $resume = $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath);
+        // P-D1: what the user told the run while it worked, on every return
+        // below as on the failure path — the harness's note, so it goes
+        // outside the report's fence.
+        $inboxTrailer = $turnInbox?->trailer() ?? '';
+        $inboxNote = $inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer;
 
         if ($capStop !== null) {
             $why = sprintf(
@@ -1194,7 +1199,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
             return $this->refusal(
                 $toolCallId,
-                $why . '. ' . $resume . $failureTail($turn->transcript),
+                $why . '. ' . $resume . $failureTail($turn->transcript) . $inboxNote,
                 self::elapsedMs($startedAt),
                 $spent,
             );
@@ -1216,7 +1221,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $agentName,
                 $maxTurns,
                 $resume,
-            ) . $failureTail($turn->transcript), self::elapsedMs($startedAt), $spent);
+            ) . $failureTail($turn->transcript) . $inboxNote, self::elapsedMs($startedAt), $spent);
         }
 
         // A run that hit its step cap now ENDS IN A SUMMARY rather than in
@@ -1255,6 +1260,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $resume,
             );
         }
+        $content .= $inboxNote;
 
         return new ToolResult(
             toolCallId: $toolCallId,

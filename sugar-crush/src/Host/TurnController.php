@@ -280,36 +280,17 @@ final class TurnController
     }
 
     /**
-     * Why a headless host did not run the command $text: slash commands are
-     * a TUI surface until their logic leaves `Chat` (roadmap O-2h), and
-     * running one against a session the TUI is not drawing would answer into
-     * nothing. A command file is a PROMPT and is not refused by this.
+     * Why a headless host did not run the command $text: a turn holds the
+     * session, and a command would rewrite the history that turn is about to
+     * append to. A command file is a PROMPT and is not refused by this.
      */
-    public function hostCommandNotice(string $text, bool $busy): string
-    {
-        return $busy
-            ? sprintf(
-                '%s is a command, and commands do not run while a turn is in flight — it would rewrite '
-                . 'history this turn is about to append to. Send it again once the turn finishes, or '
-                . 'cancel the turn.',
-                self::quoteDraft($text),
-            )
-            : sprintf(
-                '%s was not run: slash commands are not available in a headless session yet.',
-                self::quoteDraft($text),
-            );
-    }
-
-    /**
-     * Why a headless host did not run `!$command`: the user's own shell
-     * command (roadmap 5.14g) runs in the TUI, where the person who typed it
-     * is the one who sees it run.
-     */
-    public function hostBangNotice(string $command): string
+    public function hostCommandNotice(string $text): string
     {
         return sprintf(
-            'Did not run `%s`: shell commands typed with `!` run in the TUI only.',
-            self::quoteDraft($command),
+            '%s is a command, and commands do not run while a turn is in flight — it would rewrite '
+            . 'history this turn is about to append to. Send it again once the turn finishes, or '
+            . 'cancel the turn.',
+            self::quoteDraft($text),
         );
     }
 

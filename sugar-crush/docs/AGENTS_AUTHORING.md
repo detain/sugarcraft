@@ -306,7 +306,7 @@ How much authority a message has depends on who sent it:
 
 Either way the text is fenced as untrusted: `PromptFence::escape()` runs on it
 and the two message tags are defanged, so a message cannot close its fence and
-speak as the harness. When the run fails, its `Task` result ends with a note
+speak as the harness. Its `Task` result ends with a note
 listing the user's messages and the step each was delivered at, so the
 delegating model knows why the run covered more than it asked.
 

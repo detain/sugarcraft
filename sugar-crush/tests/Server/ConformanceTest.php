@@ -340,16 +340,20 @@ final class ConformanceTest extends TestCase
         self::assertSame('session_not_found', $b->request('session.get', ['sessionId' => $sessionId])['error']['data']['kind']);
     }
 
-    public function testBuiltInCommandsAreClientSideUntilTheyRunHeadless(): void
+    public function testBuiltInsWithAHostBodyRunOnTheServerAndTheRestAreClientSide(): void
     {
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
 
-        $commands = $client->call('command.list')['items'];
-        $clear = \array_values(\array_filter($commands, static fn (array $c): bool => $c['name'] === 'clear'))[0] ?? null;
-        self::assertSame('client', $clear['runsIn'] ?? null);
+        $commands = \array_column($client->call('command.list')['items'], null, 'name');
+        self::assertSame('server', $commands['clear']['runsIn'] ?? null, 'Host\\Commands\\ClearCommand runs headless');
+        self::assertSame('client', $commands['theme']['runsIn'] ?? null, 'a screen-only command');
 
-        $reply = $client->request('command.exec', ['sessionId' => $sessionId, 'name' => '/clear']);
+        $cleared = $client->call('command.exec', ['sessionId' => $sessionId, 'name' => '/clear']);
+        self::assertSame(['clear-transcript'], $cleared['effects']);
+        self::assertIsArray($cleared['rows']);
+
+        $reply = $client->request('command.exec', ['sessionId' => $sessionId, 'name' => '/theme']);
         self::assertSame(ErrorCode::UnsupportedInServer->value, $reply['error']['code']);
         self::assertSame('ui_only', $reply['error']['data']['kind']);
         self::assertSame('command_not_found', $client->request('command.exec', ['sessionId' => $sessionId, 'name' => 'nope'])['error']['data']['kind']);
@@ -396,11 +400,24 @@ final class ConformanceTest extends TestCase
         self::assertContains('clear', $info['commands']);
     }
 
-    public function testTheReservedTodoMethodSaysItIsUnavailable(): void
+    public function testTodoGetAnswersTheSessionsSavedList(): void
     {
         $client = $this->fixture->client();
+        $sessionId = $this->fixture->session($client);
+        self::assertSame(['items' => []], $client->call('todo.get', ['sessionId' => $sessionId]), 'no list kept yet');
 
-        self::assertSame('todo_unavailable', $client->request('todo.get', ['sessionId' => 'abc'])['error']['data']['kind']);
+        $other = $this->fixture->session($client);
+        $transcripts = $this->fixture->hub->workspace()->service(\SugarCraft\Crush\Host\TranscriptStore::class);
+        self::assertInstanceOf(\SugarCraft\Crush\Host\TranscriptStore::class, $transcripts);
+        $transcripts->saveTodos($other, \SugarCraft\Crush\Todo\TodoList::fromToolArguments(['todos' => [
+            ['content' => 'write the parser', 'status' => 'in_progress'],
+            ['content' => 'test it', 'status' => 'pending'],
+        ]]));
+
+        self::assertSame(
+            ['items' => [['content' => 'write the parser', 'status' => 'in_progress'], ['content' => 'test it', 'status' => 'pending']]],
+            $client->call('todo.get', ['sessionId' => $other]),
+        );
     }
 
     public function testRequestsPastTheBurstAreRateLimited(): void

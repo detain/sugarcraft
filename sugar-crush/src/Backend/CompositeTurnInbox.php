@@ -10,7 +10,7 @@ namespace SugarCraft\Crush\Backend;
  *
  * A turn can have more than one source of mid-turn messages — the user's
  * `steer` frames ({@see SocketSteerInbox}) and, for a sub-agent, its mailbox
- * (P-D1) — and the step loop drains exactly one inbox.
+ * ({@see MailboxTurnInbox}, P-D1) — and the step loop drains exactly one inbox.
  */
 final class CompositeTurnInbox implements TurnInbox
 {

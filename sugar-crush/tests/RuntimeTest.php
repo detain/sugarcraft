@@ -3887,10 +3887,8 @@ DOC;
         // `WebFetch` joined the divergence in audit F-P6: it moves no file,
         // so it is still read-only HERE, but an outbound fetch whose URL the
         // model composes is not safe to run unasked, so the gate no longer
-        // lists it. (`src/Runtime.php`'s census paragraph still names three;
-        // it is wave-7-locked, so the integrator owns that one-word edit.)
-        // `Todo` (roadmap 3.C) is here for `Memory`'s reason: the gate
-        // classes it no-ask, not read, because it writes harness state.
+        // lists it. `Memory`, `Prune` and `Todo` diverge because the gate
+        // classes them no-ask, not read: each writes harness-owned state.
         $this->assertSame(
             ['Memory', 'Prune', 'Skill', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,

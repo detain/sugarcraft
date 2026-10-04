@@ -312,8 +312,8 @@ sugar-crush/tests/Backend/InTurnPruneTest.php	0.600	4
 sugar-crush/tests/Server/WsUpgradeTest.php	0.600	7
 sugar-crush/tests/Memory/CompactionJournalTest.php	0.600	8
 sugar-crush/tests/Backend/EngineBackendWithModelTest.php	0.600	7
-sugar-crush/tests/Backend/TurnInboxDrainTest.php	0.600	5
-sugar-crush/tests/Chat/AgentViewTest.php	0.600	17
+sugar-crush/tests/Backend/TurnInboxDrainTest.php	0.600	6
+sugar-crush/tests/Chat/AgentViewTest.php	0.600	18
 sugar-crush/tests/Tools/McpToolBridgeResultCapTest.php	0.587	4
 sugar-crush/tests/Tools/IgnoreRulesBacktrackingTest.php	0.564	112
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.555	10
@@ -527,6 +527,7 @@ sugar-crush/tests/Providers/SglangContinueFinalMessageTest.php	0.100	5
 sugar-crush/tests/Agents/Live/TranscriptLogTailTest.php	0.100	11
 sugar-crush/tests/Memory/EmbeddingCacheTest.php	0.100	9
 sugar-crush/tests/Support/DaemonizeTest.php	0.100	6
+sugar-crush/tests/Backend/StepTopRemindersTest.php	0.100	2
 sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
 sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35
@@ -702,7 +703,7 @@ sugar-crush/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.030	16
 sugar-crush/tests/Skills/TruncatesOutputNudgeMarginDocTest.php	0.030	4
 sugar-crush/tests/Hooks/BashEscapeDenyHookTest.php	0.030	55
 sugar-crush/tests/Messages/MessageIdentityTest.php	0.030	14
-sugar-crush/tests/Context/TurnContextBlockTest.php	0.030	9
+sugar-crush/tests/Context/TurnContextBlockTest.php	0.030	10
 sugar-crush/tests/Config/Settings/SettingsResolverTest.php	0.030	14
 sugar-crush/tests/Commands/BuiltInCommandsTest.php	0.030	7
 sugar-crush/tests/Hooks/HookRegistryReservedNameTest.php	0.030	4

@@ -315,7 +315,7 @@ edit it by hand.
 | `/exit` | ✓ | ✓ | — | Quit the app |
 | `/theme` | ✓ | | — | Switch the color theme |
 | `/settings` | ✓ | ✓ | `[search]` | Show every setting, its value, where it came from and when it applies |
-| `/agents` | ✓ | | — | List active agents, or inspect one by name |
+| `/agents` | ✓ | | — | List active agents, inspect one by name, or open a running one's Agent View |
 | `/mcp` | ✓ | | `<list\|add\|remove\|login> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
 | `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
