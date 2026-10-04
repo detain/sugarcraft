@@ -933,6 +933,7 @@ sugar-crush/tests/Tui/MultiplexerSplitPaneTest.php	0.006	24
 sugar-crush/tests/Hooks/HookDispatchResultTest.php	0.006	23
 sugar-crush/tests/Support/ClipboardImageTest.php	0.006	6
 sugar-crush/tests/Providers/EchoProviderTest.php	0.006	10
+sugar-crush/tests/Providers/EchoProviderScriptedToolCallTest.php	0.006	11
 sugar-crush/tests/Providers/SglangProviderDsmlStreamingTest.php	0.006	7
 sugar-crush/tests/Tools/BuiltIn/SkillToolArgumentsTest.php	0.006	12
 sugar-crush/tests/Backend/SubAgentFrameCodecTest.php	0.006	13
