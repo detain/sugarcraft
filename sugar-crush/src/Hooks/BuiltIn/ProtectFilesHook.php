@@ -174,9 +174,26 @@ final readonly class ProtectFilesHook implements HookInterface
      * {@see self::DEFAULT_PROTECTED_PATTERNS} proper and is refused read-side
      * too.
      *
-     * THE REST OF THE POLICY SURFACE (step 0.8). `hooks.yaml`, `config.json`
-     * and `agents/` were never the whole of what decides a session's powers,
-     * so the agent could still grant itself the rest by writing it:
+     * THE REST OF THE POLICY SURFACE is not denied here but ASKED about — see
+     * {@see self::POLICY_ASK_PATTERNS}. The three entries above stay deny-class
+     * because each one is a self-grant the human cannot see in a diff: the
+     * trust list, the hooks it admits, and a preset's own `permissionMode:`.
+     */
+    public const WRITE_ONLY_PATTERNS = [
+        '#(^|/)\.sugar-crush/(hooks\.yaml|config\.json)(?![\w.-])#',
+        '#(^|/)\.sugar-crush/agents/#',
+        '#(?<![\w-])\.git/+(?:\./+)*(?:hooks|info)(?![\w.-])#i',
+    ];
+
+    /**
+     * THE REST OF THE POLICY SURFACE (steps 0.8 and 0.8b): writes the hook
+     * ASKS about in every permission mode — `bypass-permissions` and
+     * `dont-ask` included, since a hook's ASK is put to the human whatever the
+     * mode says — rather than refusing outright.
+     *
+     * `hooks.yaml`, `config.json` and `agents/` were never the whole of what
+     * decides a session's powers, so the agent could still grant itself the
+     * rest by writing it:
      *
      *  - `.sugar-crush/settings.json` and `settings.local.json` — the layered
      *    settings tiers (`allowedTools`, `instructions`, `statusLine`, which
@@ -186,7 +203,7 @@ final readonly class ProtectFilesHook implements HookInterface
      *    programs start next session. Bounded on both sides by the
      *    "different name" class, so `foo.mcp.json` and `.mcp.json.example`
      *    are other files. An `mcp__*` call whose free text names `.mcp.json`
-     *    is refused too — the fail-closed cost {@see inputsFor()} already
+     *    is asked about too — the fail-closed cost {@see inputsFor()} already
      *    names for `.env`.
      *  - `.sugar-crush/skills`, `commands`, `rules` and `workflows` — prompt
      *    text the next session treats as the operator's own instructions,
@@ -194,56 +211,89 @@ final readonly class ProtectFilesHook implements HookInterface
      *    when invoked: written once, they outlive the session that planted
      *    them, the `.git/hooks/` argument above. The directory name itself is
      *    matched (`(?![\w.-])`, not a trailing `/`), so `mv x
-     *    .sugar-crush/skills` is refused as well as a write inside it.
+     *    .sugar-crush/skills` is asked about as well as a write inside it.
+     *  - `.claude/` and `.opencode/` `skills`, `agents` and `commands` (and
+     *    opencode's singular `agent`/`command`) — sugar-crush imports skills
+     *    and agent presets from both trees, so a write there is a write to
+     *    this session's next launch; and they are other agents' policy too.
+     *    Their `settings*.json` are NOT listed: sugar-crush never reads them.
      *
-     * The cost is real and accepted: `cat .mcp.json` and `ls
-     * .sugar-crush/skills` in Bash are refused like `cat .git/hooks/x` is,
-     * and editing a project skill now needs the human (or a gated mode's
-     * prompt once step 0.8b moves these to always-Ask). `Read`, `Grep` and
-     * `Glob` of all of them stay allowed — reading a policy grants nothing.
-     * The `.claude/` and `.opencode/` trees sugar-crush also imports skills
-     * and agents from are NOT listed: they are other tools' configuration,
-     * which other agents edit legitimately, and widening onto them is a
-     * decision for 0.8b's Ask path rather than a silent deny here.
+     * WHY ASK AND NOT DENY. Step 0.8 denied these outright because there was
+     * nobody to ask: the TUI could not put a question to the human and its
+     * default mode never prompted. With approvals live in the TUI (1.C-2) and
+     * `default` its default mode (DEF-MODE), a deny only made the user do by
+     * hand what they could approve in one keystroke — editing a project skill,
+     * or `cat .mcp.json` in Bash. An ASK still stops the unprompted write,
+     * which is the whole threat: the human sees the exact call. It is
+     * ALWAYS-ask — a hook's question is not one the "always" answer can
+     * remember ({@see HookResult::askedOnlyBy()}), so the next write asks
+     * again — and a headless run with nobody to answer refuses it.
+     *
+     * Write-only, like {@see self::WRITE_ONLY_PATTERNS}: `Read`, `Grep`, `Glob`
+     * and `Lsp` of all of them stay allowed, unprompted — reading a policy
+     * grants nothing. `Bash` and `mcp__*` are asked about on any mention, since
+     * a shell string does not say which way it touches the file.
      */
-    public const WRITE_ONLY_PATTERNS = [
-        '#(^|/)\.sugar-crush/(hooks\.yaml|config\.json)(?![\w.-])#',
-        '#(^|/)\.sugar-crush/agents/#',
-        '#(?<![\w-])\.git/+(?:\./+)*(?:hooks|info)(?![\w.-])#i',
+    public const POLICY_ASK_PATTERNS = [
         '#(^|/)\.sugar-crush/settings(?:\.local)?\.json(?![\w.-])#',
         '#(?<![\w.-])\.mcp\.json(?![\w.-])#',
         '#(^|/)\.sugar-crush/(?:skills|commands|rules|workflows)(?![\w.-])#',
+        '#(^|/)\.(?:claude|opencode)/(?:skills|agents?|commands?)(?![\w.-])#',
     ];
 
 
     /** @var list<string> */
     private array $protectedPatterns;
 
+    /** @var list<string> */
+    private array $askPatterns;
+
     /**
-     * @param list<string>|null $protectedPatterns Regex patterns to protect;
+     * @param list<string>|null $protectedPatterns Regex patterns to DENY;
      *        null keeps {@see self::DEFAULT_PROTECTED_PATTERNS}. An empty list
-     *        is honoured verbatim (protects nothing) — callers that want the
+     *        is honoured verbatim (denies nothing) — callers that want the
      *        defaults must pass null, not [].
+     * @param list<string>|null $askPatterns Regex patterns whose writes are
+     *        ASKED about; null keeps {@see self::POLICY_ASK_PATTERNS}, [] asks
+     *        about nothing. Judged only after every deny pattern missed, so a
+     *        call both lists name is refused rather than put to the human.
      */
-    public function __construct(?array $protectedPatterns = null)
+    public function __construct(?array $protectedPatterns = null, ?array $askPatterns = null)
     {
         $this->protectedPatterns = array_values($protectedPatterns ?? self::DEFAULT_PROTECTED_PATTERNS);
+        $this->askPatterns = array_values($askPatterns ?? self::POLICY_ASK_PATTERNS);
     }
 
     /**
-     * Immutable setter: returns a copy guarding the given patterns instead.
+     * Immutable setter: returns a copy denying the given patterns instead.
      *
      * @param list<string> $protectedPatterns
      */
     public function withProtectedPatterns(array $protectedPatterns): self
     {
-        return new self($protectedPatterns);
+        return new self($protectedPatterns, $this->askPatterns);
+    }
+
+    /**
+     * Immutable setter: returns a copy asking about the given patterns instead.
+     *
+     * @param list<string> $askPatterns
+     */
+    public function withAskPatterns(array $askPatterns): self
+    {
+        return new self($this->protectedPatterns, $askPatterns);
     }
 
     /** @return list<string> */
     public function protectedPatterns(): array
     {
         return $this->protectedPatterns;
+    }
+
+    /** @return list<string> */
+    public function askPatterns(): array
+    {
+        return $this->askPatterns;
     }
 
     public function name(): string
@@ -357,7 +407,34 @@ final readonly class ProtectFilesHook implements HookInterface
             }
         }
 
+        // The policy surface is write-side only, like WRITE_ONLY_PATTERNS, so
+        // the tools that cannot write never reach it.
+        if ($readOnly) {
+            return HookResult::allow();
+        }
+
+        foreach ($this->askPatterns as $pattern) {
+            foreach ($inputs as $input) {
+                if (\is_string($input) && preg_match($pattern, $input) === 1) {
+                    return HookResult::ask(sprintf(
+                        'This %s call may change a policy file (%s) — settings, MCP servers, or the skills, '
+                        . 'agents, commands, rules or workflows a later session runs as your own. '
+                        . 'Allow it this once? (matched %s)',
+                        $context->toolName,
+                        self::clipped($input),
+                        $pattern,
+                    ));
+                }
+            }
+        }
+
         return HookResult::allow();
+    }
+
+    /** $input bounded for the question, so a long shell line cannot fill the prompt. */
+    private static function clipped(string $input): string
+    {
+        return strlen($input) <= 200 ? $input : mb_strcut($input, 0, 200, 'UTF-8') . '…';
     }
 
     /**

@@ -869,12 +869,14 @@ the default on every path. Now:
 | `mcp__*` | every string leaf of the decoded arguments, at any depth (not the raw JSON text) — so an MCP call whose free text merely mentions `.env` is refused too |
 
 `Read`, `Grep`, `Glob` and `Lsp` cannot write, so they skip the write-only
-policy patterns (`.sugar-crush/hooks.yaml` and friends — `config.json`,
-`settings.json`, `settings.local.json`, and the `agents/`, `skills/`,
-`commands/`, `rules/` and `workflows/` directories — plus `.mcp.json`,
-`.git/hooks/` and `.git/info/`); `Bash` and MCP tools get the full list — so `cat
-.git/hooks/pre-commit` in `Bash` is refused where `Read` of the same file is
-not.
+policy patterns (`.sugar-crush/hooks.yaml`, `config.json` and `agents/`, plus
+`.git/hooks/` and `.git/info/`, which are denied; and the always-asked rest —
+`settings.json`, `settings.local.json`, the `skills/`, `commands/`, `rules/`
+and `workflows/` directories, `.mcp.json`, and the `.claude/` / `.opencode/`
+skill, agent and command trees); `Bash` and MCP tools get the full list — so
+`cat .git/hooks/pre-commit` in `Bash` is refused, and `cat .mcp.json` asks,
+where `Read` of either file is not. The asked rows are a hook's `ask()`, put to
+you in every permission mode; a deny-class match in the same call wins.
 
 `.git/hooks/` and `.git/info/` are on that list since audit F-J4: a file
 written to `.git/hooks/pre-commit` runs on the user's next `git commit`,

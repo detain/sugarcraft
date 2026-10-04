@@ -545,7 +545,7 @@ is chosen for the *quality* of the message. A narrow, specific hazard
 than the generic "permission mode 'plan' does not allow Edit".
 
 The gate is not a replacement for them. Even under `bypass-permissions`,
-`ProtectFilesHook` still refuses:
+`ProtectFilesHook` still refuses — or, for the last row, asks:
 
 | Pattern | Applies to |
 |---|---|
@@ -554,7 +554,7 @@ The gate is not a replacement for them. Even under `bypass-permissions`,
 | `.git/config`, `config/*.php` | all of the above |
 | `.sugar-crush/hooks.yaml`, `.sugar-crush/config.json`, `.sugar-crush/agents/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) |
 | `.git/hooks/`, `.git/info/` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — a hook runs on your next `git commit`, outside any session (audit F-J4) |
-| `.sugar-crush/settings.json`, `.sugar-crush/settings.local.json`, `.mcp.json`, `.sugar-crush/skills`, `.sugar-crush/commands`, `.sugar-crush/rules`, `.sugar-crush/workflows` | **writes only** (`Edit`, `Write`, `Bash`, `mcp__*`) — the rest of the policy surface: settings tiers, the MCP server list, and prompt text, commands and workflows the next session runs as yours |
+| `.sugar-crush/settings.json`, `.sugar-crush/settings.local.json`, `.mcp.json`, `.sugar-crush/skills`, `.sugar-crush/commands`, `.sugar-crush/rules`, `.sugar-crush/workflows`, and `.claude/` / `.opencode/` `skills`, `agents`, `commands` (opencode's `agent`, `command` too) | **writes only, asked rather than refused** (`Edit`, `Write`, `Bash`, `mcp__*`) — the rest of the policy surface: settings tiers, the MCP server list, and prompt text, presets, commands and workflows the next session runs as yours. Every mode asks, `bypass-permissions` included; a mode that refuses the call on its own (`plan`, `dont-ask`) still refuses it |
 
 `Bash` commands are matched both as written and with quotes removed, so
 `cat ".env"` and `cat .env;true` are refused; see
@@ -566,19 +566,24 @@ not say whether it reads or writes, `Bash` gets the write-only rows too:
 project files, neither secrets nor policy, and guarding them (as this table once
 did) refused even `grep` of a manifest in a Bash command.
 
-The `.sugar-crush` group — with `.mcp.json` beside it — is policy rather than
-secrets, and a decision is changed by *writing* it — so reads are allowed
-(opening `.sugar-crush/agents/reviewer.md` is how you debug a preset) and
-writes are denied in every mode. The cost is that `Bash` cannot `cat
-.mcp.json` or `ls .sugar-crush/skills` either, and a project skill or command
-is edited by you rather than by the agent; once interactive approvals land
-these rows move from deny to always-Ask (step 0.8b). The `.claude/` and
-`.opencode/` trees sugar-crush also imports skills and agents from are not on
-the list: they are other tools' configuration. That is not
-theoretical: under `bypass-permissions` (then the TUI's default, still the
-console paths'), an unprompted write to
-`trustedProjectHooks` followed by a provider switch was measured end-to-end as
-the model granting itself the trust the gate exists to withhold.
+The `.sugar-crush` group — with `.mcp.json` and the `.claude/` / `.opencode/`
+skill, agent and command trees beside it — is policy rather than secrets, and a
+decision is changed by *writing* it — so reads are allowed (opening
+`.sugar-crush/agents/reviewer.md` is how you debug a preset) and writes are
+never made unprompted. `hooks.yaml`, `config.json` and `agents/` stay
+**denied** in every mode: each is a self-grant you cannot see in a diff (the
+trust list, the hooks it admits, a preset's own `permissionMode:`), and that
+is not theoretical — under `bypass-permissions` (then the TUI's default, still
+the console paths'), an unprompted write to `trustedProjectHooks` followed by a
+provider switch was measured end-to-end as the model granting itself the trust
+the gate exists to withhold. The rest of the policy rows are **always asked**:
+the prompt names the call, and a project skill or command can be edited by the
+agent with your yes. It is a hook's question, so `a` (always) answers it once
+and the next write asks again; a run with nobody to answer (`-p` without a
+terminal) refuses it. `Bash` asks on any mention, read or write —
+`cat .mcp.json` and `ls .sugar-crush/skills` prompt — since one shell string
+does not say which way it touches the file; `Read`, `Grep` and `Glob` never ask.
+`.claude/settings*.json` is not listed: sugar-crush never reads it.
 
 `HookRegistry::executeHooks()` also **re-scans the whole chain against a
 rewrite**, so a hook that turns `Bash{command:"ls"}` into
