@@ -144,7 +144,7 @@ It is the largest file in the package — well past ten thousand lines; run
 `wc -l src/Chat.php` rather than trusting a figure here, because the one this
 sentence used to carry ("10,381 lines, measured on this checkout") was stale by
 the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
-palette, session tabs, the permission prompt, and the dispatch arms for 28
+palette, session tabs, the permission prompt, and the dispatch arms for 31
 built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to
@@ -764,14 +764,25 @@ and `~/Downloads` are refused. Every git child goes through
 `Workspace\GitRunner`, which runs on the bounded `runCaptured()` spawn, with
 the inherited `GIT_DIR` family unset and signing and hooks switched off. A
 refusal or failure is stored in the row with its reason and never fails the
-turn. A capture that runs out of its 15-second budget switches snapshots off
-for that directory for the rest of the process. **A ref lives as long as its
-row does.** Pruning past the per-session cap, `/rewind` and deleting or
-retention-pruning a session drop the refs of the rows they remove, after the
-write commits. `/branch` pins its own copy under the new session's id.
-`WorkspaceCheckpointer::restore()` and `changes()` are the primitives a file
-restore is built on. A restore is refused once HEAD has moved since the
-checkpoint. Files the snapshot never recorded are never deleted.
+turn; the first refusal or failure per directory and reason is announced
+once through `RuntimeNoticeSink::warn()`. A capture that runs out of its
+15-second budget switches snapshots off for that directory for the rest of the
+process. **A ref lives as long as its row does.** Pruning past the per-session
+cap and deleting or retention-pruning a session drop the refs of the rows they
+remove, after the write commits. `/branch` pins its own copy under the new
+session's id. **A rewind does not delete rows.**
+`EnhancedSessionStore::restoreCheckpoint()` marks the rows it steps over in the
+`checkpoints.undone` column, and the first time it records the state it left as
+one more row on top. Those rows are the redo stack: live readers no longer see
+them, `redoCheckpoint()` walks back up them for `/redo`, and the next
+`saveCheckpoint()` deletes them with their refs and message bodies.
+`WorkspaceCheckpointer::restore()`, `changes()` and `trees()` are the
+primitives `/rewind --files|--both`, `/undo`, `/redo` and `/diff`
+(`Workspace\CheckpointDiff`) are built on. A restore is refused once HEAD has
+moved since the checkpoint; a diff is not. Files the snapshot never recorded
+are never deleted. A shadow repository's unreachable objects are collected by
+`Workspace\ShadowGarbageCollector`: at most once a day per shadow, only past
+1,000 loose objects, in the foreground under a 10-second budget.
 
 `Sessions\Background*` runs a task in a detached session (`/bg`, `/fork`) with
 its own runner and supervisor. `Context\ContextCompactor` +

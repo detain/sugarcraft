@@ -87,10 +87,11 @@ final class CommandsTableTakesColumnDriftTest extends TestCase
         }
 
         self::assertNotNull($rewind);
+        // Item 3.A-2 added the scope word; the usage line names both halves.
         self::assertSame(
-            '[n]',
+            '[n] [--chat|--files|--both]',
             $rewind->argumentHint,
-            '/rewind takes an optional checkpoint count (`/rewind 3`, `/rewind:3`) and its usage line says `/rewind [n]` — the hint the popup and the table show must say so too',
+            '/rewind takes an optional checkpoint count (`/rewind 3`, `/rewind:3`) and an optional scope word, and its usage line says `/rewind [n] [--chat|--files|--both]` — the hint the popup and the table show must say so too',
         );
     }
 }

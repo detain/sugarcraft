@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Session;
 
 use PDO;
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Workspace\ShadowGarbageCollector;
 use SugarCraft\Crush\Workspace\WorkspaceCheckpointer;
 
 /**
@@ -229,11 +231,13 @@ final class EnhancedSessionStore
         }
 
         $stmt = $this->pdo->prepare('
-            SELECT "index", state_data, created_at FROM checkpoints WHERE session_id = ? ORDER BY "index" ASC
+            SELECT "index", state_data, created_at, undone FROM checkpoints WHERE session_id = ? ORDER BY "index" ASC
         ');
         $stmt->execute([$fromId]);
+        // The redo stack comes along (item 3.A-2): a branch taken right after
+        // a rewind can still /redo, from its own copies of the rows.
         $insert = $this->pdo->prepare('
-            INSERT INTO checkpoints (session_id, "index", state_data, created_at) VALUES (?, ?, ?, ?)
+            INSERT INTO checkpoints (session_id, "index", state_data, created_at, undone) VALUES (?, ?, ?, ?, ?)
         ');
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $stateData = $this->remapEnvelope((string) $row['state_data'], $idMap);
@@ -253,6 +257,7 @@ final class EnhancedSessionStore
                 (int) $row['index'],
                 $stateData,
                 $row['created_at'],
+                (int) $row['undone'],
             ]);
         }
 
@@ -342,10 +347,13 @@ final class EnhancedSessionStore
         // and with them the only record of which refs pin their snapshots.
         $workspaces = $this->workspaceRefsBySession();
         $deleted = $this->sessionStore->deleteSession($id, $withChildren);
+        $dropped = [];
         foreach ($deleted as $deletedId) {
-            array_push($this->pendingRefDrops, ...($workspaces[$deletedId] ?? []));
+            array_push($dropped, ...($workspaces[$deletedId] ?? []));
         }
+        array_push($this->pendingRefDrops, ...$dropped);
         $this->flushWorkspaceRefOps();
+        self::collectShadows($dropped);
         // The FK cascade took these sessions' checkpoint_blobs rows with them,
         // so every id this instance had interned for them is now dangling.
         // See internMessages(): ANY blob deletion has to invalidate the cache,
@@ -398,12 +406,15 @@ final class EnhancedSessionStore
                 $stmt = $this->pdo->prepare("SELECT id FROM sessions WHERE id IN ({$placeholders})");
                 $stmt->execute(array_map('strval', array_keys($workspaces)));
                 $alive = array_flip(array_map('strval', $stmt->fetchAll(PDO::FETCH_COLUMN)));
+                $dropped = [];
                 foreach ($workspaces as $sessionId => $refs) {
                     if (!isset($alive[(string) $sessionId])) {
-                        array_push($this->pendingRefDrops, ...$refs);
+                        array_push($dropped, ...$refs);
                     }
                 }
+                array_push($this->pendingRefDrops, ...$dropped);
                 $this->flushWorkspaceRefOps();
+                self::collectShadows($dropped);
             }
         }
 
@@ -446,9 +457,21 @@ final class EnhancedSessionStore
                 "index" INTEGER NOT NULL,
                 state_data TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                undone INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
         ');
+
+        // The redo stack (item 3.A-2): a rewind marks rows instead of
+        // deleting them — see restoreCheckpoint(). An older database gains
+        // the column the next time it is opened; every existing row is live.
+        $checkpointColumns = array_column(
+            $this->pdo->query('PRAGMA table_info(checkpoints)')->fetchAll(PDO::FETCH_ASSOC),
+            'name',
+        );
+        if (!\in_array('undone', $checkpointColumns, true)) {
+            $this->pdo->exec('ALTER TABLE checkpoints ADD COLUMN undone INTEGER NOT NULL DEFAULT 0');
+        }
 
         $this->migrateCheckpointIndexUnique();
 
@@ -696,13 +719,30 @@ final class EnhancedSessionStore
      * Checkpoint-state key holding the workspace snapshot taken for that turn
      * (item 3.A-1): a {@see WorkspaceCheckpointer} outcome — the pinned
      * commit and the ref pinning it, or why none was taken. Its ref follows
-     * its row: pruned, rewound and deleted rows drop theirs, and a `/branch`
-     * copy gets one of its own.
+     * its row: pruned and deleted rows drop theirs, a row a rewind sets aside
+     * keeps its own until the redo stack is discarded, and a `/branch` copy
+     * gets one of its own.
      */
     public const CHECKPOINT_WORKSPACE_KEY = 'workspaceRef';
 
     /** Directory beside the database that holds shadow repositories. */
     public const SHADOW_DIRECTORY = 'checkpoints';
+
+    /**
+     * `checkpoints.undone` (item 3.A-2). A rewind does not delete the rows it
+     * steps back over: it marks them UNDONE, which puts them on the redo
+     * stack, and — the first time, when there is no stack yet — records the
+     * state it left as one more row marked REDO_TIP above them all. Every
+     * reader but the redo surface sees LIVE rows only, so to `/rewind`,
+     * `listCheckpoints()` and a resume a marked row is gone exactly as a
+     * deleted one was. The next checkpoint saved deletes them for real.
+     */
+    private const CHECKPOINT_LIVE = 0;
+    private const CHECKPOINT_UNDONE = 1;
+    private const CHECKPOINT_REDO_TIP = 2;
+
+    /** @var array<string, true> root + reason pairs already announced */
+    private static array $announcedMissingSnapshots = [];
 
     /**
      * Snapshot refs of rows the current write deleted, dropped once it
@@ -952,7 +992,71 @@ final class EnhancedSessionStore
             WorkspaceCheckpointer::dropRefs([$workspace]);
         }
 
+        if (!WorkspaceCheckpointer::isCaptured($workspace)) {
+            self::announceMissingSnapshot($root, $workspace);
+        } elseif (($workspace['kind'] ?? null) === 'shadow') {
+            // A shadow's dropped snapshots are never collected by anything
+            // else; see ShadowGarbageCollector for how this stays bounded.
+            ShadowGarbageCollector::collectIfDue((string) $workspace['gitDir']);
+        }
+
         return $workspace;
+    }
+
+    /**
+     * Tell the user, once per directory and reason for the life of the
+     * process, that the files are not being snapshotted — the W2 hand-off
+     * from 3.A-1: the reason was stored in the row, but nobody learned it
+     * until a `/rewind --files` came back empty-handed. Once, because a
+     * refusal (the home directory, a non-git project with no shadow store)
+     * repeats on every turn, and every transcript row is re-sent to the
+     * model on every later turn.
+     *
+     * @param array<string, mixed> $workspace a refused or failed outcome
+     */
+    private static function announceMissingSnapshot(string $root, array $workspace): void
+    {
+        $reason = \is_string($workspace['reason'] ?? null) ? $workspace['reason'] : 'no reason was given';
+        $key = $root . "\0" . $reason;
+        if (isset(self::$announcedMissingSnapshots[$key])) {
+            return;
+        }
+        self::$announcedMissingSnapshots[$key] = true;
+
+        $what = ($workspace['status'] ?? null) === WorkspaceCheckpointer::STATUS_FAILED
+            ? 'A file snapshot failed'
+            : 'Files are not being snapshotted';
+        RuntimeNoticeSink::warn(sprintf(
+            '%s in %s: %s. /rewind and /undo can bring back the conversation here, not the files.',
+            $what,
+            $root,
+            $reason,
+        ));
+    }
+
+    /** Forget which missing-snapshot notices this process has shown. For tests. */
+    public static function forgetAnnouncedSnapshots(): void
+    {
+        self::$announcedMissingSnapshots = [];
+    }
+
+    /**
+     * Collect the shadow repositories behind $workspaces whose refs were just
+     * dropped — at most once a day each, see {@see ShadowGarbageCollector}.
+     *
+     * @param list<array<string, mixed>> $workspaces
+     */
+    private static function collectShadows(array $workspaces): void
+    {
+        $gitDirs = [];
+        foreach ($workspaces as $workspace) {
+            if (($workspace['kind'] ?? null) === 'shadow' && \is_string($workspace['gitDir'] ?? null)) {
+                $gitDirs[$workspace['gitDir']] = true;
+            }
+        }
+        foreach (array_keys($gitDirs) as $gitDir) {
+            ShadowGarbageCollector::collectIfDue($gitDir);
+        }
     }
 
     /**
@@ -991,6 +1095,30 @@ final class EnhancedSessionStore
      */
     private function insertCheckpoint(string $sessionId, array $chatState): int
     {
+        // A new turn ends the redo stack (item 3.A-2), as in every editor:
+        // the states a rewind set aside can no longer be stepped back to once
+        // the conversation has moved on from somewhere else. Their rows go,
+        // and with them their refs and the message bodies only they named.
+        $this->discardRedoStackRows($sessionId);
+
+        $nextIndex = $this->insertCheckpointRow($sessionId, $chatState, self::CHECKPOINT_LIVE);
+
+        // Enforce the 100 checkpoint limit: delete oldest checkpoints if over limit
+        $this->pruneOldCheckpoints($sessionId, self::MAX_CHECKPOINTS_PER_SESSION);
+
+        return $nextIndex;
+    }
+
+    /**
+     * Insert $chatState as the session's next checkpoint index, with
+     * `undone` = $undone, and return that index.
+     *
+     * @param array<string, mixed> $chatState
+     *
+     * @throws \JsonException
+     */
+    private function insertCheckpointRow(string $sessionId, array $chatState, int $undone): int
+    {
         // Get the next index for this session
         $stmt = $this->pdo->prepare('
             SELECT COALESCE(MAX("index"), -1) + 1 FROM checkpoints WHERE session_id = ?
@@ -1008,8 +1136,8 @@ final class EnhancedSessionStore
 
         // Insert the new checkpoint
         $insertStmt = $this->pdo->prepare('
-            INSERT INTO checkpoints (session_id, "index", state_data, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO checkpoints (session_id, "index", state_data, created_at, undone)
+            VALUES (?, ?, ?, ?, ?)
         ');
         $insertStmt->execute([
             $sessionId,
@@ -1018,10 +1146,8 @@ final class EnhancedSessionStore
             // UTC like every other timestamp in the database; this was the
             // process's local time (audit SES-5).
             gmdate('Y-m-d H:i:s'),
+            $undone,
         ]);
-
-        // Enforce the 100 checkpoint limit: delete oldest checkpoints if over limit
-        $this->pruneOldCheckpoints($sessionId, self::MAX_CHECKPOINTS_PER_SESSION);
 
         return $nextIndex;
     }
@@ -1889,7 +2015,8 @@ final class EnhancedSessionStore
     }
 
     /**
-     * Retrieve a specific checkpoint by index.
+     * Retrieve a specific checkpoint by index — a live one: a row a rewind
+     * moved onto the redo stack is not returned (see {@see redoStack()}).
      *
      * @param string $sessionId The session ID
      * @param int $index The checkpoint index
@@ -1898,11 +2025,11 @@ final class EnhancedSessionStore
     public function getCheckpoint(string $sessionId, int $index): ?array
     {
         $stmt = $this->pdo->prepare('
-            SELECT state_data FROM checkpoints WHERE session_id = ? AND "index" = ?
+            SELECT state_data FROM checkpoints WHERE session_id = ? AND "index" = ? AND undone = 0
         ');
         $stmt->execute([$sessionId, $index]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        // restoreCheckpoint() DELETEs immediately after calling this, so the
+        // restoreCheckpoint() WRITES immediately after calling this, so the
         // read transaction a live cursor holds would straddle that write and
         // suppress the WAL auto-checkpoint — the same trap saveCheckpoint()
         // fell into. Closed explicitly rather than left to $stmt's scope.
@@ -1916,7 +2043,8 @@ final class EnhancedSessionStore
     }
 
     /**
-     * List recent checkpoints for a session.
+     * List recent live checkpoints for a session, newest first. Rows on the
+     * redo stack are left out (see {@see redoStack()}).
      *
      * @param string $sessionId The session ID
      * @param int $limit Maximum number of checkpoints to return (default 100)
@@ -1927,7 +2055,7 @@ final class EnhancedSessionStore
         $stmt = $this->pdo->prepare('
             SELECT "index", created_at, state_data
             FROM checkpoints
-            WHERE session_id = ?
+            WHERE session_id = ? AND undone = 0
             ORDER BY "index" DESC
             LIMIT ?
         ');
@@ -1944,48 +2072,183 @@ final class EnhancedSessionStore
     }
 
     /**
-     * Restore a checkpoint and return its state data.
+     * Restore checkpoint $index and return its state data.
+     *
+     * THE ROWS FROM $index UP ARE SET ASIDE, NOT DELETED (item 3.A-2; this
+     * deleted them, so a rewind could not be undone). They are marked
+     * {@see CHECKPOINT_UNDONE} and form the redo stack, its lowest row —
+     * $index itself — being the state the conversation is now at. Every live
+     * reader stops seeing them at once, refs and message bodies stay, and
+     * {@see redoCheckpoint()} steps back up through them. The next
+     * {@see saveCheckpoint()} deletes them, refs and bodies included.
+     *
+     * $redoTip is the state being left (the conversation as it stands, with
+     * its files when $root is given). It is recorded as the stack's top row
+     * — {@see CHECKPOINT_REDO_TIP} — only when there is no stack yet: with
+     * one, the state being left is the stack's lowest row already, so a
+     * second rewind adds rows below it rather than a second top.
      *
      * @param string $sessionId The session ID
      * @param int $index The checkpoint index to restore
+     * @param array<string, mixed>|null $redoTip the state /redo returns to last
+     * @param string|null $root the project whose files the tip snapshots
      * @return array|null The restored state data, or null if not found
      */
-    public function restoreCheckpoint(string $sessionId, int $index): ?array
+    public function restoreCheckpoint(string $sessionId, int $index, ?array $redoTip = null, ?string $root = null): ?array
     {
-        // Read, delete and collect under one write lock, so another writer
-        // cannot add a checkpoint between the read and the delete.
+        $tipIndex = null;
+        // Read and mark under one write lock, so another writer cannot add a
+        // checkpoint between the read and the update.
+        $state = $this->writeTransaction(function () use ($sessionId, $index, $redoTip, &$tipIndex): ?array {
+            $state = $this->getCheckpoint($sessionId, $index);
+            if ($state === null) {
+                return null;
+            }
+
+            $hadStack = $this->redoStackSize($sessionId) > 0;
+            $this->pdo->prepare('
+                UPDATE checkpoints SET undone = ? WHERE session_id = ? AND "index" >= ? AND undone = ?
+            ')->execute([self::CHECKPOINT_UNDONE, $sessionId, $index, self::CHECKPOINT_LIVE]);
+
+            if ($redoTip !== null && !$hadStack) {
+                $tipIndex = $this->insertCheckpointRow($sessionId, $redoTip, self::CHECKPOINT_REDO_TIP);
+            }
+
+            return $state;
+        });
+
+        // The tip's files, after the commit and before the caller restores
+        // the target's: this is the snapshot /redo puts back at the end.
+        if ($tipIndex !== null && $root !== null && $root !== '') {
+            try {
+                $this->captureWorkspace($sessionId, $tipIndex, $root);
+            } catch (\Throwable) {
+                // The tip simply has no files to return to; /redo says so.
+            }
+        }
+
+        return $state;
+    }
+
+    /**
+     * The redo stack, lowest index first: the first row is the state the
+     * conversation is at, each later one a step /redo can take, the last the
+     * state the first rewind left (`tip`). Empty when there is nothing to
+     * redo. Each row carries its workspace outcome (null when none was
+     * recorded), read without loading a message body.
+     *
+     * @return list<array{index: int, tip: bool, workspace: array<string, mixed>|null}>
+     */
+    public function redoStack(string $sessionId): array
+    {
+        $stmt = $this->pdo->prepare('
+            SELECT "index", undone, state_data FROM checkpoints
+            WHERE session_id = ? AND undone > 0 ORDER BY "index" ASC
+        ');
+        $stmt->execute([$sessionId]);
+
+        return array_map(fn (array $row): array => [
+            'index' => (int) $row['index'],
+            'tip' => (int) $row['undone'] === self::CHECKPOINT_REDO_TIP,
+            'workspace' => $this->workspaceOf((string) $row['state_data']),
+        ], $stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /**
+     * Take one step up the redo stack: the row above the lowest becomes the
+     * state the conversation is at, and the rows below it are live again.
+     * Reaching the tip ends the stack — the tip row is deleted (it is the
+     * state after the last turn, not a checkpoint taken before one) and its
+     * ref dropped once the write commits; the snapshot commit stays in the
+     * object store for the caller's file restore.
+     *
+     * @return array{index: int, tip: bool, state: array<string, mixed>}|null
+     *         null when there is no step to take
+     */
+    public function redoCheckpoint(string $sessionId): ?array
+    {
         try {
-            $state = $this->writeTransaction(function () use ($sessionId, $index): ?array {
-                // First verify the checkpoint exists
-                $state = $this->getCheckpoint($sessionId, $index);
+            $step = $this->writeTransaction(function () use ($sessionId): ?array {
+                $stmt = $this->pdo->prepare('
+                    SELECT id, "index", undone, state_data FROM checkpoints
+                    WHERE session_id = ? AND undone > 0 ORDER BY "index" ASC LIMIT 2
+                ');
+                $stmt->execute([$sessionId]);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                if (\count($rows) < 2) {
+                    return null;
+                }
+                $to = $rows[1];
+                $state = $this->decodeCheckpoint((string) $to['state_data']);
                 if ($state === null) {
                     return null;
                 }
+                $tip = (int) $to['undone'] === self::CHECKPOINT_REDO_TIP;
 
-                $this->queueWorkspaceRefDrops('session_id = ? AND "index" >= ?', [$sessionId, $index]);
+                $this->pdo->prepare('
+                    UPDATE checkpoints SET undone = ? WHERE session_id = ? AND undone = ? AND "index" < ?
+                ')->execute([self::CHECKPOINT_LIVE, $sessionId, self::CHECKPOINT_UNDONE, (int) $to['index']]);
 
-                // Delete all checkpoints with index >= the restored index (they are now invalid)
-                $deleteStmt = $this->pdo->prepare('
-                    DELETE FROM checkpoints WHERE session_id = ? AND "index" >= ?
-                ');
-                $deleteStmt->execute([$sessionId, $index]);
+                if ($tip) {
+                    $this->queueWorkspaceRefDrops('id = ?', [(int) $to['id']]);
+                    $this->pdo->prepare('DELETE FROM checkpoints WHERE id = ?')->execute([(int) $to['id']]);
+                    $this->collectCheckpointBlobs($sessionId);
+                }
 
-                // A rewind explicitly discards state, so the messages only that
-                // state referenced stop being worth keeping.
-                $this->collectCheckpointBlobs($sessionId);
-
-                return $state;
+                return ['index' => (int) $to['index'], 'tip' => $tip, 'state' => $state];
             });
         } catch (\Throwable $e) {
             $this->discardWorkspaceRefOps();
             throw $e;
         }
-        // The deleted rows' snapshot refs go too — including the restored
-        // row's own: its state, returned above, still names the commit, which
-        // stays in the object store for a file restore to use.
         $this->flushWorkspaceRefOps();
 
-        return $state;
+        return $step;
+    }
+
+    /**
+     * Delete the redo stack of $sessionId outright — what the next
+     * {@see saveCheckpoint()} does on its own.
+     */
+    public function discardRedoStack(string $sessionId): void
+    {
+        try {
+            $this->writeTransaction(function () use ($sessionId): void {
+                $this->discardRedoStackRows($sessionId);
+            });
+        } catch (\Throwable $e) {
+            $this->discardWorkspaceRefOps();
+            throw $e;
+        }
+        $this->flushWorkspaceRefOps();
+    }
+
+    /**
+     * Inside a write: delete the redo-stack rows, queue their refs, and
+     * collect the message bodies only they named.
+     */
+    private function discardRedoStackRows(string $sessionId): void
+    {
+        if ($this->redoStackSize($sessionId) === 0) {
+            return;
+        }
+        $this->queueWorkspaceRefDrops('session_id = ? AND undone > 0', [$sessionId]);
+        $this->pdo->prepare('DELETE FROM checkpoints WHERE session_id = ? AND undone > 0')->execute([$sessionId]);
+        // A rewind explicitly discarded this state, so the messages only it
+        // referenced stop being worth keeping.
+        $this->collectCheckpointBlobs($sessionId);
+    }
+
+    private function redoStackSize(string $sessionId): int
+    {
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM checkpoints WHERE session_id = ? AND undone > 0');
+        $stmt->execute([$sessionId]);
+        $count = (int) $stmt->fetchColumn();
+        // An open cursor across the write that follows blocks the WAL
+        // auto-checkpoint; see insertCheckpoint().
+        $stmt->closeCursor();
+
+        return $count;
     }
 
     /**

@@ -702,13 +702,13 @@ final class RendererTest extends TestCase
         $out = Renderer::render($this->chat(buf: '/re'));
 
         // ANSI-stripped, because the typed "re" now carries its own SGR run
-        // inside the row (crush_code.md Phase 4 item 5), so "▸ /rename" is no
+        // inside the row (crush_code.md Phase 4 item 5), so "▸ /redo" is no
         // longer contiguous in the raw bytes. The marker and the row are still
         // what is being asserted - see
         // testSlashMenuHighlightsTheMatchedRunOfTheTypedPrefix() for the SGR.
         $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $out);
 
-        $this->assertStringContainsString('▸ /rename', $plain);
+        $this->assertStringContainsString('▸ /redo', $plain);
         $this->assertStringContainsString('/rewind', $plain);
         // The unselected row is present but not marked as selected.
         $this->assertStringNotContainsString('▸ /rewind', $plain);
@@ -777,7 +777,7 @@ final class RendererTest extends TestCase
         $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/re')));
 
         $this->assertStringContainsString('/rename <name> — Rename the current session', $plain);
-        $this->assertStringContainsString('/rewind [n] — Restore chat state', $plain);
+        $this->assertStringContainsString('/rewind [n] [--chat|--files|--both] — Restore an earlier checkpoint', $plain);
         // …and a row with no hint gains no stray spacing from the feature.
         // (`/theme`: `/rewind` was this example until it gained its `[n]`
         // hint, audit 15b-25, and `/sessions` until it gained `[<query>]`.)

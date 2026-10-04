@@ -9847,15 +9847,17 @@ final class Chat implements Model
      *
      * AN ALLOWLIST, so it fails closed: a command added later is refused in a
      * read-only window until someone decides it is safe here. Left out on
-     * purpose: `/clear`, `/compact`, `/rename`, `/rewind` (each rewrites the
-     * session another TUI is writing) and `/workflow run|resume` (a run
-     * appends to it). `/workflow list|status` read only, and are let through by
+     * purpose: `/clear`, `/compact`, `/rename`, `/rewind`, `/undo`, `/redo`
+     * (each rewrites the session another TUI is writing; the last three can
+     * rewrite its files too) and `/workflow run|resume` (a run appends to
+     * it). `/diff` only reads the checkpoints and the files, so it is in.
+     * `/workflow list|status` read only, and are let through by
      * {@see isReadOnlySafeCommand()}.
      */
     private const READ_ONLY_COMMANDS = [
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
-        'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config',
+        'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
     ];
 
     /**
@@ -14845,17 +14847,236 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /rewind command — restore chat state from a checkpoint.
+     * The scope words `/rewind` takes (item 3.A-2), Cline's and Claude Code's
+     * three choices: the conversation (the default, what `/rewind` always
+     * did), the project's files, or both.
+     */
+    private const REWIND_SCOPES = ['--chat' => 'chat', '--files' => 'files', '--both' => 'both'];
+
+    private const REWIND_USAGE = 'Usage: /rewind [n] [--chat|--files|--both] - step back n checkpoints, n a positive whole number (default 1). --chat (the default) restores the conversation, --files the project\'s files, --both both.';
+
+    private const DIFF_USAGE = 'Usage: /diff [n] - show what changed in the files since checkpoint n, n a positive whole number (default 1: the one taken before your last prompt).';
+
+    /**
+     * Handle /rewind command — restore an earlier checkpoint: the
+     * conversation, the project's files (item 3.A-2), or both.
+     *
+     * `[n]` counts checkpoints back, `1` when omitted. The scope word may come
+     * before or after it, once. Anything else is answered with usage and
+     * rewinds NOTHING. The old `(int)` cast clamped to 1, so `/rewind last`,
+     * `/rewind help`, `/rewind -2` and `/rewind:all` each performed a one-step
+     * rewind — a destructive command run on input that asked for something
+     * else (audit 15b-22).
+     *
+     * A CONVERSATION REWIND CAN BE UNDONE: the rows it steps over go onto the
+     * redo stack instead of being deleted ({@see EnhancedSessionStore::restoreCheckpoint()}),
+     * and {@see handleRedoCommand()} walks back up it until the next prompt
+     * is sent. `--files` alone touches no row: it puts files back and leaves
+     * the conversation where it is.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleRewindCommand(string $inputText): array
     {
+        $refusal = $this->checkpointCommandRefusal($inputText);
+        if ($refusal !== null) {
+            return $refusal;
+        }
+
+        $stepsBack = null;
+        $scope = null;
+        $argument = self::commandArgument($inputText);
+        foreach ($argument === '' ? [] : (preg_split('/\s+/', $argument, -1, PREG_SPLIT_NO_EMPTY) ?: []) as $word) {
+            if ($scope === null && isset(self::REWIND_SCOPES[$word])) {
+                $scope = self::REWIND_SCOPES[$word];
+                continue;
+            }
+            if ($stepsBack === null && ctype_digit($word) && (int) $word >= 1) {
+                $stepsBack = (int) $word;
+                continue;
+            }
+
+            return $this->sessionResponse($inputText, self::REWIND_USAGE);
+        }
+
+        return match ($scope ?? 'chat') {
+            'files' => $this->rewindFiles($inputText, $stepsBack ?? 1),
+            'both' => $this->rewindConversation($inputText, $stepsBack ?? 1, true),
+            default => $this->rewindConversation($inputText, $stepsBack ?? 1, false),
+        };
+    }
+
+    /**
+     * `/undo` (item 3.A-2) — take back the last turn: the conversation
+     * returns to the checkpoint taken before the last prompt, the prompt goes
+     * back into the box, and the files go back to how that turn found them
+     * (opencode's `/undo`). The same as `/rewind 1 --both`, and undone in turn
+     * by `/redo`.
+     *
+     * When auto-commit lands (3.G) this is the ONE `/undo`: it will first
+     * revert the last commit if HEAD is that commit, and fall back to this.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleUndoCommand(): array
+    {
+        $refusal = $this->checkpointCommandRefusal('/undo');
+
+        return $refusal ?? $this->rewindConversation('/undo', 1, true);
+    }
+
+    /**
+     * `/redo` (item 3.A-2) — step forward one checkpoint over what `/rewind`
+     * or `/undo` set aside, back to where the first of them started. The
+     * conversation always moves.
+     *
+     * THE FILES MOVE ONLY WHEN THEY ARE WHERE THE CONVERSATION IS: they must
+     * match the snapshot of the checkpoint being left, which is true after
+     * `/undo` or `/rewind --both` and false after a conversation-only rewind
+     * (the files never went back) or once they have been edited since. Moving
+     * them in any other case would overwrite work the redo knows nothing
+     * about, so they are left alone and the reply says why.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleRedoCommand(): array
+    {
+        $inputText = '/redo';
+        $refusal = $this->checkpointCommandRefusal($inputText);
+        if ($refusal !== null) {
+            return $refusal;
+        }
+        /** @var \SugarCraft\Crush\Session\EnhancedSessionStore $store */
+        $store = $this->sessionStore;
+        $sessionId = (string) $this->currentSessionId;
+
+        try {
+            $stack = $store->redoStack($sessionId);
+            if (\count($stack) < 2) {
+                return $this->sessionResponse($inputText, 'Nothing to redo: /redo steps forward over what /rewind or /undo set aside, until the next prompt is sent.');
+            }
+            [$from, $to] = [$stack[0], $stack[1]];
+            $checkpointer = $store->workspaceCheckpointer($this->projectRoot());
+
+            $moveFiles = false;
+            $filesNote = '';
+            if (\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($from['workspace'])) {
+                $drift = $checkpointer->changes($from['workspace']);
+                if (\is_string($drift)) {
+                    $filesNote = ' The files were left as they are: ' . $drift . '.';
+                } elseif ($drift !== []) {
+                    $filesNote = ' The files were left as they are: they do not match the checkpoint the conversation was at, so moving them would overwrite changes.';
+                } elseif (!\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($to['workspace'])) {
+                    $filesNote = ' The files were left as they are: ' . self::noSnapshotReason($to['workspace']) . '.';
+                } else {
+                    $ahead = $checkpointer->changes($to['workspace']);
+                    if (\is_string($ahead)) {
+                        $filesNote = ' The files were left as they are: ' . $ahead . '.';
+                    } else {
+                        $moveFiles = $ahead !== [];
+                    }
+                }
+            }
+
+            $step = $store->redoCheckpoint($sessionId);
+            if ($step === null) {
+                return $this->sessionResponse($inputText, 'Nothing to redo: /redo steps forward over what /rewind or /undo set aside, until the next prompt is sent.');
+            }
+            if ($moveFiles && \is_array($to['workspace'])) {
+                $filesNote = ' ' . self::fileRestoreReport($checkpointer->restore($to['workspace']));
+            }
+
+            [$messages, $inputBuf, $inputCursor] = self::checkpointChatState($step['state']);
+            $restored = max(0, self::agentVisibleCount($messages) - self::agentVisibleCount($this->history));
+            $response = $step['tip']
+                ? "Redid {$restored} messages: back where you were before the rewind." . $filesNote
+                : "Redid {$restored} messages, to checkpoint {$step['index']}." . $filesNote . ' /redo again to go further.';
+
+            return [$this->withRestoredCheckpoint($messages, $inputBuf, $inputCursor, $inputText, $response), null];
+        } catch (\Throwable $e) {
+            return $this->sessionResponse($inputText, "Error during redo: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * `/diff [n]` (item 3.A-2) — what changed in the files since checkpoint
+     * n: the changed paths and the patch, checkpoint on the left. Counted
+     * like `/rewind --files`, so `/diff` shows exactly what `/rewind --files`
+     * would undo. Read-only, and the rows are UI-only: a patch on screen is
+     * not sent to the model.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleDiffCommand(string $inputText): array
+    {
+        $refusal = $this->checkpointCommandRefusal($inputText);
+        if ($refusal !== null) {
+            return $refusal;
+        }
+
+        $argument = self::commandArgument($inputText);
+        if ($argument !== '' && (!ctype_digit($argument) || (int) $argument < 1)) {
+            return $this->sessionResponse($inputText, self::DIFF_USAGE);
+        }
+        $stepsBack = $argument === '' ? 1 : (int) $argument;
+
+        /** @var \SugarCraft\Crush\Session\EnhancedSessionStore $store */
+        $store = $this->sessionStore;
+        try {
+            $positions = $this->fileCheckpointPositions($store, (string) $this->currentSessionId, $stepsBack);
+            if ($positions === []) {
+                return $this->sessionResponse($inputText, 'No checkpoints available to diff against.');
+            }
+            $target = $positions[min($stepsBack, \count($positions)) - 1];
+            if (!\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($target['workspace'])) {
+                return $this->sessionResponse($inputText, "Checkpoint {$target['index']} has no file snapshot: " . self::noSnapshotReason($target['workspace']) . '.');
+            }
+
+            $diff = \SugarCraft\Crush\Workspace\CheckpointDiff::of(
+                $store->workspaceCheckpointer($this->projectRoot()),
+                $target['workspace'],
+            );
+            if (\is_string($diff)) {
+                return $this->sessionResponse($inputText, "No diff against checkpoint {$target['index']}: {$diff}.");
+            }
+            if ($diff->isEmpty()) {
+                return $this->sessionResponse($inputText, "The files match checkpoint {$target['index']}: nothing has changed since.");
+            }
+
+            $files = \count($diff->changes);
+            $response = sprintf(
+                "%d %s changed since checkpoint %d (`/rewind %d --files` puts %s back):\n\n%s\n\n%s",
+                $files,
+                $files === 1 ? 'file' : 'files',
+                $target['index'],
+                $stepsBack,
+                $files === 1 ? 'it' : 'them',
+                self::fenced(implode("\n", $diff->summaryLines()), ''),
+                self::fenced($diff->patch, 'diff'),
+            );
+            if ($diff->omittedLines > 0) {
+                $response .= "\n\n{$diff->omittedLines} more lines of the patch are not shown.";
+            }
+
+            return $this->sessionResponse($inputText, $response);
+        } catch (\Throwable $e) {
+            return $this->sessionResponse($inputText, "Error during diff: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Why a checkpoint command cannot run here, or null when it can: no
+     * store, a store without checkpoints, or no session.
+     *
+     * @return array{0:Chat,1:?\Closure}|null
+     */
+    private function checkpointCommandRefusal(string $inputText): ?array
+    {
         if ($this->sessionStore === null) {
             return $this->sessionResponse($inputText, 'Session store not configured.');
         }
 
-        if (!method_exists($this->sessionStore, 'restoreCheckpoint')) {
+        if (!$this->sessionStore instanceof \SugarCraft\Crush\Session\EnhancedSessionStore) {
             return $this->sessionResponse($inputText, 'Session store does not support checkpoints. Use an EnhancedSessionStore.');
         }
 
@@ -14863,119 +15084,324 @@ final class Chat implements Model
             return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
         }
 
-        // Optional step count: `/rewind` is one step, `/rewind <n>` is n.
-        // Anything else is answered with usage and rewinds NOTHING. The old
-        // `(int)` cast clamped to 1, so `/rewind last`, `/rewind help`,
-        // `/rewind -2` and `/rewind:all` each performed a one-step rewind -
-        // a destructive command (it drops the latest answer from the live and
-        // the persisted history) run on input that asked for something else
-        // (audit 15b-22).
-        $afterRewind = self::commandArgument($inputText);
-        $stepsBack = 1;
+        return null;
+    }
 
-        if ($afterRewind !== '') {
-            if (!ctype_digit($afterRewind) || (int) $afterRewind < 1) {
-                return $this->sessionResponse($inputText, 'Usage: /rewind [n] - step back n checkpoints, n a positive whole number (default 1).');
-            }
-            $stepsBack = (int) $afterRewind;
-        }
+    /**
+     * Rewind the conversation $stepsBack checkpoints — and, with $withFiles,
+     * the files to that checkpoint's snapshot.
+     *
+     * WITH FILES, NOTHING MOVES UNLESS BOTH CAN: a snapshot whose restore
+     * would be refused (HEAD has moved since — restoring would silently undo
+     * those commits, Cline's rule — or the repository is gone) refuses the
+     * whole command before the conversation is touched. A checkpoint that
+     * simply has no snapshot (taken in the home directory, a failed capture)
+     * still rewinds the conversation and says why the files stayed.
+     *
+     * WITHOUT, THE FILE RESTORE IS OFFERED ONLY WHEN IT WOULD CHANGE
+     * SOMETHING (Zed): the reply names how many files differ and the command
+     * that puts them back, and says nothing about files that already match.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function rewindConversation(string $inputText, int $stepsBack, bool $withFiles): array
+    {
+        /** @var \SugarCraft\Crush\Session\EnhancedSessionStore $store */
+        $store = $this->sessionStore;
+        $sessionId = (string) $this->currentSessionId;
 
         try {
-            // Get list of checkpoints to find the target
-            $checkpoints = $this->sessionStore->listCheckpoints($this->currentSessionId, $stepsBack);
-
-            if (empty($checkpoints)) {
+            $checkpoints = $store->listCheckpoints($sessionId, $stepsBack);
+            if ($checkpoints === []) {
                 return $this->sessionResponse($inputText, 'No checkpoints available to rewind to.');
             }
+            $targetIndex = (int) $checkpoints[min($stepsBack, \count($checkpoints)) - 1]['index'];
+            $workspace = self::checkpointWorkspace($checkpoints[min($stepsBack, \count($checkpoints)) - 1]['state_data']);
+            $checkpointer = $store->workspaceCheckpointer($this->projectRoot());
+            $captured = \SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($workspace);
 
-            // Find the checkpoint N steps back (where N is stepsBack)
-            $targetIndex = $checkpoints[min($stepsBack - 1, count($checkpoints) - 1)]['index'] ?? null;
-
-            if ($targetIndex === null) {
-                return $this->sessionResponse($inputText, 'Could not determine checkpoint index.');
+            $restoreFiles = false;
+            $filesNote = '';
+            if ($withFiles) {
+                if (!$captured) {
+                    $filesNote = ' The files were left as they are: ' . self::noSnapshotReason($workspace) . '.';
+                } else {
+                    $changes = $checkpointer->changes($workspace);
+                    if (\is_string($changes)) {
+                        return $this->sessionResponse(
+                            $inputText,
+                            "Nothing was rewound: the files cannot be restored to checkpoint {$targetIndex} — {$changes}. `/rewind {$stepsBack} --chat` rewinds the conversation alone.",
+                        );
+                    }
+                    $restoreFiles = $changes !== [];
+                    if (!$restoreFiles) {
+                        $filesNote = ' The files already match that checkpoint.';
+                    }
+                }
             }
 
-            // Restore the checkpoint
-            $state = $this->sessionStore->restoreCheckpoint($this->currentSessionId, $targetIndex);
-
+            $state = $store->restoreCheckpoint($sessionId, $targetIndex, $this->redoTipState(), $this->projectRoot);
             if ($state === null) {
                 return $this->sessionResponse($inputText, "Checkpoint {$targetIndex} not found.");
             }
 
-            // Extract state data
-            $messages = $state['state_data']['messages'] ?? $state['messages'] ?? [];
-            // Convert raw arrays to Message objects before passing to Chat
-            // constructor, healing any placeholder whose tool call died with
-            // the checkpointing process (crush_feat.md §1 E7).
-            $messages = array_map(
-                static fn(array $msg): Message => self::reviveCheckpointMessage($msg),
-                $messages,
-            );
-            $inputBuf = $state['state_data']['inputBuf'] ?? $state['inputBuf'] ?? '';
-            // E4: the caret offset the checkpoint captured, in the same flat
-            // codepoint form {@see inputCursorOffset()} produces. Absent (null)
-            // for hand-saved or pre-E4 checkpoints — the mutate below then
-            // reseeds at end-of-text exactly as it always did.
-            $inputCursor = $state['state_data']['inputCursor'] ?? $state['inputCursor'] ?? null;
-
-            // AN OLDER CHECKPOINT STILL ENDS ON THE PROMPT ITS DRAFT RE-SEEDS (audit
-            // SES-1): before the save side learned to store the pre-turn
-            // transcript, every auto-save serialised the history WITH the user's
-            // line, so restoring one as-is leaves the prompt in the transcript and
-            // in the box at once — Enter sends it twice. Sessions saved before the
-            // fix still hold those, so the line is dropped here too. Only when the
-            // checkpoint lacks the pre-turn marker: in a current one a trailing
-            // user row equal to the draft is a real earlier turn (the same prompt
-            // sent twice), not this one.
-            $preTurnShape = ($state['state_data'][self::CHECKPOINT_PRE_TURN_KEY] ?? $state[self::CHECKPOINT_PRE_TURN_KEY] ?? false) === true;
-            if (!$preTurnShape && is_string($inputBuf)) {
-                $messages = self::withoutLegacyTrailingPrompt($messages, $inputBuf);
+            if ($restoreFiles && \is_array($workspace)) {
+                $filesNote = ' ' . self::fileRestoreReport($checkpointer->restore($workspace));
+            } elseif (!$withFiles && $captured && \is_array($workspace)) {
+                $changes = $checkpointer->changes($workspace);
+                if (\is_array($changes) && $changes !== []) {
+                    $filesNote = \count($changes) === 1
+                        ? ' Your files were left as they are; 1 file differs from that checkpoint — `/rewind --files` puts it back too.'
+                        : ' Your files were left as they are; ' . \count($changes) . ' files differ from that checkpoint — `/rewind --files` puts them back too.';
+                }
             }
 
-            // Build response — counted AFTER the legacy trim, so "Rewound N" is
-            // the rows the restore really took away: the prompt, its reply and
-            // everything the turn added in between.
-            $rewoundCount = count($this->history) - count($messages);
-            $response = "Rewound {$rewoundCount} messages to checkpoint {$targetIndex}. Use /branch to save this state before continuing.";
+            [$messages, $inputBuf, $inputCursor] = self::checkpointChatState($state);
+            // Counted AFTER the legacy trim, so "Rewound N" is the rows the
+            // restore really took away: the prompt, its reply and everything
+            // the turn added in between.
+            $rewoundCount = \count($this->history) - \count($messages);
+            $response = "Rewound {$rewoundCount} messages to checkpoint {$targetIndex}." . $filesNote
+                . ' /redo steps forward again until you send another prompt.';
 
-            // Return Chat with restored state
-            $next = $this->mutate([
-                'history' => [...$messages, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-                // E681: the draft the checkpoint captured goes back into the box —
-                // a checkpoint restore is one of mutate()'s replace-the-whole-draft
-                // routes (see the two-write-routes comment in mutate()). Before the
-                // save-side fix this field was always '' AND was ignored here, so
-                // rewinds silently dropped the in-flight text; a checkpoint with no
-                // draft (hand-saved or legacy) still restores to ''.
-                'inputBuf' => $inputBuf,
-                'inFlight' => false,
-                // An outstanding `/compact` summarization is ABANDONED, for the
-                // same reason `/clear` abandons one: the transcript it was
-                // fetched for is no longer on screen. This one is the sharper
-                // case of the two — measured, a summary landing after a rewind
-                // compacted the transcript the user had just RECOVERED, and
-                // since the summaries were keyed to the discarded content none
-                // of them applied, so five restored exchanges came back as
-                // `[exchanged information]` placeholders. See
-                // {@see applyModelCompaction()}.
-                'pendingCompactionId' => null,
-            ]);
-
-            // AFTER the mutate on purpose: naming `inputBuf` alone is the
-            // replace-the-whole-draft route and its widget rebuild parks the
-            // caret at the end, so the captured offset has to be re-applied to
-            // the rebuilt draft, not smuggled through it. `withInputCursor()`
-            // clamps through `seekInput()` — a stale offset from a draft that
-            // has since been shortened lands at the end rather than corrupting
-            // the widget or the restore.
-            if (is_int($inputCursor)) {
-                $next = $next->withInputCursor($inputCursor);
-            }
-
-            return [$next, null];
+            return [$this->withRestoredCheckpoint($messages, $inputBuf, $inputCursor, $inputText, $response), null];
         } catch (\Throwable $e) {
             return $this->sessionResponse($inputText, "Error during rewind: {$e->getMessage()}");
         }
+    }
+
+    /**
+     * `/rewind [n] --files` — put the files back to checkpoint n's snapshot
+     * and leave the conversation, and every checkpoint row, as it is.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function rewindFiles(string $inputText, int $stepsBack): array
+    {
+        /** @var \SugarCraft\Crush\Session\EnhancedSessionStore $store */
+        $store = $this->sessionStore;
+
+        try {
+            $positions = $this->fileCheckpointPositions($store, (string) $this->currentSessionId, $stepsBack);
+            if ($positions === []) {
+                return $this->sessionResponse($inputText, 'No checkpoints available to rewind to.');
+            }
+            $target = $positions[min($stepsBack, \count($positions)) - 1];
+            if (!\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($target['workspace'])) {
+                return $this->sessionResponse(
+                    $inputText,
+                    "Nothing was restored: checkpoint {$target['index']} has no file snapshot — " . self::noSnapshotReason($target['workspace']) . '.',
+                );
+            }
+
+            $result = $store->workspaceCheckpointer($this->projectRoot())->restore($target['workspace']);
+            $response = match ($result['status']) {
+                'restored' => "Restored the files to checkpoint {$target['index']}: {$result['written']} rewritten, {$result['deleted']} deleted. The conversation was left as it is.",
+                'unchanged' => "The files already match checkpoint {$target['index']}; nothing was restored.",
+                default => "Nothing was restored: {$result['reason']}.",
+            };
+
+            return $this->sessionResponse($inputText, $response);
+        } catch (\Throwable $e) {
+            return $this->sessionResponse($inputText, "Error during rewind: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * The checkpoints `/rewind --files` and `/diff` count back through,
+     * newest first, at most $limit of them: the checkpoint the conversation
+     * is rewound to, when it is (the redo stack's lowest row), then the live
+     * ones. So right after `/rewind`, `/rewind --files` is "the files of the
+     * checkpoint you just rewound to" — what the rewind's reply offers.
+     *
+     * @return list<array{index: int, workspace: array<string, mixed>|null}>
+     */
+    private function fileCheckpointPositions(\SugarCraft\Crush\Session\EnhancedSessionStore $store, string $sessionId, int $limit): array
+    {
+        $positions = [];
+        $stack = $store->redoStack($sessionId);
+        if (\count($stack) >= 2) {
+            $positions[] = ['index' => $stack[0]['index'], 'workspace' => $stack[0]['workspace']];
+        }
+        if (\count($positions) < $limit) {
+            foreach ($store->listCheckpoints($sessionId, $limit - \count($positions)) as $checkpoint) {
+                $positions[] = [
+                    'index' => (int) $checkpoint['index'],
+                    'workspace' => self::checkpointWorkspace($checkpoint['state_data']),
+                ];
+            }
+        }
+
+        return $positions;
+    }
+
+    /**
+     * The state `/redo` returns to last: the conversation as it stands now,
+     * stored in the pre-turn shape a checkpoint has, with an empty draft (the
+     * box holds the command that is rewinding).
+     *
+     * @return array<string, mixed>
+     */
+    private function redoTipState(): array
+    {
+        return [
+            'messages' => self::withoutContextReminders($this->history),
+            self::CHECKPOINT_PRE_TURN_KEY => true,
+            'inputBuf' => '',
+            'inputCursor' => null,
+            'inFlight' => false,
+            'agentContext' => [
+                'currentSessionId' => $this->currentSessionId,
+            ],
+        ];
+    }
+
+    /**
+     * The workspace outcome a decoded checkpoint state carries, if any.
+     *
+     * @param mixed $state
+     * @return array<string, mixed>|null
+     */
+    private static function checkpointWorkspace(mixed $state): ?array
+    {
+        if (!\is_array($state)) {
+            return null;
+        }
+        $key = \SugarCraft\Crush\Session\EnhancedSessionStore::CHECKPOINT_WORKSPACE_KEY;
+        $workspace = $state[$key] ?? $state['state_data'][$key] ?? null;
+
+        return \is_array($workspace) ? $workspace : null;
+    }
+
+    /**
+     * @param array<string, mixed>|null $workspace
+     */
+    private static function noSnapshotReason(?array $workspace): string
+    {
+        $reason = \is_string($workspace['reason'] ?? null) ? $workspace['reason'] : null;
+
+        return $reason === null
+            ? 'no snapshot was taken for that checkpoint'
+            : 'no snapshot was taken for that checkpoint (' . $reason . ')';
+    }
+
+    /**
+     * @param array{status: string, written: int, deleted: int, reason: string} $result
+     */
+    private static function fileRestoreReport(array $result): string
+    {
+        return match ($result['status']) {
+            'restored' => "Restored the files: {$result['written']} rewritten, {$result['deleted']} deleted.",
+            'unchanged' => 'The files already match that checkpoint.',
+            default => "The files could not be restored: {$result['reason']}.",
+        };
+    }
+
+    /**
+     * The messages, draft and caret a checkpoint state restores.
+     *
+     * @param array<string, mixed> $state
+     * @return array{0: list<Message>, 1: string, 2: ?int}
+     */
+    private static function checkpointChatState(array $state): array
+    {
+        $messages = $state['state_data']['messages'] ?? $state['messages'] ?? [];
+        // Convert raw arrays to Message objects before passing to Chat
+        // constructor, healing any placeholder whose tool call died with
+        // the checkpointing process (crush_feat.md §1 E7).
+        $messages = array_map(
+            static fn(array $msg): Message => self::reviveCheckpointMessage($msg),
+            \is_array($messages) ? array_values($messages) : [],
+        );
+        $inputBuf = $state['state_data']['inputBuf'] ?? $state['inputBuf'] ?? '';
+        $inputBuf = \is_string($inputBuf) ? $inputBuf : '';
+        // E4: the caret offset the checkpoint captured, in the same flat
+        // codepoint form {@see inputCursorOffset()} produces. Absent (null)
+        // for hand-saved or pre-E4 checkpoints — the mutate then reseeds at
+        // end-of-text exactly as it always did.
+        $inputCursor = $state['state_data']['inputCursor'] ?? $state['inputCursor'] ?? null;
+
+        // AN OLDER CHECKPOINT STILL ENDS ON THE PROMPT ITS DRAFT RE-SEEDS (audit
+        // SES-1): before the save side learned to store the pre-turn
+        // transcript, every auto-save serialised the history WITH the user's
+        // line, so restoring one as-is leaves the prompt in the transcript and
+        // in the box at once — Enter sends it twice. Sessions saved before the
+        // fix still hold those, so the line is dropped here too. Only when the
+        // checkpoint lacks the pre-turn marker: in a current one a trailing
+        // user row equal to the draft is a real earlier turn (the same prompt
+        // sent twice), not this one.
+        $preTurnShape = ($state['state_data'][self::CHECKPOINT_PRE_TURN_KEY] ?? $state[self::CHECKPOINT_PRE_TURN_KEY] ?? false) === true;
+        if (!$preTurnShape) {
+            $messages = self::withoutLegacyTrailingPrompt($messages, $inputBuf);
+        }
+
+        return [$messages, $inputBuf, \is_int($inputCursor) ? $inputCursor : null];
+    }
+
+    /**
+     * This Chat with a checkpoint's conversation and draft restored, and the
+     * command and its reply appended as UI-only rows.
+     *
+     * @param list<Message> $messages
+     */
+    private function withRestoredCheckpoint(array $messages, string $inputBuf, ?int $inputCursor, string $inputText, string $response): self
+    {
+        $next = $this->mutate([
+            'history' => [...$messages, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
+            // E681: the draft the checkpoint captured goes back into the box —
+            // a checkpoint restore is one of mutate()'s replace-the-whole-draft
+            // routes (see the two-write-routes comment in mutate()). Before the
+            // save-side fix this field was always '' AND was ignored here, so
+            // rewinds silently dropped the in-flight text; a checkpoint with no
+            // draft (hand-saved or legacy) still restores to ''.
+            'inputBuf' => $inputBuf,
+            'inFlight' => false,
+            // An outstanding `/compact` summarization is ABANDONED, for the
+            // same reason `/clear` abandons one: the transcript it was
+            // fetched for is no longer on screen. This one is the sharper
+            // case of the two — measured, a summary landing after a rewind
+            // compacted the transcript the user had just RECOVERED, and
+            // since the summaries were keyed to the discarded content none
+            // of them applied, so five restored exchanges came back as
+            // `[exchanged information]` placeholders. See
+            // {@see applyModelCompaction()}.
+            'pendingCompactionId' => null,
+        ]);
+
+        // AFTER the mutate on purpose: naming `inputBuf` alone is the
+        // replace-the-whole-draft route and its widget rebuild parks the
+        // caret at the end, so the captured offset has to be re-applied to
+        // the rebuilt draft, not smuggled through it. `withInputCursor()`
+        // clamps through `seekInput()` — a stale offset from a draft that
+        // has since been shortened lands at the end rather than corrupting
+        // the widget or the restore.
+        return $inputCursor !== null ? $next->withInputCursor($inputCursor) : $next;
+    }
+
+    /**
+     * @param list<Message> $messages
+     */
+    private static function agentVisibleCount(array $messages): int
+    {
+        return \count(array_filter($messages, static fn (Message $message): bool => !$message->uiOnly));
+    }
+
+    /**
+     * $text in a Markdown code fence one backtick longer than the longest
+     * run inside it, so a patch that itself contains a fence cannot close
+     * this one early.
+     */
+    private static function fenced(string $text, string $info): string
+    {
+        $longest = 0;
+        if (preg_match_all('/`+/', $text, $runs) > 0) {
+            foreach ($runs[0] as $run) {
+                $longest = max($longest, \strlen($run));
+            }
+        }
+        $fence = str_repeat('`', max(3, $longest + 1));
+
+        return $fence . $info . "\n" . $text . "\n" . $fence;
     }
 
     /**

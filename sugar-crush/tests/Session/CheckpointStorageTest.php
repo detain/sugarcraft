@@ -237,6 +237,11 @@ final class CheckpointStorageTest extends TestCase
     /**
      * Rewinding discards state, so the bodies only that state referenced are
      * collected. Bodies still named by a surviving checkpoint stay.
+     *
+     * Since item 3.A-2 a rewind sets the state aside on the redo stack
+     * instead of deleting it, so the discard — and the collection — happens
+     * when the stack is discarded (the next save does it; here it is asked
+     * for directly). Until then the bodies stay, because /redo needs them.
      */
     public function testRewindingCollectsOnlyTheBodiesNoSurvivingCheckpointNeeds(): void
     {
@@ -252,6 +257,9 @@ final class CheckpointStorageTest extends TestCase
         $store->restoreCheckpoint('s', 1);
 
         $pdo = new PDO('sqlite:' . $this->dbPath);
+        $this->assertCount(2, $pdo->query('SELECT payload FROM checkpoint_blobs')->fetchAll(PDO::FETCH_COLUMN), 'the redo stack still needs both bodies');
+
+        $store->discardRedoStack('s');
         $payloads = $pdo->query('SELECT payload FROM checkpoint_blobs')->fetchAll(PDO::FETCH_COLUMN);
 
         $this->assertCount(1, $payloads);
@@ -627,11 +635,13 @@ final class CheckpointStorageTest extends TestCase
         $terminalOne->saveCheckpoint('s', ['messages' => [$first]]);
         $terminalOne->saveCheckpoint('s', ['messages' => [$first, $second]]);
 
-        // A second terminal rewinds to checkpoint 0. That drops checkpoint 1,
-        // and with it the only reference to $second's body — which is
-        // collected. $first survives, because checkpoint 0 still names it.
+        // A second terminal rewinds to checkpoint 0 and discards the redo
+        // stack (its next save would). That drops checkpoint 1, and with it
+        // the only reference to $second's body — which is collected. $first
+        // survives, because checkpoint 0 still names it.
         $terminalTwo = new EnhancedSessionStore($this->dbPath);
         $this->assertNotNull($terminalTwo->restoreCheckpoint('s', 1));
+        $terminalTwo->discardRedoStack('s');
 
         $pdo = new PDO('sqlite:' . $this->dbPath);
         $this->assertSame(

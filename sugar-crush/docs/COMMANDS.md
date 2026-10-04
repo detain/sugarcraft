@@ -327,7 +327,10 @@ edit it by hand.
 | `/init` | ✓ | | `[focus]` | Study this project and write or improve its AGENTS.md |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `<name>` | Rename the current session |
-| `/rewind` | ✓ | | `[n]` | Restore chat state from an earlier checkpoint |
+| `/rewind` | ✓ | | `[n] [--chat\|--files\|--both]` | Restore an earlier checkpoint: the conversation, the files, or both |
+| `/undo` | ✓ | | — | Take back the last turn: conversation and files |
+| `/redo` | ✓ | | — | Step forward again over what /rewind or /undo took back |
+| `/diff` | ✓ | | `[n]` | Show what changed in the files since a checkpoint |
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
 | `/fork` | ✓ | | `<prompt>` | Clone this conversation into a background session |
 | `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |
@@ -407,12 +410,26 @@ argument; a space-spelled argument that itself starts with `:` keeps it. `/pane`
 argument, so `/pane:dock left`, `/layout:reset` and `/mcp:list` are their
 space spellings.
 
-`/rewind` takes one optional argument: a positive whole number of checkpoints to
-step back, `1` when omitted (`/rewind`, `/rewind 3`, `/rewind:3`). Anything else
-— `/rewind help`, `/rewind last`, `/rewind -2`, `/rewind 0`, `/rewind:all` —
-prints `Usage: /rewind [n]` and rewinds nothing, because a rewind drops turns
-from the live and the persisted history and must not run on input that asked for
-something else.
+`/rewind` takes an optional positive whole number of checkpoints to step back,
+`1` when omitted (`/rewind`, `/rewind 3`, `/rewind:3`), and an optional scope
+word, in either order: `--chat` (the default) restores the conversation,
+`--files` the project's files, `--both` both. Anything else — `/rewind help`,
+`/rewind last`, `/rewind -2`, `/rewind 0`, `/rewind:all`, two numbers, two
+scope words — prints `Usage: /rewind [n] [--chat|--files|--both]` and rewinds
+nothing, because a rewind changes the live and the persisted history and must
+not run on input that asked for something else.
+
+A conversation rewind sets the checkpoints it steps over aside instead of
+deleting them, so `/redo` can step forward over them again; the next prompt
+discards them. `--files` counts from the checkpoint the conversation is at, so
+right after `/rewind`, `/rewind --files` restores that checkpoint's files —
+which is what the rewind's reply offers when, and only when, the files differ.
+With `--both`, a file restore that would be refused (HEAD has moved since the
+checkpoint, or its repository is gone) refuses the whole command. `/undo` is
+`/rewind 1 --both`. `/diff [n]` counts like `--files` and shows exactly what
+that restore would undo; its reply is shown, not sent to the model, and it is the
+one checkpoint command a read-only window runs. `/undo` and `/redo` take no
+argument, so `/undo it` is a prompt.
 
 While a turn is in flight, Enter on a command line does not run it: the
 command could rewrite the history the turn is about to append to, so it is

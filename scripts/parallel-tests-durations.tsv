@@ -70,6 +70,7 @@ sugar-crush/tests/Workflows/WorkflowStageTimeoutTest.php	4.951	4
 sugar-crush/tests/Sessions/ForkCarriesHistoryTest.php	4.800	8
 sugar-crush/tests/Backend/EngineBackendTest.php	4.743	35
 sugar-crush/tests/SwallowingCatchCensusTest.php	4.709	2
+sugar-crush/tests/Chat/UndoRedoDiffCommandsTest.php	4.670	10
 sugar-crush/tests/ChatTest.php	4.663	254
 sugar-crush/tests/Workflows/WorkflowLivePaneTest.php	4.417	11
 sugar-crush/tests/Support/AssertionSwallowingCatchTest.php	4.327	6
@@ -93,6 +94,7 @@ sugar-crush/tests/Support/FixtureLifetimeCensusTest.php	3.827	3
 sugar-crush/tests/Backend/TaskSpendPropagationTest.php	3.813	12
 sugar-crush/tests/Backend/EngineBackendTeardownKillsToolTreeTest.php	3.775	2
 sugar-crush/tests/MCP/ClaudeCodeMcpClientForkSafetyTest.php	3.718	3
+sugar-crush/tests/Chat/RewindFilesTest.php	3.690	11
 sugar-crush/tests/Cli/BootstrapToolAndPermissionSettingsTest.php	3.689	57
 sugar-crush/tests/Backend/EngineBackendFrameCorruptionTest.php	3.654	7
 sugar-crush/tests/Sessions/BackgroundSupervisorReapTest.php	3.645	10
@@ -146,6 +148,7 @@ sugar-crush/tests/Providers/PromptStabilityTest.php	2.117	16
 sugar-crush/tests/Cli/BootstrapHookFileTest.php	2.091	41
 sugar-crush/tests/Support/DuplicatedDocBlockLineTest.php	2.082	4
 sugar-crush/tests/Session/SessionForkTest.php	2.073	10
+sugar-crush/tests/Session/RedoStackTest.php	2.063	6
 sugar-crush/tests/Backend/ForkChannelAskRoundTripTest.php	2.053	10
 sugar-crush/tests/Agents/AgentWorkerPoolInlineBudgetTest.php	2.007	5
 sugar-crush/tests/Cli/SessionRetentionWiringTest.php	1.965	16
@@ -292,6 +295,7 @@ sugar-crush/tests/Tools/TaskToolOutputFenceTest.php	0.450	6
 sugar-crush/tests/RepoMap/PhpSymbolExtractorTest.php	0.450	9
 sugar-crush/tests/Tui/SessionPickerActionsTest.php	0.450	22
 sugar-crush/tests/Support/ForkedChildTest.php	0.449	2
+sugar-crush/tests/Workspace/ShadowGarbageCollectorTest.php	0.448	3
 sugar-crush/tests/Backend/EngineBackendHeartbeatThreadingTest.php	0.445	4
 sugar-crush/tests/Backend/EngineBackendFrameSocketInheritanceTest.php	0.443	2
 sugar-crush/tests/Backend/ForkChannelReplyAfterCancelTest.php	0.422	1
@@ -315,6 +319,7 @@ sugar-crush/tests/Backend/StructuredReplayTest.php	0.350	11
 sugar-crush/tests/Integration/TaskToolWiringTest.php	0.343	4
 sugar-crush/tests/Host/ContextMeterTest.php	0.338	12
 sugar-crush/tests/Support/RequirementDirectiveProvenanceTest.php	0.326	18
+sugar-crush/tests/Workspace/CheckpointDiffTest.php	0.320	3
 sugar-crush/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.312	8
 sugar-crush/tests/Context/ContextCompactorTest.php	0.311	88
 sugar-crush/tests/Context/SortedWalkCapTest.php	0.303	9

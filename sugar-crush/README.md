@@ -169,8 +169,8 @@ them out too.
 another sugarcrush already has open — `--continue` in a second terminal, the
 same `--resume` twice, or picking it in the picker — opens it **read-only**: the
 transcript is shown, but prompts and the commands that would change the session
-(`/clear`, `/compact`, `/rename`, `/rewind`, `/workflow run|resume`, any custom
-command) are refused and nothing is saved, and the status bar leads with
+(`/clear`, `/compact`, `/rename`, `/rewind`, `/undo`, `/redo`,
+`/workflow run|resume`, any custom command) are refused and nothing is saved, and the status bar leads with
 `read-only: /branch to fork` (narrowing to `RO` on a small terminal). `/branch` forks the session into a
 new one this window owns and carries on there, and the refused draft comes back
 in the box;
@@ -199,10 +199,27 @@ build directories (`node_modules/`, `vendor/`, `dist/`, …), media, archives,
 binaries, databases, logs and `.env*` files are left out. No snapshot is taken
 in your home directory itself, a directory above it, or `~/Desktop`,
 `~/Documents` and `~/Downloads`. A snapshot that cannot be taken never holds up
-the turn. The refs are deleted with their checkpoints: old ones past the
-per-session limit, the ones `/rewind` discards, and a deleted session's.
-`/branch` keeps its own copy. `/rewind` itself still restores only the
-conversation.
+the turn, but the first time it is refused or fails in a directory the
+transcript says why, once.
+
+**Taking a turn back.** `/undo` restores the conversation to the checkpoint
+before your last prompt, puts that prompt back in the box, and puts the files
+back the way that turn found them. `/redo` steps forward again, one checkpoint
+at a time, until you send another prompt. `/rewind [n]` steps back `n`
+checkpoints and restores the conversation only (`--chat`, the default); it
+tells you when the files differ from that checkpoint, and `/rewind --files`
+then puts them back too. `--files` alone restores the files and leaves the
+conversation, `--both` does both. `/diff [n]` shows what changed in the files
+since checkpoint `n` (`1`, the one before your last prompt, by default), as the
+list of files and the patch. A file restore is refused once HEAD has moved since
+the checkpoint (it would undo those commits): `--both` and `/undo` then change
+nothing, and `--chat` still works. Files a snapshot leaves out are never
+touched by a restore. `/redo` moves the files only when they still match the
+checkpoint the conversation is at, so edits you made after a rewind are kept.
+The refs are deleted with their checkpoints: old ones past the per-session
+limit, a deleted session's, and the ones a rewind set aside once the next
+prompt is sent. `/branch` keeps its own copy. Unused snapshots in the private
+directories are cleaned up by a `git gc` at most once a day.
 
 ### Settings files
 
@@ -953,10 +970,10 @@ taken as written. `Tab` completes the path under the cursor.
 
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
-`/compact` `/editor` `/exit` (`/quit`) `/fork` `/help` `/init` `/keys` `/layout`
-`/mcp` `/memory` `/model` `/notices` `/pane` `/permissions` `/rename` `/rewind`
-`/rules` `/sessions` `/settings` (`/config`) `/share` `/theme` `/websearch`
-`/workflow`.
+`/compact` `/diff` `/editor` `/exit` (`/quit`) `/fork` `/help` `/init` `/keys`
+`/layout` `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions` `/redo`
+`/rename` `/rewind` `/rules` `/sessions` `/settings` (`/config`) `/share`
+`/theme` `/undo` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no

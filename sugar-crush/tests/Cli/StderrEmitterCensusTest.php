@@ -127,8 +127,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-FIVE
- *     of them, in EIGHT files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-SIX
+ *     of them, in NINE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -539,6 +539,13 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Providers/SglangProvider.php' => 7,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 4,
         'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
+        // Item 3.A-2 (the 3.A-1 hand-off): a turn whose file snapshot was
+        // refused or failed. The routing decision: `/rewind --files` and
+        // `/undo` will not be able to bring those files back, which the user
+        // cannot learn from anywhere else until they try. One site behind a
+        // once-per-directory-and-reason latch, so a refusal that repeats on
+        // every turn (the home directory) is one row per session.
+        'src/Session/EnhancedSessionStore.php' => 1,
     ];
 
     /**

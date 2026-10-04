@@ -8,8 +8,9 @@ use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
  * Snapshots of the project's FILES, one per user turn, so a turn's edits can
- * be undone (item 3.A-1; the `/rewind --files`, `/undo` and `/diff` surface
- * is 3.A-2). `/rewind` restored only the transcript until now.
+ * be undone (item 3.A-1). `/rewind --files|--both`, `/undo`, `/redo` and
+ * `/diff` (item 3.A-2, {@see \SugarCraft\Crush\Chat::handleRewindCommand()})
+ * are built on {@see restore()}, {@see changes()} and {@see trees()}.
  *
  * IN A GIT WORK TREE (Cline 4.x, Zed): nothing the user can see changes —
  * no stash entry, no index write, no commit on their branch.
@@ -357,6 +358,21 @@ final class WorkspaceCheckpointer
     }
 
     /**
+     * The runner, the snapshot's tree and the tree the workspace would
+     * snapshot to now — what {@see CheckpointDiff} compares — or the reason
+     * no answer is possible. Unlike {@see restore()} and {@see changes()}, a
+     * HEAD that has moved since the checkpoint is not a refusal here: a diff
+     * changes nothing, and the commits since are part of what it shows.
+     *
+     * @param array<string, mixed> $workspace
+     * @return array{0: GitRunner, 1: string, 2: string}|string
+     */
+    public function trees(array $workspace): array|string
+    {
+        return $this->prepare($workspace, false);
+    }
+
+    /**
      * Delete the pinning refs of every captured shape in $workspaces, one
      * `update-ref --stdin` per repository. Best effort: a repository that is
      * gone has no refs left to leak.
@@ -700,7 +716,7 @@ final class WorkspaceCheckpointer
      * @param array<string, mixed> $workspace
      * @return array{0: GitRunner, 1: string, 2: string}|string
      */
-    private function prepare(array $workspace): array|string
+    private function prepare(array $workspace, bool $guardHead = true): array|string
     {
         if (!self::isCaptured($workspace)) {
             $reason = \is_string($workspace['reason'] ?? null) ? $workspace['reason'] : 'no workspace snapshot was taken';
@@ -728,7 +744,7 @@ final class WorkspaceCheckpointer
             return 'the snapshot commit ' . $sha . ' is no longer in the repository';
         }
 
-        if ($workspace['kind'] === 'repo') {
+        if ($guardHead && $workspace['kind'] === 'repo') {
             $head = self::revParse($git, 'HEAD^{commit}');
             $base = \is_string($workspace['base'] ?? null) ? $workspace['base'] : null;
             if ($head !== $base) {
@@ -814,9 +830,12 @@ final class WorkspaceCheckpointer
     }
 
     /**
+     * `[status, path]` pairs of `git diff-tree --name-status <from> <to>`,
+     * or null when git failed.
+     *
      * @return list<array{0: string, 1: string}>|null
      */
-    private static function diffTrees(GitRunner $git, string $from, string $to): ?array
+    public static function diffTrees(GitRunner $git, string $from, string $to): ?array
     {
         $diff = $git->run('diff-tree', '-r', '-z', '--no-renames', '--name-status', $from, $to);
         if (!$diff['ok']) {

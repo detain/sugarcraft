@@ -41,6 +41,8 @@ final class CheckpointRefLifecycleTest extends TestCase
 
     private EnhancedSessionStore $store;
 
+    private string|false $previousErrorLog = false;
+
     protected function setUp(): void
     {
         if (!GitRunner::available()) {
@@ -50,6 +52,11 @@ final class CheckpointRefLifecycleTest extends TestCase
         mkdir($this->tmp . '/db', 0o700, true);
         $this->useHomeSandbox($this->tmp . '/home');
         WorkspaceCheckpointer::forgetDisabled();
+        // A refused capture warns once (item 3.A-2); keep its error_log()
+        // copy out of the runner's output.
+        EnhancedSessionStore::forgetAnnouncedSnapshots();
+        $this->previousErrorLog = ini_get('error_log');
+        ini_set('error_log', $this->tmp . '/error.log');
 
         $this->repo = $this->tmp . '/repo';
         mkdir($this->repo, 0o700, true);
@@ -65,6 +72,8 @@ final class CheckpointRefLifecycleTest extends TestCase
     protected function tearDown(): void
     {
         WorkspaceCheckpointer::forgetDisabled();
+        EnhancedSessionStore::forgetAnnouncedSnapshots();
+        $this->previousErrorLog === false ? ini_restore('error_log') : ini_set('error_log', $this->previousErrorLog);
         $this->restoreHomeSandbox();
         self::rmrf($this->tmp);
     }
@@ -116,16 +125,30 @@ final class CheckpointRefLifecycleTest extends TestCase
         self::assertSame([WorkspaceCheckpointer::refFor(self::LIFECYCLE_SESSION, $second)], $this->refs());
     }
 
-    public function testARewindDropsTheRefsOfEveryRowItDiscards(): void
+    /**
+     * Item 3.A-2: a rewind sets the rows it steps over aside on the redo
+     * stack, refs and all, so `/redo` can put their files back; the next
+     * save discards the stack, and only then do the refs go.
+     */
+    public function testARewindKeepsTheRefsOfTheRowsItSetsAsideUntilTheNextSave(): void
     {
         $kept = $this->checkpointWithSnapshot();
         $restored = $this->checkpointWithSnapshot();
-        $this->checkpointWithSnapshot();
+        $later = $this->checkpointWithSnapshot();
 
         $state = $this->store->restoreCheckpoint(self::LIFECYCLE_SESSION, $restored);
 
-        self::assertSame([WorkspaceCheckpointer::refFor(self::LIFECYCLE_SESSION, $kept)], $this->refs());
         self::assertSame('captured', $state[EnhancedSessionStore::CHECKPOINT_WORKSPACE_KEY]['status'], 'the restored state still names its snapshot');
+        self::assertSame(
+            array_map(static fn (int $i): string => WorkspaceCheckpointer::refFor(self::LIFECYCLE_SESSION, $i), [$kept, $restored, $later]),
+            $this->refs(),
+            'nothing is unpinned while /redo can still reach it',
+        );
+
+        $next = $this->store->saveCheckpoint(self::LIFECYCLE_SESSION, ['inputBuf' => '']);
+
+        self::assertSame($restored, $next, 'the discarded rows free their indexes');
+        self::assertSame([WorkspaceCheckpointer::refFor(self::LIFECYCLE_SESSION, $kept)], $this->refs());
     }
 
     public function testABranchPinsItsOwnCopyAndOutlivesItsSource(): void

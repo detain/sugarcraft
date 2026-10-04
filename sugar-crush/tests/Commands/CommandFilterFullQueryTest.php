@@ -74,7 +74,7 @@ final class CommandFilterFullQueryTest extends TestCase
         self::assertSame(['release', 'review'], self::names(CommandRegistry::filter('re', $custom)));
 
         // And back: the registry list is recomputed, not answered from the custom set.
-        self::assertSame(['rename', 'rewind', 'rules'], self::names(CommandRegistry::filter('re')));
+        self::assertSame(['redo', 'rename', 'rewind', 'rules'], self::names(CommandRegistry::filter('re')));
     }
 
     /**
