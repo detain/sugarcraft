@@ -27,17 +27,50 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * A CACHE, SO CORRUPTION IS NOT AN ERROR. A database that cannot be opened
  * or read as SQLite is deleted and rebuilt once. A second failure throws,
  * because a cache that cannot even be created points at a permissions
- * problem the caller should report. An extractor version change wipes every
- * row ({@see EXTRACTOR_VERSION}), because tags from an older rule set would
- * silently mix with new ones.
+ * problem the caller should report.
+ *
+ * WHICH CODE MADE A ROW IS PART OF THE ROW (roadmap 5.5-5). Each file is
+ * stored with its PRODUCER stamp — {@see PHP_PRODUCER} for
+ * {@see PhpSymbolExtractor}, {@see CtagsSymbolExtractor::cacheStamp()} for
+ * universal-ctags (the extractor's rule version plus the binary's version
+ * banner) — and {@see get()} answers only for the stamp the caller names. So
+ * a ctags upgrade or a changed reference scan re-extracts exactly the files
+ * that producer tagged, and a PHP extractor change exactly the PHP files.
+ * {@see SCHEMA_VERSION} (with the PHP {@see EXTRACTOR_VERSION}) still wipes
+ * everything when the storage layout itself changes.
+ *
+ * ONE ROW PER FILE. A file's tags are one compact JSON list in its row, not
+ * one row per tag: sugar-crush's own tree is ~1,700 PHP files and ~309,000
+ * tags, and a row per tag (plus an index on the name) made the first map
+ * spend longer writing the cache than tokenizing the files. The same layout
+ * makes a warm read one SELECT per file.
+ *
+ * IT ALSO KEEPS FINISHED MAPS ({@see rendered()} / {@see storeRendered()}): a
+ * caller that can name everything a map depends on — the system prompt's
+ * {@see \SugarCraft\Crush\Context\SymbolMapBlock} keys it by every mapped
+ * file's path, mtime, size and producer — reuses the ranked, rendered text
+ * instead of rebuilding the graph and re-running PageRank. At most
+ * {@see MAX_RENDERED} are kept, oldest first out.
  */
 final class TagCache
 {
     /**
      * Bump when {@see PhpSymbolExtractor}'s output changes for the same
-     * input, so every cached row is re-extracted.
+     * input; it is the PHP producer's stamp ({@see PHP_PRODUCER}).
      */
     public const EXTRACTOR_VERSION = 1;
+
+    /** Bump when the tables change shape; a mismatch wipes every row. */
+    public const SCHEMA_VERSION = 2;
+
+    /** The producer stamp of {@see PhpSymbolExtractor}'s rows. */
+    public const PHP_PRODUCER = 'php/' . self::EXTRACTOR_VERSION;
+
+    /** Most finished maps kept by {@see storeRendered()}. */
+    public const MAX_RENDERED = 8;
+
+    /** Tag kinds as stored: one character each. */
+    private const KIND_CODES = [Tag::KIND_DEFINITION => 'd', Tag::KIND_REFERENCE => 'r'];
 
     private function __construct(
         private readonly \PDO $pdo,
@@ -53,7 +86,7 @@ final class TagCache
     public static function open(string $dbPath): self
     {
         $dir = \dirname($dbPath);
-        if (!\is_dir($dir) && !@\mkdir($dir, 0700, true) && !\is_dir($dir)) {
+        if ($dbPath !== ':memory:' && !\is_dir($dir) && !@\mkdir($dir, 0700, true) && !\is_dir($dir)) {
             throw new \RuntimeException("Cannot create the repo-map cache directory {$dir}.");
         }
 
@@ -96,47 +129,82 @@ final class TagCache
     }
 
     /**
-     * The tags for $relPath when the cached entry still matches $mtime and
-     * $size, or null for a miss.
+     * The tags for $relPath when the cached entry still matches $mtime, $size
+     * and the producer, or null for a miss.
      *
+     * @param ?string $producer the stamp the row must carry; null is {@see PHP_PRODUCER}
      * @return list<Tag>|null
      */
-    public function get(string $relPath, int $mtime, int $size): ?array
+    public function get(string $relPath, int $mtime, int $size, ?string $producer = null): ?array
     {
-        $stmt = $this->pdo->prepare('SELECT mtime, size FROM files WHERE path = ?');
-        $stmt->execute([$relPath]);
-        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if ($row === false || (int) $row['mtime'] !== $mtime || (int) $row['size'] !== $size) {
+        $rows = $this->row($relPath, $mtime, $size, $producer);
+        if ($rows === null) {
             return null;
         }
 
-        $stmt = $this->pdo->prepare('SELECT path, line, name, kind, type, scope FROM tags WHERE path = ? ORDER BY seq');
-        $stmt->execute([$relPath]);
+        $tags = [];
+        foreach ($rows as $row) {
+            $tags[] = self::tag($relPath, $row);
+        }
 
-        return \array_map(Tag::fromArray(...), $stmt->fetchAll(\PDO::FETCH_ASSOC));
+        return $tags;
     }
 
     /**
-     * Replace $relPath's entry with $tags, stamped with $mtime and $size, in
-     * one transaction, so a reader never sees half a file's tags.
+     * {@see get()} reduced to what a {@see SymbolGraph} reads: the
+     * definition tags, and how often each identifier is referenced. A file's
+     * reference tags are the bulk of every cache (nine in ten on this tree)
+     * and the graph needs only their counts, so a map of a large checkout
+     * never holds them as objects.
+     *
+     * @return array{definitions: list<Tag>, references: array<string, int>}|null
+     */
+    public function summary(string $relPath, int $mtime, int $size, ?string $producer = null): ?array
+    {
+        $rows = $this->row($relPath, $mtime, $size, $producer);
+        if ($rows === null) {
+            return null;
+        }
+
+        $definitions = [];
+        $references = [];
+        foreach ($rows as $row) {
+            if (($row[0] ?? null) === 'r') {
+                $name = (string) ($row[2] ?? '');
+                $references[$name] = ($references[$name] ?? 0) + 1;
+            } else {
+                $definitions[] = self::tag($relPath, $row);
+            }
+        }
+
+        return ['definitions' => $definitions, 'references' => $references];
+    }
+
+    /**
+     * Replace $relPath's entry with $tags, stamped with $mtime, $size and the
+     * producer, so a reader never sees half a file's tags.
      *
      * @param list<Tag> $tags
+     * @param ?string   $producer null is {@see PHP_PRODUCER}
      */
-    public function put(string $relPath, int $mtime, int $size, array $tags): void
+    public function put(string $relPath, int $mtime, int $size, array $tags, ?string $producer = null): void
     {
-        $this->pdo->beginTransaction();
-        try {
-            $this->deleteRows($relPath);
-            $this->pdo->prepare('INSERT INTO files (path, mtime, size) VALUES (?, ?, ?)')->execute([$relPath, $mtime, $size]);
-            $insert = $this->pdo->prepare('INSERT INTO tags (path, seq, line, name, kind, type, scope) VALUES (?, ?, ?, ?, ?, ?, ?)');
-            foreach (\array_values($tags) as $seq => $tag) {
-                $insert->execute([$relPath, $seq, $tag->line, $tag->name, $tag->kind, $tag->type, $tag->scope]);
-            }
-            $this->pdo->commit();
-        } catch (\Throwable $e) {
-            $this->pdo->rollBack();
-            throw $e;
+        $rows = [];
+        foreach (\array_values($tags) as $tag) {
+            $rows[] = $tag->isDefinition()
+                ? [self::KIND_CODES[Tag::KIND_DEFINITION], $tag->line, $tag->name, $tag->type, $tag->scope]
+                : [self::KIND_CODES[Tag::KIND_REFERENCE], $tag->line, $tag->name];
         }
+
+        $this->pdo->prepare('INSERT OR REPLACE INTO files (path, mtime, size, producer, count, tags) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([
+                $relPath,
+                $mtime,
+                $size,
+                $producer ?? self::PHP_PRODUCER,
+                \count($rows),
+                \json_encode($rows, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE),
+            ]);
     }
 
     /**
@@ -205,18 +273,92 @@ final class TagCache
         return \count($gone);
     }
 
+    /**
+     * Run $work inside one transaction, so a map that stores hundreds of
+     * extracted files commits once rather than once per file.
+     *
+     * @template T
+     * @param \Closure(): T $work
+     * @return T
+     */
+    public function transaction(\Closure $work): mixed
+    {
+        if ($this->pdo->inTransaction()) {
+            return $work();
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $result = $work();
+            $this->pdo->commit();
+
+            return $result;
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /** The finished map stored under $key, or null. */
+    public function rendered(string $key): ?string
+    {
+        $stmt = $this->pdo->prepare('SELECT body FROM renders WHERE key = ?');
+        $stmt->execute([$key]);
+        $body = $stmt->fetchColumn();
+
+        return \is_string($body) ? $body : null;
+    }
+
+    /** Keep $body as the finished map for $key; the oldest past {@see MAX_RENDERED} go. */
+    public function storeRendered(string $key, string $body): void
+    {
+        $this->pdo->prepare('INSERT OR REPLACE INTO renders (key, body, stored_at) VALUES (?, ?, ?)')
+            ->execute([$key, $body, (int) (\microtime(true) * 1_000_000)]);
+        $this->pdo->exec(
+            'DELETE FROM renders WHERE key IN (SELECT key FROM renders ORDER BY stored_at DESC, rowid DESC LIMIT -1 OFFSET '
+            . self::MAX_RENDERED . ')'
+        );
+    }
+
     /** @return array{files:int,tags:int} */
     public function stats(): array
     {
         return [
             'files' => (int) $this->pdo->query('SELECT COUNT(*) FROM files')->fetchColumn(),
-            'tags' => (int) $this->pdo->query('SELECT COUNT(*) FROM tags')->fetchColumn(),
+            'tags' => (int) $this->pdo->query('SELECT COALESCE(SUM(count), 0) FROM files')->fetchColumn(),
         ];
+    }
+
+    /**
+     * The stored tag rows of $relPath when the entry matches, else null.
+     *
+     * @return list<list<mixed>>|null
+     */
+    private function row(string $relPath, int $mtime, int $size, ?string $producer): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT mtime, size, producer, tags FROM files WHERE path = ?');
+        $stmt->execute([$relPath]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if ($row === false || (int) $row['mtime'] !== $mtime || (int) $row['size'] !== $size
+            || (string) $row['producer'] !== ($producer ?? self::PHP_PRODUCER)) {
+            return null;
+        }
+
+        $rows = \json_decode((string) $row['tags'], true);
+
+        return \is_array($rows) ? \array_values(\array_filter($rows, 'is_array')) : null;
+    }
+
+    /** @param list<mixed> $row */
+    private static function tag(string $relPath, array $row): Tag
+    {
+        return ($row[0] ?? null) === 'r'
+            ? Tag::reference($relPath, (int) ($row[1] ?? 1), (string) ($row[2] ?? ''))
+            : Tag::definition($relPath, (int) ($row[1] ?? 1), (string) ($row[2] ?? ''), (string) ($row[3] ?? ''), (string) ($row[4] ?? ''));
     }
 
     private function deleteRows(string $relPath): void
     {
-        $this->pdo->prepare('DELETE FROM tags WHERE path = ?')->execute([$relPath]);
         $this->pdo->prepare('DELETE FROM files WHERE path = ?')->execute([$relPath]);
     }
 
@@ -229,26 +371,34 @@ final class TagCache
             $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
             $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 5);
             $pdo->exec('PRAGMA journal_mode=WAL');
+            // A derived cache: a crash may cost the last writes, never a
+            // source file, so it does not pay for an fsync per commit.
+            $pdo->exec('PRAGMA synchronous=NORMAL');
             $pdo->exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
-            $pdo->exec('CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, mtime INTEGER NOT NULL, size INTEGER NOT NULL)');
-            $pdo->exec('CREATE TABLE IF NOT EXISTS tags (
-                path TEXT NOT NULL, seq INTEGER NOT NULL, line INTEGER NOT NULL,
-                name TEXT NOT NULL, kind TEXT NOT NULL, type TEXT NOT NULL, scope TEXT NOT NULL,
-                PRIMARY KEY (path, seq)
-            )');
-            $pdo->exec('CREATE INDEX IF NOT EXISTS tags_name ON tags (name)');
 
             $version = $pdo->query("SELECT value FROM meta WHERE key = 'extractor_version'")->fetchColumn();
-            if ($version !== (string) self::EXTRACTOR_VERSION) {
-                $pdo->exec('DELETE FROM tags');
-                $pdo->exec('DELETE FROM files');
+            $expected = self::SCHEMA_VERSION . '/' . self::PHP_PRODUCER;
+            if ($version !== $expected) {
+                // Every table this class has ever had, in any layout.
+                foreach (['tags', 'files', 'renders'] as $table) {
+                    $pdo->exec('DROP TABLE IF EXISTS ' . $table);
+                }
+                $pdo->exec('DROP INDEX IF EXISTS tags_name');
                 $pdo->prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('extractor_version', ?)")
-                    ->execute([(string) self::EXTRACTOR_VERSION]);
+                    ->execute([$expected]);
             }
+
+            $pdo->exec('CREATE TABLE IF NOT EXISTS files (
+                path TEXT PRIMARY KEY, mtime INTEGER NOT NULL, size INTEGER NOT NULL,
+                producer TEXT NOT NULL, count INTEGER NOT NULL, tags TEXT NOT NULL
+            )');
+            $pdo->exec('CREATE TABLE IF NOT EXISTS renders (key TEXT PRIMARY KEY, body TEXT NOT NULL, stored_at INTEGER NOT NULL)');
         } finally {
             \umask($previousUmask);
         }
-        @\chmod($dbPath, 0600);
+        if ($dbPath !== ':memory:') {
+            @\chmod($dbPath, 0600);
+        }
 
         return $pdo;
     }

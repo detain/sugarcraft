@@ -90,9 +90,14 @@ final class PageRank
 
         $index = \array_flip($nodes);
 
-        // Row-normalised out-edges: from => [to => share].
+        // Row-normalised out-edges: from => [to => share]. Rewritten IN PLACE
+        // over $weights, row by row and keeping the row order: a graph handed
+        // over as a temporary (SymbolGraph's ~340,000 pairs on sugar-crush's
+        // own tree) then never exists twice in memory.
         $out = [];
-        foreach ($weights as $from => $targets) {
+        foreach (\array_keys($weights) as $from) {
+            $targets = $weights[$from];
+            unset($weights[$from]);
             if (!isset($index[$from])) {
                 continue;
             }
@@ -109,6 +114,7 @@ final class PageRank
                 $row[$to] = ($row[$to] ?? 0.0) + $weight;
                 $total += $weight;
             }
+            unset($targets);
             if ($total > 0.0) {
                 foreach ($row as $to => $weight) {
                     $row[$to] = $weight / $total;
@@ -116,6 +122,7 @@ final class PageRank
                 $out[(string) $from] = $row;
             }
         }
+        unset($weights);
 
         $teleport = $this->teleportVector($nodes, $personalization);
 

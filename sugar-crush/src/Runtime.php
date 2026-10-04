@@ -4171,6 +4171,18 @@ final class Runtime
         // note above).
         $sections[] = $this->repoMapSnapshot($app);
 
+        // Roadmap 5.5-5: the symbol-level map, directly behind the directory
+        // map it refines — the same kind of thing (fact derived from the
+        // repository), PerSession and byte-stable for the session. Like the
+        // tool-guidance slot, it joins the list ONLY when the session holds a
+        // capture (EngineBackend primes it before a turn's fork,
+        // primeSymbolMap()); every other prompt build — and the golden —
+        // assembles exactly as before this slot existed.
+        $symbolMap = $this->symbolMapSnapshot($app);
+        if ($symbolMap !== null) {
+            $sections[] = $symbolMap;
+        }
+
         // Step 1.A-1: the standing instruction slab — user rules, the
         // instruction documents (CLAUDE.md/AGENTS.md and forced globs) and the
         // repository's rule tiers — is session-stable and memoised per
@@ -5496,6 +5508,48 @@ final class Runtime
             'repo-map:' . hash('xxh128', self::projectRoot($app)),
             static fn(): RepoMapBlock => RepoMapBlock::capture(self::projectRoot($app)),
         );
+    }
+
+    /**
+     * The session's symbol-level repo map (roadmap 5.5-5), or null when this
+     * session holds no capture — then the slot is absent from the prompt, not
+     * rendered empty. Never captured here: capturing walks the checkout, and
+     * only the engine's parent-side prime ({@see primeSymbolMap()}) pays for
+     * that, once per session.
+     */
+    private function symbolMapSnapshot(App $app): ?Context\SymbolMapBlock
+    {
+        $memo = $this->sessionPromptMemo();
+        $slot = self::symbolMapSlot($app);
+        if (!$memo->has($app->sessionId, $slot)) {
+            return null;
+        }
+
+        return $memo->remember($app->sessionId, $slot, static fn (): Context\SymbolMapBlock => Context\SymbolMapBlock::empty());
+    }
+
+    /**
+     * Capture the symbol-level repo map for $app's session once, into the
+     * session memo the turn's prompt reads (roadmap 5.5-5). EngineBackend
+     * calls it in the parent before forking a turn; after the first turn of a
+     * session — and until a refresh point forgets the session's layers — it
+     * returns the held capture without touching the checkout, so the bytes
+     * the prompt carries never move inside a session. A capture that came
+     * back empty is held too: the session stays without the map rather than
+     * gaining it mid-session and moving message 0.
+     */
+    public function primeSymbolMap(App $app): Context\SymbolMapBlock
+    {
+        return $this->sessionPromptMemo()->remember(
+            $app->sessionId,
+            self::symbolMapSlot($app),
+            static fn (): Context\SymbolMapBlock => Context\SymbolMapBlock::capture(self::projectRoot($app)),
+        );
+    }
+
+    private static function symbolMapSlot(App $app): string
+    {
+        return 'symbol-map:' . hash('xxh128', self::projectRoot($app));
     }
 
     /**

@@ -88,8 +88,13 @@ final class RepoMapRenderer
             return '';
         }
 
+        // Every rendered entry costs at least one token (two definitions on
+        // one source line, which share it, are the rare exception), so no
+        // prefix much longer than the budget can fit: searching past it only rendered (and read
+        // the source of) thousands of entries that could never be kept — on
+        // a 1,700-file tree, every file's lines held in memory at once.
         $lower = 0;
-        $upper = $count;
+        $upper = \min($count, $maxTokens);
         $middle = \min(\intdiv($maxTokens, self::TOKENS_PER_ENTRY_GUESS), $count);
         $best = '';
         $bestTokens = 0;

@@ -136,6 +136,66 @@ final class TagCacheTest extends TestCase
         self::assertSame(['files' => 0, 'tags' => 0], TagCache::open($path)->stats());
     }
 
+    public function testARowIsAHitOnlyForTheProducerThatTaggedIt(): void
+    {
+        $cache = TagCache::open($this->dir . '/cache.sqlite');
+        $cache->put('a.rs', 1, 2, [Tag::reference('a.rs', 1, 'Thing')], 'ctags/1/aaaa');
+
+        self::assertNotNull($cache->get('a.rs', 1, 2, 'ctags/1/aaaa'));
+        self::assertNull($cache->get('a.rs', 1, 2, 'ctags/1/bbbb'), 'another ctags build is a miss');
+        self::assertNull($cache->get('a.rs', 1, 2), 'the PHP producer never reads a ctags row');
+        self::assertSame(TagCache::PHP_PRODUCER, 'php/' . TagCache::EXTRACTOR_VERSION);
+    }
+
+    public function testTheSummaryKeepsDefinitionsAndCountsReferences(): void
+    {
+        $cache = TagCache::open($this->dir . '/cache.sqlite');
+        $cache->put('a.php', 1, 1, [
+            Tag::definition('a.php', 2, 'A', Tag::TYPE_CLASS),
+            Tag::reference('a.php', 3, 'B'),
+            Tag::reference('a.php', 4, 'B'),
+            Tag::reference('a.php', 5, 'C'),
+        ]);
+
+        $summary = $cache->summary('a.php', 1, 1);
+
+        self::assertEquals([Tag::definition('a.php', 2, 'A', Tag::TYPE_CLASS)], $summary['definitions']);
+        self::assertSame(['B' => 2, 'C' => 1], $summary['references']);
+        self::assertNull($cache->summary('a.php', 2, 1));
+    }
+
+    public function testFinishedMapsAreKeptByKeyAndTheOldestGo(): void
+    {
+        $cache = TagCache::open($this->dir . '/cache.sqlite');
+        foreach (range(0, TagCache::MAX_RENDERED) as $i) {
+            $cache->storeRendered("k{$i}", "map {$i}");
+        }
+
+        self::assertNull($cache->rendered('k0'), 'past the cap the oldest map is dropped');
+        self::assertSame('map ' . TagCache::MAX_RENDERED, $cache->rendered('k' . TagCache::MAX_RENDERED));
+    }
+
+    public function testTheTransactionCommitsOnceAndRollsBackOnFailure(): void
+    {
+        $cache = TagCache::open($this->dir . '/cache.sqlite');
+        $cache->transaction(static function () use ($cache): void {
+            $cache->put('a.php', 1, 1, []);
+            $cache->put('b.php', 1, 1, []);
+        });
+        $threw = false;
+        try {
+            $cache->transaction(static function () use ($cache): void {
+                $cache->put('c.php', 1, 1, []);
+                throw new \RuntimeException('boom');
+            });
+        } catch (\RuntimeException) {
+            $threw = true;
+        }
+
+        self::assertTrue($threw);
+        self::assertSame(['files' => 2, 'tags' => 0], $cache->stats());
+    }
+
     public function testACorruptDatabaseIsRebuiltRatherThanFatal(): void
     {
         $path = $this->dir . '/cache.sqlite';

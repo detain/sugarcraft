@@ -2725,6 +2725,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // Step 1.A-2: in the parent, before the fork — see beginSessionTurn().
         $this->beginSessionTurn($history);
 
+        // Roadmap 5.5-5: the session's symbol-level repo map, captured HERE
+        // in the parent once per session (Runtime::primeSymbolMap() holds it
+        // in the session memo until a refresh point), so every turn's child
+        // inherits the same bytes and the system prompt never moves for it.
+        // The capture is bounded and degrades to no map (SymbolMapBlock);
+        // `SUGARCRUSH_DISABLE_SYMBOL_MAP` turns it off.
+        if (!\SugarCraft\Crush\Context\SymbolMapBlock::disabledByEnvironment()) {
+            try {
+                $this->newRuntime(new HookManager(new HookRegistry()))->primeSymbolMap($this->sessionApp());
+            } catch (\Throwable) {
+                // No map this turn; the child assembles without the slot.
+            }
+        }
+
         // Roadmap 5.3-2: this turn's memory recall, ranked HERE in the parent
         // before the fork, so the note reads and the one embedding request
         // happen once per turn and the child's `<turn-context>` row reads the

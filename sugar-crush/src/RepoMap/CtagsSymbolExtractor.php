@@ -51,6 +51,14 @@ final class CtagsSymbolExtractor
 
     public const BINARY = 'ctags';
 
+    /**
+     * Bump when {@see parse()} or {@see references()} answers differently for
+     * the same input. Part of {@see cacheStamp()}, so {@see TagCache} re-runs
+     * every file this extractor produced — and only those — instead of mixing
+     * tags from two rule sets.
+     */
+    public const EXTRACTOR_VERSION = 1;
+
     /** Per-batch wall clock. ctags parses thousands of files a second. */
     public const TIMEOUT_SECONDS = 30.0;
 
@@ -138,6 +146,9 @@ final class CtagsSymbolExtractor
     /** @var array<string, bool> binary => is Universal Ctags with JSON */
     private static array $universal = [];
 
+    /** @var array<string, string> binary => the first line of its `--version` banner */
+    private static array $banners = [];
+
     private function __construct(
         private readonly string $binary,
         private readonly float $timeoutSeconds,
@@ -190,9 +201,26 @@ final class CtagsSymbolExtractor
             self::PROBE_TIMEOUT_SECONDS,
         );
 
+        self::$banners[$this->binary] = \trim((string) \strtok($run['stdout'], "\n"));
+
         return self::$universal[$this->binary] = !$run['timedOut']
             && $run['exitCode'] === 0
             && self::isUniversalWithJson($run['stdout']);
+    }
+
+    /**
+     * The stamp {@see TagCache} stores beside every file this extractor
+     * tagged: the extractor's own rule version and the binary's version
+     * banner. Either moving — a ctags upgrade can change what its parsers
+     * emit, an edited reference scan changes the references — turns every
+     * row it stamped into a miss, so no tag outlives the code that made it.
+     */
+    public function cacheStamp(): string
+    {
+        $this->available();
+
+        return 'ctags/' . self::EXTRACTOR_VERSION . '/'
+            . \substr(\hash('xxh128', self::$banners[$this->binary] ?? ''), 0, 16);
     }
 
     /**

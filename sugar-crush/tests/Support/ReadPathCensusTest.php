@@ -496,6 +496,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'its root, skipped when a symlink and re-resolved through PathJail before it is handed over; '
                 . 'size-capped at MAX_FILE_BYTES before the read',
         ],
+        'RepoMap/RepoMapBuilder.php|file_get_contents' => [
+            'PATH_JAIL — the renderer\'s line source (W2-j carry-over), shared by the RepoMap tool and the '
+                . 'prompt\'s SymbolMapBlock since 5.5-5: a path from the builder\'s own `git ls-files` listing, '
+                . 're-resolved through PathJail against the root, a symlink refused, and nothing read past '
+                . 'PhpSymbolExtractor::MAX_FILE_BYTES',
+        ],
         'RepoMap/PhpSymbolExtractor.php|file_get_contents' => [
             'CALLER_SUPPLIED — extractFile()\'s source read, for a path TagCache::tagsFor() received from the '
                 . 'RepoMap tool\'s `git ls-files` listing, PathJail-resolved and symlinks skipped; size-capped at '
@@ -649,11 +655,6 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Tools/BuiltIn/Read.php|fopen' => [
             'PATH_JAIL — the read tool\'s one arm, streaming every read a page at a time (0.11)',
-        ],
-        'Tools/BuiltIn/RepoMapTool.php|file_get_contents' => [
-            'PATH_JAIL — the renderer\'s line source (W2-j carry-over): a path from the tool\'s own '
-                . '`git ls-files` listing, re-resolved through PathJail against the jail root, a symlink '
-                . 'refused, and nothing read past PhpSymbolExtractor::MAX_FILE_BYTES',
         ],
         'Tools/BuiltIn/WebFetch.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',

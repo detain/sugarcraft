@@ -263,6 +263,9 @@ Environment variables:
                           Any value other than empty or 0 stops reading and
                           refreshing the LiteLLM model database that sizes and
                           prices models with no built-in figure.
+   SUGARCRUSH_DISABLE_SYMBOL_MAP
+                          Any value other than empty or 0 keeps the ranked
+                          symbol map out of the system prompt.
    SUGARCRUSH_BACKGROUND  light or dark — forces what the adaptive theme
                           believes about the terminal background, skipping
                           the OSC 11 probe and COLORFGBG.

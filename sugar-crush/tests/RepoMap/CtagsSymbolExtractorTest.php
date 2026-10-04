@@ -50,6 +50,19 @@ final class CtagsSymbolExtractorTest extends TestCase
         self::assertFalse(CtagsSymbolExtractor::isUniversalWithJson('Exuberant Ctags 5.8, Copyright (C) 1996-2009'));
     }
 
+    public function testTheCacheStampMovesWithTheBinarysVersionBanner(): void
+    {
+        $six = CtagsSymbolExtractor::new()->withBinary($this->fakeCtags(self::UNIVERSAL_BANNER, ''));
+        $next = CtagsSymbolExtractor::new()->withBinary($this->fakeCtags(
+            str_replace('6.0.0', '6.1.0', self::UNIVERSAL_BANNER),
+            '',
+        ));
+
+        self::assertStringStartsWith('ctags/' . CtagsSymbolExtractor::EXTRACTOR_VERSION . '/', $six->cacheStamp());
+        self::assertSame($six->cacheStamp(), $six->cacheStamp());
+        self::assertNotSame($six->cacheStamp(), $next->cacheStamp(), 'a ctags upgrade must invalidate the rows it tagged');
+    }
+
     public function testAMissingBinaryIsUnavailableAndExtractsNothing(): void
     {
         $extractor = CtagsSymbolExtractor::new()->withBinary($this->dir . '/no-such-ctags');

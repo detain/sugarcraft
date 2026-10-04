@@ -11,6 +11,7 @@ use SugarCraft\Crush\Context\MemoryBlock;
 use SugarCraft\Crush\Context\PromptSection;
 use SugarCraft\Crush\Context\RepoMapBlock;
 use SugarCraft\Crush\Context\Sections\MaximsSection;
+use SugarCraft\Crush\Context\SymbolMapBlock;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Runtime;
@@ -86,13 +87,14 @@ final class ArchitectureAssemblyOrderTest extends TestCase
         2 => ['maxims', 'MaximsSection'],
         3 => ['tool-guidance', 'tool-guidance layer'],
         4 => ['repo-map', 'RepoMapBlock'],
-        5 => ['user-rules', '<user-rules>'],
-        6 => ['project-doc', 'InstructionFileLoader'],
-        7 => ['project-rule', 'project-tier rules'],
-        8 => ['memory', 'MemoryBlock'],
-        9 => ['skill-body', 'full bodies'],
-        10 => ['skill-listing', 'listForPrompt'],
-        11 => ['env', 'LAST'],
+        5 => ['symbol-map', 'SymbolMapBlock'],
+        6 => ['user-rules', '<user-rules>'],
+        7 => ['project-doc', 'InstructionFileLoader'],
+        8 => ['project-rule', 'project-tier rules'],
+        9 => ['memory', 'MemoryBlock'],
+        10 => ['skill-body', 'full bodies'],
+        11 => ['skill-listing', 'listForPrompt'],
+        12 => ['env', 'LAST'],
     ];
 
     // Canary bytes are absurd tokens, never prose: each one is the ONLY place
@@ -150,14 +152,14 @@ final class ArchitectureAssemblyOrderTest extends TestCase
         $tokens = $this->assembledTokens();
         $documented = $this->documentedSlotItems();
 
-        // The page's list must be the eleven consecutive items the code
+        // The page's list must be the twelve consecutive items the code
         // produces — membership and position together. assertSame on two
         // string lists prints the first divergence, which is exactly the
         // diagnostic a reordered slot needs.
         self::assertSame(
             array_keys(self::DOC_SLOT_PINS),
             array_keys($documented),
-            'the ARCHITECTURE.md assembly list must number exactly items 1..11 in ascending order; '
+            'the ARCHITECTURE.md assembly list must number exactly items 1..12 in ascending order; '
             . 'a renumbered, inserted, or deleted slot changes this sequence and the page and code '
             . 'have to be corrected together',
         );
@@ -172,7 +174,7 @@ final class ArchitectureAssemblyOrderTest extends TestCase
             );
         }
 
-        // array_column walks the const in file order, which is slot order 1..11.
+        // array_column walks the const in file order, which is slot order 1..12.
         $expected = array_column(self::DOC_SLOT_PINS, 0);
 
         self::assertSame(
@@ -196,7 +198,7 @@ final class ArchitectureAssemblyOrderTest extends TestCase
         $tokens = $this->assembledTokens();
 
         self::assertSame('env', end($tokens), 'the volatile EnvironmentBlock must stay the LAST section');
-        self::assertCount(11, $tokens, 'every documented slot is wired in this fixture, so the list length is itself pinned');
+        self::assertCount(12, $tokens, 'every documented slot is wired in this fixture, so the list length is itself pinned');
     }
 
     // -------------------------------------------------------------------------
@@ -280,6 +282,11 @@ final class ArchitectureAssemblyOrderTest extends TestCase
             null,
             Runtime::class,
         );
+        // Slot 5 joins the list only once the session holds a symbol-map
+        // capture (EngineBackend primes it before a turn's fork); prime it
+        // here so every documented slot is wired. The fixture is no git
+        // checkout, so the capture is the empty block — the slot, not bytes.
+        $runtime->primeSymbolMap($app);
         $sections = $sections($runtime, $app);
 
         return array_map($this->classify(...), $sections);
@@ -303,6 +310,9 @@ final class ArchitectureAssemblyOrderTest extends TestCase
         }
         if ($section instanceof RepoMapBlock) {
             return 'repo-map';
+        }
+        if ($section instanceof SymbolMapBlock) {
+            return 'symbol-map';
         }
         if ($section instanceof MemoryBlock) {
             return 'memory';

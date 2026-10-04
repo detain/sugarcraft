@@ -10,10 +10,10 @@ a doc that does not exist.
 For the assembly-order list in the architecture survey see `docs/ARCHITECTURE.md` ("The system
 prompt, in assembly order"); this page is the *why* beside that *what*.
 
-## The eleven slots, in order of record
+## The twelve slots, in order of record
 
 `Runtime::systemPromptSections()` returns an ordered list of `PromptSection`s, base first and the
-static `<env>` block last. Counted from the live method, there are eleven slots:
+static `<env>` block last. Counted from the live method, there are twelve slots:
 
 1. **Base identity** (`Runtime::basePrompt()`) — the Static heredoc that opens every prompt.
    Unfenced, because it is harness voice with no untrusted input. For the DeepSeek-V4, Qwen3.8
@@ -30,10 +30,16 @@ static `<env>` block last. Counted from the live method, there are eleven slots:
    `name()`, so the bytes cannot depend on registration order. Static.
 4. **Repo map** (`RepoMapBlock`) — fenced `repo-map`; per-session memoized snapshot of derived
    repository facts.
-5. **User-tier rules** — each enabled rule from `RuleLoader::load()` whose tier is `user` gets its
+5. **Symbol map** (`SymbolMapBlock`) — fenced `symbol-map`; the definitions the rest of the workspace
+   references most, ranked by PageRank over which files use which names (an Aider repo map, roadmap
+   5.5-5), unfocused and capped at 1,024 tokens. PerSession and byte-stable: `EngineBackend` captures
+   it once per session in the parent before a turn's fork (`Runtime::primeSymbolMap()`) and the
+   session memo holds it until a refresh point; a session with no capture assembles no slot at all,
+   so every other prompt build is unchanged.
+6. **User-tier rules** — each enabled rule from `RuleLoader::load()` whose tier is `user` gets its
    own fence, `user-rules`, with the operator-authority preamble — except a `paths:`-scoped rule,
    which is delivered at tool time instead (see the trigger bullets below).
-6. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()` (read
+7. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()` (read
    through their path-keyed sibling `loadDocuments()`), each non-blank document its own
    `project-instructions` fence with the project-authority preamble. Budgeted like the rules
    (audit 15d-09, C3): each document's framed, post-escape section is held to
@@ -45,17 +51,17 @@ static `<env>` block last. Counted from the live method, there are eleven slots:
    past that ceiling is replaced at its import site by an `import-deferred` note carrying the same
    pointer line. The verdicts are made in one place, `Runtime::planInstructionDocuments()`, which
    the launch also runs so one launch notice can name each file left out and why (audit R1).
-7. **Project-tier rules** — the same `project-instructions` fence and preamble as the documents,
+8. **Project-tier rules** — the same `project-instructions` fence and preamble as the documents,
    because the authorship claim is identical: bytes shipped inside the checkout. A
    `paths:`-scoped project rule is skipped here the same way.
-8. **Memory** (`MemoryBlock`) — fenced `project-memory`: an INDEX, one line per note (type, id,
+9. **Memory** (`MemoryBlock`) — fenced `project-memory`: an INDEX, one line per note (type, id,
    opening words, tags), never the note text; the user's own cross-project notes first (at most 4
    notes / 1 KB), then the project's, memoized per session like the repo map, followed outside the
    fence by the standing instructions on when to save a note and what not to save (anything the
    code already says), and the mandatory recall step: search memory — the turn's `memory-recall`
    block, then the `Memory` tool's `recall` — before answering about prior work. Agent-scope notes
    never reach it.
-9. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
+10. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
    `Skill::systemPromptContribution()` as a PerTurn section, name and body through
    `PromptFence::escape()`. Held to `CompactorConfig`'s `skillBudgetPerSkill` and
    `skillBudgetCombined` tokens, measured with `TokenEstimate::ofText()`: a body over either keeps
@@ -65,7 +71,7 @@ static `<env>` block last. Counted from the live method, there are eleven slots:
    `EngineBackend::withCompactorConfig()`'s, else those same defaults — the source the launch
    notice prices against, since no settings key feeds compaction budgets. Each build records its
    deferrals on `Runtime::skillDeferrals()`, and the launch names them in one notice (audit R1).
-10. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
+11. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
     already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble, because
     names and descriptions are skill authors' text — a cloned checkout's `.claude/skills` among
@@ -74,12 +80,12 @@ static `<env>` block last. Counted from the live method, there are eleven slots:
     opened with a provenance badge from `SkillOrigin::badge()` — `[built-in]`, `[user]`,
     `[project]`, plus `foreign: claude` or `foreign: opencode` for another tool's format
     (audit 15d-02). `SkillPathNudge` uses the same helper at its own entry cap, without the badge.
-11. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The P3.S1 invariant. Since
+12. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The P3.S1 invariant. Since
     step 1.A-1 it is the *static* half only — working directory, git-repo flag, platform, OS, PHP,
     model and date, every line frozen at capture or constant (`EnvironmentBlock::withVolatile()`)
     — so it is PerSession. The git section moved to the `<turn-context>` row (next section).
 
-Slots 1–3 are the Static prefix; 4–8 are PerSession; 9–10 are PerTurn; 11 is PerSession again —
+Slots 1–3 are the Static prefix; 4–9 are PerSession; 10–11 are PerTurn; 12 is PerSession again —
 the static `<env>` half, kept last because the slot order is the documented one. A section whose
 `render()` returns the empty string folds out of both wire forms — an absent layer adds no bytes,
 no empty fence and no dangling separator.
@@ -254,7 +260,7 @@ other:
   request* outside the assembled system prompt — foreign by exactly the route a repo file is — and
   `harness-injected` is the roster's one pre-registered, defang-only tag: nothing emits it yet, and
   a tag added before the bytes that need it is free, whereas a tag added after leaves a forging
-  window. `available-skills` is the fence around the skill listing (slot 10), whose names and
+  window. `available-skills` is the fence around the skill listing (slot 11), whose names and
   descriptions are skill authors' text (audit 15d-02). `turn-context` and `system-notice` fence
   user-role rows outside the system prompt — the per-step state row and a history notice kept in
   place — and are on the roster so no repository byte can spell either harness voice.
@@ -429,16 +435,16 @@ How each user-facing surface reaches the model, and where it does not reach:
   of the user, project and root tiers; the tier picks the *voice* (fence and preamble), never a
   second walk, and the rulebook toggles subtract inside that one entry point so the `/rules`
   listing and the prompt cannot disagree about which packs are on. Rules enter the system prompt
-  (slots 5 and 7), except `paths:`-scoped ones, which enter tool output (next bullet).
+  (slots 6 and 8), except `paths:`-scoped ones, which enter tool output (next bullet).
 - **Triggers.** Built per rule; only `paths:` is applied. A `paths:`-scoped rule leaves the
   system prompt and reaches the model through `RulePathNudge`, inside the `<system-reminder>`
   block that Read, Edit, Write, Glob and Grep append to their output when they touch a matching
   file. `KeywordTrigger` and `IntentTrigger` have no consumer in `src/` — see the register above.
-  The listing-and-selection trigger family for *skills* does ship: slot 10 exists so discovered
+  The listing-and-selection trigger family for *skills* does ship: slot 11 exists so discovered
   skills are auto-triggerable through the `Skill` tool.
 - **Skills.** Two channels, deliberately one body path: explicitly enabled skills contribute full
-  bodies via `Skill::systemPromptContribution()` (slot 9) and are excluded from the
-  `SkillMatcher::listForPrompt()` metadata listing (slot 10) so no skill is in the prompt twice;
+  bodies via `Skill::systemPromptContribution()` (slot 10) and are excluded from the
+  `SkillMatcher::listForPrompt()` metadata listing (slot 11) so no skill is in the prompt twice;
   path-scoped skills additionally surface a first-touch nudge through `SkillPathNudge`, which
   rides into tool output under the reminder tag, not into the system prompt.
 - **Compaction summaries.** A compaction reaches the model as history rows, never as a system

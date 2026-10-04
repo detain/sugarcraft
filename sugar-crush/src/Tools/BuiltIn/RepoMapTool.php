@@ -6,10 +6,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\RepoMap\CtagsSymbolExtractor;
-use SugarCraft\Crush\RepoMap\PhpSymbolExtractor;
-use SugarCraft\Crush\RepoMap\RepoMapRenderer;
-use SugarCraft\Crush\RepoMap\SymbolGraph;
-use SugarCraft\Crush\RepoMap\Tag;
+use SugarCraft\Crush\RepoMap\RepoMapBuilder;
 use SugarCraft\Crush\RepoMap\TagCache;
 use SugarCraft\Crush\Tools\AcceptsHeartbeat;
 use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
@@ -18,10 +15,8 @@ use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
 use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
-use SugarCraft\Crush\Tools\PathJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
-use SugarCraft\Crush\Workspace\GitRunner;
 
 /**
  * `RepoMap`: the symbol-level repo map as a tool (roadmap 5.5-4) — the
@@ -30,23 +25,26 @@ use SugarCraft\Crush\Workspace\GitRunner;
  * budget.
  *
  * It mirrors Aider's repo map (`RepoMap.get_repo_map()`), shipped as a tool
- * the model calls rather than a prompt block, so it costs nothing until it is
- * asked for and its size is the caller's choice; a byte-stable prompt block is
- * the separate, later step 5.5-5.
+ * the model calls, so it costs nothing until it is asked for and its size and
+ * focus are the caller's choice. The system prompt carries an unfocused,
+ * byte-stable map of the same kind once per session
+ * ({@see \SugarCraft\Crush\Context\SymbolMapBlock}, roadmap 5.5-5); this
+ * tool is how the model draws a fresh or focused one.
  *
- * THE PIPELINE, every stage of which already existed (5.5-1…5.5-3):
+ * THE PIPELINE lives in {@see RepoMapBuilder}, shared with that block:
  *
  *  1. FILES: `git ls-files --cached --others --exclude-standard` in the jail
  *     root, so `.gitignore` decides what is project code exactly as it does
  *     for the user. A symlink is skipped and every path is re-resolved
- *     through {@see PathJail} before anything reads it.
- *  2. TAGS: PHP through {@see PhpSymbolExtractor} (no binary needed), every
- *     other code file through {@see CtagsSymbolExtractor} when Universal Ctags
- *     is installed; both cached in the per-project {@see TagCache} under the
- *     home directory, keyed on path + mtime + size.
- *  3. RANK: {@see SymbolGraph} (Aider's weights), personalised by the files
- *     and identifiers the caller names.
- *  4. RENDER: {@see RepoMapRenderer::fit()} to `max_tokens`.
+ *     through {@see \SugarCraft\Crush\Tools\PathJail} before anything reads it.
+ *  2. TAGS: PHP through {@see \SugarCraft\Crush\RepoMap\PhpSymbolExtractor}
+ *     (no binary needed), every other code file through
+ *     {@see CtagsSymbolExtractor} when Universal Ctags is installed; both
+ *     cached in the per-project {@see TagCache} under the home directory,
+ *     keyed on path + mtime + size + the producer that tagged the file.
+ *  3. RANK: {@see \SugarCraft\Crush\RepoMap\SymbolGraph} (Aider's weights),
+ *     personalised by the files and identifiers the caller names.
+ *  4. RENDER: {@see \SugarCraft\Crush\RepoMap\RepoMapRenderer::fit()} to `max_tokens`.
  *
  * A READ, classified {@see ToolPermissionClass::Read}: it reports source that
  * `Read` would show, writes nothing in the checkout, and its one write is the
@@ -69,14 +67,6 @@ final readonly class RepoMapTool implements Tool, AcceptsWorktreeJail, AcceptsHe
 
     /** At most this many `focus_files` / `mentioned_idents` entries are honoured. */
     public const MAX_HINTS = 50;
-
-    /** Extensions universal-ctags is asked about; anything else (docs, data, images) is not code. */
-    private const CTAGS_EXTENSIONS = [
-        'c', 'h', 'cc', 'cpp', 'cxx', 'hh', 'hpp', 'hxx', 'cs', 'go', 'java', 'kt', 'kts', 'scala',
-        'rs', 'py', 'pyi', 'rb', 'js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'swift', 'm', 'mm', 'lua',
-        'pl', 'pm', 'sh', 'bash', 'zsh', 'ex', 'exs', 'erl', 'hrl', 'hs', 'ml', 'mli', 'clj', 'dart',
-        'r', 'jl', 'zig', 'nim', 'vim', 'groovy', 'tcl', 'f90', 'f95', 'ada', 'adb', 'ads', 'el',
-    ];
 
     public function __construct(
         private ?string $root = null,
@@ -176,73 +166,51 @@ final readonly class RepoMapTool implements Tool, AcceptsWorktreeJail, AcceptsHe
             return new ToolResult($id, 'Error: RepoMap has no project directory to map.', true);
         }
 
-        $listing = GitRunner::new($rootReal)
-            ->withInheritedGitEnv()
-            ->withTimeout(GitRunner::DEFAULT_TIMEOUT_SECONDS)
-            ->run('ls-files', '-z', '--cached', '--others', '--exclude-standard');
-        if (!$listing['ok']) {
-            return new ToolResult(
-                $id,
-                'Error: RepoMap maps the files git lists, and `git ls-files` failed here: '
-                    . \trim($listing['stderr'] !== '' ? $listing['stderr'] : 'exit ' . $listing['exitCode'])
-                    . '. Use Glob and Grep to explore a directory that is not a git checkout.',
-                true,
-            );
-        }
-
-        $ctags = $this->ctags ?? CtagsSymbolExtractor::new();
-        $ctagsAvailable = $ctags->available();
-        [$phpFiles, $otherFiles, $capped] = $this->codeFiles($listing['stdout'], $rootReal, $ctagsAvailable);
-
         try {
             $cache = TagCache::open($this->cachePath ?? TagCache::defaultPath($rootReal) ?? ':memory:');
         } catch (\RuntimeException $e) {
             return new ToolResult($id, 'Error: RepoMap could not open its tag cache: ' . $e->getMessage(), true);
         }
 
-        $tagsByFile = [];
-        $php = PhpSymbolExtractor::new();
-        foreach ($phpFiles as $rel => $abs) {
-            $tagsByFile[$rel] = $cache->tagsFor($abs, $rel, $php);
-            $beat();
+        // The pipeline is shared with the system prompt's SymbolMapBlock
+        // (roadmap 5.5-5), so the tool and the prompt map the same files the
+        // same way.
+        $builder = RepoMapBuilder::new($rootReal, $cache, $this->ctags);
+        $listing = $builder->codeFiles(self::MAX_FILES);
+        if (!$listing['ok']) {
+            return new ToolResult(
+                $id,
+                'Error: RepoMap maps the files git lists, and `git ls-files` failed here: '
+                    . $listing['error']
+                    . '. Use Glob and Grep to explore a directory that is not a git checkout.',
+                true,
+            );
         }
-        foreach ($this->ctagsTags($otherFiles, $cache, $ctags) as $rel => $tags) {
-            $tagsByFile[$rel] = $tags;
-        }
-        $beat();
-        $cache->prune(\array_keys($phpFiles + $otherFiles));
+        $ctagsAvailable = $builder->ctagsAvailable();
 
-        if ($tagsByFile === []) {
+        $summaries = $builder->summaries($listing['php'], $listing['other'], $beat);
+        $mapped = \count($summaries['definitions']);
+        if ($mapped === 0) {
             return new ToolResult($id, 'RepoMap found no code files to map in ' . $rootReal . self::ctagsNote($ctagsAvailable));
         }
 
-        $graph = SymbolGraph::new(
-            $tagsByFile,
+        $maxTokens = self::budget($args['max_tokens'] ?? null);
+        $map = $builder->render(
+            $summaries['definitions'],
+            $summaries['references'],
+            $maxTokens,
             self::stringList($args['focus_files'] ?? null),
             self::stringList($args['mentioned_files'] ?? null),
             self::stringList($args['mentioned_idents'] ?? null),
         );
-        $maxTokens = self::budget($args['max_tokens'] ?? null);
-        $entries = $graph->rankedEntries();
         $beat();
-        // The renderer reads these only for scope headers, which are
-        // definitions; handing it the references too made every outline line
-        // scan every reference in its file (measured: half the warm run).
-        $definitions = \array_map(
-            static fn (array $tags): array => \array_values(\array_filter($tags, static fn (Tag $t): bool => $t->isDefinition())),
-            $tagsByFile,
-        );
-        $map = RepoMapRenderer::new(
-            static fn (string $rel): array => self::sourceLines($rootReal, $rel),
-            $definitions,
-        )->fit($entries, $maxTokens);
 
         $header = sprintf(
             'Repo map of %d code file%s (budget %d tokens)%s%s',
-            \count($tagsByFile),
-            \count($tagsByFile) === 1 ? '' : 's',
+            $mapped,
+            $mapped === 1 ? '' : 's',
             $maxTokens,
-            $capped ? sprintf('; only the first %d files git lists were mapped', self::MAX_FILES) : '',
+            $listing['capped'] ? sprintf('; only the first %d files git lists were mapped', self::MAX_FILES) : '',
             self::ctagsNote($ctagsAvailable),
         );
 
@@ -256,117 +224,6 @@ final readonly class RepoMapTool implements Tool, AcceptsWorktreeJail, AcceptsHe
     private function jailRoot(): ?string
     {
         return $this->worktreeJail?->root() ?? $this->root;
-    }
-
-    /**
-     * Split `git ls-files -z` into PHP files and ctags files, each
-     * root-relative => absolute, skipping symlinks and anything PathJail does
-     * not place inside the root.
-     *
-     * @return array{0: array<string, string>, 1: array<string, string>, 2: bool}
-     */
-    private function codeFiles(string $listing, string $rootReal, bool $withCtags): array
-    {
-        $paths = \array_values(\array_unique(\array_filter(\explode("\0", $listing), static fn (string $p): bool => $p !== '')));
-        \sort($paths, \SORT_STRING);
-
-        $php = [];
-        $other = [];
-        $capped = false;
-        foreach ($paths as $rel) {
-            $ext = \strtolower(\pathinfo($rel, \PATHINFO_EXTENSION));
-            $isPhp = $ext === 'php';
-            if (!$isPhp && !($withCtags && \in_array($ext, self::CTAGS_EXTENSIONS, true))) {
-                continue;
-            }
-            if (\count($php) + \count($other) >= self::MAX_FILES) {
-                $capped = true;
-
-                break;
-            }
-
-            $candidate = $rootReal . '/' . $rel;
-            if (\is_link($candidate)) {
-                continue;
-            }
-            $abs = PathJail::resolve($rootReal, $rel);
-            if ($abs === null || !\is_file($abs)) {
-                continue;
-            }
-
-            if ($isPhp) {
-                $php[$rel] = $abs;
-            } else {
-                $other[$rel] = $abs;
-            }
-        }
-
-        return [$php, $other, $capped];
-    }
-
-    /**
-     * Tags for the ctags files: cache hits as they are, misses extracted in
-     * one batched run and stored. A file the extractor did not answer for (a
-     * cut-off batch) is mapped from nothing this time and not cached.
-     *
-     * @param array<string, string> $files
-     * @return array<string, list<Tag>>
-     */
-    private function ctagsTags(array $files, TagCache $cache, CtagsSymbolExtractor $ctags): array
-    {
-        $out = [];
-        $misses = [];
-        $stamps = [];
-        foreach ($files as $rel => $abs) {
-            \clearstatcache(true, $abs);
-            $stat = @\stat($abs);
-            if ($stat === false) {
-                continue;
-            }
-            $stamps[$rel] = [(int) $stat['mtime'], (int) $stat['size']];
-            $hit = $cache->get($rel, $stamps[$rel][0], $stamps[$rel][1]);
-            if ($hit !== null) {
-                $out[$rel] = $hit;
-            } else {
-                $misses[$rel] = $abs;
-            }
-        }
-
-        foreach ($ctags->extractFiles($misses) as $rel => $tags) {
-            $cache->put($rel, $stamps[$rel][0], $stamps[$rel][1], $tags);
-            $out[$rel] = $tags;
-        }
-
-        return $out;
-    }
-
-    /**
-     * The renderer's line source (the W2-j carry-over): CONTAINED — the path
-     * is re-resolved through {@see PathJail} against the root, and a symlink
-     * is refused — and SIZE-BOUNDED — a file over
-     * {@see PhpSymbolExtractor::MAX_FILE_BYTES} supplies no lines, so its
-     * outline falls back to `type name`. The renderer is only ever handed
-     * paths from this call's own listing; the checks hold anyway, because a
-     * closure is a door anyone holding it can walk through.
-     *
-     * @return list<string>
-     */
-    private static function sourceLines(string $rootReal, string $rel): array
-    {
-        if (\is_link($rootReal . '/' . $rel)) {
-            return [];
-        }
-        $abs = PathJail::resolve($rootReal, $rel);
-        if ($abs === null || !\is_file($abs)) {
-            return [];
-        }
-        $size = @\filesize($abs);
-        if ($size === false || $size > PhpSymbolExtractor::MAX_FILE_BYTES) {
-            return [];
-        }
-        $source = @\file_get_contents($abs);
-
-        return $source === false ? [] : \explode("\n", \str_replace("\r\n", "\n", $source));
     }
 
     /**

@@ -3065,7 +3065,7 @@ final class DocFigureProseDriftTest extends TestCase
         $archRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md');
         $start = strpos($archRaw, '### The system prompt, in assembly order');
         self::assertIsInt($start, 'the assembly-order heading moved — the eleven-slot paragraph lost its home');
-        $end = strpos($archRaw, 'Item 10 is what makes', $start);
+        $end = strpos($archRaw, 'Item 11 is what makes', $start);
         self::assertIsInt($end, 'the follow-up paragraphs moved — the ordinals they cite stop being checkable');
         $segment = substr($archRaw, $start, $end - $start);
 
@@ -3075,7 +3075,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         preg_match_all('/^(\d+)\. /m', $segment, $ordinals);
         self::assertSame(range(1, $words[$word[1]]), $ordinals[1] === [] ? [] : array_map('intval', $ordinals[1]), 'the numbered list is no longer exactly 1..N with N the spelled slot count');
-        self::assertSame(1, preg_match('/^11\. `EnvironmentBlock` LAST/m', $segment), 'item eleven is no longer EnvironmentBlock LAST — the volatility-last ordering claim rots with it');
+        self::assertSame(1, preg_match('/^12\. `EnvironmentBlock` LAST/m', $segment), 'item twelve is no longer EnvironmentBlock LAST — the volatility-last ordering claim rots with it');
 
         // The roster is the doc's own vocabulary: the short symbol as the list
         // backticks it => the declared type it must resolve to. Every
@@ -3087,6 +3087,8 @@ final class DocFigureProseDriftTest extends TestCase
             'MaximsSection' => 'SugarCraft\Crush\Context\Sections\MaximsSection',
             'PromptGuidance' => 'SugarCraft\Crush\Tools\PromptGuidance',
             'RepoMapBlock' => 'SugarCraft\Crush\Context\RepoMapBlock',
+            'SymbolMapBlock' => 'SugarCraft\Crush\Context\SymbolMapBlock',
+            'EngineBackend' => 'SugarCraft\Crush\Backend\EngineBackend',
             'RuleLoader' => 'SugarCraft\Crush\Context\RuleLoader',
             'InstructionFileLoader' => 'SugarCraft\Crush\Context\InstructionFileLoader',
             'PromptFence' => 'SugarCraft\Crush\Context\PromptFence',
@@ -3113,9 +3115,9 @@ final class DocFigureProseDriftTest extends TestCase
         foreach (array_keys($layers) as $symbol) {
             self::assertArrayHasKey($symbol, $cited, "the assembly list stopped naming {$symbol} — the roster the arm derives from the prose lost a layer");
         }
-        self::assertTrue(method_exists('SugarCraft\Crush\Skills\SkillMatcher', 'listForPrompt'), 'item 10 cites SkillMatcher::listForPrompt() which is gone');
+        self::assertTrue(method_exists('SugarCraft\Crush\Skills\SkillMatcher', 'listForPrompt'), 'item 11 cites SkillMatcher::listForPrompt() which is gone');
         self::assertTrue(method_exists(Runtime::class, 'basePrompt'), 'item 1 is the base instructions — Runtime::basePrompt() is gone');
-        self::assertTrue(class_exists('SugarCraft\Crush\Tools\BuiltIn\SkillTool'), 'the Skill tool that item 10 exists to advertise no longer exists');
+        self::assertTrue(class_exists('SugarCraft\Crush\Tools\BuiltIn\SkillTool'), 'the Skill tool that item 11 exists to advertise no longer exists');
     }
 
     /**
@@ -5489,8 +5491,8 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $root = \dirname(__DIR__, 2);
         $raw = (string) file_get_contents($root . '/docs/PROMPT_ENGINEERING.md');
-        $start = strpos($raw, '## The eleven slots, in order of record');
-        self::assertIsInt($start, 'the eleven-slots heading moved — the count word lives in its own text');
+        $start = strpos($raw, '## The twelve slots, in order of record');
+        self::assertIsInt($start, 'the twelve-slots heading moved — the count word lives in its own text');
         $end = strpos($raw, "\n## ", $start + 5);
         self::assertIsInt($end, 'no heading follows the slots section — the window became the page tail');
         $window = substr($raw, $start, $end - $start);
@@ -5504,7 +5506,7 @@ final class DocFigureProseDriftTest extends TestCase
         $archRaw = (string) file_get_contents($root . '/docs/ARCHITECTURE.md');
         $archStart = strpos($archRaw, '### The system prompt, in assembly order');
         self::assertIsInt($archStart, 'the ARCHITECTURE assembly heading moved — arm AP anchors on the same string and this cross-page leg anchors with it');
-        $archEnd = strpos($archRaw, 'Item 10 is what makes', $archStart);
+        $archEnd = strpos($archRaw, 'Item 11 is what makes', $archStart);
         self::assertIsInt($archEnd, 'the assembly follow-up paragraph moved — the cross-page item count lost its window');
         preg_match_all('/^(\d+)\. /m', substr($archRaw, $archStart, $archEnd - $archStart), $archOrdinals);
         self::assertCount(count($ordinals[1]), $archOrdinals[1], 'the two slot lists no longer carry the same number of items — one page was updated and the mirror left behind');
@@ -5524,13 +5526,13 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertCount(3, \SugarCraft\Crush\Context\Stability::cases(), 'Stability grew a tier — every per-item stability label in the list needs re-reading, starting with this partition');
 
-        self::assertSame(1, preg_match('/^11\. \*\*Environment\*\* \(`EnvironmentBlock`\).*\*\*LAST\*\*/m', $window), 'item eleven is no longer Environment LAST — the P3.S1 invariant this page exists to carry has moved');
+        self::assertSame(1, preg_match('/^12\. \*\*Environment\*\* \(`EnvironmentBlock`\).*\*\*LAST\*\*/m', $window), 'item twelve is no longer Environment LAST — the P3.S1 invariant this page exists to carry has moved');
         self::assertTrue(method_exists('SugarCraft\Crush\Runtime', 'systemPromptSections'), 'the intro cites Runtime::systemPromptSections() — gone');
         foreach (['basePrompt', 'toolGuidanceSection'] as $method) {
             self::assertTrue(method_exists('SugarCraft\Crush\Runtime', $method), "slot prose cites Runtime::{$method}() — gone");
         }
-        self::assertTrue(method_exists('SugarCraft\Crush\Skills\SkillMatcher', 'listForPrompt'), 'slot 10 cites SkillMatcher::listForPrompt() — gone');
-        self::assertTrue(class_exists('SugarCraft\Crush\Context\EnvironmentBlock'), 'slot 11 names EnvironmentBlock — gone');
+        self::assertTrue(method_exists('SugarCraft\Crush\Skills\SkillMatcher', 'listForPrompt'), 'slot 11 cites SkillMatcher::listForPrompt() — gone');
+        self::assertTrue(class_exists('SugarCraft\Crush\Context\EnvironmentBlock'), 'slot 12 names EnvironmentBlock — gone');
     }
 
     /**

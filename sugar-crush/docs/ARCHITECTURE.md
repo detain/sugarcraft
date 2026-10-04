@@ -589,7 +589,7 @@ results that answer it, so each result stays paired with its own call.
 ### The system prompt, in assembly order
 
 `Runtime::systemPromptSections()` returns the prompt as an ordered list of
-sections — eleven slots, though a session that qualifies none of the optional
+sections — twelve slots, though a session that qualifies none of the optional
 ones assembles fewer — and `buildSystemPrompt()` folds that list into the
 string the model receives. The order of record, each layer named as the code
 names it:
@@ -603,29 +603,33 @@ names it:
    one fragment is non-empty;
 4. `RepoMapBlock` — a `<repo-map>` of the workspace's Composer sub-packages and
    its PSR-4 source directories, memoized per session;
-5. `<user-rules>` — the user-tier rule files `RuleLoader` returns, each in its
+5. `SymbolMapBlock` — a `<symbol-map>`: the definitions the rest of the
+   workspace references most, ranked by PageRank (roadmap 5.5-5), captured
+   once per session by `EngineBackend` before a turn's fork; the slot appears
+   only when the session holds a capture;
+6. `<user-rules>` — the user-tier rule files `RuleLoader` returns, each in its
    own fence behind the authority preamble;
-6. `<project-instructions>` documents — `CLAUDE.md` / `AGENTS.md`, with
+7. `<project-instructions>` documents — `CLAUDE.md` / `AGENTS.md`, with
    `@import`s expanded, via `InstructionFileLoader`, escaped by `PromptFence`;
-7. the repository's own project-tier rules from `RuleLoader`, same
+8. the repository's own project-tier rules from `RuleLoader`, same
    `<project-instructions>` fence as the documents immediately above them;
-8. `MemoryBlock` — an index of the notes, one line each: `user`-scope first
+9. `MemoryBlock` — an index of the notes, one line each: `user`-scope first
    (at most 4 / 1 KB), then `project`-scope, fenced `<project-memory>`, then
    the standing memory instructions;
-9. explicitly enabled skills' full bodies;
-10. `SkillMatcher::listForPrompt()` — name + description for every discovered
+10. explicitly enabled skills' full bodies;
+11. `SkillMatcher::listForPrompt()` — name + description for every discovered
     auto-invocable skill, each line badged with its tier (`[built-in]`,
     `[user]`, `[project]`), fenced `<available-skills>` behind its preamble;
-11. `EnvironmentBlock` LAST — its static half: cwd, git-repo flag, platform,
+12. `EnvironmentBlock` LAST — its static half: cwd, git-repo flag, platform,
     OS, PHP, model, date, memoized per session. The git status, log and diffs
     left the system prompt at step 1.A-1 for the `<turn-context>` row below.
 
-Item 10 is what makes the `Skill` tool worth having: without the listing, the
+Item 11 is what makes the `Skill` tool worth having: without the listing, the
 model has no reason to call it, and a populated registry would still be
 un-triggerable.
 
-Items 3 and 4 are the derived-fact half and items 5 through 8 the
-authored-convention half, which is why the map sits where it does: it is the
+Items 3 to 5 are the derived-fact half and items 6 through 9 the
+authored-convention half, which is why the maps sit where they do: it is the
 same kind of thing the base is — fact derived from the repository, not
 convention an author wrote down — every line in it is a path the model resolves
 against the working directory the env block names, and the conventions after it
@@ -638,9 +642,11 @@ root's immediate children and the directories the root manifest names, so a
 nested layout that does not declare itself is not found. Its own docblock
 records that decision and what it costs.
 
-The **symbol-level** map is a different instrument and is not in the prompt:
-the `RepoMap` tool (`Tools\BuiltIn\RepoMapTool`, roadmap 5.5-4) builds it
-on demand, the way Aider's repo map is built. It lists the files
+The **symbol-level** map is built the way Aider's repo map is, by one
+pipeline (`RepoMap\RepoMapBuilder`) with two consumers: the `RepoMap` tool
+(`Tools\BuiltIn\RepoMapTool`, roadmap 5.5-4) builds a fresh one on demand,
+focused on the files and identifiers the model names, and item 5 above carries
+an unfocused one per session. It lists the files
 `git ls-files` reports (so `.gitignore` decides what is code; symlinks are
 skipped and every path is re-resolved through `PathJail`), extracts
 definitions and references — PHP with `RepoMap\PhpSymbolExtractor` (the
@@ -653,6 +659,20 @@ passes) and renders the outline to the caller's token budget with
 `RepoMap\RepoMapRenderer`. The ctags child runs with `--options=NONE`, so a
 checkout's `.ctags.d/` cannot steer it, and through the same bounded spawn
 path every tool child uses; `doctor` reports whether it is available.
+
+`TagCache` stores one row per file, stamped with the producer that tagged it
+(`TagCache::PHP_PRODUCER`, or `CtagsSymbolExtractor::cacheStamp()` — the
+extractor's rule version plus the ctags binary's version banner), so a ctags
+upgrade or a changed reference scan re-extracts exactly the files it produced.
+`SymbolGraph` holds the graph aggregated per identifier rather than as Aider's
+edge multigraph (≈570,000 edges on this package, ≈340,000 distinct file
+pairs) and gives the same ranks to the bit. The prompt's `SymbolMapBlock`
+also caches its finished map in the same database, keyed by every mapped
+file's path, mtime, size and producer, so an unchanged tree costs a
+`git ls-files` and a stat per file; it gives up — no map that session, the
+work kept for the next — past 3,000 code files, past a 4-second tokenizing
+budget, or without memory headroom, and `SUGARCRUSH_DISABLE_SYMBOL_MAP`
+turns it off.
 
 The ordering is a caching decision, not a stylistic one, and it is the P3.S1
 invariant recorded in `Runtime::buildSystemPrompt()` and restated in

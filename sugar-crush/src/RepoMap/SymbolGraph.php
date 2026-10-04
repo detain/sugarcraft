@@ -34,6 +34,18 @@ namespace SugarCraft\Crush\RepoMap;
  * Exact-case identifiers, as Aider: references are lexical, and folding PHP's
  * case-insensitive class and function names would merge distinct properties
  * and constants that only differ in case.
+ *
+ * AGGREGATED, NOT ENUMERATED (roadmap 5.5-5). An edge's weight depends on the
+ * referencer and the identifier — never on which definer it points at — so
+ * the graph is held per identifier: its multiplier, its definers, and each
+ * referencer's count. Aider's multigraph has one edge per (referencer,
+ * definer, identifier); on sugar-crush's own tree that is ~570,000 edges
+ * (~300 MB as PHP arrays) for ~340,000 distinct file pairs. {@see weights()}
+ * sums straight into the pairs and {@see rankedEntries()} credits each
+ * (definer, identifier) from one per-identifier sum, walking the same
+ * sequence the enumerated edges would have, so every float — and therefore
+ * every rank and every tie — is the one the edge list produced.
+ * {@see edges()} still enumerates them on demand.
  */
 final class SymbolGraph
 {
@@ -60,14 +72,17 @@ final class SymbolGraph
 
     /**
      * @param list<string>                                         $files      every file in the map, sorted
-     * @param list<array{from: string, to: string, weight: float, ident: string}> $edges
+     * @param array<string, array{definers: list<string>, referencers: array<string, float>}> $idents
+     *        ident => its sorted definers and each referencer's edge weight
+     *        (in referencer order); no referencers means the self-edges of an
+     *        unreferenced definition
      * @param array<string, float>                                 $personalization
      * @param array<string, array<string, list<Tag>>>              $definitions file => ident => definition tags
      * @param array<string, true>                                  $focus
      */
     private function __construct(
         private readonly array $files,
-        private readonly array $edges,
+        private readonly array $idents,
         private readonly array $personalization,
         private readonly array $definitions,
         private readonly array $focus,
@@ -86,25 +101,67 @@ final class SymbolGraph
         array $mentionedFiles = [],
         array $mentionedIdents = [],
     ): self {
-        $files = \array_map('strval', \array_keys($tagsByFile));
+        $definitionsByFile = [];
+        $referencesByFile = [];
+        foreach ($tagsByFile as $file => $tags) {
+            $file = (string) $file;
+            $definitionsByFile[$file] = [];
+            $referencesByFile[$file] = [];
+            foreach ($tags as $tag) {
+                if ($tag->isDefinition()) {
+                    $definitionsByFile[$file][] = $tag;
+                } else {
+                    $referencesByFile[$file][$tag->name] = ($referencesByFile[$file][$tag->name] ?? 0) + 1;
+                }
+            }
+        }
+
+        return self::fromSummaries($definitionsByFile, $referencesByFile, $focusFiles, $mentionedFiles, $mentionedIdents);
+    }
+
+    /**
+     * The graph from per-file summaries — each file's definition tags and its
+     * reference COUNTS per identifier ({@see TagCache::summary()}) — so a
+     * caller mapping a large checkout never holds a reference tag as an
+     * object. {@see new()} is this, after counting.
+     *
+     * @param array<string, list<Tag>>           $definitionsByFile root-relative path => its definition tags
+     * @param array<string, array<string, int>>  $referencesByFile  root-relative path => ident => times referenced
+     * @param list<string>                       $focusFiles
+     * @param list<string>                       $mentionedFiles
+     * @param list<string>                       $mentionedIdents
+     */
+    public static function fromSummaries(
+        array $definitionsByFile,
+        array $referencesByFile,
+        array $focusFiles = [],
+        array $mentionedFiles = [],
+        array $mentionedIdents = [],
+    ): self {
+        $files = \array_map('strval', \array_keys($definitionsByFile + $referencesByFile));
         \sort($files, \SORT_STRING);
         $focus = \array_fill_keys(\array_map('strval', $focusFiles), true);
         $mentionedFileSet = \array_fill_keys(\array_map('strval', $mentionedFiles), true);
         $mentioned = \array_fill_keys(\array_map('strval', $mentionedIdents), true);
 
         // ident => [file => true], ident => [file => count], file => ident => tags.
+        // Built in the order new() always walked the tags — files in input
+        // order, definitions before references within a file is immaterial
+        // since the two maps are separate — so ident order is unchanged.
         $definers = [];
         $references = [];
         $definitions = [];
-        foreach ($tagsByFile as $file => $tags) {
+        foreach ($definitionsByFile as $file => $tags) {
             $file = (string) $file;
             foreach ($tags as $tag) {
-                if ($tag->isDefinition()) {
-                    $definers[$tag->name][$file] = true;
-                    $definitions[$file][$tag->name][] = $tag;
-                } else {
-                    $references[$tag->name][$file] = ($references[$tag->name][$file] ?? 0) + 1;
-                }
+                $definers[$tag->name][$file] = true;
+                $definitions[$file][$tag->name][] = $tag;
+            }
+        }
+        foreach ($referencesByFile as $file => $counts) {
+            $file = (string) $file;
+            foreach ($counts as $ident => $count) {
+                $references[(string) $ident][$file] = ($references[(string) $ident][$file] ?? 0) + (int) $count;
             }
         }
 
@@ -119,16 +176,14 @@ final class SymbolGraph
             }
         }
 
-        $edges = [];
+        $idents = [];
         foreach ($definers as $ident => $set) {
             $ident = (string) $ident;
             $definerFiles = \array_map('strval', \array_keys($set));
             \sort($definerFiles, \SORT_STRING);
 
             if (!isset($references[$ident])) {
-                foreach ($definerFiles as $definer) {
-                    $edges[] = ['from' => $definer, 'to' => $definer, 'weight' => self::UNREFERENCED_SELF_WEIGHT, 'ident' => $ident];
-                }
+                $idents[$ident] = ['definers' => $definerFiles, 'referencers' => []];
 
                 continue;
             }
@@ -136,19 +191,18 @@ final class SymbolGraph
             $mul = self::identMultiplier($ident, isset($mentioned[$ident]), \count($definerFiles));
             $referencers = $references[$ident];
             \ksort($referencers, \SORT_STRING);
+            $weights = [];
             foreach ($referencers as $referencer => $count) {
                 $referencer = (string) $referencer;
                 $useMul = isset($focus[$referencer]) ? $mul * self::FOCUS_REFERENCER_MULTIPLIER : $mul;
-                $weight = $useMul * \sqrt((float) $count);
-                foreach ($definerFiles as $definer) {
-                    $edges[] = ['from' => $referencer, 'to' => $definer, 'weight' => $weight, 'ident' => $ident];
-                }
+                $weights[$referencer] = $useMul * \sqrt((float) $count);
             }
+            $idents[$ident] = ['definers' => $definerFiles, 'referencers' => $weights];
         }
 
         return new self(
             $files,
-            $edges,
+            $idents,
             self::personalizationFor($files, $focus, $mentionedFileSet, $mentioned),
             $definitions,
             $focus,
@@ -241,10 +295,23 @@ final class SymbolGraph
         return $this->files;
     }
 
-    /** @return list<array{from: string, to: string, weight: float, ident: string}> */
+    /**
+     * Every edge of Aider's multigraph, enumerated — one per (referencer,
+     * definer, identifier), plus an unreferenced definition's self-edge. The
+     * graph itself never holds this list (see the class docblock); it is
+     * built here, in the order the ranking walks it, for a caller that wants
+     * to read the edges.
+     *
+     * @return list<array{from: string, to: string, weight: float, ident: string}>
+     */
     public function edges(): array
     {
-        return $this->edges;
+        $edges = [];
+        $this->walk(static function (string $from, string $to, float $weight, string $ident) use (&$edges): void {
+            $edges[] = ['from' => $from, 'to' => $to, 'weight' => $weight, 'ident' => $ident];
+        });
+
+        return $edges;
     }
 
     /** @return array<string, float> */
@@ -262,10 +329,10 @@ final class SymbolGraph
     public function nodes(): array
     {
         $nodes = [];
-        foreach ($this->edges as $edge) {
-            $nodes[$edge['from']] = true;
-            $nodes[$edge['to']] = true;
-        }
+        $this->walk(static function (string $from, string $to) use (&$nodes): void {
+            $nodes[$from] = true;
+            $nodes[$to] = true;
+        });
 
         return \array_map('strval', \array_keys($nodes));
     }
@@ -279,9 +346,9 @@ final class SymbolGraph
     public function weights(): array
     {
         $weights = [];
-        foreach ($this->edges as $edge) {
-            $weights[$edge['from']][$edge['to']] = ($weights[$edge['from']][$edge['to']] ?? 0.0) + $edge['weight'];
-        }
+        $this->walk(static function (string $from, string $to, float $weight) use (&$weights): void {
+            $weights[$from][$to] = ($weights[$from][$to] ?? 0.0) + $weight;
+        });
 
         return $weights;
     }
@@ -289,6 +356,8 @@ final class SymbolGraph
     /** @return array<string, float> file => PageRank over this graph */
     public function fileRanks(?PageRank $pageRank = null): array
     {
+        // weights() is passed as a temporary, never held here: PageRank
+        // normalises it in place, so the pair map exists once, not twice.
         return ($pageRank ?? PageRank::new())->rank($this->nodes(), $this->weights(), $this->personalization);
     }
 
@@ -310,21 +379,46 @@ final class SymbolGraph
     {
         $ranks = $this->fileRanks($pageRank);
 
+        // Each source file's total out-weight, summed edge by edge in walk
+        // order, so the shares below are the enumerated graph's to the bit.
         $outWeight = [];
-        foreach ($this->edges as $edge) {
-            $outWeight[$edge['from']] = ($outWeight[$edge['from']] ?? 0.0) + $edge['weight'];
-        }
+        $this->walk(static function (string $from, string $to, float $weight) use (&$outWeight): void {
+            $outWeight[$from] = ($outWeight[$from] ?? 0.0) + $weight;
+        });
 
-        // "definer\0ident" => [definer, ident, rank]
+        // "definer\0ident" => [definer, ident, rank]. An edge's share depends
+        // on its referencer and identifier only, so each identifier's credit
+        // is summed once over its referencers and handed to every definer.
         $credited = [];
-        foreach ($this->edges as $edge) {
-            $total = $outWeight[$edge['from']];
-            if ($total <= 0.0) {
+        foreach ($this->idents as $ident => $node) {
+            $ident = (string) $ident;
+            if ($node['referencers'] === []) {
+                foreach ($node['definers'] as $definer) {
+                    $total = $outWeight[$definer] ?? 0.0;
+                    if ($total <= 0.0) {
+                        continue;
+                    }
+                    $key = $definer . "\0" . $ident;
+                    $credited[$key] ??= [$definer, $ident, 0.0];
+                    $credited[$key][2] += ($ranks[$definer] ?? 0.0) * self::UNREFERENCED_SELF_WEIGHT / $total;
+                }
+
                 continue;
             }
-            $key = $edge['to'] . "\0" . $edge['ident'];
-            $credited[$key] ??= [$edge['to'], $edge['ident'], 0.0];
-            $credited[$key][2] += ($ranks[$edge['from']] ?? 0.0) * $edge['weight'] / $total;
+
+            foreach ($node['referencers'] as $referencer => $weight) {
+                $referencer = (string) $referencer;
+                $total = $outWeight[$referencer] ?? 0.0;
+                if ($total <= 0.0) {
+                    continue;
+                }
+                $share = ($ranks[$referencer] ?? 0.0) * $weight / $total;
+                foreach ($node['definers'] as $definer) {
+                    $key = $definer . "\0" . $ident;
+                    $credited[$key] ??= [$definer, $ident, 0.0];
+                    $credited[$key][2] += $share;
+                }
+            }
         }
 
         $credited = \array_values($credited);
@@ -361,5 +455,32 @@ final class SymbolGraph
         }
 
         return $entries;
+    }
+
+    /**
+     * Visit every edge of the multigraph in Aider's enumeration order —
+     * identifiers in first-definition order; an unreferenced one's definers'
+     * self-edges; otherwise referencers in path order, each against every
+     * definer in path order — without ever materialising the list.
+     *
+     * @param \Closure(string, string, float, string): void $visit from, to, weight, ident
+     */
+    private function walk(\Closure $visit): void
+    {
+        foreach ($this->idents as $ident => $node) {
+            $ident = (string) $ident;
+            if ($node['referencers'] === []) {
+                foreach ($node['definers'] as $definer) {
+                    $visit($definer, $definer, self::UNREFERENCED_SELF_WEIGHT, $ident);
+                }
+
+                continue;
+            }
+            foreach ($node['referencers'] as $referencer => $weight) {
+                foreach ($node['definers'] as $definer) {
+                    $visit((string) $referencer, $definer, $weight, $ident);
+                }
+            }
+        }
     }
 }

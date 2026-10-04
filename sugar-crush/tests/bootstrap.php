@@ -139,6 +139,16 @@ putenv('CLAUDE_CODE_PROJECT_DIR_NAME');
 putenv('SUGARCRUSH_DISABLE_MODEL_METADATA=1');
 
 /*
+ * And for the system prompt's symbol map (roadmap 5.5-5). EngineBackend
+ * captures it before a turn's fork, rooted at the turn's project directory —
+ * for a test that never names a root, this package — and a test that sandboxes
+ * HOME has an empty tag cache, so every such forked turn would tokenize the
+ * whole tree against the capture's extraction budget. Off for the suite; the
+ * tests that exercise the map unset it themselves.
+ */
+putenv('SUGARCRUSH_DISABLE_SYMBOL_MAP=1');
+
+/*
  * A temp directory for the suite's own throwaway files, and the two things that
  * keep `vendor/bin/phpunit` from garbage-collecting the developer's real /tmp.
  *
