@@ -15,6 +15,7 @@ use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Theme;
+use SugarCraft\Crush\Tui\TerminalNotifier;
 
 /**
  * The "Interface" category's keys. One file per category so a step adding a
@@ -63,6 +64,18 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp('The docked-pane manifest; written by the shell when panes move.')
                 ->withReaderSymbol(Bootstrap::class . '::app')
                 ->withReadBy('`Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()`'),
+            // Roadmap 5.14a. Cosmetic and project-settable like `theme`: it
+            // only decides which bytes tell THIS terminal a turn is over.
+            SettingDefinition::new(TerminalNotifier::SETTINGS_KEY, SettingType::Enum, TerminalNotifier::OFF)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withEnumValues(TerminalNotifier::MODES)
+                ->withLabel('Notifications')
+                ->withHelp('off, bell (BEL) or osc9 (a desktop notification): sent when a turn ends and when the agent waits for an approval.')
+                ->withReaderSymbol(TerminalNotifier::class . '::fromConfig')
+                ->withReadBy('`Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()`'),
         ];
     }
 }

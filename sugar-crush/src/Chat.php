@@ -2384,6 +2384,10 @@ final class Chat implements Model
             if ($goal !== null) {
                 [$done, $judge] = $done->scheduleGoalJudge($goal);
             }
+            // Roadmap 5.14a: the `notify` setting's bell or desktop
+            // notification, once the turn is really over — not while a queued
+            // prompt or a goal's judging carries it on.
+            $notify = $done->inFlight ? null : $done->terminalNotification('sugarcrush: turn finished');
             $cmds = array_values(array_filter([
                 $doneCmd,
                 $suggest,
@@ -2391,6 +2395,7 @@ final class Chat implements Model
                 $autoCommit,
                 $dream === null ? null : Cmd::promise($dream),
                 $judge,
+                $notify,
             ]));
 
             return [$done, match (count($cmds)) {
@@ -3740,7 +3745,22 @@ final class Chat implements Model
      */
     private function goalEnded(\SugarCraft\Crush\Goal\GoalState $goal, string $status, string $notice): array
     {
-        return self::releaseQueuedPrompts([$this->endGoal($goal, $status, $notice), null]);
+        [$next, $cmd] = self::releaseQueuedPrompts([$this->endGoal($goal, $status, $notice), null]);
+        // The goal loop held the turn until now, so this is its turn end
+        // (roadmap 5.14a) — unless a queued prompt has just taken the slot.
+        $notify = $next->inFlight ? null : $next->terminalNotification('sugarcrush: goal ' . $status);
+
+        return [$next, $cmd === null || $notify === null ? ($cmd ?? $notify) : Cmd::batch($cmd, $notify)];
+    }
+
+    /**
+     * The `notify` setting's Cmd announcing $text to the terminal (roadmap
+     * 5.14a), or null when it is off — read from the launch's merged config,
+     * so a change applies from the next launch.
+     */
+    private function terminalNotification(string $text): ?\Closure
+    {
+        return \SugarCraft\Crush\Tui\TerminalNotifier::fromConfig($this->workspace?->userConfig ?? [])->cmd($text);
     }
 
     /** This model with $goal recorded as ended ($status) and $notice beside it. */
@@ -4069,8 +4089,12 @@ final class Chat implements Model
             'permissionDeferred' => $deferred,
             'inFlight' => true,
         ]);
+        $wait = Cmd::promise(static fn(): PromiseInterface => $deferred->promise());
+        // Roadmap 5.14a: the agent is now waiting on the user, which is the
+        // other moment the `notify` setting rings for.
+        $notify = $this->terminalNotification('sugarcrush: waiting for approval: ' . $msg->toolCall->name);
 
-        return [$next, Cmd::promise(static fn(): PromiseInterface => $deferred->promise())];
+        return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
     }
 
     /**

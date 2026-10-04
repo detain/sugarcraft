@@ -276,15 +276,15 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these thirty-six keys are layered — `provider`, `models`, `titleModel`,
+Only these thirty-seven keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `contextWindow`, `secretEnvAllowlist`, `allowedTools`,
 `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `instructions`,
 `disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
 `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`,
-`theme`, `statusLine`, `layout`, `lintCommands`, `connectTimeoutSeconds`,
-`providerRetryAttempts`, `providerRetryBaseBackoffMs`.
+`theme`, `statusLine`, `layout`, `notify`, `lintCommands`,
+`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
