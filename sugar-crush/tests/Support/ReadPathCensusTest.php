@@ -177,6 +177,12 @@ final class ReadPathCensusTest extends TestCase
         'Agents/SuspendedDelegations.php|file_get_contents' => [
             'SELF_LOCATED — a suspension this store wrote, named by a hex-only id in that same verified directory',
         ],
+        'Agents/TaskList.php|fopen' => [
+            'SELF_LOCATED — openForWrite()\'s `a`-mode flock handle on the task database this store owns; '
+                . 'the handle is locked, never read',
+            'SELF_LOCATED — acquireTaskLock()\'s `a`-mode flock handle on a `task_locks/<hash>.lock` beside '
+                . 'that database, named from a hash; never read',
+        ],
         'Agents/TeamManager.php|file_get_contents' => [
             'SELF_LOCATED — the team registry this manager writes under `~/.sugar-crush`',
         ],
@@ -397,6 +403,8 @@ final class ReadPathCensusTest extends TestCase
         // whose rationale is "nobody calls this" expires the moment somebody does,
         // which is the transition this ledger exists to make visible.
         'Cli/Subcommands.php|file_get_contents' => [
+            'CALLER_SUPPLIED — `doctor`\'s config-file check: Bootstrap::userConfigPath(), the operator\'s '
+                . '`--config` path or `~/.sugar-crush/config.json`, read only to be JSON-validated and reported',
             'CALLER_SUPPLIED — `mcp import`\'s operand: the operator\'s own argv names the file, '
                 . 'the verb reads one document, translates it through the shared McpForeignTranslate '
                 . 'table, and PRINTS (the never-write law); nothing read here is ever executed',
@@ -467,6 +475,17 @@ final class ReadPathCensusTest extends TestCase
         'Providers/ProviderFactory.php|file_get_contents' => [
             'CONTAINED — fromProjectConfig(), behind readableDefaultConfigPath()',
             'CONTAINED — projectProviderConfig(), behind the same pair',
+        ],
+        'RepoMap/CtagsSymbolExtractor.php|file_get_contents' => [
+            'CALLER_SUPPLIED — the reference scan of a file the RepoMap tool listed with `git ls-files` under '
+                . 'its root, skipped when a symlink and re-resolved through PathJail before it is handed over; '
+                . 'size-capped at MAX_FILE_BYTES before the read',
+        ],
+        'RepoMap/PhpSymbolExtractor.php|file_get_contents' => [
+            'CALLER_SUPPLIED — extractFile()\'s source read, for a path TagCache::tagsFor() received from the '
+                . 'RepoMap tool\'s `git ls-files` listing, PathJail-resolved and symlinks skipped; size-capped at '
+                . 'MAX_FILE_BYTES before the read '
+                . '(W2-j carry-over, invisible until the census learned the `\\file_get_contents` spelling)',
         ],
         'Runtime.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
@@ -563,6 +582,15 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — sweep() lists a retained store\'s own owner-only directory (and its one level of '
                 . 'session sub-directories) after re-verifying it; no content is read, and only a regular '
                 . 'file older than the retention window is unlinked, typed by lstat() so no link is followed',
+        ],
+        'Support/ProcessContainment.php|scandir' => [
+            'PROCESS_DERIVED — closeOnExec() lists /proc/self/fd, this process\'s own descriptor table',
+        ],
+        'Support/ProcessTree.php|file_get_contents' => [
+            'PROCESS_DERIVED — /proc/<pid>/stat for an integer pid: the kernel\'s process table',
+        ],
+        'Support/ProcessTree.php|scandir' => [
+            'PROCESS_DERIVED — snapshot() lists /proc, the kernel\'s process table',
         ],
         'Support/SiblingSpendLedger.php|fopen' => [
             'SELF_LOCATED — create()\'s exclusive (`x`, 0600) open of the name ToolIpcFiles::reserve() '
@@ -818,6 +846,10 @@ final class ReadPathCensusTest extends TestCase
     {
         return [
             'a plain read' => ['<?php file_get_contents($p);', 1],
+            // Missed until the RepoMap extractors (W2-j carry-over): the
+            // fully-qualified spelling is one token, not a T_STRING.
+            'a fully-qualified read' => ['<?php @\\file_get_contents($p);', 1],
+            'a fully-qualified call to something that is not a sink' => ['<?php \\strlen($p);', 0],
             'a language construct' => ['<?php require $p;', 1],
             'a static method read' => ['<?php Yaml::parseFile($p);', 1],
             'an iterator that opens a directory' => ['<?php new \\RecursiveDirectoryIterator($p);', 1],
@@ -969,6 +1001,17 @@ final class ReadPathCensusTest extends TestCase
             $short = ltrim((string) $class[1], '\\');
 
             return \in_array($short, self::CONSTRUCTOR_SINKS, true) ? 'new ' . $short : null;
+        }
+
+        // A fully-qualified call (`\\file_get_contents(…)`) is the same function:
+        // PHP 8 lexes it as one T_NAME_FULLY_QUALIFIED token, which a T_STRING
+        // scan alone never saw — so `@\\file_get_contents()` in RepoMap and five
+        // other files went uncounted. It cannot be a method, a static call or a
+        // declaration, so only the function-sink check applies to it.
+        if ($token[0] === \T_NAME_FULLY_QUALIFIED && ($tokens[$i + 1] ?? null) === '(') {
+            $name = strtolower(ltrim((string) $token[1], '\\'));
+
+            return \in_array($name, self::FUNCTION_SINKS, true) ? $name : null;
         }
 
         if ($token[0] !== \T_STRING || ($tokens[$i + 1] ?? null) !== '(') {

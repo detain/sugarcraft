@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\RepoMap\CtagsSymbolExtractor;
 use SugarCraft\Crush\ToolResult as BootProbe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -53,6 +54,18 @@ use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 #[BuiltInTool(name: 'doctor', permission: ToolPermissionClass::Ask, position: 9, gloss: 'a capability probe the model can call to report what this build/deployment actually supports')]
 final class Doctor implements Tool, BuildsFromCatalog
 {
+    /**
+     * @param CtagsSymbolExtractor|null $ctags the repo map's optional
+     *        universal-ctags producer (roadmap 5.5-2), whose availability this
+     *        tool reports; null probes the default `ctags` on `PATH`. Probed at
+     *        execute time, never in {@see description()}, so the advertised
+     *        text is the same on every host.
+     */
+    public function __construct(
+        private readonly ?CtagsSymbolExtractor $ctags = null,
+    ) {
+    }
+
     public static function fromCatalog(ToolBuildContext $context): self
     {
         return new self();
@@ -77,7 +90,9 @@ final class Doctor implements Tool, BuildsFromCatalog
             . 'by the candy-mosaic probe the client ran once at startup; calling it never '
             . 're-queries the terminal. It takes no parameters, and its answer is a line of text '
             . 'naming the pixel-graphics protocol that was found (Kitty, Sixel, or iTerm2) '
-            . 'or reporting that only a text-cell fallback is available, alongside a '
+            . 'or reporting that only a text-cell fallback is available, then a line saying '
+            . 'whether universal-ctags is installed (the RepoMap tool maps non-PHP files only '
+            . 'with it), alongside a '
             . '16-by-16 PNG capability swatch rendered green on a real pixel protocol and '
             . 'amber on the fallback. Reach for it when a decision depends on which image '
             . 'protocol this terminal speaks, such as before attaching an image to a '
@@ -110,6 +125,11 @@ final class Doctor implements Tool, BuildsFromCatalog
         $summary = $pixelGraphics
             ? "Detected pixel-graphics protocol: {$protocol}."
             : "No pixel-graphics protocol detected; using '{$protocol}' text-cell fallback.";
+
+        $ctags = $this->ctags ?? CtagsSymbolExtractor::new();
+        $summary .= "\n" . ($ctags->available()
+            ? 'Universal Ctags with JSON output is installed: the repo map covers non-PHP files too.'
+            : 'Universal Ctags (with +json) was not found: the repo map covers PHP files only.');
 
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
