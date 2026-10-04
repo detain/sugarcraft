@@ -32,6 +32,8 @@ use SugarCraft\Crush\Events\UsageUpdated;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\SessionPermissionMemo;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\Sessions\ActiveSubagentsBlock;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Todo\TodoList;
 use SugarCraft\Crush\Todo\TodoReminder;
 use SugarCraft\Crush\Tools\BuiltIn\Todo;
@@ -95,6 +97,13 @@ use SugarCraft\Crush\Tools\BuiltIn\Todo;
  * persisted where the model read it and the next request's prefix still hits
  * the cache.
  *
+ * THE BACKGROUND WORK STILL OUT (roadmap 4.3-2) rides the same way: while a
+ * background `Task` (or `/bg` session) this host owns is running, a dispatch
+ * whose history does not already show the current list carries an
+ * {@see ActiveSubagentsBlock} row, so a model that got only an `agent_id`
+ * back still knows, turns later, what is running and that its result will
+ * arrive on its own.
+ *
  * NEVER FATAL TO THE TURN. The log is a second audience: a write that fails
  * (a locked database, a payload JSON cannot carry) drops that event — it is
  * not broadcast either, the {@see EventLog} contract — and a listener that
@@ -137,6 +146,15 @@ final class TurnRunner
 
     private int $nextListener = 0;
 
+    /**
+     * Where the "Active subagents" row's list comes from (roadmap 4.3-2), or
+     * null for the default: the background supervisor bound into the turn's
+     * `Task` tool ({@see activeSubagents()}).
+     *
+     * @var (\Closure(): list<array{id: string, name: string, agent: string, task: string, createdAt: int, background: bool}>)|null
+     */
+    private ?\Closure $activeSubagentSource = null;
+
     private function __construct(private readonly TranscriptProjector $projector)
     {
         $this->turns = new \WeakMap();
@@ -157,6 +175,45 @@ final class TurnRunner
         self::$owned ??= new \WeakMap();
 
         return self::$owned[$owner] ??= self::new();
+    }
+
+    /**
+     * Read the "Active subagents" list from $source instead of the turn's
+     * `Task` tool (roadmap 4.3-2) — a host that keeps its own background
+     * supervisor, or a test. Null restores the default.
+     *
+     * @param (\Closure(): list<array{id: string, name: string, agent: string, task: string, createdAt: int, background: bool}>)|null $source
+     */
+    public function bindActiveSubagentSource(?\Closure $source): self
+    {
+        $this->activeSubagentSource = $source;
+
+        return $this;
+    }
+
+    /**
+     * The background sessions still running for the host that dispatches
+     * through $backend, as {@see BackgroundSupervisor::ownedActiveSummaries()}
+     * reports them: from the bound source, else from the supervisor the
+     * engine's `Task` tool spawns through. A backend with neither has none.
+     *
+     * @return list<array{id: string, name: string, agent: string, task: string, createdAt: int, background: bool}>
+     */
+    public function activeSubagents(Backend $backend): array
+    {
+        if ($this->activeSubagentSource !== null) {
+            return ($this->activeSubagentSource)();
+        }
+        if (!$backend instanceof EngineBackend) {
+            return [];
+        }
+        foreach ($backend->tools() as $tool) {
+            if ($tool instanceof \SugarCraft\Crush\Tools\BuiltIn\TaskTool && ($supervisor = $tool->backgroundSupervisor()) !== null) {
+                return $supervisor->ownedActiveSummaries();
+            }
+        }
+
+        return [];
     }
 
     /** The projector the caller folds this runner's events through. */
@@ -372,6 +429,22 @@ final class TurnRunner
                 }
             }
 
+            // Roadmap 4.3-2: the background work still out for this host —
+            // a background `Task` returned only its id, so this row is how a
+            // later turn knows it is running and that its result will come
+            // on its own. The same rules as the reminder above: engine turns
+            // only, sent when its bytes changed, persisted where it was read.
+            $activeRow = null;
+            if ($carriesLedger) {
+                $active = $runner->activeSubagents($backend);
+                if (ActiveSubagentsBlock::due($active, $history)) {
+                    $activeRow = ActiveSubagentsBlock::row($active);
+                    if ($activeRow !== null) {
+                        $visible[] = $activeRow;
+                    }
+                }
+            }
+
             // The permission events (1.C-2) share the inbox: a question has to
             // reach the screen in the turn's own event order, between the tool
             // events around it.
@@ -452,7 +525,7 @@ final class TurnRunner
                 return $events;
             };
 
-            $settle = static function (Message $message, bool $failed) use ($runner, $drain, $generation, $cancellation, $transcripts, $sessionId, $carriesLedger, $reminder): Msg {
+            $settle = static function (Message $message, bool $failed) use ($runner, $drain, $generation, $cancellation, $transcripts, $sessionId, $carriesLedger, $reminder, $activeRow): Msg {
                 // Roadmap 2.2-2: the ledger the turn ended with becomes the
                 // session's, and leaves the reply — it is transport, and the
                 // reply goes on to be a stored row.
@@ -467,8 +540,10 @@ final class TurnRunner
                 // may bring no transcript at all; it still carries its step
                 // id, which is what lets the fold keep it as the turn's reply.
                 // A failed turn has neither, and its next dispatch decides again.
-                if ($reminder !== null && !$failed && ($message->turnTranscript !== [] || $message->stepId !== null)) {
-                    $message = $message->withTurnTranscript([$reminder, ...$message->turnTranscript]);
+                // The "Active subagents" row (4.3-2) rides the same way, after it.
+                $dispatchRows = \array_values(\array_filter([$reminder, $activeRow]));
+                if ($dispatchRows !== [] && !$failed && ($message->turnTranscript !== [] || $message->stepId !== null)) {
+                    $message = $message->withTurnTranscript([...$dispatchRows, ...$message->turnTranscript]);
                 }
                 $events = $drain();
                 if ($events === []) {

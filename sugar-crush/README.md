@@ -1391,6 +1391,16 @@ Without `ext-pcntl` the turn runs in-process, so the lines appear filled in
 when it ends rather than live (see TROUBLESHOOTING). While a batch is running,
 a faint `alt+↓ agents · click a task to open it` follows its last line.
 
+A **background `Task`** (`background: true`, or an agent whose preset says
+`background: true`) gets no live line: the call returns `{"agent_id": …}` at
+once and the agent runs as a background session, exactly like `/bg` — its
+result, with its status, runtime, tokens, cost and the resume id that continues
+it, arrives as a new message when it settles, and starts a turn if none is
+running. Until then every turn's dispatch tells the model what is still out in
+an `<active-subagents>` row, so it never has to poll. The session runs under the
+stricter of its own launch's permission mode and the session's that started it,
+and a call that would ask is refused, since nobody is there to answer.
+
 **Agent View.** A click on a live line (or `Enter` on the agents strip, or on
 the agent dashboard's peek) swaps the transcript area for **that agent's own
 transcript** — its task, every tool call with its result, its thoughts and its

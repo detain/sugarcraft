@@ -335,7 +335,15 @@ one":
   [`WORKFLOWS.md`](WORKFLOWS.md).
 - **`/bg` and `/fork`** run a task in a background session
   (`src/Sessions/BackgroundSessionRunner.php`), again without consulting the
-  preset roster.
+  preset roster. A **background `Task`** does consult it: `Task` with
+  `background: true` — or for an agent whose preset says `background: true`,
+  unless the call says `background: false` — returns `{"agent_id": …}` at
+  once, and the session daemon runs the agent through `TaskTool` itself, so
+  its grant, model, effort and step cap hold and its result names a resume id.
+  It runs under the stricter of its launch's mode and the delegating
+  session's, and with nobody to ask, a call that would ask is refused. The
+  result comes back as the `/bg` announcement does, and while it runs every
+  turn's dispatch carries an `<active-subagents>` row naming it.
 
 So a preset's practical effect today is: it appears in the roster, `/agent
 <name>` describes it, and `Task` dispatches it by name onto the executor

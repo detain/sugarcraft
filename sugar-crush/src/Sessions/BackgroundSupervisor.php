@@ -119,6 +119,13 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      */
     public const ADOPTED_STATUS = 'adopted';
 
+    /**
+     * The tag a background `Task` session carries, `agent:<roster name>`
+     * (roadmap 4.3-2) — how {@see ownedActiveSummaries()} tells a delegated
+     * agent from a plain `/bg` task.
+     */
+    public const AGENT_TAG_PREFIX = 'agent:';
+
     /** A record names its session's three IPC files by these exact suffixes. */
     private const IPC_FILE_SUFFIXES = ['socketPath' => '.sock', 'bufferPath' => '.buffer', 'tokenPath' => '.token'];
 
@@ -197,6 +204,25 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      */
     private array $bufferMtimes = [];
 
+    /**
+     * The process this supervisor was built in, as an index-record owner
+     * stamp (roadmap 4.3-2). A session is recorded as owned by THIS process
+     * even when the spawn happens in a process forked from it: a background
+     * `Task` spawns from inside the forked turn child, and the session must
+     * belong to the host that will announce its result, not to a child that
+     * exits when the turn does.
+     *
+     * @var array{pid: int, startTime: ?int}
+     */
+    private array $homeStamp;
+
+    /**
+     * Unix second of the last scan for handed-off records
+     * ({@see adoptHandedOff()}); the scan is repeated only once the index
+     * directory has changed at or after it.
+     */
+    private int $handoffScannedAt = 0;
+
     public function __construct(
         ?SessionNotificationInterface $listener = null,
         ?StallDetector $stallDetector = null,
@@ -205,6 +231,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         $this->listener = $listener;
         $this->stallDetector = $stallDetector ?? new StallDetector();
         $this->tempRoot = rtrim($tempRoot ?? sys_get_temp_dir(), '/') ?: '/';
+        $this->homeStamp = self::ownerStamp();
     }
 
     // =========================================================================
@@ -256,6 +283,11 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      */
     public function hasActiveSessions(): bool
     {
+        // Roadmap 4.3-2: a session a forked turn child spawned on this
+        // process's behalf joins here — this is what the host's background
+        // poll is armed by, so it is where such a session must first appear.
+        $this->adoptHandedOff();
+
         foreach ($this->sessions as $session) {
             // A timed-out session is still "active" to the dashboard, which
             // lists it, but nothing will ever change it again: counting it
@@ -285,6 +317,15 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * into it. Only the id reaches the daemon — see
      * {@see buildSessionDaemonCode()} for why never the transcript itself.
      *
+     * $delegation makes the session a background `Task` (roadmap 4.3-2):
+     * instead of one bare completion the daemon runs the named roster agent
+     * through {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}, so the
+     * preset's grants, model, effort and step cap apply and the run is
+     * resumable. Its keys are `agent` (required), and optionally
+     * `description`, `model`, `resume`, `permissionMode` and `scope` — names
+     * and modes, never secrets, because they ride the daemon's argv.
+     *
+     * @param array<string, string>|null $delegation
      * @return BackgroundSession The newly spawned session
      * @throws \RuntimeException If the private IPC directory or files cannot be
      *         created, or the child fails to authenticate within the handshake
@@ -298,6 +339,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         int $timeoutSeconds = 3600,
         ?array $tags = null,
         ?string $forkedSessionId = null,
+        ?array $delegation = null,
     ): BackgroundSession {
         $sessionId = $this->generateSessionId();
         // All four files live inside a 0700 per-process directory rather than
@@ -357,6 +399,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
                 $agent->model,
                 $timeoutSeconds,
                 $forkedSessionId,
+                $delegation,
             ),
         ];
 
@@ -552,7 +595,10 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * For the same argv reason a `/fork` passes the forked session's ID and
      * never its transcript: the runner reads the rows from the 0600 session
      * store itself ({@see BackgroundSessionRunner::executeTask()}). The key is
-     * left out entirely for a plain `/bg`.
+     * left out entirely for a plain `/bg`, and so is `delegation` for anything
+     * but a background `Task` ({@see spawnSession()}).
+     *
+     * @param array<string, string>|null $delegation
      */
     public function buildSessionDaemonCode(
         string $socketPath,
@@ -565,6 +611,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         string $model,
         int $timeoutSeconds,
         ?string $forkedSessionId = null,
+        ?array $delegation = null,
     ): string {
         $config = [
             'sessionId' => $sessionId,
@@ -579,6 +626,9 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         ];
         if ($forkedSessionId !== null && $forkedSessionId !== '') {
             $config['forkedSessionId'] = $forkedSessionId;
+        }
+        if ($delegation !== null && $delegation !== []) {
+            $config['delegation'] = $delegation;
         }
 
         // The umask/fork/setsid/fork sequence is {@see Daemonize::code()}:
@@ -908,6 +958,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
     public function tick(?int $now = null): void
     {
         $now = $now ?? time();
+        $this->adoptHandedOff();
 
         foreach ($this->sessions as $id => $session) {
             // Settled is final: a timed-out session stays "active" for the
@@ -1582,7 +1633,12 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             'tokenPath' => $ipc['tokenPath'] ?? '',
             'pid' => $ipc['pid'],
             'startTime' => $ipc['startTime'] ?? null,
-            'owner' => self::ownerStamp(),
+            // The HOST owns it, not whichever process ran the spawn: see
+            // $homeStamp. `handoff` marks a record spawned from a forked
+            // child, which the host adopts as soon as it next looks
+            // ({@see adoptHandedOff()}) rather than only after a restart.
+            'owner' => $this->homeStamp,
+            'handoff' => (int) getmypid() !== $this->homeStamp['pid'],
         ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($record === false) {
             return;
@@ -1647,6 +1703,117 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
     }
 
     /**
+     * Adopt every session a process forked from this one spawned on its
+     * behalf (roadmap 4.3-2), and return them.
+     *
+     * A background `Task` runs inside the turn's forked child, so the
+     * {@see spawnSession()} that starts its daemon registers the session in
+     * the CHILD's copy of a supervisor — which this process never sees. Its
+     * index record, though, names this process as the owner and carries the
+     * `handoff` mark ({@see $homeStamp}), and that is what is read here: the
+     * session joins this supervisor's table as running, so the host's
+     * background poll reaps it and announces its result like any `/bg`.
+     *
+     * Called from {@see hasActiveSessions()} and {@see tick()}, i.e. on every
+     * host poll; the directory is scanned again only when it changed at or
+     * after the second of the previous scan, so an idle host pays one `stat`.
+     *
+     * @return array<string, BackgroundSession>
+     */
+    public function adoptHandedOff(): array
+    {
+        $dir = $this->indexDir(false);
+        if ($dir === null) {
+            return [];
+        }
+        clearstatcache(true, $dir);
+        $changed = @filemtime($dir);
+        if ($changed === false || $changed < $this->handoffScannedAt) {
+            return [];
+        }
+        $this->handoffScannedAt = time();
+
+        $adopted = [];
+        foreach (glob($dir . '/sess_*.json', GLOB_NOSORT) ?: [] as $path) {
+            $id = basename($path, '.json');
+            if (preg_match(self::SESSION_ID_PATTERN, $id) !== 1 || isset($this->sessions[$id])) {
+                continue;
+            }
+
+            $session = $this->claimIndexRecord($path, $id, null, handoff: true);
+            if ($session !== null) {
+                $adopted[$id] = $session;
+            }
+        }
+
+        return $adopted;
+    }
+
+    /**
+     * The running background sessions this process owns, as the index
+     * records them — its own `/bg` sessions and the background `Task` runs
+     * handed to it — newest last (roadmap 4.3-2: the "Active subagents" row a
+     * turn's dispatch carries). Read from the index rather than this
+     * instance's table, so any supervisor of the process gives the same
+     * answer. Settled sessions are gone from the index, so they are not
+     * listed.
+     *
+     * @return list<array{id: string, name: string, agent: string, task: string, createdAt: int, background: bool}>
+     */
+    public function ownedActiveSummaries(): array
+    {
+        $dir = $this->indexDir(false);
+        if ($dir === null) {
+            return [];
+        }
+
+        $owned = [];
+        foreach (glob($dir . '/sess_*.json', GLOB_NOSORT) ?: [] as $path) {
+            $id = basename($path, '.json');
+            if (preg_match(self::SESSION_ID_PATTERN, $id) !== 1) {
+                continue;
+            }
+            $record = json_decode((string) @file_get_contents($path), true);
+            if (!is_array($record) || ($record['id'] ?? null) !== $id || !self::isThisProcess($record['owner'] ?? null)) {
+                continue;
+            }
+            $tags = is_array($record['tags'] ?? null) ? $record['tags'] : [];
+            $agent = '';
+            foreach ($tags as $tag) {
+                if (is_string($tag) && str_starts_with($tag, self::AGENT_TAG_PREFIX)) {
+                    $agent = substr($tag, strlen(self::AGENT_TAG_PREFIX));
+                }
+            }
+            $owned[] = [
+                'id' => $id,
+                'name' => is_string($record['name'] ?? null) ? $record['name'] : $id,
+                'agent' => $agent,
+                'task' => is_string($record['task'] ?? null) ? $record['task'] : '',
+                'createdAt' => is_int($record['createdAt'] ?? null) ? $record['createdAt'] : 0,
+                'background' => $agent !== '',
+            ];
+        }
+        usort($owned, static fn (array $a, array $b): int => [$a['createdAt'], $a['id']] <=> [$b['createdAt'], $b['id']]);
+
+        return $owned;
+    }
+
+    /**
+     * Whether $owner (an index record's owner stamp) is the running process:
+     * the same pid and, when both are known, the same `/proc` start time.
+     */
+    private static function isThisProcess(mixed $owner): bool
+    {
+        if (!is_array($owner) || ($owner['pid'] ?? null) !== (int) getmypid()) {
+            return false;
+        }
+        $startTime = $owner['startTime'] ?? null;
+        $observed = self::procStartTime((int) getmypid());
+
+        return !is_int($startTime) || $observed === null || $observed === $startTime;
+    }
+
+    /**
      * Read one record under an exclusive, non-blocking lock and adopt it when
      * its owner is gone and it belongs to $want; prune it when it is garbage.
      *
@@ -1657,8 +1824,13 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
      * in place, under the lock, rather than the write-and-rename
      * {@see writeIndexRecord()} uses: a rename would hand the next reader a
      * different inode from the one this lock is held on.
+     *
+     * With $handoff the rule is the other one {@see adoptHandedOff()} needs:
+     * only a record marked `handoff` whose owner is THIS process is taken —
+     * the session a forked turn child spawned for it — whatever project it
+     * names, and the mark is cleared so it is taken once.
      */
-    private function claimIndexRecord(string $path, string $id, string $want): ?BackgroundSession
+    private function claimIndexRecord(string $path, string $id, ?string $want, bool $handoff = false): ?BackgroundSession
     {
         $uid = posix_getuid();
         clearstatcache(true, $path);
@@ -1691,11 +1863,15 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
                 return null;
             }
 
-            if (self::ownerAlive($record['owner'] ?? null)) {
+            $recordDirectory = self::normalisedDirectory(is_string($record['workingDirectory'] ?? null) ? $record['workingDirectory'] : null);
+            if ($handoff) {
+                if (($record['handoff'] ?? false) !== true || !self::isThisProcess($record['owner'] ?? null)) {
+                    return null;
+                }
+                $want = $recordDirectory ?? '.';
+            } elseif (self::ownerAlive($record['owner'] ?? null)) {
                 return null;
-            }
-
-            if (self::normalisedDirectory(is_string($record['workingDirectory'] ?? null) ? $record['workingDirectory'] : null) !== $want) {
+            } elseif ($recordDirectory !== $want) {
                 // Another project's session, left for that project's next
                 // launch — unless it is long dead, when nothing will claim it.
                 if (!$this->isProcessRunning($ipc['pid'], $ipc['startTime'])
@@ -1708,6 +1884,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             }
 
             $record['owner'] = self::ownerStamp();
+            $record['handoff'] = false;
             $encoded = json_encode($record, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
             if ($encoded === false || !ftruncate($handle, 0) || !rewind($handle) || fwrite($handle, $encoded) !== strlen($encoded)) {
                 return null;

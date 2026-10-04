@@ -206,6 +206,14 @@ final class BackgroundSessionRunner
         public readonly int $timeoutSeconds = 3600,
         public readonly string $tokenPath = '',
         public readonly string $forkedSessionId = '',
+        /**
+         * Set for a background `Task` (roadmap 4.3-2): the roster agent to
+         * run and how — see {@see BackgroundSupervisor::spawnSession()}. Empty
+         * for a plain `/bg` or `/fork` session.
+         *
+         * @var array<string, string>
+         */
+        public readonly array $delegation = [],
     ) {}
 
     /**
@@ -226,7 +234,30 @@ final class BackgroundSessionRunner
             timeoutSeconds: (int) ($config['timeoutSeconds'] ?? 3600),
             tokenPath: (string) ($config['tokenPath'] ?? ''),
             forkedSessionId: (string) ($config['forkedSessionId'] ?? ''),
+            delegation: self::delegationFrom($config['delegation'] ?? null),
         );
+    }
+
+    /**
+     * The `delegation` block of a spawn config, string values only — it came
+     * through argv, so anything else is dropped rather than trusted.
+     *
+     * @return array<string, string>
+     */
+    private static function delegationFrom(mixed $delegation): array
+    {
+        if (!\is_array($delegation)) {
+            return [];
+        }
+
+        $clean = [];
+        foreach (['agent', 'description', 'model', 'resume', 'permissionMode', 'scope'] as $key) {
+            if (\is_string($delegation[$key] ?? null) && $delegation[$key] !== '') {
+                $clean[$key] = $delegation[$key];
+            }
+        }
+
+        return isset($clean['agent']) ? $clean : [];
     }
 
     /**
@@ -390,9 +421,13 @@ final class BackgroundSessionRunner
      * is exactly the silent bug this replaced. $store is injectable for the
      * same reason $backend is; production opens the launch's own store.
      *
+     * A background `Task` ({@see self::$delegation} set) runs the roster
+     * agent through {@see self::executeDelegation()} instead of one bare
+     * completion; $agents is injectable like $backend.
+     *
      * @return int 0 when the turn completed, 1 when it failed
      */
-    public function executeTask(?Backend $backend = null, ?EnhancedSessionStore $store = null): int
+    public function executeTask(?Backend $backend = null, ?EnhancedSessionStore $store = null, ?\SugarCraft\Crush\Agents\AgentManager $agents = null): int
     {
         if ($this->workingDirectory !== '' && \is_dir($this->workingDirectory)) {
             @\chdir($this->workingDirectory);
@@ -428,6 +463,10 @@ final class BackgroundSessionRunner
         // own id — so a session-scoped hook, grant or ledger sees one id for
         // the whole turn instead of none. Each billed step is summed on the
         // way, because the reply's own usage covers only its last step.
+        if ($this->delegation !== []) {
+            return $this->executeDelegation($backend, $agents);
+        }
+
         $steps = null;
         if ($backend instanceof EngineBackend) {
             $backend = $backend
@@ -482,6 +521,87 @@ final class BackgroundSessionRunner
         $usage = $steps ?? $message->usage;
         if ($usage !== null) {
             $this->log(sprintf('%s tokens=%d cost=%.6F', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd));
+        }
+        $this->log('[session:task:complete]');
+
+        return 0;
+    }
+
+    /**
+     * Run a background `Task` (roadmap 4.3-2): the roster agent
+     * {@see self::$delegation} names, on {@see self::$task}, through
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} — the same path a
+     * foreground delegation takes, so the preset's tool grant (argument
+     * halves included), model, effort and step cap hold, its transcript is
+     * logged, and the run is saved for a later `Task(resume: …)`.
+     *
+     * The tool's result is the session's output: the fenced report and the
+     * sentence naming the resume id, or the refusal with the run's partial
+     * output. Its usage becomes the usage record, and the outcome record
+     * follows the result — a refused or failed run settles the session
+     * Failed with the first line of the reason.
+     *
+     * NEVER WIDER THAN THE SESSION THAT ASKED. A daemon's gate is the
+     * launch's headless one (`-p`'s, `bypass-permissions` unless configured
+     * otherwise), and the delegating session may have been stricter: the
+     * stricter of the two governs. With no one at a terminal an ASK is
+     * refused ({@see self::backend()}'s console approver), and the run reads
+     * that refusal like any other.
+     */
+    private function executeDelegation(Backend $backend, ?\SugarCraft\Crush\Agents\AgentManager $agents): int
+    {
+        $agentName = $this->delegation['agent'];
+        if (!$backend instanceof EngineBackend) {
+            $this->log('[session:task:failed] background agent ' . $this->oneLine($agentName)
+                . ' needs the engine backend, and this provider has none');
+
+            return 1;
+        }
+
+        try {
+            $agents ??= Bootstrap::agentManager($this->workingDirectory !== '' ? $this->workingDirectory : null);
+        } catch (\Throwable $e) {
+            $this->log('[session:task:failed] could not load the agent roster: ' . $this->oneLine($e->getMessage()));
+
+            return 1;
+        }
+
+        $backend = $backend->withSessionId($this->sessionId);
+        $gate = $backend->permissionGate();
+        $asked = \SugarCraft\Crush\Permissions\PermissionMode::tryFrom($this->delegation['permissionMode'] ?? '');
+        if ($gate !== null && $asked !== null && $asked->isStricterThan($gate->mode())) {
+            $backend = $backend->withPermissionGate(new \SugarCraft\Crush\Permissions\PermissionGate(
+                $asked,
+                $gate->rules(),
+                null,
+                'the session that started this background agent',
+            ));
+        }
+
+        $tool = (new \SugarCraft\Crush\Tools\BuiltIn\TaskTool($agents))->withEngine($backend);
+        $result = $tool->execute(\array_filter([
+            'id' => 'bg_' . $this->sessionId,
+            'agent' => $agentName,
+            'prompt' => $this->task,
+            'description' => $this->delegation['description'] ?? '',
+            'model' => $this->delegation['model'] ?? '',
+            'resume' => $this->delegation['resume'] ?? '',
+            'background' => false,
+        ], static fn (mixed $value): bool => $value !== ''));
+
+        $content = \rtrim($result->content(), "\n");
+        if ($content !== '') {
+            $this->append($content . "\n");
+        }
+        $usage = $result->usage();
+        if ($usage !== null) {
+            $this->log(sprintf('%s tokens=%d cost=%.6F', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd));
+        }
+        if ($result->isError()) {
+            $reason = \preg_replace('/^Error: Task refused — /u', '', \strtok($content, "\n") ?: $content);
+            $this->log('[session:task:failed] ' . $this->oneLine(\mb_strimwidth((string) $reason, 0, 400, '…', 'UTF-8')));
+
+            return 1;
         }
         $this->log('[session:task:complete]');
 

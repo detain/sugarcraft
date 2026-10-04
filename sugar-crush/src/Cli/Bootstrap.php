@@ -8431,8 +8431,16 @@ final class Bootstrap
         // sub-agent rosters and two sets of grants, the split-state bug this
         // seam exists to prevent. What the sub-agent may then do is bounded
         // by the preset's grants inside `executeAll`, not by this list.
+        //
+        // Roadmap 4.3-2: and able to run a delegation in the background. The
+        // supervisor is built HERE, in the launching process, so the sessions
+        // it spawns from a forked turn child are recorded as this process's
+        // and adopted by the host's own supervisor on its next poll
+        // (BackgroundSupervisor::adoptHandedOff()) — whichever instance that
+        // is. The session works in the same tree the tools are jailed to.
         if ($taskManager !== null) {
-            $tools[] = new TaskTool($taskManager, $taskPool);
+            $tools[] = (new TaskTool($taskManager, $taskPool))
+                ->withBackgroundSupervisor(new BackgroundSupervisor(), $root ?? (getcwd() ?: '.'));
         }
 
         return $tools;
