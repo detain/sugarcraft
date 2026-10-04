@@ -2010,7 +2010,36 @@ final class App implements Model
             // kill() exits that never let a model emit a Cmd.
             CoreCmd::pushKittyKeyboard(KeyboardEnhancementsMsg::DISAMBIGUATE),
             $this->chat?->init(),
+            $this->pruneAgentArtifacts(),
         );
+    }
+
+    /**
+     * The launch's sweep of sub-agent transcript logs and mailboxes whose
+     * session is gone (roadmap P-D1's retention remainder,
+     * {@see \SugarCraft\Crush\Agents\AgentManager::pruneSessionArtifacts()}) — as
+     * a Cmd, so the first frame never waits on the directory walk, and only
+     * when the hosted chat has a session store to ask. A failure is
+     * swallowed: stale files are not a reason to disturb a launch.
+     */
+    private function pruneAgentArtifacts(): ?\Closure
+    {
+        $store = $this->chat?->sessionStore();
+        if ($store === null) {
+            return null;
+        }
+
+        return static function () use ($store): null {
+            try {
+                \SugarCraft\Crush\Agents\AgentManager::pruneSessionArtifacts(
+                    static fn (string $sessionId): bool => $store->getSession($sessionId) !== null,
+                );
+            } catch (\Throwable) {
+                // Best effort — see above.
+            }
+
+            return null;
+        };
     }
 
     /**

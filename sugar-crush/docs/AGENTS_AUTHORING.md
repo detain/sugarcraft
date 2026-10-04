@@ -284,7 +284,10 @@ turn's steering. A message lands after the step's tool results and before the
 next request. A `steer` or `note` lets the current step's calls finish. An
 `interrupt` skips the step's calls that have not started yet. A `followup`
 waits for the conversation's next run, and a `control` verb never reaches the
-model at all.
+model at all. A session's mailboxes, like its sub-agents' transcript logs
+(`~/.sugar-crush/subagents/<session>/`), go when the session does: each launch
+sweeps the ones whose session is gone — pruned by retention or deleted from the
+session picker — once nothing in them has been written for an hour.
 
 How much authority a message has depends on who sent it:
 

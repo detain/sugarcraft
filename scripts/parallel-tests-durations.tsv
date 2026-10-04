@@ -412,6 +412,7 @@ sugar-crush/tests/Chat/ContextCommandsTest.php	0.300	5
 sugar-crush/tests/Backend/MemoryRecallPrimeTest.php	0.300	3
 sugar-crush/tests/Backend/StepSummaryCompactHooksTest.php	0.300	3
 sugar-crush/tests/Tools/BuiltIn/CompressToolTest.php	0.300	15
+sugar-crush/tests/Agents/SessionArtifactRetentionTest.php	0.300	3
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10

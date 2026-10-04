@@ -2417,4 +2417,90 @@ final class AgentManager
 
         return $this->teamManager->teamCount();
     }
+
+    /**
+     * Sweep the per-session sub-agent files whose session is gone (roadmap
+     * P-D1's retention remainder, Appendix P §5.6): every
+     * `~/.sugar-crush/subagents/<session>/` (the runs' transcript logs, P-C1)
+     * and `~/.sugar-crush/mailboxes/<session>/` (their mailboxes, P-D1) whose
+     * session $sessionExists no longer finds. Run at launch, so the files
+     * follow their session out — whether retention pruned it or the user
+     * deleted it from the session picker — instead of outliving it forever.
+     *
+     * A directory is spared while anything in it is younger than
+     * $graceSeconds: a session's row can trail its first sub-agent's files
+     * (and another window may be writing them), and an hour is far past any
+     * such gap. Symbolic links are never followed or removed, and only the
+     * two-level layouts those writers make are walked.
+     *
+     * @param \Closure(string $sessionId): bool $sessionExists
+     * @param string|null $home the `.sugar-crush` directory; null is where the
+     *        writers put them ({@see Live\SubAgentTranscriptLog::defaultRoot()},
+     *        {@see Live\AgentInbox::defaultRoot()})
+     *
+     * @return int session directories removed
+     */
+    public static function pruneSessionArtifacts(\Closure $sessionExists, ?string $home = null, int $graceSeconds = 3600, ?int $now = null): int
+    {
+        $now ??= time();
+        $roots = $home === null
+            ? [Live\SubAgentTranscriptLog::defaultRoot(), Live\AgentInbox::defaultRoot()]
+            : [rtrim($home, '/') . '/' . Live\SubAgentTranscriptLog::DIR_NAME, rtrim($home, '/') . '/' . Live\AgentInbox::DIR_NAME];
+
+        $removed = 0;
+        foreach ($roots as $root) {
+            if ($root === null || is_link($root) || !is_dir($root)) {
+                continue;
+            }
+            foreach (scandir($root) ?: [] as $session) {
+                $dir = $root . '/' . $session;
+                if ($session === '.' || $session === '..' || is_link($dir) || !is_dir($dir)) {
+                    continue;
+                }
+                if ($sessionExists($session) || self::newestMtime($dir, 2) > $now - $graceSeconds) {
+                    continue;
+                }
+                if (self::removeTree($dir, 2)) {
+                    $removed++;
+                }
+            }
+        }
+
+        return $removed;
+    }
+
+    /** The newest mtime under $dir, $depth levels down, without following links. */
+    private static function newestMtime(string $dir, int $depth): int
+    {
+        $newest = (int) @filemtime($dir);
+        foreach (scandir($dir) ?: [] as $entry) {
+            $path = $dir . '/' . $entry;
+            if ($entry === '.' || $entry === '..' || is_link($path)) {
+                continue;
+            }
+            $newest = max($newest, is_dir($path) && $depth > 0 ? self::newestMtime($path, $depth - 1) : (int) @filemtime($path));
+        }
+
+        return $newest;
+    }
+
+    /** Remove $dir and what is in it, $depth levels down; a link is unlinked, never followed. */
+    private static function removeTree(string $dir, int $depth): bool
+    {
+        foreach (scandir($dir) ?: [] as $entry) {
+            $path = $dir . '/' . $entry;
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            if (!is_link($path) && is_dir($path)) {
+                if ($depth <= 0 || !self::removeTree($path, $depth - 1)) {
+                    return false;
+                }
+                continue;
+            }
+            @unlink($path);
+        }
+
+        return @rmdir($dir);
+    }
 }
