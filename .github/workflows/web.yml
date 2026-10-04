@@ -17,6 +17,10 @@ name: web
 # for goes red here, at the diff after `npm run gen:protocol`, before it can
 # become a runtime surprise.
 #
+# The e2e job drives the built UI in Chromium against a real `sugarcrush
+# serve` on the offline EchoProvider (e2e/fixtures/server.ts), so it also
+# runs when sugar-crush's server, protocol or provider code changes.
+#
 # Path-scoped on purpose — not in affected-libs.php's FORCE_ALL_FILES.
 
 on:
@@ -25,11 +29,19 @@ on:
     paths:
       - 'sugar-crush-web/**'
       - 'sugar-crush/docs/protocol/**'
+      - 'sugar-crush/src/Server/**'
+      - 'sugar-crush/src/Protocol/**'
+      - 'sugar-crush/src/Host/**'
+      - 'sugar-crush/src/Providers/EchoProvider.php'
       - '.github/workflows/web.yml'
   pull_request:
     paths:
       - 'sugar-crush-web/**'
       - 'sugar-crush/docs/protocol/**'
+      - 'sugar-crush/src/Server/**'
+      - 'sugar-crush/src/Protocol/**'
+      - 'sugar-crush/src/Host/**'
+      - 'sugar-crush/src/Providers/EchoProvider.php'
       - '.github/workflows/web.yml'
   workflow_dispatch:
 
@@ -91,3 +103,64 @@ jobs:
             exit 1
           fi
           echo "OK: dist/ is byte-identical to a clean build of src-web/"
+
+  e2e:
+    name: 'sugar-crush-web · e2e against sugarcrush serve'
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      # See ci.yml: the checkout is a detached ref, so pin the root version.
+      COMPOSER_ROOT_VERSION: dev-master
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      # `sugarcrush serve` refuses to start without pcntl, posix and FFI.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, json, pcntl, posix, ffi, sqlite3, pdo_sqlite, curl, openssl
+          ini-values: ffi.enable=true
+          tools: composer:v2
+          coverage: none
+
+      # The same sibling wiring ci.yml injects before every install.
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
+
+      - name: Install sugar-crush
+        run: cd sugar-crush && composer install --prefer-dist --no-progress -n
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: sugar-crush-web/.nvmrc
+          cache: npm
+          cache-dependency-path: sugar-crush-web/package-lock.json
+
+      - name: Install (lockfile only)
+        working-directory: sugar-crush-web
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: sugar-crush-web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        working-directory: sugar-crush-web
+        run: npm run build
+
+      - name: End-to-end
+        working-directory: sugar-crush-web
+        run: npm run e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sugar-crush-web-playwright-report
+          path: |
+            sugar-crush-web/playwright-report
+            sugar-crush-web/test-results
+          if-no-files-found: ignore
+          retention-days: 7

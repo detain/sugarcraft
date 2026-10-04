@@ -15,14 +15,20 @@
     "typecheck": "vue-tsc --build",
     "lint": "eslint .",
     "test": "vitest run",
+    "e2e": "playwright test",
     "gen:protocol": "node scripts/gen-protocol.mjs"
   },
   "dependencies": {
+    "@tanstack/vue-virtual": "^3.13.39",
+    "dompurify": "^3.4.16",
+    "markdown-it": "^14.3.2",
     "pinia": "^4.0.3",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/markdown-it": "^14.2.0",
     "@types/node": "^24.19.1",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/test-utils": "^2.5.1",

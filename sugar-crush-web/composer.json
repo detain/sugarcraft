@@ -58,7 +58,12 @@
             "/tsconfig.app.json",
             "/tsconfig.node.json",
             "/eslint.config.js",
-            "/scripts"
+            "/scripts",
+            "/playwright.config.ts",
+            "/tsconfig.vitest.json",
+            "/tsconfig.e2e.json",
+            "/playwright-report",
+            "/test-results"
         ]
     },
     "minimum-stability": "dev",

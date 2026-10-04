@@ -21,3 +21,27 @@
   `~6.0` (TypeScript 7 is the native port). `@vue/eslint-config-typescript`
   was dropped for plain `typescript-eslint` + `eslint-plugin-vue`: it pulled a
   `fast-glob` → `braces` chain with an open high-severity advisory.
+- **`src-web/protocol/generated.ts` is generated** by `scripts/gen-protocol.mjs`
+  from `../sugar-crush/docs/protocol/sugarcrush.v1.schema.json`; `web.yml`
+  regenerates and diffs it, and `generated.spec.ts` does the same locally
+  (skipped in a split-repo clone, where the schema is absent).
+- **DOMPurify is unreliable under happy-dom** (its parser mangles the walk:
+  links vanish, `<script>` text survives). Unit tests pin `markdownToHtml()`
+  (markdown-it with `html: false` already escapes raw HTML and refuses
+  `javascript:` links); the sanitiser itself is covered by the e2e suite in
+  Chromium.
+- **Tool-call ids repeat across turns** (EchoProvider and the DSML/MiniMax
+  parsers restart at `*_call_1`), so tool rows key on `turnId` + `toolCallId`,
+  and a finish without an exact match pairs with the newest running row.
+- **A running call in a snapshot is a `system`-role placeholder row** carrying
+  `pendingToolCallId` / `pendingToolName` / `pendingToolArguments`: check that
+  before the role.
+- **`command.exec` refuses an empty `args`** (`invalid_params`) — omit it. A
+  command rewrites the transcript without events (`/clear` answers
+  `effects: ["clear-transcript"]`), so the session store re-subscribes for a
+  fresh snapshot after one.
+- **Drive tools without a model with `::tool <Name> <json>`** (EchoProvider's
+  scripted mode). Not `!tool`: a prompt starting with `!` is BangShell, the
+  user's own shell command.
+- **`@playwright/test` is pinned exactly** (1.63.0 ↔ chromium revision 1243);
+  bump it together with `npx playwright install chromium`.

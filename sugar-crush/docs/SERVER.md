@@ -731,6 +731,64 @@ What an attached window does NOT yet route to the server: slash commands
 and a turn another client starts on the same session shows up only when the
 window next attaches.
 
+## Web UI
+
+The browser UI is the [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web)
+package: a pre-built Vue bundle that `serve` hands out on the same port as the
+API and the WebSocket, so there is nothing else to run. The server looks for it
+in this order and names what it found on the `web UI:` startup line:
+
+1. `--web-root <dir>` (or `SUGARCRUSH_SERVER_WEB_ROOT`);
+2. the installed package (`composer require sugarcraft/sugar-crush-web`; it is
+   a `suggest`, not a dependency, so headless installs stay lean);
+3. neither: API and WebSocket only (also what `--no-web` asks for).
+
+Open the sign-in URL and the page signs in, connects and shows:
+
+- **Sessions** in a sidebar — newest activity first, a filter, a status dot,
+  and a count of the questions each one is waiting on (also in the tab title,
+  and as an opt-in desktop notification while the tab is in the background).
+- **The transcript** of the open session, virtualised so a long session
+  scrolls like a short one: your prompts, the replies as Markdown streaming in
+  (sanitised — neither a reply nor a file a tool read can put markup or script
+  on the page), the model's reasoning in a fold, and a card per tool call —
+  name, key argument, duration and outcome, collapsed once it succeeded; open,
+  it shows the arguments, the output (in full on request when the event was
+  capped) and an edit's diff with line numbers. A refused call is marked with
+  its reason.
+- **Permission questions** as cards with *Allow once*, *Always (this
+  session)*, *Reject* and *Reject & stop* (`y` / `a` / `n` on a focused card).
+  Every tab and client following the session shows the same question; the
+  first answer wins and closes it everywhere.
+- **The composer**: Enter sends, Shift+Enter is a new line. While a turn runs a
+  prompt is queued by default — or steers the turn, or interrupts it — and the
+  queue is listed above the box, each entry removable. *Stop* (or Esc Esc)
+  cancels the turn. `/` completes the slash commands that run here: a built-in
+  the server runs goes through `command.exec`, a command file is sent as a
+  prompt, and a screen-only built-in says it runs only in the terminal UI.
+- **A status bar**: what the session is doing (and the step), context used,
+  spend, the model, and the permission mode — changeable from there.
+
+The page keeps one WebSocket. When it drops, the page retries — after 0.5 s,
+then doubling to at most 15 s, each wait jittered — with a fresh ticket, and
+resumes every session it follows from the last event it holds, so nothing that
+happened meanwhile is missed or shown twice; a reload is never needed. A
+restarted server signs the browser out (sign-ins live in memory) and the page
+asks again. A server that comes back as a different version offers a reload.
+
+**Developing the UI** (`sugar-crush-web/`, Node 24): `npm run dev` serves it
+from Vite with hot reload and proxies `/ws` and `/api` to `127.0.0.1:7420`;
+start that server with `--allowed-origin http://localhost:5173` so it accepts
+the dev page's origin. The end-to-end suite (`npm run e2e`) drives the built UI
+in Chromium against a real `serve` on the offline echo provider. With no model,
+a prompt whose lines read `::tool <Name> <json-object>` makes the echo provider
+call that tool — through the permission gate like a model's call — and then
+report what it returned:
+
+```text
+::tool Write {"file_path": "notes.txt", "content": "alpha\nbeta\n"}
+```
+
 ## Security model
 
 - **Loopback by default.** `127.0.0.1` only; any other bind needs

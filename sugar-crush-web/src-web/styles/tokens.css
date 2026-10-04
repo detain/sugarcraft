@@ -1,5 +1,6 @@
 /* Theme tokens. Dark is the default (TokyoNight, as the TUI demos use); the
-   light set applies when the OS asks for it. Later themes mirror
+   light set applies when the OS asks for it, or when the viewer picks a theme
+   (`data-theme` on <html>, set by the settings store). Later themes mirror
    sugar-crush's src/Theme.php. */
 :root {
   color-scheme: dark;
@@ -12,12 +13,14 @@
   --ok: #9ece6a;
   --warn: #e0af68;
   --error: #f7768e;
+  --diff-add: rgb(158 206 106 / 0.16);
+  --diff-del: rgb(247 118 142 / 0.16);
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme='dark']) {
     color-scheme: light;
     --bg: #f6f7fb;
     --panel: #e9ebf3;
@@ -28,7 +31,24 @@
     --ok: #387068;
     --warn: #8c6c3e;
     --error: #c64343;
+    --diff-add: rgb(56 150 80 / 0.16);
+    --diff-del: rgb(198 67 67 / 0.14);
   }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f6f7fb;
+  --panel: #e9ebf3;
+  --line: #c8ccdb;
+  --text: #343b58;
+  --muted: #6b7089;
+  --accent: #2e7de9;
+  --ok: #387068;
+  --warn: #8c6c3e;
+  --error: #c64343;
+  --diff-add: rgb(56 150 80 / 0.16);
+  --diff-del: rgb(198 67 67 / 0.14);
 }
 
 *,
@@ -43,6 +63,70 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
+}
+
+button {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+button.danger {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+button.link:hover {
+  color: var(--text);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
