@@ -1859,7 +1859,22 @@ final class Runtime
         ?callable $onPermissionRequest = null,
         ?\Closure $heartbeat = null,
     ): \Generator {
+        // Roadmap 1.C-3: once a mid-turn message is waiting, nothing more of
+        // this step starts — the model reads the message at the next step
+        // boundary before doing more work on a plan it may change. Probed
+        // before each segment (each sequential call, each concurrent group),
+        // never inside one: a call already running finishes.
+        $steered = false;
         foreach ($this->segments($toolCalls, $app) as $segment) {
+            $steered = $steered || ($this->turnInbox?->pending() ?? false);
+            if ($steered) {
+                foreach ($segment as $toolCall) {
+                    yield $this->skippedForIncomingMessage($toolCall, $onEvent);
+                }
+
+                continue;
+            }
+
             if (count($segment) === 1) {
                 yield $this->executeSequentially($segment[0], $app, $onEvent, $onPermissionRequest, $heartbeat);
 
@@ -1870,6 +1885,20 @@ final class Runtime
                 yield $message;
             }
         }
+    }
+
+    /**
+     * The result of a call {@see executeToolCalls()} did not start because a
+     * mid-turn message arrived first (roadmap 1.C-3): {@see TurnInbox::SKIPPED},
+     * as an ERROR result so nothing reads the call as having run (an Edit
+     * answered this way wrote nothing). The call still gets its
+     * {@see ToolStarted}/{@see ToolFinished} pair, like every other branch.
+     */
+    private function skippedForIncomingMessage(ToolCall $toolCall, ?callable $onEvent): ToolResultMessage
+    {
+        $this->emit($onEvent, ToolStarted::fromCall($toolCall));
+
+        return $this->failure($toolCall, \SugarCraft\Crush\Backend\TurnInbox::SKIPPED, $onEvent);
     }
 
     /**
@@ -4966,6 +4995,24 @@ final class Runtime
 
     /** See {@see withTurnContextPersisted()}. */
     private bool $turnContextPersisted = false;
+
+    /**
+     * A copy that probes $inbox before each sequential tool call (roadmap
+     * 1.C-3): once a mid-turn message is waiting, the step's unstarted calls
+     * are skipped ({@see executeToolCalls()}). The inbox itself is drained by
+     * the step loop that owns it (EngineBackend::runTurn). A clone, like
+     * {@see withSessionPromptMemo()}.
+     */
+    public function withTurnInbox(\SugarCraft\Crush\Backend\TurnInbox $inbox): self
+    {
+        $copy = clone $this;
+        $copy->turnInbox = $inbox;
+
+        return $copy;
+    }
+
+    /** See {@see withTurnInbox()}. */
+    private ?\SugarCraft\Crush\Backend\TurnInbox $turnInbox = null;
 
     /**
      * The session memo this Runtime reads its PerSession layers through:

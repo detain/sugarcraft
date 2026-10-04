@@ -392,6 +392,10 @@ final class KeyBindingRegistry
 
         return [
             KeyBinding::new('chat.send', 'Enter', 'Send, or accept the highlighted "/" command', $c),
+            // Roadmap 1.C-3 (D6): mid-turn, Enter steers the running turn (the
+            // agent reads it at its next step) and Tab queues it for after.
+            KeyBinding::new('chat.steer', 'Enter', 'Mid-turn: steer the agent at its next step', $c),
+            KeyBinding::new('chat.queue', 'Tab', 'Mid-turn: queue the draft for after this turn', $c),
             KeyBinding::new('chat.newline', 'Alt+Enter', 'Insert a newline instead of sending', $c),
             KeyBinding::new('chat.slash-menu', '↑ / ↓', 'Move through the "/" command popup', $c),
             // Declared in the SAME round the keystroke went live (W4), unlike

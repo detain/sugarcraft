@@ -255,7 +255,7 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 93 declared rows — and THAT is the domain
+     * Zero false positives across all 95 declared rows — and THAT is the domain
      * of the zero. It says nothing about prose not yet written; it says those 92
      * rows are clean under this pattern.
      *
@@ -638,6 +638,19 @@ final class KeyBindingDriftTest extends TestCase
         }
     }
 
+    /** An engine turn in flight with $draft in the box (roadmap 1.C-3). */
+    private function midTurn(\SugarCraft\Crush\Backend\CancellationToken $token, string $draft): Chat
+    {
+        return (new Chat(
+            history: [Message::user('go')],
+            backend: \SugarCraft\Crush\Backend\EngineBackend::new(new \SugarCraft\Crush\Tests\Support\ScriptedProvider([]), 'm'),
+            inFlight: true,
+            generation: 1,
+            inFlightCancellation: $token,
+            inputBuf: $draft,
+        ))->withSize(120, 20);
+    }
+
     /**
      * One closure per live row: it drives the real handler and asserts the
      * described effect.
@@ -657,6 +670,25 @@ final class KeyBindingDriftTest extends TestCase
                 [$next] = $this->chat([], 'hello')->update($k[0]);
                 $this->assertSame('', $next->inputBuf);
                 $this->assertNotSame([], $next->history);
+            },
+            // Roadmap 1.C-3: the same Enter, mid-turn on an engine turn, goes
+            // into the running turn through its handle — and is held on the
+            // queue as the fallback for a turn that ends before reading it.
+            'chat.steer' => function (array $k): void {
+                $token = new \SugarCraft\Crush\Backend\CancellationToken();
+                [$next] = $this->midTurn($token, 'look at the tests first')->update($k[0]);
+                $this->assertSame('', $next->inputBuf);
+                $this->assertSame(['look at the tests first'], array_column($token->takeSteers(), 'text'), 'Enter steers the running turn');
+                $this->assertSame(['look at the tests first'], $next->queuedPrompts(), 'and holds the fallback');
+                $this->assertTrue($next->inFlight, 'the turn runs on');
+            },
+            'chat.queue' => function (array $k): void {
+                $token = new \SugarCraft\Crush\Backend\CancellationToken();
+                $chat = $this->midTurn($token, 'then update the docs');
+                $this->assertTrue($chat->queueOwnsTab(), 'fixture: the shell yields Tab on this predicate');
+                [$next] = $chat->update($k[0]);
+                $this->assertSame(['then update the docs'], $next->queuedPrompts());
+                $this->assertSame([], $token->takeSteers(), 'Tab queues; it does not steer');
             },
             'chat.newline' => function (array $k): void {
                 [$next] = $this->chat([], 'a')->update($k[0]);

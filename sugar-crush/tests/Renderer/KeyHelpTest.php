@@ -1095,8 +1095,10 @@ final class KeyHelpTest extends TestCase
         // separator more — so the list is 107 lines: 73 -> 82 at 100x30. The
         // step-boundary stop (`chat.stop`, 1.C-4a) added one more row: 108
         // lines, 82 -> 83, and the fitting size is 100x113 (a body of 108
-        // against 108 lines).
-        foreach ([[100, 30, 83], [100, 113, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // against 108 lines). Mid-turn steering (1.C-3) declared `chat.steer`
+        // and `chat.queue`: 110 lines, 83 -> 85, and the fitting size is
+        // 100x115 (a body of 110 against 110 lines).
+        foreach ([[100, 30, 85], [100, 115, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1160,8 +1162,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 113 rows, not 80: the list is 108 content lines now (89 live
-            // rows, 10 headers, 9 separators; 107 before `chat.stop`, 98 before the settings
+            // 115 rows, not 80: the list is 110 content lines now (91 live
+            // rows, 10 headers, 9 separators; 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
             // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
@@ -1170,7 +1172,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 113))),
+                Width::of($this->footer($this->chat('', $cols, 115))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

@@ -39,6 +39,7 @@ use SugarCraft\Crush\Attachments\FileMentions;
 use SugarCraft\Crush\Support\ClipboardImage;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\ObservesReasoning;
+use SugarCraft\Crush\Backend\QueueMode;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Events\ReasoningDelta;
 use SugarCraft\Crush\Events\SpendCapBreached;
@@ -2862,6 +2863,13 @@ final class Chat implements Model
                 && !$msg->ctrl && !$msg->alt && !$msg->shift
                 && $this->mentionOwnsTab()
                 => $this->completeMention(),
+            // Roadmap 1.C-3 (`chat.queue`): mid-turn, Tab holds the draft for
+            // after the turn while Enter steers it in. Same contract again —
+            // the shell yields Tab on queueOwnsTab().
+            $msg->type === KeyType::Tab
+                && !$msg->ctrl && !$msg->alt && !$msg->shift
+                && $this->queueOwnsTab()
+                => $this->recordInputHistory()->queueDraft(),
             // Shell-history-style recall: Up on an empty input box (and no
             // "/" popup showing - the arm above already claimed that case)
             // fills inputBuf with the last prompt the user sent - from this
@@ -3949,7 +3957,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 89 live rows across 10 contexts — 93 in all, four of them
+     * declares 91 live rows across 10 contexts — 95 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -9041,7 +9049,14 @@ final class Chat implements Model
                 return $this->refuseInFlightCommand($text);
             }
 
-            return $this->enqueuePrompt($text);
+            // Roadmap 1.C-3 (decision D6): Enter mid-turn STEERS the running
+            // turn — the agent reads the message at its next step boundary —
+            // and Tab queues it for after the turn ({@see queueOwnsTab()}).
+            // The `queueMode` setting that could make another mode Enter's
+            // default is N-P4g's; until then the mode is fixed.
+            return QueueMode::onEnter() === QueueMode::Steer
+                ? $this->steerPrompt($text)
+                : $this->enqueuePrompt($text);
         }
 
         // A READ-ONLY SESSION (audit SES-3(b)) refuses here, ahead of the
@@ -9502,6 +9517,129 @@ final class Chat implements Model
                 self::quoteDraftForNotice($text),
             ))],
         ]), null];
+    }
+
+    /**
+     * Steer a prompt sent mid-turn into the RUNNING turn (roadmap 1.C-3): the
+     * turn's own handle ({@see CancellationToken::steer()}) carries it to the
+     * forked turn's parent, which writes it down as a `steer` frame, and the
+     * engine loop appends it at its next step boundary — skipping the step's
+     * calls that have not started, so the message is read before more work
+     * is done.
+     *
+     * NEVER LOST. The text is ALSO held on {@see $queuedPrompts}, exactly as
+     * {@see enqueuePrompt()} holds a follow-up: when the turn settles,
+     * {@see releaseQueuedPrompts()} drops it if the turn delivered it (the
+     * settled transcript carries its `[steering]` row) and otherwise sends it
+     * as the next prompt — a steer that arrived after the turn's last step
+     * boundary, or a turn that could not take one, ends up exactly where a
+     * queued message would have.
+     *
+     * A turn whose handle refuses the steer (it is already stopping) or that
+     * is not an engine turn is simply queued.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function steerPrompt(string $text): array
+    {
+        if (!$this->backend instanceof Backend\InteractiveTurn
+            || $this->inFlightCancellation?->steer($text) === null) {
+            return $this->enqueuePrompt($text);
+        }
+
+        $queue = [...$this->queuedPrompts, $text];
+
+        return [$this->mutate([
+            'queuedPrompts' => $queue,
+            'inputBuf' => '',
+            'history' => [...$this->history, Message::notice(sprintf(
+                'Steering — the agent reads this at its next step (sent as the next prompt if the turn ends first): %s',
+                self::quoteDraftForNotice($text),
+            ))],
+        ]), null];
+    }
+
+    /**
+     * Whether a bare Tab QUEUES the draft for after the running turn
+     * (roadmap 1.C-3, `chat.queue`) — the follow-up half of "Enter steers,
+     * Tab queues" (Codex, nanobot). Only mid-turn, with a draft that would be
+     * sent (not a slash command, which is refused mid-turn), and only when
+     * neither completion owns Tab and no modal is up — the same reachability
+     * contract as {@see slashMenuOwnsTab()}: the shell yields Tab on exactly
+     * this predicate, so a yielded Tab always lands on a live arm.
+     */
+    public function queueOwnsTab(): bool
+    {
+        $draft = trim($this->inputBuf);
+
+        return $this->inFlight
+            && $draft !== ''
+            && !str_starts_with($draft, '/')
+            && $this->keyHelp === null
+            && $this->pendingPermission === null
+            && $this->palette === null
+            && $this->sessionPicker === null
+            && !$this->slashMenuOwnsTab()
+            && !$this->mentionOwnsTab();
+    }
+
+    /**
+     * Hold the draft as a follow-up for after the running turn (`chat.queue`).
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function queueDraft(): array
+    {
+        return $this->enqueuePrompt(trim($this->inputBuf));
+    }
+
+    /**
+     * $queue without the entries the turn that just settled delivered as
+     * steers (roadmap 1.C-3).
+     *
+     * A delivered steer is a hidden user row of exactly
+     * {@see Backend\SocketSteerInbox::content()}'s bytes, folded into the
+     * history from the turn's transcript. Only the rows AFTER the turn's own
+     * prompt — the last user row the transcript shows — are counted, so a
+     * steer an earlier turn delivered cannot swallow the same words queued
+     * now; each delivered row cancels one queued entry.
+     *
+     * @param list<string>  $queue
+     * @param list<Message> $history
+     * @return list<string>
+     */
+    private static function withoutDeliveredSteers(array $queue, array $history): array
+    {
+        $delivered = [];
+        for ($i = count($history) - 1; $i >= 0; $i--) {
+            $row = $history[$i];
+            if ($row->role !== Role::User) {
+                continue;
+            }
+            if ($row->userVisible && !$row->uiOnly) {
+                break;
+            }
+            if (!$row->userVisible) {
+                $delivered[$row->content] = ($delivered[$row->content] ?? 0) + 1;
+            }
+        }
+
+        if ($delivered === []) {
+            return $queue;
+        }
+
+        $kept = [];
+        foreach ($queue as $text) {
+            $row = Backend\SocketSteerInbox::content($text);
+            if (($delivered[$row] ?? 0) > 0) {
+                $delivered[$row]--;
+
+                continue;
+            }
+            $kept[] = $text;
+        }
+
+        return $kept;
     }
 
     /**
@@ -10028,6 +10166,16 @@ final class Chat implements Model
         [$chat, $cmd] = $settled;
         if ($chat->queuedPrompts === []) {
             return $settled;
+        }
+
+        // Roadmap 1.C-3: a steer the turn delivered mid-turn is done; only
+        // the ones it never read (and the Tab-queued follow-ups) go out now.
+        $queue = self::withoutDeliveredSteers($chat->queuedPrompts, $chat->history);
+        if ($queue !== $chat->queuedPrompts) {
+            $chat = $chat->mutate(['queuedPrompts' => $queue]);
+            if ($queue === []) {
+                return [$chat, $cmd];
+            }
         }
 
         $cmds = $cmd === null ? [] : [$cmd];

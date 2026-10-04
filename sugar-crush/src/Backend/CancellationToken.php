@@ -25,6 +25,14 @@ namespace SugarCraft\Crush\Backend;
  * natural boundary — a forked engine turn finishes the step's tools and makes
  * no further provider call. A holder that has no boundary to stop at simply
  * ignores the soft flag; a later hard cancel always wins.
+ *
+ * STEERING (roadmap 1.C-3) rides the same per-turn handle: {@see steer()}
+ * queues a message the user typed while the turn runs, the forked turn's
+ * parent takes it with {@see takeSteers()} on the tick it already polls this
+ * token on and writes it down as a `steer` frame, and the child's
+ * `steer_ack` comes back through {@see acknowledgeSteer()}. A holder that
+ * cannot deliver mid-turn never takes them; the steer is then sent as the
+ * next prompt by Chat's queue release, so it is never lost either way.
  */
 final class CancellationToken
 {
@@ -36,6 +44,14 @@ final class CancellationToken
     private array $listeners = [];
 
     private int $nextListener = 0;
+
+    /** @var list<array{steerId: string, text: string}> queued, not yet taken by the turn's parent */
+    private array $steers = [];
+
+    /** @var array<string, int> steerId => the step it was delivered at */
+    private array $acknowledged = [];
+
+    private int $nextSteer = 0;
 
     public function cancel(): void
     {
@@ -100,5 +116,54 @@ final class CancellationToken
         return function () use ($id): void {
             unset($this->listeners[$id]);
         };
+    }
+
+    /**
+     * Queue $text for delivery into the running turn at its next step
+     * boundary, and answer the steer's id — or null when the turn is already
+     * stopping (cancelled, or soft-cancelled: a turn on its way out has no
+     * next boundary to deliver at).
+     */
+    public function steer(string $text): ?string
+    {
+        if ($this->isSoftCancelled() || trim($text) === '') {
+            return null;
+        }
+
+        $id = 'st_' . ++$this->nextSteer;
+        $this->steers[] = ['steerId' => $id, 'text' => $text];
+
+        return $id;
+    }
+
+    /**
+     * The steers queued since the last call, oldest first, each handed out
+     * once — the turn's parent writes each down as a `steer` frame.
+     *
+     * @return list<array{steerId: string, text: string}>
+     */
+    public function takeSteers(): array
+    {
+        $steers = $this->steers;
+        $this->steers = [];
+
+        return $steers;
+    }
+
+    /** Record the child's `steer_ack`: $steerId was delivered at $step. */
+    public function acknowledgeSteer(string $steerId, int $step): void
+    {
+        $this->acknowledged[$steerId] = $step;
+    }
+
+    /**
+     * The steers the turn acknowledged, steerId => the step each was
+     * delivered at.
+     *
+     * @return array<string, int>
+     */
+    public function acknowledgedSteers(): array
+    {
+        return $this->acknowledged;
     }
 }

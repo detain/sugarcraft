@@ -1161,11 +1161,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * as a deliberate exit — no step-ceiling notice and no summary request,
      * because the person asked it to stop.
      *
+     * `$inbox` (roadmap 1.C-3) carries messages that arrive while the turn
+     * runs: drained at the top of every step and appended before the step's
+     * provider call, and probed by the Runtime before each sequential tool
+     * call, which skips the step's unstarted calls once one is waiting.
+     *
      * @param list<TypedMessage> $messages
      * @param list<TypedMessage> $transcript
      * @param ?\Closure(): bool  $stopRequested
      */
-    private function runTurn(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript, ?callable $onStep = null, ?\Closure $stopRequested = null): Message
+    private function runTurn(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript, ?callable $onStep = null, ?\Closure $stopRequested = null, ?TurnInbox $inbox = null): Message
     {
         $transcript = $messages;
 
@@ -1217,6 +1222,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             self::parallelToolDeadlineSeconds($userConfig),
             self::maxOutputTokens($userConfig),
         )->withTurnContextPersisted();
+        if ($inbox !== null) {
+            $runtime = $runtime->withTurnInbox($inbox);
+        }
 
         $app = $this->sessionApp()
             ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd))
@@ -1297,6 +1305,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // @region step-top
             $assistant = null;
             $toolResults = [];
+
+            // Roadmap 1.C-3: what the user sent while the turn ran is read
+            // HERE, at the step boundary, ahead of the step's request — the
+            // previous step's tools have all settled (any that had not started
+            // when it arrived were skipped), so the model reads the message
+            // before deciding what to do next.
+            if ($inbox !== null) {
+                $incoming = $inbox->drain($step + 1);
+                if ($incoming !== []) {
+                    $app = $app->withMessages([...$app->messages, ...$incoming]);
+                }
+            }
 
             // Step 1.A-2: the volatile `<turn-context>` row is PERSISTED into
             // the history, here at the top of the step and only when its
@@ -2660,12 +2680,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // one `cancel_soft` frame goes down the moment the flag flips, and the
         // child stops at its next step boundary; a later hard cancel still
         // wins, through $teardown, whatever the child is doing.
+        // 1.C-3: on the same tick, each message the user steered into the
+        // running turn goes down as a `steer` frame; the child reads it at
+        // its next step boundary.
         $softCancelSent = false;
         $cancelTimer = $cancellation === null ? null : $loop->addPeriodicTimer(0.1, function () use ($cancellation, $teardown, $sendToChild, &$softCancelSent): void {
             if ($cancellation->isCancelled()) {
                 $teardown('Request cancelled');
 
                 return;
+            }
+            foreach ($cancellation->takeSteers() as $steer) {
+                $sendToChild(['kind' => ChildChannel::STEER] + $steer);
             }
             if (!$softCancelSent && $cancellation->isSoftCancelled()) {
                 $softCancelSent = true;
@@ -2676,7 +2702,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // Frame dispatch for one chunk off the socket, shared by the read edge
         // below and by $exitTimer's final drain so the two cannot disagree
         // about what a frame means.
-        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $onStep, $finalize, $resetTimeout, $teardown, $handleAsk): void {
+        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $onStep, $finalize, $resetTimeout, $teardown, $handleAsk, $cancellation): void {
             $buffer .= $chunk;
             $corrupt = false;
             $frames = self::drainFrames($buffer, $corrupt);
@@ -2705,6 +2731,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // actually sits between.
                 if (($frame['kind'] ?? null) === ChildChannel::ASK) {
                     $handleAsk($frame);
+
+                    continue;
+                }
+
+                // 1.C-3: a steer landed — recorded on the turn's token.
+                if (($frame['kind'] ?? null) === ChildChannel::STEER_ACK) {
+                    $steerId = $frame['steerId'] ?? null;
+                    $step = $frame['step'] ?? null;
+                    if (is_string($steerId) && is_int($step)) {
+                        $cancellation?->acknowledgeSteer($steerId, $step);
+                    }
 
                     continue;
                 }
@@ -3082,6 +3119,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 $transcript,
                 $onStep,
                 $stopRequested,
+                // 1.C-3: the user's mid-turn messages, as `steer` frames.
+                CompositeTurnInbox::of(SocketSteerInbox::new($channel)),
             )->withAttachmentNotice($attachmentNotice);
             $transcriptRows = [];
             foreach ($message->turnTranscript as $row) {

@@ -44,7 +44,9 @@ use SugarCraft\Crush\Tools\ToolCall;
  * provider call and a `usage` frame after each response through
  * {@see send()}, and asks {@see softCancelRequested()} at each step boundary,
  * so a `cancel_soft` from the parent ends the turn once the step's tools have
- * finished. Steering (1.C-3) and `cancel_tool` (1.C-4b) are still to come.
+ * finished. Steering (1.C-3) reads {@see takeSteers()} through
+ * {@see SocketSteerInbox}, which answers each delivered steer with a
+ * `steer_ack`; `cancel_tool` (1.C-4b) is still to come.
  *
  * ## No deadline in the child
  *

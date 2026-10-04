@@ -274,8 +274,10 @@ final class KeyboardHandler
     {
         // Audit 15b-15: an `@file` mention under the caret is the second
         // thing a bare Tab completes, on the same one-predicate contract.
+        // Roadmap 1.C-3: the third — mid-turn, a sendable draft is QUEUED by
+        // Tab (`chat.queue`), the follow-up half of "Enter steers".
         return $app->chat !== null
-            && ($app->chat->slashMenuOwnsTab() || $app->chat->mentionOwnsTab());
+            && ($app->chat->slashMenuOwnsTab() || $app->chat->mentionOwnsTab() || $app->chat->queueOwnsTab());
     }
 
     /**

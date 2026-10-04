@@ -251,8 +251,9 @@ big-endian length plus a `serialize()`d array, decoded with
 | child → parent | `step` | `step`, `maxSteps`, `context` (the step's `ContextPressure` as an array); written before each provider call |
 | child → parent | `usage` | `step`, `usage` (that response's), `turnUsage` (the turn's running total); written as each response is billed |
 | parent → child | `cancel_soft` | — : stop at the next step boundary, once the step's tools have finished |
-| parent → child | `steer`, `cancel_tool` | reserved: parsed and buffered by the child, not sent yet |
-| child → parent | `steer_ack` | reserved: writable by the child, not sent yet |
+| parent → child | `steer` | `steerId`, `text`: a message the user sent mid-turn (`CancellationToken::steer()`), drained at the next step boundary by `Backend\SocketSteerInbox` and appended as a `[steering] …` user row; once one is waiting, the step's unstarted sequential calls are answered `Skipped to process an incoming message.` |
+| child → parent | `steer_ack` | `steerId`, `step`: where the steer landed (`CancellationToken::acknowledgedSteers()`) |
+| parent → child | `cancel_tool` | reserved: parsed and buffered by the child, not sent yet |
 
 - `askId` is the first 16 hex digits of a hash over `{toolCallId, tool, args}`.
   The parent hands each question to `$onEvent` as an `Events\PermissionAsked`
