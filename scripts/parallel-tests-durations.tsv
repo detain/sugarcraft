@@ -310,6 +310,7 @@ sugar-crush/tests/Backend/InTurnPruneTest.php	0.600	4
 sugar-crush/tests/Server/WsUpgradeTest.php	0.600	7
 sugar-crush/tests/Memory/CompactionJournalTest.php	0.600	8
 sugar-crush/tests/Backend/EngineBackendWithModelTest.php	0.600	7
+sugar-crush/tests/Backend/TurnInboxDrainTest.php	0.600	5
 sugar-crush/tests/Tools/McpToolBridgeResultCapTest.php	0.587	4
 sugar-crush/tests/Tools/IgnoreRulesBacktrackingTest.php	0.564	112
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.555	10
@@ -346,7 +347,7 @@ sugar-crush/tests/Backend/ForkChannelReplyAfterCancelTest.php	0.422	1
 sugar-crush/tests/App/SidePaneRowClickTest.php	0.415	7
 sugar-crush/tests/Support/TimedFileLockTest.php	0.409	4
 sugar-crush/tests/Agents/ForeignAgentPresetRegistryTest.php	0.403	39
-sugar-crush/tests/Agents/MailboxTest.php	0.401	22
+sugar-crush/tests/Agents/MailboxTest.php	0.401	23
 sugar-crush/tests/Host/EventLogTest.php	0.400	8
 sugar-crush/tests/Chat/CacheReusingSummaryRouteTest.php	0.400	8
 sugar-crush/tests/Tools/BuiltIn/EditTest.php	0.398	15
@@ -587,6 +588,7 @@ sugar-crush/tests/Context/Pruning/Strategies/DuplicateCallStrategyTest.php	0.060
 sugar-crush/tests/Context/Pruning/Strategies/StaleReadStrategyTest.php	0.060	3
 sugar-crush/tests/Context/Pruning/Strategies/SupersededWriteInputStrategyTest.php	0.060	2
 sugar-crush/tests/Context/Pruning/Strategies/ErroredInputStrategyTest.php	0.060	2
+sugar-crush/tests/Agents/Live/AgentInboxTest.php	0.060	9
 sugar-crush/tests/Permissions/PermissionGateTest.php	0.059	165
 sugar-crush/tests/SessionTest.php	0.059	18
 sugar-crush/tests/Context/ProjectMemoryWriterTest.php	0.058	10
@@ -748,7 +750,7 @@ sugar-crush/tests/Permissions/ChatBashGateRootTest.php	0.020	2
 sugar-crush/tests/Diagnostics/RuntimeNoticeSinkTest.php	0.020	29
 sugar-crush/tests/Memory/ForeignMemoryImporterContainmentTest.php	0.020	10
 sugar-crush/tests/Providers/SessionAffinityHeaderTest.php	0.020	20
-sugar-crush/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.020	24
+sugar-crush/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.020	29
 sugar-crush/tests/Providers/SglangProviderReasoningReplayTest.php	0.020	7
 sugar-crush/tests/RepoMap/PageRankTest.php	0.020	10
 sugar-crush/tests/RepoMap/SymbolGraphTest.php	0.020	9

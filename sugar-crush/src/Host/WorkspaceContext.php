@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Host;
 
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Agents\Live\AgentInbox;
 use SugarCraft\Crush\Agents\AgentPoolConfig;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Backend;
@@ -89,6 +90,8 @@ final class WorkspaceContext
         public readonly ?BackgroundSupervisor $backgroundSupervisor,
         private readonly ?\Closure $backendFactory,
         private readonly array $services,
+        #[\SensitiveParameter]
+        private readonly string $inboxKey,
     ) {
     }
 
@@ -150,7 +153,27 @@ final class WorkspaceContext
             backgroundSupervisor: $backgroundSupervisor,
             backendFactory: $backendFactory,
             services: [],
+            // P-D1: minted HERE, in the launching process, before any turn
+            // forks — so every turn child and grandchild inherits the key the
+            // composer signs with. See agentInbox().
+            inboxKey: AgentInbox::launchKey(),
         );
+    }
+
+    /**
+     * The mailbox of session $sessionId's sub-agents, signing with this
+     * launch's key (roadmap P-D1, Appendix P §5.4) — the door through which
+     * the user's messages to a running agent enter, from the Agent View
+     * composer or a server's authenticated user channel. A `from:'user'`
+     * message sent through it carries an HMAC under the key this workspace
+     * pinned at build ({@see AgentInbox::launchKey()}), the key the agent's
+     * own run verifies it with; a line written into the mailbox by anything
+     * else cannot claim the user's authority. Null when there is no owned home
+     * to keep mailboxes in ({@see AgentInbox::defaultRoot()}).
+     */
+    public function agentInbox(string $sessionId, ?string $root = null): ?AgentInbox
+    {
+        return AgentInbox::forSession($sessionId, $this->inboxKey, $root);
     }
 
     /**
@@ -276,6 +299,7 @@ final class WorkspaceContext
             'backgroundSupervisor' => $this->backgroundSupervisor,
             'backendFactory' => $this->backendFactory,
             'services' => $this->services,
+            'inboxKey' => $this->inboxKey,
         ], $changes));
     }
 }

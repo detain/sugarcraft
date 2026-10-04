@@ -41,6 +41,34 @@ final class MailboxTest extends TestCase
     // send
     // -------------------------------------------------------------------------
 
+    /**
+     * Roadmap P-D1: a mailbox holds what the user told a sub-agent, so it is
+     * owner-only — the directory 0700 and its files 0600, whatever the umask.
+     */
+    public function testInboxesAreOwnerOnlyAndSizedWithoutAScan(): void
+    {
+        $mailbox = new Mailbox($this->basePath);
+        $this->assertSame(0, $mailbox->inboxSize('teammate-b'), 'no inbox, no bytes');
+
+        $previous = umask(0o022);
+        try {
+            $mailbox->send('teammate-a', 'teammate-b', new TeamMessage('msg-1', 'teammate-a', 'teammate-b', 'idle', [], new \DateTimeImmutable()));
+            $mailbox->markRead('teammate-b', 'msg-1');
+            $restored = umask();
+        } finally {
+            umask($previous);
+        }
+
+        $dir = $this->basePath . '/teammate-b';
+        $this->assertSame(0o700, fileperms($dir) & 0o777);
+        foreach (['inbox.jsonl', 'inbox.jsonl.read_markers', '.wake'] as $file) {
+            $this->assertSame(0o600, fileperms($dir . '/' . $file) & 0o777, $file);
+        }
+        clearstatcache();
+        $this->assertSame(filesize($dir . '/inbox.jsonl'), $mailbox->inboxSize('teammate-b'));
+        $this->assertSame(0o022, $restored, 'the process umask is restored after each write');
+    }
+
     public function testSendMessageAppearsInRecipientInbox(): void
     {
         $mailbox = new Mailbox($this->basePath);

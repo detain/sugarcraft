@@ -2821,7 +2821,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($tableEnd);
         $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
         preg_match_all('/\| `([^`]+)` \| `([^`]+)`/', $segment, $rows, \PREG_SET_ORDER);
-        self::assertCount(8, $rows, 'the sessions table no longer has its eight directory/class rows');
+        self::assertCount(9, $rows, 'the sessions table no longer has its nine directory/class rows');
         $orderedDirs = [
             '~/.sugar-crush/session.db',
             '~/.sugar-crush/session.db',
@@ -2829,6 +2829,7 @@ final class DocFigureProseDriftTest extends TestCase
             '~/.sugar-crush/memory/.compaction-journal-<key>.jsonl',
             '~/.sugar-crush/teams/',
             '~/.sugar-crush/subagents/',
+            '~/.sugar-crush/mailboxes/',
             '<workflowsPath>/.running/',
             '<tmp>/sugar_crush_bg_<uid>_index/',
         ];
@@ -2844,6 +2845,9 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("'~/.sugar-crush/teams'", self::sourceOf('Agents/TeamManager.php'), 'TeamManager no longer defaults to ~/.sugar-crush/teams — table cell drifted');
         self::assertSame('subagents', \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::DIR_NAME, 'the transcript log directory no longer spells subagents — table cell drifted');
         self::assertStringContainsString("'/.sugar-crush/' . self::DIR_NAME", self::sourceOf('Agents/Live/SubAgentTranscriptLog.php'), 'SubAgentTranscriptLog no longer roots its logs under ~/.sugar-crush — table cell drifted');
+        self::assertSame('mailboxes', \SugarCraft\Crush\Agents\Live\AgentInbox::DIR_NAME, 'the agent mailbox directory no longer spells mailboxes — table cell drifted');
+        self::assertStringContainsString('\\dirname($logs) . \'/\' . self::DIR_NAME', self::sourceOf('Agents/Live/AgentInbox.php'), 'AgentInbox no longer keeps its mailboxes beside the transcript logs under ~/.sugar-crush — table cell drifted');
+        self::assertStringContainsString("'/inbox.jsonl'", self::sourceOf('Agents/Mailbox.php'), 'a mailbox is no longer <agent>/inbox.jsonl — table cell drifted');
         self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Crush\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
         self::assertSame(
             'sugar_crush_bg_<uid>_index',

@@ -570,6 +570,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          */
         private readonly ?\SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook $subAgentGrant = null,
         /**
+         * Roadmap P-D1: set ONLY on the copy
+         * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} runs a delegated
+         * sub-agent on — that agent's {@see MailboxTurnInbox}, drained at the
+         * top of every step of {@see completeTranscript()} and
+         * {@see complete()} so a message sent to the running agent reaches it
+         * at its next step boundary. Null — every top-level turn, whose
+         * mid-turn messages arrive on the fork's socket instead
+         * ({@see SocketSteerInbox}) — drains nothing. @see withTurnInbox()
+         */
+        private readonly ?TurnInbox $turnInbox = null,
+        /**
          * Step 1.A-2: the session's prompt memo — the PerSession system-prompt
          * layers (static `<env>`, repo map, project memory, standing
          * instruction slab) read once per session and frozen until a refresh
@@ -1022,6 +1033,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The same engine, delivering $inbox's messages into its turns at each
+     * step boundary — see {@see $turnInbox}. Bound by
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} on the run it
+     * delegates; null takes it off.
+     */
+    public function withTurnInbox(?TurnInbox $inbox): self
+    {
+        return $this->mutate(['turnInbox' => $inbox]);
+    }
+
+    /**
      * The per-dispatch install of E20's mid-turn spend cap: the dollar
      * ceiling plus the session spend the turn STARTS at, as a pair. Returns a
      * clone; the cap is a launch-again decision, never a mutation of the
@@ -1227,7 +1249,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // turn-start strategies applied — on this path as on the forked one.
         $engine = $this->contextLedger === null ? $this : $this->withContextLedger($this->turnStartLedger($typed));
 
-        return $engine->runTurn($typed, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript)
+        return $engine->runTurn($typed, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, inbox: $this->turnInbox)
             ->withAttachmentNotice($attachmentNotice);
     }
 
@@ -1263,7 +1285,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $transcript = $messages;
 
         try {
-            $reply = $this->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, $onStep);
+            // P-D1: a delegated run's mailbox, when TaskTool bound one.
+            $reply = $this->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, $onStep, inbox: $this->turnInbox);
         } catch (\Throwable $failure) {
             throw new TurnInterrupted($transcript, $failure);
         }

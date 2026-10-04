@@ -772,6 +772,22 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             $logThought = '';
         };
 
+        // Step P-D1: the run's mailbox. What the user (from the Agent View,
+        // HMAC-signed) or the delegating agent sends this run while it works
+        // is read at each of its step boundaries, framed by sender, and
+        // logged beside the rest of its transcript. Keyed by the parent
+        // session like the log: no session, no mailbox to address.
+        $turnInbox = null;
+        $agentInbox = $parentSessionId === null ? null : \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($parentSessionId);
+        if ($agentInbox !== null) {
+            try {
+                $turnInbox = \SugarCraft\Crush\Backend\MailboxTurnInbox::new($agentInbox, $subAgent->id, $log);
+            } catch (\InvalidArgumentException) {
+                // An id no mailbox can be named by (an embedder's own
+                // SubAgent): the run cannot be messaged, and still runs.
+            }
+        }
+
         // Step 4.7-1: a run that FAILS hands back the last 3 x 4096 bytes of
         // what it produced — its own text, the calls it made and their
         // results, from this run's steps only (the opening turns and a
@@ -1026,6 +1042,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 ->withMaxSteps($maxTurns)
                 ->withSiblingSpend($this->siblingSpend)
                 ->withStepUsageObserver($observeUsage)
+                ->withTurnInbox($turnInbox)
                 ->completeTranscript(
                     $messages,
                     // SubAgentActivity is deliberately NOT in this signature:
@@ -1142,9 +1159,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $resumeId,
             );
 
+            // P-D1: what the user told the run before it stopped is part of
+            // why it stopped where it did.
+            $inboxTrailer = $turnInbox?->trailer() ?? '';
+
             return $this->refusal(
                 $toolCallId,
-                $why . '. ' . $resume . $failureTail($failure->transcript),
+                $why . '. ' . $resume . $failureTail($failure->transcript) . ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer),
                 self::elapsedMs($startedAt),
                 $spent,
             );

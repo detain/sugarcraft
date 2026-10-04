@@ -115,6 +115,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 ),
                 ['subAgentGrant'],
             ],
+            // Roadmap P-D1: a delegated run's mailbox, drained per step.
+            'withTurnInbox' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withTurnInbox(null),
+                ['turnInbox'],
+            ],
             // Step 0.16: the per-turn cap on concurrent delegated runs.
             'withMaxConcurrentDelegations' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(9),
@@ -289,6 +294,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             summaryModel: 'populated-summary-model',
             contextLedger: \SugarCraft\Crush\Context\Pruning\ContextLedger::new()->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('populated', 'x')]),
             reasoningEffort: 'xhigh',
+            turnInbox: self::blank(\SugarCraft\Crush\Backend\MailboxTurnInbox::class),
         );
     }
 

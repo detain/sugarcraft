@@ -927,6 +927,7 @@ completion can legitimately run for tens of minutes.
 | `~/.sugar-crush/memory/.compaction-journal-<key>.jsonl` | `Memory\CompactionJournal` | every model-written compaction summary, one JSON line each, per project (`shared` without a root) |
 | `~/.sugar-crush/teams/` | `Agents\TeamManager` | team state |
 | `~/.sugar-crush/subagents/` | `Agents\Live\SubAgentTranscriptLog` | one JSONL transcript per delegated run, `<session>/<agent>.jsonl` |
+| `~/.sugar-crush/mailboxes/` | `Agents\Live\AgentInbox` | messages to a running delegated run, `<session>/<agent>/inbox.jsonl`, read at its step boundaries; a message from the user carries the launch key's HMAC |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
 | `<tmp>/sugar_crush_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running `/bg` session, so a restart re-adopts its daemon |
 

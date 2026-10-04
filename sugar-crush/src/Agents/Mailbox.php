@@ -49,8 +49,28 @@ final class Mailbox
             'read' => $message->read,
         ], JSON_THROW_ON_ERROR) . "\n";
 
-        file_put_contents($inboxPath, $line, FILE_APPEND | LOCK_EX);
-        $this->touchWakeMarker($toTeammateId);
+        $previous = umask(0o077);
+        try {
+            file_put_contents($inboxPath, $line, FILE_APPEND | LOCK_EX);
+            $this->touchWakeMarker($toTeammateId);
+        } finally {
+            umask($previous);
+        }
+    }
+
+    /**
+     * The size in bytes of a teammate's inbox file, 0 when it has none — a
+     * stat, not a read, so a caller that polls between steps
+     * ({@see \SugarCraft\Crush\Backend\MailboxTurnInbox::pending()}) pays
+     * for a scan only when something was appended since its last one.
+     */
+    public function inboxSize(string $teammateId): int
+    {
+        $path = $this->inboxPath($teammateId);
+        clearstatcache(true, $path);
+        $size = @filesize($path);
+
+        return $size === false ? 0 : $size;
     }
 
     /**
@@ -166,11 +186,16 @@ final class Mailbox
         // Append the messageId to the read-markers file (oneId per line).
         // receive() checks this file to determine read status without ever
         // needing to modify the inbox itself.
-        file_put_contents(
-            $this->readMarkersPath($teammateId),
-            $messageId . "\n",
-            FILE_APPEND | LOCK_EX,
-        );
+        $previous = umask(0o077);
+        try {
+            file_put_contents(
+                $this->readMarkersPath($teammateId),
+                $messageId . "\n",
+                FILE_APPEND | LOCK_EX,
+            );
+        } finally {
+            umask($previous);
+        }
     }
 
     /**
@@ -300,7 +325,11 @@ final class Mailbox
         // because another process created it a microsecond earlier. The second
         // is_dir() is what distinguishes "someone else won the race" (success)
         // from "the filesystem really refused" (the RuntimeException below).
-        if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) {
+        //
+        // Owner-only (0700, files 0600 under the umask send() sets): an inbox
+        // holds what one agent told another, and roadmap P-D1's agent
+        // mailboxes hold what the USER told a sub-agent.
+        if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
             throw new \RuntimeException("Failed to create inbox directory: {$dir}");
         }
     }
