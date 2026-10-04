@@ -3,6 +3,8 @@
 A workflow is a named sequence of stages, each dispatching a sub-agent with a
 prompt and a tool list. Workflows are the **only** surface in SugarCrush that
 dispatches sub-agents from a chat command; `/agents` inspects and does not spawn.
+The model reaches the same engine through the `Workflow` tool
+([Model-authored plans](#model-authored-plans-the-workflow-tool)).
 
 Two formats, two tiers, and an important asymmetry between them: a `.yaml`
 workflow is data, a `.php` one is code, and the tier a file lives in decides
@@ -350,6 +352,52 @@ whole declaration by the same `SubAgentGrantHook` a `Task` preset's grant uses
 the agent as denied calls it can work around. A stage with no `tools:` is not
 policed by the grant, and a malformed entry (`Bash(git *`) fails the stage
 naming why.
+
+---
+
+## Model-authored plans: the `Workflow` tool
+
+The model can run a workflow of its own: the built-in `Workflow` tool takes the
+same YAML as a `.yaml` file, as a string, plus an optional `context` object for
+`{{key}}` placeholders:
+
+```json
+{"plan": "stages:\n  - name: survey\n    agent: explorer\n    prompt: List the callers of Foo::bar.\n    tools: [Read, Grep]\n  - name: fix\n    prompt: \"Update every caller: {{survey.output}}\"\n    tools: [Read, Edit, \"Bash(composer test*)\"]\n"}
+```
+
+- **Same loader, same checks.** `WorkflowRegistry::fromYamlString()` runs the
+  plan through the validation a file gets, so a plan and a file cannot mean two
+  different things. The plan's `name` is optional (it defaults to `plan`); a
+  syntax error is reported with the parser's message, which a file's error
+  withholds because it would quote the file.
+- **One engine per call, bound to the calling turn.** The tool builds its own
+  `WorkflowEngine` and pool around an `EngineExecutor` bound to the engine that
+  is running the current turn, and calls `WorkflowEngine::runWorkflow()`. It
+  never re-binds the launch's `/workflow` engine, whose executor binding is
+  shared.
+- **Stages run inside the turn.** The stage agents run synchronously in the
+  turn's own process, not in forked workers as `/workflow run` stages do. The
+  turn already runs off the TUI, and staying in its process is what lets a stage
+  agent's permission questions reach your prompt; the cost is that the agents
+  of a `parallel: true` stage take turns. Every stage agent beats the turn's
+  heartbeat, so a long plan is not mistaken for a hung turn.
+- **What a stage agent may do.** This session's tool loop, hooks, permission
+  gate and root, limited to its stage's `tools:` (argument-scoped entries
+  included) or the session's tools when it declares none. `Task` and `Workflow`
+  are withheld from it, so a plan cannot recurse, and it does not see the
+  conversation that called the tool.
+- **Not resumable.** A plan has no registry name, so `runWorkflow()` writes no
+  pause file, remembers no result and installs no interrupt handlers;
+  `/workflow pause`/`resume`/`status` do not apply. Cancelling the turn stops
+  the run and its agents.
+- **The permission gate sees the tool call itself.** `Workflow` is
+  write-capable, so it asks under `default` and is denied under `plan` and
+  `dont-ask`, before any stage runs.
+
+The tool's result is a headline (status, stages succeeded, tokens, cost) and
+each stage that ran with its status, its error when it failed, and its output,
+whose middle is elided past 8 KB. A run that did not complete is returned as an
+error result.
 
 ---
 

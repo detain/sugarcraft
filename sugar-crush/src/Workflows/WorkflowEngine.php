@@ -661,6 +661,43 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
+     * Execute a {@see Workflow} value the CALLER built — the model-authored
+     * plan the `Workflow` tool parses with
+     * {@see WorkflowRegistry::fromYamlString()} (roadmap 4.10-2) — through the
+     * same stage loop, declaration checks and fail-fast rule as {@see run()}.
+     *
+     * What it deliberately leaves out, because the workflow has no registry
+     * name to come back by:
+     *  - no result is remembered and no pause file is written, so
+     *    {@see pause()}/{@see resume()} do not apply — there is nothing
+     *    `load()` could re-read;
+     *  - no SIGINT/SIGTERM handlers (R28) are installed. Their only job is
+     *    that pause file, and the tool runs this inside the forked turn child,
+     *    where a handler's plain `exit()` would run PHP's shutdown over the
+     *    copy of the TUI's object graph that child holds. A cancelled turn
+     *    kills the child's process tree, stage agents included.
+     *
+     * Stage agents run on THIS engine's pool, so a caller that wants them on a
+     * particular session engine builds the engine with its own pool — the
+     * `Workflow` tool builds one per call — rather than re-binding a shared
+     * one ({@see bindEngineBackend()} is a setter on the pool's executor, and
+     * a re-bind would move every other run on that pool to a different
+     * engine).
+     *
+     * @param array<string, mixed> $context Key-value pairs for {{variable}} interpolation.
+     * @throws \InvalidArgumentException When a context key is reserved (starts with `@`).
+     */
+    public function runWorkflow(Workflow $workflow, array $context = [], ?CancellationToken $cancellation = null): WorkflowResult
+    {
+        self::refuseReservedContextKeys($context);
+
+        return $this->underCancellation(
+            $cancellation,
+            fn (): WorkflowResult => $this->runFromWorkflow($workflow, $context, 0, null, interruptible: false),
+        );
+    }
+
+    /**
      * Persist the current state of a workflow so it can be resumed later.
      *
      * Writes a pause file to `<workflowsPath>/.running/<name>.json` containing:
@@ -1290,6 +1327,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *                                              priorProgress()), so the result is absolute. Empty for a fresh run.
      * @param bool             $pauseRequested     Out: whether a pause() was requested while this run was live —
      *                                              in which case the run rewrote or withdrew its own pause file.
+     * @param bool             $interruptible      Whether the R28 SIGINT/SIGTERM handlers are installed for the
+     *                                              loop. False only for {@see runWorkflow()}, whose run cannot be
+     *                                              resumed and may be inside a forked turn child.
      * @return WorkflowResult
      */
     private function runFromWorkflow(
@@ -1301,6 +1341,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         ?string $loadPath = null,
         array $prior = [],
         bool &$pauseRequested = false,
+        bool $interruptible = true,
     ): WorkflowResult {
         // The concurrency gate sits HERE rather than inside
         // installInterruptHandlers(), even though the signal-handler stack is
@@ -1321,6 +1362,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $loadPath,
                 $prior,
                 $pauseRequested,
+                $interruptible,
             );
         } finally {
             // In a finally so a throwing run cannot strand its slot and wedge
@@ -1373,6 +1415,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         ?string $loadPath,
         array $prior,
         bool &$pauseRequested,
+        bool $interruptible = true,
     ): WorkflowResult {
         // A resumed run starts from the paused run's progress, so everything
         // it reports — stage list, totals, start time — covers the whole run
@@ -1418,7 +1461,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
         }
 
-        $previousAsyncSignals = $this->installInterruptHandlers(
+        $previousAsyncSignals = !$interruptible ? null : $this->installInterruptHandlers(
             $interruptId,
             $resolvedWorkflowId,
             $loadPath,

@@ -663,10 +663,12 @@ final class Runtime
      * child may have written the tree must re-arm the diff for the NEXT prompt,
      * so the name belongs here rather than on the read-only list, where the
      * direct-call scanner would see nothing and pass for the wrong reason.
+     * `Workflow` (roadmap 4.10-2) joined on the same judgement: its stage
+     * agents run the session's write tools.
      *
      * @var list<string>
      */
-    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'Edit', 'Write', 'Task'];
+    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'Edit', 'Write', 'Task', 'Workflow'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

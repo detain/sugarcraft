@@ -103,7 +103,7 @@ first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases
 Three name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Lsp`, `RepoMap`
-- **write-capable**: `Bash`, `Edit`, `Write`, `Task`, and anything starting `mcp__`
+- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `Task`, and anything starting `mcp__`
 - **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor` and `Skill`.

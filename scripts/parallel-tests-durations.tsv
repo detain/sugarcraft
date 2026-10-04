@@ -228,6 +228,7 @@ sugar-crush/tests/Workflows/WorkflowResumeReportingTest.php	1.288	4
 sugar-crush/tests/Tools/OutputTruncationTest.php	1.283	24
 sugar-crush/tests/Integration/SystemPromptWiringTest.php	1.275	14
 sugar-crush/tests/Integration/ForeignAgentPresetWiringTest.php	1.273	16
+sugar-crush/tests/Tools/WorkflowToolTest.php	1.256	14
 sugar-crush/tests/Chat/ToolChildReapTest.php	1.253	5
 sugar-crush/tests/Chat/EngineAskModalTest.php	1.250	11
 sugar-crush/tests/Backend/EngineBackendEmptyReplyTest.php	1.235	7

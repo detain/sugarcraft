@@ -1047,6 +1047,52 @@ final class WorkflowRegistry
             );
         }
 
+        return $this->buildFromYamlData($data, $yamlPath);
+    }
+
+    /**
+     * A workflow from a YAML plan held in a STRING — the plan a model hands
+     * the `Workflow` tool (roadmap 4.10-2) — held to every check a `.yaml`
+     * file gets ({@see buildFromYamlFile()}): the same loader, so a plan the
+     * model writes and a file a user writes cannot mean two different things.
+     *
+     * Two differences, both because the text is the caller's own rather than
+     * a file on disk. The parser's message IS included on a syntax error —
+     * the reason {@see buildFromYamlFile()} withholds it is that it quotes the
+     * file being read, and here it can only quote what the caller wrote. And
+     * `name` may be omitted (it defaults to $defaultName): a plan is run, not
+     * stored, so its name only labels the run.
+     *
+     * Not registered and not written anywhere: nothing here makes the plan
+     * loadable by name later.
+     *
+     * @param string $source How error messages name the text — "Workflow
+     *        file <source> …", the same shape a file's errors take.
+     * @throws WorkflowLoadException When the text is not a valid workflow.
+     */
+    public function fromYamlString(string $yaml, string $source = '(plan)', string $defaultName = 'plan'): Workflow
+    {
+        try {
+            $data = Yaml::parse($yaml);
+        } catch (ParseException $e) {
+            throw new WorkflowLoadException("Workflow file {$source} is not valid YAML: " . $e->getMessage());
+        }
+
+        if (is_array($data) && !array_key_exists('name', $data)) {
+            $data['name'] = $defaultName;
+        }
+
+        return $this->buildFromYamlData($data, $source)->build();
+    }
+
+    /**
+     * Validate one parsed YAML document and map it onto a builder chain — the
+     * shared half of {@see buildFromYamlFile()} and {@see fromYamlString()}.
+     *
+     * @throws WorkflowLoadException When $data is not a valid workflow map.
+     */
+    private function buildFromYamlData(mixed $data, string $yamlPath): WorkflowBuilder
+    {
         if (!is_array($data)) {
             throw new WorkflowLoadException(
                 "Workflow file {$yamlPath} must contain a YAML map, got " . get_debug_type($data)

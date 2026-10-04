@@ -317,7 +317,7 @@ delegating model knows why the run covered more than it asked.
 Be precise about this, because "agent preset" reads like "the model can spawn
 one":
 
-- **`Task` delegates.** `Bootstrap::tools()` ships seventeen
+- **`Task` delegates.** `Bootstrap::tools()` ships eighteen
   built-in tools and one of them — `Task` — is exactly the delegation seam:
   it hands a bounded task to a sub-agent named from the session's agent
   roster and returns that worker's final text. With no session
@@ -336,8 +336,11 @@ one":
   `new Agent(name: 'reviewer', description: <the interpolated prompt>, prompt: '')`
   — the name is a *label*, and the stage's own `prompt:` is the entire
   instruction. A preset named `reviewer` and a workflow stage saying
-  `agent: reviewer` are unrelated objects that happen to share a string. See
-  [`WORKFLOWS.md`](WORKFLOWS.md).
+  `agent: reviewer` are unrelated objects that happen to share a string. That
+  holds for a plan the model writes too: the `Workflow` tool runs a YAML plan
+  through the same engine, so a stage's `agent:` there is a label as well, and
+  its `tools:` (argument-scoped entries included) is the stage's whole grant.
+  See [`WORKFLOWS.md`](WORKFLOWS.md).
 - **`/bg` and `/fork`** run a task in a background session
   (`src/Sessions/BackgroundSessionRunner.php`), again without consulting the
   preset roster. A **background `Task`** does consult it: `Task` with
