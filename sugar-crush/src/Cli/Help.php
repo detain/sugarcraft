@@ -99,6 +99,7 @@ terminal; each answers and exits except serve, which runs until stopped):
                          translation made are listed on stderr.
   serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-origin <list>]
         [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root]
+        [--detach] [--parent-pid <pid>]
                          Run the WebSocket + HTTP server the web UI talks to,
                          in the foreground until Ctrl+C. Binds 127.0.0.1:7420
                          by default and prints a sign-in URL whose one-time
@@ -122,8 +123,25 @@ terminal; each answers and exits except serve, which runs until stopped):
                          (refused by default; the server's sessions start in
                          default unless --permission-mode says otherwise).
       --allow-root       Permit running as root (refused by default).
+      --detach           Run in the background: print the URL and pid once
+                         the port is bound, then exit; the server logs to
+                         server.log in its state directory.
+      --parent-pid <pid> Stop the server when process <pid> exits (for an
+                         editor or TUI that starts a private server).
                          Refuses to start without ext-pcntl, ext-posix and
-                         ext-ffi (see doctor). Exits 1 if the port is taken.
+                         ext-ffi (see doctor). Exits 1 if the port is taken or
+                         a server already runs from the same state directory.
+  serve status           Report the running server: pid, URL, root, uptime and
+                         whether GET /api/health answers. Exits 1 when none
+                         runs.
+  serve stop [--force]   Stop it: SIGTERM, up to 30 s to drain, then SIGKILL.
+      --force            SIGKILL at once.
+  serve logs [-f]        Print the end of a detached server's log.
+  -f, --follow           Keep printing what it appends until it stops.
+  serve url              Print a sign-in URL with a fresh one-time code.
+  serve token [--rotate] Print the owner token bearer clients send.
+      --rotate           Replace it; a running server keeps the old one until
+                         it restarts.
   completion bash|zsh|fish
                          Write a shell completion script to stdout, e.g.
                          eval "$(sugarcrush completion bash)".
@@ -294,8 +312,11 @@ Environment variables:
                           The token `serve` requires, instead of the one in
                           its state directory (at least 32 characters; for
                           containers).
-   SUGARCRUSH_SERVER_DIR  The directory `serve` keeps its token in (default
+   SUGARCRUSH_SERVER_DIR  The directory `serve` keeps its token, lock,
+                          discovery record and log in (default
                           ~/.sugar-crush/server; created 0700).
+   SUGARCRUSH_SERVER_PARENT_PID
+                          A process `serve` stops with (--parent-pid wins).
    SUGARCRUSH_MCP_DISABLE
                           1, true or yes (case-insensitive) silences project
                           MCP entirely: .mcp.json is treated as absent, no

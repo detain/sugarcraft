@@ -1,0 +1,32 @@
+# sugar-crush server as a systemd USER unit (docs/SERVER.md, "systemd").
+#
+#   cp docs/examples/sugarcrush.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now sugarcrush
+#   journalctl --user -u sugarcrush -f
+#
+# The server runs in the FOREGROUND here: systemd is the supervisor, so no
+# --detach. Its stderr (the startup lines and the request log) goes to the
+# journal. `sugarcrush serve status|stop|url` still work against it, through
+# the same ~/.sugar-crush/server state directory.
+
+[Unit]
+Description=sugar-crush server (WebSocket + web UI)
+After=network.target
+
+[Service]
+Type=simple
+# The project the server works on. Adjust both paths; sugarcrush must be on
+# the PATH below or named absolutely.
+WorkingDirectory=%h/src/my-project
+ExecStart=/usr/bin/env sugarcrush serve
+# SIGTERM drains the server (stop accepting, close sockets, release the lock).
+KillSignal=SIGTERM
+TimeoutStopSec=45
+Restart=on-failure
+RestartSec=5
+# Everything it creates is this user's alone.
+UMask=0077
+
+[Install]
+WantedBy=default.target

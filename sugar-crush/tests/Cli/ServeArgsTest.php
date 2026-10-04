@@ -209,7 +209,11 @@ final class ServeArgsTest extends TestCase
 
     public function testServeRefusesAnOperandAndAnUnservableConfigAtExitTwoWithoutBinding(): void
     {
-        self::assertSame(NonInteractive::EXIT_CONFIG, Subcommands::dispatch(self::parse(['serve', 'status'])));
+        self::assertSame(NonInteractive::EXIT_CONFIG, Subcommands::dispatch(self::parse(['serve', 'bogus'])));
+        self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', 'status', 'extra'])));
+        self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', 'stop', '--detach'])), 'a start flag on a management action');
+        self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--force'])), 'a management flag on a start');
+        self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--parent-pid', 'abc'])));
         self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--host', '192.0.2.1'])));
         self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--port', 'x'])));
     }
@@ -234,7 +238,48 @@ final class ServeArgsTest extends TestCase
 
         self::assertMatchesRegularExpression('/^  serve \[/m', $screen);
         foreach (\array_keys(ParsedArgs::SUBCOMMAND_FLAGS['serve']) as $flag) {
-            self::assertMatchesRegularExpression('/^ +' . \preg_quote($flag, '/') . '(?:[ =,]|$)/m', $screen, "serve {$flag} is not documented on the help screen");
+            self::assertMatchesRegularExpression('/^ +(?:-[a-z], )?' . \preg_quote($flag, '/') . '(?:[ =,]|$)/m', $screen, "serve {$flag} is not documented on the help screen");
         }
+        foreach (Serve::ACTIONS as $action) {
+            self::assertMatchesRegularExpression('/^  serve ' . $action . '\b/m', $screen, "serve {$action} is not on the help screen");
+        }
+    }
+
+    /**
+     * O-4a: every flag the parser accepts after `serve` belongs to exactly the
+     * actions {@see Serve::ACTION_FLAGS} names, and nothing in that table is a
+     * flag the parser would refuse.
+     */
+    public function testEveryServeFlagBelongsToAnAction(): void
+    {
+        $owned = \array_merge(...\array_values(Serve::ACTION_FLAGS));
+        \sort($owned);
+        $parsed = \array_keys(ParsedArgs::SUBCOMMAND_FLAGS['serve']);
+        \sort($parsed);
+
+        self::assertSame($parsed, $owned);
+        self::assertSame(['', ...Serve::ACTIONS], \array_keys(Serve::ACTION_FLAGS));
+    }
+
+    public function testTheManagementActionsAndTheirFlagsParse(): void
+    {
+        $stop = self::parse(['serve', 'stop', '--force']);
+        self::assertSame(['stop'], $stop->subcommandArgs);
+        self::assertSame(['--force' => true], $stop->subcommandFlags);
+
+        self::assertSame(['-f' => true], self::parse(['serve', 'logs', '-f'])->subcommandFlags);
+        self::assertSame(['--rotate' => true], self::parse(['serve', 'token', '--rotate'])->subcommandFlags);
+        self::assertSame(['--detach' => true, '--parent-pid' => '42'], self::parse(['serve', '--detach', '--parent-pid', '42'])->subcommandFlags);
+        self::assertSame(['-f'], self::parse(['-f', 'serve', 'logs'])->unknownFlags, '-f is scoped to the verb');
+    }
+
+    public function testTheParentPidComesFromTheFlagThenTheVariable(): void
+    {
+        self::assertNull(Serve::parentPid(self::parse(['serve']), []));
+        self::assertSame(7, Serve::parentPid(self::parse(['serve']), ['SUGARCRUSH_SERVER_PARENT_PID' => '7']));
+        self::assertSame(9, Serve::parentPid(self::parse(['serve', '--parent-pid', '9']), ['SUGARCRUSH_SERVER_PARENT_PID' => '7']));
+
+        $this->expectException(ServerConfigException::class);
+        Serve::parentPid(self::parse(['serve']), ['SUGARCRUSH_SERVER_PARENT_PID' => '-3']);
     }
 }

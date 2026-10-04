@@ -176,6 +176,20 @@ final class ForkedChildExitConventionTest extends TestCase
                 . 'in-step), which is exactly why this site shows up at all and needs the row.',
         ],
 
+        'src/Support/Daemonize.php::becomeDaemon' => [
+            'count' => 1,
+            'reason' =>
+                'DELIBERATE, O-4a. The second fork\'s child IS the daemon `serve --detach` '
+                . 'leaves running: from there on it is the long-lived process, not a copy of one, '
+                . 'and its shutdown sequence (destructors, registered shutdown functions) is the '
+                . 'server\'s real shutdown - the one bin/sugarcrush\'s own exit($code) would have '
+                . 'run had it not detached. The branch ends in finish(), a `: never` helper whose '
+                . 'last statement is that plain exit($code); the inherited output-buffer levels are '
+                . 'DRAINED without flushing first, and serve never constructs Program, so no raw '
+                . 'tty is inherited. The INTERMEDIATE child (the first fork, via becomeDaemon) '
+                . 'leaves through ForkedChild::exitNow() and needs no row.',
+        ],
+
         'src/Agents/AgentWorkerPool.php::startAgent' => [
             'count' => 1,
             'reason' =>

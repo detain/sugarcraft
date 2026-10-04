@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Support\Daemonize;
+use SugarCraft\Crush\Support\PrivateDir;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Support\ProcessTree;
@@ -579,17 +581,10 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             $config['forkedSessionId'] = $forkedSessionId;
         }
 
-        return sprintf(
+        // The umask/fork/setsid/fork sequence is {@see Daemonize::code()}:
+        // one sequence shared with `sugarcrush serve --detach` (O-4a).
+        return Daemonize::code() . sprintf(
             '
-umask(0o077);
-$pid = pcntl_fork();
-if ($pid < 0) { exit(1); }
-if ($pid > 0) { exit(0); }
-posix_setsid() >= 0 || posix_setpgid(0, 0);
-$pid = pcntl_fork();
-if ($pid < 0) { exit(1); }
-if ($pid > 0) { exit(0); }
-
 $autoload = %s;
 if ($autoload === null || !is_file($autoload)) {
     file_put_contents(%s, "[session:bootstrap:error] composer autoload not found\n", FILE_APPEND);
@@ -681,34 +676,14 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
      *
      * Together with the pid this is a process IDENTITY: a number the pid
      * allocator recycles does not come back with its predecessor's start time,
-     * which is the spoof {@see isProcessRunning()} refuses. Field indexing
-     * follows the {@see BackgroundSessionRunner} test precedent — fields 1-2
-     * (pid, comm) sit before the state field, comm may contain spaces, so the
-     * split starts after the LAST ')' and starttime is then rest[22-3].
+     * which is the spoof {@see isProcessRunning()} refuses. The reading lives
+     * in {@see Daemonize::startTime()} (O-4a), shared with the server's
+     * discovery file; this name stays because every caller here and its tests
+     * spell it.
      */
     public static function procStartTime(int $pid): ?int
     {
-        if ($pid <= 0) {
-            return null;
-        }
-
-        $stat = @file_get_contents('/proc/' . $pid . '/stat');
-        if (!is_string($stat)) {
-            return null;
-        }
-
-        $close = strrpos($stat, ')');
-        if ($close === false) {
-            return null;
-        }
-
-        $rest = preg_split('/\s+/', trim(substr($stat, $close + 1)));
-        // state(3) .. starttime(22) means the slice needs at least 20 entries.
-        if ($rest === false || count($rest) < 20 || !ctype_digit($rest[19])) {
-            return null;
-        }
-
-        return (int) $rest[19];
+        return Daemonize::startTime($pid);
     }
 
     /**
@@ -740,26 +715,15 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             $this->ipcDir = '';
         }
 
-        $uid = function_exists('posix_getuid') ? posix_getuid() : (int) getmypid();
-        $dir = $this->tempRoot . '/' . self::IPC_DIR_PREFIX . $uid . '_' . bin2hex(random_bytes(8));
+        $uid = function_exists('posix_getuid') ? posix_getuid() : null;
+        $dir = $this->tempRoot . '/' . self::IPC_DIR_PREFIX . ($uid ?? (int) getmypid()) . '_' . bin2hex(random_bytes(8));
 
-        $previous = umask(0o077);
+        // Created under a narrowed umask and verified off lstat by the one
+        // rule the server's state directory shares (O-4a).
         try {
-            if (!@mkdir($dir, 0700) && !is_dir($dir)) {
-                throw new \RuntimeException("Failed to create private IPC directory {$dir}");
-            }
-        } finally {
-            umask($previous);
-        }
-
-        clearstatcache(true, $dir);
-        $stat = @lstat($dir);
-        $isPrivateDir = $stat !== false
-            && ($stat['mode'] & 0o170000) === 0o040000 // S_ISDIR on the lstat'd inode itself
-            && ($stat['uid'] === $uid || !function_exists('posix_getuid'))
-            && ($stat['mode'] & 0o777) === 0700;
-        if (!$isPrivateDir) {
-            throw new \RuntimeException("Private IPC directory {$dir} is not owner-private (0700) — refusing to spawn");
+            PrivateDir::ensure($dir, 'private IPC', $uid);
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("Private IPC directory {$dir} is not owner-private (0700) — refusing to spawn: " . $e->getMessage(), 0, $e);
         }
 
         $this->ipcDir = $dir;
@@ -1578,27 +1542,14 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
         $dir = $this->tempRoot . '/' . self::IPC_DIR_PREFIX . $uid . self::INDEX_DIR_SUFFIX;
 
         if ($create) {
-            $previous = umask(0o077);
             try {
-                @mkdir($dir, 0700);
-            } finally {
-                umask($previous);
+                return PrivateDir::ensure($dir, 'session index', $uid);
+            } catch (\RuntimeException) {
+                return null;
             }
         }
 
-        return self::isPrivateDirOf($dir, $uid) ? $dir : null;
-    }
-
-    /** Whether $dir is a real (not symlinked) directory owned by $uid with mode 0700. */
-    private static function isPrivateDirOf(string $dir, int $uid): bool
-    {
-        clearstatcache(true, $dir);
-        $stat = @lstat($dir);
-
-        return $stat !== false
-            && ($stat['mode'] & self::STAT_TYPE_MASK) === self::STAT_DIRECTORY
-            && $stat['uid'] === $uid
-            && ($stat['mode'] & 0o777) === 0700;
+        return PrivateDir::isPrivate($dir, $uid) ? $dir : null;
     }
 
     /**
@@ -1826,7 +1777,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             || dirname($dir) !== $this->tempRoot
             || preg_match(self::IPC_DIR_PATTERN, basename($dir), $name) !== 1
             || (int) $name[1] !== $uid
-            || !self::isPrivateDirOf($dir, $uid)
+            || !PrivateDir::isPrivate($dir, $uid)
         ) {
             return null;
         }

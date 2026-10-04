@@ -73,16 +73,24 @@ final readonly class ParsedArgs
         // `serve` (Appendix O §4.7): every flag scoped, none global — a
         // `--port` before the verb is an unknown option, not a server setting.
         // `--allowed-origin` takes a comma-separated list; a repeat keeps the
-        // last one, as every value flag here does.
+        // last one, as every value flag here does. The management actions'
+        // flags (`stop --force`, `logs -f`, `token --rotate`; O-4a) share the
+        // verb's table; which action each belongs to is `Serve::ACTION_FLAGS`.
         'serve' => [
             '--allow-bypass' => false,
             '--allow-remote' => false,
             '--allow-root' => false,
             '--allowed-origin' => true,
+            '--detach' => false,
+            '--follow' => false,
+            '--force' => false,
             '--host' => true,
             '--no-web' => false,
+            '--parent-pid' => true,
             '--port' => true,
+            '--rotate' => false,
             '--web-root' => true,
+            '-f' => false,
         ],
         'session' => [
             '--all' => false,

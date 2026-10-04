@@ -1478,6 +1478,7 @@ final class Subcommands
     private const SUBCOMMAND_ACTIONS = [
         'session' => ['list', 'show', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
         'mcp' => ['list', 'auth', 'import', 'trust'],
+        'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,
     ];
 

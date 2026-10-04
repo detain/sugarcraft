@@ -256,6 +256,16 @@ final class ReadPathCensusTest extends TestCase
                 . 'config, created by this process under umask 077 and opened `c` only for the '
                 . 'timed LOCK_EX; no byte of it is read',
         ],
+        'Cli/Serve.php|file_get_contents' => [
+            'SELF_LOCATED — storedToken(): the owner-token file in the `serve` state dir '
+                . 'StateDir::existing() verified 0700 and ours; lstat refuses anything but a '
+                . 'regular file, and it is read, never minted',
+        ],
+        'Cli/Serve.php|fopen' => [
+            'SELF_LOCATED — tail(): server.log in the verified state dir, which a detached '
+                . 'server writes; lstat-checked as a regular file before it is opened',
+            'SELF_LOCATED — follow(): the same log, re-opened at the offset already printed',
+        ],
         'Host/TurnController.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file (roadmap O-2g takePayload()), named by '
                 . 'Support\\ToolIpcFiles::reserve() in this process before the fork, read once and discarded',
@@ -526,8 +536,18 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — the owner-token file this store minted, in the `serve` state dir '
                 . 'PrivateRetainedDir::verified() created 0700 and checked is ours; lstat refuses a link',
         ],
+        'Server/DiscoveryFile.php|file_get_contents' => [
+            'SELF_LOCATED — server.json, the record a server wrote 0600 into the state dir '
+                . 'PrivateDir verified 0700 and ours; lstat refuses a link, and it is decoded as '
+                . 'JSON at depth 8, never executed',
+        ],
         'Server/Http/StaticFiles.php|file_get_contents' => [
             'CONTAINED — a static asset, read only for a path ContainedPath::within() keeps under the web root',
+        ],
+        'Server/StateDir.php|fopen' => [
+            'SELF_LOCATED — server.lock in the verified state dir, opened `c` under umask 077 '
+                . 'only to hold flock(); lstat refuses anything but a regular file and no byte '
+                . 'of it is read',
         ],
         'Session/PromptHistory.php|file' => [
             'SELF_LOCATED — ~/.sugar-crush/prompt_history.jsonl, the path Bootstrap::promptHistory() names',
@@ -560,8 +580,6 @@ final class ReadPathCensusTest extends TestCase
                 . 'reconnect() adopted from the index after vetting its directory)',
             'SELF_LOCATED — the per-spawn token file this supervisor minted, read to '
                 . 'authenticate a reconnect (audit M5)',
-            'PROCESS_DERIVED — `/proc/<pid>/stat`, a kernel interface named by a '
-                . 'literal, read to fingerprint a daemon pid against reuse (audit M5)',
         ],
         'Sessions/BackgroundSupervisor.php|glob' => [
             'NAMES_ONLY — the startup sweep (audit BG-2) lists `sugar_crush_bg_<uid>_*` names in the '

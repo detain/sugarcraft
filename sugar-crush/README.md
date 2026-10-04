@@ -519,6 +519,9 @@ sugarcrush mcp import claude|opencode <path>
 sugarcrush serve                     # WebSocket + HTTP server for the web UI, until Ctrl+C
                                      #   [--host IP] [--port N] [--allow-remote] [--allowed-origin LIST]
                                      #   [--web-root DIR] [--no-web] [--allow-bypass] [--allow-root]
+                                     #   [--detach] [--parent-pid PID]
+sugarcrush serve status|stop|logs|url|token
+                                     # the running server: stop [--force], logs [-f], token [--rotate]
 sugarcrush completion bash|zsh|fish  # a shell completion script on stdout
 ```
 
@@ -531,8 +534,12 @@ client must authenticate — loopback is not trusted on its own — and a
 non-loopback `--host`, the bypass permission modes and running as root are each
 refused unless their `--allow-*` flag is given; it also refuses to start
 without `ext-pcntl`, `ext-posix` and `ext-ffi` (`doctor` reports all three).
-The flags belong to `serve` (before it they are unknown options). Its
-transport, auth flow and security model are in
+The flags belong to `serve` (before it they are unknown options). `serve
+--detach` runs it in the background instead, printing the URL and pid once the
+port is bound; `serve status`, `stop`, `logs`, `url` (a fresh sign-in link) and
+`token` manage whichever server holds the state directory's lock, and
+`--parent-pid` stops it when the process that started it exits. Its
+transport, auth flow, background mode and security model are in
 [docs/SERVER.md](docs/SERVER.md). `doctor` is the sharpest case — it is a health check for an install
 that may be broken, so it must not require the thing it is diagnosing. A
 config whose `permissionMode` is unusable makes the launch refuse to start

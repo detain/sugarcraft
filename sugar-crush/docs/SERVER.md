@@ -3,16 +3,17 @@
 `sugarcrush serve` runs an HTTP + WebSocket server that a browser (the
 [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) UI) or a
 script drives sugar-crush through. It runs in the foreground until `Ctrl+C` or
-`SIGTERM`, on the same ReactPHP loop the engine's forked turns use, and serves
-one project root — the current directory or `--root`.
+`SIGTERM` — or in the background with `--detach` — on the same ReactPHP loop
+the engine's forked turns use, and serves one project root — the current
+directory or `--root`.
 
 This page covers the **transport**: binding, authentication, the WebSocket
 endpoint and the security model. The `sugarcrush.v1` method and event roster
 (sessions, turns, permission answers) lands with the protocol; until then a
 WebSocket request is answered with a well-formed JSON-RPC
 `-32601` / `data.kind: "not_implemented"` error (see [WebSocket](#websocket)).
-Background mode and `serve status|stop|logs|url|token` are not there yet
-either: today the server is a foreground process.
+[Background mode](#background-mode) and the verbs that manage a running server
+(`serve status|stop|logs|url|token`) are below.
 
 ## Starting it
 
@@ -21,6 +22,7 @@ sugarcrush serve                       # 127.0.0.1:7420
 sugarcrush serve --port 0              # any free port; the startup lines say which
 sugarcrush --root ~/src/app serve      # serve another project
 sugarcrush serve --output-format json  # one JSON document with the URL on stdout
+sugarcrush serve --detach              # in the background; prints the URL and pid, then returns
 ```
 
 On start it prints, on stderr, the address, the project root, the permission
@@ -50,6 +52,8 @@ Open the sign-in URL in a browser on the same machine. The code rides in the URL
 | `--no-web` | off | API and WebSocket only. |
 | `--allow-bypass` | off | Let sessions run in `bypass-permissions` or `dont-ask`. |
 | `--allow-root` | off | Permit running as root. |
+| `--detach` | off | Run in the background ([Background mode](#background-mode)). |
+| `--parent-pid <pid>` | none | Stop when process `<pid>` exits ([Parent-pid watchdog](#parent-pid-watchdog)). |
 | `--permission-mode <mode>` | `default` | The global flag: the mode server sessions start in. |
 
 The flags belong to the verb: `sugarcrush --port 1 serve` is an unknown option
@@ -69,6 +73,7 @@ the TUI's and does not apply here.
 | `SUGARCRUSH_SERVER_WEB_ROOT` | — | UI directory. |
 | `SUGARCRUSH_SERVER_TOKEN` | — | The owner token, instead of the stored one (≥ 32 characters; for containers). |
 | `SUGARCRUSH_SERVER_DIR` | — | State directory, default `~/.sugar-crush/server`. |
+| `SUGARCRUSH_SERVER_PARENT_PID` | — | The parent pid to watch, like `--parent-pid`. |
 | — | `server.allowedHosts` | Host names (or `host:port`) answered beside the loopback names — a reverse proxy's public name. |
 | — | `server.trustedProxies` | IPs or CIDRs whose `X-Forwarded-For` / `X-Forwarded-Proto` are believed. |
 | — | `server.allowBypass` | `true` is the same as `--allow-bypass`. |
@@ -82,23 +87,115 @@ modes. A non-loopback `server.host` still needs `--allow-remote` on each launch.
 
 `serve` refuses to start, at exit `2` before binding anything, when:
 
-- an operand follows the verb, or a flag value is malformed (a port that is not
-  `0`–`65535`, an origin that is not `http(s)://host[:port]`);
+- an operand follows the verb that is not one of `status`, `stop`, `logs`,
+  `url` or `token`, a flag belongs to a different action (`serve stop
+  --detach`), or a flag value is malformed (a port that is not `0`–`65535`, an
+  origin that is not `http(s)://host[:port]`, a `--parent-pid` that is not a
+  pid);
 - `--host` is not loopback and `--allow-remote` was not given;
 - the permission mode is `bypass-permissions` or `dont-ask` and neither
   `--allow-bypass` nor `server.allowBypass` permits it;
 - it runs as root without `--allow-root`;
 - `ext-pcntl`, `ext-posix` or `ext-ffi` is missing (or FFI is disabled by
   `ffi.enable`) — see [Why pcntl, posix and FFI](#why-pcntl-posix-and-ffi);
-- the state directory is unsafe (a symlink, someone else's, or readable by
-  group or world), or `SUGARCRUSH_SERVER_TOKEN` is shorter than 32 characters.
+- the state directory is unsafe (a symlink, someone else's, or not exactly
+  `0700`), or `SUGARCRUSH_SERVER_TOKEN` is shorter than 32 characters;
+- `--parent-pid` names a process that is not running.
 
 A port that is already taken is exit `1`: it ran, failed, and may succeed once
-the port is free. Under `--output-format json` that failure is still one
+the port is free. So is a second server on the same state directory — the
+first one holds its lock — and a `--detach` whose background server failed to
+bind (its reason is printed; the detail is in `server.log`). Under `--output-format json` that failure is still one
 document on stdout, carried like `doctor`'s failing report — as the answer, not
 as a new `error.type`: `{"result": {"listening": false, "address": "…",
 "reason": "…"}}`. A refusal is the usual `usage` error document. `sugarcrush doctor` reports the three extensions as its
 `server mode` check (a `WARN`, never a `FAIL` — the TUI does not need them).
+
+## Background mode
+
+```sh
+sugarcrush serve --detach        # background: prints the URL + pid once bound, exits 0
+sugarcrush serve status          # pid, URL, root, uptime, and whether /api/health answers
+sugarcrush serve stop [--force]  # SIGTERM, up to 30 s to drain, then SIGKILL (--force: SIGKILL now)
+sugarcrush serve logs [-f]       # the end of server.log; -f follows it until the server stops
+sugarcrush serve url             # a sign-in URL with a fresh one-time code
+sugarcrush serve token [--rotate]
+```
+
+`--detach` daemonizes the way background (`/bg`) sessions do — the same
+sequence, in one place (`Support\Daemonize`): `umask 077`, fork, `setsid()`,
+fork again, so the server has no controlling terminal and outlives the shell
+that started it. Its stdin is `/dev/null` and its stdout and stderr append to
+`server.log`. The command you ran waits until the server has bound its port and
+then prints the same startup lines a foreground server does (one JSON document
+under `--output-format json`, with `"detached": true` and the `log` path), so
+the URL it prints is one that already answers. The sign-in code itself is never
+written to the log.
+
+**The state directory** (`~/.sugar-crush/server/`, or `SUGARCRUSH_SERVER_DIR`)
+is `0700` — refused if it is a symlink, someone else's, or any other mode — and
+holds:
+
+| File | What |
+|---|---|
+| `token` | the owner token, `0600` |
+| `server.json` | the discovery record: `{pid, procStartTime, version, protocol: {min, max}, url, host, port, root, startedAt, detached, log}`, `0600`, replaced atomically. Never the token. |
+| `server.lock` | the singleton lock: `flock()` held for the server's whole life, so the kernel releases it however the server dies |
+| `control.sock` | the local socket `serve url` asks the running server on; every request carries the owner token |
+| `server.log` | a detached server's stdout and stderr, rotated past 10 MiB into `server.log.1` and `server.log.2` |
+
+One server runs per state directory: a second `serve` finds the lock held and
+exits `1`, naming the running one. A foreground server keeps the same record,
+lock and control socket, so `status`, `stop` and `url` work on it too.
+
+**A record is checked, not believed.** `status` and `stop` act on the pid in
+`server.json` only while that pid is still the process that started at the
+recorded `procStartTime` (`/proc/<pid>/stat`), so a pid the kernel has handed
+to something else is never signalled. A record that fails the check — a server
+that was SIGKILLed cannot remove its own — is reported as stale, and `stop`
+removes it.
+
+**Stopping.** `SIGTERM` or `SIGINT` (what `serve stop` and `Ctrl+C` send)
+drains the server: it stops accepting, closes every WebSocket with `1001`,
+removes `server.json` and `control.sock` and releases the lock. `serve stop`
+waits up to 30 s for that, then sends `SIGKILL`; `--force` skips straight to
+`SIGKILL`. `SIGCHLD` is never handled — the turn children are reaped by the
+engine's own sweep.
+
+| Verb | Exit `0` | Exit `1` |
+|---|---|---|
+| `serve status` | a server runs (`health` is `ok`, or `unreachable` when it does not answer `/api/health`) | none runs (a stale record is reported as such) |
+| `serve stop` | it stopped | none was running, or it did not exit |
+| `serve logs` | the log was printed | there is no `server.log` (only a detached server writes one) |
+| `serve url` | a fresh sign-in URL was printed | no server runs, or it refused the token |
+| `serve token` | the token was printed (`--rotate`: replaced first) | — (refused at `2` while `SUGARCRUSH_SERVER_TOKEN` is set) |
+
+Under `--output-format json` each prints one `{"result": …}` document — the
+"no server" answers included, as results rather than errors; `logs -f` streams
+text and does not combine with it. The management verbs read the state
+directory without creating it.
+
+### Parent-pid watchdog
+
+`--parent-pid <pid>` (or `SUGARCRUSH_SERVER_PARENT_PID`) makes the server stop,
+exactly as `SIGTERM` would, once that process has exited — for an editor or a
+TUI that starts a private server and may crash without stopping it. The parent
+is checked every second by pid **and** start time, so a recycled pid reads as
+gone; a pid that is not running at startup is refused. It combines with
+`--detach`.
+
+### systemd
+
+Under a service manager run the server in the **foreground** — the manager is
+the supervisor, and `--detach` would only hide the process from it.
+[`examples/sugarcrush.service`](examples/sugarcrush.service) is a user unit:
+
+```sh
+cp docs/examples/sugarcrush.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now sugarcrush
+journalctl --user -u sugarcrush -f   # the server's log; sugarcrush serve url for a sign-in link
+```
 
 ## Authentication
 
@@ -110,7 +207,10 @@ rebinding or a cross-site WebSocket, by any page your browser opens.
 **The owner token.** 32 random bytes (64 hex characters), minted on the first
 `serve` into `<state dir>/token` — mode `0600` in a `0700` directory this user
 owns. `SUGARCRUSH_SERVER_TOKEN` replaces it. It is compared with `hash_equals`
-and never printed.
+and never printed by `serve` itself; `sugarcrush serve token` prints it on
+request for a script that needs a bearer credential, and `serve token
+--rotate` replaces it (a running server keeps accepting the old one until it
+restarts).
 
 **Browsers** never hold the token:
 
