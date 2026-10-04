@@ -294,6 +294,7 @@ final class SessionPickerActionsTest extends TestCase
             $store->createSession('old', 'p', 'm', null, 'Old');
             $store->saveTranscript('old', [
                 ['role' => 'user', 'content' => "first\nquestion"],
+                ['role' => 'user', 'content' => "<turn-context>\nbranch: main\n</turn-context>", 'userVisible' => false],
                 ['role' => 'assistant', 'content' => "an \x1b[31manswer"],
             ]);
             $store->createSession('now', 'p', 'm', null, 'Now');

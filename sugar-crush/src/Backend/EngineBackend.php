@@ -899,11 +899,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
 
     /**
      * The compaction budgets the next turn's {@see App} is built with — the
-     * configured one, else the {@see CompactorConfig::new()} defaults.
+     * configured one, else the {@see CompactorConfig::new()} defaults — with
+     * the per-model absolute caps for this backend's model applied
+     * ({@see CompactorConfig::forModel()}, roadmap 2.9). With no override
+     * naming the model that is the configured instance itself.
      */
     public function compactorConfig(): CompactorConfig
     {
-        return $this->compactorConfig ?? CompactorConfig::new();
+        return ($this->compactorConfig ?? CompactorConfig::new())->forModel($this->model, $this->provider->name());
     }
 
     public function withMaxSteps(int $maxSteps): self

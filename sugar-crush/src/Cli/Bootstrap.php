@@ -1782,6 +1782,7 @@ final class Bootstrap
             ->withService(\SugarCraft\Crush\Host\SpendLedger::class, \SugarCraft\Crush\Host\SpendLedger::new())
             ->withService(\SugarCraft\Crush\Host\ContextMeter::class, \SugarCraft\Crush\Host\ContextMeter::new())
             ->withService(\SugarCraft\Crush\Host\CompactionService::class, \SugarCraft\Crush\Host\CompactionService::new())
+            ->withService(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry::class, \SugarCraft\Crush\Agents\Live\AgentLiveRegistry::new())
             ->withService(\SugarCraft\Crush\Host\TranscriptStore::class, $transcripts);
 
         $events = $transcripts->events();

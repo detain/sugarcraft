@@ -268,4 +268,33 @@ final class AbsoluteThresholdTest extends TestCase
 
         CompactorConfig::new()->withModelTokenOverride('', ['reminderTokens' => 10]);
     }
+
+    /**
+     * Chat's compactor resolves the per-model caps against its backend's
+     * model, and a `/model` switch — a new backend — re-resolves them.
+     */
+    public function testChatsCompactorTakesTheCapsOfItsBackendsModel(): void
+    {
+        $config = CompactorConfig::new()->withModelTokenOverride('big', ['reminderTokens' => 60_000]);
+        $chat = new \SugarCraft\Crush\Chat(
+            backend: \SugarCraft\Crush\Backend\EngineBackend::new(new \SugarCraft\Crush\Tests\Support\ScriptedProvider([]), 'big'),
+            compactorConfig: $config,
+        );
+
+        $this->assertSame(60_000, self::compactorConfigOf($chat)->reminderTokens);
+
+        $switched = $chat->withBackend(\SugarCraft\Crush\Backend\EngineBackend::new(new \SugarCraft\Crush\Tests\Support\ScriptedProvider([]), 'small'));
+
+        $this->assertSame($config, self::compactorConfigOf($switched), 'no override names the new model');
+    }
+
+    private static function compactorConfigOf(\SugarCraft\Crush\Chat $chat): CompactorConfig
+    {
+        $compactor = (new \ReflectionProperty(\SugarCraft\Crush\Chat::class, 'compactor'))->getValue($chat);
+        \assert($compactor instanceof ContextCompactor);
+        $config = (new \ReflectionProperty(ContextCompactor::class, 'config'))->getValue($compactor);
+        \assert($config instanceof CompactorConfig);
+
+        return $config;
+    }
 }

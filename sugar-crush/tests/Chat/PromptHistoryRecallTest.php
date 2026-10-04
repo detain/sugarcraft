@@ -149,6 +149,22 @@ final class PromptHistoryRecallTest extends TestCase
         $this->assertSame('one', self::press($chat, self::up(), self::up())->inputBuf);
     }
 
+    /**
+     * The persisted `<turn-context>` row (1.A-2) and nudge rows are user-role
+     * but hidden from the user: they were never typed, so ↑ skips them.
+     */
+    public function testWithoutAFileRecallSkipsRowsHiddenFromTheUser(): void
+    {
+        $chat = new Chat(history: [
+            Message::user('one'),
+            Message::user("<turn-context>\nbranch: main\n</turn-context>")->withUserVisible(false),
+            Message::assistant('reply'),
+        ]);
+
+        $this->assertSame('one', self::press($chat, self::up())->inputBuf);
+        $this->assertSame('one', self::press($chat, self::up(), self::up())->inputBuf);
+    }
+
     public function testEnterOnAnEmptyBoxStillHandsBackTheReceiver(): void
     {
         $chat = new Chat(promptHistory: $this->file());

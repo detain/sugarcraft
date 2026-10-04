@@ -79,7 +79,10 @@ final class WritePathScope
      * NOT LISTED, AND STILL GRANTED: `.claude/` and `.opencode/` (foreign agent
      * presets and skills are discovered from them) and anything else in the
      * policy-file surface the audit tracks as known #9 — closing that surface
-     * is a policy-file inventory, not a line in this list.
+     * is a policy-file inventory, not a line in this list. The grant here is
+     * not the last word for their skill, agent and command directories:
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} asks before
+     * every write to those in every permission mode (step 0.8b).
      *
      * Matched with `fnmatch()` and FNM_PERIOD, the way bash matches a glob to a
      * dotfile (writing STAR for the asterisk so this docblock does not close on

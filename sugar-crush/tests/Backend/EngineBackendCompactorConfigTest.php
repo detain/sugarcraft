@@ -75,6 +75,25 @@ final class EngineBackendCompactorConfigTest extends TestCase
         $this->assertEquals(CompactorConfig::new(), $backend->compactorConfig());
     }
 
+    /**
+     * Roadmap 2.9: the engine lane resolves the per-model absolute caps for
+     * the backend's own model — provider-qualified key first — and a config
+     * naming no override for it comes back as the configured instance.
+     */
+    public function testThePerModelCapsForThisBackendsModelApply(): void
+    {
+        $config = CompactorConfig::new()
+            ->withModelTokenOverride('m', ['reminderTokens' => 60_000])
+            ->withModelTokenOverride('scripted/m', ['reminderTokens' => 40_000]);
+        $backend = EngineBackend::new(new ScriptedProvider([]), 'm')->withCompactorConfig($config);
+
+        $this->assertSame(40_000, $backend->compactorConfig()->reminderTokens);
+        $this->assertSame(40_000, $backend->compactorConfig()->reminderTokenThreshold(1_000_000));
+
+        $other = CompactorConfig::new()->withModelTokenOverride('another', ['reminderTokens' => 60_000]);
+        $this->assertSame($other, EngineBackend::new(new ScriptedProvider([]), 'm')->withCompactorConfig($other)->compactorConfig());
+    }
+
     private function smallSkill(): Skill
     {
         return Skill::parse("---\ndescription: small\n---\nSMALLCANARY " . str_repeat('word ', 200) . "\n", 'small');

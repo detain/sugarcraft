@@ -4497,12 +4497,19 @@ final class DocFigureProseDriftTest extends TestCase
         );
 
         $chatText = self::sourceOf('Chat.php');
-        $locate = self::bodyExcerpt($chatText, 'memoryLocate');
-        $repoAt = strpos($locate, 'forRoot');
-        $homeAt = strpos($locate, '$this->memoryStore->get($id)');
-        self::assertNotFalse($repoAt, 'memoryLocate no longer consults the repo resolver — the "resolves in the repo store first" clause lost its code home');
-        self::assertNotFalse($homeAt, 'memoryLocate no longer reads the home store — the precedence sentence names a two-store walk');
-        self::assertLessThan($homeAt, $repoAt, 'memoryLocate flipped to home-first — the page and the fold law both say repo-first');
+        // memoryLocate routes through MemoryWriter::locate(), the router the
+        // Memory tool shares, so the repo-first walk is pinned there.
+        self::assertStringContainsString(
+            'memoryWriter()->locate(',
+            self::bodyExcerpt($chatText, 'memoryLocate', 300),
+            'memoryLocate no longer resolves through MemoryWriter::locate() — the "resolves in the repo store first" clause lost its code home',
+        );
+        $locate = self::bodyExcerpt(self::sourceOf('Memory/MemoryWriter.php'), 'locate', 600);
+        $repoAt = strpos($locate, '$this->repository()');
+        $homeAt = strpos($locate, '$this->home()');
+        self::assertNotFalse($repoAt, 'MemoryWriter::locate() no longer consults the repo store — the "resolves in the repo store first" clause lost its code home');
+        self::assertNotFalse($homeAt, 'MemoryWriter::locate() no longer reads the home store — the precedence sentence names a two-store walk');
+        self::assertLessThan($homeAt, $repoAt, 'MemoryWriter::locate() flipped to home-first — the page and the fold law both say repo-first');
 
         foreach (['memoryDelete', 'memoryEdit'] as $arm) {
             self::assertStringContainsString(

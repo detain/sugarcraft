@@ -803,7 +803,7 @@ it runs only once the rest of the chain has permitted that output — see
 
 | Hook | Event | What it does |
 |---|---|---|
-| `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
+| `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files; asks for the rest — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
@@ -889,7 +889,8 @@ app/main.py:
 
 PHP files are checked with `php -l` (the interpreter running sugar-crush) out
 of the box. Add, replace or switch off linters by file extension with
-`lintCommands` in your own `~/.sugar-crush/config.json`:
+`lintCommands` in your own `~/.sugar-crush/config.json` or
+`~/.sugar-crush/settings.json`:
 
 ```json
 {"lintCommands": {"php": "vendor/bin/phpstan analyse --no-progress --error-format=raw", "py": "flake8 --select=E9,F63,F7,F82", "js": false}}

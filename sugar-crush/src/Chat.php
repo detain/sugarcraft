@@ -87,7 +87,6 @@ use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Context\ProjectMemoryWriter;
-use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Memory\MemoryStore;
@@ -386,12 +385,8 @@ final class Chat implements Model
      */
     private const CHECKPOINT_PRE_TURN_KEY = 'messagesPrecedePrompt';
 
-    /**
-     * The fixed opening of the notice {@see scheduleParkedCompaction()} writes
-     * when it parks a turn — named once because
-     * {@see withoutParkedSubmission()} recognises the notice by it.
-     */
-    private const PARK_NOTICE_PREFIX = 'Context reached the automatic-compaction tier at ~';
+    /** Alias of {@see \SugarCraft\Crush\Host\CompactionService::PARK_NOTICE_PREFIX}, which documents it. */
+    private const PARK_NOTICE_PREFIX = \SugarCraft\Crush\Host\CompactionService::PARK_NOTICE_PREFIX;
 
     /**
      * Set to any value other than empty or `0` to keep the "onToken observer
@@ -578,48 +573,11 @@ final class Chat implements Model
      */
     private const RUNTIME_NOTICE_POLL_SECONDS = 0.5;
 
-    /**
-     * Stable head of the context-usage reminder {@see contextReminderMessage()}
-     * builds, and the ONLY thing {@see isContextReminder()} matches on.
-     *
-     * A PREFIX RATHER THAN THE WHOLE MESSAGE BECAUSE THE WHOLE MESSAGE IS NOT A
-     * CONSTANT: everything after this point embeds the current estimated token
-     * count, so two copies written on two different turns are never byte-equal.
-     * A full-text equality check would therefore never match, the
-     * deduplication in {@see dispatchTurn()} would look correct in review, and
-     * every copy would still pile up — while a test that only asserts "a
-     * reminder is present" passed either way. The count of copies is the only
-     * thing that discriminates the fix from the bug, which is why
-     * `tests/Chat/ContextReminderDedupTest.php` asserts a quantity.
-     *
-     * Carried in the message CONTENT rather than as a new `Message` field on
-     * purpose: content is one of the few things {@see Message::toWire()} emits,
-     * so a reminder that has been through a checkpoint save/restore or a wire
-     * round-trip is still recognisable. A dedicated field has no
-     * representation in either, so the dedup would silently stop working on a
-     * resumed session — the same lossiness documented on
-     * {@see messagesFromWire()}.
-     *
-     * THAT COVERS ONLY THE CONTENT HALF OF THE PREDICATE, and
-     * {@see isContextReminder()} needs both halves: the marker AND
-     * `Role::System`. The wire half was always sound —
-     * {@see messagesFromWire()} rebuilds the role with `Role::from()` — but the
-     * checkpoint half was not, until E33's review round: with no `'system'` arm
-     * in {@see reviveCheckpointMessage()} the ROW survived a checkpoint intact
-     * while the restored message came back as `Role::User`, so one `/rewind`
-     * put a copy beyond this predicate's reach forever. Both halves round-trip
-     * now; changing either method's role handling breaks the dedup silently,
-     * not loudly.
-     */
-    private const CONTEXT_REMINDER_PREFIX = 'Heads up: this conversation has grown to ~';
+    /** Alias of {@see \SugarCraft\Crush\Host\CompactionService::CONTEXT_REMINDER_PREFIX}, which documents it. */
+    private const CONTEXT_REMINDER_PREFIX = \SugarCraft\Crush\Host\CompactionService::CONTEXT_REMINDER_PREFIX;
 
-    /**
-     * The first bytes of the 95% tier's refusal ({@see foregroundBlockedResponse()}),
-     * which {@see blockedAttempts()} counts. The refusal is a UI-only row and
-     * {@see Message::jsonSerialize()} persists that flag, so content plus flag
-     * still recognise it after a save and resume.
-     */
-    private const BLOCKED_TURN_PREFIX = 'This turn was NOT sent: the conversation is at ~';
+    /** Alias of {@see \SugarCraft\Crush\Host\CompactionService::BLOCKED_TURN_PREFIX}, which documents it. */
+    private const BLOCKED_TURN_PREFIX = \SugarCraft\Crush\Host\CompactionService::BLOCKED_TURN_PREFIX;
 
     /**
      * @param list<Message> $history
@@ -1546,7 +1504,15 @@ final class Chat implements Model
             static fn(CommandSpec $spec): bool => $spec->isFileBased(),
         );
 
-        $this->compactor = new ContextCompactor($this->compactorConfig ?? CompactorConfig::new());
+        // Per-model absolute caps (2.9) resolve against the backend's model.
+        // The constructor runs on every mutate(), so a `/model` switch — a new
+        // backend — rebuilds the compactor for the new model; with no override
+        // naming the model forModel() is the base config itself.
+        $compactorConfig = $this->compactorConfig ?? CompactorConfig::new();
+        if ($this->backend instanceof Backend\EngineBackend) {
+            $compactorConfig = $compactorConfig->forModel($this->backend->model(), $this->backend->provider()->name());
+        }
+        $this->compactor = new ContextCompactor($compactorConfig);
         $this->tokenTracker = $tokenTracker ?? new TokenTracker();
         $this->rulesState = $rulesState ?? RulesState::new();
         $this->memoryStore = $memoryStore;
@@ -14351,7 +14317,9 @@ final class Chat implements Model
 
         $lines = [];
         foreach (self::loadTranscript($this->sessionStore, $selected['sessionId']) as $message) {
-            if ($message->uiOnly || ($message->role !== Role::User && $message->role !== Role::Assistant)) {
+            // A row hidden from the user — the per-turn `<turn-context>` block,
+            // a nudge — is the model's, not a line of the conversation.
+            if ($message->uiOnly || !$message->userVisible || ($message->role !== Role::User && $message->role !== Role::Assistant)) {
                 continue;
             }
             $text = trim((string) preg_replace('/\s+/u', ' ', self::sanitizeSessionField($message->content)));
@@ -15858,7 +15826,7 @@ final class Chat implements Model
             // only for the scope that can host repo notes, and when it has
             // nothing to show the pre-grouping home-only bytes come back
             // verbatim (the same degradation memoryLocate promises per id).
-            $repoStore = $scope === 'project' ? ProjectMemoryWriter::forRoot($this->projectRoot())?->store() : null;
+            $repoStore = $scope === 'project' ? $this->memoryWriter()->repository() : null;
             $repoEntries = $repoStore?->list($scope) ?? [];
             $entries = $this->memoryStore->list($scope);
             if ($repoEntries === []) {
@@ -15928,8 +15896,7 @@ final class Chat implements Model
             // from MemoryWriter, the router the Memory tool's `recall` uses,
             // so the command and the tool search the same notes; each store
             // answers best match first (MemoryStore::search(), BM25, 5.3-1).
-            $writer = \SugarCraft\Crush\Memory\MemoryWriter::new($this->memoryStore, $this->projectRoot());
-            $repoStore = $writer->repository();
+            $repoStore = $this->memoryWriter()->repository();
             $repoEntries = $repoStore?->search($query) ?? [];
             $entries = $this->memoryStore->search($query);
             $total = count($repoEntries) + count($entries);
@@ -15993,15 +15960,20 @@ final class Chat implements Model
      */
     private function memoryLocate(string $id): array
     {
-        $repo = ProjectMemoryWriter::forRoot($this->projectRoot())?->store();
-        if ($repo !== null) {
-            $entry = $repo->get($id);
-            if ($entry !== null) {
-                return [$entry, $repo];
-            }
-        }
+        return $this->memoryWriter()->locate($id) ?? [null, $this->memoryStore];
+    }
 
-        return [$this->memoryStore->get($id), $this->memoryStore];
+    /**
+     * The router `/memory` shares with the `Memory` tool and auto-memory
+     * ({@see \SugarCraft\Crush\Memory\MemoryWriter}), over this Chat's home
+     * store and project root — so a command, the tool and the consolidator
+     * agree on which store an id names and which repository store exists.
+     */
+    private function memoryWriter(): \SugarCraft\Crush\Memory\MemoryWriter
+    {
+        $home = $this->memoryStore;
+
+        return \SugarCraft\Crush\Memory\MemoryWriter::new(static fn (): ?MemoryStore => $home, $this->projectRoot());
     }
 
     /**
@@ -17569,7 +17541,8 @@ final class Chat implements Model
      * prompt typed, across sessions. Without one it is the transcript's own
      * user rows, read live, which is what the recall answered before the file
      * existed and what a Chat built in a test still gets. Only real user
-     * turns either way - assistant replies and tool/system rows are skipped.
+     * turns either way - assistant replies, tool/system rows and user rows
+     * hidden from the user are skipped.
      *
      * @return list<string>
      */
@@ -17581,7 +17554,9 @@ final class Chat implements Model
 
         $entries = [];
         foreach ($this->history as $message) {
-            if ($message->role === Role::User) {
+            // Rows hidden from the user (the `<turn-context>` block, a nudge)
+            // were never typed, so they are not recalled.
+            if ($message->role === Role::User && $message->userVisible) {
                 $entries[] = $message->content;
             }
         }
