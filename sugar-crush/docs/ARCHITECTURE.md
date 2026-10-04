@@ -393,11 +393,32 @@ tool schemas included (`TokenEstimate::ofToolSchemas()`); on every later step
 the previous response's prompt as the provider counted it, plus an estimate of
 only the rows the step added. The budget is `Context\ContextBudget`: the smaller
 of 80% of the window and the window less `maxOutputTokens` less a reserve for
-tool output (64k, capped at a fifth of the window). The figure and its verdict
-ride the step's `Events\StepStarted` to `runTurn()`'s `$onStep` observer
-(`completeTranscript()` takes one too, so a `Task` sub-agent is measured the
-same way). Detecting is all this does: pruning and step summaries are the
-actions later roadmap steps hang on the verdict.
+tool output (64k, capped at a fifth of the window), and the automatic
+compaction tier's absolute cap (`CompactorConfig::$backgroundCompactionTokens`)
+when one is configured. Every step is measured, with or without an observer;
+the figure and its verdict ride the step's `Events\StepStarted` to `runTurn()`'s
+`$onStep` observer (`completeTranscript()` takes one too, so a `Task` sub-agent
+is measured — and relieved — the same way).
+
+**An over-budget request is pruned before it is sent.** The observer cannot
+change the request, so while relief remains it refuses it: it throws
+`Context\Pruning\StepOverBudget`, which `run()` lets out before any provider call
+or yield, and `runTurn()` rebuilds the step over a relieved
+`Context\Pruning\ContextLedger`. The ledger records what is taken out of the
+model's view; the rows themselves are never rewritten. `Runtime::buildMessages()`
+projects every request through it (`Context\Pruning\ContextProjector`, then
+`HistorySanitizer`), so an App with an empty ledger sends exactly what it always
+did. The relief is `Context\Pruning\EmergencyPrune`, one batch of two
+strategies: the age rule (`Strategies\ToolOutputAgeStrategy` — the last two user
+turns and the newest 40k tokens of older tool output stay, `Task`, `Skill`,
+`Edit` and `Write` output is never touched, older output becomes a placeholder)
+and the superseded `<turn-context>` rows (`Strategies\SupersededTurnContextStrategy`
+— every one but the newest). It is made only when it frees at least 20k
+estimated tokens, because a prune rewrites bytes the provider has cached: the
+ledger changes rarely and in bulk, never a little each step. The ledger is the
+turn's own (it does not yet cross to Chat), and Chat's compaction applies the
+same age rule to the exchanges it condenses (`ContextCompactor::removeToolResults()`,
+which never touches the preserved tail).
 
 The two type worlds meet at the `EngineBackend` seam: the chassis works in the
 root `Message`/`ToolCall` value objects, the engine in the typed
@@ -627,6 +648,16 @@ than 30% of the model's context window is saved and replaced by a head+tail
 preview — the net for tools with no cap of their own (`WebSearch`, `doctor`)
 and for caps chosen for a far larger window than
 the current model's. `Task` and `Skill` results are exempt: they are the answer.
+
+**Old output can be pruned from a request, never from the history.** When a
+step's request is over its budget (see the agentic loop above), tool output
+outside the protected window is sent as a one-line placeholder naming the tool
+and its main argument — `file_path`, `path`, `command`, `pattern`, `url`,
+`query`, then the first string argument —
+`[Read src/Tools/Bash.php — output pruned to save context; re-run the tool if you need it]`
+(`Context\Pruning\PrunedOutputPlaceholder`). The result keeps its call id and its
+error flag, so every call still has its answer, and the model re-runs the call
+if it needs the output again.
 
 ---
 

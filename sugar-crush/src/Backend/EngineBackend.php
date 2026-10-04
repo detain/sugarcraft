@@ -1352,70 +1352,125 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // tool result it reads, so the request that overflows is one no
             // tier ever saw. Each step's request is measured HERE, built and
             // not yet sent (Runtime::run()'s $onRequest), against
-            // min(80% of the window, window - maxOutputTokens - reserve) —
-            // anchored on the provider's own count for the previous step plus
-            // an estimate of the rows added since. Sub-agents get it too:
-            // TaskTool and EngineExecutor run through completeTranscript().
-            // This step DETECTS and reports, on $onStep's StepStarted; the
-            // actions (in-turn pruning, step summaries) arrive with 2.2/2.4.
-            if ($onStep !== null) {
-                $contextBudget ??= \SugarCraft\Crush\Context\ContextBudget::new($this->contextWindow(), self::maxOutputTokens($userConfig));
-            }
+            // min(80% of the window, window - maxOutputTokens - reserve) and
+            // the automatic-compaction tier's absolute cap when one is set
+            // (2.9) — anchored on the provider's own count for the previous
+            // step plus an estimate of the rows added since. Sub-agents get
+            // it too: TaskTool and EngineExecutor run through
+            // completeTranscript(). Measured on EVERY step, observer or not,
+            // because the verdict now acts (2.2-1 / 2.4-1, below).
+            // The window contextPercentAtStepTop() just read (0 when the
+            // provider could not say, which the budget resolves to the shared
+            // fallback) — one provider question per turn, not two.
+            $contextBudget ??= \SugarCraft\Crush\Context\ContextBudget::forCompactor(
+                $contextWindow ?? 0,
+                self::maxOutputTokens($userConfig),
+                $this->compactorConfig(),
+            );
             $pressureAnchor ??= [null, 0];
-            $requestRows = $app->messages;
+            // Roadmap 2.2-1: what this turn has taken out of the model's view.
+            // Local to the turn (2.2-2 carries it across turns); the App
+            // carries it so every request — this step's, a step summary's,
+            // the stopped-turn summary's — is projected through it.
+            $contextLedger ??= $app->contextLedger ?? \SugarCraft\Crush\Context\Pruning\ContextLedger::new();
             $maxSteps = $this->maxSteps;
-            $observeRequest = $onStep === null ? null : static function (\SugarCraft\Crush\Providers\CompleteRequest $request) use ($contextBudget, $requestRows, $pressureAnchor, $onStep, $step, $maxSteps): void {
-                $onStep(new \SugarCraft\Crush\Events\StepStarted(
-                    $step + 1,
-                    $maxSteps,
-                    \SugarCraft\Crush\Context\ContextPressure::measure($contextBudget, $request, $requestRows, $pressureAnchor[0], $pressureAnchor[1]),
-                ));
-            };
 
-            foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat, $observeRequest) as $message) {
-                if ($message instanceof AssistantMessage) {
-                    $assistant = $message;
-                    // 2.1: the next step's anchor — this request as the
-                    // provider counted it, and how many rows it was built
-                    // from, so the delta is only what this step adds.
-                    $pressureAnchor = [\SugarCraft\Crush\Context\ContextPressure::promptTokensOf($assistant->usage()), count($requestRows)];
-                    // Counted ON ARRIVAL, before this step's tools run: a Task
-                    // call among them reads $spentSoFarUsd as its sub-agent's
-                    // cap baseline, and the step that asked for it is paid.
-                    $stepUsages[] = $assistant->usage();
-                    // On the shared ledger the moment it is billed, so a
-                    // sibling's next cap check sees it — and so it survives
-                    // this process dying before the run reports (B4-rem).
-                    $this->siblingSpend?->record($assistant->usage());
-                    if ($this->stepUsageObserver !== null) {
-                        ($this->stepUsageObserver)($assistant->usage());
+            // Roadmap 2.2-1 / 2.4-1: an over-budget request is relieved before
+            // it is sent. The observer sees the request fully built and, while
+            // relief remains, refuses it (StepOverBudget, thrown before any
+            // provider call or yield); the step is then rebuilt over a
+            // relieved ledger. First the deterministic prune — the age rule
+            // and the superseded `<turn-context>` rows, made only when it
+            // frees enough to be worth a cache rewrite — then, if the request
+            // is still over, a step summary of everything the model has
+            // already been sent. Each at most once per step; whatever is left
+            // is sent as it stands.
+            $pruneTried = false;
+            $summaryTried = false;
+            while (true) {
+                $requestRows = $app->messages;
+                $mayRelieve = !($pruneTried && $summaryTried);
+                $observeRequest = static function (\SugarCraft\Crush\Providers\CompleteRequest $request) use ($contextBudget, $requestRows, $pressureAnchor, $onStep, $step, $maxSteps, $mayRelieve): void {
+                    $pressure = \SugarCraft\Crush\Context\ContextPressure::measure($contextBudget, $request, $requestRows, $pressureAnchor[0], $pressureAnchor[1]);
+                    if ($mayRelieve && $pressure->isOverBudget()) {
+                        throw new \SugarCraft\Crush\Context\Pruning\StepOverBudget($pressure);
                     }
-                    // 1.C-4: the same instant, to the turn's own observer —
-                    // on the forked path this is the `usage` frame, so the
-                    // UI's cost moves while the turn runs.
                     if ($onStep !== null) {
-                        $onStep(new \SugarCraft\Crush\Events\UsageUpdated($step + 1, $assistant->usage(), Usage::sum($stepUsages)));
+                        $onStep(new \SugarCraft\Crush\Events\StepStarted($step + 1, $maxSteps, $pressure));
                     }
-                    // Per PROVIDER RESPONSE, not per turn: the cache buckets
-                    // describe one request's prefix, and a turn's sum would
-                    // hide a zero step behind a cached one.
-                    $this->observeCacheHealth($assistant->usage());
-                } elseif ($message instanceof ToolResultMessage) {
-                    $toolResults[] = $message;
-                    // Folded AS IT SETTLES, not after the step: a sequential
-                    // Task later in this same step reads $spentSoFarUsd when
-                    // it starts, and must see this one's dollars.
-                    if ($message->usage() !== null) {
-                        $stepUsages[] = self::delegatedSpend($message->usage());
-                        $this->siblingSpend?->record(self::delegatedSpend($message->usage()));
+                };
+
+                try {
+                    foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat, $observeRequest) as $message) {
+                        if ($message instanceof AssistantMessage) {
+                            $assistant = $message;
+                            // 2.1: the next step's anchor — this request as the
+                            // provider counted it, and how many rows it was built
+                            // from, so the delta is only what this step adds.
+                            $pressureAnchor = [\SugarCraft\Crush\Context\ContextPressure::promptTokensOf($assistant->usage()), count($requestRows)];
+                            // Counted ON ARRIVAL, before this step's tools run: a Task
+                            // call among them reads $spentSoFarUsd as its sub-agent's
+                            // cap baseline, and the step that asked for it is paid.
+                            $stepUsages[] = $assistant->usage();
+                            // On the shared ledger the moment it is billed, so a
+                            // sibling's next cap check sees it — and so it survives
+                            // this process dying before the run reports (B4-rem).
+                            $this->siblingSpend?->record($assistant->usage());
+                            if ($this->stepUsageObserver !== null) {
+                                ($this->stepUsageObserver)($assistant->usage());
+                            }
+                            // 1.C-4: the same instant, to the turn's own observer —
+                            // on the forked path this is the `usage` frame, so the
+                            // UI's cost moves while the turn runs.
+                            if ($onStep !== null) {
+                                $onStep(new \SugarCraft\Crush\Events\UsageUpdated($step + 1, $assistant->usage(), Usage::sum($stepUsages)));
+                            }
+                            // Per PROVIDER RESPONSE, not per turn: the cache buckets
+                            // describe one request's prefix, and a turn's sum would
+                            // hide a zero step behind a cached one.
+                            $this->observeCacheHealth($assistant->usage());
+                        } elseif ($message instanceof ToolResultMessage) {
+                            $toolResults[] = $message;
+                            // Folded AS IT SETTLES, not after the step: a sequential
+                            // Task later in this same step reads $spentSoFarUsd when
+                            // it starts, and must see this one's dollars.
+                            if ($message->usage() !== null) {
+                                $stepUsages[] = self::delegatedSpend($message->usage());
+                                $this->siblingSpend?->record(self::delegatedSpend($message->usage()));
+                            }
+                            // Last image-bearing tool result of the whole turn wins -
+                            // W1.G2 reachability fix: this is the only point left
+                            // with access to the typed ToolResultMessage before only
+                            // the root Message survives back to Chat/Renderer.
+                            if ($message->hasImage()) {
+                                $lastImageBytes = $message->imageBytes();
+                                $lastImageProtocol = $message->imageProtocol();
+                            }
+                        }
                     }
-                    // Last image-bearing tool result of the whole turn wins -
-                    // W1.G2 reachability fix: this is the only point left
-                    // with access to the typed ToolResultMessage before only
-                    // the root Message survives back to Chat/Renderer.
-                    if ($message->hasImage()) {
-                        $lastImageBytes = $message->imageBytes();
-                        $lastImageProtocol = $message->imageProtocol();
+
+                    break;
+                } catch (\SugarCraft\Crush\Context\Pruning\StepOverBudget) {
+                    $relieved = null;
+                    if (!$pruneTried) {
+                        $pruneTried = true;
+                        $delta = \SugarCraft\Crush\Context\Pruning\EmergencyPrune::propose(
+                            \SugarCraft\Crush\Context\Pruning\ContextProjector::new()->project($app->messages, $contextLedger)->messages,
+                            $contextLedger,
+                            \SugarCraft\Crush\Context\Pruning\PruningPolicy::new(),
+                        );
+                        $relieved = $delta === null ? null : $contextLedger->apply($delta);
+                    }
+                    if ($relieved === null && !$summaryTried) {
+                        $summaryTried = true;
+                    }
+                    if ($relieved !== null) {
+                        $contextLedger = $relieved;
+                        $app = $app->withContextLedger($contextLedger);
+                        // The provider counted the request BEFORE the ledger
+                        // moved; the next figure is a fresh estimate until a
+                        // response re-anchors it.
+                        $pressureAnchor = [null, 0];
                     }
                 }
             }

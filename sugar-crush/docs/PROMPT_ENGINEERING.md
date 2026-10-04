@@ -105,6 +105,18 @@ re-prefills the whole conversation behind it.
   alone) still appends the row to each wire request itself.
   Payload bytes are already `PromptFence`-escaped by `EnvironmentBlock`, and the row neutralises its
   own fence name inside them, so a commit subject spelling the closer cannot end the row early.
+- **Pruned tool output and superseded turn-context rows.** When a step's request
+  is over its budget, `EngineBackend::runTurn()` prunes before sending
+  (`Context\Pruning\EmergencyPrune`), and `Runtime::buildMessages()` projects every
+  request through the turn's `Context\Pruning\ContextLedger`. An old tool result
+  then reads, in place of its output,
+  `[Read src/Tools/Bash.php — output pruned to save context; re-run the tool if you need it]`
+  — the tool and its main argument, on one line, bounded to 120 characters
+  (`Context\Pruning\PrunedOutputPlaceholder`) — and every `<turn-context>` row but
+  the newest is left out, as its own preamble says it supersedes them. Both are
+  pure functions of the rows and the ledger, and the ledger moves only at that
+  over-budget point, in one batch worth at least 20k tokens: the bytes before
+  the first pruned row are the bytes the previous request sent.
 - **History system rows stay in place.** `SglangProvider::placeSystemRows()` — shared by
   `CustomProvider` — keeps ONE leading `system` row: the assembled prompt, then any history system
   rows that precede the first non-system row (a launch notice, the title one-shot's instruction).

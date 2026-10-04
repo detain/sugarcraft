@@ -3783,6 +3783,14 @@ final class Runtime
         return null;
     }
 
+    /**
+     * The messages a request sends: the App's rows, projected through its
+     * {@see \SugarCraft\Crush\Context\Pruning\ContextLedger} (roadmap
+     * 2.2-1 — pruned tool output becomes its placeholder, superseded
+     * `<turn-context>` rows are left out), then sanitised. The rows are never
+     * rewritten: an App with no ledger, or an empty one, sends them exactly
+     * as before, byte for byte.
+     */
     private function buildMessages(App $app): array
     {
         $messages = [];
@@ -3791,6 +3799,12 @@ final class Runtime
             if ($msg instanceof Message) {
                 $messages[] = $msg;
             }
+        }
+
+        if ($app->contextLedger !== null && !$app->contextLedger->isEmpty()) {
+            $messages = \SugarCraft\Crush\Context\Pruning\ContextProjector::new()
+                ->project($messages, $app->contextLedger)
+                ->messages;
         }
 
         return \SugarCraft\Crush\Messages\HistorySanitizer::sanitize($messages);

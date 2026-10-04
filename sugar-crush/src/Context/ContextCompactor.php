@@ -637,13 +637,14 @@ final class ContextCompactor
 
         $preserveCount = $this->config->recentPreserveCount;
 
-        // Stage 0: strip tool-result system messages before pairing
-        // (tool results are voluminous intermediate outputs; they are not
-        // part of the conversational exchange that needs preserving)
-        $messages = $this->removeToolResults($messages);
+        // Stage 0: older tool output becomes its placeholder (roadmap 2.2-1,
+        // the engine's age rule). Only rows the stages below are about to
+        // condense change; the preserved tail keeps its bytes. What the caller
+        // handed in stays $messages: the savings figure is measured against it.
+        $staged = $this->removeToolResults($messages);
 
         // Group messages into user/assistant pairs
-        $pairs = $this->groupIntoPairs($messages);
+        $pairs = $this->groupIntoPairs($staged);
 
         // Stage 1: if we have <= preserveCount pairs, no compaction needed
         if (count($pairs) <= $preserveCount) {
@@ -1116,24 +1117,87 @@ final class ContextCompactor
     }
 
     /**
-     * Stage 0: Remove tool result messages from older exchanges.
+     * Stage 0: older tool output becomes a placeholder naming its call — the
+     * same age rule, by the same figures, the engine applies to an over-budget
+     * request (roadmap 2.2-1,
+     * {@see \SugarCraft\Crush\Context\Pruning\Strategies\ToolOutputAgeStrategy::select()}).
      *
-     * Removes messages with role=system that carry tool_results, as these are
-     * voluminous intermediate outputs that are summarized by stage 2 anyway.
-     * Recent tool results (within recentPreserveCount pairs) are kept intact.
+     * A tool row is one carrying the `tool` key
+     * ({@see \SugarCraft\Crush\Host\CompactionService::compactionWire()}).
+     * Walking back from the newest row, everything from the second-last user
+     * prompt on is kept, then the newest 40k estimated tokens of tool output;
+     * older output (not `Task` or `Skill`, whose results cannot be had again by
+     * re-running a cheap call) becomes
+     * {@see \SugarCraft\Crush\Context\Pruning\PrunedOutputPlaceholder} — and
+     * only when that frees at least 20k, so a small history is never touched.
      *
-     * @param array<array{role:string,content:string,?tool_results?:mixed}> $messages
+     * THE PRESERVED TAIL IS NEVER CHANGED. The last `recentPreserveCount`
+     * exchanges are what {@see compact()} keeps verbatim, and Chat maps a
+     * compacted wire back onto its rows by matching that tail byte for byte
+     * ({@see \SugarCraft\Crush\Host\CompactionService::messagesFromWire()}):
+     * a placeholder there would turn the kept rows into rewritten ones. So the
+     * rule only reaches the rows about to be condensed, and a history with
+     * nothing to condense comes back as it went in. Row count and roles never
+     * change, so the pairing downstream is the pairing of the input.
+     *
+     * The legacy shape — a `system` row carrying `tool_results`, which no
+     * current producer writes — is still dropped.
+     *
+     * @param array<array{role:string,content:string,tool?:array<string,mixed>,tool_results?:mixed}> $messages
      * @return array<array{role:string,content:string}>
      */
     public function removeToolResults(array $messages): array
     {
-        return array_values(array_filter(
+        $messages = array_values(array_filter(
             $messages,
             fn(array $msg): bool => !(
                 ($msg['role'] ?? '') === 'system'
                 && isset($msg['tool_results'])
             )
         ));
+
+        $preserveCount = $this->config->recentPreserveCount;
+        $preservedRows = $preserveCount > 0
+            ? count($this->flattenPairs(array_slice($this->groupIntoPairs($messages), -$preserveCount)))
+            : 0;
+        $protectFrom = count($messages) - $preservedRows;
+
+        $rows = [];
+        $placeholders = [];
+        foreach ($messages as $index => $msg) {
+            $content = (string) ($msg['content'] ?? '');
+            if (($msg['role'] ?? '') === 'user' && !str_starts_with($content, TurnContextBlock::FENCE . "\n")) {
+                $rows[] = ['userTurn' => true];
+
+                continue;
+            }
+            $tool = $msg['tool'] ?? null;
+            if (!is_array($tool)) {
+                continue;
+            }
+            $name = is_string($tool['name'] ?? null) ? $tool['name'] : '';
+            $placeholders[$index] = \SugarCraft\Crush\Context\Pruning\PrunedOutputPlaceholder::for(
+                $name,
+                is_array($tool['arguments'] ?? null) ? $tool['arguments'] : [],
+            );
+            $rows[] = [
+                'key' => $index,
+                'tool' => $name,
+                'tokens' => TokenEstimate::ofText($content),
+                'placeholderTokens' => TokenEstimate::ofText($placeholders[$index]),
+                'keep' => $index >= $protectFrom,
+            ];
+        }
+
+        $selected = \SugarCraft\Crush\Context\Pruning\Strategies\ToolOutputAgeStrategy::select(
+            $rows,
+            \SugarCraft\Crush\Context\Pruning\PruningPolicy::new(),
+        );
+        foreach (array_keys($selected) as $index) {
+            $messages[$index]['content'] = $placeholders[$index];
+        }
+
+        return $messages;
     }
 
     /**

@@ -235,6 +235,14 @@ final class App implements Model
          */
         public readonly ?CompactorConfig $compactorConfig = null,
         /**
+         * What has been pruned from the model's view of {@see $messages}
+         * (roadmap 2.2-1): {@see \SugarCraft\Crush\Runtime::buildMessages()}
+         * projects the rows through it on every request. Null — every App
+         * outside an engine turn that has pruned — sends the rows as they are.
+         * Carried here for the reason {@see $compactorConfig} is.
+         */
+        public readonly ?\SugarCraft\Crush\Context\Pruning\ContextLedger $contextLedger = null,
+        /**
          * Delegated runs whose row the user expanded with a click (by
          * {@see \SugarCraft\Crush\Agents\SubAgent::$id}), value always
          * true — the same shape as {@see \SugarCraft\Crush\Chat::expanded()}.
@@ -784,6 +792,12 @@ final class App implements Model
     public function withCompactorConfig(?CompactorConfig $v): self
     {
         return $this->mutate(compactorConfig: $v);
+    }
+
+    /** See {@see $contextLedger}. */
+    public function withContextLedger(?\SugarCraft\Crush\Context\Pruning\ContextLedger $v): self
+    {
+        return $this->mutate(contextLedger: $v);
     }
 
     /**
@@ -2720,6 +2734,7 @@ final class App implements Model
             dock: array_key_exists('dock', $changes) ? $changes['dock'] : $this->dock,
             onLayoutChange: array_key_exists('onLayoutChange', $changes) ? $changes['onLayoutChange'] : $this->onLayoutChange,
             compactorConfig: array_key_exists('compactorConfig', $changes) ? $changes['compactorConfig'] : $this->compactorConfig,
+            contextLedger: array_key_exists('contextLedger', $changes) ? $changes['contextLedger'] : $this->contextLedger,
             expandedAgents: array_key_exists('expandedAgents', $changes) ? $changes['expandedAgents'] : $this->expandedAgents,
             paneScroll: array_key_exists('paneScroll', $changes) ? $changes['paneScroll'] : $this->paneScroll,
             agentSplitCols: array_key_exists('agentSplitCols', $changes) ? $changes['agentSplitCols'] : $this->agentSplitCols,

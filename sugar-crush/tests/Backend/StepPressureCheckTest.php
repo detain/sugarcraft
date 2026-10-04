@@ -114,8 +114,10 @@ final class StepPressureCheckTest extends TestCase
         $this->assertTrue($events[1]->pressure?->isOverBudget(), 'the provider\'s count plus the step\'s tool result is over');
     }
 
-    public function testNoObserverMeansNoMeasurement(): void
+    public function testATurnWithoutAnObserverRunsTheSame(): void
     {
+        // Measured on every step since 2.2-1 acts on the verdict; with no
+        // observer there is simply no one to tell.
         $calls = 0;
         $seen = [];
         $events = [];

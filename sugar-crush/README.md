@@ -1233,7 +1233,13 @@ and `/clear` frees the whole context at once. Those tiers judge at submit; insid
 a turn the engine also measures every step's request before sending it — system
 prompt and tool schemas included, anchored on the provider's own count for the
 step before — against a step budget of the smaller of 80% of the window and the
-window less the output ceiling and a reserve. While the turn runs, the status
+window less the output ceiling and a reserve. A request over that budget is
+pruned before it goes out: older tool output — outside the last two prompts and
+the newest 40k tokens of it, and never a `Task` or `Skill` result — is sent as
+a one-line placeholder naming the call (`[Read src/Foo.php — output pruned to save
+context; re-run the tool if you need it]`), along with superseded copies of the
+harness's own state row, but only when that frees at least 20k tokens. Your
+transcript keeps every output. While the turn runs, the status
 bar names the step it is on, adds that step's context figure once the request
 is over budget, and moves the spend readout as each step is billed. On such a
 turn the first `Esc` stops it after the current step's tools finish, with its

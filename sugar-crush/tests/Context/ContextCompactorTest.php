@@ -692,6 +692,63 @@ final class ContextCompactorTest extends TestCase
         $this->assertSame('Here is the content', $result[1]['content']);
     }
 
+    public function testStageZeroPrunesOlderToolOutputByTheEngineRule(): void
+    {
+        // Roadmap 2.2-1: the wire form of the engine's age rule. Five 15k
+        // reads in the oldest exchange, then three short exchanges preserved.
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 3));
+        $messages = [$this->msg('user', 'read everything')];
+        for ($i = 1; $i <= 5; $i++) {
+            $messages[] = $this->bigReadRow("f{$i}.php");
+        }
+        foreach (['second', 'third', 'fourth'] as $prompt) {
+            $messages[] = $this->msg('user', $prompt);
+            $messages[] = $this->msg('assistant', 'ok');
+        }
+
+        $result = $compactor->removeToolResults($messages);
+
+        $this->assertCount(count($messages), $result, 'rows are rewritten, never removed');
+        // f5 and f4 are the newest 30k of older output; f3 tips past 40k.
+        foreach ([1, 2, 3] as $i) {
+            $this->assertSame(
+                '[Read f' . $i . '.php — output pruned to save context; re-run the tool if you need it]',
+                $result[$i]['content'],
+            );
+            $this->assertSame('Read', $result[$i]['tool']['name'], 'the row stays a tool row');
+        }
+        $this->assertSame($messages[4]['content'], $result[4]['content']);
+        $this->assertSame($messages[5]['content'], $result[5]['content']);
+        $this->assertSame(array_slice($messages, 6), array_slice($result, 6), 'the preserved tail keeps its bytes');
+    }
+
+    public function testStageZeroNeverTouchesThePreservedTail(): void
+    {
+        // Everything fits in the preserved window, however large: compact()
+        // has nothing to condense, so stage 0 has nothing to change.
+        $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 10));
+        $messages = [$this->msg('user', 'read everything')];
+        for ($i = 1; $i <= 6; $i++) {
+            $messages[] = $this->bigReadRow("f{$i}.php");
+        }
+        $messages[] = $this->msg('user', 'second');
+        $messages[] = $this->msg('user', 'third');
+
+        $this->assertSame($messages, $compactor->removeToolResults($messages));
+        $this->assertSame($messages, $compactor->compact($messages));
+        $this->assertSame(0, $compactor->savingsPercentage());
+    }
+
+    /** @return array{role:string,content:string,tool:array{name:string,arguments:array<string,string>,error:bool}} */
+    private function bigReadRow(string $path): array
+    {
+        return [
+            'role' => 'assistant',
+            'content' => str_repeat('lorem ipsum ', 5_000),
+            'tool' => ['name' => 'Read', 'arguments' => ['file_path' => $path], 'error' => false],
+        ];
+    }
+
     // ─── compactSkills() ────────────────────────────────────────
 
     public function testCompactSkillsPreservesNonSkillMessages(): void

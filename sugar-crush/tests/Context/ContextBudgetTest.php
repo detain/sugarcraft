@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextBudget;
 use SugarCraft\Crush\Context\ContextPressure;
 use SugarCraft\Crush\Context\ContextWindow;
@@ -52,6 +53,25 @@ final class ContextBudgetTest extends TestCase
     public function testAnOutputCeilingPastTheWindowFallsBackToTheShare(): void
     {
         $this->assertSame(6_553, ContextBudget::new(8_192, 16_000)->threshold());
+    }
+
+    public function testAnAbsoluteCapBindsALargeWindowAndIsOffByDefault(): void
+    {
+        $this->assertSame(100_000, ContextBudget::new(1_000_000, 32_000, 100_000)->threshold());
+        $this->assertSame(80_000, ContextBudget::new(100_000, null, 500_000)->threshold(), 'a cap above the share changes nothing');
+        $this->assertNull(ContextBudget::new(1_000_000, null, 0)->absoluteTokens, 'a non-positive cap is no cap');
+
+        $this->assertSame(800_000, ContextBudget::forCompactor(1_000_000, 32_000, CompactorConfig::new())->threshold(), 'unset by default');
+        $this->assertSame(
+            CompactorConfig::SMART_ZONE_COMPACTION_TOKENS,
+            ContextBudget::forCompactor(1_000_000, 32_000, CompactorConfig::smartZone())->threshold(),
+            'the automatic-compaction cap is the step budget\'s absolute term',
+        );
+        $this->assertSame(
+            50_000,
+            ContextBudget::forCompactor(1_000_000, null, CompactorConfig::new()->withModelTokenOverride('m', ['backgroundCompactionTokens' => 50_000])->forModel('m'))->threshold(),
+            'a per-model cap reaches it through forModel()',
+        );
     }
 
     public function testAnUnknownWindowTakesTheSharedFallback(): void
