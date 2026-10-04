@@ -311,6 +311,7 @@ sugar-crush/tests/Server/WsUpgradeTest.php	0.600	7
 sugar-crush/tests/Memory/CompactionJournalTest.php	0.600	8
 sugar-crush/tests/Backend/EngineBackendWithModelTest.php	0.600	7
 sugar-crush/tests/Backend/TurnInboxDrainTest.php	0.600	5
+sugar-crush/tests/Chat/AgentViewTest.php	0.600	17
 sugar-crush/tests/Tools/McpToolBridgeResultCapTest.php	0.587	4
 sugar-crush/tests/Tools/IgnoreRulesBacktrackingTest.php	0.564	112
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.555	10

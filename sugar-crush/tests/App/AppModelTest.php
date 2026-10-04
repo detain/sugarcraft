@@ -34,6 +34,7 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
 use SugarCraft\Crush\Tui\Commands\GroupInputCmd;
 use SugarCraft\Crush\Tui\Commands\NewSessionCmd;
+use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd;
 use SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd;
 use SugarCraft\Crush\Tui\Components\MenuBar;
@@ -955,10 +956,32 @@ final class AppModelTest extends TestCase
     {
         $app = $this->app()->withChat(new Chat());
 
-        foreach ([new GroupInputCmd(), new StopAllAgentsCmd(), new QuitAgentViewCmd()] as $inert) {
+        foreach ([new GroupInputCmd(), new StopAllAgentsCmd()] as $inert) {
             [$next, $cmd] = $app->consumeShellCmd($inert);
             $this->assertNull($cmd);
             $this->assertSame($app, $next);
         }
+    }
+
+    /**
+     * QuitAgentViewCmd left the inert list with roadmap P-C2: the dashboard's
+     * `q` also leaves an open Agent View. With none open it changes nothing.
+     */
+    public function testQuitAgentViewClosesAnOpenAgentView(): void
+    {
+        $app = $this->app()->withChat(new Chat());
+
+        [$idle, $cmd] = $app->consumeShellCmd(new QuitAgentViewCmd());
+        $this->assertNull($cmd);
+        $this->assertSame($app, $idle, 'no view open: nothing to close');
+
+        $open = $app->openAgentView('run-1');
+        $this->assertSame('run-1', $open->agentViewTarget);
+        $this->assertSame(AgentViewMode::Attach, $open->agentViewMode);
+
+        [$closed, $cmd] = $open->consumeShellCmd(new QuitAgentViewCmd());
+        $this->assertNull($cmd);
+        $this->assertNull($closed->agentViewTarget);
+        $this->assertSame(AgentViewMode::List, $closed->agentViewMode);
     }
 }

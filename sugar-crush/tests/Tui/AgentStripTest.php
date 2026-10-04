@@ -168,24 +168,27 @@ final class AgentStripTest extends TestCase
         $this->assertNull($next->agentStripFocus);
     }
 
-    public function testEnterOpensTheFocusedRunOnTheDashboard(): void
+    public function testEnterOpensTheFocusedRunInTheAgentView(): void
     {
         [$app] = $this->app()->update(new KeyMsg(KeyType::Down, alt: true));
         [$app] = $app->update(new KeyMsg(KeyType::Right));
         [$app] = $app->update(new KeyMsg(KeyType::Enter));
 
-        $this->assertSame(Pane::Agents, $app->pane);
-        $this->assertSame(AgentViewMode::Peek, $app->agentViewMode);
+        // Roadmap P-C2: the run's transcript in the main area.
+        $this->assertSame(Pane::Chat, $app->pane);
+        $this->assertSame('r2', $app->agentViewTarget, 'the run that was focused');
+        $this->assertSame(AgentViewMode::Attach, $app->agentViewMode);
         $this->assertNull($app->agentStripFocus);
         $entries = \SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($app);
-        $this->assertSame('r2', $entries[$app->selectedAgentIndex]->key, 'the run that was focused');
+        $this->assertSame('r2', $entries[$app->selectedAgentIndex]->key, 'the dashboard agrees');
     }
 
     public function testAClickOnARunsZoneOpensItThroughTheShell(): void
     {
         [$app] = $this->app()->update(new OpenAgentViewMsg('r1'));
 
-        $this->assertSame(Pane::Agents, $app->pane);
+        $this->assertSame(Pane::Chat, $app->pane);
+        $this->assertSame('r1', $app->agentViewTarget);
         $entries = \SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($app);
         $this->assertSame('r1', $entries[$app->selectedAgentIndex]->key);
     }

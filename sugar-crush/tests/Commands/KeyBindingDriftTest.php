@@ -1485,6 +1485,16 @@ final class KeyBindingDriftTest extends TestCase
                 [$app] = $this->claim($k[0], $this->agentApp(1)->withSelectedAgentIndex(0));
                 $this->assertSame(AgentViewMode::Peek, $app->agentViewMode);
             },
+            // Roadmap P-C2: the peek's Enter attaches — the main area shows the
+            // agent. Through App::update(), so the shell's delivery of the
+            // open message is on the path, not just the mode flip.
+            'agents.attach' => function (array $k): void {
+                $peeking = $this->agentApp(1)->withSelectedAgentIndex(0)->withAgentViewMode(AgentViewMode::Peek);
+                [$app] = $peeking->update($k[0]);
+                $this->assertSame(AgentViewMode::Attach, $app->agentViewMode);
+                $this->assertSame('agent-1', $app->agentViewTarget, 'the peeked agent is on screen');
+                $this->assertSame(Pane::Chat, $app->pane, 'in the main area');
+            },
             'agents.slot' => function (): void {
                 [$app] = $this->claim(
                     new KeyMsg(KeyType::Char, '2', alt: true),
@@ -1530,10 +1540,31 @@ final class KeyBindingDriftTest extends TestCase
             },
             'strip.open' => function (array $k): void {
                 [$app] = $this->stripApp()->withAgentStripFocus('run-2')->update($k[0]);
-                $this->assertSame(Pane::Agents, $app->pane, 'the run opens on the dashboard');
-                $this->assertSame(AgentViewMode::Peek, $app->agentViewMode);
+                $this->assertSame('run-2', $app->agentViewTarget, 'the run opens in the Agent View');
+                $this->assertSame(Pane::Chat, $app->pane);
+                $this->assertSame(AgentViewMode::Attach, $app->agentViewMode);
                 $this->assertSame('run-2', \SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($app)[$app->selectedAgentIndex]->key);
                 $this->assertNull($app->agentStripFocus);
+            },
+            // ── Agent transcript (P-C2) ─────────────────────────────────
+            'agentview.back' => function (array $k): void {
+                $open = $this->stripApp()->openAgentView('run-2');
+                $this->assertSame('run-2', $open->agentViewTarget, 'fixture: the view is open');
+
+                [$app] = $open->update($k[0]);
+                $this->assertNull($app->agentViewTarget, 'the main transcript is back');
+                $this->assertSame(AgentViewMode::List, $app->agentViewMode);
+                $this->assertTrue($app->chat?->inFlight, 'and the turn was not touched');
+            },
+            // Both directions from the MIDDLE run, so swapping the two keys —
+            // or walking the wrong batch — fails.
+            'agentview.next' => function (array $k): void {
+                [$app] = $this->batchApp()->openAgentView('b-2')->update($k[0]);
+                $this->assertSame('b-3', $app->agentViewTarget);
+            },
+            'agentview.prev' => function (array $k): void {
+                [$app] = $this->batchApp()->openAgentView('b-2')->update($k[0]);
+                $this->assertSame('b-1', $app->agentViewTarget);
             },
             'strip.cancel' => function (array $k): void {
                 $token = new \SugarCraft\Crush\Backend\CancellationToken();
@@ -1824,6 +1855,23 @@ final class KeyBindingDriftTest extends TestCase
 
                 $renaming = $this->clickZone($pinned, Renderer::SESSION_ACT_ZONE_PREFIX . $pinned->sessionPicker()?->selectedIndex() . ':rename');
                 $this->assertTrue($renaming->sessionPicker()?->isRenaming(), 'clicking the pencil opens the rename');
+            },
+            // A Task row's live line, clicked in the painted frame: the chat
+            // asks its shell to open that run, and the shell does.
+            'mouse.agent' => function (): void {
+                $app = $this->stripApp();
+                $chat = $app->chat;
+                $this->assertNotNull($chat);
+                Renderer::render($chat);
+                $zone = Renderer::scanner()->get(Renderer::AGENT_LINE_ZONE_PREFIX . 'run-2');
+                $this->assertInstanceOf(Zone::class, $zone, 'the live line is a click zone');
+
+                [$pressed] = $chat->update(new MouseClickMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Press));
+                [, $cmd] = $pressed->update(new MouseReleaseMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Release));
+                $this->assertInstanceOf(\Closure::class, $cmd);
+
+                [$opened] = $app->update($cmd());
+                $this->assertSame('run-2', $opened->agentViewTarget);
             },
             'mouse.palette-row' => function (): void {
                 $chat = $this->chatWithPalette();
@@ -2224,6 +2272,33 @@ final class KeyBindingDriftTest extends TestCase
         return $this->app()->withChat($chat);
     }
 
+    /**
+     * An App over a chat whose ONE Task call runs a batch of three runs
+     * (`b-1..3` under `call_b`) — the siblings `Alt+N` / `Alt+P` walk.
+     */
+    private function batchApp(): App
+    {
+        $chat = (new Chat(
+            history: [Message::user('go'), Message::toolRunning(new ToolCall('Task', [], 'call_b'))],
+            backend: new EchoBackend(),
+            inFlight: true,
+            generation: 1,
+        ))->withSize(120, 20);
+        foreach ([1, 2, 3] as $n) {
+            $chat->agentLive()->apply(new \SugarCraft\Crush\Events\SubAgentActivity(
+                \SugarCraft\Crush\Events\SubAgentActivity::OP_STARTED,
+                'b-' . $n,
+                'explore',
+                'a task',
+                1,
+                '',
+                parentCallId: 'call_b',
+            ));
+        }
+
+        return $this->app()->withChat($chat);
+    }
+
     private function skillApp(): App
     {
         // Three options, not two: the picker wraps, so from row 0 a two-row
@@ -2441,6 +2516,7 @@ final class KeyBindingDriftTest extends TestCase
         'mouse.side-row',
         'mouse.palette-row',
         'mouse.session-action',
+        'mouse.agent',
     ];
 
     /**

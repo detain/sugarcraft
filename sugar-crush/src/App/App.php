@@ -90,6 +90,24 @@ final class App implements Model
     /** Rows a wheel notch scrolls a docked pane — the transcript's own step. */
     private const PANE_WHEEL_ROWS = 3;
 
+    /**
+     * How often an open Agent View reads its run's log (P-C2) — about the
+     * chat's own 0.1 s pump, but a log only grows a line per tool step.
+     */
+    public const AGENT_VIEW_TICK_SECONDS = 0.2;
+
+    /** The Agent View's tail tick, keyed per run so a switch cancels the old one. */
+    public const AGENT_VIEW_SUBSCRIPTION = 'agent-view:';
+
+    /**
+     * Log windows read at once when a view opens, so a finished run's whole
+     * transcript (up to 4 MB) is on screen at once instead of over the ticks.
+     */
+    private const AGENT_VIEW_OPEN_READS = 64;
+
+    /** Newest log items the view keeps; a longer run drops its oldest rows. */
+    private const AGENT_VIEW_MAX_ITEMS = 4000;
+
     private function __construct(
         public readonly ProviderInterface $provider,
         public readonly string $model,
@@ -313,6 +331,45 @@ final class App implements Model
          * own tiers answer exactly as before.
          */
         public readonly string|float|null $reasoningEffort = null,
+        /**
+         * The delegated run the read-only Agent View shows in the main
+         * transcript area (roadmap P-C2, Appendix P §5.1–5.2), by
+         * {@see \SugarCraft\Crush\Agents\Live\AgentLiveState::$id} — or the
+         * dashboard row's key or name for a worker that is not one run — or
+         * null while the parent transcript is on screen. Shell state, like the
+         * dashboard's selection, so the hosted chat's state is not widened for
+         * it: {@see view()} hands the frame to the chat's renderer for the one
+         * paint ({@see Renderer::setAgentView()}).
+         */
+        public readonly ?string $agentViewTarget = null,
+        /**
+         * Where the view has read the run's JSONL log up to (P-C1's
+         * {@see \SugarCraft\Crush\Agents\Live\AgentTranscriptTail}), or null
+         * when the view reads no log — a stored child session, or a worker that
+         * wrote none.
+         */
+        public readonly ?\SugarCraft\Crush\Agents\Live\AgentTranscriptTail $agentViewTail = null,
+        /**
+         * Every log item the view has read, in order — kept so a tool result
+         * that arrives on a later tick still replaces its call's running row.
+         *
+         * @var list<array<string, mixed>>
+         */
+        public readonly array $agentViewItems = [],
+        /**
+         * The rows the view draws: {@see $agentViewItems} projected
+         * ({@see \SugarCraft\Crush\Agents\Live\AgentTranscriptTail::messages()}),
+         * or a stored child session's transcript. Projected in update(), never
+         * in view().
+         *
+         * @var list<\SugarCraft\Crush\Message>
+         */
+        public readonly array $agentViewRows = [],
+        /**
+         * The open view's agent name when no live run carries one — a stored
+         * child session opened from the session picker.
+         */
+        public readonly ?string $agentViewName = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -467,24 +524,261 @@ final class App implements Model
     }
 
     /**
-     * Open run $id (P-B3): the dashboard, with that run selected and its
-     * peek up — the closest view a run has until the Agent View (P-C2)
-     * lands. The strip gives the keyboard back. A run the dashboard does not
-     * list (already cleared) leaves the shell as it was, minus the focus.
+     * Open run $id (P-B3's strip `Enter`): the read-only Agent View (P-C2).
+     *
+     * @see openAgentView()
      */
     public function openAgent(string $id): self
     {
-        $next = $this->withAgentStripFocus(null);
+        return $this->openAgentView($id);
+    }
+
+    /**
+     * Open the read-only Agent View on run $id (roadmap P-C2, Appendix P
+     * §5.1): the chat pane's transcript area shows that run's own transcript,
+     * with {@see \SugarCraft\Crush\Tui\AgentViewHeader} pinned above it,
+     * until {@see closeAgentView()}. The input box stays the main chat's.
+     *
+     * {@see AgentViewMode::Attach} now means exactly this — "the main area
+     * shows the agent" — so the dashboard's Peek → Attach `Enter` lands here,
+     * and its row for the run is selected, so the two surfaces agree.
+     *
+     * WHAT IT READS, in order:
+     *  1. the run's JSONL log (P-C1), announced by its `started` frame and
+     *     checked to lie under the transcript root before it is opened — read
+     *     up to {@see AGENT_VIEW_OPEN_READS} windows now, then tailed;
+     *  2. else the `subagent` child session the finished run was stored as
+     *     ($childSessionId, the run's own, or the manager's record of it),
+     *     read once from the session store;
+     *  3. else nothing of its own: a dashboard worker that keeps no log (a
+     *     workflow stage, a background session) is drawn from its live output
+     *     buffer by {@see \SugarCraft\Crush\Tui\AgentOutputPane}'s Attach mode.
+     *
+     * Opening the run that is already open is the view's refresh — see
+     * {@see \SugarCraft\Crush\OpenAgentViewMsg}.
+     */
+    public function openAgentView(string $id, ?string $childSessionId = null, ?string $name = null): self
+    {
+        if ($id === '') {
+            return $this;
+        }
+        // A stored child session this launch still holds the live run of
+        // opens as that run, so the view tails its log and knows its batch.
+        if ($childSessionId !== null && $this->chat !== null) {
+            foreach ($this->chat->agentLive()->all() as $state) {
+                if ($state->childSessionId === $childSessionId) {
+                    $id = $state->id;
+                    break;
+                }
+            }
+        }
+        if ($this->agentViewTarget === $id) {
+            return $this->refreshAgentView();
+        }
+
+        $next = $this->mutate(
+            pane: Pane::Chat,
+            agentViewMode: AgentViewMode::Attach,
+            agentStripFocus: null,
+            agentViewTarget: $id,
+            agentViewTail: null,
+            agentViewItems: [],
+            agentViewRows: [],
+            agentViewName: $name,
+        );
         foreach (\SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($next) as $index => $entry) {
-            if ($entry->key === $id) {
-                return $next
-                    ->withPane(Pane::Agents)
-                    ->withSelectedAgentIndex($index)
-                    ->withAgentViewMode(AgentViewMode::Peek);
+            if (($entry->key ?? $entry->name) === $id) {
+                $next = $next->withSelectedAgentIndex($index);
+                break;
             }
         }
 
-        return $next;
+        $log = $next->agentViewLog();
+        if ($log !== null) {
+            $next = $next->mutate(agentViewTail: \SugarCraft\Crush\Agents\Live\AgentTranscriptTail::of($log));
+            for ($read = 0; $read < self::AGENT_VIEW_OPEN_READS; $read++) {
+                $before = $next->agentViewTail;
+                $next = $next->refreshAgentView();
+                if ($next->agentViewTail?->offset() === $before?->offset()) {
+                    break;
+                }
+            }
+
+            return $next;
+        }
+
+        return $next->readStoredAgentView($childSessionId);
+    }
+
+    /**
+     * Read what the open view's log gained since the last read — one window of
+     * {@see \SugarCraft\Crush\Agents\Live\AgentTranscriptTail::MAX_BYTES_PER_READ}
+     * at most — and re-project the rows. The shell's tail tick
+     * ({@see subscriptions()}) calls it through {@see openAgentView()}.
+     *
+     * A view opened before the run announced its log (a click on a queued
+     * line) picks the log up here once the `started` frame names it; one whose
+     * run finished without a log falls back to the stored child session.
+     */
+    public function refreshAgentView(): self
+    {
+        if ($this->agentViewTarget === null) {
+            return $this;
+        }
+
+        $tail = $this->agentViewTail;
+        if ($tail === null) {
+            $log = $this->agentViewLog();
+            if ($log === null) {
+                return $this->agentViewRows === [] ? $this->readStoredAgentView(null) : $this;
+            }
+            $tail = \SugarCraft\Crush\Agents\Live\AgentTranscriptTail::of($log);
+        }
+
+        [$items, $advanced] = $tail->next();
+        if ($items === [] && $advanced->offset() === $tail->offset() && $tail === $this->agentViewTail) {
+            return $this;
+        }
+
+        $all = $this->agentViewItems;
+        array_push($all, ...$items);
+        if (\count($all) > self::AGENT_VIEW_MAX_ITEMS) {
+            $all = \array_slice($all, -self::AGENT_VIEW_MAX_ITEMS);
+        }
+
+        return $this->mutate(
+            agentViewTail: $advanced,
+            agentViewItems: $all,
+            agentViewRows: \SugarCraft\Crush\Agents\Live\AgentTranscriptTail::messages($all),
+        );
+    }
+
+    /**
+     * Leave the Agent View: the parent transcript is back, and the dashboard
+     * is no longer attached. Pane focus is left where it is.
+     */
+    public function closeAgentView(): self
+    {
+        if ($this->agentViewTarget === null && $this->agentViewMode !== AgentViewMode::Attach) {
+            return $this;
+        }
+
+        return $this->mutate(
+            agentViewMode: AgentViewMode::List,
+            agentViewTarget: null,
+            agentViewTail: null,
+            agentViewItems: [],
+            agentViewRows: [],
+            agentViewName: null,
+        );
+    }
+
+    /**
+     * The runs of the open run's Task batch, in spawn order, itself included —
+     * what `Alt+N` / `Alt+P` and the header's `‹ i of N ›` walk. A single run,
+     * or a worker that is not a run, has none.
+     *
+     * @return list<string> run ids
+     */
+    public function agentViewSiblings(): array
+    {
+        $state = $this->agentViewTarget === null ? null : $this->chat?->agentLive()->get($this->agentViewTarget);
+        if ($state === null || $state->parentCallId === '') {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($this->chat?->agentLive()->forCall($state->parentCallId) ?? [] as $sibling) {
+            if (!$sibling->isQueued()) {
+                $ids[] = $sibling->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * The sibling $step places away from the open run (`Alt+N` is +1, `Alt+P`
+     * is -1), or null at either end or with no siblings.
+     */
+    public function agentViewSibling(int $step): ?string
+    {
+        $siblings = $this->agentViewSiblings();
+        $at = array_search($this->agentViewTarget, $siblings, true);
+
+        return \is_int($at) ? ($siblings[$at + $step] ?? null) : null;
+    }
+
+    /**
+     * What one frame of the open view draws, for
+     * {@see Renderer::setAgentView()} — or null while no view is open. Read in
+     * view(): it computes from state and reads nothing from disk.
+     *
+     * @return array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<\SugarCraft\Crush\Message>, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null
+     */
+    public function agentViewFrame(): ?array
+    {
+        $id = $this->agentViewTarget;
+        if ($id === null || $this->chat === null) {
+            return null;
+        }
+
+        $state = $this->chat->agentLive()->get($id);
+        $attach = null;
+        $transcript = $this->agentViewTail !== null || $this->agentViewRows !== [];
+        if (!$transcript) {
+            foreach (\SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($this) as $entry) {
+                if (($entry->key ?? $entry->name) === $id) {
+                    $attach = $entry;
+                    break;
+                }
+            }
+        }
+
+        return [
+            'id' => $id,
+            'name' => $state?->name ?? $this->agentViewName ?? $attach?->name ?? $this->chat->agentManager()?->getSubAgent($id)?->agent->name ?? $id,
+            'state' => $state,
+            'rows' => $this->agentViewRows,
+            'attach' => $attach,
+            'siblings' => $this->agentViewSiblings(),
+            'transcript' => $transcript,
+        ];
+    }
+
+    /**
+     * The open run's transcript log, when its frames announced one that lies
+     * where {@see \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog} writes
+     * — a path off a frame is checked before it is opened.
+     */
+    private function agentViewLog(): ?string
+    {
+        $log = $this->agentViewTarget === null ? null : $this->chat?->agentLive()->get($this->agentViewTarget)?->transcriptLog;
+
+        return $log !== null && \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::isLogPath($log) ? $log : null;
+    }
+
+    /**
+     * The view's rows from the stored `subagent` child session: $childSessionId,
+     * else the one the run's finished frame named, else the manager's record.
+     * One store read, in update(), on open or when a log-less run finished.
+     */
+    private function readStoredAgentView(?string $childSessionId): self
+    {
+        $id = (string) $this->agentViewTarget;
+        $childSessionId ??= $this->chat?->agentLive()->get($id)?->childSessionId
+            ?? $this->chat?->agentManager()?->childSessionIdOf($id);
+        if ($childSessionId === null || $this->chat === null) {
+            return $this;
+        }
+
+        try {
+            $rows = Chat::loadTranscript($this->chat->sessionStore(), $childSessionId);
+        } catch (\Throwable) {
+            return $this;
+        }
+
+        return $rows === [] ? $this : $this->mutate(agentViewRows: array_values($rows));
     }
 
     /** How far the surface $id is scrolled down; 0 is the top. */
@@ -1490,8 +1784,10 @@ final class App implements Model
             $msg instanceof StatusMsg,
             $msg instanceof OpenSkillPickerMsg,
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
-            // A click on an `agent:` zone in the chat (P-B3).
-            $msg instanceof \SugarCraft\Crush\OpenAgentViewMsg => [$this->openAgent($msg->agentId), null],
+            // A click on an `agent:` zone in the chat (P-B3), the picker's
+            // sub-agent row, and the open view's own tail tick (P-C2).
+            $msg instanceof \SugarCraft\Crush\OpenAgentViewMsg => [$this->openAgentView($msg->agentId, $msg->childSessionId, $msg->name), null],
+            $msg instanceof \SugarCraft\Crush\CloseAgentViewMsg => $this->closeAgentView()->delegateToChat($msg),
             $msg instanceof KeyMsg => $this->handleKey($msg),
             $msg instanceof MouseMsg => $this->handleShellMouse($msg),
             $msg instanceof BackgroundColorMsg => $this->observeBackground($msg),
@@ -2357,14 +2653,16 @@ final class App implements Model
      * pass-through: see {@see handleKey()} for why the object itself can
      * never be returned to the Program.
      *
+     * {@see \SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd} is no longer
+     * among them (P-C2): leaving the dashboard also leaves an open Agent View.
+     *
      * Still deliberately inert, and honestly so:
      * {@see \SugarCraft\Crush\Tui\Commands\GroupInputCmd},
      * {@see \SugarCraft\Crush\Tui\Commands\CancelAgentCmd},
-     * {@see \SugarCraft\Crush\Tui\Commands\ResumeAgentCmd},
-     * {@see \SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd} and
-     * {@see \SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd}. The first has no
+     * {@see \SugarCraft\Crush\Tui\Commands\ResumeAgentCmd} and
+     * {@see \SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd}. The first has no
      * counterpart anywhere in the live app to translate INTO, and the agent
-     * four would have to reach into a worker pool the shell does not hold —
+     * three would have to reach into a worker pool the shell does not hold —
      * their pane/selection half is already applied by
      * {@see KeyboardHandler::handleAgentViewKey()}. Inventing a consumer for
      * them here would be a fabricated call path, not a fix.
@@ -2387,6 +2685,14 @@ final class App implements Model
             // The live agents strip's stop (P-B3): the turn's own cancel_tool
             // for that run's Task call, which the chat owns.
             $cmd instanceof \SugarCraft\Crush\CancelAgentRunMsg => $this->delegateToChat($cmd),
+            // The Agent View (P-C2): the dashboard's Peek → Attach `Enter`
+            // opens it, and `Esc`/`Alt+↑` in it, or the dashboard's `q`,
+            // leave it — the chat hears the close, to disarm its `Esc` `Esc`.
+            $cmd instanceof \SugarCraft\Crush\OpenAgentViewMsg => [$this->openAgentView($cmd->agentId, $cmd->childSessionId, $cmd->name), null],
+            $cmd instanceof \SugarCraft\Crush\CloseAgentViewMsg,
+            $cmd instanceof \SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd => $this->agentViewTarget === null
+                ? [$this->closeAgentView(), null]
+                : $this->closeAgentView()->delegateToChat(new \SugarCraft\Crush\CloseAgentViewMsg()),
             default => [$this, null],
         };
     }
@@ -2760,22 +3066,42 @@ final class App implements Model
         // the paint it governs (reset in the `finally`), so a standalone
         // Renderer path can never inherit a stale value.
         Renderer::setPaletteAbandoned(KeyboardHandler::paletteIsAbandoned($this));
+        // P-C2: the open Agent View rides the same per-paint seam — the chat's
+        // renderer swaps the transcript area for it, for this frame only.
+        Renderer::setAgentView($this->agentViewFrame());
         try {
             return TuiRenderer::renderView($this, $this->cols, $this->rows);
         } finally {
             Renderer::setPaletteAbandoned(false);
+            Renderer::setAgentView(null);
         }
     }
 
     /**
      * Subscriptions the Program should pump, delegated to the hosted chat.
      *
-     * The shell declares none of its own, so a hosted `Chat` keeps whatever
-     * polling it declares standalone instead of losing it to the wrapper.
+     * A hosted `Chat` keeps whatever polling it declares standalone instead of
+     * losing it to the wrapper. The shell adds one tick of its own, the open
+     * Agent View's tail.
      */
     public function subscriptions(): ?Subscriptions
     {
-        return $this->chat?->subscriptions();
+        $subscriptions = $this->chat?->subscriptions();
+
+        // P-C2: the open Agent View's tail tick — declared only while a view
+        // is open, keyed by the run so switching runs cancels the old tick.
+        // The tick re-sends the open run's OpenAgentViewMsg, which reads what
+        // its log gained ({@see refreshAgentView()}).
+        $id = $this->agentViewTarget;
+        if ($id !== null && $this->chat !== null) {
+            $subscriptions = ($subscriptions ?? new Subscriptions())->withTick(
+                self::AGENT_VIEW_SUBSCRIPTION . $id,
+                self::AGENT_VIEW_TICK_SECONDS,
+                static fn (): CoreMsg => new \SugarCraft\Crush\OpenAgentViewMsg($id),
+            );
+        }
+
+        return $subscriptions;
     }
 
     /**
@@ -2935,6 +3261,11 @@ final class App implements Model
             settingsSources: array_key_exists('settingsSources', $changes) ? $changes['settingsSources'] : $this->settingsSources,
             settingsWriter: array_key_exists('settingsWriter', $changes) ? $changes['settingsWriter'] : $this->settingsWriter,
             reasoningEffort: array_key_exists('reasoningEffort', $changes) ? $changes['reasoningEffort'] : $this->reasoningEffort,
+            agentViewTarget: array_key_exists('agentViewTarget', $changes) ? $changes['agentViewTarget'] : $this->agentViewTarget,
+            agentViewTail: array_key_exists('agentViewTail', $changes) ? $changes['agentViewTail'] : $this->agentViewTail,
+            agentViewItems: array_key_exists('agentViewItems', $changes) ? $changes['agentViewItems'] : $this->agentViewItems,
+            agentViewRows: array_key_exists('agentViewRows', $changes) ? $changes['agentViewRows'] : $this->agentViewRows,
+            agentViewName: array_key_exists('agentViewName', $changes) ? $changes['agentViewName'] : $this->agentViewName,
         );
     }
 }

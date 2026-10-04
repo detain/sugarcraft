@@ -65,6 +65,8 @@ final class KeyBindingRegistry
     public const CONTEXT_AGENTS = 'Agent view';
     /** Keys the live agents strip answers while it holds the keyboard (`Alt+↓`). */
     public const CONTEXT_AGENT_STRIP = 'Agents strip';
+    /** Keys the read-only Agent View answers while it shows a run's transcript (P-C2). */
+    public const CONTEXT_AGENT_TRANSCRIPT = 'Agent transcript';
     /** Keys the Ctrl+S skill picker answers while it is open. */
     public const CONTEXT_SKILLS = 'Skill picker';
     /** Keys the full-band settings view (`/settings`) answers while it is open. */
@@ -90,6 +92,7 @@ final class KeyBindingRegistry
             ...self::permission(),
             ...self::agents(),
             ...self::agentStrip(),
+            ...self::agentTranscript(),
             ...self::skills(),
             ...self::settings(),
             ...self::menu(),
@@ -638,10 +641,9 @@ final class KeyBindingRegistry
     {
         $c = self::CONTEXT_AGENTS;
         // The criterion is "nothing observable happens", not "the command is on
-        // App::consumeShellCmd()'s inert list". That list names FIVE commands,
-        // and the fifth — QuitAgentViewCmd, behind `q` — is live below: its
-        // pane/selection half IS applied, by handleAgentViewKey() itself, so
-        // pressing it visibly leaves the view. These three have no such half.
+        // App::consumeShellCmd()'s inert list". That list names FOUR commands
+        // now; QuitAgentViewCmd, behind `q`, left it with P-C2 (it also closes
+        // an open Agent View). These three have no pane/selection half either.
         $inert = 'KeyboardHandler::handleAgentViewKey() claims the key and returns a command with '
             . 'no consumer: App::consumeShellCmd() lists it among the deliberately inert ones, and '
             . 'unlike QuitAgentViewCmd it has no pane/selection half that lands anyway — the shell '
@@ -651,9 +653,10 @@ final class KeyBindingRegistry
         return [
             KeyBinding::new('agents.move', '↑ / ↓', 'Move the selection (or k / j)', $c),
             KeyBinding::new('agents.peek', 'Enter', 'Look at the selected agent (or Space)', $c),
+            KeyBinding::new('agents.attach', 'Enter', 'Open that agent\'s transcript (in the peek)', $c),
             KeyBinding::new('agents.slot', 'Alt+1…9', 'Jump to that numbered dashboard row', $c),
             KeyBinding::new('agents.back', 'Esc', 'Drop the selection, then leave the view', $c),
-            KeyBinding::new('agents.quit', 'q', 'Leave the agent view', $c),
+            KeyBinding::new('agents.quit', 'q', 'Leave the view and any open agent transcript', $c),
             KeyBinding::new('agents.cancel', 'c', 'Cancel the selected agent', $c, dormantReason: $inert),
             KeyBinding::new('agents.resume', 'r', 'Resume the selected agent', $c, dormantReason: $inert),
             KeyBinding::new('agents.stop-all', 's', 'Stop every agent', $c, dormantReason: $inert),
@@ -674,10 +677,30 @@ final class KeyBindingRegistry
 
         return [
             KeyBinding::new('strip.move', '← / →', 'Move along the strip (or ↑ / ↓)', $c),
-            KeyBinding::new('strip.open', 'Enter', 'Open the focused agent', $c),
+            KeyBinding::new('strip.open', 'Enter', 'Open the focused agent\'s transcript', $c),
             KeyBinding::new('strip.cancel', 'c', 'Stop the focused agent', $c),
             KeyBinding::new('strip.dismiss', 'x', 'Dismiss if finished, else stop it', $c),
             KeyBinding::new('strip.back', 'Esc', 'Back to the input box (or Alt+↑)', $c),
+        ];
+    }
+
+    /**
+     * The read-only Agent View (roadmap P-C2, Appendix P §5.5): a delegated
+     * run's own transcript in the main area, opened by a click on its live
+     * line, `Enter` on the strip, or `Enter` in the dashboard's peek.
+     * {@see \SugarCraft\Crush\Tui\KeyboardHandler} answers these; every other
+     * key reaches the chat as before.
+     *
+     * @return list<KeyBinding>
+     */
+    private static function agentTranscript(): array
+    {
+        $c = self::CONTEXT_AGENT_TRANSCRIPT;
+
+        return [
+            KeyBinding::new('agentview.back', 'Esc', 'Back to the main transcript (or Alt+↑)', $c),
+            KeyBinding::new('agentview.next', 'Alt+N', 'Open the next agent of the same batch', $c),
+            KeyBinding::new('agentview.prev', 'Alt+P', 'Open the previous agent of the same batch', $c),
         ];
     }
 
@@ -761,6 +784,7 @@ final class KeyBindingRegistry
             KeyBinding::new('mouse.side-row', 'Click side row', 'Expand or collapse that Tools or Agents pane row', $c),
             KeyBinding::new('mouse.palette-row', 'Click row', 'Run that palette row', $c),
             KeyBinding::new('mouse.session-action', 'Click ✎ ★ ✕', 'Rename, pin or delete the picker session', $c),
+            KeyBinding::new('mouse.agent', 'Click agent', 'Open that agent\'s transcript (a Task line)', $c),
         ];
     }
 }

@@ -173,6 +173,14 @@ final class KeyboardHandler
             return true;
         }
 
+        // The read-only Agent View (roadmap P-C2): `Esc`/`Alt+↑` leave it and
+        // `Alt+N`/`Alt+P` walk the run's batch, while it is open in the chat
+        // pane with nothing modal over it. Every other key falls through to
+        // the chat as before — the input box stays the main chat's.
+        if (self::agentViewKey($msg, $app) !== null) {
+            return true;
+        }
+
         if (self::shellOwnsKeyboard($app)) {
             return true;
         }
@@ -523,6 +531,15 @@ final class KeyboardHandler
             $app = $app->withAgentStripFocus(null);
         }
 
+        // The open Agent View (P-C2) — below the strip, which has the keyboard
+        // first while it is focused, and only with no menu open over it.
+        if ($app->pane === Pane::Chat && $app->agentViewTarget !== null && MenuBar::getActiveMenu() === 0) {
+            $result = $this->handleOpenAgentViewKey($key, $app);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+
         // Tab - cycle focus over Chat plus the docked panes, left column
         // first (top-to-bottom), then right. Dock-scoped since L2: the cycle
         // visits what the frame persistently shows; docking more panes widens
@@ -769,7 +786,7 @@ final class KeyboardHandler
      * call it runs under, so it reaches the chat as a
      * {@see \SugarCraft\Crush\CancelAgentRunMsg} for
      * {@see App::consumeShellCmd()} to deliver. Opening a run is
-     * {@see App::openAgent()}.
+     * {@see App::openAgent()}, the Agent View (P-C2).
      *
      * @return array{0: App, 1: ?object}|null null when the strip does not answer the key
      */
@@ -804,6 +821,60 @@ final class KeyboardHandler
                 : [$app, new \SugarCraft\Crush\CancelAgentRunMsg($focused->parentCallId)],
             'escape', 'alt+up' => [$app->withAgentStripFocus(null), null],
             'alt+down' => [$app, null],
+            default => null,
+        };
+    }
+
+    /**
+     * What a key means to the open read-only Agent View (roadmap P-C2), or
+     * null when the view does not answer it: `back` (`Esc`, `Alt+↑`) and
+     * `next`/`prev` (`Alt+N`/`Alt+P`, the runs of the same Task batch).
+     *
+     * Only in the chat pane, with the view open and nothing modal over the
+     * chat — a permission prompt, the key reference, the palette, the session
+     * picker or the inline title editor each own `Esc` first, and so do the
+     * settings view and an open menu. The live agents strip, while it holds
+     * the keyboard, answers its own `Esc` before this ({@see claims()}).
+     */
+    private static function agentViewKey(KeyMsg $msg, App $app): ?string
+    {
+        $chat = $app->chat;
+        if ($app->agentViewTarget === null || $app->pane !== Pane::Chat || $chat === null
+            || $app->agentStripFocus !== null || $app->settingsEditor !== null || MenuBar::getActiveMenu() > 0
+            || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
+            || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->titleEditor() !== null) {
+            return null;
+        }
+
+        if ($msg->ctrl || $msg->shift) {
+            return null;
+        }
+
+        return match (true) {
+            !$msg->alt && $msg->type === KeyType::Escape => 'back',
+            $msg->alt && $msg->type === KeyType::Up => 'back',
+            $msg->alt && $msg->type === KeyType::Char && strtolower($msg->rune) === 'n' => 'next',
+            $msg->alt && $msg->type === KeyType::Char && strtolower($msg->rune) === 'p' => 'prev',
+            default => null,
+        };
+    }
+
+    /**
+     * Act on a key the open Agent View answers (roadmap P-C2). `$key` is the
+     * key's {@see KeyMsg::string()} spelling. Leaving is a
+     * {@see \SugarCraft\Crush\CloseAgentViewMsg} for
+     * {@see App::consumeShellCmd()} to deliver, so the hosted chat hears it
+     * and disarms its `Esc` `Esc` cancel; a sibling is opened in place, and
+     * `Alt+N`/`Alt+P` past either end of the batch do nothing.
+     *
+     * @return array{0: App, 1: ?object}|null null when the view does not answer the key
+     */
+    private function handleOpenAgentViewKey(string $key, App $app): ?array
+    {
+        return match (strtolower($key)) {
+            'escape', 'alt+up' => [$app, new \SugarCraft\Crush\CloseAgentViewMsg()],
+            'alt+n' => [($next = $app->agentViewSibling(1)) === null ? $app : $app->openAgentView($next), null],
+            'alt+p' => [($prev = $app->agentViewSibling(-1)) === null ? $app : $app->openAgentView($prev), null],
             default => null,
         };
     }
@@ -866,9 +937,17 @@ final class KeyboardHandler
      */
     private function handleAgentPeekKey(string $key, App $app): ?array
     {
-        // Enter - switch to attach mode
+        // Enter - attach: the main area shows the peeked agent (roadmap P-C2's
+        // Agent View). The mode changes here; the view itself is opened by
+        // App::consumeShellCmd() from the message, which also gives the chat
+        // pane focus — the run's transcript is drawn where the chat's was.
         if ($key === 'enter') {
-            return [$app->withAgentViewMode(AgentViewMode::Attach), null];
+            $entry = AgentDashboardPane::entries($app)[$app->selectedAgentIndex] ?? null;
+
+            return [
+                $app->withAgentViewMode(AgentViewMode::Attach),
+                $entry === null ? null : new \SugarCraft\Crush\OpenAgentViewMsg($entry->key ?? $entry->name, null, $entry->name),
+            ];
         }
 
         // Escape - return to list view
@@ -882,15 +961,14 @@ final class KeyboardHandler
     /**
      * Handle keys in agent attach view mode.
      *
-     * Escape is the only key intercepted here for detaching. Every other
-     * key is claimed with a no-op `[App, null]` (not `null`) so it can never
-     * fall through to the quick-action shortcuts in {@see handleAgentViewKey()}
-     * — that fallthrough was the P5.S4 bug. There is no live "forward this
-     * keystroke to the attached agent process" Cmd anywhere in src/ yet (the
-     * same pre-existing, repo-wide "no Cmd type is consumed by a main loop"
-     * gap documented on {@see App::userInvocableSkills()}); wiring one is a
-     * distinct, larger integration than this ordering fix and stays out of
-     * scope here. What this method guarantees today: a key typed while
+     * Attached means the main area shows the agent (roadmap P-C2's Agent
+     * View, opened by the Peek `Enter`); this is what the dashboard does with
+     * a key while it is focused over an attached view. Escape is the only key
+     * intercepted here for detaching. Every other key is claimed with a no-op
+     * `[App, null]` (not `null`) so it can never fall through to the
+     * quick-action shortcuts in {@see handleAgentViewKey()} — that fallthrough
+     * was the P5.S4 bug. Typing to the agent is P-D2's composer, in the chat
+     * pane, not here. What this method guarantees today: a key typed while
      * attached is never reinterpreted as CancelAgentCmd/ResumeAgentCmd/
      * StopAllAgentsCmd/QuitAgentViewCmd.
      *
@@ -898,9 +976,13 @@ final class KeyboardHandler
      */
     private function handleAgentAttachKey(string $key, App $app): array
     {
-        // Escape - detach and return to list view
+        // Escape - detach and return to list view. Attached means an Agent
+        // View is open in the main area (P-C2), so detaching closes it too.
         if ($key === 'escape') {
-            return [$app->withAgentViewMode(AgentViewMode::List), null];
+            return [
+                $app->withAgentViewMode(AgentViewMode::List),
+                $app->agentViewTarget === null ? null : new \SugarCraft\Crush\CloseAgentViewMsg(),
+            ];
         }
 
         return [$app, null];

@@ -303,17 +303,23 @@ final class SessionPickerActionsTest extends TestCase
 
     // ── children, preview, resume ────────────────────────────────────────
 
-    public function testTabShowsSubAgentRowsAndEnterOnOnePreviewsInsteadOfSwitching(): void
+    public function testTabShowsSubAgentRowsAndEnterOnOneOpensItsAgentViewInsteadOfSwitching(): void
     {
         $sub = $this->store->createChildSession('s3', SessionKind::Subagent, 'explore', 'call-1', 'p', 'm', 'Map the flow');
         $shown = $this->press($this->open(), ['tab']);
         $this->assertSame(['s3', $sub, 's2', 's1'], self::ids($shown));
 
-        $entered = $this->press($shown, ['down', 'enter']);
+        $moved = $this->press($shown, ['down']);
+        [$entered, $cmd] = $moved->update(self::key('enter'));
 
         $this->assertSame('s1', $entered->currentSessionId(), 'a sub-agent record is not switched to');
-        $this->assertNotNull($entered->sessionPicker());
-        $this->assertSame($sub, $entered->sessionPicker()->preview()['id'] ?? null);
+        $this->assertNull($entered->sessionPicker(), 'the picker gives way to the Agent View');
+        // Roadmap P-C2: the shell opens the read-only Agent View on it.
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $msg = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Crush\OpenAgentViewMsg::class, $msg);
+        $this->assertSame($sub, $msg->childSessionId);
+        $this->assertSame('explore', $msg->name);
     }
 
     public function testSpaceLoadsTheLastMessagesIntoTheFooter(): void

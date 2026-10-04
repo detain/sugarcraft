@@ -1103,8 +1103,11 @@ final class KeyHelpTest extends TestCase
         // `chat.agents-strip` and five rows in an eleventh context — one header
         // and one separator more: 120 lines, 87 -> 95, fitting at 100x125.
         // The settings editor's ten keys (W4-g's save door, bound): 130 lines,
-        // 95 -> 105, fitting at 100x135.
-        foreach ([[100, 30, 105], [100, 135, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // 95 -> 105, fitting at 100x135. The read-only Agent View (P-C2)
+        // declared five rows — three in a twelfth context, one header and one
+        // separator more, plus `agents.attach` and `mouse.agent`: 137 lines,
+        // 105 -> 112, fitting at 100x142.
+        foreach ([[100, 30, 112], [100, 142, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1168,8 +1171,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 135 rows, not 80: the list is 130 content lines now (109 live
-            // rows, 11 headers, 10 separators; 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
+            // 142 rows, not 80: the list is 137 content lines now (114 live
+            // rows, 12 headers, 11 separators; 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
             // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
@@ -1178,7 +1181,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 135))),
+                Width::of($this->footer($this->chat('', $cols, 142))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

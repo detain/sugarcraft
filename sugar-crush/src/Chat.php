@@ -2156,6 +2156,14 @@ final class Chat implements Model
      */
     private function route(Msg $msg): array
     {
+        // Roadmap P-C2: the shell left the Agent View. The key that left it
+        // (Esc) never reached this chat, but an Esc pressed BEFORE the view
+        // opened may still be armed — so the first Esc after the view closes
+        // is a first press again, never the second half of a turn cancel.
+        if ($msg instanceof CloseAgentViewMsg) {
+            return [$this->lastEscapeAt === null ? $this : $this->mutate(['lastEscapeAt' => null]), null];
+        }
+
         // Roadmap P-B3: `c` (or `x` on a running run) on the live agents
         // strip. Only a call the turn on screen is still running is named,
         // and only that call stops (1.C-4b) — the turn carries on.
@@ -7124,6 +7132,29 @@ final class Chat implements Model
         $agentPrefix = \SugarCraft\Crush\Tui\AgentStrip::ZONE_PREFIX;
         if (str_starts_with($zoneId, $agentPrefix) && strlen($zoneId) > strlen($agentPrefix)) {
             $runId = substr($zoneId, strlen($agentPrefix));
+
+            return [$this, static fn (): OpenAgentViewMsg => new OpenAgentViewMsg($runId)];
+        }
+
+        // Roadmap P-C2: a Task row's live agent line (`agent-line:<runId>`)
+        // opens that run's Agent View, and the view header's own zones walk
+        // it: `agent-nav:main`, the breadcrumb, leaves the view — the mouse
+        // twin of Esc — and `agent-nav:<runId>`, a sibling arrow, opens that
+        // sibling. Allowed mid-turn like `agent:` (watching a run is the point
+        // of the view), refused under a modal by refuseMouseDispatch() above
+        // like any zone.
+        $linePrefix = Renderer::AGENT_LINE_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $linePrefix) && strlen($zoneId) > strlen($linePrefix)) {
+            $runId = substr($zoneId, strlen($linePrefix));
+
+            return [$this, static fn (): OpenAgentViewMsg => new OpenAgentViewMsg($runId)];
+        }
+        if ($zoneId === \SugarCraft\Crush\Tui\AgentViewHeader::BACK_ZONE) {
+            return [$this, static fn (): CloseAgentViewMsg => new CloseAgentViewMsg()];
+        }
+        $navPrefix = \SugarCraft\Crush\Tui\AgentViewHeader::NAV_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $navPrefix) && strlen($zoneId) > strlen($navPrefix)) {
+            $runId = substr($zoneId, strlen($navPrefix));
 
             return [$this, static fn (): OpenAgentViewMsg => new OpenAgentViewMsg($runId)];
         }
@@ -13855,8 +13886,8 @@ final class Chat implements Model
      * has a `currentSessionName`.
      *
      * A sub-agent row is not switched to: it is a record of a delegated run,
-     * not a conversation to continue, so Enter shows its last messages in
-     * the footer instead.
+     * not a conversation to continue, so Enter opens it in the read-only
+     * Agent View instead (P-C2).
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -13867,9 +13898,17 @@ final class Chat implements Model
             return [$this->mutate(['sessionPicker' => null]), null];
         }
 
+        // Roadmap P-C2: a sub-agent row opens the read-only Agent View on its
+        // stored transcript, in the shell that hosts this chat (`Space` still
+        // previews its last messages in the footer).
         if (($selected['kind'] ?? 'main') === 'subagent') {
-            return [$this->mutate(['sessionPicker' => $this->previewSessionInPicker($picker)
-                ->withNotice('Sub-agent sessions are read-only; showing its last messages.')]), null];
+            $childId = (string) $selected['sessionId'];
+            $agent = trim((string) ($selected['agent'] ?? '')) === '' ? null : (string) $selected['agent'];
+
+            return [
+                $this->mutate(['sessionPicker' => null]),
+                static fn (): OpenAgentViewMsg => new OpenAgentViewMsg($childId, $childId, $agent),
+            ];
         }
 
         $sessionId = $selected['sessionId'];

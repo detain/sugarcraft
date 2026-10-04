@@ -879,7 +879,8 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Ctrl+V` | Attach the **image** on the system clipboard (a screenshot): it is read through `pngpaste` (macOS), `wl-paste` (Wayland) or `xclip` (X11), saved to a private temp directory and inserted into the draft as an `@` mention, so it is attached when you send. Text pastes with your terminal's own paste key as before. No image (or no tool) leaves a notice and the draft untouched. See [Attachments](#attachments) |
 | `Ctrl+R` | Session picker (persisted across turns; `/sessions <query>` opens it already filtered). Rows are grouped Pinned / Today / Yesterday / by date and show the title, when it was last used, its turns, provider/model and a badge (`⠋ live`, `⧗ bg`, `+N ag` sub-agents, `⑂` branch); the footer names where it was opened, its branch and the last prompt. With the picker up the wheel browses, a click selects, and `Enter` resumes; browsing onto the last loaded row fetches the next page. `/` filters (fuzzy, over title, last prompt, agent, id and branch — `k`/`j` keep moving outside it), `Space` previews the last messages, `r` renames in place, `d` deletes after a second `d` (sub-agent sessions go with it, branches are kept unless you confirm with `D`), `p` pins, `f` forks and switches to the copy, `x` archives, `a` shows archived sessions and `u` brings one back, `Tab` shows sub-agent sessions under their parent, and `Ctrl+B` keeps the current git branch's sessions. Inside the filter `Ctrl+E` / `Ctrl+D` / `Ctrl+F` rename, delete and pin. The highlighted row also carries a clickable `✎ ★ ✕` (rename, pin, delete). The session on screen cannot be deleted or archived |
 | `Ctrl+A` | Same dispatch as typing `/agents` |
-| `Alt+↓` | Focus the **live agents strip**, the one row above the input box that lists the delegated runs that are live, plus finished ones for 30 s: `agents: ⠋ explore · ✗ reviewer   (alt+↓)`. Then `←`/`→` (or `↑`/`↓`) move, `Enter` opens the run on the agent dashboard with its peek up, `c` stops it (only that run's `Task` call; the turn goes on), `x` dismisses a finished run or stops a running one, and `Esc` or `Alt+↑` gives the keyboard back. Any other key gives it back too, and lands in the input box. A click on a run on the strip opens it the same way. While the strip shows, it replaces the agent list below the input |
+| `Alt+↓` | Focus the **live agents strip**, the one row above the input box that lists the delegated runs that are live, plus finished ones for 30 s: `agents: ⠋ explore · ✗ reviewer   (alt+↓)`. Then `←`/`→` (or `↑`/`↓`) move, `Enter` opens the run in the **Agent View** (its own transcript in place of the main one — see *What you see while a turn runs*), `c` stops it (only that run's `Task` call; the turn goes on), `x` dismisses a finished run or stops a running one, and `Esc` or `Alt+↑` gives the keyboard back. Any other key gives it back too, and lands in the input box. A click on a run on the strip opens it the same way. While the strip shows, it replaces the agent list below the input |
+| `Esc` / `Alt+↑` (Agent View) | Back to the main transcript; the `Esc` that leaves the view is never the first half of an `Esc` `Esc` cancel. `Alt+N` / `Alt+P` open the next / previous agent of the same `Task` batch |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
 | `Up` (empty input) | Recall the last prompt you sent — press again to walk further back, into earlier sessions too (a fresh launch's first `Up` is the previous session's last prompt). History lives in `~/.sugar-crush/prompt_history.jsonl`; editing a recalled prompt ends the walk |
 | `Down` (while recalling) | Step forward through recalled prompts; past the newest one, the draft you were typing comes back |
@@ -902,7 +903,7 @@ cover and moved by the `↑`/`↓`/`Enter` those views claim. Leave the view and
 
 The table above is a summary of the chat pane; **the reference `?` opens is the
 authority**, and it covers the overlays too (palette, session picker, permission
-prompt, agent view, agents strip, skill picker, menu bar, mouse). It is generated from
+prompt, agent view, agents strip, agent transcript, skill picker, menu bar, mouse). It is generated from
 `Commands\KeyBindingRegistry`, which is also what `Tui\KeyboardHandler` reads its
 claimed-chord sets from — so the screen cannot describe a keyboard the app does
 not have. `tests/Commands/KeyBindingDriftTest.php` presses every row it lists
@@ -918,7 +919,8 @@ box, but not advertised either.
 Mouse mode is on by default (`SUGARCRUSH_DISABLE_MOUSE=1` turns it off). Zones
 are registered during the render pass, so clicks land on what you see: wheel
 scrolls the transcript, clicking a tool call or a `💭 Thought` row
-expands/collapses it, clicking a session tab switches sessions, clicking a docked pane's header focuses that
+expands/collapses it, clicking a `Task` row's live agent line (or an agent on
+the strip) opens that agent's transcript, clicking a session tab switches sessions, clicking a docked pane's header focuses that
 pane, clicking a pane tab on the menu bar toggles its docking (see below),
 clicking a palette/picker row selects it, clicking the menu bar opens a
 menu, and in the settings view a click on a category tab switches to it, a
@@ -1363,7 +1365,23 @@ waiting for a free delegation slot says `◌ queued:` on its row instead of
 `running:`. The line never wraps: on a narrow terminal the spend goes first,
 then the tokens, then the tool count, and the item is shortened in the middle.
 Without `ext-pcntl` the turn runs in-process, so the lines appear filled in
-when it ends rather than live (see TROUBLESHOOTING).
+when it ends rather than live (see TROUBLESHOOTING). While a batch is running,
+a faint `alt+↓ agents · click a task to open it` follows its last line.
+
+**Agent View.** A click on a live line (or `Enter` on the agents strip, or on
+the agent dashboard's peek) swaps the transcript area for **that agent's own
+transcript** — its task, every tool call with its result, its thoughts and its
+replies, drawn exactly like the main transcript and read live from the
+sub-agent's log (`~/.sugar-crush/subagents/`) while it runs. A header row stays
+pinned above it: `main ▸ explore  ‹ 1 of 3 ›  ⠋ running · step 4/50 · 0:12 ·
+4.1K tok   esc back`. `Esc` (or `Alt+↑`, or a click on `main`) goes back to the
+main transcript without counting toward an `Esc` `Esc` cancel, and `Alt+N` /
+`Alt+P` (or a click on `‹` / `›`) open the other agents of the same batch. The
+view is read-only: the input box below it is still the main chat's. A finished
+agent reopens from its stored sub-agent session — `Enter` on a sub-agent row of
+the session picker opens it the same way — and a dashboard worker that keeps no
+transcript (a workflow stage, a background session) shows its live output pane
+instead.
 
 Beside the context readout, a **spend** readout appears once the provider has
 reported something to show — dollars, and the cap if one is set. It is a
@@ -1613,7 +1631,7 @@ Things that are genuinely not finished, stated plainly rather than left for you 
 
   The TUI's default mode is `default`, which asks; `-p` and background sessions keep `bypass-permissions` (see *Permission modes*).
 - **The `anthropic` provider type key is OpenAI-shaped.** It authenticates as Anthropic but posts to `chat/completions` with `supportsFunctionCalling: false`, so it cannot call tools. Use `claude-code` or `SUGARCRUSH_BACKEND_CMD` for a native Anthropic path.
-- **Five shell commands are still inert**: `GroupInputCmd`, `CancelAgentCmd`, `ResumeAgentCmd`, `StopAllAgentsCmd`, `QuitAgentViewCmd`. The first has no counterpart in the live app; the agent four would need to reach into a worker pool the shell does not hold. Their pane/selection half *is* applied — only the action half is missing.
+- **Four shell commands are still inert**: `GroupInputCmd`, `CancelAgentCmd`, `ResumeAgentCmd`, `StopAllAgentsCmd`. The first has no counterpart in the live app; the agent three would need to reach into a worker pool the shell does not hold. Their pane/selection half *is* applied — only the action half is missing. (`QuitAgentViewCmd`, the dashboard's `q`, is live: it also closes an open Agent View.)
 - **Workflow resume granularity is per whole stage.** An interrupted *parallel* sub-stage cannot be resumed with partial credit.
 - **Workflow stages run the real tool loop — on a launch with a provider.** `Bootstrap::workflowEngine()` gives the pool an `Agents\EngineExecutor` as its forked executor, and `Chat`'s constructor binds the chat's current backend into it (re-bound on a provider switch). Each stage agent — sequential, pipeline, verification or parallel — then runs through that engine's bounded loop in a forked child: same provider, hook chain, permission gate and root as the chat, narrowed to the stage's `tools:`, with `Task` withheld and a 200-step cap. With no provider, the pool keeps `ProcessExecutor`'s worker, which fails closed naming the absence, and a provider that fails to build (the chat then degrades to echo) is refused by the executor itself — echoed text is never reported as a stage's work.
 - **`/workflow run` keeps the TUI alive, with two limits worth knowing.** It used to freeze it outright: `Chat::update()` called `WorkflowEngine::run()` synchronously on the ReactPHP loop, so a multi-stage workflow meant no repaint, no keystrokes and no spinner until the last stage. It no longer does. `Chat::workflowRun()` hands the run to a `\Fiber` that a periodic timer on the loop steps, suspending at `AgentWorkerPool::idle()` — the one point where the parent is idle while forked workers run — so the spinner turns, keystrokes land, and the live-agent split pane paints tiles while the workflow is still going. (The `stream_select` this bullet used to blame is in the CHILD, and never was the obstacle. And do not "fix" this with the fork-plus-socket pattern `EngineBackend::completeAsync()` uses, which this bullet used to recommend: `AgentManager::liveOutputs()` reads an object graph in the PARENT, so forking the workflow would put every sub-agent somewhere the renderer cannot see and repaint the pane promptly and blank. A fiber suspends the whole call stack in-process, which is why it is the right shape here and `completeAsync()`'s is not.) There was never an issue #79 for any of this — detain/sugarcraft #79 is a merged CandyMetrics pull request.

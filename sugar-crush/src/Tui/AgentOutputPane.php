@@ -140,12 +140,18 @@ final class AgentOutputPane
 
     /**
      * Attach mode: full-focus view with full buffer and line count footer.
+     *
+     * Reached through the read-only Agent View (roadmap P-C2): a dashboard
+     * worker that keeps no transcript of its own — a workflow stage, a
+     * background session — is shown in the main area as this pane. The buffer
+     * is a live tail, so the rows kept are the NEWEST ones, which is what the
+     * footer's "showing last N" has always said.
      */
     private static function renderAttach(string $header, array $lines, Color $borderColor, string $agentName, int $width, int $height, Theme $theme): string
     {
         // Reserve rows: 1 header + 1 blank + 1 footer = 3; rest for output.
         $outputRows = max(1, $height - 3);
-        $visibleLines = array_slice($lines, 0, $outputRows);
+        $visibleLines = array_slice($lines, -$outputRows);
 
         $outputStyled = [];
         foreach ($visibleLines as $line) {

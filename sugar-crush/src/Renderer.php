@@ -968,6 +968,31 @@ final class Renderer
     }
 
     /**
+     * The read-only Agent View the shell has open for the frame being
+     * composited (roadmap P-C2), as {@see \SugarCraft\Crush\App\App::agentViewFrame()}
+     * built it, or null for the parent transcript.
+     *
+     * The view's state is the SHELL's ({@see \SugarCraft\Crush\App\App::$agentViewTarget}),
+     * not the chat's, so it reaches this renderer the way the abandonment
+     * signal above does: set around one paint by the shell compositor and
+     * reset on the way out, so a standalone Chat render never sees one.
+     *
+     * @var array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<Message>, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null
+     */
+    private static ?array $agentView = null;
+
+    /**
+     * Declare the Agent View for the frame being composited — see
+     * {@see self::$agentView}.
+     *
+     * @param array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<Message>, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null $view
+     */
+    public static function setAgentView(?array $view): void
+    {
+        self::$agentView = $view;
+    }
+
+    /**
      * Drop the click-zone registry and reset the origin and the abandonment
      * signal.
      *
@@ -1546,6 +1571,7 @@ final class Renderer
         // $toolRowHeads for why the layout question and the click question are
         // answered from two registries rather than one.
         self::$toolRowHeads = [];
+        self::$agentLineZones = [];
         self::$ctrlOThoughtKey = $chat->latestThoughtKey();
         // One number, named once. Every producer that writes into $body below
         // is held to it, and fitToPane() is the backstop for the ones whose
@@ -1562,8 +1588,14 @@ final class Renderer
         // SHELL_CHROME_COLS + 1 columns the bordered shell cannot fit at all;
         // clipFrameToCols() cuts that case further down.
         $contentWidth = max(1, $chat->cols() - self::SHELL_CHROME_COLS);
+        // Roadmap P-C2: with the shell's Agent View open, the transcript area
+        // is that run's own transcript — its projected rows, drawn by the same
+        // renderer, so tool rows expand, thoughts fold and diffs are gutted
+        // exactly as in the parent's. The parent's in-flight extras below (its
+        // live thought, its streaming reply) are the parent's, and stay out.
+        $openView = self::$agentView;
         $body = self::renderHistory(
-            $chat->history,
+            $openView === null ? $chat->history : $openView['rows'],
             $theme,
             $contentWidth,
             $chat->expanded(),
@@ -1578,7 +1610,15 @@ final class Renderer
             // function of state.
             $chat->agentLive(),
         );
-        if ($chat->inFlight) {
+        if ($openView !== null) {
+            if ($body === '' && $openView['attach'] === null) {
+                $body = self::dim($theme)->render(
+                    $openView['transcript'] || $openView['state']?->isFinished() === false
+                        ? \SugarCraft\Crush\Tui\AgentViewHeader::WAITING
+                        : \SugarCraft\Crush\Tui\AgentViewHeader::NO_TRANSCRIPT,
+                );
+            }
+        } elseif ($chat->inFlight) {
             // E494 - the model's THINKING while the turn runs, painted above
             // the reply and below whatever has already settled.
             //
@@ -1636,6 +1676,23 @@ final class Renderer
             ->padding(1, 2)
             ->render($body);
         $shell = self::markToolCalls($shell);
+        $shell = self::markAgentLines($shell);
+        // P-C2: a worker the view opened that keeps no transcript of its own
+        // (a workflow stage, a background session) is its live output buffer,
+        // in AgentOutputPane's Attach mode — the full-focus pane the dashboard
+        // names "attach", drawn where the transcript was.
+        if ($openView !== null && $openView['attach'] !== null) {
+            $shell = self::clipRowsToCols(
+                \SugarCraft\Crush\Tui\AgentOutputPane::render(
+                    $openView['attach'],
+                    max(1, $chat->cols() - 2),
+                    max(4, $chat->rows() - 6),
+                    $theme,
+                    \SugarCraft\Crush\Tui\Mode::Attach,
+                ),
+                $chat->cols(),
+            );
+        }
 
         // Roadmap P-B3: the live agents strip, one row above the input while
         // delegated runs are live (Appendix P §4.5). It is the in-chat agent
@@ -1709,7 +1766,21 @@ final class Renderer
         // answer rather than dropping the bar; renderStatusBar()'s docblock says
         // why the bar is the row that survives.
         $rows = $chat->rows();
-        $available = max(1, $rows - 1);
+        // P-C2: the Agent View's header row is pinned ABOVE the clip, so the
+        // way back ("main", "esc back") never scrolls off with older rows.
+        // Dropped on a terminal too short to give it a row of its own.
+        $agentHeader = $openView === null || $rows < 4 ? '' : \SugarCraft\Crush\Tui\AgentViewHeader::render(
+            $openView['name'],
+            $openView['state'],
+            $openView['siblings'],
+            $chat->cols(),
+            $theme,
+            $live->spinnerFrame(),
+            $live->now(),
+            Chat::mouseClicksEnabled(),
+        );
+        $headerRows = $agentHeader === '' ? 0 : 1;
+        $available = max(1, $rows - 1 - $headerRows);
         $contentLines = explode("\n", $content);
         $overflow = max(0, count($contentLines) - $available);
         self::$maxScrollOffset = $overflow;
@@ -1724,7 +1795,8 @@ final class Renderer
             }
         }
 
-        $frame = implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);
+        $frame = ($agentHeader === '' ? '' : $agentHeader . "\n")
+            . implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat);
 
         // ONE rule orders this chain: the overlay on screen must be the one
         // Chat::update() routes the next keystroke to, because an overlay the
@@ -1872,6 +1944,10 @@ final class Renderer
         self::$selectableRegion = $overlay === ''
             ? self::transcriptTextRegion($tabStrip, $shell, $sliceStart, $available)
             : null;
+        if (self::$selectableRegion !== null && $headerRows > 0) {
+            self::$selectableRegion[0] += $headerRows;
+            self::$selectableRegion[1] += $headerRows;
+        }
         self::$selectableLines = explode("\n", $frame);
 
         $selection = Chat::textSelection();
@@ -4922,11 +4998,12 @@ final class Renderer
         }
 
         $lines = '';
+        $running = false;
         foreach ($runs as $run) {
             if ($run->isQueued() || ($settled && !$run->isFinished())) {
                 continue;
             }
-            $lines .= "\n" . \SugarCraft\Crush\Tui\AgentActivityLine::render(
+            $line = \SugarCraft\Crush\Tui\AgentActivityLine::render(
                 $run,
                 $width,
                 $theme,
@@ -4934,9 +5011,113 @@ final class Renderer
                 $agents->now(),
                 $run->isFinished() && count($runs) === 1 ? $elapsedSeconds : null,
             );
+            // Roadmap P-C2: each line opens its run's Agent View on a click.
+            self::recordAgentLineZone($run->id, $line);
+            $lines .= "\n" . $line;
+            $running = $running || !$run->isFinished();
+        }
+
+        // Appendix P §4.1's batch hint, once, under the LAST Task row of the
+        // batch that still has a run going — the newest such call in the
+        // registry's arrival order. Gone once the batch has finished.
+        if ($running && !$settled && $runs !== [] && self::lastRunningCall($agents) === $runs[0]->parentCallId) {
+            $hint = Chat::mouseClicksEnabled() ? self::AGENT_BATCH_HINT . self::AGENT_BATCH_HINT_CLICK : self::AGENT_BATCH_HINT;
+            $lines .= "\n" . self::dim($theme)->render(Width::truncate('    ' . $hint, $width));
         }
 
         return $lines;
+    }
+
+    /** The batch hint under a running Task batch (Appendix P §4.1). */
+    public const AGENT_BATCH_HINT = 'alt+↓ agents';
+
+    /**
+     * Click-zone prefix of a Task row's live agent line (roadmap P-C2):
+     * `agent-line:<runId>`. Not the strip's `agent:` — the strip lists the
+     * same runs in the same frame, and two zones with one id make the scan
+     * throw and cost the frame every zone.
+     */
+    public const AGENT_LINE_ZONE_PREFIX = 'agent-line:';
+
+    /** Its second half, said only while clicks are on. */
+    public const AGENT_BATCH_HINT_CLICK = ' · click a task to open it';
+
+    /**
+     * The parent call id of the newest delegated run still going, or null.
+     */
+    private static function lastRunningCall(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents): ?string
+    {
+        $last = null;
+        foreach ($agents->all() as $state) {
+            if (!$state->isFinished() && !$state->isQueued() && $state->parentCallId !== '') {
+                $last = $state->parentCallId;
+            }
+        }
+
+        return $last;
+    }
+
+    /**
+     * Live agent lines the current frame wants clickable (roadmap P-C2), as
+     * `['id' => runId, 'label' => the line's plain text]`, collected while the
+     * transcript is built and marked once the shell is drawn — the
+     * {@see $toolCallZones} detour, for the same layout reason.
+     *
+     * @var list<array{id: string, label: string}>
+     */
+    private static array $agentLineZones = [];
+
+    /**
+     * Remember that the live line $line of run $runId should become an
+     * `agent-line:<runId>` click zone. The id is the run's own
+     * (`subagent_<pid>_<uniqid>`), never its agent-supplied name, and is
+     * held to {@see Mark}'s charset like every zone id.
+     */
+    private static function recordAgentLineZone(string $runId, string $line): void
+    {
+        $zoneId = self::AGENT_LINE_ZONE_PREFIX . $runId;
+        $label = trim(\SugarCraft\Core\Util\Ansi::strip($line));
+        if ($label === '' || !Chat::mouseClicksEnabled()
+            || preg_match(self::ZONE_ID_CHARSET, $runId) !== 1 || strlen($zoneId) > Mark::MAX_ID_BYTES) {
+            return;
+        }
+
+        self::$agentLineZones[] = ['id' => $runId, 'label' => $label];
+    }
+
+    /**
+     * Turn each line recorded by {@see recordAgentLineZone()} into its
+     * `agent-line:` zone on the bordered shell, located by its plain text the way
+     * {@see markToolCalls()} locates a tool row — in order, each shell row
+     * claimed at most once, so two lines that read alike map to their own
+     * rows. A run drawn under two rows (never, today) keeps its first: a
+     * duplicate zone id would cost the whole frame its zones.
+     */
+    private static function markAgentLines(string $shell): string
+    {
+        if (self::$agentLineZones === []) {
+            return $shell;
+        }
+
+        $lines = explode("\n", $shell);
+        $from = 0;
+        $marked = [];
+        foreach (self::$agentLineZones as $zone) {
+            if (isset($marked[$zone['id']])) {
+                continue;
+            }
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains(\SugarCraft\Core\Util\Ansi::strip($lines[$i]), $zone['label'])) {
+                    $lines[$i] = Mark::zone(self::AGENT_LINE_ZONE_PREFIX . $zone['id'], $lines[$i]);
+                    $marked[$zone['id']] = true;
+                    $from = $i + 1;
+
+                    break;
+                }
+            }
+        }
+
+        return implode("\n", $lines);
     }
 
     /**

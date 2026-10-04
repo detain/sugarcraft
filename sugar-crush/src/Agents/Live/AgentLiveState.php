@@ -74,6 +74,19 @@ final readonly class AgentLiveState
         public string $outcome,
         public ?string $error,
         public ?string $resumeId,
+        /**
+         * The run's own JSONL transcript ({@see SubAgentTranscriptLog}), as
+         * its `started` frame announced it (P-C1) — what the Agent View tails
+         * while the run is live (P-C2). Null for a run that announced none (no
+         * session, a v1 frame).
+         */
+        public ?string $transcriptLog = null,
+        /**
+         * The `subagent` child session the finished run was stored as (P-C1),
+         * which the Agent View reads once the log is gone. Only the parent sets
+         * it, on the finished frame it projected.
+         */
+        public ?string $childSessionId = null,
     ) {
     }
 
@@ -190,6 +203,8 @@ final readonly class AgentLiveState
             'outcome' => $finished ? $activity->outcome : '',
             'error' => $finished ? $activity->error : null,
             'resumeId' => $activity->resumeId ?? $this->resumeId,
+            'transcriptLog' => $activity->transcriptLog ?? $this->transcriptLog,
+            'childSessionId' => $activity->childSessionId ?? $this->childSessionId,
         ]);
     }
 

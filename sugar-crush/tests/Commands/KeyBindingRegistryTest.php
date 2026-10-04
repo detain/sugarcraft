@@ -50,6 +50,7 @@ final class KeyBindingRegistryTest extends TestCase
             KeyBindingRegistry::CONTEXT_PERMISSION,
             KeyBindingRegistry::CONTEXT_AGENTS,
             KeyBindingRegistry::CONTEXT_AGENT_STRIP,
+            KeyBindingRegistry::CONTEXT_AGENT_TRANSCRIPT,
             KeyBindingRegistry::CONTEXT_SKILLS,
             KeyBindingRegistry::CONTEXT_SETTINGS,
             KeyBindingRegistry::CONTEXT_MENU,
@@ -290,13 +291,18 @@ final class KeyBindingRegistryTest extends TestCase
      * 99 -> 109 live (103 -> 113 all) with the settings editor's keys (the
      * W4-g save door, bound): `settings.edit`, `.stage`, `.cancel-edit`,
      * `.reset`, `.tier`, `.save`, `.confirm`, `.back`, `.trust`, `.discard`.
+     *
+     * 109 -> 114 live (113 -> 118 all) and 11 -> 12 contexts with the
+     * read-only Agent View (roadmap P-C2): the three rows of the new
+     * `Agent transcript` context (`agentview.back`, `.next`, `.prev`),
+     * `agents.attach` (the peek's `Enter`) and `mouse.agent`.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(113, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(109, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(118, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(114, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
-        $this->assertCount(11, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
+        $this->assertCount(12, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
     /**

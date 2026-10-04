@@ -183,12 +183,13 @@ final class AgentOutputPaneTest extends TestCase
         // Height of 6 → reserve 3 → outputRows = 3.
         $output = AgentOutputPane::render($state, 60, 6, self::theme(), Mode::Attach);
 
-        // Lines 1-3 should be visible.
-        $this->assertStringContainsString('output line 1', $output);
-        $this->assertStringContainsString('output line 2', $output);
-        $this->assertStringContainsString('output line 3', $output);
-        // Lines beyond row limit should NOT appear.
-        $this->assertStringNotContainsString('output line 4', $output);
+        // The newest three — the buffer is a live tail (P-C2 reaches this).
+        $this->assertStringContainsString('output line 8', $output);
+        $this->assertStringContainsString('output line 9', $output);
+        $this->assertStringContainsString('output line 10', $output);
+        // Older lines than the row limit should NOT appear.
+        $this->assertStringNotContainsString('output line 7', $output);
+        $this->assertDoesNotMatchRegularExpression('/output line 1(?!0)/', $output);
         // Footer should indicate total line count and that we're showing a subset.
         $this->assertStringContainsString('lines: 10', $output);
         $this->assertStringContainsString('showing last 3', $output);

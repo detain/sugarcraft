@@ -50,7 +50,10 @@ final class AgentDashboardPerInstanceTest extends TestCase
     {
         $app = $this->app()->openAgent('run-c');
 
-        $this->assertSame(Pane::Agents, $app->pane);
+        // Roadmap P-C2: the run opens in the main area's Agent View, and the
+        // dashboard's selection follows it to its own row.
+        $this->assertSame(Pane::Chat, $app->pane);
+        $this->assertSame('run-c', $app->agentViewTarget);
         $this->assertSame(2, $app->selectedAgentIndex);
     }
 
