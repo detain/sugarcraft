@@ -196,6 +196,40 @@ final readonly class ContextLedger
     }
 
     /**
+     * What this ledger holds that $before did not, as the delta that takes
+     * $before here (roadmap 3.B-3's live `ledger` frame, DCP §13.2 G): every
+     * prune and dropped `<turn-context>` row it added, and every block it
+     * added, in the order they were made. A delta carries only additions —
+     * the one kind of change a turn makes — so a block $before already held
+     * and this ledger merely deactivated is not in it; applying the delta to
+     * $before re-derives that consumption ({@see withBlock()}).
+     */
+    public function deltaSince(self $before): LedgerDelta
+    {
+        $delta = LedgerDelta::new();
+        if ($before === $this) {
+            return $delta;
+        }
+        foreach ($this->prunes as $id => $entry) {
+            if (!isset($before->prunes[$id])) {
+                $delta = $delta->withPrune($entry);
+            }
+        }
+        foreach ($this->droppedContextRows as $key => $tokens) {
+            if (!isset($before->droppedContextRows[$key])) {
+                $delta = $delta->withDroppedContextRow((string) $key, $tokens);
+            }
+        }
+        foreach ($this->blocks as $id => $block) {
+            if (!isset($before->blocks[$id])) {
+                $delta = $delta->withBlock($block);
+            }
+        }
+
+        return $delta;
+    }
+
+    /**
      * The ref every tool result in $messages is shown under: its fixed one
      * when it has one, else a PROVISIONAL one — {@see $nextRef} onwards, in
      * order of first appearance. Pure: the same rows and ledger give the same

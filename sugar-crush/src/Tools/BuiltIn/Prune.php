@@ -69,6 +69,7 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
     private function __construct(
         private ?\Closure $read = null,
         private ?\Closure $apply = null,
+        private ?\Closure $gate = null,
     ) {
     }
 
@@ -84,7 +85,12 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
 
     public function withLedger(\Closure $read, \Closure $apply): Tool
     {
-        return new self($read, $apply);
+        return new self($read, $apply, $this->gate);
+    }
+
+    public function withCompactionGate(\Closure $gate): Tool
+    {
+        return new self($this->read, $this->apply, $gate);
     }
 
     public function name(): string
@@ -160,6 +166,13 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
         [$delta, $pruned, $distilled, $skipped] = self::plan($targets, $reason, $ledger, $messages);
         if ($delta->isEmpty()) {
             return new ToolResult($callId, 'Error: nothing was pruned.' . self::skippedText($skipped), true);
+        }
+        // DCP §13.2 F: a prune is a compaction, and a PreCompact hook that
+        // refuses compactions refuses it — checked once there is something to
+        // prune, so a call that would change nothing never runs the chain.
+        $refusal = $this->gate === null ? null : ($this->gate)('auto', '');
+        if ($refusal !== null) {
+            return new ToolResult($callId, 'Error: a PreCompact hook refused this prune (' . $refusal . '); nothing was pruned.', true);
         }
         if (($this->apply)($delta) === null) {
             return new ToolResult($callId, 'Error: the turn\'s context ledger could not be reached from where this call ran; nothing was pruned.', true);

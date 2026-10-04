@@ -39,4 +39,18 @@ interface MutatesContextLedger
      * @param \Closure(LedgerDelta): ?ContextLedger                       $apply
      */
     public function withLedger(\Closure $read, \Closure $apply): Tool;
+
+    /**
+     * This tool with the turn's `PreCompact` gate (roadmap 3.B-3 / 3.B-4,
+     * DCP §13.2 F "Both tools"): a change to what the model is sent is a
+     * compaction, so a hook that refuses compactions refuses it too. `$gate`
+     * runs the chain with the `trigger` (`auto` for the model's own call,
+     * `manual` for one the person asked for) and the call's own label as
+     * `custom_instructions`, and answers why it refused, or null to go on.
+     * Bound after {@see withLedger()}, keeping that binding; unbound, nothing
+     * gates the call.
+     *
+     * @param \Closure(string $trigger, string $focus): ?string $gate
+     */
+    public function withCompactionGate(\Closure $gate): Tool;
 }

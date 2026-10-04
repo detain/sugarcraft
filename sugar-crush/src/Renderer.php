@@ -1609,6 +1609,11 @@ final class Renderer
             // in update() (Chat's pump tick), so this frame stays a pure
             // function of state.
             $chat->agentLive(),
+            // Roadmap 3.B-3: the session's ledger as its runner holds it (a
+            // memory read), so a pruned or distilled tool row wears its
+            // badge — live, as a turn's `Prune` lands. An open Agent View
+            // shows another run's rows, which this ledger does not describe.
+            $openView === null ? $chat->contextLedgerView() : null,
         );
         if ($openView !== null) {
             if ($body === '' && $openView['attach'] === null) {

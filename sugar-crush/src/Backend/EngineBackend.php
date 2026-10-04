@@ -19,6 +19,7 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Context\SessionPromptMemo;
 use SugarCraft\Crush\Context\TurnContextBlock;
+use SugarCraft\Crush\Events\ContextLedgerChanged;
 use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Events\ToolFinished;
@@ -1414,10 +1415,41 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             $runtime = $runtime->withTurnInbox($inbox);
         }
 
+        // Roadmap 3.B-3 / 3.D-2: the turn's own PreCompact chain, for the
+        // compactions made INSIDE it — a ledger tool's call, a step summary.
+        // The chain the Runtime gates with (one per turn), run here in the
+        // turn's process: it is already off the render loop. Answers why it
+        // refused (an ask fails closed: nobody can be asked from here), or
+        // null to go on; a chain that throws refuses, as Chat's does.
+        $compactionHooks = $this->resolveHookManager($loopGuard);
+        $preCompact = function (string $trigger, string $focus) use ($compactionHooks): ?string {
+            $event = \SugarCraft\Crush\Hooks\HookEvent::PreCompact;
+            if (!$compactionHooks->hasHooksFor($event, $event->value)) {
+                return null;
+            }
+            try {
+                $verdict = $compactionHooks->preCompact(HookManager::eventContext(
+                    $event,
+                    ['trigger' => $trigger, 'custom_instructions' => $focus],
+                    $this->sessionId ?? '',
+                    $this->root ?? '',
+                    $this->model,
+                    $this->provider->name(),
+                ));
+            } catch (\Throwable $e) {
+                return 'a PreCompact hook failed: ' . $e->getMessage();
+            }
+
+            return \SugarCraft\Crush\Host\CompactionService::preCompactRefusal($verdict);
+        };
+
         $app = $this->sessionApp()
             // Roadmap 4.1-1: a sub-agent's preset effort, per request.
             ->withReasoningEffort($this->reasoningEffort)
-            ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd, $contextLedger, $app))
+            ->withTools(self::gatedLedgerTools(
+                $this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd, $contextLedger, $app),
+                $preCompact,
+            ))
             ->withMessages($messages);
 
         $lastAssistant = null;
@@ -1574,6 +1606,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // the stopped-turn summary's — is projected through it.
             $contextLedger ??= $app->contextLedger ?? \SugarCraft\Crush\Context\Pruning\ContextLedger::new();
             $maxSteps = $this->maxSteps;
+            // Roadmap 3.B-3 (DCP §13.2 G): every change to the turn's ledger —
+            // a `Prune` call's, an over-budget relief's — is shown to the host
+            // as it happens (the live `ledger` frame on the forked path), so
+            // the transcript dims the rows while the turn still runs. Only
+            // where a host keeps the session's ledger: a delegated run's is its
+            // own and ends with it. The turn's final ledger still arrives
+            // whole on the reply, so a shown delta is only ever an early view.
+            $ledgerShown ??= $contextLedger;
+            $showLedger ??= $onEvent === null || $this->contextLedger === null
+                ? static function (string $toolCallId): void {
+                }
+                : static function (string $toolCallId) use (&$contextLedger, &$ledgerShown, $onEvent): void {
+                    if ($contextLedger === $ledgerShown) {
+                        return;
+                    }
+                    $delta = $contextLedger->deltaSince($ledgerShown);
+                    $ledgerShown = $contextLedger;
+                    if (!$delta->isEmpty()) {
+                        $onEvent(new ContextLedgerChanged($delta, $toolCallId));
+                    }
+                };
 
             // Roadmap 2.2-1 / 2.4-1: an over-budget request is relieved before
             // it is sent. The observer sees the request fully built and, while
@@ -1674,6 +1727,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                             $this->observeCacheHealth($assistant->usage());
                         } elseif ($message instanceof ToolResultMessage) {
                             $toolResults[] = $message;
+                            // 3.B-3: a ledger tool applied its delta as it ran.
+                            $showLedger($message->toolCallId());
                             // Folded AS IT SETTLES, not after the step: a sequential
                             // Task later in this same step reads $spentSoFarUsd when
                             // it starts, and must see this one's dollars.
@@ -1751,6 +1806,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     }
                     if ($relieved !== null) {
                         $contextLedger = $relieved;
+                        $showLedger('');
                         $app = $app->withContextLedger($contextLedger);
                         // The provider counted the request BEFORE the ledger
                         // moved; the next figure is a fresh estimate until a
@@ -1840,6 +1896,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         throw $failure;
                     }
                     $contextLedger = $relieved;
+                    $showLedger('');
                     $app = $app->withContextLedger($contextLedger);
                     $pressureAnchor = [null, 0];
                 }
@@ -2647,6 +2704,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
 
         return $tools;
+    }
+
+    /**
+     * $tools with every ledger tool `turnTools()` bound to the turn's ledger
+     * also bound to the turn's PreCompact gate (roadmap 3.B-3, DCP §13.2 F):
+     * the model's `Prune` is a compaction, and a hook that refuses
+     * compactions refuses it. Every other tool is returned as it was.
+     *
+     * @param list<Tool>                                     $tools
+     * @param \Closure(string $trigger, string $focus): ?string $preCompact
+     *
+     * @return list<Tool>
+     */
+    private static function gatedLedgerTools(array $tools, \Closure $preCompact): array
+    {
+        return array_map(
+            static fn (Tool $tool): Tool => $tool instanceof \SugarCraft\Crush\Tools\MutatesContextLedger
+                ? $tool->withCompactionGate($preCompact)
+                : $tool,
+            $tools,
+        );
     }
 
     /**
@@ -4123,7 +4201,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 static function (string $delta) use ($childSocket): void {
                     self::writeFrame($childSocket, ['kind' => 'token', 'text' => $delta]);
                 },
-                static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity $event) use ($childSocket): void {
+                static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|ContextLedgerChanged $event) use ($childSocket): void {
                     self::writeFrame($childSocket, self::encodeEvent($event));
                 },
                 // E456. The child's third sink, and the one that exists for the
@@ -4476,8 +4554,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @return array<string, mixed>
      */
-    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity $event): array
+    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|ContextLedgerChanged $event): array
     {
+        if ($event instanceof ContextLedgerChanged) {
+            // Roadmap 3.B-3: the live `ledger` frame — what a Prune (or an
+            // over-budget relief) just took out of the model's view, as the
+            // delta's own plain-array form, so the host can dim the rows
+            // while the turn still runs.
+            return ['kind' => 'ledger'] + $event->toArray();
+        }
+
         if ($event instanceof SpendCapBreached) {
             return [
                 'kind' => 'spend_cap',
@@ -4546,7 +4632,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @param array<string, mixed> $encoded
      */
-    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|null
+    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|ContextLedgerChanged|null
     {
         // THE KIND IS READ BEFORE THE IDENTITY, and the order is the fix, not
         // a style choice: a spend_cap frame carries no toolCallId/name pair at
@@ -4564,6 +4650,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             }
 
             return new SpendCapBreached($calls, (float) $spent, (float) $cap);
+        }
+
+        if ($kind === 'ledger') {
+            // Lenient like the ledger's own reader: entries it cannot read
+            // are skipped, and a delta with nothing left is no event at all.
+            return ContextLedgerChanged::fromArray($encoded);
         }
 
         if ($kind === 'subagent') {

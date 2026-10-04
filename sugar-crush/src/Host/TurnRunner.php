@@ -375,9 +375,15 @@ final class TurnRunner
             // The permission events (1.C-2) share the inbox: a question has to
             // reach the screen in the turn's own event order, between the tool
             // events around it.
-            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|PermissionAsked|PermissionResolved $event) use ($inbox, $generation, $runner, $cancellation): void {
+            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|PermissionAsked|PermissionResolved|\SugarCraft\Crush\Events\ContextLedgerChanged $event) use ($inbox, $generation, $runner, $cancellation): void {
                 if ($event instanceof SpendCapBreached) {
                     $runner->markSpendCapped($cancellation);
+                }
+                // Roadmap 3.B-3: what the turn just took out of the model's
+                // view becomes the session's as its frame arrives, so the
+                // transcript dims the rows while the turn runs.
+                if ($event instanceof \SugarCraft\Crush\Events\ContextLedgerChanged) {
+                    $runner->observeLedger($cancellation, $event);
                 }
                 // Roadmap 3.C: a `Todo` call's new list becomes the session's
                 // as its frame arrives, so the pane follows the turn live.
@@ -428,9 +434,12 @@ final class TurnRunner
                 foreach ($inbox as $entry) {
                     if ($entry[1] instanceof PermissionAsked || $entry[1] instanceof PermissionResolved) {
                         $held[] = $entry;
-                    } elseif ($entry[1] instanceof StepStarted || $entry[1] instanceof UsageUpdated) {
+                    } elseif ($entry[1] instanceof StepStarted || $entry[1] instanceof UsageUpdated
+                        || $entry[1] instanceof \SugarCraft\Crush\Events\ContextLedgerChanged) {
                         // Live-only (1.C-4): the settled reply carries the
-                        // turn's real usage, and a finished turn has no step.
+                        // turn's real usage, and a finished turn has no step;
+                        // nor a ledger change (3.B-3) — the reply carries the
+                        // turn's whole ledger, saved below.
                         continue;
                     } else {
                         $rest[] = $entry;
@@ -536,11 +545,41 @@ final class TurnRunner
         if ($sessionId !== null && $transcripts?->persists() === true) {
             $stored = $transcripts->loadLedger($sessionId);
             if ($stored !== null) {
-                return $stored;
+                // Held as well (3.B-3), for heldLedger(): the store stays
+                // the copy this reads first, so holding shadows nothing.
+                return $this->ledgers[$sessionId] = $stored;
             }
         }
 
         return $this->ledgers[$sessionId ?? ''] ?? ContextLedger::new();
+    }
+
+    /**
+     * $sessionId's context ledger as this runner holds it, or null when it
+     * holds none — the store is never read, so the transcript can call it
+     * per frame (roadmap 3.B-3: the pruned / distilled badges). Held from
+     * every save, a live `ledger` frame's included.
+     */
+    public function heldLedger(?string $sessionId): ?ContextLedger
+    {
+        return $this->ledgers[$sessionId ?? ''] ?? null;
+    }
+
+    /**
+     * Apply a running turn's {@see \SugarCraft\Crush\Events\ContextLedgerChanged}
+     * to its session's ledger and keep it (roadmap 3.B-3, DCP §13.2 G) — the
+     * mid-turn view of a `Prune`. Idempotent with the turn's settle, which
+     * saves the turn's whole final ledger over it. A turn this runner did
+     * not start changes nothing.
+     */
+    public function observeLedger(?CancellationToken $turn, \SugarCraft\Crush\Events\ContextLedgerChanged $event): void
+    {
+        $state = $this->state($turn);
+        if ($state === null) {
+            return;
+        }
+        $sessionId = $state['sessionId'];
+        $this->saveLedger($state['transcripts'], $sessionId, $this->ledger($state['transcripts'], $sessionId)->apply($event->delta));
     }
 
     /**

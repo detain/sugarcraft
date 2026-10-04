@@ -168,7 +168,7 @@ already run:
 | `SessionStart` | the first prompt submitted into an empty history | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
 | `SessionEnd` | the process is exiting: the TUI closed, or a `-p` run printed its answer | `NonInteractive::fireSessionEnd()` |
 | `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
-| `PreCompact` | before a compaction condenses the history — the one that can skip it | `Chat::preCompactGate()` |
+| `PreCompact` | before a compaction condenses the history — the one that can skip it | `Chat::preCompactGate()`, `EngineBackend::runTurn()` |
 | `PostCompact` | after a compaction was applied | `Chat::postCompactCmd()` |
 | `TeammateIdle` | a teammate went idle | — |
 | `TaskCreated` / `TaskCompleted` | task lifecycle | — |
@@ -334,8 +334,11 @@ nothing fires there. The session server (`serve`) does not fire it yet.
 condense the history through the TUI: `/compact` (`trigger: manual`), and the
 automatic 85% tier when it parks a prompt behind a model-written summary
 (`trigger: auto`). `Chat::postCompactCmd()` fires `PostCompact` once such a
-compaction has been applied. The automatic tier's heuristic route (no summary
-model configured) and the engine's step-level compaction do not fire them yet.
+compaction has been applied. Inside a turn, `EngineBackend::runTurn()` fires
+`PreCompact` (`trigger: auto`) before the model's own `Prune` call changes what
+it is sent: a block refuses the call, and the model reads why. The automatic
+tier's heuristic route (no summary model configured) and the engine's
+step-level compaction do not fire them yet.
 
 - **Never on the render loop.** A wired `PreCompact` chain runs inside the
   compaction's own Cmd — before the summarization request is sent, so a block

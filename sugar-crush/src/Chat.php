@@ -4889,6 +4889,15 @@ final class Chat implements Model
             ]), $more];
         }
 
+        // Roadmap 3.B-3: the runner applied it to the session's ledger as its
+        // frame arrived ({@see \SugarCraft\Crush\Host\TurnRunner::observeLedger()});
+        // the frame this returns repaints the transcript with the rows dimmed.
+        if ($event instanceof \SugarCraft\Crush\Events\ContextLedgerChanged) {
+            $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
+
+            return [$this, $more];
+        }
+
         if ($text !== null) {
             // Ephemeral (Appendix O §6.5): heard live by a listener, never
             // logged — the settled reply is the durable copy of these bytes.
@@ -8512,6 +8521,19 @@ final class Chat implements Model
     public function currentSessionId(): ?string
     {
         return $this->currentSessionId;
+    }
+
+    /**
+     * This session's context ledger as its turn runner holds it, or null
+     * when it holds none yet (roadmap 3.B-3) — the copy the transcript's
+     * pruned / distilled badges and its compressed-block rows read. Never the
+     * store: {@see \SugarCraft\Crush\Host\TurnRunner::heldLedger()} is a
+     * memory read, so {@see Renderer} may call this per frame. Kept current
+     * by every save — a turn's settle, a live `ledger` frame, `/sweep`.
+     */
+    public function contextLedgerView(): ?\SugarCraft\Crush\Context\Pruning\ContextLedger
+    {
+        return $this->turnRunner()->heldLedger($this->currentSessionId);
     }
 
     /**

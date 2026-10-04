@@ -30,10 +30,13 @@ use SugarCraft\Crush\Backend\CancellationToken;
  * backend that refuses to make the NEXT call mid-loop the refusal itself
  * ({@see Events\SpendCapBreached}), and for a run the backend delegates to a
  * sub-agent, that run's own beats as they happen
- * ({@see Events\SubAgentActivity}). The roster is exactly what
+ * ({@see Events\SubAgentActivity}), and for a backend that keeps a context
+ * ledger, each change a turn makes to what the model is sent — a `Prune`
+ * call's — as it lands ({@see Events\ContextLedgerChanged}, roadmap 3.B-3).
+ * The roster is exactly what
  * {@see Backend\EngineBackend::encodeEvent()} admits — the wire encoder's
  * parameter type, not a prose list, is the authority, and a consumer that
- * type-matches these four covers the channel. It exists
+ * type-matches these five covers the channel. It exists
  * because the returned Message is a single opaque final answer: an
  * agentic backend such as {@see Backend\EngineBackend} can run several
  * rounds of tool calls behind it, and without this callback none of
@@ -70,7 +73,7 @@ interface Backend
      *                                `function(string $token): void`
      * @param callable|null $onEvent optional turn-lifecycle observer.
      *                                Signature:
-     *                                `function(Events\ToolStarted|Events\ToolFinished|Events\SpendCapBreached|Events\SubAgentActivity $event): void`
+     *                                `function(Events\ToolStarted|Events\ToolFinished|Events\SpendCapBreached|Events\SubAgentActivity|Events\ContextLedgerChanged $event): void`
      */
     public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message;
 
