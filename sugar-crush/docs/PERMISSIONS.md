@@ -37,8 +37,8 @@ the engine path, whose forked turn puts the question up its two-way frame
 channel — becomes the y/n/a modal, and `/rewind`'s workspace checkpoints sit
 behind whatever you allowed. Until both of those landed the TUI started in
 `bypass-permissions` too, because an asking mode refused engine-path writes
-instead of prompting. One gap is left: a `Task` sub-agent run in a parallel
-batch cannot ask yet and is refused with a reason (see
+instead of prompting. A `Task` sub-agent run in a parallel batch asks too: its
+question is relayed through the turn and lands in the same modal (see
 [`Ask` needs somewhere to ask](#ask-needs-somewhere-to-ask)).
 
 The console paths keep the permissive default on purpose. Their approver asks
@@ -486,10 +486,15 @@ situations, not two:
     command of a chain to match. Nothing is written to a settings file.
   - Only the gate's own question offers "always". A question one of your
     hooks asks is put every time, and `a` there counts as "once".
-  - A `Task` sub-agent running in a **parallel** batch has no channel of its
-    own yet: its question is refused with a reason the model reads
-    (`approval from a parallel sub-agent is not yet supported; run it alone or
-    allow it by rule`). A `Task` run alone asks normally.
+  - A `Task` sub-agent running in a **parallel** batch asks like any other
+    call. Its run lives in a grandchild below the turn, which cannot write the
+    turn's socket, so the turn opens a private channel to each member
+    (`Support\PermissionAskRelay`) and puts the member's question to the
+    modal itself; your answer goes back down unchanged. Questions from several
+    members are shown one at a time, and an "always" covers the siblings for
+    the rest of the turn. Only a member whose channel could not be opened is
+    still refused, with a reason the model reads (`approval from a parallel
+    sub-agent is not yet supported; run it alone or allow it by rule`).
 - **The console paths** attach `HeadlessPermissionPrompt` as `Runtime`'s
   approver. At a terminal it asks on **stderr** and reads the answer from
   stdin, granting only on a literal `y`/`yes`. With no terminal it does not

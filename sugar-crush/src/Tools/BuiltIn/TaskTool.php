@@ -159,7 +159,7 @@ use SugarCraft\Crush\Usage;
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
  * carries across the fork.
  */
-final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, StreamsActivity
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, StreamsActivity, \SugarCraft\Crush\Tools\RelaysPermissionAsks
 {
     /**
      * Step cap for a preset that declares no `maxTurns`. 200 since
@@ -274,6 +274,24 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         return $this->withSubAgentEmitter(static function (SubAgentActivity $activity) use ($sink): void {
             $sink->emit($activity);
         });
+    }
+
+    /**
+     * The copy a forked member of a concurrent group runs (roadmap 1.C-5):
+     * every question its delegated run raises goes to $approver — the
+     * member's {@see \SugarCraft\Crush\Support\PermissionAskRelay} — instead
+     * of the turn child's channel, which refuses from any other process. A
+     * copy with no engine bound has no run to gate and is returned as is.
+     *
+     * @param \Closure(\SugarCraft\Crush\Tools\ToolCall, \SugarCraft\Crush\Hooks\HookResult): \SugarCraft\Crush\Permissions\ApprovalVerdict $approver
+     */
+    public function withPermissionApprover(\Closure $approver): self
+    {
+        if ($this->engine === null) {
+            return $this;
+        }
+
+        return new self($this->agentManager, $this->workerPool, $this->engine->withPermissionApprover($approver), $this->heartbeat, $this->suspended, $this->subAgentEmitter, $this->siblingSpend, $this->activityClock);
     }
 
     /**

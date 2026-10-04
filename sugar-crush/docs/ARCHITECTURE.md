@@ -295,7 +295,7 @@ big-endian length plus a `serialize()`d array, decoded with
   remembers it for the same call for the rest of the turn.
 - `Backend\ChildChannel` is bound to the turn child's pid. A parallel Task
   grandchild that inherits it is refused rather than allowed to interleave
-  frames on the turn's socket.
+  frames on the turn's socket; its questions take the ask relay below instead.
 - Plain `completeAsync()` never attaches the channel's approver. Its asks
   settle in the child exactly as before, through the attached approver or the
   fail-closed no-approver refusal. Without ext-pcntl, an interactive question
@@ -366,6 +366,24 @@ writes. The relay carries those beats instead:
   an error, `complete` otherwise.
 - Every relay is closed in `executeConcurrently()`'s `finally` block. No
   process is added, only file descriptors.
+
+**Permission ask relay (1.C-5).** The same grandchild cannot put a question up
+the turn socket either. When the turn has an approver and a member's tool
+implements `Tools\RelaysPermissionAsks` (`TaskTool`), the turn child opens a
+unix stream pair (`Support\PermissionAskRelay`, the engine's length-prefixed
+framing) before the fork:
+
+- The grandchild rebinds the tool with `withPermissionApprover()`, which
+  rebinds its engine's approver, and closes its inherited copy of the turn
+  socket (`ChildChannel::releaseInherited()`). Each ask goes down as an `ask`
+  frame (`askId`, the call, the question, who asked), and the grandchild
+  blocks for the matching `ask_reply`. EOF means nobody answered.
+- The reap loop reads every member's relay and puts each question to the turn
+  child's own approver, the `ChildChannel` on a TUI turn, so it reaches the
+  modal as an ordinary `ask` frame. The verdict goes back exactly as settled:
+  `once`, `always`, `reject` with its feedback, or unanswered. Questions are
+  settled one at a time, and the channel's turn-wide `always` memo covers
+  siblings.
 
 ---
 

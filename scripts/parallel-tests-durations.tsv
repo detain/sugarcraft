@@ -288,6 +288,7 @@ sugar-crush/tests/Diagnostics/RuntimeNoticeSinkStderrTest.php	0.517	5
 sugar-crush/tests/Agents/AgentManagerRetentionTest.php	0.514	7
 sugar-crush/tests/Diagnostics/TuiErrorLogTest.php	0.513	40
 sugar-crush/tests/Tools/WebSearchTransportTest.php	0.504	13
+sugar-crush/tests/Runtime/ParallelGrandchildAskRelayTest.php	0.500	9
 sugar-crush/tests/MCP/StdioMcpEnvScrubTest.php	0.497	6
 sugar-crush/tests/Permissions/ChatAlwaysGrantScopeTest.php	0.491	5
 sugar-crush/tests/MCP/StdioMcpServerToolListRobustnessTest.php	0.486	9

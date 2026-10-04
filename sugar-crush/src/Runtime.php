@@ -2288,7 +2288,7 @@ final class Runtime
 
             // One member's fork (or in-process fallback), shared by the
             // fan-out below and by phase 3's start of a queued delegation.
-            $launch = function (int $index) use (&$jobs): void {
+            $launch = function (int $index) use (&$jobs, $onPermissionRequest): void {
                 $job = $jobs[$index];
 
                 // The copy that records onto the group ledger, run on either
@@ -2300,6 +2300,12 @@ final class Runtime
                 // instead and phase 3 replays what arrives (StreamsActivity).
                 $emitter = $tool instanceof StreamsActivity ? $tool->subAgentEmitter() : null;
                 $relay = $emitter !== null ? SubAgentActivityRelay::open() : null;
+                // 1.C-5: a member whose run asks its own questions gets a
+                // channel to put them to THIS process's approver; the one it
+                // inherits answers only in the process that built it.
+                $asks = $onPermissionRequest !== null && $tool instanceof \SugarCraft\Crush\Tools\RelaysPermissionAsks
+                    ? \SugarCraft\Crush\Support\PermissionAskRelay::open()
+                    : null;
                 $pid = pcntl_fork();
 
                 if ($pid === -1) {
@@ -2342,6 +2348,7 @@ final class Runtime
                     // Left in rather than trimmed to what the tests can see.
                     ToolIpcFiles::discard($file);
                     $relay?->close();
+                    $asks?->close();
                     $jobs[$index]['file'] = null;
                     $jobs[$index]['result'] = $this->executeGuarded($tool, $job['call'], $job['args']);
                     $jobs[$index]['settled'] = true;
@@ -2353,6 +2360,9 @@ final class Runtime
                     if ($relay !== null && $tool instanceof StreamsActivity) {
                         $tool = $tool->withActivitySink($relay->childSink());
                     }
+                    if ($asks !== null && $tool instanceof \SugarCraft\Crush\Tools\RelaysPermissionAsks) {
+                        $tool = $tool->withPermissionApprover($asks->childApprover());
+                    }
                     $this->runToolInChild($file, $tool, $job['call'], $job['args']);
                 }
 
@@ -2361,6 +2371,10 @@ final class Runtime
                     $relay->becomeReader();
                     $jobs[$index]['relay'] = $relay;
                     $jobs[$index]['emitter'] = $emitter;
+                }
+                if ($asks !== null) {
+                    $asks->becomeReader();
+                    $jobs[$index]['asks'] = $asks;
                 }
             };
 
@@ -2426,6 +2440,10 @@ final class Runtime
                 // last beats (its finished frame) replayed before its
                 // ToolFinished is released below.
                 self::relaySubAgentActivity($jobs);
+                // 1.C-5: a member's permission question is put to this
+                // process's approver (the turn's channel, so the user's
+                // modal) and the verdict goes back down its relay.
+                self::relayPermissionAsks($jobs, $onPermissionRequest);
 
                 $released = false;
                 while ($next < $total && $jobs[$next]['settled']) {
@@ -2474,6 +2492,10 @@ final class Runtime
                         }
                         $jobs[$next]['relay']->close();
                         unset($jobs[$next]['relay']);
+                    }
+                    if (isset($jobs[$next]['asks'])) {
+                        $jobs[$next]['asks']->close();
+                        unset($jobs[$next]['asks']);
                     }
                     yield $this->release($jobs[$next], $onEvent);
                     $next++;
@@ -2526,6 +2548,10 @@ final class Runtime
                     $readers = [];
                     foreach ($jobs as $job) {
                         $stream = isset($job['relay']) ? $job['relay']->readStream() : null;
+                        if ($stream !== null) {
+                            $readers[] = $stream;
+                        }
+                        $stream = isset($job['asks']) ? $job['asks']->readStream() : null;
                         if ($stream !== null) {
                             $readers[] = $stream;
                         }
@@ -2590,6 +2616,9 @@ final class Runtime
                 if (isset($job['relay'])) {
                     $job['relay']->close();
                 }
+                if (isset($job['asks'])) {
+                    $job['asks']->close();
+                }
             }
 
             // Every member that will ever be released has been by now (or the
@@ -2619,6 +2648,41 @@ final class Runtime
             }
             foreach ($relay->drain() as $beat) {
                 $emitter($beat);
+            }
+        }
+    }
+
+    /**
+     * Put every question a forked member has relayed since the last pass to
+     * $onPermissionRequest — in this process, whose approver is the turn's
+     * own (the frame channel, on a TUI turn) — and send each verdict back
+     * down that member's relay exactly as it was settled (roadmap 1.C-5).
+     *
+     * Blocks while a question is open, as a sequential turn's gate does: the
+     * parent pauses its idle ceiling for an open ask, the other members keep
+     * running, and their beats and questions wait on their own sockets until
+     * this one is answered — one modal at a time.
+     *
+     * @param list<array<string, mixed>> $jobs
+     */
+    private static function relayPermissionAsks(array $jobs, ?callable $onPermissionRequest): void
+    {
+        if ($onPermissionRequest === null) {
+            return;
+        }
+        foreach ($jobs as $job) {
+            $asks = $job['asks'] ?? null;
+            if (!$asks instanceof \SugarCraft\Crush\Support\PermissionAskRelay) {
+                continue;
+            }
+            foreach ($asks->takeAsks() as $askId => $question) {
+                try {
+                    $verdict = \SugarCraft\Crush\Permissions\ApprovalVerdict::of($onPermissionRequest($question['call'], $question['ask']));
+                } catch (\Throwable $e) {
+                    // An approver that throws has not consented.
+                    $verdict = \SugarCraft\Crush\Permissions\ApprovalVerdict::reject('the approver failed: ' . $e->getMessage());
+                }
+                $asks->reply((string) $askId, $verdict);
             }
         }
     }

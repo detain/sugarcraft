@@ -64,8 +64,16 @@ use SugarCraft\Crush\Tools\ToolCall;
  * stream interleave frames, which is the same reason the sub-agent emitter is
  * pid-bound in {@see EngineBackend}. So every write checks the pid it was
  * built in, and an ask from any other process is refused with
- * {@see GRANDCHILD_REFUSAL} until the per-job relay (1.C-5) gives it a
- * channel of its own.
+ * {@see GRANDCHILD_REFUSAL}.
+ *
+ * Since roadmap 1.C-5 that refusal is the FALLBACK, not the rule: the turn
+ * child opens a {@see \SugarCraft\Crush\Support\PermissionAskRelay} per
+ * parallel Task member, the member asks over it, and the turn child puts the
+ * question to the parent through THIS channel — so a parallel sub-agent's
+ * write reaches the user's modal like any other. Only a member whose relay
+ * could not be opened still gets the refusal. The member also gives up its
+ * inherited copy of the turn socket ({@see releaseInherited()}), so nothing
+ * in it can write onto this stream even by accident.
  */
 final class ChildChannel
 {
@@ -99,6 +107,15 @@ final class ChildChannel
     private const MAX_SELECT_FAILURES = 100;
 
     private const MAX_HELD_REPLIES = 64;
+
+    /**
+     * Every channel built in this process or inherited by it through a fork,
+     * held weakly, so {@see releaseInherited()} can find the ones a forked
+     * process does not own.
+     *
+     * @var list<\WeakReference<self>>
+     */
+    private static array $live = [];
 
     private string $inbound = '';
 
@@ -146,6 +163,44 @@ final class ChildChannel
         if (is_resource($this->socket)) {
             stream_set_read_buffer($this->socket, 0);
         }
+        self::$live[] = \WeakReference::create($this);
+    }
+
+    /**
+     * Close this process's copy of every channel socket it inherited rather
+     * than built (roadmap 1.C-5, the RELAY design's "the grandchild closes
+     * its copy of the turn socket"). Called by a forked member that has a
+     * channel of its own: the turn's frame writers it inherited also hold
+     * the socket, and a write from here would interleave with the turn
+     * child's frames — with the copy closed, such a write fails instead.
+     * The turn child's own end is untouched (a separate descriptor table).
+     *
+     * @return int how many sockets were closed
+     */
+    public static function releaseInherited(): int
+    {
+        $pid = (int) getmypid();
+        $closed = 0;
+        $kept = [];
+        foreach (self::$live as $ref) {
+            $channel = $ref->get();
+            if ($channel === null) {
+                continue;
+            }
+            if ($channel->ownerPid === $pid) {
+                $kept[] = $ref;
+
+                continue;
+            }
+            if (is_resource($channel->socket)) {
+                @fclose($channel->socket);
+                $closed++;
+            }
+            $channel->closed = true;
+        }
+        self::$live = $kept;
+
+        return $closed;
     }
 
     /**
