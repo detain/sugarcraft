@@ -2338,13 +2338,44 @@ final class Chat implements Model
             // queued took the turn's place — a queued prompt is the same
             // conversation carrying on, and commits once it settles.
             $autoCommit = $done->inFlight ? null : $done->scheduleAutoCommit();
-            $cmds = array_values(array_filter([$doneCmd, $suggest, $consolidate === null ? null : Cmd::promise($consolidate), $autoCommit]));
+            // Roadmap 5.4-3, same seam: the dream pass folds the compaction
+            // journal into memory in a restricted-tool turn of the session's
+            // engine (read-only Memory + Read, via EngineBackend::withTools),
+            // throttled on disk to one pass per project per two hours. Only
+            // the gating runs here (a stat and a small state read); the turn
+            // runs in the engine's fork, and the notes are written in this
+            // process as it settles (DreamPassCompletedMsg).
+            $dream = $done->inFlight || $done->memoryStore === null ? null
+                : \SugarCraft\Crush\Memory\DreamPass::new(
+                    \SugarCraft\Crush\Memory\MemoryWriter::new($done->memoryStore, $done->projectRoot()),
+                )->call($done->backend, $done->spendCapReached(), $done->currentSessionId);
+            $cmds = array_values(array_filter([
+                $doneCmd,
+                $suggest,
+                $consolidate === null ? null : Cmd::promise($consolidate),
+                $autoCommit,
+                $dream === null ? null : Cmd::promise($dream),
+            ]));
 
             return [$done, match (count($cmds)) {
                 0 => null,
                 1 => $cmds[0],
                 default => Cmd::batch(...$cmds),
             }];
+        }
+        if ($msg instanceof DreamPassCompletedMsg) {
+            // Roadmap 5.4-3: the notes, the memory-history commit and the
+            // journal cursor are already written (in this process, as the
+            // turn settled). Accounted first — the pass ran on the user's
+            // key — then one display-only notice when a note was saved,
+            // changed or removed; a pass that changed nothing says nothing.
+            $this->accountUsage($msg->usage);
+            $notice = \SugarCraft\Crush\Memory\DreamPass::notice($msg);
+            if ($notice === null) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['history' => [...$this->history, Message::notice($notice)]]), null];
         }
         if ($msg instanceof \SugarCraft\Crush\Workspace\AutoCommittedMsg) {
             // Step 3.G: the commit is already made (or refused). Accounted

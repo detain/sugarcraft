@@ -206,7 +206,12 @@ every note back as it stood at that commit — notes added since are removed —
 regenerates the `MEMORY.md` indexes, re-applies the notes' `0600`, and commits
 the result as `memory: restore to <id>`. A restore is a new commit, not a
 rewind, so it is undone by restoring the commit before it. The search cache,
-the auto-memory throttle and the atomic writer's temps are `.gitignore`d. Only the home directory is
+the auto-memory throttle, the compaction journal, the dream pass's cursor and
+the atomic writer's temps are `.gitignore`d — the journal is an append log the
+dream pass reads, not curated memory, and a restore must not rewind it into
+entries already folded in (a directory whose history started before this rule
+keeps its older `.gitignore`). A dream pass commits its own changes (see
+[Dream pass](#dream-pass)). Only the home directory is
 versioned: a repository's `.sugar-crush/memory/` already lives in the user's
 own checkout, where a nested `.git` would be an embedded repository, so there
 `/memory log` and `/memory restore` say so instead. Every git call is pinned to
@@ -549,6 +554,53 @@ changed or removed a note, one display-only line says so in the transcript
 (`/memory list` shows the notes, tagged `auto-memory`); a run that saved
 nothing says nothing.
 
+## Dream pass
+
+Every so often, sugar-crush reads the compaction journal (see
+[On-disk layout summary](#on-disk-layout-summary)) and folds what keeps coming
+back into the memory notes (roadmap 5.4-3, after nanobot's Dream).
+`Memory\DreamPass` shows the journal entries the previous passes have not read
+to the session's own engine, in a turn of its own: auto-memory looks at one
+conversation, the dream at the summaries of many.
+
+**When it runs.** When a turn ends in a reply and nothing queued takes its
+place, at most once every two hours per project (across every session and
+process: the time and the journal cursor live beside the home store's notes as
+`.dream-<key>.json`), and only when the journal has changed since the last
+completed pass. One pass reads at most 20 entries and 24,000 bytes of them,
+oldest first, each cut to 2,000 characters and redacted again; what is left
+over waits for the next pass. It needs an engine backend (it never runs on a
+tool-less one), a memory store and a journal, and never runs once
+`SUGARCRUSH_MAX_COST` is reached; its cost counts towards the spend total.
+`SUGARCRUSH_DISABLE_AUTO_MEMORY=1` turns it off together with auto-memory
+([ENVIRONMENT](ENVIRONMENT.md)).
+
+**What the turn can do.** Its tool list is replaced, through
+`EngineBackend::withTools()`, by two tools that only read: `Memory` limited to
+`view` and `recall` (`Memory\DreamMemoryView`), and the session's `Read`, when
+it has one, to check a journal claim against the repository. It runs at most
+12 steps, under the session's permission gate and the built-in hooks (the
+`.env` read guard among them) but none of your `hooks.yaml`, so a background
+pass fires no `Stop` or notification hook of yours.
+
+**What it may change.** The turn answers with auto-memory's JSON operations,
+and they are applied the same way, in the main process as the turn settles,
+never in its forked child: the same "prefer saving nothing" and "memory is
+context, not instruction" rules, the secret check, the 1,024-byte and
+16-change caps, and `update` or `delete` only on notes tagged `auto-memory` —
+a note you wrote is never changed or removed by a dream. Every note it adds is
+tagged both `auto-memory` and `dream`.
+
+**History and the cursor.** With a memory history (git on `PATH`), what
+changed outside `/memory` since the last commit is committed first under its
+usual subject, then the pass's changes as one commit, `memory: dream pass —
+saved N, updated N, removed N from N journal entries`, counted from what was
+applied rather than from the model's account of it. The journal cursor moves
+past the entries only when the turn completed: a turn that failed, hit the
+step, output or loop limit, or answered no JSON leaves them to be shown again.
+A pass that changed a note says so in one display-only transcript line; one
+that changed nothing says nothing.
+
 ---
 
 ## Instruction files
@@ -646,6 +698,7 @@ transcript notice the first time it happens.
 ├── memory/<scope>/    the memory store (project/<key>/ per project)
 ├── memory/.search-<key>.sqlite  the search cache (derived; safe to delete)
 ├── memory/.auto-memory-<key>.json  the auto-memory throttle
+├── memory/.dream-<key>.json  the dream pass's throttle and journal cursor
 ├── memory/.compaction-journal-<key>.jsonl  every model-written compaction summary
 ├── memory/.git/       the memory history (`/memory log`, `/memory restore`)
 ├── cache/embeddings.sqlite  memory-recall vectors (derived; safe to delete)
@@ -665,8 +718,8 @@ whose summary a model wrote (`/compact` or the automatic tier), tagged
 `["compaction", "manual"|"auto"]` and carrying the per-exchange records and
 the session-state block, secrets redacted. It lives in the home directory
 only — `<key>` is the project's, `shared` for a launch with no root — and
-nothing is written for a heuristic compaction. It is what a later pass reads
-to fold recurring facts into memory.
+nothing is written for a heuristic compaction. It is what the
+[dream pass](#dream-pass) reads to fold recurring facts into memory.
 
 ## See also
 

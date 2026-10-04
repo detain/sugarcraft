@@ -28,8 +28,11 @@ use SugarCraft\Crush\Workspace\GitRunner;
  * account for.
  *
  * WHAT IS NOT VERSIONED: the search index cache (`.search*.sqlite*`, a
- * derived file rebuilt from mtimes), the auto-memory throttle state and the
- * atomic writer's in-flight temps.
+ * derived file rebuilt from mtimes), the auto-memory throttle state, the
+ * compaction journal and the dream pass's cursor, and the atomic writer's
+ * in-flight temps. The journal is an append log the dream pass reads, not
+ * curated memory: versioned, every commit would carry its growth, and a
+ * restore would rewind it and replay entries the dream already folded in.
  * The generated `MEMORY.md` indexes ARE versioned, so a restore brings back the
  * index of every project's directory as it stood; the store's own scopes are
  * then regenerated through {@see MemoryStore::generateIndex()} before the
@@ -50,9 +53,11 @@ final class MemoryHistory
     /** Rows `/memory log` lists when the user names no count. */
     public const DEFAULT_LOG_ENTRIES = 20;
 
-    private const GITIGNORE = "# sugar-crush memory history: derived caches and in-flight temps\n"
+    private const GITIGNORE = "# sugar-crush memory history: derived caches, run state, the compaction journal and in-flight temps\n"
         . ".search*.sqlite*\n"
         . ".auto-memory-*.json\n"
+        . ".compaction-journal-*.jsonl\n"
+        . ".dream-*.json\n"
         . ".*.tmp.*\n";
 
     /** A revision is named by a hex object id only — never a ref, range or option. */

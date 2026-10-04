@@ -479,6 +479,10 @@ final class ReadPathCensusTest extends TestCase
         'Memory/CompactionJournal.php|fopen' => [
             'SELF_LOCATED — write(): the same journal opened `ab` for one locked append; no byte of it is read',
         ],
+        'Memory/DreamPass.php|file_get_contents' => [
+            'SELF_LOCATED — readState(): the `.dream-<key>.json` throttle and journal cursor this class writes '
+                . 'beside the home store\'s notes (roadmap 5.4-3); decoded as JSON, never executed',
+        ],
         'Memory/ForeignMemoryImporter.php|file_get_contents' => [
             'CONTAINED — a `.opencode/memory` file behind the project tier\'s anchor',
             'CONTAINED — the user tier\'s, behind HomeDirectory::owned()',
