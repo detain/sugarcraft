@@ -440,6 +440,7 @@ sugar-crush/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php	0.111	22
 sugar-crush/tests/Renderer/C1ControlFrameTest.php	0.110	39
 sugar-crush/tests/Host/WorkspaceContextTest.php	0.110	9
 sugar-crush/tests/Host/TitleServiceTest.php	0.110	9
+sugar-crush/tests/Commands/ContextCommandTest.php	0.110	6
 sugar-crush/tests/Memory/ForeignMemoryImporterTest.php	0.109	40
 sugar-crush/tests/MCP/OAuthLoopbackFlowTest.php	0.109	10
 sugar-crush/tests/Context/InstructionBudgetTest.php	0.108	14

@@ -3841,6 +3841,78 @@ final class Runtime
     }
 
     /**
+     * The system prompt $app would send, measured per layer — what `/context`
+     * shows (roadmap 5.6). Built from the very section list {@see run()}
+     * assembles, through the one fold ({@see assembleSections()}), so the
+     * bytes counted are the bytes sent: every row's `bytes` includes the
+     * "\n\n" separator its block carries, and the rows sum to the assembled
+     * prompt's length exactly. Empty layers fold away here as they do there.
+     *
+     * Rows are grouped by LABEL in first-appearance order, because one layer
+     * can be several sections (three instruction documents are three
+     * `<project-instructions>` sections): `sections` says how many. The label
+     * is the section's fence without its brackets; the four unfenced kinds
+     * are told apart by what they are — the base identity is always first,
+     * {@see MaximsSection} is its own class, the tool-guidance layer is the
+     * other Static one, and a PerTurn unfenced section is an enabled skill's
+     * body.
+     *
+     * Cheap in the parent: the PerSession layers come from the session memo
+     * the turn prime already filled, so this reads no repository twice.
+     *
+     * @return list<array{label: string, stability: string, sections: int, bytes: int, tokens: int}>
+     */
+    public function promptSectionSizes(App $app): array
+    {
+        // Each section is rendered ONCE, then re-wrapped so the fold below sees
+        // the same bytes without paying a second render(); the separator a
+        // block carries is the fold's decision, never re-derived here.
+        $kept = [];
+        foreach ($this->systemPromptSections($app) as $index => $section) {
+            $rendered = $section->render();
+            if ($rendered === '') {
+                continue;
+            }
+            $fence = trim($section->fence(), '<>');
+            $kept[] = [
+                'label' => match (true) {
+                    $fence !== '' => $fence,
+                    $index === 0 => 'base',
+                    $section instanceof MaximsSection => 'maxims',
+                    $section->stability() === Stability::PerTurn => 'skills',
+                    default => 'tool-guidance',
+                },
+                'stability' => $section->stability(),
+                'section' => $this->section($section->fence(), $section->stability(), $rendered),
+            ];
+        }
+
+        [, $blocks] = self::assembleSections(array_column($kept, 'section'));
+
+        $rows = [];
+        foreach ($kept as $i => $entry) {
+            $label = $entry['label'];
+            $contribution = $blocks[$i];
+            $rows[$label] ??= [
+                'label' => $label,
+                'stability' => match ($entry['stability']) {
+                    Stability::Static => 'static',
+                    Stability::PerSession => 'per-session',
+                    Stability::PerTurn => 'per-turn',
+                },
+                'sections' => 0,
+                'bytes' => 0,
+                'tokens' => 0,
+            ];
+            $rows[$label]['sections']++;
+            $rows[$label]['bytes'] += strlen($contribution);
+            $rows[$label]['tokens'] += \SugarCraft\Crush\Util\TokenEstimate::ofText($contribution);
+        }
+
+        return array_values($rows);
+    }
+
+    /**
      * The system prompt as an ordered list of {@see PromptSection}s, base first
      * and the volatile <env> block last (the P3.S1 ordering invariant).
      *

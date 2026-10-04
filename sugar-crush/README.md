@@ -990,10 +990,10 @@ taken as written. `Tab` completes the path under the cursor.
 
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
-`/compact` `/diff` `/editor` `/exit` (`/quit`) `/fork` `/help` `/init` `/keys`
-`/layout` `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions` `/redo`
-`/rename` `/rewind` `/rules` `/sessions` `/settings` (`/config`) `/share`
-`/theme` `/undo` `/websearch` `/workflow`.
+`/compact` `/context` (`/tokens`) `/diff` `/editor` `/exit` (`/quit`) `/fork`
+`/help` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/notices` `/pane`
+`/permissions` `/redo` `/rename` `/rewind` `/rules` `/sessions`
+`/settings` (`/config`) `/share` `/theme` `/undo` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
@@ -1033,6 +1033,19 @@ which is the point — the panel exists so truncation ends somewhere inside the
 app rather than only in a scrollback. It takes no argument; the record is
 already total.
 
+`/context` (or `/tokens`) answers "what is filling my context window?". The
+status bar's `~81K / 131K` is the history alone; every request also carries the
+system prompt and the tool schemas. `/context` prints the next request's
+estimated size split into the system prompt **per layer** (base, maxims, repo
+map, rules, project instructions, memory, skills, `<env>` — each with its
+stability), the tool schemas, the history (and how many UI-only rows were never
+sent), the five largest messages, and the share of each prompt the provider
+served from its cache — for the last reply and across the session. Token
+figures are script-weighted estimates (`~`); the cache figures are the
+provider's own. A part a backend cannot report — a command backend assembles no
+prompt of its own — prints as "not measured", never as zero. It is read-only,
+local and calls no model.
+
 Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type
 (`/rwd` finds `/rewind`), **highlights the characters you typed** and shows each
 command's **argument hint** (`/rename <name>`) — fitting the whole row to the
@@ -1040,9 +1053,9 @@ terminal rather than letting it run off the edge: the description gives up
 columns first, then the hint, and the name (the row's identity) last.
 
 `/help` lists every command the registry advertises, with its argument hint —
-that is the list above without the four aliases: `/agents`, `/bg`, `/exit` and
-`/settings` appear, `/agent`, `/background`, `/quit` and `/config` do not.
-`tests/Commands/SlashDispatchTest.php` fails if a fifth unadvertised alias
+that is the list above without the five aliases: `/agents`, `/bg`, `/context`,
+`/exit` and `/settings` appear, `/agent`, `/background`, `/tokens`, `/quit` and
+`/config` do not. `tests/Commands/SlashDispatchTest.php` fails if a sixth unadvertised alias
 turns up without a reason written next to it. `/model` on its own opens the
 same provider picker `Ctrl+P` → **Switch model** opens; `/model <provider>`
 switches straight to one, and an unknown name says so in the transcript instead

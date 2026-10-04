@@ -191,7 +191,9 @@ final class SlashDispatchTest extends TestCase
         // - `background`: the long form of the `bg` row, same story.
         // - `config`: the spelling other CLIs teach for `/settings` (N-P1);
         //   reserved in CONTROL_PLANE beside the row it aliases.
-        $unadvertisedAliases = ['quit', 'agent', 'background', 'config'];
+        // - `tokens`: the spelling other CLIs teach for the `/context` panel
+        //   (roadmap 5.6); the same read-only breakdown, so no second row.
+        $unadvertisedAliases = ['quit', 'agent', 'background', 'config', 'tokens'];
 
         $advertised = array_map(static fn(CommandSpec $spec): string => $spec->name, CommandRegistry::slashCommands());
         $dispatched = [];

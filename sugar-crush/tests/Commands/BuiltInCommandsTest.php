@@ -105,7 +105,7 @@ final class BuiltInCommandsTest extends TestCase
 
         self::assertNull(BuiltInCommands::forSpelling('new'), 'a palette-only row is not a dispatching spelling');
         self::assertNull(BuiltInCommands::forSpelling('zzzsecret'));
-        self::assertSame(['quit', 'config', 'agent', 'background'], BuiltInCommands::aliases());
+        self::assertSame(['quit', 'config', 'agent', 'tokens', 'background'], BuiltInCommands::aliases());
     }
 
     public function testAnArgumentLessCommandAcceptsOnlyItsBareName(): void

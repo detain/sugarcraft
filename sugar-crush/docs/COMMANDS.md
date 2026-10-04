@@ -319,6 +319,7 @@ edit it by hand.
 | `/help` | ✓ | ✓ | — | List every slash command |
 | `/permissions` | ✓ | ✓ | — | Show this session's permission mode, its source, and the rules it decides by |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
+| `/context` | ✓ | | — | Show what fills the context window: prompt layers, tools, history, cache |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
 | `/pane` | ✓ | | `dock <left\|right>\|toggle [name]` | Dock a pane to a side, or toggle its docked state |
 | `/layout` | ✓ | | `reset` | Reset the pane layout to the launch default |
@@ -368,10 +369,12 @@ Everything else, a custom command included, is refused; the box is cleared so
 `/branch` can be typed at once, and the refused draft comes back once `/branch`
 has forked the session into one this window owns.
 
-Three spellings dispatch with no row of their own, so nothing advertises them:
-`/agent` for `/agents`, `/background` for `/bg`, and `/quit` for `/exit`. The
-first two are second names the old prefix chain had already made reachable and
-that stay reachable; `quit` is the control-plane case above.
+Five spellings dispatch with no row of their own, so nothing advertises them:
+`/agent` for `/agents`, `/background` for `/bg`, `/quit` for `/exit`, `/config`
+for `/settings`, and `/tokens` for `/context`. The first two are second names
+the old prefix chain had already made reachable and that stay reachable; `quit`
+is the control-plane case above; `config` and `tokens` are the spellings other
+CLIs teach for the same screens.
 
 `/bg` (and `/background`) has one sub-command its row does not advertise:
 `/bg stop <session-id>` stops a running background session — the id is the one

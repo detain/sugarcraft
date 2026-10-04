@@ -11161,6 +11161,57 @@ final class Chat implements Model
      *
      * @return array{0: self, 1: ?\Closure}
      */
+    /**
+     * `/context` (and `/tokens`): where the next request's context window
+     * goes — the system prompt per layer, the tool schemas, the history, the
+     * largest messages and the cache-hit share (roadmap 5.6). Read-only and
+     * local: it measures in this process, sends nothing and calls no model.
+     *
+     * The history figure is {@see contextTokens()} — the status bar's own —
+     * so the two surfaces cannot disagree. The prompt layers come from a
+     * backend that assembles its own prompt
+     * ({@see \SugarCraft\Crush\Backend\ReportsPromptSections}); the tool
+     * schemas from an engine backend's tool list. Either may be unknown, and
+     * the report then says so instead of printing a zero.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleContextCommand(string $inputText): array
+    {
+        $sections = null;
+        if ($this->backend instanceof \SugarCraft\Crush\Backend\ReportsPromptSections) {
+            try {
+                $sections = $this->backend->promptSectionSizes();
+            } catch (\Throwable) {
+                // A layer that fails to build here fails the next turn too and
+                // is reported there; this read-only panel just says "not measured".
+                $sections = null;
+            }
+        }
+        $tools = $this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend ? $this->backend->tools() : null;
+
+        $breakdown = \SugarCraft\Crush\Context\ContextBreakdown::measure(
+            $this->history,
+            $sections,
+            $tools,
+            $this->contextTokenLimit(),
+            $this->contextTokens(),
+        );
+
+        return [
+            $this->mutate([
+                'history' => [
+                    ...$this->history,
+                    Message::user($inputText)->withUiOnly(),
+                    Message::assistant((new \SugarCraft\Crush\Commands\ContextCommand($breakdown))->report())->withUiOnly(),
+                ],
+                'inputBuf' => '',
+                'inFlight' => false,
+            ]),
+            null,
+        ];
+    }
+
     private function handleNoticesCommand(string $inputText): array
     {
         return [
