@@ -542,6 +542,7 @@ sugar-crush/tests/Chat/MemoryAddDefaultScopeTest.php	0.070	5
 sugar-crush/tests/RepoMap/RepoMapRendererBudgetTest.php	0.070	9
 sugar-crush/tests/Host/CompactionServiceParityTest.php	0.070	7
 sugar-crush/tests/Context/Pruning/PathKeyedPruningTest.php	0.070	5
+sugar-crush/tests/Providers/FallbackProviderTest.php	0.070	20
 sugar-crush/tests/Hooks/RuntimeHookInputEncodingTest.php	0.069	6
 sugar-crush/tests/Backend/PendingAskTest.php	0.069	13
 sugar-crush/tests/Providers/ProviderFactoryTest.php	0.067	100

@@ -532,6 +532,13 @@ final class StderrEmitterCensusTest extends TestCase
         // the routing rule's "failed to produce the call" arm, decided
         // exactly like SglangProvider's Q7 flush warnings below.
         'src/Providers/Concerns/ReassemblesStreamedToolCalls.php' => 2,
+        // Roadmap 5.13b: a request that moved to the next `fallbackModels`
+        // entry. The routing decision: the reply the user reads came from a
+        // model they did not choose, priced at its rate — which nothing else
+        // on screen says (Part II #37: a fallback must not be silent). One
+        // site, one row per switch, and a transient switch pins for a minute,
+        // so a dead primary costs one row per minute, not one per request.
+        'src/Providers/FallbackProvider.php' => 1,
         // E192, round 48: the two argument-decode refusals, plus the three
         // tool-call flush warnings the Q7 truncation hardening added — a
         // dropped or half-decoded buffered argument is the data corruption

@@ -352,12 +352,15 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         )));
 
         $this->assertSame(
-            ['EchoProvider'],
+            ['EchoProvider', 'FallbackProvider'],
             array_values(array_diff($implementers, $contracted)),
-            'Every ProviderInterface implementer except EchoProvider must transmit '
+            'Every ProviderInterface implementer except EchoProvider and FallbackProvider must transmit '
             . 'CompleteRequest::$systemPrompt onto the wire. EchoProvider is exempted WITH A '
             . 'NAMED REASON: it is a test double with no wire — it echoes a blockquote in PHP '
-            . 'and never serializes a request payload (its class doc-block and complete()/completeStream()). A NEW '
+            . 'and never serializes a request payload (its class doc-block and complete()/completeStream()). '
+            . 'FallbackProvider (5.13b) has no wire either: it hands the wrapped provider the '
+            . 'request with only `model` changed, which '
+            . 'FallbackProviderTest::testRequestsAndChunksPassThroughUntouched pins. A NEW '
             . 'provider must add a TRANSMISSION_CONTRACT entry AND a per-provider transmission '
             . 'test.',
         );

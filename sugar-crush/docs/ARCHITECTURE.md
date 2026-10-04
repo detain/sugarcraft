@@ -894,6 +894,16 @@ strategy is derived from the model — `dsml` for the DeepSeek-V4 family. Only
 batch one; `CustomProvider` and `OpenAIProvider` take no `toolCallParser` at
 all.
 
+A block that names `fallbackModels` comes back from `ProviderFactory::create()`
+wrapped in a `FallbackProvider` (roadmap 5.13b): it answers as the provider it
+wraps — name, capabilities, the served-model and prompt-cache seams — and on a
+transient or context-overflow failure (the shared `TransientFailure` /
+`ContextOverflow` verdicts) re-sends the request to the block's next model,
+built lazily from the same block, before the first streamed chunk only. A
+transient switch is pinned for a minute and reported as the served model, which
+the turn child's result frame carries home like SGLang's discovery; every switch
+raises one `RuntimeNoticeSink` notice.
+
 **No blanket total-request timeout is applied to a provider call**, anywhere. A
 completion can legitimately run for tens of minutes.
 `SUGARCRUSH_CONNECT_TIMEOUT` (15s) bounds the connect phase only.

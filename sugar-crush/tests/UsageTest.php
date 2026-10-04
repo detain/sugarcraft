@@ -880,6 +880,12 @@ final class UsageTest extends TestCase
             ) {
                 continue;
             }
+            // Not a provider with a usage parse of its own: the 5.13b
+            // decorator returns the wrapped provider's responses untouched,
+            // so it has no side of the split to be on.
+            if ($short === 'FallbackProvider') {
+                continue;
+            }
             $out[$short] = $file;
         }
 

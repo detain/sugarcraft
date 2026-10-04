@@ -399,6 +399,13 @@ same money reason as `maxOutputTokens`.
   wire. None of this has been checked against a live Vertex or Bedrock
   endpoint.
 
+One more key shapes a provider but lives **only** in its block, never in a
+settings file: `fallbackModels`, the other model ids of the same provider to
+try, in order, when a request fails transiently or overflows the context window
+(`ProviderFactory::create()` → `FallbackProvider`). No tier merges it, so a
+project cannot set it. The [README](../README.md#providers) says when a switch
+happens and what it reports.
+
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to
 grep for. The second name is a private method on `Bootstrap` in every row but

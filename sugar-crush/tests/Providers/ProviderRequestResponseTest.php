@@ -506,14 +506,16 @@ final class ProviderRequestResponseTest extends TestCase
         );
 
         $this->assertSame(
-            ['EchoProvider'],
+            ['EchoProvider', 'FallbackProvider'],
             array_values(array_diff($implementers, $fixtured)),
-            'Every ProviderInterface implementer except EchoProvider must have a streamed-usage '
+            'Every ProviderInterface implementer except EchoProvider and FallbackProvider must have a streamed-usage '
             . 'contract fixture. EchoProvider is exempted WITH A NAMED REASON: it is a test '
             . 'double with no usage concept — it echoes a blockquote in PHP and its '
             . 'completeStream() yields CompleteResponse objects carrying no tokensUsed/costUsd '
             . 'at all (its echo() and completeStream()), mirroring the P1.S7 precedent for '
-            . 'exempting a stub. A NEW provider must add a STREAMED_USAGE_CONTRACT entry AND a '
+            . 'exempting a stub. FallbackProvider (5.13b) is exempted because it has no wire '
+            . 'of its own: it yields the wrapped provider\'s chunks untouched, which '
+            . 'FallbackProviderTest::testRequestsAndChunksPassThroughUntouched pins. A NEW provider must add a STREAMED_USAGE_CONTRACT entry AND a '
             . 'per-provider contract test.',
         );
 

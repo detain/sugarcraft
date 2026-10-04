@@ -89,31 +89,31 @@ final readonly class ProviderFactory
     private const TYPE_SCHEMAS = [
         'openai' => [
             'required' => ['apiKey'],
-            'optional' => ['organization', 'model', 'modelPrices', 'contextWindow', 'supportsVision'],
+            'optional' => ['organization', 'model', 'modelPrices', 'contextWindow', 'supportsVision', 'fallbackModels'],
         ],
         'anthropic' => [
             'required' => ['apiKey'],
-            'optional' => ['baseUrl', 'model', 'modelPrices', 'contextWindow'],
+            'optional' => ['baseUrl', 'model', 'modelPrices', 'contextWindow', 'fallbackModels'],
         ],
         'claude-code' => [
             'required' => ['claudePath'],
-            'optional' => ['model'],
+            'optional' => ['model', 'fallbackModels'],
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
-            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo', 'supportsVision'],
+            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs', 'discoverServerInfo', 'supportsVision', 'fallbackModels'],
         ],
         'bedrock' => [
             'required' => ['region'],
-            'optional' => ['model', 'modelPrices', 'promptCache'],
+            'optional' => ['model', 'modelPrices', 'promptCache', 'fallbackModels'],
         ],
         'vertex' => [
             'required' => ['projectId'],
-            'optional' => ['location', 'model', 'modelPrices', 'thinkingBudget', 'promptCache'],
+            'optional' => ['location', 'model', 'modelPrices', 'thinkingBudget', 'promptCache', 'fallbackModels'],
         ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
-            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision', 'modelPrices', 'contextWindow'],
+            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision', 'modelPrices', 'contextWindow', 'fallbackModels'],
         ],
     ];
 
@@ -155,7 +155,58 @@ final readonly class ProviderFactory
         $this->validateRequiredKeys($type, $config);
 
         // Create the appropriate provider
-        return $this->instantiateProvider($type, $config);
+        $provider = $this->instantiateProvider($type, $config);
+
+        // Roadmap 5.13b: a block naming `fallbackModels` is wrapped, so every
+        // reader of this one factory call — the session, the turn child that
+        // rebuilds it from the same block, the title and summary backends —
+        // inherits the chain. Each fallback is THIS block with only `model`
+        // replaced, built on first use, so it is sized and priced as itself.
+        $fallbackModels = self::configuredFallbackModels($config['fallbackModels'] ?? null);
+        if ($fallbackModels === []) {
+            return $provider;
+        }
+
+        $primaryModel = is_string($config['model'] ?? null) ? $config['model'] : '';
+        $builders = [];
+        foreach ($fallbackModels as $model) {
+            $builders[$model] = fn (): ProviderInterface => $this->instantiateProvider(
+                $type,
+                array_replace($config, ['model' => $model]),
+            );
+        }
+        unset($builders[$primaryModel]);
+
+        return $builders === [] ? $provider : FallbackProvider::new($provider, $primaryModel, $builders);
+    }
+
+    /**
+     * The `fallbackModels` provider-block key (roadmap 5.13b): model ids of
+     * the same provider to try, in order, when a request fails transiently or
+     * overflows ({@see FallbackProvider}). A single string is a one-model
+     * list. Non-strings and blanks are dropped and duplicates collapse — the
+     * tolerant posture of {@see configuredContextWindow()}, because a provider
+     * that throws while being built degrades the whole launch to `echo`.
+     *
+     * @return list<string>
+     */
+    private static function configuredFallbackModels(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = [$value];
+        }
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $models = [];
+        foreach ($value as $model) {
+            if (is_string($model) && trim($model) !== '') {
+                $models[trim($model)] = true;
+            }
+        }
+
+        return array_keys($models);
     }
 
     /**
