@@ -12,6 +12,7 @@ use SugarCraft\Crush\Config\Settings\SettingCategory;
 use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingSource;
+use SugarCraft\Crush\Config\Settings\SettingsTier;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
@@ -23,12 +24,17 @@ use SugarCraft\Sprinkles\Style;
  * where that value came from, whether something locks it, and when a change to
  * it would take effect.
  *
- * READ-ONLY in this phase. It answers "what am I running with, and why"; the
- * writer, validation and save preview are the next phase (N-P2), so nothing
- * here edits a value or writes a file, and no key is bound to save or reset
- * (decision D7: no Ctrl+S / Ctrl+R — both are shell chords already). Labels are
- * literal English (D7): the schema's `labelKey`/`helpKey` are kept for i18n,
- * which arrives later.
+ * IT ANSWERS "what am I running with, and why", and since N-P2 it also holds
+ * an EDIT SET: {@see stage()} / {@see stageReset()} record changes against a
+ * {@see SettingsTier}, the row shows the staged value, and
+ * {@see withPreview()} shows the {@see SettingsSavePreview} the shell built for
+ * them. Nothing here writes a file — the write is the shell's Cmd
+ * ({@see \SugarCraft\Crush\App\App::confirmSettingsSave()}), answered with a
+ * {@see SettingsSavedMsg} ({@see withSaved()}). No key is bound to those yet
+ * (decision D7: no Ctrl+S / Ctrl+R — both are shell chords already), so until
+ * the editor's keys land the view still says "read-only". Labels are literal
+ * English (D7): the schema's `labelKey`/`helpKey` are kept for i18n, which
+ * arrives later.
  *
  * HELD BY THE SHELL ({@see \SugarCraft\Crush\App\App::$settingsEditor}), not by
  * `Chat`: it writes no history and sends nothing to the model, which is also
@@ -54,6 +60,8 @@ final class SettingsEditor
 
     /**
      * @param array<string, ResolvedSetting> $resolved by key, schema order
+     * @param array<string, mixed> $set staged values, by key
+     * @param list<string> $unset staged resets (the key is removed from the tier's file)
      */
     private function __construct(
         public readonly SettingsSources $sources,
@@ -62,6 +70,11 @@ final class SettingsEditor
         public readonly int $cursor,
         public readonly string $query,
         public readonly bool $searching,
+        public readonly SettingsTier $tier = SettingsTier::You,
+        public readonly array $set = [],
+        public readonly array $unset = [],
+        public readonly ?SettingsSavePreview $preview = null,
+        public readonly ?string $status = null,
     ) {
     }
 
@@ -69,6 +82,104 @@ final class SettingsEditor
     public static function open(SettingsSources $sources, string $query = ''): self
     {
         return new self($sources, $sources->resolver->resolveAll(), 0, 0, PaneLabel::of($query), false);
+    }
+
+    // ── the edit set (N-P2) ─────────────────────────────────────────────
+
+    /** Stage `$key` = `$value` for the next save; a staged reset of it is dropped. */
+    public function stage(string $key, mixed $value): self
+    {
+        $set = $this->set;
+        $set[$key] = $value;
+
+        return $this->edited($this->tier, $set, array_values(array_diff($this->unset, [$key])));
+    }
+
+    /** Stage a reset: the save removes `$key` from the tier's file. */
+    public function stageReset(string $key): self
+    {
+        $set = $this->set;
+        unset($set[$key]);
+
+        return $this->edited($this->tier, $set, array_values(array_unique([...$this->unset, $key])));
+    }
+
+    /** Drop whatever is staged for `$key`. */
+    public function unstage(string $key): self
+    {
+        $set = $this->set;
+        unset($set[$key]);
+
+        return $this->edited($this->tier, $set, array_values(array_diff($this->unset, [$key])));
+    }
+
+    /** Write to `$tier` instead; the staged changes are kept. */
+    public function withTier(SettingsTier $tier): self
+    {
+        return $this->edited($tier, $this->set, $this->unset);
+    }
+
+    public function hasChanges(): bool
+    {
+        return $this->set !== [] || $this->unset !== [];
+    }
+
+    /** Show (or, with null, close) the save preview. */
+    public function withPreview(?SettingsSavePreview $preview): self
+    {
+        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $preview, $this->status);
+    }
+
+    /**
+     * A changed edit set: any open preview and any earlier save message no
+     * longer describe it, so both go.
+     *
+     * @param array<string, mixed> $set
+     * @param list<string> $unset
+     */
+    private function edited(SettingsTier $tier, array $set, array $unset): self
+    {
+        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $tier, $set, $unset, null, null);
+    }
+
+    /** Values re-resolved after a save, so the rows show what the files now say. */
+    public function withResolved(SettingsSources $sources): self
+    {
+        return new self($sources, $sources->resolver->resolveAll(), $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, $this->status);
+    }
+
+    /**
+     * The save's outcome: on success the saved keys leave the edit set and the
+     * preview closes; on failure everything stays staged, so nothing typed is
+     * lost, and the status line says why.
+     */
+    public function withSaved(SettingsSavedMsg $msg): self
+    {
+        if (!$msg->ok()) {
+            return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, 'Not saved: ' . $msg->error);
+        }
+
+        $set = $this->set;
+        foreach ($msg->changed as $key) {
+            unset($set[$key]);
+        }
+
+        $count = \count($msg->changed);
+        $status = sprintf('Saved %d setting%s to %s', $count, $count === 1 ? '' : 's', (string) $msg->path);
+
+        return new self(
+            $this->sources,
+            $this->resolved,
+            $this->tab,
+            $this->cursor,
+            $this->query,
+            $this->searching,
+            $this->tier,
+            $set,
+            array_values(array_diff($this->unset, $msg->changed)),
+            null,
+            $status,
+        );
     }
 
     // ── what is listed ──────────────────────────────────────────────────
@@ -254,7 +365,9 @@ final class SettingsEditor
         $muted = Style::new()->foreground($theme->shellMuted);
         $w = $g['inner'];
 
-        $title = ' ⚙ settings · read-only ';
+        $title = $this->hasChanges()
+            ? sprintf(' ⚙ settings · %d unsaved · %s ', \count($this->set) + \count($this->unset), $this->tier->label())
+            : ' ⚙ settings · read-only ';
         $topFill = max(0, $cols - 3 - Width::string($title));
         $lines = [$border->render('╭─' . $title . str_repeat('─', $topFill) . '╮')];
 
@@ -264,11 +377,19 @@ final class SettingsEditor
             ? $g['tabLine']
             : $muted->render(sprintf('%d %s across every category', \count($this->rows()), \count($this->rows()) === 1 ? 'match' : 'matches'));
         $inner[] = $muted->render(str_repeat('─', $w));
-        foreach ($this->bodyLines($theme, $g) as $line) {
+        $body = $this->bodyLines($theme, $g);
+        if ($this->preview !== null) {
+            // The preview takes the body's rows, exactly as many.
+            $body = array_pad(\array_slice($this->preview->lines($theme, $w), 0, \count($body)), \count($body), '');
+        }
+
+        foreach ($body as $line) {
             $inner[] = $line;
         }
         $inner[] = $muted->render(str_repeat('─', $w));
-        $inner[] = $muted->render($this->footer());
+        $inner[] = $this->status !== null
+            ? Style::new()->foreground(str_starts_with($this->status, 'Not saved') ? $theme->shellError : $theme->shellSuccess)->render($this->status)
+            : $muted->render($this->footer());
 
         foreach ($inner as $line) {
             $lines[] = $border->render('│') . ' ' . self::cell($line, $w) . ' ' . $border->render('│');
@@ -432,13 +553,22 @@ final class SettingsEditor
             . SettingsDetailPanel::sourceShort($resolved->source)
             . ($resolved->locked ? ' (locked)' : '');
 
-        $value = SettingsDetailPanel::value($definition, $resolved->value);
+        $staged = \array_key_exists($definition->key, $this->set);
+        $reset = \in_array($definition->key, $this->unset, true);
+        $value = match (true) {
+            $staged => '• ' . SettingsDetailPanel::value($definition, $this->set[$definition->key]),
+            $reset => '• reset to default',
+            default => SettingsDetailPanel::value($definition, $resolved->value),
+        };
 
         $label = Style::new()->foreground($selected ? $theme->shellPrimary : $theme->shellForeground)->bold($selected);
         $line = ($selected ? $label->render('▸ ') : '  ')
             . $label->render(self::pad($definition->label, $labelW)) . ' '
-            . Style::new()->foreground($resolved->isDefault() ? $theme->shellMuted : $theme->shellForeground)
-                ->render(self::pad($value, $valueW));
+            . Style::new()->foreground(match (true) {
+                $staged || $reset => $theme->shellWarning,
+                $resolved->isDefault() => $theme->shellMuted,
+                default => $theme->shellForeground,
+            })->render(self::pad($value, $valueW));
 
         if ($showSource) {
             $line .= ' ' . Style::new()->foreground($resolved->locked ? $theme->shellWarning : $theme->shellMuted)
@@ -582,6 +712,11 @@ final class SettingsEditor
             $cursor ?? $this->cursor,
             $query ?? $this->query,
             $searching ?? $this->searching,
+            $this->tier,
+            $this->set,
+            $this->unset,
+            $this->preview,
+            $this->status,
         );
     }
 

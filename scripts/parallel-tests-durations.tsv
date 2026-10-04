@@ -128,6 +128,7 @@ sugar-crush/tests/Backend/ProviderErrorSurfacingTest.php	2.506	10
 sugar-crush/tests/Session/TranscriptSchemaV2MigrationTest.php	2.500	10
 sugar-crush/tests/Context/GlobDialectDifferentialTest.php	2.497	13
 sugar-crush/tests/Workflows/WorkflowAgentResultsTest.php	2.494	13
+sugar-crush/tests/Config/Settings/SettingsWriterCensusTest.php	2.430	4
 sugar-crush/tests/Tools/BuiltIn/UnifiedDiffBoundedMemoryTest.php	2.416	5
 sugar-crush/tests/Backend/EngineBackendParallelConfigTest.php	2.415	29
 sugar-crush/tests/Runtime/RejectionFeedbackReachesModelTest.php	2.400	9
@@ -367,6 +368,7 @@ sugar-crush/tests/Workflows/WorkflowFailureReportingTest.php	0.191	2
 sugar-crush/tests/Chat/InitialPromptTest.php	0.191	5
 sugar-crush/tests/Renderer/CarriageReturnFrameTest.php	0.191	82
 sugar-crush/tests/Integration/BinSugarcrushJsonStdoutDiagnosticsTest.php	0.190	1
+sugar-crush/tests/Tui/Settings/SettingsSaveFlowTest.php	0.190	10
 sugar-crush/tests/Chat/UiOnlyHistoryTest.php	0.189	9
 sugar-crush/tests/Context/MemoryBlockTest.php	0.187	41
 sugar-crush/tests/Backend/EngineBackendCompactorConfigTest.php	0.187	3
@@ -443,6 +445,8 @@ sugar-crush/tests/Cli/AgentManagerWiringTest.php	0.101	26
 sugar-crush/tests/Tools/BuiltIn/EditMultiEditTest.php	0.100	9
 sugar-crush/tests/Tui/SessionPickerFilterTest.php	0.100	15
 sugar-crush/tests/Commands/SettingsCommandTest.php	0.100	9
+sugar-crush/tests/Cli/PersistedModelResolutionTest.php	0.100	8
+sugar-crush/tests/Config/Settings/SettingsWriterTest.php	0.100	34
 sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
 sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35
@@ -490,7 +494,7 @@ sugar-crush/tests/Tui/Components/SettingsPaneTest.php	0.060	18
 sugar-crush/tests/Providers/OpenAIProviderStreamedToolCallsTest.php	0.060	7
 sugar-crush/tests/Skills/SkillRequiresGatingTest.php	0.060	19
 sugar-crush/tests/Config/Settings/SettingsSchemaTest.php	0.060	46
-sugar-crush/tests/Config/Settings/SettingsSchemaDocDriftTest.php	0.060	14
+sugar-crush/tests/Config/Settings/SettingsSchemaDocDriftTest.php	0.060	19
 sugar-crush/tests/Support/ToolOutputSpillTest.php	0.060	15
 sugar-crush/tests/Tools/PathJailSpillAllowTest.php	0.060	8
 sugar-crush/tests/Context/PersonalInstructionFileTest.php	0.060	11

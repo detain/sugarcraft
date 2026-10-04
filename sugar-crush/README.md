@@ -78,7 +78,8 @@ sugarcrush -- --not-a-flag                      # `--` ends options; everything 
 ```
 
 `--model <name>` (also `--model=<name>`) names the conversation MODEL and
-overrides `$SUGARCRUSH_MODEL` and the provider's own default. It does not pick a
+overrides `$SUGARCRUSH_MODEL`, the model persisted for the provider (the
+`models` setting) and the provider's own default. It does not pick a
 provider — that still comes from `$SUGARCRUSH_PROVIDER` or the persisted
 `provider` setting, and the two are independent axes. The Ctrl+P palette entry
 labelled "Switch model" switches the PROVIDER, which is why the distinction is
@@ -228,7 +229,7 @@ key:
 
 | # | File | Who wrote it | Wins over |
 |---|------|--------------|-----------|
-| 4 | `~/.sugar-crush/config.json` | you, and the CLI itself — Ctrl+P and `/theme` write `theme` here, `/model` writes `provider` | everything |
+| 4 | `~/.sugar-crush/config.json` | you, and the CLI itself — Ctrl+P and `/theme` write `theme` here, `/model` writes `provider`, and the settings view's save writes the keys it changes (never `provider` or `theme`) | everything |
 | 3 | `~/.sugar-crush/settings.json` | you, by hand | the project's two |
 | 2 | `<project>/.sugar-crush/settings.local.json` | whoever wrote the repository (`.gitignore`d **by convention**, which is not a trust signal — see below) | the shared project file |
 | 1 | `<project>/.sugar-crush/settings.json` | whoever wrote the repository | nothing |
@@ -257,7 +258,7 @@ cannot tell whether the sentence is about them.)
 > migrate *to*: `settings.json` is never written.
 
 <!-- settings:layered:begin -->
-Only these twenty-four keys are layered — `provider`, `titleModel`,
+Only these twenty-five keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `contextWindow`, `secretEnvAllowlist`, `allowedTools`,
@@ -300,7 +301,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, eighteen keys are **never** taken from a project file:
+Even for a trusted project, nineteen keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path;
@@ -318,9 +319,9 @@ clone can run up; `modelPrices`, because it sets the rate every billed token
 converts at — the mirrored direction on the same money axis, where a
 project-supplied map could zero a rate and silently blind the spend cap and the
 `/budget` totals, the exact failure the unpriced-model notice exists to make
-loud; `titleModel` and `summaryModel`, because they choose the model every
-title, prompt suggestion and `/compact` summary runs on with the operator's
-key — within one provider the price spread is over 100×, and a model with no
+loud; `models`, `titleModel` and `summaryModel`, because they choose the model
+the session itself and every title, prompt suggestion and `/compact` summary
+run on with the operator's key — within one provider the price spread is over 100×, and a model with no
 price on file bills as $0, so a project-chosen one blinds the spend cap the same
 way a zeroed rate would; `layout`, because it records where the operator chose to put
 their own windows — frame geometry is a personal habit, not a property of the
@@ -803,7 +804,7 @@ Three ways to get off the offline `EchoProvider`, from quickest to most permanen
 
 1. **One-off, this run only:** `SUGARCRUSH_PROVIDER=dev-sglang ./bin/sugarcrush` — `dev-sglang` is sugar-crush's own dev/test SGLang endpoint (declared in the `.sugar-crush/config.dev.json` that ships inside the sugar-crush package — not a file in the project you run it in), useful for trying a real (if smaller) model with zero API keys.
 2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in the package's own `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it. **Switch theme** works the same way for color themes.
-3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD`/`$SUGARCRUSH_BACKEND_CMD_STREAM` still take priority over the persisted choice when set, for scripting/CI overrides.
+3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD`/`$SUGARCRUSH_BACKEND_CMD_STREAM` still take priority over the persisted choice when set, for scripting/CI overrides. The **model** persists too, separately and per provider: `"models": {"dev-sglang": "<model id>"}` in `config.json` (or your `settings.json`) is the model that provider runs whenever it is selected — at launch and after a switch — unless `--model` or `$SUGARCRUSH_MODEL` names one; keyed by provider because a model id means nothing to any other provider. There is no top-level `model` key.
 
 ## Using the TUI
 

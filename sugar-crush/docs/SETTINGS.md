@@ -69,8 +69,10 @@ through the chat's config-change door (`provider` and `theme` — see below),
 and a third, `layout`, is written by the shell itself each time a pane is
 docked, moved, undocked or reset — its value is the versioned `DockLayout`
 manifest, and the door is `App`'s own `onLayoutChange` hook rather than
-Chat's. Everything else in it, including
-`trustedProjectSettings`, you hand-author.
+Chat's. The settings view's save is a door of its own too — `SettingsWriter`,
+see [Saving from the settings view](#saving-from-the-settings-view) — and it
+writes the keys the view changed, never `provider` or `theme`. Everything else
+in it, including `trustedProjectSettings`, you hand-author.
 
 Two orderings on that table are deliberate and both cost something:
 
@@ -88,8 +90,8 @@ and then silently revert on the next launch, with no error and nothing
 pointing at the file responsible. What breaks is *persistence*, not the
 visible command.
 
-Exactly two keys are ever written there, and **each has two producers — a
-palette row and a slash command**: `provider` (the Ctrl+P palette's "Switch
+Exactly two keys reach it through `Chat`'s config-change door, and **each has
+two producers — a palette row and a slash command**: `provider` (the Ctrl+P palette's "Switch
 Model" row, and `/model <name>`) and `theme` (the palette's "Switch Theme" row,
 and `/theme <name>`). Those are the only two values `Chat`'s `onConfigChange`
 callback is invoked with, and `Bootstrap` wires that callback to
@@ -172,6 +174,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | Key | Read by | Project may set |
 |---|---|---|
 | `provider` | `Bootstrap::selectedProviderName()`, `backend()` | **no** |
+| `models` | `Bootstrap::selectedModelName()`, `backendFor()`, `selectedProviderLabel()` | **no** |
 | `titleModel` | `Bootstrap::titleBackend()` | **no** |
 | `summaryModel` | `Bootstrap::summaryBackend()` | **no** |
 | `maxOutputTokens` | `EngineBackend::complete()` | **no** |
@@ -198,7 +201,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-four, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-five, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -465,11 +468,12 @@ the session set only subtracts from the file's intent and never overrules it.
 
 **Persisting a toggle is a deferred step, not an omission.** The ruling in
 `prompt_plan.md` (P6.S4) kept the byte-identical contract standing and named the
-cost of breaking it: a third CLI-written key would collide with the two-key
-invariant above and with the census that guards that invariant, so the guarded
-write door waits for its own step. Until it lands, a `/rules` decision dies with
-the session, and `disabledRules` in one of your two files is the only way to make
-one permanent.
+cost of breaking it: a third key through `Chat`'s config-change door would
+collide with the two-key invariant above and with the census that guards that
+invariant, so the toggle waits for a guarded door of its own. That door now
+exists — the settings view's `SettingsWriter` — but `/rules` does not use it, so
+a `/rules` decision still dies with the session, and `disabledRules` in one of
+your two files is the only way to make one permanent.
 
 And that file value arrives through the **merged** read, which is what makes the
 key live rather than decorative: `Bootstrap::chat()` seeds the session's
@@ -539,15 +543,20 @@ and clipped to the terminal width by a grapheme-aware measure. stderr is
 drained so it cannot deadlock the read, and discarded.
 
 **There is no top-level `model` key**, and it is the one name people look for.
-Nothing reads one. The two model-shaped keys that exist are `titleModel` and
-`summaryModel`.
+Nothing reads one. The model-shaped keys that exist are `models`, `titleModel`
+and `summaryModel`.
 
-**No model is persisted anywhere.** The session's model comes from the provider
-(and from `--model`), and it does not survive a restart: the Ctrl+P action
-called "Switch Model" writes `provider`, not a model. Only `provider` and
-`theme` are ever written to `config.json`. If you want a specific model on
-every launch, name it on the command line or in the provider's own config —
-there is no settings key that will do it.
+**The session's model persists per provider, in `models`** —
+`{"<provider>": "<model id>"}`, user tier only (a model is a price). It is
+keyed by provider because a model id means nothing to any other provider: one
+flat key would send the last provider's model to the next one a `/model`
+switch picked. `Bootstrap::selectedModelName()` resolves `--model`, then
+`$SUGARCRUSH_MODEL`, then the entry for the provider being built, then the
+provider's own default — at launch, on every `/model` switch, and for the
+status-bar caption alike. The Ctrl+P action called "Switch Model" still writes
+`provider`, not a model; `models` is written by the settings view's save (see
+[Saving from the settings view](#saving-from-the-settings-view)), or by
+hand.
 
 **`permissionMode` and `permissionRules` are readable from
 `~/.sugar-crush/settings.json`**, but not through this stack. They go through
@@ -799,6 +808,7 @@ project-settable.
 | Key | Category | Type | Default | Tiers | Env / flag | Applies | Risk |
 |---|---|---|---|---|---|---|---|
 | `provider` | Model & Provider | string | unset | U C | `SUGARCRUSH_PROVIDER` | live | egress |
+| `models` | Model & Provider | object | `{}` | U C | `SUGARCRUSH_MODEL`, `--model` | restart | spend |
 | `titleModel` | Model & Provider | string | unset | U C | `SUGARCRUSH_TITLE_MODEL` | restart | spend |
 | `summaryModel` | Model & Provider | string | unset | U C | `SUGARCRUSH_SUMMARY_MODEL` | restart | spend |
 | `maxOutputTokens` | Model & Provider | int | unset | U C | — | next turn | spend |
@@ -833,6 +843,39 @@ project-settable.
 | `claudeMcpEnv` | Hooks & MCP | object | unset | C | — | next launch | security |
 <!-- settings:end -->
 
+## Saving from the settings view
+
+The settings view (`/settings`) holds an edit set — values staged against a
+tier — and saves it through `Config\Settings\SettingsWriter`, a write door of
+its own. It is **not** `Chat`'s config-change door, so that door still carries
+exactly `provider` and `theme`; `SettingsWriterCensusTest` pins who may write
+`config.json` at all.
+
+| Tier | File | Keys |
+|---|---|---|
+| **You** (default) | `config.json` — `Bootstrap::userConfigPath()`, so `--config` moves it — through `Bootstrap::writeUserConfig()`, the one writer that file already has | every editable key except `provider` and `theme`, whose live commands (`/model`, `/theme`) are their writers |
+| **This project (local)** | `<root>/.sugar-crush/settings.local.json` | the project-settable keys only, and only for a project you already trust |
+
+`settings.json` is never written. A save to **You** outranks it, so the value
+sticks; the preview says when your `settings.json` is the value it overrides,
+and — for a project-tier save — when one of your own files, the environment or
+a flag still outranks the file being written.
+
+Before anything is written the view shows a preview: the target file, a
+unified diff of its JSON (sugar-diff), and when each change applies. A save is
+refused, with the reason, for a key the schema does not define or marks
+read-only, for a value of the wrong type or outside its range, for a
+`permissionMode` that is not a mode (the launch would refuse it), for a
+project-tier key a project may not set, and for the trust lists — those change
+only through the confirmed trust action, on your `config.json` alone, and like
+every trust grant they apply from the next launch. **A reset deletes the key**
+rather than writing its default, so a later change to the default still reaches
+you; an explicit `null` is refused, because in a settings file `null` is a value
+that masks every lower layer. A `config.json` that exists but is not a JSON
+object is never overwritten.
+
+Saved is not applied: see the next section for when each key takes effect.
+
 ## When a change takes effect
 
 The settings files are **re-read every turn** — `EngineBackend::runTurn()`, the
@@ -848,7 +891,7 @@ mid-session changes those on the next turn and nothing else. A trusted project's
 `maxOutputTokens` is a key no project file may set. Every other key is
 consumed once, while `Bootstrap` builds the session: `disabledSkills` is read
 by `Bootstrap::skillRegistry()` at launch (and again on a Ctrl+P skill
-switch), `theme` and `provider` when the `Chat` is constructed, `disabledRules` when the launch seeds the session's `RulesState`
+switch), `theme` and `provider` when the `Chat` is constructed, `models` whenever a backend is built for a provider (at launch and on a `/model` switch), `disabledRules` when the launch seeds the session's `RulesState`
 — a mid-session edit to that file waits for a restart like the rest, though a
 `/rules` toggle flips the seeded set live, from the next turn onward — and
 `allowedTools`/`disabledTools` when the tool set is assembled.
@@ -932,8 +975,8 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only six of the twenty-four layered keys have an
-  env override (`provider`, `titleModel`, `summaryModel`, `promptCache`,
+  They do not cover it: only seven of the twenty-five layered keys have an
+  env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`). `maxOutputTokens`,
   `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`, `contextWindow`,
   `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `instructions`,

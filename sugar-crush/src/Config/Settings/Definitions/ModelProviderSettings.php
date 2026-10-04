@@ -42,6 +42,20 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withHelp('Which LLM provider the session talks to; every prompt is sent to its host.')
                 ->withReaderSymbol(Bootstrap::class . '::selectedProviderName')
                 ->withReadBy('`Bootstrap::selectedProviderName()`, `backend()`'),
+            // D9: the model choice persists per provider, user tier only, so a
+            // provider switch lands on the model last chosen FOR THAT provider
+            // and a model id is never sent to a provider it was not chosen for.
+            // `--model` and $SUGARCRUSH_MODEL still outrank it for every provider.
+            SettingDefinition::new('models', SettingType::Map, [])
+                ->withCategory(SettingCategory::ModelProvider)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withEnvVar('SUGARCRUSH_MODEL')
+                ->withCliFlag('--model')
+                ->withLabel('Model')
+                ->withHelp('The model to run, per provider ({"<provider>": "<model id>"}); unset uses the provider default.')
+                ->withReaderSymbol(Bootstrap::class . '::selectedModelName')
+                ->withReadBy('`Bootstrap::selectedModelName()`, `backendFor()`, `selectedProviderLabel()`'),
             SettingDefinition::new('titleModel', SettingType::String)
                 ->withCategory(SettingCategory::ModelProvider)
                 ->withRiskClass(RiskClass::Spend)

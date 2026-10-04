@@ -2926,7 +2926,15 @@ final class Bootstrap
                 self::userConfigPath(),
                 array_filter(getenv(), 'is_string'),
                 self::$permissionModeOverride === null ? [] : ['--permission-mode' => self::$permissionModeOverride],
-            ));
+            ))
+            // N-P2: the settings editor's own write door, NOT `onConfigChange`
+            // (whose census stays `provider` + `theme`). Its "You" tier goes
+            // through writeUserConfig() — the one writer config.json has — and
+            // its project tier only to a trusted project's settings.local.json.
+            ->withSettingsWriter(\SugarCraft\Crush\Config\Settings\SettingsWriter::new(
+                self::userConfigPath(),
+                static fn (array $set, array $unset) => self::writeUserConfig($set, $unset),
+            )->withProject($root, $root !== null && self::projectSettingsTrusted($root)));
     }
 
     /**
@@ -3041,7 +3049,7 @@ final class Bootstrap
         try {
             $factory = new ProviderFactory();
             $config = $factory->defaultConfig($providerName);
-            $config['model'] = $model ?? self::selectedModelName() ?? ($config['model'] ?? 'gpt-4o');
+            $config['model'] = $model ?? self::selectedModelName($providerName) ?? ($config['model'] ?? 'gpt-4o');
 
             // E652 review fix — never put a RESOLVED credential on the fork
             // frame. defaultConfig() bakes getenv() output into apiKey (and
@@ -3343,8 +3351,9 @@ final class Bootstrap
         self::useProjectRootForSettings(self::configRoot($root));
         $factory = new ProviderFactory();
         $config = $factory->defaultConfig($providerName);
-        // --model wins over $SUGARCRUSH_MODEL wins over the provider default.
-        $model = self::selectedModelName() ?? ($config['model'] ?? 'gpt-4o');
+        // --model wins over $SUGARCRUSH_MODEL wins over the model persisted for
+        // THIS provider (D9, `models`) wins over the provider default.
+        $model = self::selectedModelName($providerName) ?? ($config['model'] ?? 'gpt-4o');
         // THE PROVIDER IS BUILT ON THE SAME MODEL THE ENGINE SENDS, as
         // {@see provider()} and {@see toollessBackend()} already build theirs.
         // Built from the bare default config instead, a `sglang` provider
@@ -3574,9 +3583,10 @@ final class Bootstrap
     /**
      * ~/.sugar-crush/config.json — per-user persisted UI choices
      * (`provider`/`theme`, written by the Ctrl+P palette's Switch Model/
-     * Switch Theme actions) plus hand-authored settings the CLI never writes
-     * back, currently the `instructions` glob array {@see
-     * forcedInstructions()} reads. Distinct from {@see
+     * Switch Theme actions; `layout`, written by the shell; and whatever the
+     * settings editor saves on the "You" tier, the per-provider `models` among
+     * them) plus hand-authored settings, such as the `instructions` glob array
+     * {@see forcedInstructions()} reads. Distinct from {@see
      * ProviderFactory::defaultConfigPath()}'s project-level
      * .sugar-crush/config.dev.json dev/test fixture — that one is checked
      * into the repo and shared; this one is a real per-user runtime state
@@ -3785,11 +3795,11 @@ final class Bootstrap
      * label is the reason this needed settling in writing: the two are
      * independent axes and this flag is the model one.
      *
-     * No `model` key is added to {@see \SugarCraft\Crush\Config\LayeredSettings::LAYERED_KEYS}
-     * to back it. That was considered and rejected: the docblock on that const
-     * records that a top-level `model` key would be "surface with no reader",
-     * and a launch flag does not need one — it is read here, at the same two
-     * sites `$SUGARCRUSH_MODEL` already is.
+     * No top-level `model` key backs it. The persisted choice is the per-provider
+     * `models` map in {@see \SugarCraft\Crush\Config\LayeredSettings::LAYERED_KEYS}
+     * (decision D9), which this flag OUTRANKS for every provider — see
+     * {@see selectedModelName()}, where the flag, `$SUGARCRUSH_MODEL` and that
+     * map are resolved in one place.
      *
      * ## TEST ISOLATION — read this before calling either setter from a test
      *
@@ -3860,25 +3870,44 @@ final class Bootstrap
     }
 
     /**
-     * The model name this run should use, or null to let the caller fall back
-     * to the provider's own default.
+     * The model name this run should use on `$providerName`, or null to let the
+     * caller fall back to the provider's own default.
      *
-     * ONE resolver rather than two `??` chains, because there are two readers —
-     * {@see backendFor()}, which builds the backend that actually runs, and
-     * {@see selectedProviderLabel()}, which produces the status-bar caption.
-     * If only the first honoured `--model`, the status bar would name a
-     * different model than the one answering, which is precisely the "a value
-     * true of one path displayed as a property of another" defect.
+     * Precedence, highest first: `--model` ({@see useModel()}), then
+     * `$SUGARCRUSH_MODEL`, then the model PERSISTED FOR THIS PROVIDER — the
+     * `models` setting, `{"<provider>": "<model id>"}` (decision D9), which the
+     * settings editor writes — then null. Keyed by provider rather than one
+     * top-level `model`, because a model id means nothing to any other
+     * provider: a single key would send the last provider's model to the next
+     * one the moment `/model` switched. The flag and the variable stay
+     * provider-blind, as they always were — they name the model for whatever
+     * this launch runs.
+     *
+     * ONE resolver rather than several `??` chains, because there are three
+     * readers — {@see backendFor()}, which builds the backend that actually
+     * runs, {@see selectedProviderLabel()}, which produces the status-bar
+     * caption, and {@see workerProviderSpec()}, which hands forked sub-agent
+     * workers their provider. If only the first honoured a tier, the status bar
+     * would name a different model than the one answering, which is precisely
+     * the "a value true of one path displayed as a property of another" defect.
      */
-    private static function selectedModelName(): ?string
+    private static function selectedModelName(string $providerName): ?string
     {
         if (self::$modelOverride !== null) {
             return self::$modelOverride;
         }
 
         $env = getenv('SUGARCRUSH_MODEL');
+        if ($env !== false && $env !== '') {
+            return $env;
+        }
 
-        return ($env === false || $env === '') ? null : $env;
+        // The layered read, so `models` in `~/.sugar-crush/settings.json` counts
+        // too; it is user-tier only, so no project file can choose it.
+        $persisted = self::readUserConfig()['models'] ?? null;
+        $model = \is_array($persisted) ? ($persisted[$providerName] ?? null) : null;
+
+        return \is_string($model) && trim($model) !== '' ? $model : null;
     }
 
     /**
@@ -4192,9 +4221,17 @@ final class Bootstrap
      * shell's dock persistence, and none of them can do anything with an
      * exception but crash the session over a theme.
      *
+     * KEYS ARE REMOVED ONLY BY NAME: `$unset` lists keys to delete from the
+     * merged result, which is how the settings editor's reset works — a reset
+     * deletes the key rather than writing its default, so a later change to
+     * the default is still picked up. `null` in `$patch` is NOT a removal: an
+     * explicit null is a statement that outranks every lower layer
+     * ({@see \SugarCraft\Crush\Config\LayeredSettings}'s `only()`).
+     *
      * @param array<string, mixed> $patch
+     * @param list<string> $unset keys to remove from the file
      */
-    public static function writeUserConfig(array $patch): void
+    public static function writeUserConfig(array $patch, array $unset = []): void
     {
         $path = self::userConfigPath();
 
@@ -4239,7 +4276,13 @@ final class Bootstrap
             }
 
             $merged = array_merge($existing, $patch);
-            $json = json_encode($merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            foreach ($unset as $key) {
+                unset($merged[$key]);
+            }
+
+            // An emptied file is still an OBJECT: `[]` would decode as a list,
+            // which every reader of this file treats as "not a config".
+            $json = json_encode($merged === [] ? new \stdClass() : $merged, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
             if ($json === false) {
                 return;
             }
@@ -9018,7 +9061,7 @@ final class Bootstrap
 
         // Same resolver backendFor() builds the real backend from, so the
         // caption cannot name a different model than the one answering.
-        $model = self::selectedModelName();
+        $model = self::selectedModelName($name);
         if ($model === null) {
             try {
                 $configured = (new ProviderFactory())->defaultConfig($name)['model'] ?? null;

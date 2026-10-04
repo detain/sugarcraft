@@ -52,7 +52,7 @@ final class LayeredSettingsTest extends TestCase
     public function testTheUserTierOnlyKeysAreExactlyTheLayeredKeysNoProjectMaySet(): void
     {
         self::assertSame(
-            ['provider', 'titleModel', 'summaryModel', 'maxOutputTokens', 'modelPrices', 'extraBody', 'thinkingBudget', 'promptCache', 'maxToolSteps', 'contextWindow', 'secretEnvAllowlist', 'allowedTools', 'instructions', 'disabledRules', 'enabledSkills', 'attribution', 'statusLine', 'layout'],
+            ['provider', 'models', 'titleModel', 'summaryModel', 'maxOutputTokens', 'modelPrices', 'extraBody', 'thinkingBudget', 'promptCache', 'maxToolSteps', 'contextWindow', 'secretEnvAllowlist', 'allowedTools', 'instructions', 'disabledRules', 'enabledSkills', 'attribution', 'statusLine', 'layout'],
             LayeredSettings::userTierOnlyKeys(),
         );
 
@@ -70,7 +70,8 @@ final class LayeredSettingsTest extends TestCase
 
     /**
      * `model` is the name a reader expects and it must NOT be layerable, because
-     * nothing reads a top-level `model` out of the user config. A key that
+     * nothing reads a top-level `model` out of the user config — the persisted
+     * model choice is the per-provider `models` map (decision D9). A key that
      * merges but has no consumer looks configurable and is inert.
      */
     public function testNoKeyIsLayeredThatNothingReads(): void

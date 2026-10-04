@@ -58,6 +58,11 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Crush\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Crush\Tui\Settings\SettingsEditor;
+use SugarCraft\Crush\Tui\Settings\SettingsSavedMsg;
+use SugarCraft\Crush\Tui\Settings\SettingsSavePreview;
+use SugarCraft\Crush\Config\Settings\SettingSource;
+use SugarCraft\Crush\Config\Settings\SettingsTier;
+use SugarCraft\Crush\Config\Settings\SettingsWriter;
 use SugarCraft\Crush\Tui\Settings\SettingsSources;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\ZoneClickTracker;
@@ -267,6 +272,12 @@ final class App implements Model
          * were not consulted.
          */
         public readonly ?\Closure $settingsSources = null,
+        /**
+         * The settings editor's write door (N-P2) — its own censused door,
+         * separate from Chat's `onConfigChange`. Null (an embedder that wired
+         * none) means the view can stage and preview but every save is refused.
+         */
+        public readonly ?SettingsWriter $settingsWriter = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -510,6 +521,140 @@ final class App implements Model
     public function withSettingsSources(?\Closure $v): self
     {
         return $this->mutate(settingsSources: $v);
+    }
+
+    /** Replace the open settings view's state (null closes it). */
+    public function withSettingsEditor(?SettingsEditor $v): self
+    {
+        return $this->mutate(settingsEditor: $v);
+    }
+
+    public function withSettingsWriter(?SettingsWriter $v): self
+    {
+        return $this->mutate(settingsWriter: $v);
+    }
+
+    /**
+     * Build the open settings view's save preview from what its tier's file
+     * holds now (N-P2). One small read, on an explicit request — the same
+     * shape as {@see openSettings()} resolving the files when the view opens.
+     */
+    public function previewSettings(): self
+    {
+        $editor = $this->settingsEditor;
+        if ($editor === null || !$editor->hasChanges()) {
+            return $this;
+        }
+
+        $writer = $this->settingsWriter;
+        $tier = $editor->tier;
+        if ($writer === null) {
+            return $this->mutate(settingsEditor: $editor->withPreview(
+                SettingsSavePreview::blocked($tier, null, 'settings cannot be saved from this session'),
+            ));
+        }
+
+        try {
+            $before = $writer->current($tier);
+        } catch (\RuntimeException $e) {
+            return $this->mutate(settingsEditor: $editor->withPreview(
+                SettingsSavePreview::blocked($tier, $writer->targetPath($tier), $e->getMessage()),
+            ));
+        }
+
+        $preview = SettingsSavePreview::new(
+            $tier,
+            $writer->targetPath($tier),
+            $before,
+            SettingsWriter::patched($before, $editor->set, $editor->unset),
+            $editor->set,
+            $editor->unset,
+            $writer->refusals($tier, $editor->set, $editor->unset),
+        );
+
+        return $this->mutate(settingsEditor: $editor->withPreview(
+            $preview->withNotes(self::settingsShadowNotes($editor)),
+        ));
+    }
+
+    /**
+     * What the preview should say about precedence: a "You" save that now
+     * overrides a value in your `settings.json`, and a project-tier save that a
+     * value in one of your own files (or the environment, or a flag) still
+     * outranks — saved, but not what this launch will use.
+     *
+     * @return list<string>
+     */
+    private static function settingsShadowNotes(SettingsEditor $editor): array
+    {
+        $notes = [];
+        foreach ($editor->set as $key => $value) {
+            $resolved = $editor->resolved[$key] ?? null;
+            if ($resolved === null) {
+                continue;
+            }
+
+            $sources = [$resolved->source, ...$resolved->shadowed];
+            if ($editor->tier === SettingsTier::You && \in_array(SettingSource::UserSettings, $sources, true)) {
+                $notes[] = "{$key}: overrides the value in your settings.json";
+            }
+
+            if ($resolved->source->precedence() > $editor->tier->source()->precedence()) {
+                $notes[] = "{$key}: {$resolved->source->label()} still sets it, and outranks this file";
+            }
+        }
+
+        return $notes;
+    }
+
+    /**
+     * Confirm the open preview: the write runs as a Cmd (it is I/O) and
+     * answers with a {@see SettingsSavedMsg}. Nothing happens without a
+     * preview that {@see SettingsSavePreview::canSave()}.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function confirmSettingsSave(): array
+    {
+        $preview = $this->settingsEditor?->preview;
+        $writer = $this->settingsWriter;
+        if ($preview === null || $writer === null || !$preview->canSave()) {
+            return [$this, null];
+        }
+
+        $tier = $preview->tier;
+        $set = $preview->set;
+        $unset = $preview->unset;
+        $changed = $preview->changed();
+
+        return [$this, static function () use ($writer, $tier, $set, $unset, $changed): SettingsSavedMsg {
+            try {
+                return SettingsSavedMsg::saved($tier, $changed, $writer->write($tier, $set, $unset));
+            } catch (\Throwable $e) {
+                return SettingsSavedMsg::failed($tier, $changed, $e->getMessage());
+            }
+        }];
+    }
+
+    /**
+     * A save finished: the view records the outcome and, after a write,
+     * re-resolves so its rows show what the files now say.
+     */
+    private function settingsSaved(SettingsSavedMsg $msg): self
+    {
+        $editor = $this->settingsEditor;
+        if ($editor === null) {
+            return $this;
+        }
+
+        $editor = $editor->withSaved($msg);
+        if ($msg->ok()) {
+            $editor = $editor->withResolved($this->settingsSources !== null
+                ? ($this->settingsSources)()
+                : SettingsSources::bestEffort($this->root));
+        }
+
+        return $this->mutate(settingsEditor: $editor);
     }
 
     /**
@@ -1223,6 +1368,7 @@ final class App implements Model
         return match (true) {
             $msg instanceof WindowSizeMsg => $this->handleWindowSize($msg),
             $msg instanceof OpenSettingsMsg => [$this->openSettings($msg->query), null],
+            $msg instanceof SettingsSavedMsg => [$this->settingsSaved($msg), null],
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
             $msg instanceof DockPaneMsg,
@@ -2579,6 +2725,7 @@ final class App implements Model
             agentSplitCols: array_key_exists('agentSplitCols', $changes) ? $changes['agentSplitCols'] : $this->agentSplitCols,
             settingsEditor: array_key_exists('settingsEditor', $changes) ? $changes['settingsEditor'] : $this->settingsEditor,
             settingsSources: array_key_exists('settingsSources', $changes) ? $changes['settingsSources'] : $this->settingsSources,
+            settingsWriter: array_key_exists('settingsWriter', $changes) ? $changes['settingsWriter'] : $this->settingsWriter,
         );
     }
 }
