@@ -323,7 +323,7 @@ So `MemoryBlock::renderEntry()` runs every assembled note line through
 `PromptFence::escape()` before the per-entry clip. `PromptFence` is the single
 authority owning the prompt's fence-tag roster — `env`, `project-memory`,
 `repo-map`, `project-instructions`, `system-reminder`, `user-rules`,
-`prior-summary`, `harness-injected`, `available-skills` — and its `escape()` rewrites only the leading
+`prior-summary`, `harness-injected`, `available-skills`, `turn-context`, `system-notice` — and its `escape()` rewrites only the leading
 `<` of a recognised open/close tag to `&lt;`. A tag carrying attributes counts,
 however it is spelled — `<system-reminder priority="high">`, an attribute list broken
 across lines, an opener with no `>` at all — because a model reads each as the

@@ -209,13 +209,14 @@ final class InstructionFileLoader
      * from disk and re-expand their `@import` references.
      *
      * The trade-off is deliberate: an edit to CLAUDE.md/AGENTS.md made
-     * mid-session is not picked up until the loader is rebuilt.
+     * mid-session is not picked up until {@see refresh()} (a prompt refresh
+     * point) or a new loader.
      *
-     * Note that on the live TUI path EngineBackend::completeAsync() forks a
-     * child per user turn, so a warmed cache dies with that child; the win
-     * is collapsing the up-to-$maxSteps Runtime::run() reads inside a single
-     * complete() down to one. Per-session caching would have to live on the
-     * parent side of the fork.
+     * On the live TUI path EngineBackend::completeAsync() forks a child per
+     * user turn, so a cache warmed in the child dies with it. Since step
+     * 1.A-2 the parent primes the session's prompt before each fork, so this
+     * instance is warmed on the parent side and every turn's child inherits
+     * it.
      *
      * Each entry is one document as {@see loadDocuments()} returns it.
      *
@@ -1304,6 +1305,36 @@ final class InstructionFileLoader
                 $this->announcedRefusals[(string) $path] = true;
             }
         }
+    }
+
+    /**
+     * Forget everything this loader read and emitted, so the next load reads
+     * the files from disk again — the CLAUDE.md half of a prompt refresh
+     * point (`/clear`, a compaction, a session switch; step 1.A-2).
+     *
+     * WHY IN PLACE AND NOT A NEW INSTANCE. The loader is shared on purpose:
+     * Read/Edit/Glob/Grep/Write hold this same object for loadForPath()'s
+     * once-per-session dedup ({@see \SugarCraft\Crush\App\App::withInstructionLoader()}),
+     * and the prompt memo keys its instruction slab by this object's id. A
+     * fresh instance would split the dedup set from the tools' and orphan
+     * the memo slot; clearing this one keeps both pointing at one object.
+     *
+     * The emitted set goes with the caches: at a refresh point the rows that
+     * carried those documents (the old system prompt, the on-touch notes in
+     * tool results) have left the conversation, so "already in front of the
+     * model" is no longer true of any of them. What the user was already
+     * told on screen ({@see announcedRefusals()}) stays said.
+     */
+    public function refresh(): void
+    {
+        $this->deferredPaths = [];
+        $this->emittedPaths = [];
+        $this->refusedPaths = [];
+        $this->rootCache = null;
+        $this->forcedCache = null;
+        $this->personalCache = null;
+        $this->ancestorRootResolved = false;
+        $this->ancestorRoot = null;
     }
 
     /**

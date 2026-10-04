@@ -159,6 +159,15 @@ final class PromptFence
      * inside the carried block and reddens there. The earlier prose here credited
      * only the user-tier guard and was understated by seven.
      *
+     * The last two fences open OUTSIDE the system prompt (step 1.A-1/1.A-2):
+     * `turn-context` is the volatile per-step state row
+     * ({@see \SugarCraft\Crush\Context\TurnContextBlock}) and `system-notice`
+     * the user-role row a history notice travels as
+     * ({@see \SugarCraft\Crush\Providers\SglangProvider::systemNoticeContent()}).
+     * Both are harness voice in the request the model reads, so a repository
+     * byte inside the system prompt must not be able to spell them either; each
+     * class still neutralises its own name in its own payload as well.
+     *
      * @var list<string>
      */
     private const TAGS = [
@@ -171,6 +180,8 @@ final class PromptFence
         'prior-summary',
         'harness-injected',
         'available-skills',
+        'turn-context',
+        'system-notice',
     ];
 
     /**

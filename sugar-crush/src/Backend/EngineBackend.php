@@ -17,6 +17,8 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulesState;
+use SugarCraft\Crush\Context\SessionPromptMemo;
+use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Events\ToolFinished;
@@ -540,6 +542,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * top-level turn — adds nothing. @see withSubAgentGrant()
          */
         private readonly ?\SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook $subAgentGrant = null,
+        /**
+         * Step 1.A-2: the session's prompt memo — the PerSession system-prompt
+         * layers (static `<env>`, repo map, project memory, standing
+         * instruction slab) read once per session and frozen until a refresh
+         * point. ONE per backend, SHARED by every clone (mutate() carries the
+         * reference forward, as it does {@see $cacheHealth}), and on the
+         * PARENT side of the fork: {@see completeAsync()} primes it before
+         * forking, so every turn's child inherits the warm entries instead of
+         * re-walking the repository. Each turn's {@see Runtime} reads it
+         * through {@see Runtime::withSessionPromptMemo()}.
+         */
+        private readonly SessionPromptMemo $sessionPromptMemo = new SessionPromptMemo(),
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -588,6 +602,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     public function contextWindow(): int
     {
         return $this->provider->contextWindow();
+    }
+
+    /**
+     * The session's prompt memo (step 1.A-2) — shared by every clone of this
+     * backend, primed before each turn's fork. Exposed so an owner can drop a
+     * session's layers explicitly ({@see SessionPromptMemo::forget()}) on
+     * top of the refresh points the backend detects itself.
+     */
+    public function sessionPromptMemo(): SessionPromptMemo
+    {
+        return $this->sessionPromptMemo;
     }
 
     /**
@@ -1064,6 +1089,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     {
         $transcript = [];
         $attachmentNotice = null;
+        // Step 1.A-2: the in-process path observes refresh points and primes
+        // the session memo exactly as the forked one does before its fork.
+        $this->beginSessionTurn($history);
         $typed = $this->toTypedMessages($history, $attachmentNotice);
 
         // Audit 15b-15: an attachment the provider could not carry is reported
@@ -1179,34 +1207,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // never carried across the user's prompts (see ToolCallLoopGuard).
         $loopGuard = ToolCallLoopGuard::new();
 
-        $runtime = new Runtime(
-            $this->provider,
+        // Step 1.A-2: the session's prompt memo, so the PerSession layers are
+        // the ones the parent primed (or the previous in-process turn read),
+        // and the turn-context row is persisted by the step loop below rather
+        // than re-appended to each request by Runtime::run().
+        $runtime = $this->newRuntime(
             $this->resolveHookManager($loopGuard),
-            parallelToolCalls: self::parallelToolCallsEnabled($userConfig),
-            parallelToolDeadlineSeconds: self::parallelToolDeadlineSeconds($userConfig),
-            maxOutputTokens: self::maxOutputTokens($userConfig),
-            maxConcurrentDelegations: $this->maxConcurrentDelegations,
-        );
+            self::parallelToolCallsEnabled($userConfig),
+            self::parallelToolDeadlineSeconds($userConfig),
+            self::maxOutputTokens($userConfig),
+        )->withTurnContextPersisted();
 
-        $app = App::new($this->provider, $this->model)
+        $app = $this->sessionApp()
             ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd))
-            ->withEnabledSkills($this->skills)
-            // The P6.S3 rulebook toggle set, on the same per-turn carry the enabled
-            // skills ride. Read here rather than cached into the App at
-            // construction because this App is rebuilt every turn: the set is
-            // session state that `Chat` mutates between turns, and a value copied
-            // once at launch would freeze it for the whole session.
-            ->withRulesState($this->rulesState)
-            ->withAvailableSkills($this->skillRegistry ?? new SkillRegistry())
-            ->withInstructionLoader($this->instructionLoader)
-            ->withRoot($this->root)
-            ->withMemoryStore($this->memoryStore)
-            // Audit R1: the skill budget the prompt splice applies, from the
-            // same source the launch notice priced it against.
-            ->withCompactorConfig($this->compactorConfig())
-            // Step 0.13-a: before this, every engine-path hook was handed
-            // `sessionId: ''` and no request named its session.
-            ->withSessionId($this->sessionId)
             ->withMessages($messages);
 
         $lastAssistant = null;
@@ -1268,6 +1281,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // reply that said nothing — see the `no-tools` region below.
         $reasoningOnlyNudges = 0;
         $emptyReplyRetries = 0;
+
+        // Step 1.A-2: read once, on the first step's turn-context row; the
+        // row last built, reused after a step that could not have written.
+        $contextWindow = null;
+        $turnContext = null;
         // @endregion build
 
         // Bounded agentic loop: keep running while the model asks for tools.
@@ -1279,6 +1297,31 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // @region step-top
             $assistant = null;
             $toolResults = [];
+
+            // Step 1.A-2: the volatile `<turn-context>` row is PERSISTED into
+            // the history, here at the top of the step and only when its
+            // bytes changed, so step k+1 sends step k's request unchanged and
+            // appends to it — the whole request is a cacheable prefix of the
+            // next, not everything but its last row. It rides the transcript
+            // back to Chat as a hidden row (1.B-2), so the next turn's first
+            // step sends no new row either while nothing moved.
+            //
+            // The git half is re-polled only on the first step and after a
+            // step that could have written (the P3.S5 write signal): after a
+            // read-only step the work tree is as the agent last saw it, so
+            // the previous row's git state is reused — no subprocess, and no
+            // diff-less copy of the row that would differ from its neighbours
+            // only by the diffs it withheld. A change made outside the agent
+            // between two read-only steps shows on the next write or turn.
+            $turnContext = $turnContext === null || $lastAssistant === null || Runtime::stepRequestedAWrite($lastAssistant->toolCalls())
+                ? $runtime->turnContext($app)
+                : $turnContext->withRecentlyModifiedFiles(TurnContextBlock::recentlyModifiedIn($app->messages));
+            $turnContext = $turnContext->withContextPercent(
+                $this->contextPercentAtStepTop($app->messages, $pressureAnchor ?? [null, 0], $contextWindow),
+            );
+            if ($turnContext->changedSince($app->messages)) {
+                $app = $app->withMessages([...$app->messages, $turnContext->message()]);
+            }
 
             // Roadmap 2.1: the step-level pressure check. Chat judges the
             // conversation once, at submit, and its estimate leaves out the
@@ -1651,6 +1694,132 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ->withStepId($replyStepId)
             ->withTurnTranscript($turnRows);
         // @endregion return
+    }
+
+    /**
+     * The turn's {@see Runtime}: the ONE construction site in `src/`, shared
+     * by {@see runTurn()} and the parent-side prime
+     * ({@see beginSessionTurn()}), and always reading the session's
+     * {@see $sessionPromptMemo}. The per-turn settings arrive resolved —
+     * runTurn() reads them off its one config read, and the prime needs none
+     * of them (the memo's layers do not depend on dispatch settings).
+     */
+    private function newRuntime(
+        HookManager $hooks,
+        bool $parallelToolCalls = true,
+        int $parallelToolDeadlineSeconds = Runtime::PARALLEL_TOOL_DEADLINE_SECONDS,
+        ?int $maxOutputTokens = null,
+    ): Runtime {
+        return (new Runtime(
+            $this->provider,
+            $hooks,
+            parallelToolCalls: $parallelToolCalls,
+            parallelToolDeadlineSeconds: $parallelToolDeadlineSeconds,
+            maxOutputTokens: $maxOutputTokens,
+            maxConcurrentDelegations: $this->maxConcurrentDelegations,
+        ))->withSessionPromptMemo($this->sessionPromptMemo);
+    }
+
+    /**
+     * The App every turn of this session is built on, before its tools and
+     * messages — everything the system prompt's PerSession layers are keyed
+     * by, so the parent's prime and the child's turn fill and read the same
+     * memo slots.
+     */
+    private function sessionApp(): App
+    {
+        return App::new($this->provider, $this->model)
+            ->withEnabledSkills($this->skills)
+            // The P6.S3 rulebook toggle set, on the same per-turn carry the enabled
+            // skills ride. Read here rather than cached into the App at
+            // construction because this App is rebuilt every turn: the set is
+            // session state that `Chat` mutates between turns, and a value copied
+            // once at launch would freeze it for the whole session.
+            ->withRulesState($this->rulesState)
+            ->withAvailableSkills($this->skillRegistry ?? new SkillRegistry())
+            ->withInstructionLoader($this->instructionLoader)
+            ->withRoot($this->root)
+            ->withMemoryStore($this->memoryStore)
+            // Audit R1: the skill budget the prompt splice applies, from the
+            // same source the launch notice priced it against.
+            ->withCompactorConfig($this->compactorConfig())
+            // Step 0.13-a: before this, every engine-path hook was handed
+            // `sessionId: ''` and no request named its session.
+            ->withSessionId($this->sessionId);
+    }
+
+    /**
+     * Step 1.A-2, in the PARENT before a turn runs: decide whether this turn
+     * is a prompt refresh point, then prime the session's prompt memo.
+     *
+     * A refresh point — `/clear`, a compaction, a rewind, a session switch —
+     * is read off the history itself ({@see SessionPromptMemo::observeTurn()}):
+     * the memo forgets the session's layers and the shared instruction loader
+     * drops what it read ({@see InstructionFileLoader::refresh()}), so an
+     * edited CLAUDE.md, a new memory note or a changed repository layout
+     * reaches the prompt there and not on any ordinary step.
+     *
+     * Then the layers are read HERE, where they outlive the turn: a forked
+     * child inherits them warm, where before every turn's child re-walked the
+     * repository map, re-read memory and CLAUDE.md, and re-captured the date
+     * — and any byte that had moved rewrote the middle of message 0. A prime
+     * that fails is left to the child, which builds the same layers itself
+     * and reports the failure on the turn it belongs to.
+     *
+     * @param list<Message> $history
+     */
+    private function beginSessionTurn(array $history): void
+    {
+        $rowKeys = [];
+        foreach (Message::agentVisible($history) as $row) {
+            $rowKeys[] = hash('xxh128', $row->role->value . "\0" . $row->content);
+        }
+
+        if ($this->sessionPromptMemo->observeTurn($this->sessionId, $rowKeys)) {
+            $this->instructionLoader?->refresh();
+        }
+
+        try {
+            $this->newRuntime(new HookManager(new HookRegistry()))
+                ->primeSessionPrompt($this->sessionApp());
+        } catch (\Throwable) {
+            // See the docblock: the child rebuilds and owns the error.
+        }
+    }
+
+    /**
+     * The context-window share the step about to be sent will use, for the
+     * `<turn-context>` row ({@see TurnContextBlock::withContextPercent()}),
+     * or null when the window is unknown.
+     *
+     * The previous step's prompt as its provider counted it plus an estimate
+     * of the rows added since — the anchor the 2.1 pressure check uses — and
+     * on a turn's first step, before any count, the estimate of the whole
+     * history. FLOORED TO 5%: the row is re-sent whenever its bytes change,
+     * and a figure that moved every step would add a row every step.
+     *
+     * @param list<TypedMessage>  $rows
+     * @param array{?int, int}    $anchor previous step's prompt tokens and row count
+     */
+    private function contextPercentAtStepTop(array $rows, array $anchor, ?int &$window): ?int
+    {
+        if ($window === null) {
+            try {
+                $window = $this->contextWindow();
+            } catch (\Throwable) {
+                $window = 0;
+            }
+        }
+        if ($window <= 0) {
+            return null;
+        }
+
+        [$anchorTokens, $anchorRows] = $anchor;
+        $tokens = $anchorTokens !== null
+            ? $anchorTokens + \SugarCraft\Crush\Context\ContextPressure::ofMessages(\array_slice($rows, $anchorRows))
+            : \SugarCraft\Crush\Context\ContextPressure::ofMessages($rows);
+
+        return intdiv(intdiv($tokens * 100, $window), 5) * 5;
     }
 
     /**
@@ -2154,6 +2323,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
 
             return $deferred->promise();
         }
+
+        // Step 1.A-2: in the parent, before the fork — see beginSessionTurn().
+        $this->beginSessionTurn($history);
 
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
             return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning, $interactive);

@@ -230,7 +230,8 @@ final class TaskToolEngineTest extends TestCase
         $this->assertStringContainsString('whole budget of 1 tool steps', $turns[4][1], 'the summary exchange is part of the saved transcript');
         $this->assertSame(['user', 'carry on and report'], $turns[array_key_last($turns)]);
         $this->assertNotNull(
-            $provider->requests[2]->messages[2]->toArray()['tool_calls'] ?? null,
+            // Indexed past the persisted `<turn-context>` rows (step 1.A-2).
+            \SugarCraft\Crush\Context\TurnContextBlock::strip($provider->requests[2]->messages)[2]->toArray()['tool_calls'] ?? null,
             'the earlier assistant step kept its tool call across the disk round-trip',
         );
         $this->assertSame($id, self::resumeId($resumed->content()), 'a report keeps the run resumable under the same id (step 4.7-1)');

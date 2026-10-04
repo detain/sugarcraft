@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\TranscriptTurn;
 use SugarCraft\Crush\Backend\TurnInterrupted;
+use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
@@ -39,10 +40,13 @@ final class EngineBackendTranscriptTest extends TestCase
 
         $this->assertInstanceOf(TranscriptTurn::class, $turn);
         $this->assertSame('answer', $turn->reply->content);
-        $this->assertSame(['user', 'assistant', 'tool', 'assistant'], array_map(static fn ($m): string => $m->role(), $turn->transcript));
-        $this->assertInstanceOf(AssistantMessage::class, $turn->transcript[1]);
-        $this->assertSame('call_1', $turn->transcript[1]->toolCalls()[0]->id());
-        $this->assertInstanceOf(ToolResultMessage::class, $turn->transcript[2]);
+        // The conversation itself: the `<turn-context>` rows the loop
+        // persists (step 1.A-2) ride along and are resumed with it.
+        $conversation = TurnContextBlock::strip($turn->transcript);
+        $this->assertSame(['user', 'assistant', 'tool', 'assistant'], array_map(static fn ($m): string => $m->role(), $conversation));
+        $this->assertInstanceOf(AssistantMessage::class, $conversation[1]);
+        $this->assertSame('call_1', $conversation[1]->toolCalls()[0]->id());
+        $this->assertInstanceOf(ToolResultMessage::class, $conversation[2]);
     }
 
     public function testAFailureCarriesTheTranscriptUpToTheLastCompletedStep(): void
@@ -63,7 +67,7 @@ final class EngineBackendTranscriptTest extends TestCase
         $this->assertNotNull($interrupted, 'the failure must surface as TurnInterrupted');
         $this->assertSame('provider went away', $interrupted->getMessage());
         $this->assertSame($boom, $interrupted->getPrevious());
-        $this->assertSame(['user', 'assistant', 'tool'], array_map(static fn ($m): string => $m->role(), $interrupted->transcript));
+        $this->assertSame(['user', 'assistant', 'tool'], array_map(static fn ($m): string => $m->role(), TurnContextBlock::strip($interrupted->transcript)));
     }
 
     public function testCompleteStillThrowsTheOriginalFailure(): void

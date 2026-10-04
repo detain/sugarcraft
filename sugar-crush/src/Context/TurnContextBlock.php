@@ -199,10 +199,21 @@ final readonly class TurnContextBlock
      * {@see FENCE}). A real user prompt cannot pose as one by typing the tag
      * — it would still be a user row carrying user bytes, and the worst it
      * does is mask the next change check, which re-sends on any difference.
+     *
+     * Either message shape counts: the engine's typed {@see UserMessage}, and
+     * — since step 1.A-2 persists the row and it rides the turn's transcript
+     * back to Chat — the root {@see \SugarCraft\Crush\Message} user row it is
+     * stored as there (hidden from the screen, sent to the model).
      */
     public static function isTurnContext(mixed $message): bool
     {
-        return $message instanceof UserMessage && str_starts_with($message->content(), self::FENCE . "\n");
+        if ($message instanceof UserMessage) {
+            return str_starts_with($message->content(), self::FENCE . "\n");
+        }
+
+        return $message instanceof \SugarCraft\Crush\Message
+            && $message->role === \SugarCraft\Crush\Role::User
+            && str_starts_with($message->content, self::FENCE . "\n");
     }
 
     /**
@@ -216,7 +227,7 @@ final readonly class TurnContextBlock
         $latest = null;
         foreach ($messages as $message) {
             if (self::isTurnContext($message)) {
-                $latest = $message->content();
+                $latest = $message instanceof UserMessage ? $message->content() : $message->content;
             }
         }
 
@@ -297,9 +308,11 @@ final readonly class TurnContextBlock
      * Rewrite the `<` of every `<turn-context` / `</turn-context` opener in a
      * payload to `&lt;`, with the same terminator rule as
      * {@see PromptFence::escape()} (whitespace, `/`, `>` or end of payload).
-     * Local rather than a {@see PromptFence} roster entry because this fence
-     * opens outside the system prompt; see the HANDOFF note on widening the
-     * roster.
+     * Kept beside the {@see PromptFence} roster entry (step 1.A-2 added
+     * `turn-context` there): the recently-modified paths are escaped through
+     * PromptFence already, but the git half arrives pre-escaped from
+     * {@see EnvironmentBlock}, and this pass is what guarantees the row's own
+     * closer for every payload byte whichever route it came by.
      */
     private static function escapeOwnFence(string $payload): string
     {

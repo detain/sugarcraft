@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Tests\Support\ScriptedProvider;
@@ -37,9 +38,11 @@ final class ResultFrameTranscriptCodecTest extends TestCase
         $this->assertSame('answer', $forked->content);
         $this->assertNotNull($forked->stepId);
         $this->assertSame(self::shape($sync->turnTranscript), self::shape($forked->turnTranscript));
-        $this->assertFalse($forked->turnTranscript[0]->userVisible);
-        $this->assertSame('pondering', $forked->turnTranscript[0]->reasoning);
-        $this->assertSame($forked->turnTranscript[0]->stepId, $forked->turnTranscript[1]->stepId);
+        // Past the persisted `<turn-context>` rows (step 1.A-2), which cross too.
+        $rows = TurnContextBlock::strip($forked->turnTranscript);
+        $this->assertFalse($rows[0]->userVisible);
+        $this->assertSame('pondering', $rows[0]->reasoning);
+        $this->assertSame($rows[0]->stepId, $rows[1]->stepId);
     }
 
     public function testATurnThatOutgrowsTheFrameBudgetSendsAMarkerNotTheOutput(): void
@@ -51,7 +54,7 @@ final class ResultFrameTranscriptCodecTest extends TestCase
 
         $this->assertInstanceOf(Message::class, $forked, 'the turn must settle, not lose its result frame');
         $this->assertSame('answer', $forked->content);
-        $result = $forked->turnTranscript[1]->toolResults[0];
+        $result = TurnContextBlock::strip($forked->turnTranscript)[1]->toolResults[0];
         $this->assertStringStartsWith('[tool output not carried', $result->result);
         $this->assertSame('call_1', $result->id, 'the pairing survives the omission');
     }

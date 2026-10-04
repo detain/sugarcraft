@@ -391,7 +391,7 @@ final class SystemPromptWiringTest extends TestCase
         // repository produces: there both diff commands exit 0 (MEASURED) and
         // the body is a multi-line patch that a one-line body class would
         // false-red on. That regime is covered deliberately elsewhere, by
-        // {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite()},
+        // {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheEngineLoopReusesTheRowAfterAReadOnlyStepAndRepollsAfterAWrite()},
         // which builds a real committed-then-dirtied repository. Do not
         // "repair" this test by handing it one: that would delete the only
         // exclusivity pin in this file to duplicate coverage that exists.
@@ -434,7 +434,17 @@ final class SystemPromptWiringTest extends TestCase
         // this fixture both of those fields are an `unavailable (git exited N)`
         // line anyway. Asserted, not argued.
         $this->assertSame(1, substr_count($first, $marker), 'the cut marker must occur exactly once in the emitting step prompt');
-        $this->assertSame(0, substr_count($second, $marker), 'the suppressed step must carry no staged-diff section at all');
+
+        // STEP 1.A-2: the row is PERSISTED at step top, and after a read-only
+        // step its git half is not re-polled, so the second step carries the
+        // first step's row in place and appends no other — the per-step diff
+        // suppression this test was written about can no longer move a byte
+        // mid-turn, because no second row is built to suppress anything in.
+        $this->assertSame($first, $second, 'after a read-only step the row is reused whole; nothing drifts mid-turn');
+        $this->assertCount(1, array_filter(
+            $provider->requests[1]->messages,
+            static fn ($m): bool => TurnContextBlock::isTurnContext($m),
+        ), 'the second step re-sends the persisted row, it does not add one');
 
         // NOT `(int) strpos(...)`. `strpos()` returns `int|false`, and
         // `(int) false === 0` turns "the marker is absent" into "cut at byte
@@ -446,12 +456,6 @@ final class SystemPromptWiringTest extends TestCase
         $cut = strpos($first, $marker);
         $this->assertNotFalse($cut, 'the cut marker must be locatable in the emitting step prompt');
         $tail = substr($first, $cut);
-
-        $this->assertSame(
-            substr($first, 0, $cut) . "\n</turn-context>",
-            $second,
-            'the second step\'s row must be the first\'s with exactly the two diff sections cut — nothing else may drift mid-turn',
-        );
 
         // EXCLUSIVITY, and it is the deterministic fixture that buys it. There
         // is NO `/s` here and no `.*`: `[^\n]*` cannot cross a line, so this

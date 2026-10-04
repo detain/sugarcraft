@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\Message as TypedMessage;
@@ -38,9 +39,12 @@ final class StructuredReplayTest extends TestCase
 
         $this->assertSame('answer', $reply->content);
         $this->assertNotNull($reply->stepId, 'a tool-free final step travels as the reply itself');
-        $this->assertCount(2, $reply->turnTranscript);
+        // The persisted `<turn-context>` rows (step 1.A-2) ride along hidden;
+        // the steps are what this pins.
+        $rows = TurnContextBlock::strip($reply->turnTranscript);
+        $this->assertCount(2, $rows);
 
-        [$step, $result] = $reply->turnTranscript;
+        [$step, $result] = $rows;
         $this->assertSame('looking', $step->content, 'the interim narration is kept');
         $this->assertSame('pondering', $step->reasoning);
         $this->assertFalse($step->userVisible, 'the step record is the model\'s, not the transcript\'s');
@@ -157,6 +161,7 @@ final class StructuredReplayTest extends TestCase
         $shown = $this->shown('go', 'call_1', 'echo', 'ok');
 
         [$history, $settled] = Message::settleTurnTranscript($shown, $reply);
+        $history = TurnContextBlock::strip($history);
 
         $this->assertCount(3, $history);
         $this->assertSame($shown[0], $history[0], 'the prompt is untouched');
@@ -175,6 +180,7 @@ final class StructuredReplayTest extends TestCase
         $reply = $this->toolTurn()->complete([Message::user('go')]);
 
         [$history] = Message::settleTurnTranscript([Message::user('go')], $reply);
+        $history = TurnContextBlock::strip($history);
 
         $this->assertCount(3, $history);
         $this->assertSame('ok', $history[2]->toolResults[0]->result);

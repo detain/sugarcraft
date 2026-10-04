@@ -67,6 +67,26 @@ final class InstructionFileLoaderTest extends TestCase
         $this->assertStringContainsString('Root AGENTS', $contents[1]);
     }
 
+    /**
+     * Step 1.A-2: refresh() is the loader half of a prompt refresh point —
+     * the SAME instance (the tools share it) reads the files again, and a
+     * document it had emitted is emittable again.
+     */
+    public function testRefreshRereadsTheFilesOnTheSameInstance(): void
+    {
+        $this->touch($this->repoRoot . '/CLAUDE.md', '# Version one');
+        $loader = new InstructionFileLoader($this->repoRoot);
+        $this->assertStringContainsString('Version one', $loader->loadRoot()[0]);
+
+        $this->touch($this->repoRoot . '/CLAUDE.md', '# Version two');
+        $this->assertStringContainsString('Version one', $loader->loadRoot()[0], 'cached for the session until refreshed');
+
+        $loader->refresh();
+        $this->assertSame([], $loader->emittedPaths());
+        $this->assertStringContainsString('Version two', $loader->loadRoot()[0]);
+        $this->assertNotSame([], $loader->emittedPaths(), 'the re-read document is marked emitted again');
+    }
+
     public function testLoadRootSkipsMissingFiles(): void
     {
         // Create only CLAUDE.md, not AGENTS.md

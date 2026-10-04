@@ -491,10 +491,11 @@ works travels outside it.
 
 - **`<turn-context>`** — `Runtime::turnContext()` renders the git section
   (`EnvironmentBlock::renderVolatile()`), the files the agent's Edit/Write
-  calls touched and, from 60%, the context-window share, and `Runtime::run()`
-  appends it as the request's LAST row, user-role, only when its bytes differ
-  from the latest such row in the history. Persisting it into the history is
-  step 1.A-2.
+  calls touched and, from 60%, the context-window share, and
+  `EngineBackend::runTurn()` persists it into the history at the top of each
+  step, user-role, only when its bytes differ from the latest such row there,
+  so each step's request is a byte prefix of the next; it returns to Chat in
+  the turn's transcript as a hidden row.
 - **In-place notices** — `SglangProvider` and `CustomProvider` keep one leading
   `system` row (the prompt plus any history system rows ahead of the first
   conversation row) and render every later history system row where it
@@ -503,7 +504,9 @@ works travels outside it.
 - **Per-session memo** — the PerSession layers (static `<env>`, repo map,
   memory, the standing instruction slab) are memoised per session through
   `Context\SessionPromptMemo`, frozen until the session is forgotten
-  (`/clear`, compaction, another session).
+  (`/clear`, compaction, another session). `EngineBackend` holds it, primes it
+  in the parent before each turn's fork, and detects those refresh points from
+  the history it is handed.
 
 The rationale behind these placement decisions, and the one freshness policy
 for `CLAUDE.md` and the other standing layers, is written up in

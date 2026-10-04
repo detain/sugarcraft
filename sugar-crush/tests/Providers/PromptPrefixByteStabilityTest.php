@@ -20,9 +20,9 @@ use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
 
 /**
- * Step 1.A-1's regression pin: two consecutive steps of one agentic turn
- * send byte-identical wire messages for everything the earlier step sent,
- * except its trailing `<turn-context>` row.
+ * Steps 1.A-1/1.A-2's regression pin: two consecutive steps of one agentic
+ * turn send byte-identical wire messages for EVERYTHING the earlier step sent
+ * — its `<turn-context>` row included, which 1.A-2 persists into the history.
  *
  * WHY THIS IS THE PROPERTY THAT MATTERS. A prefix cache (SGLang's
  * RadixAttention, Anthropic/OpenAI prompt caching) reuses work only up to the
@@ -41,11 +41,10 @@ use SugarCraft\Crush\Tools\ToolResult;
  * OpenAI-shaped providers' `formatMessages()`, the code that produces the
  * wire bytes.
  *
- * WHAT IS NOT YET IDENTICAL, and why: the trailing row itself. Runtime
- * appends it to the wire request of each step; persisting it into the
- * history — so step k+1 carries step k's row in place and sends a new one
- * only when the bytes changed — is step 1.A-2 (EngineBackend::runTurn).
- * Once it lands, the comparison below extends to all n rows.
+ * Since step 1.A-2 the row is persisted at the top of each step
+ * (EngineBackend::runTurn), so step k+1 carries step k's row in place and
+ * appends a new one only when the bytes changed: the comparison below covers
+ * all n rows of the earlier request.
  */
 final class PromptPrefixByteStabilityTest extends TestCase
 {
@@ -70,7 +69,7 @@ final class PromptPrefixByteStabilityTest extends TestCase
     }
 
     /** @dataProvider providers */
-    public function testConsecutiveStepsShareEveryWireRowAheadOfTheTurnContext(string $providerClass): void
+    public function testConsecutiveStepsShareEveryWireRowTheEarlierStepSent(string $providerClass): void
     {
         $requests = $this->driveATurnThatWrites();
         $this->assertCount(3, $requests, 'write step, read step, answer');
@@ -79,7 +78,7 @@ final class PromptPrefixByteStabilityTest extends TestCase
             $earlier = self::wire($providerClass, $requests[$k]);
             $later = self::wire($providerClass, $requests[$k + 1]);
 
-            $tail = array_pop($earlier);
+            $tail = $earlier[array_key_last($earlier)];
             $this->assertStringStartsWith(
                 TurnContextBlock::FENCE . "\n",
                 (string) ($tail['content'] ?? ''),
@@ -90,7 +89,7 @@ final class PromptPrefixByteStabilityTest extends TestCase
             $this->assertSame(
                 json_encode($earlier),
                 json_encode(\array_slice($later, 0, \count($earlier))),
-                "step " . ($k + 1) . " must send step {$k}'s rows 0.." . (\count($earlier) - 1) . ' byte-identically',
+                "step " . ($k + 1) . " must send ALL of step {$k}'s rows 0.." . (\count($earlier) - 1) . ' byte-identically, its turn-context row included',
             );
         }
     }

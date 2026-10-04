@@ -24,16 +24,18 @@ namespace SugarCraft\Crush\Context;
  *
  * WHO HOLDS IT. The owner must outlive the Runtime and sit on the PARENT side
  * of the per-turn fork, or the warmed entries die with the child. That owner
- * is EngineBackend, wired by step 1.A-2 (it primes the memo before
- * `completeAsync()` forks). Until then nothing in `src/` shares one across
- * turns, and the freshness below is per turn in practice.
+ * is EngineBackend (step 1.A-2): one memo per backend, shared by every clone,
+ * primed in the parent before `completeAsync()` forks, so each turn's child
+ * inherits the warm entries instead of re-reading them.
  *
  * FRESHNESS POLICY — ONE RULE FOR EVERY STANDING LAYER, CLAUDE.md INCLUDED.
  * Instruction files (CLAUDE.md, AGENTS.md, `@import`s, forced globs), rules
  * and rulebooks, project memory, the repo map and the static `<env>` lines are
  * read ONCE per session, at the first prompt build, and stay frozen until the
  * session's entries are dropped with {@see forget()} — on `/clear`, after a
- * compaction, or when a different session id arrives. An edit to CLAUDE.md
+ * compaction, or when a different session id arrives. The owner does not
+ * have to be told which of those happened: {@see observeTurn()} sees each of
+ * them in the history the next turn runs on. An edit to CLAUDE.md
  * made mid-session therefore takes effect at the next of those points, not on
  * the next step; that trades immediacy for a prefix that does not move, which
  * is the trade the surveyed agents make (crush_report IV.4). The inputs that
@@ -67,7 +69,23 @@ final class SessionPromptMemo
     /** @var array<string, array<string, mixed>> session id => slot => value, LRU order */
     private array $entries = [];
 
-    private function __construct()
+    /**
+     * What the last observed turn of each session ran on: how many
+     * agent-visible rows, and one hash over them ({@see observeTurn()}).
+     *
+     * @var array<string, array{int, string}>
+     */
+    private array $histories = [];
+
+    /** The session the last observed turn belonged to, or null before any. */
+    private ?string $lastSession = null;
+
+    /**
+     * Public so an owner can default a promoted constructor field to a fresh
+     * memo (`= new SessionPromptMemo()`); {@see new()} is the spelling
+     * everything else uses.
+     */
+    public function __construct()
     {
     }
 
@@ -134,6 +152,69 @@ final class SessionPromptMemo
     public function forgetAll(): void
     {
         $this->entries = [];
+        $this->histories = [];
+        $this->lastSession = null;
+    }
+
+    /**
+     * Record the history a turn of $sessionId is about to run on, and forget
+     * that session's layers first when this turn is a refresh point of the
+     * freshness policy. Returns whether it was one — the owner then refreshes
+     * whatever ELSE caches the same files (the shared instruction loader),
+     * even when this memo held nothing yet for the session.
+     *
+     * A refresh point is either of:
+     *  - A SESSION SWITCH: the previous observed turn belonged to another
+     *    session (`/resume`, `/branch`, Ctrl+Tab). Switching back to a
+     *    session this memo still holds would otherwise reuse layers frozen
+     *    before the switch.
+     *  - A REWRITTEN HISTORY: this session's history no longer starts with
+     *    every row its previous turn ran on — `/clear` emptied it, a
+     *    compaction replaced the old rows with a summary, `/rewind` cut it.
+     *    An ordinary turn only ever APPENDS (the reply, its transcript rows,
+     *    the next prompt), so that prefix test is the whole signal.
+     *
+     * WHY DETECT RATHER THAN BE TOLD: the three events live in three places
+     * in Chat, each owned by a different feature, and a missed call site
+     * would freeze CLAUDE.md for the rest of the session with no symptom.
+     * The history the turn is handed is the one thing all three must change.
+     * A false positive costs one re-read of layers whose bytes, unchanged on
+     * disk, come back identical — the prefix cache does not notice; a false
+     * negative is the frozen state the policy already accepts until the next
+     * refresh point.
+     *
+     * @param list<string> $rowKeys one stable key per agent-visible history row,
+     *                              in order (EngineBackend hashes role + content)
+     */
+    public function observeTurn(?string $sessionId, array $rowKeys): bool
+    {
+        $session = $sessionId ?? '';
+
+        $previous = $this->histories[$session] ?? null;
+        $switched = $this->lastSession !== null && $this->lastSession !== $session;
+        $rewritten = $previous !== null
+            && (\count($rowKeys) < $previous[0] || self::hashRows(\array_slice($rowKeys, 0, $previous[0])) !== $previous[1]);
+
+        if ($switched || $rewritten) {
+            $this->forget($sessionId);
+        }
+
+        $this->histories[$session] = [\count($rowKeys), self::hashRows($rowKeys)];
+        $this->lastSession = $session;
+
+        // Bounded with the entries: a session evicted from those needs no
+        // history either, and a long-lived daemon must not grow this map.
+        if (\count($this->histories) > self::MAX_SESSIONS * 2) {
+            unset($this->histories[array_key_first($this->histories)]);
+        }
+
+        return $switched || $rewritten;
+    }
+
+    /** @param list<string> $rowKeys */
+    private static function hashRows(array $rowKeys): string
+    {
+        return hash('xxh128', implode("\0", $rowKeys));
     }
 
     /**

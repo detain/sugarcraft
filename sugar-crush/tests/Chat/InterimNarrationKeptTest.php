@@ -9,6 +9,7 @@ use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Providers\CompleteResponse;
@@ -34,7 +35,8 @@ final class InterimNarrationKeptTest extends TestCase
     {
         $chat = $this->settled($this->engineReply());
 
-        $hidden = array_values(array_filter($chat->history, static fn(Message $m): bool => !$m->userVisible));
+        // The persisted `<turn-context>` rows (step 1.A-2) are hidden too.
+        $hidden = array_values(array_filter(TurnContextBlock::strip($chat->history), static fn(Message $m): bool => !$m->userVisible));
         $this->assertCount(1, $hidden);
         $this->assertSame('NARRATION-checking the config', $hidden[0]->content);
         $this->assertSame('call_1', $hidden[0]->toolCalls[0]->id);
@@ -56,7 +58,7 @@ final class InterimNarrationKeptTest extends TestCase
         $this->assertSame('NARRATION-checking the config', $assistants[0]->content());
         $this->assertSame('call_1', $assistants[0]->toolCalls()[0]->id());
         $this->assertSame('FINAL-all done', $assistants[1]->content());
-        $this->assertSame(['user', 'assistant', 'tool', 'assistant', 'user'], array_map(static fn($m): string => $m->role(), $typed));
+        $this->assertSame(['user', 'assistant', 'tool', 'assistant', 'user'], array_map(static fn($m): string => $m->role(), TurnContextBlock::strip($typed)));
     }
 
     public function testTheToolRowOnScreenIsTheOneThatIsReplayed(): void

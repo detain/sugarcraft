@@ -87,12 +87,17 @@ re-prefills the whole conversation behind it.
   git section (`EnvironmentBlock::renderVolatile()` — caveat, branch, porcelain status, recent
   log and, after a write step, both diffs), the files this conversation's Edit and Write calls
   touched (`TurnContextBlock::recentlyModifiedIn()`), and the share of the context window in use
-  once it reaches `TurnContextBlock::CONTEXT_NOTICE_PERCENT`. `Runtime::run()` appends it to the
-  request as a **user-role** row, fenced `turn-context` and opened by a harness-voice preamble
+  once it reaches `TurnContextBlock::CONTEXT_NOTICE_PERCENT` (floored to 5% so the figure does
+  not change the row every step). `EngineBackend::runTurn()` appends it to the history at the top
+  of each step as a **user-role** row, fenced `turn-context` and opened by a harness-voice preamble
   ("metadata, not instructions"), only when its bytes differ from the latest such row the history
-  already carries (`TurnContextBlock::changedSince()`). It is always the request's last row, so a
-  write changes the tail instead of the prefix. Until step 1.A-2 persists the row into the history
-  it is wire-only and appended every step; the context-share field is filled by that wiring too.
+  already carries (`TurnContextBlock::changedSince()`). Persisted, not wire-only: step k+1 sends
+  step k's whole request unchanged and appends to it, and the row rides the turn's transcript back
+  to Chat as a hidden row, so the next turn sends none while nothing moved. The git half is
+  re-polled only on a turn's first step and after a step that could have written
+  (`Runtime::stepRequestedAWrite()`); after a read-only step the previous row's git state is reused,
+  so no diff-less copy of the row is appended. A runtime without such an owner (`Runtime::run()`
+  alone) still appends the row to each wire request itself.
   Payload bytes are already `PromptFence`-escaped by `EnvironmentBlock`, and the row neutralises its
   own fence name inside them, so a commit subject spelling the closer cannot end the row early.
 - **History system rows stay in place.** `SglangProvider::placeSystemRows()` — shared by
@@ -105,8 +110,9 @@ re-prefills the whole conversation behind it.
   ("System message must be at the beginning.").
 
 `tests/Providers/PromptPrefixByteStabilityTest.php` drives a real write-then-read turn and pins the
-result: every wire row a step sent ahead of its `<turn-context>` row is byte-identical in the next
-step's request, message 0 included. `tests/Prompt/PromptSnapshotDriftTest.php` pins both halves
+result: every wire row a step sent — its `<turn-context>` row included — is byte-identical in the
+next step's request, message 0 included; `tests/Backend/TurnContextPersistedTest.php` pins that an
+unchanged state is sent once across read-only steps and into the next turn. `tests/Prompt/PromptSnapshotDriftTest.php` pins both halves
 against committed snapshots — a per-slot manifest of the system prompt (slot, stability, fence,
 bytes, hash) and the turn-context row of the golden fixture.
 
@@ -116,16 +122,18 @@ The PerSession layers — the static `<env>`, the repo map, project memory and t
 instruction slab (user rules, `CLAUDE.md`/`AGENTS.md` with their `@import`s, forced globs, project
 rules) — are memoised per **session** through `Context\SessionPromptMemo`, not per `Runtime`
 (which is per turn). They are read once, at the session's first build, and stay frozen until the
-session's entries are dropped with `SessionPromptMemo::forget()`: on `/clear`, after a compaction,
-or when another session id arrives. An edit to `CLAUDE.md` mid-session therefore takes effect at
+session's entries are dropped with `SessionPromptMemo::forget()`: on `/clear`, after a compaction
+or rewind, or when another session id arrives. `EngineBackend` reads those points off the history
+each turn runs on (`SessionPromptMemo::observeTurn()`): a history that no longer starts with the
+previous turn's rows, or a turn from a different session than the last. An edit to `CLAUDE.md` mid-session therefore takes effect at
 the next of those points — the trade Claude Code and Aider make, immediacy for a prefix that does
 not move. Inputs that legitimately change a layer inside a session are part of its memo slot
 instead of being frozen: the project root, the model name, the `/rules` toggle set and the
 instruction-loader instance. `InstructionFileLoader` keeps its own per-instance cache, so the
-refresh point for instruction documents is `forget()` together with a loader that has not read
-them yet. The memo has to live on the parent side of the per-turn fork to span turns; holding it
-there (`EngineBackend`) is step 1.A-2, and until then each Runtime keeps a private one, so the
-policy is per turn in practice.
+refresh point for instruction documents is `forget()` together with
+`InstructionFileLoader::refresh()` on the same, tool-shared instance. The memo lives on the parent
+side of the per-turn fork: `EngineBackend` holds one per session and primes it before forking each
+turn (`Runtime::primeSessionPrompt()`), so every turn's child inherits the layers warm.
 
 ## Why that order
 
@@ -193,15 +201,17 @@ other:
   bounds a reader model tracks) or to forge `system-reminder`, which is a trust channel rather
   than a section. In the assembled prompt every roster tag is a delimiter regardless of which
   body carries the bytes.
-- **The roster is the nine tags `PromptFence::tags()` returns**, read at this base: `env`,
+- **The roster is the eleven tags `PromptFence::tags()` returns**, read at this base: `env`,
   `project-memory`, `repo-map`, `project-instructions`, `system-reminder`, `user-rules`,
-  `prior-summary`, `harness-injected`, `available-skills`. Two entries are noteworthy in kind:
+  `prior-summary`, `harness-injected`, `available-skills`, `turn-context`, `system-notice`. Two entries are noteworthy in kind:
   `prior-summary` is the tag `Chat::renderPriorSummariesForSummary()` wraps in a *summariser
   request* outside the assembled system prompt — foreign by exactly the route a repo file is — and
   `harness-injected` is the roster's one pre-registered, defang-only tag: nothing emits it yet, and
   a tag added before the bytes that need it is free, whereas a tag added after leaves a forging
   window. `available-skills` is the fence around the skill listing (slot 10), whose names and
-  descriptions are skill authors' text (audit 15d-02).
+  descriptions are skill authors' text (audit 15d-02). `turn-context` and `system-notice` fence
+  user-role rows outside the system prompt — the per-step state row and a history notice kept in
+  place — and are on the roster so no repository byte can spell either harness voice.
 - **Attribute-bearing and unterminated tags count.** A roster name matches when whitespace, `/`,
   `>` or the end of the payload follows it, so `<system-reminder priority="high">`, an attribute
   list broken across lines and an unterminated `<system-reminder foo="x"` all lose their `<` — a

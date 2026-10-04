@@ -310,7 +310,9 @@ final class PromptSectionTest extends TestCase
             'project-instructions',
             'project-memory',
             'repo-map',
+            'system-notice',
             'system-reminder',
+            'turn-context',
             'user-rules',
         ], $tags);
     }

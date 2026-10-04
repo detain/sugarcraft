@@ -1340,11 +1340,15 @@ final class Runtime
         // the request as a user-role `<turn-context>` row, never message 0 —
         // a write then changes the last row instead of the prefix every
         // provider caches. Appended only when the history does not already
-        // end its turn-context trail with the same bytes, so once step 1.A-2
-        // persists the row into the history an unchanged step sends nothing.
-        $turnContext = $this->turnContext($app);
-        if ($turnContext->changedSince($messages)) {
-            $messages[] = $turnContext->message();
+        // end its turn-context trail with the same bytes. An owner that
+        // persists the row into the history itself (step 1.A-2,
+        // EngineBackend::runTurn) says so, and this build is skipped: it
+        // would only re-poll git to find the row the owner just appended.
+        if (!$this->turnContextPersisted) {
+            $turnContext = $this->turnContext($app);
+            if ($turnContext->changedSince($messages)) {
+                $messages[] = $turnContext->message();
+            }
         }
 
         $request = new CompleteRequest(
@@ -4905,7 +4909,7 @@ final class Runtime
      * Public so the owner that persists the row into the history (step 1.A-2,
      * EngineBackend::runTurn) builds it from the same source {@see run()}
      * does. The context-window share is not filled here: the usage it needs
-     * is the engine loop's, and that wiring is step 1.A-2 / 2.1
+     * is the engine loop's, so that owner fills it
      * ({@see Context\TurnContextBlock::withContextPercent()}).
      */
     public function turnContext(App $app): Context\TurnContextBlock
@@ -4932,6 +4936,36 @@ final class Runtime
 
         return $copy;
     }
+
+    /**
+     * Fill the session memo's PerSession layers for $app without sending
+     * anything — the parent-side prime of step 1.A-2. EngineBackend calls it
+     * before forking a turn's child, so the static `<env>`, repo map, project
+     * memory and standing instruction slab are read ONCE, in the process that
+     * outlives the turn, and every child inherits them warm. Builds exactly
+     * the section list {@see run()} would, so the slots it fills are the ones
+     * the child reads.
+     */
+    public function primeSessionPrompt(App $app): void
+    {
+        $this->systemPromptSections($app);
+    }
+
+    /**
+     * A copy whose {@see run()} does not append the `<turn-context>` row,
+     * because the caller persists it into the history before each step
+     * (step 1.A-2). A clone, like {@see withSessionPromptMemo()}.
+     */
+    public function withTurnContextPersisted(): self
+    {
+        $copy = clone $this;
+        $copy->turnContextPersisted = true;
+
+        return $copy;
+    }
+
+    /** See {@see withTurnContextPersisted()}. */
+    private bool $turnContextPersisted = false;
 
     /**
      * The session memo this Runtime reads its PerSession layers through:

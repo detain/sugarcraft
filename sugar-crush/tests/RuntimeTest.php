@@ -3131,20 +3131,22 @@ DOC;
      * `Runtime` and the only production caller of `run()` - flips the signal
      * per step, and the flip is visible in the prompt the provider is handed.
      *
-     * Three steps, driven through a recording provider that keeps every
-     * `CompleteRequest::$systemPrompt` it receives:
+     * Three steps, driven through a recording provider that keeps the latest
+     * `<turn-context>` row of every request it receives:
      *
-     *   step 0 asks for `Read`  -> its own prompt is the turn's first, so it
-     *                              renders in the DEFAULT emit state
-     *   step 1 asks for `Edit`  -> its prompt follows a read-only step, so the
-     *                              diff is SUPPRESSED
-     *   step 2 answers          -> its prompt follows a write step, so the diff
-     *                              is BACK
+     *   step 0 asks for `Read`  -> its row is the turn's first, so it renders
+     *                              in the DEFAULT emit state
+     *   step 1 asks for `Edit`  -> it follows a read-only step, so step 0's
+     *                              row is REUSED as persisted (step 1.A-2):
+     *                              no git re-poll, and no diff-less copy
+     *   step 2 answers          -> it follows a write step, so the git half
+     *                              is RE-POLLED and carries the write
      *
-     * The middle row is what could not happen before this step, and the third
-     * is what makes the middle row a flip rather than a one-way latch.
+     * Before 1.A-2 the middle step SUPPRESSED the diff (P3.S5), which made
+     * sense while the row was re-sent whole on every request; persisted, a
+     * suppressed copy would be a new row appended for nothing.
      */
-    public function testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite(): void
+    public function testTheEngineLoopReusesTheRowAfterAReadOnlyStepAndRepollsAfterAWrite(): void
     {
         // The git fixture pins ~/.gitconfig out; this pins ~/.sugar-crush out.
         // Same hazard, second door - see the helper's doc-block.
@@ -3186,8 +3188,7 @@ DOC;
         $this->assertSame(1, substr_count($prompts[0], $label), 'step 0 opens in the default emit state');
         $this->assertSame(1, substr_count($prompts[0], $staged), 'step 0 opens in the default emit state');
 
-        $this->assertSame(0, substr_count($prompts[1], $label), 'step 1 follows a read-only step: no unstaged diff');
-        $this->assertSame(0, substr_count($prompts[1], $staged), 'step 1 follows a read-only step: no staged diff');
+        $this->assertSame($prompts[0], $prompts[1], 'step 1 follows a read-only step: step 0\'s row, reused whole');
 
         $this->assertSame(1, substr_count($prompts[2], $label), 'step 2 follows an Edit: the diff is re-armed');
         $this->assertSame(1, substr_count($prompts[2], $staged), 'step 2 follows an Edit: the diff is re-armed');
@@ -3205,38 +3206,25 @@ DOC;
             'the re-armed unstaged diff must show the line the Edit step wrote',
         );
 
-        // Suppression takes the two diff sections and NOTHING else. Asserted as
-        // an exact byte identity rather than as three absences, because the
-        // three cheap fields going missing with them would be a silent
-        // regression that absence assertions cannot see.
-        $cut = strpos($prompts[0], "\n\nStaged changes (");
-        $this->assertIsInt($cut, 'the emitting prompt must carry the staged-diff section');
-        $this->assertSame(
-            substr($prompts[0], 0, $cut) . "\n</turn-context>",
-            $prompts[1],
-            'the suppressed row must be the emitting one with exactly the two diff sections cut out',
-        );
-
-        // The three cheap git fields and P3.S3's caveat survive the
-        // suppression - stated positively, because the identity above would
-        // also hold if all four had never been emitted in either prompt.
+        // The three cheap git fields and P3.S3's caveat are in the reused row
+        // - stated positively, because the identity above would also hold if
+        // all four had never been emitted in either row.
         foreach (['Note: this git state is as of', 'Current branch:', 'Status:', 'Recent commits:'] as $kept) {
-            $this->assertSame(1, substr_count($prompts[1], $kept), "the suppressed prompt keeps: {$kept}");
+            $this->assertSame(1, substr_count($prompts[1], $kept), "the reused row keeps: {$kept}");
         }
     }
 
     /**
-     * The Done-when's first clause, driven as the sequence it names:
-     * CONSECUTIVE no-write steps, with the assertion on the SECOND assembled
-     * prompt.
+     * CONSECUTIVE no-write steps, with the assertion on every later step.
      *
-     * Separate from the flip test above because it pins a different property -
-     * that suppression PERSISTS across a run of quiet steps rather than
-     * decaying back to emit after one. A latch that reset itself every step
-     * would pass the flip test (step 1 suppressed, step 2 emitting after the
-     * Edit) and fail this one.
+     * Separate from the flip test above because it pins a different property
+     * - that the reuse PERSISTS across a run of quiet steps rather than
+     * decaying back to a re-poll after one. Before step 1.A-2 the same run
+     * pinned that the P3.S5 suppression persisted; persisted rows made the
+     * suppressed copy a new row appended for nothing, so the run now keeps
+     * the turn's first row, diffs included, and adds none.
      */
-    public function testTwoConsecutiveNoWriteStepsBothAssembleASuppressedPrompt(): void
+    public function testConsecutiveNoWriteStepsKeepTheTurnsFirstRow(): void
     {
         $this->pinDispatchConfigToASandboxHome();
         $root = $this->makeDirtyGitFixture();
@@ -3259,48 +3247,21 @@ DOC;
                 $this->createMockTool('Glob', 'paths'),
             ]);
 
-        $backend->complete([RootMessage::user('go')]);
+        $reply = $backend->complete([RootMessage::user('go')]);
 
         $this->assertCount(4, $prompts);
 
         $staged = 'Staged changes (git diff --cached, index vs HEAD)';
         $this->assertSame(1, substr_count($prompts[0], $staged), 'the turn still opens on the diff');
-        $this->assertSame(0, substr_count($prompts[1], $staged));
-        $this->assertSame(0, substr_count($prompts[2], $staged));
-        $this->assertSame(0, substr_count($prompts[3], $staged));
-
-        // Byte-identical - and NOT a prompt-cache win. The first draft of this
-        // comment said it was ("before this step they differed"), and that was
-        // false. MEASURED over makeDirtyGitFixture() below, three unmarked
-        // buildSystemPrompt() calls on ONE Runtime - which is byte-for-byte
-        // the pre-P3.S5 path, since a null signal short-circuits
-        // environmentSnapshot(): all three renders IDENTICAL. Quiet steps were
-        // already fully cacheable across each other. What suppression buys is
-        // input BYTES (666 on that fixture, the two diff sections exactly) and
-        // two git subprocesses; what it costs is one extra prefix divergence
-        // at the emit->suppress transition the old behaviour did not have.
-        //
-        // 666 is quoted and the totals are not, deliberately: the prompt total
-        // carries `Working directory: <root>`, so it moves with the length of
-        // the temp path this fixture happens to get, while the saving is the
-        // two sections and does not.
-        //
-        // These two assertions therefore also pass against the old code, and
-        // are kept as the PERSISTENCE pin rather than presented as the bite:
-        // they say suppression does not decay back to emit halfway through a
-        // run of quiet steps. The assertions that go red when the wiring is
-        // removed are the substr_count() zeroes above and the length
-        // comparison below - MEASURED, by deleting the mark call from
-        // EngineBackend::complete() and watching exactly those reds.
-        $this->assertSame($prompts[1], $prompts[2], 'two consecutive quiet steps assemble the same bytes');
+        $this->assertSame($prompts[0], $prompts[1], 'a quiet step keeps the row');
+        $this->assertSame($prompts[1], $prompts[2]);
         $this->assertSame($prompts[2], $prompts[3]);
 
-        // And the saving is real, not a relabelling.
-        $this->assertGreaterThan(
-            strlen($prompts[1]),
-            strlen($prompts[0]),
-            'the suppressed prompt must be SHORTER than the emitting one on a dirty tree',
-        );
+        // And no step appended a copy: the turn's transcript holds one row.
+        $this->assertCount(1, array_filter(
+            $reply->turnTranscript,
+            static fn (RootMessage $m): bool => \SugarCraft\Crush\Context\TurnContextBlock::isTurnContext($m),
+        ));
     }
 
     /**
@@ -4049,8 +4010,8 @@ DOC;
         // which is the whole reason the pin is precautionary rather than
         // load-bearing. A precaution nothing asserts is a comment.
         foreach ([
-            'testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite',
-            'testTwoConsecutiveNoWriteStepsBothAssembleASuppressedPrompt',
+            'testTheEngineLoopReusesTheRowAfterAReadOnlyStepAndRepollsAfterAWrite',
+            'testConsecutiveNoWriteStepsKeepTheTurnsFirstRow',
         ] as $method) {
             $reflected = new \ReflectionMethod(self::class, $method);
             // The slice now includes the signature line (it used to start one

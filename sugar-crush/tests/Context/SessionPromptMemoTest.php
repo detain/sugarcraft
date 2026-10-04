@@ -73,6 +73,35 @@ final class SessionPromptMemoTest extends TestCase
         $this->assertSame([], $memo->sessions());
     }
 
+    public function testObserveTurnForgetsOnlyAtARefreshPoint(): void
+    {
+        $memo = SessionPromptMemo::new();
+        $memo->remember('s1', 'a', static fn (): int => 1);
+
+        $this->assertFalse($memo->observeTurn('s1', ['u:go']), 'the first turn is no refresh point');
+        $this->assertFalse($memo->observeTurn('s1', ['u:go', 'a:ok', 'u:next']), 'a history that only grew is the same conversation');
+        $this->assertTrue($memo->has('s1', 'a'));
+
+        $this->assertTrue($memo->observeTurn('s1', ['u:summary', 'u:next']), 'a rewritten history (compaction, /clear, /rewind) refreshes');
+        $this->assertFalse($memo->has('s1', 'a'));
+
+        $memo->remember('s1', 'a', static fn (): int => 2);
+        $this->assertFalse($memo->observeTurn('s1', ['u:summary', 'u:next']), 'the rewritten history is the new baseline');
+        $this->assertTrue($memo->observeTurn('s1', []), 'an emptied history refreshes');
+    }
+
+    public function testObserveTurnTreatsASessionSwitchAsARefreshPoint(): void
+    {
+        $memo = SessionPromptMemo::new();
+        $memo->remember('A', 'a', static fn (): int => 1);
+        $memo->observeTurn('A', ['u:a']);
+
+        $this->assertTrue($memo->observeTurn('B', ['u:b']), 'a different session than the last turn\'s');
+        $this->assertTrue($memo->has('A', 'a'), 'a switch forgets only the session switched TO');
+        $this->assertTrue($memo->observeTurn('A', ['u:a', 'u:more']), 'switching back re-reads, even though A only grew');
+        $this->assertFalse($memo->has('A', 'a'));
+    }
+
     public function testSessionsAreEvictedLeastRecentlyUsedFirst(): void
     {
         $memo = SessionPromptMemo::new();
