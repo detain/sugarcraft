@@ -117,6 +117,7 @@ final class TurnController
     public const ROUTE_QUEUE = 'queue';
     public const ROUTE_STEER = 'steer';
     public const ROUTE_INTERRUPT = 'interrupt';
+    public const ROUTE_SIDE_QUESTION = 'side-question';
 
     /**
      * The row a read-only window adds for input it will not run: `%s` the
@@ -329,6 +330,9 @@ final class TurnController
      *   state left for them to corrupt.
      * - `/workflow pause|status` during a workflow run controls it
      *   ($workflowControl, the caller's judgement, audit WF-4).
+     * - `/btw <question>` (roadmap 5.14b) runs: a side question writes only
+     *   UI-only rows and leaves the turn running, so there is nothing for it
+     *   to corrupt — and asking about the work while it happens is the point.
      * - Every other `/`-prefixed draft, and the bare `mcp auth …` spelling, is
      *   refused rather than queued: a queued command would run minutes later
      *   against a transcript the user is no longer looking at, and the commands
@@ -350,6 +354,10 @@ final class TurnController
 
         if ($workflowControl) {
             return self::ROUTE_WORKFLOW_CONTROL;
+        }
+
+        if (Commands\CommandText::tokens($text)[0] === '/btw') {
+            return self::ROUTE_SIDE_QUESTION;
         }
 
         if (str_starts_with($text, '/') || self::isBareMcpAuthCommand($text)) {

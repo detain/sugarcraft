@@ -350,6 +350,7 @@ edit it by hand.
 | `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |
 | `/goal` | ✓ | | `[<condition>\|clear]` | Work until a condition is met, judged by the title model after every turn |
 | `/grind` | ✓ | | `[<condition>\|clear]` | Like /goal, with a much longer budget of follow-up rounds |
+| `/btw` | ✓ | | `<question>` | Ask the title model a side question about this conversation, kept out of it |
 <!-- commands:table:end -->
 
 **S** is blank on `new`, `session-pin`, `session-delete`, `docs`,
@@ -375,7 +376,7 @@ In a **read-only** window — a session another sugarcrush already has open
 run: `/exit`, `/keys`, `/help`, `/permissions`, `/notices`, `/rules`, `/budget`,
 `/share`, `/agents`, `/memory`, `/bg`, `/fork`, `/branch`, `/sessions`, `/theme`,
 `/mcp`, `/websearch`, `/pane`, `/layout`, `/model`, `/editor`, `/settings`, `/diff`,
-`/context` and `/workflow list|status`.
+`/context`, `/btw` and `/workflow list|status`.
 Everything else, a custom command included, is refused; the box is cleared so
 `/branch` can be typed at once, and the refused draft comes back once `/branch`
 has forked the session into one this window owns.
@@ -478,6 +479,7 @@ the turn is a `/workflow run` or `/workflow resume`: `/workflow pause <id>` and
 `/workflow status <id>`, because pausing a live run is the reason to type at it
 and neither touches the history (pause writes the pause file, status reads
 state). The run keeps its turn; its report says **paused** when it stops.
+`/btw` runs mid-turn too, during any turn: see below.
 
 One name reaches a handler with no leading slash at all: a draft whose first two
 words are `mcp auth` is routed to `Chat::handleMcpAuthCommand()` ahead of the parse,
@@ -512,6 +514,17 @@ is judged again after your next turn). A bare `/goal` reports the goal and its
 rounds; `/goal clear` (also `off` or `stop`) ends it. With no title model
 configured, `/goal` sets nothing and says so. The goal lives in the session's
 transcript, so a resumed session resumes it and `/clear` drops it.
+
+`/btw <question>` asks a side question about the conversation without adding
+it to the conversation: the title model answers from a snapshot of the
+transcript (tool output included) with no tools, and both the question and the
+answer are shown but never sent to the agent, so its next turn reads neither.
+It is the one command that also runs while a turn is in flight — it only
+appends rows the agent does not read, and asking about the work while it
+happens is the point — and a read-only window runs it too. With no title model
+configured, or with the spend cap reached, it says so and asks nothing. A
+`btw.md` custom command replaces it like any other built-in, and is then a
+prompt, refused mid-turn.
 
 `/editor` composes the next prompt in your own editor: `$VISUAL`, else
 `$EDITOR`, else `vi` (`notepad` on Windows), run as a shell command line with

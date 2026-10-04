@@ -1322,7 +1322,7 @@ final class ChatTest extends TestCase
         // out rather than derived on purpose, because the thing under test is that
         // the popup NARROWS as characters arrive, and a derived expectation would
         // pass against a popup that never filtered at all.
-        $this->assertSame(['bg', 'branch', 'budget'], $names);
+        $this->assertSame(['bg', 'branch', 'btw', 'budget'], $names);
     }
 
     public function testSlashMenuHiddenOnceArgumentsStart(): void

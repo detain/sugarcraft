@@ -2407,6 +2407,20 @@ final class Chat implements Model
         if ($msg instanceof GoalJudgedMsg) {
             return $this->landGoalVerdict($msg);
         }
+        if ($msg instanceof SideQuestionAnsweredMsg) {
+            // Roadmap 5.14b: accounted first (the call ran on the user's key),
+            // then one UI-only row — shown, never sent — unless the session
+            // it was asked in is no longer the one on screen.
+            $this->accountUsage($msg->usage);
+            if ($msg->sessionId !== $this->currentSessionId) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['history' => [
+                ...$this->history,
+                Message::assistant(\SugarCraft\Crush\Host\Commands\BtwHostCommand::answerRow($msg))->withUiOnly(),
+            ]]), null];
+        }
         if ($msg instanceof DreamPassCompletedMsg) {
             // Roadmap 5.4-3: the notes, the memory-history commit and the
             // journal cursor are already written (in this process, as the
@@ -3625,6 +3639,28 @@ final class Chat implements Model
         }
 
         return [$next->withInputBuf(''), $cmd];
+    }
+
+    /**
+     * `/btw <question>` (roadmap 5.14b) —
+     * {@see \SugarCraft\Crush\Host\Commands\BtwHostCommand}: a side question
+     * the title model answers from a snapshot of the transcript, as UI-only
+     * rows the agent never reads. The one command that runs mid-turn as well
+     * as idle; its result holds the turn either way. A session at its spend
+     * cap is told so rather than asked on its owner's key.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleBtwCommand(string $text): array
+    {
+        if ($this->spendCapReached()) {
+            return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::reply(
+                $text,
+                'The spend cap is reached, so the side question was not asked. `/budget` shows or raises the cap.',
+            )->holdingTurn());
+        }
+
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\BtwHostCommand(), $text);
     }
 
     /**
@@ -10109,6 +10145,13 @@ final class Chat implements Model
                 \SugarCraft\Crush\Host\TurnController::ROUTE_QUIT => [$this, Cmd::quit()],
                 \SugarCraft\Crush\Host\TurnController::ROUTE_WORKFLOW_CONTROL => $this->handleWorkflowCommand($text),
                 \SugarCraft\Crush\Host\TurnController::ROUTE_REFUSE_COMMAND => $this->refuseInFlightCommand($text),
+                // Roadmap 5.14b: `/btw` asks the title model beside the running
+                // turn and writes only UI-only rows — unless a file-based
+                // `btw.md` claims the name, which is a prompt and refused here
+                // like every command typed mid-turn.
+                \SugarCraft\Crush\Host\TurnController::ROUTE_SIDE_QUESTION => $this->resolveCustomCommand($text) === null
+                    ? $this->handleBtwCommand($text)
+                    : $this->refuseInFlightCommand($text),
                 \SugarCraft\Crush\Host\TurnController::ROUTE_STEER => $this->steerPrompt($text),
                 // An interrupt is a host's delivery; Enter never asks for one,
                 // and a queued follow-up is what this arm always did otherwise.
@@ -10851,7 +10894,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'tokens',
+        'context', 'tokens', 'btw',
     ];
 
     /**

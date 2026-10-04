@@ -566,6 +566,11 @@ final class InFlightInputQueueTest extends TestCase
      * there is no state left for them to corrupt, and Ctrl+C already quits
      * mid-turn. They are asserted to come back WITH a Cmd, which is the property a
      * blanket refusal would break.
+     *
+     * `/btw` (roadmap 5.14b) is the third, and the only one that runs: a side
+     * question writes UI-only rows and leaves the turn running. With no title
+     * model (this fixture has none) it answers with its echo and one reply,
+     * and never queues.
      */
     public function testEverySlashCommandIsRefusedMidTurnExceptTheTwoThatQuit(): void
     {
@@ -585,6 +590,14 @@ final class InFlightInputQueueTest extends TestCase
             if ($name === 'exit' || $name === 'quit') {
                 $this->assertNotNull($cmd, "/{$name} must still quit mid-turn");
                 $this->assertSame($before, count($after->history), "/{$name} says nothing, it just goes");
+                continue;
+            }
+
+            if ($name === 'btw') {
+                $this->assertSame([], $after->queuedPrompts(), '/btw runs, it is never queued');
+                $this->assertSame($before + 2, count($after->history), '/btw answers with its echo and one reply');
+                $this->assertTrue($after->history[$before]->uiOnly && $after->history[$before + 1]->uiOnly, '/btw writes nothing the model reads');
+                $this->assertTrue($after->inFlight, '/btw must leave the running turn alone');
                 continue;
             }
 

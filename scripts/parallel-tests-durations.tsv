@@ -555,6 +555,7 @@ sugar-crush/tests/Memory/EmbeddingCacheTest.php	0.100	9
 sugar-crush/tests/Support/DaemonizeTest.php	0.100	6
 sugar-crush/tests/Backend/StepTopRemindersTest.php	0.100	2
 sugar-crush/tests/Chat/TurnEndNotificationTest.php	0.100	8
+sugar-crush/tests/Chat/BtwCommandTest.php	0.100	10
 sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
 sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35

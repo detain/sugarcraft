@@ -1077,7 +1077,7 @@ finishes. A lone `!` is an ordinary prompt.
 ### Slash commands
 
 <!-- commands:roster:begin -->
-`/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
+`/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
 `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
 `/exit` (`/quit`) `/fork` `/goal` `/grind` `/help` `/init` `/keys` `/layout`
 `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions` `/pruning`
