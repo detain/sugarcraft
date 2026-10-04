@@ -164,6 +164,18 @@ final class ContextCommandTest extends TestCase
         }
     }
 
+    public function testTheEngineBackendMeasuresItsOwnSystemPrompt(): void
+    {
+        $this->fixture = (new PromptFixture())->write('CLAUDE.md', "# Conventions\n\nUse tabs.\n");
+        $backend = \SugarCraft\Crush\Backend\EngineBackend::new(new \SugarCraft\Crush\Providers\EchoProvider(), 'm')
+            ->withRoot($this->fixture->root());
+
+        self::assertInstanceOf(ReportsPromptSections::class, $backend, '/context would say "not measured" on the real backend');
+        $rows = $backend->promptSectionSizes();
+        self::assertSame('base', $rows[0]['label'] ?? null, 'the engine reports its prompt from the base identity on');
+        self::assertGreaterThan(0, array_sum(array_column($rows, 'bytes')));
+    }
+
     public function testToolSchemasArePricedLikeTheRequestPricesThem(): void
     {
         $tools = [new \SugarCraft\Crush\Tools\BuiltIn\Read()];

@@ -137,6 +137,8 @@ final class BinSugarcrushWiringTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Crush\Host\ContextMeter::class, $workspace->service(\SugarCraft\Crush\Host\ContextMeter::class));
         $this->assertInstanceOf(\SugarCraft\Crush\Host\CompactionService::class, $workspace->service(\SugarCraft\Crush\Host\CompactionService::class));
         $this->assertInstanceOf(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry::class, $workspace->service(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry::class));
+        $this->assertInstanceOf(\SugarCraft\Crush\Host\TurnRunner::class, $workspace->service(\SugarCraft\Crush\Host\TurnRunner::class));
+        $this->assertInstanceOf(\SugarCraft\Crush\Config\Settings\SettingsWriter::class, $workspace->service(\SugarCraft\Crush\Config\Settings\SettingsWriter::class));
 
         $transcripts = $workspace->service(\SugarCraft\Crush\Host\TranscriptStore::class);
         $this->assertInstanceOf(\SugarCraft\Crush\Host\TranscriptStore::class, $transcripts);
@@ -646,6 +648,21 @@ final class BinSugarcrushWiringTest extends TestCase
 
         $this->assertNotNull($app->availableSkills->get('bin-wiring-marker'));
         $this->assertNotNull($app->availableSkills->get('security-audit'));
+    }
+
+    /**
+     * N-P3b: `/model` saves through the workspace's SettingsWriter, and the
+     * settings editor the shell opens writes through the SAME instance — one
+     * write door per launch, not two built from separate trust answers.
+     */
+    public function testBootstrapAppHandsTheEditorTheWorkspacesSettingsWriter(): void
+    {
+        $app = Bootstrap::app($this->tempDir . '/repo');
+
+        $this->assertNotNull($app->chat);
+        $registered = $app->chat->workspace()?->service(\SugarCraft\Crush\Config\Settings\SettingsWriter::class);
+        $this->assertInstanceOf(\SugarCraft\Crush\Config\Settings\SettingsWriter::class, $registered);
+        $this->assertSame($registered, $app->settingsWriter);
     }
 
     /**

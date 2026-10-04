@@ -67,7 +67,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * works in the typed {@see \SugarCraft\Crush\Messages\Message} hierarchy.
  * Conversion happens here at the seam.
  */
-final class EngineBackend implements Backend, ReportsContextWindow, ObservesReasoning, InteractiveTurn
+final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromptSections, ObservesReasoning, InteractiveTurn
 {
     /**
      * IDLE ceiling on a forked completion child in {@see completeAsync()} -
@@ -1884,6 +1884,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             // Step 0.13-a: before this, every engine-path hook was handed
             // `sessionId: ''` and no request named its session.
             ->withSessionId($this->sessionId);
+    }
+
+    /**
+     * The next request's system prompt per layer (roadmap 5.6, `/context`),
+     * built on the same session App and prompt memo a turn reads — so after
+     * the first turn's prime it reuses the session's layers rather than
+     * re-walking the repository map and instruction files.
+     */
+    public function promptSectionSizes(): array
+    {
+        return $this->newRuntime(new HookManager(new HookRegistry()))
+            ->promptSectionSizes($this->sessionApp());
     }
 
     /**

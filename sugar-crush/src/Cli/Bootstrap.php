@@ -1793,6 +1793,13 @@ final class Bootstrap
             ->withService(\SugarCraft\Crush\Host\ContextMeter::class, \SugarCraft\Crush\Host\ContextMeter::new())
             ->withService(\SugarCraft\Crush\Host\CompactionService::class, \SugarCraft\Crush\Host\CompactionService::new())
             ->withService(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry::class, \SugarCraft\Crush\Agents\Live\AgentLiveRegistry::new())
+            // O-2f: the runner a server host listen()s on; without it every
+            // Chat lineage falls back to a runner of its own (TurnRunner::of()).
+            ->withService(\SugarCraft\Crush\Host\TurnRunner::class, \SugarCraft\Crush\Host\TurnRunner::new())
+            // N-P3b: `/model <provider> <model>` persists through this writer,
+            // and app() hands the SAME instance to the settings editor — one
+            // writer per launch, so the two doors cannot disagree on trust.
+            ->withService(\SugarCraft\Crush\Config\Settings\SettingsWriter::class, self::settingsWriter($root))
             ->withService(\SugarCraft\Crush\Host\TranscriptStore::class, $transcripts);
 
         $events = $transcripts->events();
@@ -1968,7 +1975,7 @@ final class Bootstrap
      * FIFTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * THIRTY distinct ones on this tree, fifteen of them classified
+     * THIRTY-ONE distinct ones on this tree, fifteen of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}, which
@@ -2948,10 +2955,29 @@ final class Bootstrap
             // (whose census stays `provider` + `theme`). Its "You" tier goes
             // through writeUserConfig() — the one writer config.json has — and
             // its project tier only to a trusted project's settings.local.json.
-            ->withSettingsWriter(\SugarCraft\Crush\Config\Settings\SettingsWriter::new(
-                self::userConfigPath(),
-                static fn (array $set, array $unset) => self::writeUserConfig($set, $unset),
-            )->withProject($root, $root !== null && self::projectSettingsTrusted($root)));
+            //
+            // The workspace's writer — the one `/model` saves through — so a
+            // launch has one SettingsWriter, built by settingsWriter().
+            ->withSettingsWriter(
+                ($writer = $chat->workspace()?->service(\SugarCraft\Crush\Config\Settings\SettingsWriter::class)) instanceof \SugarCraft\Crush\Config\Settings\SettingsWriter
+                    ? $writer
+                    : self::settingsWriter($root),
+            );
+    }
+
+    /**
+     * The launch's settings write door (N-P2): its "You" tier goes through
+     * writeUserConfig() — the one writer config.json has — and its project
+     * tier only to a trusted project's settings.local.json. Built once per
+     * launch by {@see workspace()}, which registers it for Chat's `/model`
+     * (N-P3b); {@see app()} reuses that instance for the settings editor.
+     */
+    private static function settingsWriter(?string $root): \SugarCraft\Crush\Config\Settings\SettingsWriter
+    {
+        return \SugarCraft\Crush\Config\Settings\SettingsWriter::new(
+            self::userConfigPath(),
+            static fn (array $set, array $unset) => self::writeUserConfig($set, $unset),
+        )->withProject($root, $root !== null && self::projectSettingsTrusted($root));
     }
 
     /**
@@ -6069,9 +6095,12 @@ final class Bootstrap
      *   checkpoints (3.A) behind `/rewind` for what was allowed. Those two
      *   were the conditions crush_report Part V set for moving the
      *   interactive default off `bypass-permissions`, and both have landed.
-     *   One gap is left and stated where it bites: a `Task` run in a PARALLEL
-     *   batch has no channel of its own yet, so its question is refused with
-     *   a reason the model reads (`ChildChannel::GRANDCHILD_REFUSAL`).
+     *   A `Task` run in a PARALLEL batch asks too since roadmap 1.C-5: its
+     *   grandchild relays the question to the turn child over
+     *   {@see \SugarCraft\Crush\Support\PermissionAskRelay}, which puts it to
+     *   the same modal. Only a member the relay could not be opened for is
+     *   still refused, with a reason the model reads
+     *   (`ChildChannel::GRANDCHILD_REFUSAL`).
      * - `-p` AND THE BACKGROUND DAEMON keep {@see DEFAULT_PERMISSION_MODE},
      *   `bypass-permissions`. Their approver is
      *   {@see HeadlessPermissionPrompt}, which asks on stderr at a terminal

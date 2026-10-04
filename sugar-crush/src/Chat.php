@@ -38,7 +38,6 @@ use SugarCraft\Crush\Support\SystemClipboard;
 use SugarCraft\Crush\Attachments\FileMentions;
 use SugarCraft\Crush\Support\ClipboardImage;
 use SugarCraft\Crush\Backend\CancellationToken;
-use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\Backend\QueueMode;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Events\ReasoningDelta;
@@ -2029,6 +2028,9 @@ final class Chat implements Model
             ...$this->sessionChangeResets(),
             'currentSessionId' => $sessionId,
             'currentSessionName' => $name,
+            // P-A4: who named the resumed session, from its row — so an
+            // auto-titled name stays replaceable and a user's stays latched.
+            'currentSessionTitleSource' => $name === null ? null : $this->storedTitleSource($sessionId),
             'history' => [...$history, Message::notice(
                 '_Resumed session ' . ($name ?? $sessionId) . '._',
             )],
@@ -2068,6 +2070,17 @@ final class Chat implements Model
             'consecutiveRefillCompactions' => 0,
             'lastActivityAt' => null,
         ];
+    }
+
+    /**
+     * Who set the name the store holds for $sessionId (its `title_source`),
+     * or null when the row records none.
+     */
+    private function storedTitleSource(string $sessionId): ?\SugarCraft\Crush\Session\TitleSource
+    {
+        $row = $this->sessionStore?->getSession($sessionId);
+
+        return \is_array($row) ? \SugarCraft\Crush\Session\TitleSource::fromStored($row['title_source'] ?? null) : null;
     }
 
     /**
@@ -8207,6 +8220,15 @@ final class Chat implements Model
     }
 
     /**
+     * The launch's workspace — the host services (Appendix O §4.3) this Chat
+     * resolves — or null for a Chat built without one (tests, embedders).
+     */
+    public function workspace(): ?\SugarCraft\Crush\Host\WorkspaceContext
+    {
+        return $this->workspace;
+    }
+
+    /**
      * Get the agent manager, if set.
      */
     public function agentManager(): ?\SugarCraft\Crush\Agents\AgentManager
@@ -9029,9 +9051,11 @@ final class Chat implements Model
         // ONE session. Every route that changes the session — a switch, a
         // resume, /new, /branch, a picker fork — passes `currentSessionId`, so
         // this is the one place that keeps them from leaking into the next
-        // session without each route having to remember.
+        // session without each route having to remember. A route that read the
+        // new session's own source from the store ({@see switchToSession()})
+        // passes it in the same change, and that wins.
         if (array_key_exists('currentSessionId', $changes) && $changes['currentSessionId'] !== $this->currentSessionId) {
-            $constructorProps['currentSessionTitleSource'] = null;
+            $constructorProps['currentSessionTitleSource'] = $changes['currentSessionTitleSource'] ?? null;
             $constructorProps['titleEditor'] = null;
         }
 
@@ -9514,7 +9538,16 @@ final class Chat implements Model
 
             // One instance for both calls: savingsPercentage() reads the state
             // compact() just left on it.
-            $attemptCompactor = $this->attemptCompactor($this->history);
+            //
+            // The state block (roadmap 2.5) built from the WHOLE history, as
+            // the `/compact` and parked routes build it
+            // ({@see \SugarCraft\Crush\Host\CompactionService::compactedHistory()}):
+            // the compactor's own fallback only sees the exchanges stage 0 has
+            // stripped of their tool rows, so it wrote "Files read/modified: none".
+            $attemptCompactor = $this->attemptCompactor($this->history)->withExchangeSummaries([
+                \SugarCraft\Crush\Context\Compaction\StateSummaryTemplate::SUMMARY_KEY
+                    => \SugarCraft\Crush\Host\CompactionService::heuristicState($this->history)->render(),
+            ]);
             $compactedWire = $attemptCompactor->compact($wireHistory);
             $savedPercentage = $attemptCompactor->savingsPercentage();
 
@@ -10069,6 +10102,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
+        'context', 'tokens',
     ];
 
     /**
@@ -14533,13 +14567,25 @@ final class Chat implements Model
                     }
                     $title = self::sanitizeSessionTitle(self::sanitizeSessionField($rename['title']));
                     if ($title === '') {
-                        // The store has no "unnamed again" write: a blank title
-                        // would be a user title of '' that blocks auto-titling
-                        // for good, so it is refused instead.
-                        return $keep($picker->withNotice('A session name cannot be blank; Esc leaves it unchanged.'));
+                        // A blank name is the "back to automatic" request, as
+                        // in the inline title editor (P-A4) — never a user title
+                        // of '' that would block the auto-titler for good. The
+                        // session on screen is re-titled from its history; any
+                        // other row is only made unnamed, there being no
+                        // history here to title it from.
+                        if ($rename['id'] === $this->currentSessionId) {
+                            [$next, $titleCmd, $line] = $this->regenerateSessionTitle();
+
+                            return [$next->mutate(['sessionPicker' => $next->reloadSessionPicker($picker, $rename['id'])->withNotice($line)]), $titleCmd];
+                        }
+                        $store->clearSessionName($rename['id']);
+
+                        return $keep($this->reloadSessionPicker($picker, $rename['id'])->withNotice('Session name cleared.'));
                     }
                     $store->renameSession($rename['id'], $title, \SugarCraft\Crush\Session\TitleSource::User);
-                    $next = $rename['id'] === $this->currentSessionId ? $this->mutate(['currentSessionName' => $title]) : $this;
+                    $next = $rename['id'] === $this->currentSessionId
+                        ? $this->mutate(['currentSessionName' => $title, 'currentSessionTitleSource' => \SugarCraft\Crush\Session\TitleSource::User])
+                        : $this;
 
                     return [$next->mutate(['sessionPicker' => $this->reloadSessionPicker($picker, $rename['id'])]), null];
 
@@ -17388,7 +17434,7 @@ final class Chat implements Model
         $items = $this->paletteItemLabels();
         $query = $this->palette->query;
         if ($query === '' || $items === []) {
-            if ($this->palette->mode !== 'providers' && $this->palette->mode !== 'themes') {
+            if (!$this->palette->isPicker()) {
                 $items = $this->rankRootPaletteLabels($items);
             }
 
@@ -17531,6 +17577,7 @@ final class Chat implements Model
     {
         return match ($this->palette?->mode) {
             'providers' => array_keys(\SugarCraft\Crush\Cli\Bootstrap::availableProviders()),
+            'models' => $this->paletteModelLabels((string) $this->palette->provider),
             'themes' => Theme::names(),
             default => array_map(static fn(PaletteAction $a): string => $a->label(), PaletteAction::all()),
         };
@@ -17780,7 +17827,8 @@ final class Chat implements Model
         $label = $matches[min($this->palette->selectedIndex, count($matches) - 1)];
 
         return match ($this->palette->mode) {
-            'providers' => $this->selectPaletteProvider($label),
+            'providers' => $this->pickPaletteProvider($label),
+            'models' => $this->selectPaletteProvider((string) $this->palette->provider, $label),
             'themes' => $this->selectPaletteTheme($label),
             // Recorded BEFORE dispatch (crush_feat.md §4 E7): several root
             // actions return a Cmd/second-level palette rather than a plain
@@ -17788,6 +17836,53 @@ final class Chat implements Model
             // the handler runs against, not bolted onto its result.
             default => $this->rememberPaletteUse($label)->runRootPaletteAction($label),
         };
+    }
+
+    /**
+     * The provider list's Enter (N-P3b): switch to $name, then — when that
+     * provider has more than one model worth offering — reopen the palette on
+     * its model list, so Ctrl+P → Switch model reaches a model as `/model
+     * <provider> <model>` does. A failed switch closes the palette as before.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function pickPaletteProvider(string $name): array
+    {
+        [$next, $cmd] = $this->selectPaletteProvider($name);
+        if ($next->backend === $this->backend || \count($next->paletteModelLabels($name)) < 2) {
+            return [$next, $cmd];
+        }
+
+        return [$next->mutate(['palette' => PaletteState::root()->withModelsOf($name)]), $cmd];
+    }
+
+    /**
+     * The model rows the palette offers for $provider
+     * ({@see \SugarCraft\Crush\Config\Settings\ModelChoice::paletteLabels()}):
+     * the model running now when it runs on that provider, the one saved for
+     * it in `models`, then its configured default.
+     *
+     * @return list<string>
+     */
+    private function paletteModelLabels(string $provider): array
+    {
+        $current = $this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend
+            && $this->backend->provider()->name() === $provider
+                ? $this->backend->model()
+                : null;
+
+        try {
+            $persisted = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()['models'][$provider] ?? null;
+            $default = \SugarCraft\Crush\Cli\Bootstrap::availableProviders()[$provider]['model'] ?? null;
+        } catch (\Throwable) {
+            $persisted = $default = null;
+        }
+
+        return \SugarCraft\Crush\Config\Settings\ModelChoice::paletteLabels(
+            $current,
+            \is_string($persisted) ? $persisted : null,
+            \is_string($default) ? $default : null,
+        );
     }
 
     /**

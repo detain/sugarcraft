@@ -118,12 +118,27 @@ final class SessionPickerActionsTest extends TestCase
         $this->assertNotNull($cancelled->sessionPicker(), 'Esc leaves the rename, not the list');
     }
 
-    public function testABlankTitleIsRefused(): void
+    public function testABlankTitleOnAnotherRowClearsItsNameBackToAutomatic(): void
     {
-        $refused = $this->press($this->open(), ['r', 'backspace', 'backspace', 'backspace', 'backspace', 'backspace', 'enter']);
+        $cleared = $this->press($this->open(), ['r', 'backspace', 'backspace', 'backspace', 'backspace', 'backspace', 'enter']);
 
-        $this->assertSame('Third', $this->store->getSession('s3')['name']);
-        $this->assertStringContainsString('cannot be blank', (string) $refused->sessionPicker()?->notice());
+        $row = $this->store->getSession('s3');
+        $this->assertNull($row['name'], 'unnamed again, never a blank user title');
+        $this->assertNull($row['title_source'], 'so the auto-titler may name it');
+        $this->assertStringContainsString('Session name cleared', (string) $cleared->sessionPicker()?->notice());
+    }
+
+    public function testABlankTitleOnTheCurrentSessionAsksForARegeneratedName(): void
+    {
+        $onCurrent = $this->press($this->open(), ['down', 'down']);
+        $this->assertSame('s1', $onCurrent->sessionPicker()?->selectedSession()['sessionId'] ?? null);
+
+        // No title model in this fixture: the regenerate path leaves the name
+        // alone and says why, rather than clearing it into a state nothing fills.
+        $answered = $this->press($onCurrent, ['r', 'backspace', 'backspace', 'backspace', 'backspace', 'backspace', 'enter']);
+
+        $this->assertSame('First', $this->store->getSession('s1')['name']);
+        $this->assertStringContainsString('No title model', (string) $answered->sessionPicker()?->notice());
     }
 
     public function testRenamingTheCurrentSessionRenamesItOnScreenToo(): void
@@ -136,6 +151,22 @@ final class SessionPickerActionsTest extends TestCase
 
         $this->assertSame('First!', $this->store->getSession('s1')['name']);
         $this->assertSame('First!', $saved->currentSessionName());
+        $this->assertSame(\SugarCraft\Crush\Session\TitleSource::User, $saved->currentSessionTitleSource(), 'latched as the user\'s name');
+    }
+
+    public function testSwitchingSessionsLoadsWhoNamedTheResumedSession(): void
+    {
+        $this->store->clearSessionName('s2');
+        $this->store->renameSession('s2', 'Generated', \SugarCraft\Crush\Session\TitleSource::Auto);
+        $this->store->renameSession('s3', 'Mine', \SugarCraft\Crush\Session\TitleSource::User);
+
+        $onAuto = $this->press($this->open(), ['down', 'enter']);
+        $this->assertSame('s2', $onAuto->currentSessionId());
+        $this->assertSame(\SugarCraft\Crush\Session\TitleSource::Auto, $onAuto->currentSessionTitleSource());
+
+        $onUser = $this->press($this->open($onAuto, null), ['enter']);
+        $this->assertSame('s3', $onUser->currentSessionId());
+        $this->assertSame(\SugarCraft\Crush\Session\TitleSource::User, $onUser->currentSessionTitleSource());
     }
 
     public function testTitlesAreSanitizedBeforeTheyAreStored(): void

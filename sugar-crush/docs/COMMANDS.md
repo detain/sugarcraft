@@ -367,7 +367,8 @@ In a **read-only** window — a session another sugarcrush already has open
 (see *Sessions* in the README) — only the commands that leave the session alone
 run: `/exit`, `/keys`, `/help`, `/permissions`, `/notices`, `/rules`, `/budget`,
 `/share`, `/agents`, `/memory`, `/bg`, `/fork`, `/branch`, `/sessions`, `/theme`,
-`/mcp`, `/websearch`, `/pane`, `/layout`, `/model`, `/editor` and `/workflow list|status`.
+`/mcp`, `/websearch`, `/pane`, `/layout`, `/model`, `/editor`, `/settings`, `/diff`,
+`/context` and `/workflow list|status`.
 Everything else, a custom command included, is refused; the box is cleared so
 `/branch` can be typed at once, and the refused draft comes back once `/branch`
 has forked the session into one this window owns.

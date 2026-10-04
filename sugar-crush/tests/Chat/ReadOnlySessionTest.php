@@ -189,6 +189,28 @@ final class ReadOnlySessionTest extends TestCase
     }
 
     /**
+     * 5.6: `/context` (and `/tokens`) only measure the session, so a
+     * read-only window answers them rather than refusing.
+     */
+    public function testTheContextBreakdownAnswersInAReadOnlyWindow(): void
+    {
+        $writer = $this->open();
+        foreach (['/context', '/tokens'] as $command) {
+            $reader = self::typed($this->open(), $command);
+            self::assertTrue($reader->isReadOnlySession(), 'fixture: the writer holds the session');
+
+            [$answered] = $reader->update(new KeyMsg(KeyType::Enter));
+
+            self::assertSame('', $answered->inputBuf, "{$command} ran and consumed the draft");
+            $last = $answered->history[\count($answered->history) - 1]->content;
+            self::assertStringNotContainsString('was not sent', $last);
+            self::assertStringContainsString('History:', $last, "{$command} printed the breakdown");
+        }
+
+        self::assertFalse($writer->isReadOnlySession());
+    }
+
+    /**
      * THE FORK OFFER: `/branch` copies the session into a new one this window
      * owns, and from then on the window writes — to the branch, never to the
      * session the other window has.

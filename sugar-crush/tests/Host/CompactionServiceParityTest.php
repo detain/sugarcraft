@@ -266,6 +266,30 @@ final class CompactionServiceParityTest extends TestCase
         self::assertCount(1, array_filter($landed->history, CompactionService::isCompactionBoundary(...)));
     }
 
+    /**
+     * Roadmap 2.5: the synchronous 85% tier (no summary model) writes the
+     * same state block the `/compact` and parked routes write — built from the
+     * whole history, so the files a condensed exchange read are listed, not
+     * "none" (the compactor alone only sees exchanges stripped of tool rows).
+     */
+    public function testTheInlineTierStateBlockListsTheFilesTheHistoryTouched(): void
+    {
+        $history = self::overTheTier();
+        $history[1] = $history[1]->withToolResults([
+            new \SugarCraft\Crush\ToolResult('Read', 'contents', arguments: ['file_path' => 'src/RouterTable.php']),
+        ]);
+        $chat = new Chat(history: $history, inputBuf: 'what changed in the router?', backend: self::window(88_000));
+
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $blocks = array_values(array_filter(
+            Message::agentVisible($next->history),
+            static fn (Message $m): bool => str_contains($m->content, StateSummaryTemplate::HEADER),
+        ));
+        self::assertNotSame([], $blocks, 'the inline tier compacted and wrote its state block');
+        self::assertStringContainsString('src/RouterTable.php', $blocks[0]->content);
+    }
+
     public function testTheSummaryRequestResolvesToTheServicesParseOfTheReply(): void
     {
         $service = CompactionService::new();

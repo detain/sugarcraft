@@ -261,6 +261,9 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/Team.php|.sugar-crush/teams' => self::USER,
         'Agents/TeamConfig.php|.sugar-crush/teams' => self::USER,
         'Agents/TeamManager.php|.sugar-crush/teams' => self::USER,
+        // 5.4-2: `/memory log|restore` names the home memory directory it
+        // versions (`~/.sugar-crush/memory`) in its refusal text — user-tier.
+        'Commands/MemoryHistoryCommand.php|.sugar-crush/memory' => self::USER,
         'Agents/Teammate.php|.sugar-crush/teams' => self::USER,
         // Not a path this file reads or builds: it is the sentence
         // `Chat::refuseCommandShell()` puts in the transcript telling the
@@ -378,7 +381,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FORTY-SEVEN occurrences — one per entry
+     * APPEARS IN. On this tree that is FORTY-EIGHT occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY-ONE distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
@@ -570,7 +573,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN', 38 => 'THIRTY-EIGHT',
             39 => 'THIRTY-NINE', 40 => 'FORTY', 41 => 'FORTY-ONE',
             42 => 'FORTY-TWO', 43 => 'FORTY-THREE', 44 => 'FORTY-FOUR', 45 => 'FORTY-FIVE',
-            46 => 'FORTY-SIX', 47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT'];
+            46 => 'FORTY-SIX', 47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT', 49 => 'FORTY-NINE',
+            50 => 'FIFTY'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE'];

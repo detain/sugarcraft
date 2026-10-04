@@ -5239,7 +5239,7 @@ final class Renderer
 
         $results = $chat->paletteMatchResults();
         $selected = $palette->selectedIndex;
-        $grouped = $palette->query === '' && $palette->mode !== 'providers' && $palette->mode !== 'themes';
+        $grouped = $palette->query === '' && !$palette->isPicker();
 
         // E3 (caret-paint half): the block caret is the palette's keyboard
         // claim. Once the shell holds the keys - {@see self::$paletteAbandoned}
@@ -5309,6 +5309,9 @@ final class Renderer
 
         $title = match ($palette->mode) {
             'providers' => ' switch model ',
+            // A provider name is a config key: no control or private-use rune
+            // reaches the border title.
+            'models' => ' switch model: ' . (string) preg_replace('/\p{C}+/u', '', (string) $palette->provider) . ' ',
             'themes' => ' switch theme ',
             default => ' command palette ',
         };

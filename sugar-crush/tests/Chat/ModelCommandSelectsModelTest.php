@@ -194,6 +194,38 @@ final class ModelCommandSelectsModelTest extends TestCase
         $this->assertFalse(PaletteState::root()->isPicker());
     }
 
+    /**
+     * N-P3b H2: Ctrl+P → Switch model → a provider reopens the palette on that
+     * provider's model rows, and picking one switches AND saves it, as
+     * `/model <provider> <model>` does.
+     */
+    public function testThePaletteWalksFromAProviderToItsModels(): void
+    {
+        Bootstrap::writeUserConfig(['models' => ['custom' => 'saved-model']]);
+
+        $chat = $this->submit($this->chat(), '/model');
+        $this->assertSame('providers', $chat->palette()?->mode, 'bare /model opens the provider list');
+        foreach (str_split('custom') as $ch) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $ch));
+        }
+        [$chat] = $chat->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertInstanceOf(EngineBackend::class, $chat->backend(), 'the provider switch happened first');
+        $this->assertSame('models', $chat->palette()?->mode, 'then the model list opened');
+        $this->assertSame('custom', $chat->palette()?->provider);
+        $labels = array_map(static fn($m): string => $m->haystack, $chat->paletteMatchResults());
+        $this->assertSame(['saved-model', 'gpt-4o'], $labels, 'running/saved model first, then the default');
+
+        [$chat] = $chat->update(new KeyMsg(KeyType::Down));
+        [$chat] = $chat->update(new KeyMsg(KeyType::Enter));
+
+        $this->assertNull($chat->palette(), 'picking a model closes the palette');
+        $backend = $chat->backend();
+        $this->assertInstanceOf(EngineBackend::class, $backend);
+        $this->assertSame('gpt-4o', $backend->model());
+        $this->assertSame('gpt-4o', $this->savedModels()['custom'] ?? null);
+    }
+
     private function chat(): Chat
     {
         $writer = SettingsWriter::new(

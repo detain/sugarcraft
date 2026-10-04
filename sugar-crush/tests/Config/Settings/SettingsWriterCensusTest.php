@@ -15,10 +15,12 @@ use PHPUnit\Framework\TestCase;
  *
  *  - `config.json` is written only through `Bootstrap::writeUserConfig()`, and
  *    that is called from exactly four places: Chat's config-change closure
- *    (`chat()`), the shell's layout hook and the settings editor's door (both
- *    in `app()`), and the project-MCP trust grant (`trustProjectMcp()`);
- *  - the editor's {@see \SugarCraft\Crush\Config\Settings\SettingsWriter} is
- *    built in one place, `Bootstrap::app()`;
+ *    (`chat()`), the shell's layout hook (`app()`), the launch's settings
+ *    write door (`settingsWriter()`), and the project-MCP trust grant
+ *    (`trustProjectMcp()`);
+ *  - that {@see \SugarCraft\Crush\Config\Settings\SettingsWriter} is built in
+ *    one place, `Bootstrap::settingsWriter()`, which `workspace()` registers
+ *    for `/model` and `app()` hands on to the settings editor;
  *  - the project-local file a writer may publish to is asked for only by the
  *    writer, and the writer is the only `Config/Settings` class that touches
  *    `AtomicJsonFile`.
@@ -29,8 +31,9 @@ use PHPUnit\Framework\TestCase;
 final class SettingsWriterCensusTest extends TestCase
 {
     private const EXPECTED_USER_CONFIG_WRITERS = [
-        'Cli/Bootstrap.php::app' => 2,
+        'Cli/Bootstrap.php::app' => 1,
         'Cli/Bootstrap.php::chat' => 1,
+        'Cli/Bootstrap.php::settingsWriter' => 1,
         'Cli/Bootstrap.php::trustProjectMcp' => 1,
     ];
 
@@ -43,7 +46,7 @@ final class SettingsWriterCensusTest extends TestCase
     {
         $sites = $this->callSites('SettingsWriter', '', 'new');
 
-        self::assertSame(['Cli/Bootstrap.php::app' => 1], $sites);
+        self::assertSame(['Cli/Bootstrap.php::settingsWriter' => 1], $sites);
     }
 
     public function testOnlyTheWriterAsksForTheProjectFileItWrites(): void
