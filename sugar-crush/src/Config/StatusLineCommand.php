@@ -330,6 +330,23 @@ final class StatusLineCommand
     }
 
     /**
+     * Re-install from a fresh read of the settings, keeping the project root
+     * the launch named — the live half of a settings-view save (roadmap N-P3).
+     *
+     * {@see configure()} already clears and re-sets, which is what makes the
+     * key live at all; this exists so the caller that applies a mid-session
+     * change does not have to know (or re-derive) the root the launch passed.
+     * A change to an unrelated key never comes here: an unchanged command would
+     * lose its cached line for nothing.
+     *
+     * @param array<string, mixed> $config the merged settings, read now
+     */
+    public static function reconfigure(array $config): void
+    {
+        self::configure($config, self::$cwd);
+    }
+
+    /**
      * Put the process back to "no status line configured".
      *
      * Exists for tests, and named for what it does rather than for who calls

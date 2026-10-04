@@ -91,8 +91,8 @@ final class SettingsSaveFlowTest extends TestCase
         self::assertContains('-    "maxToolSteps": 10', $plain);
         self::assertContains('+    "maxToolSteps": 40,', $plain);
         self::assertContains('+    "parallelToolCalls": false', $plain);
-        self::assertContains('Applies: 1 restart · 1 next turn', $plain);
-        self::assertContains('A turn is running — changes apply from the next turn.', $plain);
+        self::assertContains('Applies: 1 live · 1 next turn', $plain);
+        self::assertContains('A turn is running — it keeps the settings it began with.', $plain);
         foreach ($preview->lines(Theme::default(), 20) as $line) {
             self::assertLessThanOrEqual(20, Width::string($line));
         }

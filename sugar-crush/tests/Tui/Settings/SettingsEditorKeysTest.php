@@ -69,6 +69,8 @@ final class SettingsEditorKeysTest extends TestCase
 
         $this->assertSame(['maxToolSteps'], $app->settingsEditor?->unset);
         $this->assertSame(SettingsTier::ProjectLocal, $app->settingsEditor?->tier);
+        $app = $this->press($app, new KeyMsg(KeyType::Char, 't'));
+        $this->assertSame(SettingsTier::Session, $app->settingsEditor?->tier, 'then the session tier (N-P3)');
         $this->assertSame(SettingsTier::You, $this->press($app, new KeyMsg(KeyType::Char, 't'))->settingsEditor?->tier, 'and back');
     }
 

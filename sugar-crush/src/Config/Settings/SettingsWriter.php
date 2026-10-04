@@ -16,7 +16,7 @@ use SugarCraft\Crush\Permissions\PermissionMode;
  * and itself censused by
  * {@see \SugarCraft\Crush\Tests\Config\Settings\SettingsWriterCensusTest}.
  *
- * TWO TIERS ({@see SettingsTier}):
+ * THREE TIERS ({@see SettingsTier}):
  *
  *  - YOU writes the user's `config.json` through the injected `$userConfigDoor`,
  *    which the launch wires to `Bootstrap::writeUserConfig()` — the one writer
@@ -28,6 +28,12 @@ use SugarCraft\Crush\Permissions\PermissionMode;
  *    project-settable keys, and only for a project the operator already trusts
  *    — {@see LayeredSettings::projectLocalPath()} answers with the file the
  *    merge would read back, or null.
+ *  - SESSION writes nothing to disk: the change set lands in
+ *    {@see SessionSettings}, which `Bootstrap::mergedConfig()` lays over every
+ *    file for the rest of this process (roadmap N-P3). Only a layered key that
+ *    takes effect without a restart may go there — a session value for a key
+ *    read once at launch, or one whose reader opens `config.json` directly,
+ *    would be accepted and then never used.
  *
  * WHAT IT REFUSES, before anything is written (so the editor can show why):
  *  - a key the schema does not define, or one it marks read-only or hidden;
@@ -52,6 +58,12 @@ final class SettingsWriter
 {
     /** User-tier keys whose only writers are the live commands named. */
     public const LIVE_COMMAND_KEYS = ['provider' => '/model', 'theme' => '/theme'];
+
+    /**
+     * What a session-tier save reports as "written to": there is no file, and
+     * the reply must not suggest one.
+     */
+    public const SESSION_TARGET = 'this session only (nothing written to disk)';
 
     /**
      * Keys whose values must be maps of non-empty strings to non-empty strings.
@@ -87,7 +99,10 @@ final class SettingsWriter
         return new self($this->userConfigPath, $this->userConfigDoor, $root, $trusted);
     }
 
-    /** The file a tier writes, or null when that tier cannot be written. */
+    /**
+     * The file a tier writes, or null when that tier cannot be written — and
+     * null for the session tier, which writes no file at all.
+     */
     public function targetPath(SettingsTier $tier): ?string
     {
         return match ($tier) {
@@ -95,13 +110,14 @@ final class SettingsWriter
             SettingsTier::ProjectLocal => $this->projectRoot === null
                 ? null
                 : LayeredSettings::projectLocalPath($this->projectRoot, $this->projectTrusted),
+            SettingsTier::Session => null,
         };
     }
 
     /** Why a tier cannot be written at all, or null when it can. */
     public function tierRefusal(SettingsTier $tier): ?string
     {
-        if ($tier === SettingsTier::You || $this->targetPath($tier) !== null) {
+        if ($tier === SettingsTier::You || $tier === SettingsTier::Session || $this->targetPath($tier) !== null) {
             return null;
         }
 
@@ -176,6 +192,10 @@ final class SettingsWriter
      */
     public function current(SettingsTier $tier): array
     {
+        if ($tier === SettingsTier::Session) {
+            return SessionSettings::all();
+        }
+
         $path = $this->targetPath($tier) ?? throw new \RuntimeException((string) $this->tierRefusal($tier));
         if (!is_file($path)) {
             return [];
@@ -228,6 +248,12 @@ final class SettingsWriter
         $refusals = $this->refusals($tier, $set, $unset);
         if ($refusals !== []) {
             throw new \InvalidArgumentException(implode('; ', $refusals));
+        }
+
+        if ($tier === SettingsTier::Session) {
+            SessionSettings::apply($set, $unset);
+
+            return self::SESSION_TARGET;
         }
 
         $path = (string) $this->targetPath($tier);
@@ -318,6 +344,48 @@ final class SettingsWriter
     }
 
     /**
+     * Why `$definition` may not be set on the session tier, or null when it
+     * may. One predicate for the writer and for the docs that list the tier's
+     * keys ({@see sessionKeys()}), so the two cannot disagree.
+     *
+     * The tier only makes sense for a key something re-reads while the
+     * process runs: a layered key (anything else is read straight from
+     * `config.json`) that applies live or next turn. `provider` is the one
+     * live key it refuses — switching it rebuilds the backend, and `/model` is
+     * the door that does that.
+     */
+    public static function sessionRefusal(SettingDefinition $definition): ?string
+    {
+        $key = $definition->key;
+
+        return match (true) {
+            $key === 'provider' => "{$key} is switched by /model, which rebuilds the backend",
+            !$definition->layered => "{$key} is read from config.json at launch, so a session-only value would never be seen",
+            $definition->applyMode !== ApplyMode::Live && $definition->applyMode !== ApplyMode::NextTurn
+                => "{$key} applies only at restart, so a session-only value would never be used",
+            default => null,
+        };
+    }
+
+    /**
+     * The keys the session tier accepts, in schema order.
+     *
+     * @return list<string>
+     */
+    public static function sessionKeys(): array
+    {
+        $keys = [];
+        foreach (SettingsSchema::all() as $definition) {
+            $editable = $definition->ui !== UiEditability::ReadOnly && $definition->ui !== UiEditability::Hidden;
+            if ($editable && self::sessionRefusal($definition) === null) {
+                $keys[] = $definition->key;
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
      * The definition of a key `$tier` may write, or null with `$reason` set.
      */
     private function writableDefinition(SettingsTier $tier, string $key, ?string &$reason = null): ?SettingDefinition
@@ -333,6 +401,7 @@ final class SettingsWriter
                 => "{$key} is saved by " . self::LIVE_COMMAND_KEYS[$key] . ', which also applies it now',
             $tier === SettingsTier::ProjectLocal && !($definition->layered && $definition->projectSettable)
                 => "{$key} may not be set by a project file",
+            $tier === SettingsTier::Session => self::sessionRefusal($definition),
             default => null,
         };
 

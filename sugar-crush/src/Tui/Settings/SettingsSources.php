@@ -6,6 +6,8 @@ namespace SugarCraft\Crush\Tui\Settings;
 
 use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Config\Settings\OptionsProvider;
+use SugarCraft\Crush\Config\Settings\SessionSettings;
+use SugarCraft\Crush\Config\Settings\SettingSource;
 use SugarCraft\Crush\Config\Settings\SettingsResolver;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\HomeDirectory;
@@ -66,7 +68,10 @@ final class SettingsSources
             $projectTrusted ?? false,
             $userSettingsDir,
             $userConfigPath,
-        )->withEnvironment($env)->withFlags($flags)->withDefaults(self::TUI_DEFAULTS);
+        )->withEnvironment($env)->withFlags($flags)->withDefaults(self::TUI_DEFAULTS)
+            // The session tier (N-P3): values saved "for this session only"
+            // are process state, not a file, and outrank every file.
+            ->withLayer(SettingSource::Session, SessionSettings::all());
 
         $files = [];
         if ($userConfigPath !== null) {

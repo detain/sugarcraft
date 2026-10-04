@@ -185,7 +185,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `promptCache` | `ProviderFactory::createVertex()`, `createBedrock()` → `promptCacheEnabled()` | **no** |
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
-| `maxToolSteps` | `Bootstrap::backend()` → `resolvedMaxToolSteps()` | **no** |
+| `maxToolSteps` | `Bootstrap::backend()`, `Chat::applySettings()` → `resolvedMaxToolSteps()` | **no** |
 | `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createCustom()` → each provider's `contextWindow()` | **no** |
 | `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
 | `allowedTools` | `Bootstrap::tools()` → `filterToolSet()` | **no** |
@@ -202,7 +202,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `lsp` | `Bootstrap::lspClient()` → `LspLauncher::fromConfig()` | **no** |
 | `autoCommit` | `Bootstrap::hooks()` → `AutoCommitHook`; `Chat` (turn mode) | **no** |
 | `theme` | `Bootstrap::chat()` | yes |
-| `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
+| `statusLine` | `Bootstrap::chat()`, `Chat::applySettings()` → `StatusLineCommand::fromSettings()` | **no** |
 | `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 <!-- settings:layered:end -->
@@ -839,7 +839,7 @@ project-settable.
 | `promptCache` | Model & Provider | bool | `true` | U C | `SUGARCRUSH_DISABLE_PROMPT_CACHE` | restart | spend |
 | `parallelToolCalls` | Agent loop | bool | `true` | P U C | `SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS` | next turn | tuning |
 | `parallelToolDeadlineSeconds` | Agent loop | int | `90` | P U C | `SUGARCRUSH_PARALLEL_TOOL_DEADLINE` | next turn | tuning |
-| `maxToolSteps` | Agent loop | int | unset | U C | — | restart | spend |
+| `maxToolSteps` | Agent loop | int | unset | U C | — | live | spend |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `SUGARCRUSH_CONTEXT_PRUNING` | next turn | tuning |
 | `permissionMode` | Permissions | enum | `default` (TUI); `bypass-permissions` (`-p`, daemon) | U C | `SUGARCRUSH_PERMISSION_MODE`, `--permission-mode` | restart | security |
@@ -863,7 +863,7 @@ project-settable.
 | `lsp` | Git & Automation | object | unset | U C | — | restart | exec |
 | `autoCommit` | Git & Automation | enum | `off` | U C | — | restart | exec |
 | `theme` | Interface | enum | `dark` | P U C | — | live | cosmetic |
-| `statusLine` | Interface | object | unset | U C | — | restart | exec |
+| `statusLine` | Interface | object | unset | U C | — | live | exec |
 | `layout` | Interface | JSON | unset | U C | — | live | cosmetic |
 | `lintCommands` | Hooks & MCP | object | `{}` | U C | — | restart | exec |
 | `claudeMcpBinary` | Hooks & MCP | path | unset | C | — | next launch | exec |
@@ -889,6 +889,7 @@ exactly `provider` and `theme`; `SettingsWriterCensusTest` pins who may write
 |---|---|---|
 | **You** (default) | `config.json` — `Bootstrap::userConfigPath()`, so `--config` moves it — through `Bootstrap::writeUserConfig()`, the one writer that file already has | every editable key except `provider` and `theme`, whose live commands (`/model`, `/theme`) are their writers |
 | **This project (local)** | `<root>/.sugar-crush/settings.local.json` | the project-settable keys only, and only for a project you already trust |
+| **This session only** | nothing — the values live in memory, above every file, until the process exits | the keys that apply without a restart (listed under the next section's table); never `provider`, which `/model` switches |
 
 `settings.json` is never written. A save to **You** outranks it, so the value
 sticks; the preview says when your `settings.json` is the value it overrides,
@@ -928,9 +929,38 @@ Saved is not applied: see the next section for when each key takes effect.
 
 ## When a change takes effect
 
-The settings files are **re-read every turn** — `EngineBackend::runTurn()`, the
-loop behind `complete()`, calls `readUserConfig()` once per turn, so all four
-are opened again each time.
+**A save from the settings view** applies each key by its apply mode — the
+**Applies** column of the table above, generated from `SettingsSchema`:
+
+<!-- settings:apply:begin -->
+| Applies | When a saved change takes effect | Keys |
+|---|---|---|
+| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout` |
+| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `includeGitInstructions`, `attribution`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.allowBypass` |
+| next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
+
+**This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
+`parallelToolDeadlineSeconds`, `maxToolSteps`, `theme` and `statusLine`.
+<!-- settings:apply:end -->
+
+`provider` and `layout` are live through their own doors — `/model` and the
+pane shell apply them as they write them — and the view saves neither. A live
+key that rebuilds the engine (`maxToolSteps`) is held while a turn runs and
+applied once it has ended; the running turn itself never changes, because it
+read its settings when it started. What the save did shows as a toast in the
+top-right corner of the chat, never as a transcript row — a row would be sent
+to the model with every later turn.
+
+**The session tier** keeps its values in memory, above every file and below
+the environment and flags, until the process exits. A turn's forked child and
+the Task sub-agents it runs inherit them; a `/bg` daemon is a separate process
+and starts from the files alone.
+
+**A hand edit to a file** is another matter. The settings files are
+**re-read every turn** — `EngineBackend::runTurn()`, the loop behind
+`complete()`, calls `readUserConfig()` once per turn, so all four are opened
+again each time.
 
 **Re-read is not the same as re-applied**, and only three keys actually change
 behaviour mid-session. That per-turn read feeds exactly three settings —

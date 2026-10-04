@@ -65,7 +65,7 @@ sugar-crush/tests/Cli/HelpTest.php	5.448	68
 sugar-crush/tests/Cli/SessionSubcommandsTest.php	5.420	14
 sugar-crush/tests/Renderer/StatusBarSpendTest.php	5.254	15
 sugar-crush/tests/Integration/ParallelTaskFanOutCapTest.php	5.177	4
-sugar-crush/tests/Chat/ProviderSwitchKeepsTaskToolTest.php	5.132	3
+sugar-crush/tests/Chat/ProviderSwitchKeepsTaskToolTest.php	5.132	4
 sugar-crush/tests/Integration/ParallelToolCallsTest.php	4.957	27
 sugar-crush/tests/Workflows/WorkflowStageTimeoutTest.php	4.951	4
 sugar-crush/tests/Sessions/ForkCarriesHistoryTest.php	4.800	8
@@ -420,10 +420,12 @@ sugar-crush/tests/Context/MemoryBlockTest.php	0.187	41
 sugar-crush/tests/Backend/EngineBackendCompactorConfigTest.php	0.187	3
 sugar-crush/tests/Chat/ChatConfigChangeDoorsDocumentationDriftTest.php	0.183	7
 sugar-crush/tests/Support/SecretEnvScrubTest.php	0.181	20
+sugar-crush/tests/Config/Settings/SessionOverlayForkTest.php	0.170	4
 sugar-crush/tests/Chat/MemoryCommandTest.php	0.169	31
 sugar-crush/tests/Cli/BootstrapMcpTrustPinsTest.php	0.162	5
 sugar-crush/tests/Integration/PromptEndToEndTest.php	0.161	1
 sugar-crush/tests/Chat/AgentLiveLinesTest.php	0.160	9
+sugar-crush/tests/Chat/ApplySettingsTest.php	0.160	9
 sugar-crush/tests/Tui/ShellMouseZoneTest.php	0.155	9
 sugar-crush/tests/Renderer/AbandonedPaletteIsNotCompositedTest.php	0.155	3
 sugar-crush/tests/App/DockDividerZoneTest.php	0.155	7

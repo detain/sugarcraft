@@ -54,11 +54,15 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::AgentLoop)
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
+                // N-P3: a save re-applies it to the running engine
+                // (`Chat::applySettings()` → `EngineBackend::withMaxSteps()`),
+                // held until a running turn ends.
+                ->withApplyMode(ApplyMode::Live)
                 ->withRange(1)
                 ->withLabel('Max tool steps')
                 ->withHelp('Provider calls one turn may make; unset keeps the engine default.')
                 ->withReaderSymbol(Bootstrap::class . '::resolvedMaxToolSteps')
-                ->withReadBy('`Bootstrap::backend()` → `resolvedMaxToolSteps()`'),
+                ->withReadBy('`Bootstrap::backend()`, `Chat::applySettings()` → `resolvedMaxToolSteps()`'),
         ];
     }
 }

@@ -266,6 +266,15 @@ cannot tell whether the sentence is about them.)
 > was wrong. `config.json` keeps working indefinitely, and there is nothing to
 > migrate *to*: `settings.json` is never written.
 
+**Above all four sits the session tier.** The settings view (`/settings`, `t`
+to pick the tier) can save a change **for this session only**: nothing is
+written to disk, the value outranks every file until the process exits, and
+the environment and flags still outrank it. A turn's forked child and the Task
+sub-agents it runs inherit it; a `/bg` daemon is a separate process and starts
+from the files alone. Only keys that take effect without a restart can be set
+there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) lists
+them, and says when every other key a save changes applies.
+
 <!-- settings:layered:begin -->
 Only these thirty-one keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,

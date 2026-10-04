@@ -3108,7 +3108,7 @@ final class Bootstrap
      *
      * @return ?array<string, mixed>
      */
-    private static function workerProviderSpec(?string $providerName = null): ?array
+    public static function workerProviderSpec(?string $providerName = null): ?array
     {
         $model = null;
         if ($providerName === null) {
@@ -3558,7 +3558,7 @@ final class Bootstrap
      * @param ?array<string, mixed> $config the already-read merged config;
      *                                      null reads it
      */
-    private static function resolvedMaxToolSteps(?array $config = null): ?int
+    public static function resolvedMaxToolSteps(?array $config = null): ?int
     {
         $raw = ($config ?? self::readUserConfig())[self::MAX_TOOL_STEPS_CONFIG_KEY] ?? null;
 
@@ -4050,6 +4050,15 @@ final class Bootstrap
      * project layer" would be free to disagree with this one about which layer
      * wins — the precedence bug this class has already been bitten by twice.
      *
+     * THE SESSION TIER SITS ON TOP (roadmap N-P3): a value the settings view
+     * saved "for this session only" ({@see \SugarCraft\Crush\Config\Settings\SessionSettings}) outranks every
+     * file, `config.json` included, and is outranked by the environment and
+     * flags, whose readers consult them before this array. It is laid on the
+     * merged result rather than handed to {@see LayeredSettings::merge()} so
+     * that method's three-layer contract — and the docs that explain it — stay
+     * exactly as they are. Both halves of the tool-removal diff get it, so it
+     * can never read as a project-tier removal.
+     *
      * @return array<string, mixed>
      */
     private static function mergedConfig(bool $withProjectTier): array
@@ -4057,12 +4066,15 @@ final class Bootstrap
         $root = self::$projectRootForSettings;
         $userSettingsDir = self::userSettingsDirOrNull();
 
-        return LayeredSettings::merge(
-            self::rawUserConfig(),
-            $userSettingsDir === null ? [] : LayeredSettings::userLayer($userSettingsDir),
-            $root === null || !$withProjectTier
-                ? []
-                : LayeredSettings::projectLayer($root, self::projectSettingsTrusted($root)),
+        return array_merge(
+            LayeredSettings::merge(
+                self::rawUserConfig(),
+                $userSettingsDir === null ? [] : LayeredSettings::userLayer($userSettingsDir),
+                $root === null || !$withProjectTier
+                    ? []
+                    : LayeredSettings::projectLayer($root, self::projectSettingsTrusted($root)),
+            ),
+            \SugarCraft\Crush\Config\Settings\SessionSettings::all(),
         );
     }
 

@@ -732,23 +732,35 @@ final class App implements Model
 
     /**
      * A save finished: the view records the outcome and, after a write,
-     * re-resolves so its rows show what the files now say.
+     * re-resolves so its rows show what the files now say — and the hosted
+     * chat applies what was saved (roadmap N-P3): saved is not applied, and
+     * {@see Chat::applySettings()} is where each key takes effect live, next
+     * turn or after a restart.
+     *
+     * @return array{0: self, 1: ?\Closure}
      */
-    private function settingsSaved(SettingsSavedMsg $msg): self
+    private function settingsSaved(SettingsSavedMsg $msg): array
     {
+        $app = $this;
         $editor = $this->settingsEditor;
-        if ($editor === null) {
-            return $this;
+        if ($editor !== null) {
+            $editor = $editor->withSaved($msg);
+            if ($msg->ok()) {
+                $editor = $editor->withResolved($this->settingsSources !== null
+                    ? ($this->settingsSources)()
+                    : SettingsSources::bestEffort($this->root));
+            }
+
+            $app = $this->mutate(settingsEditor: $editor);
         }
 
-        $editor = $editor->withSaved($msg);
-        if ($msg->ok()) {
-            $editor = $editor->withResolved($this->settingsSources !== null
-                ? ($this->settingsSources)()
-                : SettingsSources::bestEffort($this->root));
+        if (!$msg->ok() || $app->chat === null) {
+            return [$app, null];
         }
 
-        return $this->mutate(settingsEditor: $editor);
+        [$chat, $cmd] = $app->chat->applySettings($msg->changed, $msg->path);
+
+        return [$app->withChat($chat), $cmd];
     }
 
     /**
@@ -1468,7 +1480,7 @@ final class App implements Model
         return match (true) {
             $msg instanceof WindowSizeMsg => $this->handleWindowSize($msg),
             $msg instanceof OpenSettingsMsg => [$this->openSettings($msg->query), null],
-            $msg instanceof SettingsSavedMsg => [$this->settingsSaved($msg), null],
+            $msg instanceof SettingsSavedMsg => $this->settingsSaved($msg),
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
             $msg instanceof DockPaneMsg,

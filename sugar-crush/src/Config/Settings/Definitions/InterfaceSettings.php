@@ -46,11 +46,13 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Exec)
                 ->withLayered()
+                // N-P3: a save re-runs `StatusLineCommand::reconfigure()`.
+                ->withApplyMode(ApplyMode::Live)
                 ->withUi(UiEditability::Complex)
                 ->withLabel('Status line command')
                 ->withHelp('{"type": "command", "command": "…"}: a shell command whose output paints the status bar.')
                 ->withReaderSymbol(StatusLineCommand::class . '::fromSettings')
-                ->withReadBy('`Bootstrap::chat()` → `StatusLineCommand::fromSettings()`'),
+                ->withReadBy('`Bootstrap::chat()`, `Chat::applySettings()` → `StatusLineCommand::fromSettings()`'),
             SettingDefinition::new('layout', SettingType::Json)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Cosmetic)

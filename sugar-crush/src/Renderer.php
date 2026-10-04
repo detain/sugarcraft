@@ -1844,6 +1844,14 @@ final class Renderer
             $frame = self::markSessionRows($frame);
         }
 
+        // N-P3: what a settings save did, as a toast in the top-right corner.
+        // Only over a frame no modal holds — a modal owns the keyboard, and a
+        // toast drawn over it would hide what the next key does.
+        $toast = $chat->settingsToast();
+        if ($overlay === '' && $toast !== null) {
+            $frame = self::overlaySettingsToast($frame, $toast, $chat->cols());
+        }
+
         // Below SHELL_CHROME_COLS + 1 columns the shell's border and padding
         // alone are wider than the terminal, and so are the input box and the
         // "/" popup chrome, so no producer can hold its own bound. Every row is
@@ -5807,6 +5815,58 @@ final class Renderer
             ->padding(1, 2)
             ->width($inner)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * Lay sugar-toast's box for `$toast` over the top-right corner of `$frame`,
+     * one row down (the top row is the shell's tab strip) and one column in.
+     *
+     * Each covered row keeps its cells left and right of the box, and loses
+     * its zone sentinels whole: a click target half under a transient toast is
+     * not one the user can see to aim at, and a sentinel cut in two would make
+     * the zone scan throw. Nothing is drawn when the frame is too short or too
+     * narrow to hold the box with a margin — the toast is a convenience, and
+     * the settings view's own status line carries the same report.
+     */
+    private static function overlaySettingsToast(string $frame, \SugarCraft\Toast\Toast $toast, int $cols): string
+    {
+        $width = min(Chat::SETTINGS_TOAST_COLS, $cols - 4);
+        if ($width < 20) {
+            return $frame;
+        }
+
+        $box = [];
+        foreach (explode("\n", $toast->view('', $width, 0)) as $line) {
+            // The canvas is `$width` wide; a shorter message leaves blank
+            // cells after the right border that must not cover the frame.
+            $line = rtrim($line, ' ');
+            if ($line !== '') {
+                $box[] = $line;
+            }
+        }
+
+        $rows = explode("\n", $frame);
+        $top = 1;
+        if ($box === [] || \count($rows) < $top + \count($box) + 1) {
+            return $frame;
+        }
+
+        foreach ($box as $i => $line) {
+            $boxWidth = Width::string($line);
+            $start = max(0, $cols - $boxWidth - 1);
+            $row = self::stripZoneMarkers($rows[$top + $i]);
+            $left = Width::takeAnsi($row, $start);
+            // takeAnsi() keeps a wide grapheme whole, so it can overshoot.
+            if (Width::string($left) > $start) {
+                $left = Width::takeAnsi($row, $start - 1);
+            }
+            $rows[$top + $i] = $left
+                . str_repeat(' ', max(0, $start - Width::string($left)))
+                . "\e[0m" . $line . "\e[0m"
+                . Width::dropAnsi($row, $start + $boxWidth);
+        }
+
+        return implode("\n", $rows);
     }
 
     /**

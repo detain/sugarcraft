@@ -178,7 +178,7 @@ final class SettingsSavePreview
         }
 
         if ($turnRunning) {
-            $lines[] = $muted->render($fit('A turn is running — changes apply from the next turn.'));
+            $lines[] = $muted->render($fit('A turn is running — it keeps the settings it began with.'));
         }
 
         return $lines;

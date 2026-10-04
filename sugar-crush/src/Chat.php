@@ -1477,6 +1477,27 @@ final class Chat implements Model
          * @var array{0: string, 1: float}|null
          */
         private readonly ?array $lastTabClick = null,
+        /**
+         * Settings keys a save changed while a turn was running whose apply
+         * rebuilds the engine (roadmap N-P3, Appendix N §4.8) — parked here
+         * and applied by {@see update()} once no turn is in flight, so the
+         * backend is never swapped under a turn whose completion handlers
+         * still hold the old one. See {@see applySettings()}.
+         *
+         * @var list<string>
+         */
+        private readonly array $pendingSettingsApply = [],
+        /**
+         * What the last settings save did, as a sugar-toast alert painted
+         * over the frame's top-right corner (N-P3), or null. Never a
+         * transcript row: a "setting changed" row would be sent to the
+         * provider with every later turn. Cleared by the
+         * {@see \SugarCraft\Crush\Tui\Settings\SettingsToastExpiredMsg} its own
+         * tick delivers.
+         */
+        private readonly ?\SugarCraft\Toast\Toast $settingsToast = null,
+        /** Stamp of {@see $settingsToast}: an older toast's expiry tick must not clear a newer one. */
+        private readonly int $settingsToastGeneration = 0,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -1687,7 +1708,25 @@ final class Chat implements Model
 
     public function update(Msg $msg): array
     {
+        if ($msg instanceof \SugarCraft\Crush\Tui\Settings\SettingsToastExpiredMsg) {
+            return [
+                $msg->generation === $this->settingsToastGeneration && $this->settingsToast !== null
+                    ? $this->mutate(['settingsToast' => null])
+                    : $this,
+                null,
+            ];
+        }
+
         [$next, $cmd] = $this->route($msg);
+
+        // N-P3: a settings save that rebuilds the engine waited out the turn
+        // that was running ({@see applySettings()}); the first message after
+        // which nothing is in flight applies it. Here rather than at each of
+        // the routes that settle a turn, so no settle path can forget it.
+        if ($next instanceof self && $next->pendingSettingsApply !== [] && !$next->inFlight) {
+            [$next, $released] = $next->releasePendingSettings();
+            $cmd = $cmd === null ? $released : Cmd::batch($cmd, $released);
+        }
 
         if ($next instanceof self && $next !== $this) {
             // A route that moved to another session (picker, tab, Ctrl+Tab,
@@ -8024,9 +8063,273 @@ final class Chat implements Model
         return $this->backend;
     }
 
+    /**
+     * Swap the backend — also the live half of a settings save that rebuilds
+     * the engine ({@see applySettings()}), which only ever calls this between
+     * turns: the completion handlers of a running turn close over the backend
+     * it started on.
+     */
     public function withBackend(Backend $backend): self
     {
         return $this->mutate(['backend' => $backend]);
+    }
+
+    /**
+     * The `workerProvider` spec a pool's forked workers should build after a
+     * switch to `$provider` (W1-h's carried half of N-P3a): the launch's own
+     * derivation ({@see \SugarCraft\Crush\Cli\Bootstrap::workerProviderSpec()}),
+     * on the model the switched engine actually runs — a `/model <p> <m>`
+     * whose save failed still runs `<m>` this session. A backend that is not
+     * an engine gets NO spec, so a worker refuses rather than quietly running
+     * the provider the session just left.
+     *
+     * @return ?array<string, mixed>
+     */
+    private static function poolWorkerSpecFor(string $provider, Backend $backend): ?array
+    {
+        if (!$backend instanceof Backend\EngineBackend) {
+            return null;
+        }
+
+        $spec = \SugarCraft\Crush\Cli\Bootstrap::workerProviderSpec($provider);
+        if ($spec !== null) {
+            $spec['model'] = $backend->model();
+        }
+
+        return $spec;
+    }
+
+    /**
+     * Keys whose live apply rebuilds the engine ({@see withEngineSettings()}),
+     * and is therefore held while a turn runs. Every other `Live` key is Chat
+     * state or a Cmd and applies at once, even mid-turn: it touches no history.
+     */
+    private const ENGINE_SETTINGS = ['maxToolSteps'];
+
+    /** Widest the settings toast is drawn, in cells. */
+    public const SETTINGS_TOAST_COLS = 56;
+
+    /** How long the settings toast stays up. */
+    private const SETTINGS_TOAST_SECONDS = 6.0;
+
+    /**
+     * Make a settings save take effect (roadmap N-P3, Appendix N §4.6): each
+     * changed key goes by its {@see \SugarCraft\Crush\Config\Settings\ApplyMode}.
+     *
+     *  - LIVE, Chat state: `theme` is re-read and becomes {@see $themeName}.
+     *  - LIVE, Cmd: `statusLine` re-installs the status-line command
+     *    ({@see \SugarCraft\Crush\Config\StatusLineCommand::reconfigure()}) in
+     *    the returned Cmd — the command is process state, and changing it is a
+     *    side effect `update()` does not perform.
+     *  - LIVE, engine: {@see ENGINE_SETTINGS} rebuild the backend through
+     *    {@see withBackend()} — at once when idle, otherwise parked in
+     *    {@see $pendingSettingsApply} for {@see update()} to apply once the
+     *    turn has ended.
+     *  - NEXT TURN: nothing to do. The engine re-reads the merged settings at
+     *    every turn start, in the turn child, so the next turn has them.
+     *  - RESTART / NEXT LAUNCH: nothing can apply them now; the toast says so.
+     *  - `provider` and `layout` are live through their own doors (`/model`,
+     *    the pane shell), which apply them as they write them.
+     *
+     * The values are read back from the merged settings rather than carried
+     * in: the session tier, a reset and a value another tier still outranks
+     * all resolve exactly as the next launch would resolve them. That is one
+     * settings read per save — an explicit act, never a keystroke.
+     *
+     * Feedback is a sugar-toast alert ({@see settingsToast()}), never a
+     * transcript row — those are sent to the provider with every turn.
+     *
+     * @param list<string> $changed the keys the save set or reset
+     * @param string|null $savedTo where they went (a path, or the session tier's description)
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function applySettings(array $changed, ?string $savedTo = null): array
+    {
+        $changed = array_values(array_unique(array_map('strval', $changed)));
+        if ($changed === []) {
+            return [$this, null];
+        }
+
+        $chat = $this;
+        $cmds = [];
+        $now = $held = $nextTurn = $restart = [];
+        $engine = false;
+        $config = null;
+
+        foreach ($changed as $key) {
+            $mode = \SugarCraft\Crush\Config\Settings\SettingsSchema::byKey($key)?->applyMode
+                ?? \SugarCraft\Crush\Config\Settings\ApplyMode::Restart;
+
+            if ($mode === \SugarCraft\Crush\Config\Settings\ApplyMode::NextTurn) {
+                $nextTurn[] = $key;
+                continue;
+            }
+
+            if ($mode !== \SugarCraft\Crush\Config\Settings\ApplyMode::Live) {
+                $restart[] = $key;
+                continue;
+            }
+
+            if (\in_array($key, self::ENGINE_SETTINGS, true)) {
+                if ($chat->inFlight) {
+                    $held[] = $key;
+                } else {
+                    $engine = true;
+                    $now[] = $key;
+                }
+                continue;
+            }
+
+            if ($key === 'theme') {
+                $config ??= \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+                $theme = \is_string($config['theme'] ?? null) ? $config['theme'] : 'dark';
+                try {
+                    // theme() throws on a name it does not know, and a hand
+                    // edit can put one in a file the reset now falls back to.
+                    Theme::byName($theme);
+                    $chat = $chat->mutate(['themeName' => $theme]);
+                } catch (\InvalidArgumentException) {
+                    $restart[] = $key;
+                    continue;
+                }
+            } elseif ($key === 'statusLine') {
+                $cmds[] = static function (): StatusLineTickMsg {
+                    StatusLineCommand::reconfigure(\SugarCraft\Crush\Cli\Bootstrap::readUserConfig());
+
+                    // configure() zeroed the refresh clock, so the tick arm
+                    // runs the new command now instead of a refresh period on.
+                    return new StatusLineTickMsg();
+                };
+            }
+
+            $now[] = $key;
+        }
+
+        if ($engine) {
+            $chat = $chat->withEngineSettings();
+        }
+
+        if ($held !== []) {
+            $chat = $chat->mutate([
+                'pendingSettingsApply' => array_values(array_unique([...$chat->pendingSettingsApply, ...$held])),
+            ]);
+        }
+
+        [$chat, $toastCmd] = $chat->withSettingsToast(
+            self::settingsSavedSummary(\count($changed), $savedTo, \count($now), \count($held), \count($nextTurn), $restart),
+            $restart === [] ? \SugarCraft\Toast\ToastType::Success : \SugarCraft\Toast\ToastType::Info,
+        );
+        $cmds[] = $toastCmd;
+
+        return [$chat, \count($cmds) === 1 ? $cmds[0] : Cmd::batch(...$cmds)];
+    }
+
+    /**
+     * The settings keys parked until the running turn ends ({@see applySettings()}).
+     *
+     * @return list<string>
+     */
+    public function pendingSettingsApply(): array
+    {
+        return $this->pendingSettingsApply;
+    }
+
+    /** The settings-save toast to paint, or null ({@see applySettings()}). */
+    public function settingsToast(): ?\SugarCraft\Toast\Toast
+    {
+        return $this->settingsToast;
+    }
+
+    /**
+     * Apply what {@see applySettings()} parked while a turn ran. Called by
+     * {@see update()} on the first message after which no turn is in flight.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function releasePendingSettings(): array
+    {
+        $keys = $this->pendingSettingsApply;
+        $chat = $this->mutate(['pendingSettingsApply' => []])->withEngineSettings();
+
+        return $chat->withSettingsToast(
+            'The turn ended, so ' . implode(', ', $keys) . ' now ' . (\count($keys) === 1 ? 'applies' : 'apply') . '.',
+            \SugarCraft\Toast\ToastType::Success,
+        );
+    }
+
+    /**
+     * Re-derive every {@see ENGINE_SETTINGS} key on the engine from the
+     * merged settings. Idempotent, so it re-applies them all rather than
+     * tracking which one moved.
+     *
+     * `maxToolSteps` goes through {@see \SugarCraft\Crush\Cli\Bootstrap::resolvedMaxToolSteps()},
+     * the rule the launch applies, so a live value and a launch value can
+     * never parse differently. Unset (a reset) means the engine's own default,
+     * which is read off `EngineBackend`'s constructor rather than restated.
+     * A non-engine backend has no step ceiling to move.
+     */
+    private function withEngineSettings(): self
+    {
+        if (!$this->backend instanceof Backend\EngineBackend) {
+            return $this;
+        }
+
+        $steps = \SugarCraft\Crush\Cli\Bootstrap::resolvedMaxToolSteps()
+            ?? (int) (new \ReflectionParameter([Backend\EngineBackend::class, '__construct'], 'maxSteps'))->getDefaultValue();
+
+        return $this->withBackend($this->backend->withMaxSteps($steps));
+    }
+
+    /**
+     * Show `$text` as the settings toast, with the tick that takes it down.
+     *
+     * The toast never expires by the wall clock (no duration): it goes when
+     * its own {@see \SugarCraft\Crush\Tui\Settings\SettingsToastExpiredMsg}
+     * lands, so a frame is a function of the model and nothing else.
+     *
+     * @return array{0: self, 1: \Closure}
+     */
+    private function withSettingsToast(string $text, \SugarCraft\Toast\ToastType $type): array
+    {
+        $generation = $this->settingsToastGeneration + 1;
+        $toast = \SugarCraft\Toast\Toast::new(self::SETTINGS_TOAST_COLS)
+            ->withDuration(null)
+            ->withSymbolSet(\SugarCraft\Toast\SymbolSet::Unicode)
+            ->alert($type, $text);
+
+        return [
+            $this->mutate(['settingsToast' => $toast, 'settingsToastGeneration' => $generation]),
+            Cmd::tick(
+                self::SETTINGS_TOAST_SECONDS,
+                static fn (): \SugarCraft\Crush\Tui\Settings\SettingsToastExpiredMsg => new \SugarCraft\Crush\Tui\Settings\SettingsToastExpiredMsg($generation),
+            ),
+        ];
+    }
+
+    /**
+     * "Saved 3 settings to ~/.sugar-crush/config.json · 1 applies now ·
+     * 1 next turn · 1 needs a restart (instructions)".
+     *
+     * @param list<string> $restart
+     */
+    private static function settingsSavedSummary(int $count, ?string $savedTo, int $now, int $held, int $nextTurn, array $restart): string
+    {
+        $parts = [sprintf('Saved %d setting%s', $count, $count === 1 ? '' : 's')
+            . ($savedTo === null || $savedTo === '' ? '' : ' to ' . $savedTo)];
+        if ($now > 0) {
+            $parts[] = $now . ' ' . ($now === 1 ? 'applies' : 'apply') . ' now';
+        }
+        if ($held > 0) {
+            $parts[] = $held . ' when this turn ends';
+        }
+        if ($nextTurn > 0) {
+            $parts[] = $nextTurn . ' next turn';
+        }
+        if ($restart !== []) {
+            $parts[] = \count($restart) . ' ' . (\count($restart) === 1 ? 'needs' : 'need') . ' a restart (' . implode(', ', $restart) . ')';
+        }
+
+        return implode(' · ', $parts);
     }
 
     /**
@@ -8871,6 +9174,9 @@ final class Chat implements Model
             'currentSessionTitleSource' => $this->currentSessionTitleSource,
             'titleEditor' => $this->titleEditor,
             'lastTabClick' => $this->lastTabClick,
+            'pendingSettingsApply' => $this->pendingSettingsApply,
+            'settingsToast' => $this->settingsToast,
+            'settingsToastGeneration' => $this->settingsToastGeneration,
         ];
 
         // P-A4: who named the session, and a half-typed title, both belong to
@@ -17934,6 +18240,12 @@ final class Chat implements Model
         return [$this->mutate([
             'palette' => null,
             'backend' => $backend,
+            // The pool {@see executeAgents()} builds from this config forks
+            // workers that construct `workerProvider` themselves — the launch
+            // provider's spec, until now, so after a switch away from it an
+            // agent on the process-executor path still ran on the old
+            // provider. See {@see poolWorkerSpecFor()}.
+            'agentPoolConfig' => $this->agentPoolConfig?->withWorkerProvider(self::poolWorkerSpecFor($name, $backend)),
             'history' => [...$this->history, Message::assistant($report)->withUiOnly()],
         ]), null];
     }

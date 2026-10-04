@@ -12,9 +12,9 @@ namespace SugarCraft\Crush\Config\Settings;
  *  - MARKED BLOCKS — a region between `<!-- settings[:<name>]:begin -->` and the
  *    matching `:end -->` comment is replaced whole. The unnamed block is the
  *    "Every key" table in `docs/SETTINGS.md`.
- *    The named blocks are the SETTINGS.md layered-key table (`layered`) and its
- *    See-also env split (`env-split`), and README.md's layered roster
- *    (`layered`).
+ *    The named blocks are the SETTINGS.md layered-key table (`layered`), its
+ *    apply-mode table (`apply`) and its See-also env split (`env-split`), and
+ *    README.md's layered roster (`layered`).
  *  - COUNT ANCHORS ({@see countAnchors()}) — a spelled number inside a
  *    hand-written sentence, rewritten in place.
  *  - THE "SETTINGS KEY" COLUMN of `docs/ENVIRONMENT.md`'s app-variable table —
@@ -98,6 +98,7 @@ final class SettingsDocGenerator
             self::SETTINGS_DOC => [
                 '' => $this->everyKeyTable(),
                 'layered' => $this->layeredTable(),
+                'apply' => $this->applyTable(),
                 'env-split' => $this->envSplitSentence(),
             ],
             self::README => [
@@ -134,6 +135,38 @@ final class SettingsDocGenerator
                 $lines[] = '| `' . $d->key . '` | ' . $d->readByText() . ' | ' . ($d->projectSettable ? 'yes' : '**no**') . ' |';
             }
         }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * The SETTINGS.md "When a change takes effect" table (roadmap N-P3): every
+     * key under the {@see ApplyMode} a save through the settings view goes by,
+     * and the keys the session tier accepts ({@see SettingsWriter::sessionKeys()}).
+     */
+    public function applyTable(): string
+    {
+        $how = [
+            ApplyMode::Live->value => 'At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end',
+            ApplyMode::NextTurn->value => 'From the next turn: the engine re-reads the merged settings at every turn start',
+            ApplyMode::Restart->value => 'At the next launch: read once while the session is built',
+            ApplyMode::Frozen->value => 'At the next launch, and only then: frozen for the life of the process',
+        ];
+
+        $byMode = [];
+        foreach (SettingsSchema::all() as $d) {
+            $byMode[$d->applyMode->value][] = $d->key;
+        }
+
+        $lines = ['| Applies | When a saved change takes effect | Keys |', '|---|---|---|'];
+        foreach (ApplyMode::cases() as $mode) {
+            if (isset($byMode[$mode->value])) {
+                $lines[] = '| ' . $mode->badge() . ' | ' . $how[$mode->value] . ' | ' . self::codeList($byMode[$mode->value], ', ') . ' |';
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = self::wrap('**This session only** accepts ' . self::codeList(SettingsWriter::sessionKeys(), ', ', ' and ') . '.');
 
         return implode("\n", $lines);
     }

@@ -1134,10 +1134,11 @@ believes it owns.
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
 `react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
-`sugarcrush serve`'s HTTP + WebSocket transport), fourteen SugarCraft siblings: `candy-core` (TEA runtime,
+`sugarcrush serve`'s HTTP + WebSocket transport), fifteen SugarCraft siblings: `candy-core` (TEA runtime,
 `Program`, `Model`, `Cmd`), `candy-forms`, `candy-sprinkles` (styles),
 `candy-shine`, `candy-fuzzy`, `sugar-veil`, `sugar-mcp` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),
+`sugar-toast` (the toast a settings save reports through),
 `candy-mosaic`, `candy-mouse`,
 `candy-layout` (dock geometry), `candy-focus`, `candy-kit`, `candy-pty`
 (the pseudo-terminal interactive tool output is captured through).

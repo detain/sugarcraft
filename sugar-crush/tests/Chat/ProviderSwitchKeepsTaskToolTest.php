@@ -137,6 +137,30 @@ final class ProviderSwitchKeepsTaskToolTest extends TestCase
         $this->assertTrue($backend->rulesState()->isDisabled('focus'));
     }
 
+    /**
+     * W1-h's carried half (N-P3): the Chat's OWN pool config — the one
+     * {@see Chat::executeAgents()} builds its process-executor pool from —
+     * used to keep the launch provider's `workerProvider` spec after a switch,
+     * so an agent on that path still ran on the provider just left.
+     */
+    public function testASwitchRebuildsTheChatsOwnPoolWorkerSpec(): void
+    {
+        $chat = new Chat(
+            backend: new EchoBackend(),
+            agentPoolConfig: new \SugarCraft\Crush\Agents\AgentPoolConfig(workerProvider: ['type' => 'echo']),
+            projectRoot: $this->tempDir . '/project',
+        );
+
+        $after = $this->submit($chat, '/model custom');
+        $backend = $after->backend();
+        $this->assertInstanceOf(EngineBackend::class, $backend);
+
+        $spec = $after->agentPoolConfig()?->workerProvider;
+        $this->assertIsArray($spec, 'a switch to a real provider must leave a spec a worker can build');
+        $this->assertSame('custom', $spec['type'] ?? null, 'the spec names the provider switched TO');
+        $this->assertSame($backend->model(), $spec['model'] ?? null, 'and the model that engine runs');
+    }
+
     private function submit(Chat $chat, string $line): Chat
     {
         // The draft is set the way a paste lands it; the submit is a real Enter.
