@@ -2102,6 +2102,23 @@ final class Chat implements Model
      */
     private function route(Msg $msg): array
     {
+        // Roadmap P-B3: `c` (or `x` on a running run) on the live agents
+        // strip. Only a call the turn on screen is still running is named,
+        // and only that call stops (1.C-4b) — the turn carries on.
+        if ($msg instanceof CancelAgentRunMsg) {
+            if ($this->inFlight && $msg->parentCallId !== '') {
+                foreach ($this->history as $message) {
+                    if ($message->pendingToolCallId === $msg->parentCallId) {
+                        $this->inFlightCancellation?->cancelTool($msg->parentCallId);
+
+                        break;
+                    }
+                }
+            }
+
+            return [$this, null];
+        }
+
         if ($msg instanceof AssistantMsg) {
             // Account the turn FIRST - before the staleness guard, before the
             // tool-call routing, before anything that can return early. Three
@@ -4046,7 +4063,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 93 live rows across 10 contexts — 97 in all, four of them
+     * declares 99 live rows across 11 contexts — 103 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -7216,6 +7233,16 @@ final class Chat implements Model
         $pickerPrefix = Renderer::PALETTE_ITEM_ZONE_PREFIX;
         if (str_starts_with($zoneId, $pickerPrefix)) {
             return $this->selectPaletteItem(substr($zoneId, strlen($pickerPrefix)));
+        }
+
+        // Roadmap P-B3: a live agents strip item (`agent:<runId>`). The run
+        // opens in the shell that hosts this chat, which owns the panes, so
+        // the click becomes its message; a chat with no shell drops it.
+        $agentPrefix = \SugarCraft\Crush\Tui\AgentStrip::ZONE_PREFIX;
+        if (str_starts_with($zoneId, $agentPrefix) && strlen($zoneId) > strlen($agentPrefix)) {
+            $runId = substr($zoneId, strlen($agentPrefix));
+
+            return [$this, static fn (): OpenAgentViewMsg => new OpenAgentViewMsg($runId)];
         }
 
         // Appendix P §3.2. One glyph of the highlighted picker row's `✎ ★ ✕`

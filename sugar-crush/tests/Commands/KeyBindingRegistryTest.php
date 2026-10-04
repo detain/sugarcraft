@@ -49,6 +49,7 @@ final class KeyBindingRegistryTest extends TestCase
             KeyBindingRegistry::CONTEXT_PICKER,
             KeyBindingRegistry::CONTEXT_PERMISSION,
             KeyBindingRegistry::CONTEXT_AGENTS,
+            KeyBindingRegistry::CONTEXT_AGENT_STRIP,
             KeyBindingRegistry::CONTEXT_SKILLS,
             KeyBindingRegistry::CONTEXT_SETTINGS,
             KeyBindingRegistry::CONTEXT_MENU,
@@ -217,11 +218,11 @@ final class KeyBindingRegistryTest extends TestCase
 
     /**
      * The shape of the table, stated as numbers because prose elsewhere states
-     * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "93 live rows
-     * across 10 contexts — 97 in all", the sweep counts in
+     * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "99 live rows
+     * across 11 contexts — 103 in all", the sweep counts in
      * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}, and
      * {@see \SugarCraft\Crush\Tests\Commands\KeyBindingDriftTest}'s KEYISH
-     * docblock ("all 97 declared rows"). A prose number nobody measures is how
+     * docblock ("all 103 declared rows"). A prose number nobody measures is how
      * a reference goes stale; this is the measurement. Those three files are
      * the domain of that list: it is where `grep -rn` for the figures found
      * them, not a claim that no other file could grow one.
@@ -280,13 +281,18 @@ final class KeyBindingRegistryTest extends TestCase
      * 91 -> 93 live (95 -> 97 all) with the permission modal's two new
      * refusals: `permission.note` (`r`, type why) and `permission.stop`
      * (`x`, refuse and stop the turn).
+     *
+     * 93 -> 99 live (97 -> 103 all) and 10 -> 11 contexts with the live
+     * agents strip (roadmap P-B3): `chat.agents-strip` (`Alt+↓`) and the five
+     * rows of the new `Agents strip` context (`strip.move`, `.open`,
+     * `.cancel`, `.dismiss`, `.back`).
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(97, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(93, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(103, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(99, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
-        $this->assertCount(10, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
+        $this->assertCount(11, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
     /**

@@ -165,6 +165,14 @@ final class KeyboardHandler
             return false;
         }
 
+        // The live agents strip (roadmap P-B3): `Alt+↓` while it shows, and
+        // its own keys while it holds the keyboard. Any other key is NOT
+        // claimed — App::handleKey() hands the keyboard back to the input and
+        // lets the key land there.
+        if (self::agentStripKey($msg, $app) !== null) {
+            return true;
+        }
+
         if (self::shellOwnsKeyboard($app)) {
             return true;
         }
@@ -501,6 +509,20 @@ final class KeyboardHandler
      */
     public function handle(string $key, App $app): array
     {
+        // The live agents strip (P-B3), ahead of everything: while it holds
+        // the keyboard its keys mean the strip, not panes or the dashboard.
+        if ($app->pane === Pane::Chat && ($app->agentStripFocus !== null || $key === 'alt+down')) {
+            $result = $this->handleAgentStripKey($key, $app);
+            if ($result !== null) {
+                return $result;
+            }
+        }
+        // A shell key the strip does not answer (Tab, F10, …) takes the
+        // keyboard elsewhere, so the strip lets go of it.
+        if ($app->agentStripFocus !== null) {
+            $app = $app->withAgentStripFocus(null);
+        }
+
         // Tab - cycle focus over Chat plus the docked panes, left column
         // first (top-to-bottom), then right. Dock-scoped since L2: the cycle
         // visits what the frame persistently shows; docking more panes widens
@@ -694,6 +716,95 @@ final class KeyboardHandler
             AgentViewMode::List => $this->handleAgentListKey($key, $app),
             AgentViewMode::Peek => $this->handleAgentPeekKey($key, $app),
             AgentViewMode::Attach => $this->handleAgentAttachKey($key, $app),
+        };
+    }
+
+    /**
+     * What a key means to the live agents strip (roadmap P-B3), or null when
+     * the strip does not answer it: `focus` (`Alt+↓` while the strip shows and
+     * the input has the keyboard), then — while it holds the keyboard —
+     * `prev`/`next` (`←`/`→`, or `↑`/`↓`), `open` (`Enter`), `cancel` (`c`),
+     * `dismiss` (`x`), `back` (`Esc`, `Alt+↑`) and `stay` (`Alt+↓` again).
+     *
+     * Only in the chat pane with nothing modal over the chat — a permission
+     * prompt, the key reference, the palette or the session picker each own
+     * the keyboard first, and so do the settings view and an open menu.
+     */
+    private static function agentStripKey(KeyMsg $msg, App $app): ?string
+    {
+        $chat = $app->chat;
+        if ($app->pane !== Pane::Chat || $chat === null || $app->settingsEditor !== null || MenuBar::getActiveMenu() > 0
+            || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
+            || $chat->palette() !== null || $chat->sessionPicker() !== null) {
+            return null;
+        }
+
+        $plain = !$msg->ctrl && !$msg->alt && !$msg->shift;
+        if ($app->agentStripFocus === null) {
+            return $msg->type === KeyType::Down && $msg->alt && !$msg->ctrl && !$msg->shift && $app->agentStripItems() !== []
+                ? 'focus'
+                : null;
+        }
+
+        return match (true) {
+            $msg->alt && !$msg->ctrl && $msg->type === KeyType::Up => 'back',
+            $msg->alt && !$msg->ctrl && $msg->type === KeyType::Down => 'stay',
+            !$plain => null,
+            $msg->type === KeyType::Left, $msg->type === KeyType::Up => 'prev',
+            $msg->type === KeyType::Right, $msg->type === KeyType::Down => 'next',
+            $msg->type === KeyType::Enter => 'open',
+            $msg->type === KeyType::Escape => 'back',
+            $msg->type === KeyType::Char && $msg->rune === 'c' => 'cancel',
+            $msg->type === KeyType::Char && $msg->rune === 'x' => 'dismiss',
+            default => null,
+        };
+    }
+
+    /**
+     * Act on a key the live agents strip answers (roadmap P-B3). `$key` is
+     * the key's {@see KeyMsg::string()} spelling, the form {@see handle()}
+     * receives.
+     *
+     * Stopping a run is the turn's own `cancel_tool` (1.C-4b) for the Task
+     * call it runs under, so it reaches the chat as a
+     * {@see \SugarCraft\Crush\CancelAgentRunMsg} for
+     * {@see App::consumeShellCmd()} to deliver. Opening a run is
+     * {@see App::openAgent()}.
+     *
+     * @return array{0: App, 1: ?object}|null null when the strip does not answer the key
+     */
+    private function handleAgentStripKey(string $key, App $app): ?array
+    {
+        $items = $app->agentStripItems();
+        if ($app->agentStripFocus === null) {
+            return $key === 'alt+down' && $items !== [] ? [$app->withAgentStripFocus($items[0]->id), null] : null;
+        }
+        if ($items === []) {
+            // Every run left the strip under the focus: the input gets the
+            // keyboard back, and the key is the strip's last.
+            return [$app->withAgentStripFocus(null), null];
+        }
+
+        $at = AgentStrip::indexOf($items, $app->agentStripFocus);
+        if ($at < 0) {
+            // The focused run left; the nearest one takes its place.
+            $at = 0;
+        }
+        $focused = $items[$at];
+
+        return match ($key) {
+            'left', 'up' => [$app->withAgentStripFocus($items[max(0, $at - 1)]->id), null],
+            'right', 'down' => [$app->withAgentStripFocus($items[min(count($items) - 1, $at + 1)]->id), null],
+            'enter' => [$app->openAgent($focused->id), null],
+            'c' => $focused->isFinished()
+                ? [$app, null]
+                : [$app, new \SugarCraft\Crush\CancelAgentRunMsg($focused->parentCallId)],
+            'x' => $focused->isFinished()
+                ? [$app->dismissFromAgentStrip($focused->id), null]
+                : [$app, new \SugarCraft\Crush\CancelAgentRunMsg($focused->parentCallId)],
+            'escape', 'alt+up' => [$app->withAgentStripFocus(null), null],
+            'alt+down' => [$app, null],
+            default => null,
         };
     }
 

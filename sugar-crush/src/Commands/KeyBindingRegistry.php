@@ -63,6 +63,8 @@ final class KeyBindingRegistry
     public const CONTEXT_PERMISSION = 'Permission prompt';
     /** Keys the full-pane agent dashboard answers. */
     public const CONTEXT_AGENTS = 'Agent view';
+    /** Keys the live agents strip answers while it holds the keyboard (`Alt+↓`). */
+    public const CONTEXT_AGENT_STRIP = 'Agents strip';
     /** Keys the Ctrl+S skill picker answers while it is open. */
     public const CONTEXT_SKILLS = 'Skill picker';
     /** Keys the full-band settings view (`/settings`) answers while it is open. */
@@ -87,6 +89,7 @@ final class KeyBindingRegistry
             ...self::picker(),
             ...self::permission(),
             ...self::agents(),
+            ...self::agentStrip(),
             ...self::skills(),
             ...self::settings(),
             ...self::menu(),
@@ -471,6 +474,9 @@ final class KeyBindingRegistry
             // (`cancel_tool`) instead of waiting for it to finish.
             KeyBinding::new('chat.stop', 'Esc', 'Stop the running tool, then the turn', $c),
             KeyBinding::new('chat.cancel', 'Esc Esc', 'Cancel the turn in flight — twice, quickly', $c),
+            // Roadmap P-B3: the one-row live agents strip above the input
+            // takes the keyboard; its own keys are the `Agents strip` rows.
+            KeyBinding::new('chat.agents-strip', 'Alt+↓', 'Focus the live agents strip', $c),
             // E744: with a draft selection held this chord COPIES first and the
             // next press quits (Chat's Ctrl+C arm). The nuance stays out of the
             // description — renderKeyHelp() clips long text and KeyHelpTest
@@ -651,6 +657,27 @@ final class KeyBindingRegistry
             KeyBinding::new('agents.cancel', 'c', 'Cancel the selected agent', $c, dormantReason: $inert),
             KeyBinding::new('agents.resume', 'r', 'Resume the selected agent', $c, dormantReason: $inert),
             KeyBinding::new('agents.stop-all', 's', 'Stop every agent', $c, dormantReason: $inert),
+        ];
+    }
+
+    /**
+     * The live agents strip (roadmap P-B3, Appendix P §4.5) while `Alt+↓` has
+     * given it the keyboard. {@see \SugarCraft\Crush\Tui\KeyboardHandler}
+     * answers these; any other key hands the keyboard back to the input box
+     * and lands there.
+     *
+     * @return list<KeyBinding>
+     */
+    private static function agentStrip(): array
+    {
+        $c = self::CONTEXT_AGENT_STRIP;
+
+        return [
+            KeyBinding::new('strip.move', '← / →', 'Move along the strip (or ↑ / ↓)', $c),
+            KeyBinding::new('strip.open', 'Enter', 'Open the focused agent', $c),
+            KeyBinding::new('strip.cancel', 'c', 'Stop the focused agent', $c),
+            KeyBinding::new('strip.dismiss', 'x', 'Dismiss if finished, else stop it', $c),
+            KeyBinding::new('strip.back', 'Esc', 'Back to the input box (or Alt+↑)', $c),
         ];
     }
 

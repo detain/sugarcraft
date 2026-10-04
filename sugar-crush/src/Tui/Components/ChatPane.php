@@ -113,7 +113,9 @@ final class ChatPane
         $images = [];
         $messages = $a->messages;
         if ($a->chat !== null) {
-            $view = LiveRenderer::renderView($a->chat->withSize($width, $innerRows));
+            // The live agents strip's focus and dismissals are the shell's
+            // state (P-B3), so they ride in beside the chat.
+            $view = LiveRenderer::renderView($a->chat->withSize($width, $innerRows), $a->agentStripFocus, $a->agentStripDismissed);
             $body = $view->body;
             $images = $view->images;
         } elseif ($messages === []) {

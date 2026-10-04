@@ -252,6 +252,23 @@ final class App implements Model
          */
         public readonly array $expandedAgents = [],
         /**
+         * The run the live agents strip holds the keyboard on (roadmap P-B3),
+         * by {@see \SugarCraft\Crush\Agents\Live\AgentLiveState::$id}, or
+         * null while the input box has it. `Alt+↓` sets it; `Esc`/`Alt+↑`,
+         * opening the run, or any key the strip does not answer clear it.
+         * Shell state, like the dashboard's selection, so the hosted chat's
+         * own state is not widened for it.
+         */
+        public readonly ?string $agentStripFocus = null,
+        /**
+         * Finished runs the user took off the strip with `x` (P-B3), value
+         * always true. The run itself is untouched — it stays in the
+         * transcript and on the dashboard.
+         *
+         * @var array<string, true>
+         */
+        public readonly array $agentStripDismissed = [],
+        /**
          * Rows (or tiles) a scrollable side surface is scrolled down by, keyed
          * by surface id — `pane:tools`, `pane:agents`, `split`. Absent means
          * the top; a renderer clamps an offset that outgrew its content.
@@ -399,6 +416,59 @@ final class App implements Model
     public function isAgentExpanded(string $runId): bool
     {
         return isset($this->expandedAgents[$runId]);
+    }
+
+    /**
+     * The runs the live agents strip shows (P-B3): the hosted chat's live
+     * registry, minus what the user dismissed. Empty with no chat.
+     *
+     * @return list<\SugarCraft\Crush\Agents\Live\AgentLiveState>
+     */
+    public function agentStripItems(): array
+    {
+        return $this->chat === null
+            ? []
+            : \SugarCraft\Crush\Tui\AgentStrip::items($this->chat->agentLive(), $this->agentStripDismissed);
+    }
+
+    /** Give the strip the keyboard on run $id, or with null hand it back to the input. */
+    public function withAgentStripFocus(?string $id): self
+    {
+        return $this->mutate(agentStripFocus: $id);
+    }
+
+    /** Take a run off the strip (`x` on a finished run); focus moves to a neighbour. */
+    public function dismissFromAgentStrip(string $id): self
+    {
+        $items = $this->agentStripItems();
+        $at = \SugarCraft\Crush\Tui\AgentStrip::indexOf($items, $id);
+        $dismissed = $this->agentStripDismissed;
+        $dismissed[$id] = true;
+        $left = array_values(array_filter($items, static fn ($state): bool => $state->id !== $id));
+        $focus = $left === [] ? null : $left[min(max(0, $at), count($left) - 1)]->id;
+
+        return $this->mutate(agentStripDismissed: $dismissed, agentStripFocus: $focus);
+    }
+
+    /**
+     * Open run $id (P-B3): the dashboard, with that run selected and its
+     * peek up — the closest view a run has until the Agent View (P-C2)
+     * lands. The strip gives the keyboard back. A run the dashboard does not
+     * list (already cleared) leaves the shell as it was, minus the focus.
+     */
+    public function openAgent(string $id): self
+    {
+        $next = $this->withAgentStripFocus(null);
+        foreach (\SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($next) as $index => $entry) {
+            if ($entry->key === $id) {
+                return $next
+                    ->withPane(Pane::Agents)
+                    ->withSelectedAgentIndex($index)
+                    ->withAgentViewMode(AgentViewMode::Peek);
+            }
+        }
+
+        return $next;
     }
 
     /** How far the surface $id is scrolled down; 0 is the top. */
@@ -1392,6 +1462,8 @@ final class App implements Model
             $msg instanceof StatusMsg,
             $msg instanceof OpenSkillPickerMsg,
             $msg instanceof SelectSkillMsg => self::withoutEngineCmd($this->dispatch($msg)),
+            // A click on an `agent:` zone in the chat (P-B3).
+            $msg instanceof \SugarCraft\Crush\OpenAgentViewMsg => [$this->openAgent($msg->agentId), null],
             $msg instanceof KeyMsg => $this->handleKey($msg),
             $msg instanceof MouseMsg => $this->handleShellMouse($msg),
             $msg instanceof BackgroundColorMsg => $this->observeBackground($msg),
@@ -2139,6 +2211,13 @@ final class App implements Model
         $handled = $this->dispatchKey($msg);
 
         if ($handled === null) {
+            // A key the focused agents strip does not answer hands the
+            // keyboard back to the input box and lands there (P-B3), so
+            // typing never goes nowhere.
+            if ($this->agentStripFocus !== null) {
+                return $this->withAgentStripFocus(null)->delegateToChat($msg);
+            }
+
             return $this->delegateToChat($msg);
         }
 
@@ -2196,6 +2275,9 @@ final class App implements Model
             $cmd instanceof ProviderSelectCmd => $this->runRegistryCommand('model'),
             // Chat's Escape is the live "cancel the in-flight turn" binding.
             $cmd instanceof CancelCmd => $this->feedChat([new KeyMsg(KeyType::Escape)]),
+            // The live agents strip's stop (P-B3): the turn's own cancel_tool
+            // for that run's Task call, which the chat owns.
+            $cmd instanceof \SugarCraft\Crush\CancelAgentRunMsg => $this->delegateToChat($cmd),
             default => [$this, null],
         };
     }
@@ -2736,6 +2818,8 @@ final class App implements Model
             compactorConfig: array_key_exists('compactorConfig', $changes) ? $changes['compactorConfig'] : $this->compactorConfig,
             contextLedger: array_key_exists('contextLedger', $changes) ? $changes['contextLedger'] : $this->contextLedger,
             expandedAgents: array_key_exists('expandedAgents', $changes) ? $changes['expandedAgents'] : $this->expandedAgents,
+            agentStripFocus: array_key_exists('agentStripFocus', $changes) ? $changes['agentStripFocus'] : $this->agentStripFocus,
+            agentStripDismissed: array_key_exists('agentStripDismissed', $changes) ? $changes['agentStripDismissed'] : $this->agentStripDismissed,
             paneScroll: array_key_exists('paneScroll', $changes) ? $changes['paneScroll'] : $this->paneScroll,
             agentSplitCols: array_key_exists('agentSplitCols', $changes) ? $changes['agentSplitCols'] : $this->agentSplitCols,
             settingsEditor: array_key_exists('settingsEditor', $changes) ? $changes['settingsEditor'] : $this->settingsEditor,

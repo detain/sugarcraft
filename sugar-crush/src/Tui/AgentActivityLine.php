@@ -136,9 +136,13 @@ final class AgentActivityLine
     }
 
     /**
+     * The run's state glyph and its colour: the spinner frame while it runs,
+     * then ✓ / ⏹ / ⏸ / ✗ by outcome. Public so the live agents strip
+     * ({@see AgentStrip}) paints a run the way its transcript line does.
+     *
      * @return array{0: string, 1: Color}
      */
-    private static function glyph(AgentLiveState $state, Theme $theme, int $spinnerFrame): array
+    public static function glyph(AgentLiveState $state, Theme $theme, int $spinnerFrame): array
     {
         if (!$state->isFinished()) {
             $frames = AgentLiveRegistry::SPINNER;

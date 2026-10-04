@@ -255,7 +255,7 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 97 declared rows — and THAT is the domain
+     * Zero false positives across all 103 declared rows — and THAT is the domain
      * of the zero. It says nothing about prose not yet written; it says those 92
      * rows are clean under this pattern.
      *
@@ -281,8 +281,8 @@ final class KeyBindingDriftTest extends TestCase
      *
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
-     * near-misses probed, because six `*.move` rows describe arrow movement
-     * (fifteen rows carry an arrow GLYPH in their label; both counts are asserted
+     * near-misses probed, because seven `*.move` rows describe arrow movement
+     * (seventeen rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -512,21 +512,21 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         $this->assertCount(
-            6,
+            7,
             $move,
-            'KEYISH\'s docblock says six `*.move` rows describe arrow movement; it found: '
+            'KEYISH\'s docblock says seven `*.move` rows describe arrow movement; it found: '
             . implode(', ', $move),
         );
         $this->assertCount(
-            15,
+            17,
             $arrowLabelled,
-            'KEYISH\'s docblock says fifteen rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says seventeen rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
         // count the interesting one — the extra rows include `chat.slash-menu`,
         // `chat.recall`, `chat.cursor`, `chat.word-motion`, `chat.draft-rows`,
-        // `menu.switch` and `settings.category`.
+        // `chat.agents-strip`, `menu.switch` and `settings.category`.
         $this->assertSame([], array_diff($move, $arrowLabelled));
     }
 
@@ -1512,6 +1512,50 @@ final class KeyBindingDriftTest extends TestCase
             // ── Skill picker ─────────────────────────────────────────────
             // Three options, for the reason picker.move gives: the picker wraps,
             // so two would make up and down indistinguishable.
+            // Roadmap P-B3: the live agents strip. Every press goes through
+            // App::update(), the live route, so the claim, the strip's arm
+            // and the shell's delivery to the chat are all on the path.
+            'chat.agents-strip' => function (array $k): void {
+                $this->assertCount(1, $k, 'the label names one press');
+                [$app] = $this->stripApp()->update($k[0]);
+                $this->assertSame('run-1', $app->agentStripFocus, 'the strip takes the keyboard on its first run');
+            },
+            'strip.move' => function (array $k): void {
+                $this->assertCount(2, $k);
+                $middle = $this->stripApp()->withAgentStripFocus('run-2');
+                [$back] = $middle->update($k[0]);
+                [$on] = $middle->update($k[1]);
+                $this->assertSame('run-1', $back->agentStripFocus, 'the first key moves back');
+                $this->assertSame('run-3', $on->agentStripFocus, 'the second moves on');
+            },
+            'strip.open' => function (array $k): void {
+                [$app] = $this->stripApp()->withAgentStripFocus('run-2')->update($k[0]);
+                $this->assertSame(Pane::Agents, $app->pane, 'the run opens on the dashboard');
+                $this->assertSame(AgentViewMode::Peek, $app->agentViewMode);
+                $this->assertSame('run-2', \SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($app)[$app->selectedAgentIndex]->key);
+                $this->assertNull($app->agentStripFocus);
+            },
+            'strip.cancel' => function (array $k): void {
+                $token = new \SugarCraft\Crush\Backend\CancellationToken();
+                $this->stripApp($token)->withAgentStripFocus('run-2')->update($k[0]);
+                $this->assertSame(['call_2'], $token->takeToolCancels(), 'only that run\'s Task call is stopped');
+                $this->assertFalse($token->isSoftCancelled(), 'the turn carries on');
+            },
+            'strip.dismiss' => function (array $k): void {
+                $token = new \SugarCraft\Crush\Backend\CancellationToken();
+                $app = $this->stripApp($token, finishedThird: true);
+                [$after] = $app->withAgentStripFocus('run-3')->update($k[0]);
+                $this->assertSame(['run-1', 'run-2'], array_map(static fn ($s): string => $s->id, $after->agentStripItems()), 'a finished run is dismissed');
+                $this->assertSame([], $token->takeToolCancels());
+
+                $app->withAgentStripFocus('run-1')->update($k[0]);
+                $this->assertSame(['call_1'], $token->takeToolCancels(), 'a running one is stopped');
+            },
+            'strip.back' => function (array $k): void {
+                [$app] = $this->stripApp()->withAgentStripFocus('run-2')->update($k[0]);
+                $this->assertNull($app->agentStripFocus, 'the input box has the keyboard again');
+                $this->assertTrue($app->chat?->inFlight, 'and the turn was not touched');
+            },
             'skills.move' => function (array $k): void {
                 [$up] = $this->claim($k[0], $this->skillApp());
                 [$down] = $this->claim($k[1], $this->skillApp());
@@ -2038,6 +2082,55 @@ final class KeyBindingDriftTest extends TestCase
         return $this->app()
             ->withPane(Pane::Agents)
             ->withChat(new Chat(agentManager: $manager));
+    }
+
+    /**
+     * An App over a chat whose turn runs three delegated runs (`run-1..3`
+     * under Task calls `call_1..3`), live on the agents strip (P-B3).
+     */
+    private function stripApp(?\SugarCraft\Crush\Backend\CancellationToken $token = null, bool $finishedThird = false): App
+    {
+        $manager = new AgentManager($this->provider, new SkillRegistry());
+        $manager->register(\SugarCraft\Crush\Tests\Support\RosterAgent::named('explore'));
+        $history = [Message::user('go')];
+        foreach ([1, 2, 3] as $n) {
+            $history[] = Message::toolRunning(new ToolCall('Task', [], 'call_' . $n));
+        }
+        $chat = (new Chat(
+            history: $history,
+            backend: new EchoBackend(),
+            inFlight: true,
+            generation: 1,
+            inFlightCancellation: $token ?? new \SugarCraft\Crush\Backend\CancellationToken(),
+            agentManager: $manager,
+        ))->withSize(120, 20);
+        foreach ([1, 2, 3] as $n) {
+            $started = new \SugarCraft\Crush\Events\SubAgentActivity(
+                \SugarCraft\Crush\Events\SubAgentActivity::OP_STARTED,
+                'run-' . $n,
+                'explore',
+                'a task',
+                1,
+                '',
+                parentCallId: 'call_' . $n,
+            );
+            $chat->agentLive()->apply($started);
+            $manager->projectRemoteSubAgent($started);
+        }
+        if ($finishedThird) {
+            $chat->agentLive()->apply(new \SugarCraft\Crush\Events\SubAgentActivity(
+                \SugarCraft\Crush\Events\SubAgentActivity::OP_FINISHED,
+                'run-3',
+                'explore',
+                '',
+                2,
+                'done',
+                parentCallId: 'call_3',
+                outcome: \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_COMPLETE,
+            ));
+        }
+
+        return $this->app()->withChat($chat);
     }
 
     private function skillApp(): App

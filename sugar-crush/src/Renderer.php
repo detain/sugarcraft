@@ -1522,8 +1522,16 @@ final class Renderer
      * beyond returning them is needed here. A fresh layer per call is required:
      * ids are positional to THIS frame, and a reused layer would keep painting
      * images whose markers have since scrolled out of the transcript.
+     *
+     * $agentStripFocus is the run the live agents strip holds the keyboard on
+     * (roadmap P-B3), which is the hosting shell's state
+     * ({@see \SugarCraft\Crush\App\App::$agentStripFocus}); null paints the
+     * strip unfocused. $agentStripDismissed are the runs the user took off it
+     * ({@see \SugarCraft\Crush\App\App::$agentStripDismissed}).
+     *
+     * @param array<string, true> $agentStripDismissed
      */
-    public static function renderView(Chat $chat): View
+    public static function renderView(Chat $chat, ?string $agentStripFocus = null, array $agentStripDismissed = []): View
     {
         $theme = $chat->theme();
         $images = new ImageLayer();
@@ -1629,14 +1637,32 @@ final class Renderer
             ->render($body);
         $shell = self::markToolCalls($shell);
 
-        $content = $shell . "\n" . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
+        // Roadmap P-B3: the live agents strip, one row above the input while
+        // delegated runs are live (Appendix P §4.5). It is the in-chat agent
+        // surface while it shows, so the manager-driven block below the
+        // input, which lists the same runs, steps aside rather than paint
+        // them twice; with no live run (a workflow's stage agents, say) that
+        // block is drawn exactly as before.
+        $live = $chat->agentLive();
+        $agentStrip = \SugarCraft\Crush\Tui\AgentStrip::render(
+            \SugarCraft\Crush\Tui\AgentStrip::items($live, $agentStripDismissed),
+            $chat->cols(),
+            $theme,
+            $live->spinnerFrame(),
+            $agentStripFocus,
+            Chat::mouseClicksEnabled(),
+        );
+
+        $content = $shell . "\n"
+            . ($agentStrip !== '' ? $agentStrip . "\n" : '')
+            . $input . ($slashMenu !== '' ? "\n" . $slashMenu : '');
 
         $tabStrip = self::renderSessionTabStrip($chat);
         if ($tabStrip !== '') {
             $content = $tabStrip . "\n" . $content;
         }
 
-        $agentView = self::renderAgentView($chat);
+        $agentView = $agentStrip === '' ? self::renderAgentView($chat) : '';
         if ($agentView !== '') {
             $content .= "\n" . $agentView;
         }

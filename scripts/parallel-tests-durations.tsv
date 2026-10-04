@@ -344,6 +344,7 @@ sugar-crush/tests/Chat/PermissionRejectNoteAndStopTest.php	0.300	5
 sugar-crush/tests/Memory/MemorySearchIndexTest.php	0.300	15
 sugar-crush/tests/Backend/StepLevelSummaryTest.php	0.300	4
 sugar-crush/tests/Chat/ModelCommandSelectsModelTest.php	0.300	11
+sugar-crush/tests/Tui/AgentStripTest.php	0.300	15
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
@@ -547,6 +548,7 @@ sugar-crush/tests/Agents/AgentDefinitionTest.php	0.050	40
 sugar-crush/tests/Permissions/SessionPermissionMemoTest.php	0.050	28
 sugar-crush/tests/Support/FrontmatterKeyAuditTest.php	0.050	22
 sugar-crush/tests/Runtime/SteerSkipsUnstartedSequentialCallsTest.php	0.050	3
+sugar-crush/tests/Tui/Components/AgentDashboardPerInstanceTest.php	0.050	3
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5
