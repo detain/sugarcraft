@@ -177,7 +177,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `provider` | `Bootstrap::selectedProviderName()`, `backend()` | **no** |
 | `models` | `Bootstrap::selectedModelName()`, `backendFor()`, `selectedProviderLabel()` | **no** |
 | `titleModel` | `Bootstrap::titleBackend()` | **no** |
-| `summaryModel` | `Bootstrap::summaryBackend()` | **no** |
+| `summaryModel` | `Bootstrap::summaryModel()`, `summaryBackend()` | **no** |
 | `maxOutputTokens` | `EngineBackend::complete()` | **no** |
 | `modelPrices` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createBedrock()`, `createCustom()` → `userTierModelPrices()` | **no** |
 | `extraBody` | `ProviderFactory::createCustom()` → `CustomProvider` | **no** |

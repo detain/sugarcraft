@@ -67,7 +67,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * works in the typed {@see \SugarCraft\Crush\Messages\Message} hierarchy.
  * Conversion happens here at the seam.
  */
-final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromptSections, ObservesReasoning, InteractiveTurn
+final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromptSections, ObservesReasoning, InteractiveTurn, SummarisesWithCache
 {
     /**
      * IDLE ceiling on a forked completion child in {@see completeAsync()} -
@@ -533,6 +533,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          * empty, as before. @see withSessionId()
          */
         private readonly ?string $sessionId = null,
+        /**
+         * Roadmap 2.4-2: the model every summary this backend writes goes to
+         * — the in-turn step summary and {@see summariseAsync()} — or null
+         * for the turn's own model, which is what makes the summary's prefix
+         * a cached one. Resolved ONCE, at launch, from
+         * `$SUGARCRUSH_SUMMARY_MODEL` then the `summaryModel` key
+         * ({@see \SugarCraft\Crush\Cli\Bootstrap::summaryModel()}), so a turn
+         * never re-reads a key documented as read at launch.
+         * @see withSummaryModel()
+         */
+        private readonly ?string $summaryModel = null,
         /**
          * Step 4.2: set ONLY on the copy {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}
          * runs a delegated sub-agent on — the hook that holds each of that
@@ -1569,7 +1580,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                                 $billSummary,
                                 $summaryLiveness,
                                 $onHeartbeat,
-                                \SugarCraft\Crush\Context\Compaction\StepSummarizer::modelOverride(),
+                                $this->summaryModel,
                             );
                             $relieved = $block === null ? null : $contextLedger->withBlock($block);
                         }
@@ -3175,6 +3186,307 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function completeInteractive(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onStep = null): PromiseInterface
     {
         return $this->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning, true, $onStep);
+    }
+
+    /**
+     * A copy whose summaries — the in-turn step summary (roadmap 2.4-1) and
+     * {@see summariseAsync()} — go to $model instead of the turn's own (see
+     * {@see $summaryModel}). Null or blank is the turn's own model, the
+     * default, because that is the one whose prefix the provider has cached.
+     */
+    public function withSummaryModel(?string $model): self
+    {
+        $model = $model === null ? null : trim($model);
+
+        return $this->mutate(['summaryModel' => $model === '' ? null : $model]);
+    }
+
+    /** The model summaries go to, or null for the turn's own. */
+    public function summaryModel(): ?string
+    {
+        return $this->summaryModel;
+    }
+
+    /**
+     * {@see SummarisesWithCache}: the request a turn of $history would send —
+     * this backend's system prompt, its tool schemas, the history converted
+     * the way {@see completeAsync()} converts it — plus $instruction as the
+     * final user row, answered by the first assistant message (roadmap 2.4-2).
+     *
+     * It is {@see \SugarCraft\Crush\Context\Compaction\StepSummarizer::summaryStep()},
+     * the request the in-turn step summary already makes, run off the render
+     * loop in a forked child exactly as a turn is: the same idle ceiling
+     * ({@see COMPLETE_TIMEOUT_SECONDS} of SILENCE, reset by every frame the
+     * child writes — each streamed chunk and each transport heartbeat), no
+     * total deadline, the same hard-cancel and tree teardown, the same reap.
+     * So a summary is never killed sooner, or later, than a turn of the same
+     * length would be.
+     *
+     * NOT A TURN, and that is the safety property: no hook runs (the runtime
+     * is built on an empty hook manager), no tool runs (the reply is taken
+     * before {@see Runtime::run()} dispatches a call, and any call it asked
+     * for is dropped), so a compaction can raise no permission prompt. The
+     * spend cap is the caller's to check before asking, as it was for the
+     * tool-less summary backend this replaces.
+     *
+     * The session's prompt memo is primed, never OBSERVED: observing would
+     * record this request as a turn of its own and make the next real turn
+     * look like a session switch, which forgets the very layers whose bytes
+     * the cache depends on.
+     *
+     * @param list<Message> $history
+     *
+     * @return PromiseInterface<Message>
+     */
+    public function summariseAsync(array $history, string $instruction, ?CancellationToken $cancellation = null): PromiseInterface
+    {
+        $deferred = new Deferred();
+        self::sweepUnreapedChildren();
+
+        if ($cancellation?->isCancelled() === true) {
+            $deferred->reject(new \RuntimeException('Request cancelled'));
+
+            return $deferred->promise();
+        }
+
+        try {
+            $this->newRuntime(new HookManager(new HookRegistry()))->primeSessionPrompt($this->sessionApp());
+        } catch (\Throwable) {
+            // The child builds the same layers itself and owns the error.
+        }
+
+        $sockets = function_exists('pcntl_fork') && function_exists('pcntl_waitpid')
+            ? @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP)
+            : false;
+        $noticeSink = \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::current();
+        $pid = $sockets === false ? -1 : pcntl_fork();
+        if ($pid === -1) {
+            if ($sockets !== false) {
+                fclose($sockets[0]);
+                fclose($sockets[1]);
+            }
+            try {
+                $deferred->resolve($this->summaryReply($history, $instruction));
+            } catch (\Throwable $e) {
+                $deferred->reject($e);
+            }
+
+            return $deferred->promise();
+        }
+
+        [$parentSocket, $childSocket] = $sockets;
+        if ($pid === 0) {
+            // The child's half of completeAsync()'s fork, in the same order
+            // and for the same reasons (see there).
+            \SugarCraft\Crush\Support\ForkedChild::closeInheritedServerFds();
+            fclose($parentSocket);
+            ProcessContainment::closeOnExec($childSocket);
+            stream_set_timeout($childSocket, self::CHILD_WRITE_TIMEOUT_SECONDS);
+            \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::enterForkedChild($noticeSink);
+            $this->summariseInChild($childSocket, $history, $instruction);
+        }
+
+        self::$unreapedChildren[$pid] = true;
+        fclose($childSocket);
+        ProcessContainment::closeOnExec($parentSocket);
+        stream_set_blocking($parentSocket, false);
+
+        $loop = Loop::get();
+        $buffer = '';
+        $settled = false;
+        $result = null;
+        $childReaped = false;
+        $timeoutTimer = null;
+        $cancelTimer = null;
+        $exitTimer = null;
+
+        $release = static function () use ($loop, $parentSocket, &$timeoutTimer, &$cancelTimer, &$exitTimer): void {
+            $loop->removeReadStream($parentSocket);
+            if (is_resource($parentSocket)) {
+                fclose($parentSocket);
+            }
+            foreach ([$timeoutTimer, $cancelTimer, $exitTimer] as $timer) {
+                if ($timer !== null) {
+                    $loop->cancelTimer($timer);
+                }
+            }
+        };
+        $teardown = static function (string $reason) use (&$settled, $release, $loop, $pid, $deferred): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $release();
+            ProcessContainment::killTreeAsync($pid, $loop)
+                ->then(static fn (): PromiseInterface => self::reapChildAsync($pid, $loop))
+                ->then(static function () use ($deferred, $reason): void {
+                    $deferred->reject(new \RuntimeException($reason));
+                });
+        };
+        $finalize = function () use (&$settled, &$result, &$buffer, $release, $pid, $deferred): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $release();
+            self::reapChild($pid);
+            if ($result === null && $buffer !== '') {
+                $deferred->reject(new \RuntimeException(self::FRAME_STREAM_CORRUPTED));
+
+                return;
+            }
+            $this->settleFromResultFrame($result, $deferred, null);
+        };
+        $resetTimeout = static function () use (&$settled, $loop, &$timeoutTimer, $teardown): void {
+            if ($settled) {
+                return;
+            }
+            if ($timeoutTimer !== null) {
+                $loop->cancelTimer($timeoutTimer);
+            }
+            $timeoutTimer = $loop->addTimer(self::COMPLETE_TIMEOUT_SECONDS, static function () use ($teardown): void {
+                $teardown('Provider request timed out after ' . self::COMPLETE_TIMEOUT_SECONDS . 's without progress');
+            });
+        };
+        $resetTimeout();
+
+        $cancelTimer = $cancellation === null ? null : $loop->addPeriodicTimer(0.1, static function () use ($cancellation, $teardown): void {
+            if ($cancellation->isCancelled()) {
+                $teardown('Request cancelled');
+            }
+        });
+
+        // Only two frame kinds cross: `reasoning` (progress — the text is
+        // never shown, a summary is not painted) and the final `result`.
+        $consume = static function (string $chunk) use (&$buffer, &$result, &$childReaped, $resetTimeout, $finalize, $teardown): void {
+            $buffer .= $chunk;
+            $corrupt = false;
+            foreach (self::drainFrames($buffer, $corrupt) as $frame) {
+                $resetTimeout();
+                if (($frame['kind'] ?? null) === 'result') {
+                    $result = $frame;
+                    $finalize();
+
+                    return;
+                }
+            }
+            if ($corrupt) {
+                $childReaped ? $finalize() : $teardown(self::FRAME_STREAM_CORRUPTED);
+            }
+        };
+
+        $loop->addReadStream($parentSocket, static function ($stream) use ($finalize, $consume): void {
+            $chunk = fread($stream, 65536);
+            if ($chunk === '' || $chunk === false) {
+                $finalize();
+
+                return;
+            }
+            $consume($chunk);
+        });
+
+        $exitTimer = $loop->addPeriodicTimer(self::EXIT_POLL_SECONDS, static function () use (&$settled, &$childReaped, $pid, $parentSocket, $consume, $finalize): void {
+            if ($settled || !self::childHasExited($pid)) {
+                return;
+            }
+            $childReaped = true;
+            while (!$settled && is_resource($parentSocket)) {
+                $chunk = @fread($parentSocket, 65536);
+                if ($chunk === '' || $chunk === false) {
+                    break;
+                }
+                $consume($chunk);
+            }
+            $finalize();
+        });
+
+        return $deferred->promise();
+    }
+
+    /**
+     * The forked child's half of {@see summariseAsync()}: run the summary,
+     * writing an empty `reasoning` frame for every streamed chunk and every
+     * transport heartbeat (the parent's idle ceiling measures silence), then
+     * the result frame in {@see settleFromResultFrame()}'s shape, then exit.
+     *
+     * @param resource      $childSocket
+     * @param list<Message> $history
+     */
+    private function summariseInChild($childSocket, array $history, string $instruction): never
+    {
+        $beat = static function () use ($childSocket): void {
+            self::writeFrame($childSocket, ['kind' => 'reasoning', 'text' => '']);
+        };
+        try {
+            $reply = $this->summaryReply($history, $instruction, static function (string $delta) use ($beat): void {
+                $beat();
+            }, $beat);
+            $payload = [
+                'kind' => 'result',
+                'ok' => true,
+                'content' => $reply->content,
+                'usage' => $reply->usage?->toArray(),
+                'lengthStopped' => $reply->lengthStopped,
+            ];
+        } catch (\Throwable $e) {
+            $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
+        }
+        $payload['servedModel'] = $this->servedModel();
+        $payload['cacheHealth'] = $this->cacheHealth->state();
+
+        self::writeFrame($childSocket, $payload);
+        fclose($childSocket);
+        \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
+    }
+
+    /**
+     * The summary request itself, in whichever process runs it: the turn's
+     * runtime and session App (tools advertised through {@see turnTools()},
+     * as a turn binds them, so the schemas are byte-for-byte a turn's), the
+     * history converted by {@see toTypedMessages()}, $instruction last.
+     *
+     * @param list<Message> $history
+     */
+    private function summaryReply(array $history, string $instruction, ?callable $onProgress = null, ?callable $onHeartbeat = null): Message
+    {
+        $userConfig = self::userConfig();
+        // Persisted turn context: the history already carries the rows the
+        // turns wrote, and a fresh one appended here would change the bytes
+        // after the cached prefix for nothing.
+        $runtime = $this->newRuntime(
+            new HookManager(new HookRegistry()),
+            self::parallelToolCallsEnabled($userConfig),
+            self::parallelToolDeadlineSeconds($userConfig),
+            self::maxOutputTokens($userConfig),
+        )->withTurnContextPersisted();
+
+        $app = $this->sessionApp()
+            ->withTools($this->turnTools(null, null, null))
+            ->withMessages($this->toTypedMessages($history));
+        if ($this->summaryModel !== null) {
+            $app = $app->withModel($this->summaryModel);
+        }
+
+        $usage = null;
+        $assistant = \SugarCraft\Crush\Context\Compaction\StepSummarizer::summaryStep(
+            $runtime,
+            $app,
+            new UserMessage($instruction),
+            function (AssistantMessage $assistant) use (&$usage): void {
+                $usage = $assistant->usage();
+                $this->observeCacheHealth($assistant->usage());
+            },
+            null,
+            $onProgress,
+            $onHeartbeat,
+        );
+        if ($assistant === null) {
+            throw new \RuntimeException('The provider returned no summary.');
+        }
+
+        return Message::assistant($assistant->content())
+            ->withUsage($usage)
+            ->withLengthStopped($assistant->lengthStopped());
     }
 
     /**

@@ -43,8 +43,10 @@ use SugarCraft\Crush\Util\TokenEstimate;
  * turn's rows are never rewritten.
  *
  * THE MODEL. The turn's own by default — that is what makes the cache hit.
- * `SUGARCRUSH_SUMMARY_MODEL`, the knob `/compact` already reads, picks
- * another model on the same provider ({@see modelOverride()}).
+ * `SUGARCRUSH_SUMMARY_MODEL` / `summaryModel`, the knob `/compact` reads too,
+ * picks another model on the same provider: resolved once at launch
+ * ({@see modelOverride()} for the environment half) and carried on the
+ * backend (`EngineBackend::withSummaryModel()`), which hands it in here.
  *
  * A summary that fails — the call throws, the reply is empty, or it is not
  * smaller than what it would replace — is no block at all: the turn goes on
@@ -208,14 +210,13 @@ final class StepSummarizer
     }
 
     /**
-     * The model `SUGARCRUSH_SUMMARY_MODEL` names, or null for the turn's own.
+     * The model `SUGARCRUSH_SUMMARY_MODEL` names, or null when it names none.
      *
-     * The environment only, read in the process running the turn: it is fixed
-     * for the launch, which is the apply mode `summaryModel` documents
-     * (restart). The config key reaches `/compact`'s backend through
-     * `Bootstrap::summaryBackend()`; carrying it to the engine needs a launch-time
-     * wither on the backend, so a turn never re-reads a key that is documented
-     * as read once.
+     * The environment half of the launch-time resolution
+     * (`Bootstrap::summaryModel()`, which falls back to the `summaryModel`
+     * key): read once at launch and carried on the backend
+     * (`EngineBackend::withSummaryModel()`), so a turn never re-reads a key
+     * that is documented as read once (apply mode: restart).
      */
     public static function modelOverride(): ?string
     {

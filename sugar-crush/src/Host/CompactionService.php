@@ -1007,8 +1007,14 @@ final class CompactionService
      *                                  instead (see the §9.12 note on
      *                                  {@see Chat::scheduleParkedCompaction()}).
      *
-     * $backend is the session's summary backend ({@see Chat::$summaryBackend},
-     * no tools) and $compactor its compactor. The request comes back as
+     * $backend is the session's summary backend ({@see Chat::$summaryBackend})
+     * and $compactor its compactor. A backend that implements
+     * {@see \SugarCraft\Crush\Backend\SummarisesWithCache} (the launch's, roadmap
+     * 2.4-2) is sent the conversation itself plus one instruction row
+     * ({@see cacheReusingSummaryInstruction()}), so the request reuses the
+     * prefix the provider cached on the last turn; any other backend gets the
+     * tool-less request below — its own system prompt and the exchanges
+     * re-rendered. Neither can run a tool. The request comes back as
      * `promise`, a closure that SENDS it and resolves to the
      * {@see HistoryCompactedMsg} — it always resolves, a failed call included —
      * so the TUI wraps it in a Cmd and a headless host simply calls it.
@@ -1074,13 +1080,30 @@ final class CompactionService
         ));
         $stateFallback = self::heuristicState($probeHistory);
 
-        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback): PromiseInterface {
+        // Roadmap 2.4-2: a backend that can send the conversation's OWN request
+        // gets the conversation plus one instruction row, so everything before
+        // the instruction is the prefix the provider cached on the last turn.
+        // The parked prompt has not been sent yet and is not part of what is
+        // summarised, so it stays out (it goes out after the landing).
+        $conversation = $parkedSubmission === null
+            ? $probeHistory
+            : self::withoutParkedSubmission($probeHistory, $parkedSubmission);
+
+        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback): PromiseInterface {
             $steer = self::renderFocusForSummary($focus, $hookGuidance);
             if ($steer !== '') {
                 $prompt[] = Message::user($steer);
             }
 
-            return $backend->completeAsync($prompt, null, $cancellation)->then(
+            $reply = $backend instanceof \SugarCraft\Crush\Backend\SummarisesWithCache
+                ? $backend->summariseAsync(
+                    $conversation,
+                    self::cacheReusingSummaryInstruction($exchanges, $priorSummaries, $steer),
+                    $cancellation,
+                )
+                : $backend->completeAsync($prompt, null, $cancellation);
+
+            return $reply->then(
                 // The usage rides along so update() can bill it. A compaction
                 // asks a model to read the WHOLE earlier conversation, so it is
                 // routinely the largest single prompt this app sends; a readout
@@ -1122,6 +1145,63 @@ final class CompactionService
         };
 
         return ['id' => $compactionId, 'count' => count($exchanges), 'promise' => $promise];
+    }
+
+    /** The opening of each user request the exchange index quotes, in characters. */
+    public const EXCHANGE_INDEX_CLIP_CHARS = 300;
+
+    /**
+     * The first line of the cache-reusing summary instruction (roadmap 2.4-2):
+     * the request is the conversation's own, so the model is told what this
+     * row is for and that the tools it still sees advertised are not to be
+     * called.
+     */
+    public const CACHE_SUMMARY_PREAMBLE = 'The conversation above is close to the context limit, so its earlier '
+        . 'exchanges will be replaced by records you write now. Do not call any tools — answer with the records '
+        . 'and the state block only.';
+
+    /**
+     * The final user row of a summary sent as the conversation's own request
+     * ({@see \SugarCraft\Crush\Backend\SummarisesWithCache}, roadmap 2.4-2): the
+     * preamble, the record contract ({@see COMPACT_SUMMARY_PROMPT}), and an
+     * INDEX of the exchanges rather than their text — the text is the
+     * conversation above, already in the provider's cache, so repeating it
+     * would pay for it twice. Each exchange is named by the opening of the
+     * user's request, numbered in conversation order, so the numbered records
+     * still map back by position. A carried prior summary and the steer
+     * (`/compact`'s focus, a PreCompact hook's note) follow, as on the
+     * tool-less route.
+     *
+     * @param list<array{key:string,user:string,assistant:string}> $exchanges
+     * @param list<string> $priorSummaries
+     */
+    public static function cacheReusingSummaryInstruction(array $exchanges, array $priorSummaries, string $steer = ''): string
+    {
+        $index = [];
+        foreach ($exchanges as $i => $exchange) {
+            $n = $i + 1;
+            $user = trim(preg_replace('/\s+/u', ' ', $exchange['user']) ?? $exchange['user']);
+            if (mb_strlen($user) > self::EXCHANGE_INDEX_CLIP_CHARS) {
+                $user = mb_substr($user, 0, self::EXCHANGE_INDEX_CLIP_CHARS - 1) . '…';
+            }
+            $index[] = "### Exchange {$n}\nUser: {$user}";
+        }
+
+        $parts = [
+            self::CACHE_SUMMARY_PREAMBLE,
+            self::COMPACT_SUMMARY_PROMPT,
+            "The numbered exchanges are the earlier turns of the conversation above, in conversation order. "
+                . "Each is named here by the opening of the user's request; read the exchange itself above.\n\n"
+                . implode("\n\n", $index),
+        ];
+        if ($priorSummaries !== []) {
+            $parts[] = self::renderPriorSummariesForSummary($priorSummaries);
+        }
+        if ($steer !== '') {
+            $parts[] = $steer;
+        }
+
+        return implode("\n\n", $parts);
     }
 
     /**

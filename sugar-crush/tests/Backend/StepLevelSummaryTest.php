@@ -93,13 +93,28 @@ final class StepLevelSummaryTest extends TestCase
 
     public function testTheSummaryModelOverrideIsHonoured(): void
     {
-        putenv('SUGARCRUSH_SUMMARY_MODEL=small-summariser');
+        $provider = self::provider();
+
+        $this->engine($provider)->withTools([self::probe()])->withSummaryModel('small-summariser')
+            ->completeTranscript([new UserMessage('map the project')]);
+
+        $this->assertSame('small-summariser', $provider->requests[3]->model);
+        $this->assertSame('m', $provider->requests[4]->model, 'only the summary moves');
+    }
+
+    /**
+     * Roadmap 2.4-2 (carried from W5): the override is resolved ONCE, at
+     * launch, onto the backend — a turn never re-reads the environment, so a
+     * variable set after launch moves nothing.
+     */
+    public function testTheTurnDoesNotReReadTheEnvironment(): void
+    {
+        putenv('SUGARCRUSH_SUMMARY_MODEL=late-summariser');
         $provider = self::provider();
 
         $this->engine($provider)->withTools([self::probe()])->completeTranscript([new UserMessage('map the project')]);
 
-        $this->assertSame('small-summariser', $provider->requests[3]->model);
-        $this->assertSame('m', $provider->requests[4]->model, 'only the summary moves');
+        $this->assertSame('m', $provider->requests[3]->model, 'the launch-time field, not the live variable');
     }
 
     public function testAFailedSummaryLeavesTheStepToGoOutAsItStands(): void

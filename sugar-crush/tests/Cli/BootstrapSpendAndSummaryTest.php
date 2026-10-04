@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Backend\CacheReusingSummaryBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\PermissionConfigException;
@@ -400,11 +401,73 @@ final class BootstrapSpendAndSummaryTest extends TestCase
         try {
             $summary = $this->privateProperty(Bootstrap::chat($this->repo), 'summaryBackend');
 
-            $this->assertInstanceOf(EngineBackend::class, $summary);
-            $this->assertSame([], $this->privateProperty($summary, 'tools'), 'and still with no tools attached');
+            // Roadmap 2.4-2: compaction summaries reuse the conversation's
+            // cached prefix, everything else stays on the tool-less half.
+            $this->assertInstanceOf(CacheReusingSummaryBackend::class, $summary);
+            $this->assertInstanceOf(EngineBackend::class, $summary->toolless());
+            $this->assertSame([], $this->privateProperty($summary->toolless(), 'tools'), 'and the plain half still has no tools attached');
+            $this->assertInstanceOf(EngineBackend::class, $summary->engine());
+            $this->assertNotSame([], $this->privateProperty($summary->engine(), 'tools'), 'the summary half advertises the conversation\'s tools');
         } finally {
             putenv('OPENAI_API_KEY');
         }
+    }
+
+    /**
+     * Given the launch's engine, the summary backend sends summaries to THAT
+     * engine and plain completions to a tool-less one on the same model — the
+     * conversation's, unless the user named another.
+     */
+    public function testGivenTheMainEngineSummariesReuseItAndDefaultToItsModel(): void
+    {
+        putenv('SUGARCRUSH_PROVIDER=openai');
+        putenv('OPENAI_API_KEY=test-key-not-used');
+
+        try {
+            $main = Bootstrap::backendFor('openai')->withModel('conversation-model');
+            $summary = Bootstrap::summaryBackend($main);
+
+            $this->assertInstanceOf(CacheReusingSummaryBackend::class, $summary);
+            $this->assertSame('conversation-model', $this->privateProperty($summary->toolless(), 'model'));
+            $this->assertSame([], $this->privateProperty($summary->toolless(), 'tools'));
+            $engine = $summary->engine();
+            $this->assertInstanceOf(EngineBackend::class, $engine);
+            $this->assertSame('conversation-model', $engine->model());
+            $this->assertNull($engine->summaryModel(), 'no override: summaries go to the conversation\'s own model');
+        } finally {
+            putenv('OPENAI_API_KEY');
+        }
+    }
+
+    /** The named model reaches both halves, and the main engine itself, at launch. */
+    public function testANamedSummaryModelIsCarriedOntoTheEngineAtLaunch(): void
+    {
+        putenv('SUGARCRUSH_PROVIDER=openai');
+        putenv('OPENAI_API_KEY=test-key-not-used');
+        mkdir($this->home . '/.sugar-crush', 0700, true);
+        file_put_contents($this->home . '/.sugar-crush/config.json', json_encode(['summaryModel' => 'persisted-summariser']));
+
+        try {
+            $this->assertSame('persisted-summariser', Bootstrap::summaryModel());
+            $main = Bootstrap::backendFor('openai');
+            $this->assertInstanceOf(EngineBackend::class, $main);
+            $this->assertSame('persisted-summariser', $main->summaryModel(), 'the in-turn step summary reads it off the engine');
+
+            $summary = Bootstrap::summaryBackend($main);
+            $this->assertInstanceOf(CacheReusingSummaryBackend::class, $summary);
+            $this->assertSame('persisted-summariser', $this->privateProperty($summary->toolless(), 'model'));
+
+            putenv('SUGARCRUSH_SUMMARY_MODEL=env-summariser');
+            $this->assertSame('env-summariser', Bootstrap::summaryModel(), 'the variable outranks the key');
+        } finally {
+            putenv('OPENAI_API_KEY');
+        }
+    }
+
+    /** Unset everywhere, the summary model is the conversation's own: null. */
+    public function testNoNamedSummaryModelMeansTheConversationsOwn(): void
+    {
+        $this->assertNull(Bootstrap::summaryModel());
     }
 
     private function privateProperty(?object $object, string $name): mixed

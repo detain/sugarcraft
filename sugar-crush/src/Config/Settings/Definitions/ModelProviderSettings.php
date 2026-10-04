@@ -70,8 +70,9 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withEnvVar('SUGARCRUSH_SUMMARY_MODEL')
                 ->withLabel('Summary model')
-                ->withHelp('Model that writes /compact summaries; unset uses the provider default.')
-                ->withReaderSymbol(Bootstrap::class . '::summaryBackend'),
+                ->withHelp('Model that writes compaction summaries; unset uses the conversation\'s own model, which reuses the prompt cache.')
+                ->withReaderSymbol(Bootstrap::class . '::summaryModel')
+                ->withReadBy('`Bootstrap::summaryModel()`, `summaryBackend()`'),
             SettingDefinition::new('maxOutputTokens', SettingType::Int)
                 ->withCategory(SettingCategory::ModelProvider)
                 ->withRiskClass(RiskClass::Spend)

@@ -1772,7 +1772,7 @@ final class Bootstrap
             // chat() reports after the Chat exists.
             memoryStore: self::memoryStore($root),
             titleBackend: self::titleBackend(),
-            summaryBackend: self::summaryBackend(),
+            summaryBackend: self::summaryBackend($backend),
             maxCostUsd: self::maxCostUsd(),
             hooks: self::hooks($permissionGate, $root),
             backgroundSupervisor: new BackgroundSupervisor(),
@@ -3454,7 +3454,10 @@ final class Bootstrap
             // Step 0.16: a parallel group runs at most the pool's width of
             // delegated Tasks at once, from the same config the Chat's
             // workflow lanes get; the rest queue for a slot.
-            ->withMaxConcurrentDelegations(self::agentPoolConfig()->maxConcurrent);
+            ->withMaxConcurrentDelegations(self::agentPoolConfig()->maxConcurrent)
+            // Roadmap 2.4-2: the model the in-turn step summary and the
+            // cache-reusing compaction go to, resolved once here at launch.
+            ->withSummaryModel(self::summaryModel());
 
         // F2: the settings ceiling lands before the approver, after every
         // with*() that ships in this chain — and `toollessBackend()`s engines
@@ -9248,37 +9251,67 @@ final class Bootstrap
     }
 
     /**
-     * A deliberately TOOL-LESS Backend for `/compact`'s model-written exchange
-     * summaries (crush_code.md Phase 5 item 6), or null when this run has no
-     * provider to build one from.
+     * The session's summary backend (crush_code.md Phase 5 item 6; roadmap
+     * 2.4-2), or null when this run has no provider to build one from.
      *
-     * Tool-less, not cheap — the distinction matters in a build whose other half
-     * is a spend cap, and the next paragraph is why: this one deliberately runs
-     * on the provider's DEFAULT model, which is the expensive one. Its prompt is
-     * the whole earlier conversation, so it is routinely the largest single call
-     * this app makes. {@see titleBackend()} is the cheap one.
+     * Given the launch's main engine, it is a
+     * {@see \SugarCraft\Crush\Backend\CacheReusingSummaryBackend}: `/compact`'s and
+     * the 85% tier's summaries go to that engine's
+     * {@see EngineBackend::summariseAsync()} — the conversation's own system
+     * prompt, tools and history plus one "do not call tools" instruction, so
+     * the request reuses the prefix the provider cached on the last turn — and
+     * every other completion (auto-memory consolidation) goes to the tool-less
+     * half. Without one (an embedder, a test) it is the tool-less backend alone.
      *
-     * Separate from {@see titleBackend()} because the two calls want different
-     * models for different reasons and one variable could not serve both: a
-     * session title is a handful of words and the smallest model will do, while
-     * a compaction summary is what the model will be shown of the whole earlier
-     * conversation from then on, and a bad one is permanent context loss. So
-     * this defaults to the PROVIDER's default model rather than to the title
-     * model, and `$SUGARCRUSH_SUMMARY_MODEL` / `summaryModel` exist for a user
-     * who would rather trade quality for cost here.
+     * THE MODEL defaults to the conversation's own: a cache hit needs the same
+     * model, and a compaction summary is what the model is shown of the earlier
+     * conversation from then on, so a bad one is permanent context loss.
+     * `$SUGARCRUSH_SUMMARY_MODEL` / `summaryModel` ({@see summaryModel()}) name
+     * another for a user who would rather trade quality for cost. Separate from
+     * {@see titleBackend()}'s variable because a title is a handful of words and
+     * the smallest model will do.
      *
-     * What it shares with titleBackend() is the part that matters for
-     * correctness: no tools, no hooks, no skill registry, no instruction
-     * preamble. {@see \SugarCraft\Crush\Chat}'s $summaryBackend docblock spells
-     * out why routing a summarization through the tool-capable main backend
-     * would let a compaction raise a permission prompt.
+     * The tool-less half shares {@see toollessBackend()} with the titler: no
+     * tools, no hooks, no skill registry, no instruction preamble.
+     * {@see \SugarCraft\Crush\Chat}'s $summaryBackend docblock spells out why
+     * a plain completion through the tool-capable main backend would let it
+     * raise a permission prompt; the cache-reusing half runs no tool either.
      *
      * Null on any construction failure, and that is not an error path: `/compact`
      * falls back to the heuristic summarizer it has always used.
      */
-    public static function summaryBackend(): ?Backend
+    public static function summaryBackend(?Backend $main = null): ?Backend
     {
-        return self::toollessBackend('SUGARCRUSH_SUMMARY_MODEL', 'summaryModel');
+        $toolless = self::toollessBackend(
+            'SUGARCRUSH_SUMMARY_MODEL',
+            'summaryModel',
+            $main instanceof EngineBackend ? $main->model() : null,
+        );
+        if ($toolless === null || !$main instanceof \SugarCraft\Crush\Backend\SummarisesWithCache) {
+            return $toolless;
+        }
+
+        return \SugarCraft\Crush\Backend\CacheReusingSummaryBackend::new(
+            $toolless,
+            $main instanceof EngineBackend ? $main->withSummaryModel(self::summaryModel()) : $main,
+        );
+    }
+
+    /**
+     * The model summaries go to when the user named one, or null for the
+     * conversation's own (roadmap 2.4-2): `$SUGARCRUSH_SUMMARY_MODEL`, else
+     * the `summaryModel` key. Read at launch and carried on the engine
+     * ({@see EngineBackend::withSummaryModel()}), never re-read per turn.
+     */
+    public static function summaryModel(): ?string
+    {
+        $env = \SugarCraft\Crush\Context\Compaction\StepSummarizer::modelOverride();
+        if ($env !== null) {
+            return $env;
+        }
+        $configured = self::readUserConfig()['summaryModel'] ?? null;
+
+        return is_string($configured) && trim($configured) !== '' ? trim($configured) : null;
     }
 
     /**
@@ -9286,6 +9319,7 @@ final class Bootstrap
      * this run's selected provider with NOTHING attached — no tools, no hooks,
      * no skill registry, no instruction loader — under whichever model
      * $modelEnvVar, then the $modelConfigKey key of ~/.sugar-crush/config.json,
+     * then $defaultModel (the summary backend passes the conversation's model),
      * then the provider's own default names.
      *
      * One builder rather than two near-copies, because the tool-less part is
@@ -9304,7 +9338,7 @@ final class Bootstrap
      * safety property at four sites. One flag makes the sentence true on its
      * own terms.
      */
-    private static function toollessBackend(string $modelEnvVar, string $modelConfigKey): ?Backend
+    private static function toollessBackend(string $modelEnvVar, string $modelConfigKey, ?string $defaultModel = null): ?Backend
     {
         $providerName = self::selectedProviderName();
         if ($providerName === null) {
@@ -9320,7 +9354,7 @@ final class Bootstrap
                 $configured = self::readUserConfig()[$modelConfigKey] ?? null;
                 $model = is_string($configured) && $configured !== ''
                     ? $configured
-                    : (string) ($config['model'] ?? '');
+                    : ($defaultModel ?? (string) ($config['model'] ?? ''));
             }
             if ($model === '') {
                 return null;

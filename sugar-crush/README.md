@@ -1345,19 +1345,21 @@ because the two are different claims and the cap is inert in that state.
 
 When you type `/compact` and a provider is configured, the older exchanges are
 summarized **by a model** rather than by the local truncate-and-placeholder
-heuristic — on the same kind of tool-less backend the session titler uses, so a
-compaction can never call a tool or raise a permission prompt. Tool-less is where
-the resemblance ends: the titler runs on a deliberately cheap small model, while
-the summarizer defaults to the provider's own default model, because a bad
-compaction summary is permanent context loss. It is the largest single call this
-app makes, which is why the spend cap gates it. The request
-goes out off the render loop, so nothing freezes: `/compact` answers immediately
-that it is summarizing and the transcript compacts when the summaries arrive. If
-the call fails, or the model answers with something unusable, the compaction
-still happens on the heuristic and the transcript says which one did it. The
-automatic 85% tier is the heuristic's, not the model's — it fires inline as a
-turn is dispatched, where waiting on a completion would stall the keystroke that
-triggered it.
+heuristic — and so is the automatic 85% tier, which parks the prompt you just
+sent until the summaries arrive. The request is the conversation's own: the same
+system prompt, tools and history the next turn would send, plus one final
+instruction not to call tools, so everything before that instruction is a prefix
+the provider has already cached. The tools are advertised but never run — the
+reply is taken before any call is dispatched — so a compaction can never raise a
+permission prompt. It runs on the conversation's own model by default, because a
+cache hit needs the same model and a bad compaction summary is permanent context
+loss; `SUGARCRUSH_SUMMARY_MODEL` (or the `summaryModel` setting) names another.
+It is still the largest single call this app makes, which is why the spend cap
+gates it. The request goes out off the render loop, so nothing freezes:
+`/compact` answers immediately that it is summarizing and the transcript compacts
+when the summaries arrive. If the call fails, or the model answers with something
+unusable, the compaction still happens on the heuristic and the transcript says
+which one did it.
 
 Sessions get a name automatically: after the first exchange a **cheap
 small-model backend** (supplied separately from the conversation backend, so

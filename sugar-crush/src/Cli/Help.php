@@ -222,8 +222,9 @@ Environment variables:
    SUGARCRUSH_TITLE_MODEL The cheap model used to auto-name a session after
                           its first exchange; defaults to the provider's.
    SUGARCRUSH_SUMMARY_MODEL
-                          The model that writes /compact's exchange
-                          summaries; defaults to the provider's.
+                          The model that writes compaction summaries;
+                          defaults to the conversation's own, which reuses
+                          the prompt cache.
    SUGARCRUSH_MAX_COST    A spend ceiling for this launch, in US dollars
                           (fractional allowed; a leading "$" is accepted).
                           A turn that crosses the ceiling is refused.
