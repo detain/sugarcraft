@@ -253,6 +253,11 @@ final class ReadPathCensusTest extends TestCase
         'Commands/CommandLoader.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the commands directory is anchored to its tree and each `*.md` confined to it',
         ],
+        'Commands/BangShell.php|file_get_contents' => [
+            'SELF_LOCATED — the `!cmd` result payload (roadmap 5.14g): the name ToolIpcFiles::reserve() '
+                . 'chose in this process before the fork, written 0600 by its own forked child, '
+                . 'read once and discarded',
+        ],
         'Commands/CommandSpec.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Commands/CommandLoader.php — parses a path the loader already bounded',
             'CONTAINED — includeFile() reads an `@path` written inside a command file, behind this '

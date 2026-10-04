@@ -996,6 +996,22 @@ taken as written. `Tab` completes the path under the cursor.
   when the project has a file named `diff`, which is still `@./diff` or `@"diff"`.
   Like files, they are read once, on `Enter`, and survive a resume.
 
+### Shell commands (`!`)
+
+Start a line with `!` to run it as a shell command yourself: `!git status`,
+`!vendor/bin/phpunit tests/Foo.php`. It runs the way the agent's `Bash` tool
+runs, as `bash -c` in the project root, in the background so the TUI stays live.
+It is bounded at 600 s and at the tool's output cap. When it finishes, its exit
+code and output land in the transcript as context the model reads on your next
+prompt. It starts no turn and costs nothing until then. Escape sequences are
+stripped from the output.
+
+Nothing asks permission, because you typed it. Policy you configured still
+applies: a `Deny` rule that matches the command refuses it in every mode, plan
+mode runs only a command it can prove read-only, and a read-only window refuses
+it like any prompt. Typed mid-turn, it waits in the queue and runs when the turn
+finishes. A lone `!` is an ordinary prompt.
+
 ### Slash commands
 
 <!-- commands:roster:begin -->

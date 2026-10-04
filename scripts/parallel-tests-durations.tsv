@@ -259,6 +259,7 @@ sugar-crush/tests/Backend/CommandBackendTest.php	0.809	15
 sugar-crush/tests/Integration/FanOutResearchTest.php	0.806	1
 sugar-crush/tests/Backend/ResultFrameTranscriptCodecTest.php	0.800	4
 sugar-crush/tests/Host/TranscriptStoreTest.php	0.800	12
+sugar-crush/tests/Chat/BangShellTest.php	0.800	9
 sugar-crush/tests/StdinConstantReaderCensusTest.php	0.796	23
 sugar-crush/tests/Backend/EngineBackendLengthStopTest.php	0.795	34
 sugar-crush/tests/Integration/StreamingWiringTest.php	0.787	20

@@ -536,6 +536,16 @@ have asked" into "no" — `PermissionGate::refuses()` answers `true` only for
 `Deny`, and `Chat::refuseCommandShell()` follows the same rule for a custom
 command's `` !`cmd` `` form.
 
+**A `!command` you type in the TUI is never asked about** (README *Shell
+commands*). The prompt exists to put the agent's actions in front of the person
+at the keyboard, and that person just typed this one, so `Ask` does not apply,
+in any mode. What you configured still binds it, through
+`Commands\BangShell::refusal()`: a `Deny` rule matching
+`Bash(<command>)` refuses it in every mode, read with
+`PermissionGate::ruleDecision()` (the rules alone, so `auto`'s strike counter
+never moves), and in `plan` mode the full `evaluate()` must not deny it. That
+lets `!ls` through and refuses `!touch x`, as it would for the agent's `Bash`.
+
 **A refusal is recognised by who made it, not by what it says.** Every refused
 call reaches the model as a result whose text opens with `Hook denied:`,
 `Permission denied:` or `Permission required:` — but that text is not what

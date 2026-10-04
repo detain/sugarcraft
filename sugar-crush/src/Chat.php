@@ -9283,6 +9283,14 @@ final class Chat implements Model
                 return $this->refuseInFlightCommand($text);
             }
 
+            // A `!cmd` (roadmap 5.14g) is the user's own shell command, not a
+            // message for the running turn: steering it in would hand the
+            // agent the text `!git status` to interpret. It waits its turn and
+            // runs when this one settles, through the branch below.
+            if (\SugarCraft\Crush\Commands\BangShell::commandOf($text) !== null) {
+                return $this->enqueuePrompt($text);
+            }
+
             // Roadmap 1.C-3 (decision D6): Enter mid-turn STEERS the running
             // turn — the agent reads the message at its next step boundary —
             // and Tab queues it for after the turn ({@see queueOwnsTab()}).
@@ -9301,6 +9309,43 @@ final class Chat implements Model
         $readOnly = $this->readOnlyRefusal($text);
         if ($readOnly !== null) {
             return $readOnly;
+        }
+
+        // `!<command>` RUNS A SHELL COMMAND FOR THE USER (roadmap 5.14g) and
+        // puts its output in the transcript as a user-role row the model reads
+        // on the next turn. Checked after the read-only refusal (a window that
+        // may not start a turn may not run commands either) and before
+        // file-based commands, which are `/`-prefixed and cannot collide.
+        // Nothing asks permission — the person who would be asked typed it —
+        // but a configured Deny rule, and plan mode's read-only rule, still
+        // refuse it ({@see Commands\BangShell::refusal()}). It starts no turn: the command runs off the
+        // update path and its row lands whenever it finishes.
+        $bang = \SugarCraft\Crush\Commands\BangShell::commandOf($text);
+        if ($bang !== null) {
+            $root = $this->projectRoot();
+            $refused = \SugarCraft\Crush\Commands\BangShell::refusal($bang, $this->permissionGate(), $root);
+            if ($refused !== null) {
+                // The box is consumed, as a send consumes it: a refusal that
+                // kept the line would wedge {@see releaseQueuedPrompts()},
+                // which reads a kept draft as "refused, retry later". ↑
+                // recalls it.
+                return [$this->mutate([
+                    'history' => [...$this->history, Message::notice(sprintf(
+                        'Did not run `%s`: %s.',
+                        self::quoteDraftForNotice($bang),
+                        $refused,
+                    ))],
+                    'inputBuf' => '',
+                ]), null];
+            }
+
+            return [$this->mutate([
+                'history' => [...$this->history, Message::notice(sprintf(
+                    'Running `%s` — its output joins the conversation when it finishes.',
+                    self::quoteDraftForNotice($bang),
+                ))],
+                'inputBuf' => '',
+            ]), \SugarCraft\Crush\Commands\BangShell::cmd($bang, $root)];
         }
 
         // FILE-BASED COMMANDS ARE CHECKED FIRST, ahead of dispatchCommand()'s
