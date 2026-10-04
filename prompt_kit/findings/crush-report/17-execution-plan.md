@@ -232,33 +232,18 @@ Columns:
 |---|---|---|---|---|---|---|
 | d | O-5a (scaffold; no protocol types) | new `sugar-crush-web/**` skeleton, root `composer.json`, `PROJECT_NAMES.md`, `docs/MATCHUPS.md`, root `README.md` lib table, `docs/index.html`, `docs/_data/sugar-crush-web.*`, `docs/lib/` (generated), `codecov.yml`, `scripts/bootstrap-org-repos.sh`, `.github/workflows/web.yml`, `media/icons/sugar-crush-web.png` | — | root README lib table only | root force-all; sugar-crush-web | M |
 
-### W7 (order: b, c, a, d, e, f, g, h, i, j)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 3.D-2 (Stop/SubagentStop/SessionEnd dispatch) | `src/Backend/EngineBackend.php`, `src/Hooks/HookManager.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Agents/EngineExecutor.php`, `bin/sugarcrush`, `src/Cli/NonInteractive.php` | EB: `runTurn` `no-tools`, `resolveHookManager`. TT: `finish`. **R-HOOKS** | HOOKS "Events" dispatch cells | — | M |
-| b | O-2h (handlers → `Host/Commands`) | `src/Chat.php`, new `src/Host/Commands/**` | Chat: `dispatchCommand` handlers (permissions, clear, workflow, share, agents, rules, branch, bg/fork, rename, rewind, memory, mcp-auth) | — | — | L |
-| c | O-3b, O-3c | new `src/Protocol/**`, `src/Server/Ws/Outbox.php`, `src/Session/EnhancedSessionStore.php`, `docs/protocol/sugarcrush.v1.schema.json`, `scripts/gen-protocol-schema.php` | ESS: paged `session_events` read | SERVER.md; PERMISSIONS "`Ask` needs somewhere" (server sentence) | sugar-mcp (only if a neutral codec is lifted) | L |
-| d | 3.B-3 | `src/Backend/EngineBackend.php`, `src/Renderer.php`, new `src/Tools/{MutatesContextLedger.php,BuiltIn/Prune.php}`, `src/Events/ContextLedgerChanged.php` | EB: `turnTools` (bind). RN: `renderHistory` (badge) | README Capabilities (generated) | — | M |
-| e | P-D1 | `src/Backend/EngineBackend.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Agents/Mailbox.php`, `src/Host/WorkspaceContext.php` (HMAC key), new `src/Backend/MailboxTurnInbox.php`, `src/Agents/Live/{AgentInbox,AgentMessage,MessageMode}.php` | EB: `withTurnInbox` wither. TT: `setup`, `run`. **R-STATE** (mailboxes dir) | AGENTS_AUTHORING (direct-message authority); ARCHITECTURE "Sessions and state" | — | M |
-| f | P-C2 (view state on `App`, not Chat) | `src/Chat.php`, `src/Renderer.php`, `src/App/App.php`, `src/Tui/{KeyboardHandler,AgentOutputPane}.php`, `src/Commands/{AgentsCommand,KeyBindingRegistry}.php`, new `src/Tui/AgentViewHeader.php`, `src/{OpenAgentViewMsg,CloseAgentViewMsg}.php` | Chat: `handlePointer` agent arms, `route` Escape arm, `subscriptions`. RN: `renderView` body. **R-KEYBIND** | README Limitations :1359, "Keys" | — | M |
-| g | 3.I-2 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Tools/BuiltIn/{Read,Edit,Write}.php`, new `src/Tools/ReadLedger.php` | RT: `runToolInChild`, `collectChildResult`. EB: `runCompleteInChild` result frame, `settleFromResultFrame` | PROMPT_ENGINEERING (notice) | — | S–M |
-| h | 3.C | `src/Host/{TurnRunner,TranscriptStore}.php`, `src/Backend/EngineBackend.php`, `src/Tui/{Pane.php,Renderer.php,Components/MenuBar.php}`, new `src/Tools/BuiltIn/Todo.php`, `src/Todo/*`, `src/Events/TodoUpdated.php`, `src/Tui/Components/TodoPane.php` | EB: `encodeEvent`/`decodeEvent`. **TR** | README "Pane docking"; Capabilities (generated) | — | M |
-| i | 5.4-3 | `src/Chat.php`, new `src/Memory/DreamPass.php`, `src/DreamPassCompletedMsg.php` | Chat: `route` AssistantMsg arm (restricted tools via `EngineBackend::withTools`, no `turnTools` edit) | MEMORY new "Dream pass" | — | M |
-| j | N-P4a | `src/Backend/EngineBackend.php`, `src/Cli/Bootstrap.php`, `src/Providers/{TransientFailure,CustomProvider}.php`, `src/Providers/Concerns/HttpClientDefaults.php`, `src/Config/Settings/Definitions/Engine.php` | EB: `completeAsync` (idle timeout resolved pre-fork), `runTurn` `build` (`userConfig`), parallel-deadline ceiling. BS: `resolvedMaxToolSteps` | SETTINGS (generated); ENVIRONMENT `SUGARCRUSH_CONNECT_TIMEOUT` | — | M |
-
 ### W8 (order: a, b, c, d, e, f, g, h, i, j)
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 3.B-4 | `src/Backend/EngineBackend.php`, `src/Host/Commands/Compact*.php`, `src/Renderer.php`, new `src/Tools/BuiltIn/Compress.php`, `src/Context/Pruning/NudgePolicy.php`, `builtin-commands/NNNN-{compress,decompress,recompress}.php` | EB: `runTurn` `step-top`. RN: collapsed block row, status bar | PROMPT_ENGINEERING reminder text | sugar-veil (modal) | L |
+| a | 3.B-4 (+ 3.B-3 remainder: the live `ledger` frame — `ContextLedgerChanged` through `encodeEvent`/`decodeEvent`, `completeAsync`'s `$consume`, every `$onEvent` consumer, `Chat::pumpLiveToolEvents()` applying the delta mid-turn, `ContextLedgerUpdatedMsg` for the blocking path; `renderView` passing a cached session ledger to `renderHistory()` so the prune badge shows; Prune dispatching `PreCompact`; + 3.D-2 remainder: `PreCompact`/`PostCompact` around the step-level `StepSummarizer::summarise()` calls) | `src/Backend/EngineBackend.php`, `src/Host/Commands/Compact*.php`, `src/Renderer.php`, new `src/Tools/BuiltIn/Compress.php`, `src/Context/Pruning/NudgePolicy.php`, `builtin-commands/NNNN-{compress,decompress,recompress}.php` | EB: `runTurn` `step-top`. RN: collapsed block row, status bar | PROMPT_ENGINEERING reminder text | sugar-veil (modal) | L |
 | b | 2.10 | `src/Host/{CompactionService,TurnController}.php`, `src/Chat.php`, `src/HistoryCompactedMsg.php`, new `src/Context/Compaction/HistoryFingerprint.php` | CompactionService: `applyModelCompaction`, `buildSummarizationRequest`. TC: `submit` tier block, `dispatchTurn` reminder. Chat: `route` HistoryCompacted arm | README :1112-1117 tiers | — | M |
 | c | O-5b | `sugar-crush-web/src-web/**`, `sugar-crush-web/e2e/**`, `sugar-crush-web/dist/**`, `src/Providers/EchoProvider.php` | — | sugar-crush-web README; SERVER.md "Web UI" | sugar-crush-web | L |
 | d | O-8a, O-7 | `src/Cli/{Attach,ParsedArgs,Subcommands,Help}.php`, `src/Cli/Bootstrap.php`, `src/Chat.php`, `tools/check-child-lifetimes.php`, new `src/Backend/RemoteBackend.php`, `src/Host/RemoteSessionHost.php`, `src/Server/Workspace/**` | BS: `openSession`. Chat: `relockedForCurrentSession`. **R-CLI** | README "Subcommands"; SERVER.md | — | L |
 | e | 4.3-2, 4.7-3 | `src/Tools/BuiltIn/TaskTool.php`, `src/Sessions/{BackgroundSupervisor,BackgroundSessionRunner}.php`, `src/Support/Daemonize.php`, `src/Cli/Bootstrap.php`, `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Events/SubAgentActivity.php`, `src/Host/TurnRunner.php` | TT: `schema`, `execute`, `setup`. RT: `executeConcurrently` `fork` (admission). EB: `turnTools`. BS: `tools` (supervisor bind). **TR** | AGENTS_AUTHORING `/bg` paragraph; ARCHITECTURE :456; README :1361/:1275 | — | L |
 | f | 4.10-2 | `src/Workflows/{WorkflowEngine,WorkflowRegistry}.php`, new `src/Tools/BuiltIn/WorkflowTool.php` | — | WORKFLOWS (model-authored plans); AGENTS_AUTHORING workflow bullet | — | M |
 | g | O-4b (calls `reconnect()`; no edit to `BackgroundSupervisor`) | `src/Chat.php`, new `src/Host/BackgroundEvents.php`, `src/Protocol/Methods/BgMethods.php` | Chat: `pumpBackgroundSessions` | SERVER.md `bg.*` | — | S–M |
-| h | P-D2, P-D3 | `src/Chat.php`, `src/Renderer.php`, `src/App/App.php`, `src/Tui/KeyboardHandler.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Agents/AgentManager.php`, `src/Message.php`, new `src/Host/AgentResume.php`, `src/{AgentMessageSentMsg,AgentControlMsg}.php` | Chat: `submit` delegator (route to `AgentInbox`), `route` AgentControlMsg arm. RN: `renderInput` placeholder. TT: `run` (`onProgress` control). **R-KEYBIND** | README Limitations (inert-commands bullet), "Keys", "What you see"; AGENTS_AUTHORING | — | L |
+| h | P-D2, P-D3 (+ P-D1 remainder: prune `~/.sugar-crush/mailboxes/<session>/` and `subagents/<session>/` with the launch-time session prune, Appendix P §5.6) | `src/Chat.php`, `src/Renderer.php`, `src/App/App.php`, `src/Tui/KeyboardHandler.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Agents/AgentManager.php`, `src/Message.php`, new `src/Host/AgentResume.php`, `src/{AgentMessageSentMsg,AgentControlMsg}.php` | Chat: `submit` delegator (route to `AgentInbox`), `route` AgentControlMsg arm. RN: `renderInput` placeholder. TT: `run` (`onProgress` control). **R-KEYBIND** | README Limitations (inert-commands bullet), "Keys", "What you see"; AGENTS_AUTHORING | — | L |
 | i | 3.H | new `src/Hooks/BuiltIn/AutoTestHook.php`, `src/Lint/TestRunner.php`, `src/Cli/Bootstrap.php`, `src/Config/Settings/Definitions/Tools.php` | BS: `hooks`. **R-HOOKS** | HOOKS built-ins | — | M |
 | j | 3.D-3 (`/goal`, `/grind`), 5.14a, 5.14b | `src/Chat.php`, `src/Host/TurnController.php`, new `src/Goal/GoalJudge.php`, `src/GoalJudgedMsg.php`, `builtin-commands/NNNN-{goal,grind,btw}.php`, `src/Config/Settings/Definitions/Ui.php` | Chat: `route` AssistantMsg arm, `requestPermission` (bell). TC: `refuseWhileInFlight` | COMMANDS/README slash roster (generated) | — | M |
 
@@ -270,7 +255,7 @@ Columns:
 | b | 3.B-5, 4.9 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Agents/{SuspendedDelegations,SubAgent}.php`, `src/Compactor.php`, `src/Chat.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/Recall.php` | TT: `setup`, `finish`. EB: `observeCacheHealth`, `withWorktreeRoot`. Chat: `scheduleBackgroundSpawn`. BS: `tools` (WorktreeManager). **R-STATE** (worktrees) | AGENTS_AUTHORING "Teams and worktrees"; README Limitations | — | L |
 | c | O-6a | `src/Protocol/**` (narration, `client.viewing`), `sugar-crush-web/src-web/{components/grid,components/approvals,stores/layout,stores/approvals}/**` | — | SERVER.md | sugar-crush-web | L |
 | d | O-6b | new `src/Protocol/Methods/SettingsMethods.php`, `sugar-crush-web/src-web/{components/settings,stores/settings}/**` | — | SETTINGS producers (`ConfigWriteProducerDocumentationDriftTest`) | sugar-crush-web | M |
-| e | O-6c | new `src/Protocol/Methods/{Agents,Workflow,Memory}Methods.php`, `sugar-crush-web/src-web/{components/agents,components/panels,stores/agents}/**` | — | SERVER.md | sugar-crush-web | L |
+| e | O-6c (+ 3.C remainder: broadcast `TurnRunner::observeTodo()`'s `TodoUpdated` as a `todo.updated` `SessionEvent` and protocol event) | new `src/Protocol/Methods/{Agents,Workflow,Memory}Methods.php`, `sugar-crush-web/src-web/{components/agents,components/panels,stores/agents}/**` | — | SERVER.md | sugar-crush-web | L |
 | f | P-E1, P-E2 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Chat.php`, `src/Renderer.php` | RT: `executeConcurrently` `poll` (`agent_cancel`). EB: `runCompleteInChild`. Chat: `requestPermission`/`answerPermission` (origin). RN: agent-view body | ARCHITECTURE frame table; PERMISSIONS | — | M |
 | g | 4.6-2 | `src/Agents/{TeamManager,Team}.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/TeamTool.php` | BS: `agentManager` | AGENTS_AUTHORING "Teams and worktrees" (team paragraph only; b owns the worktree paragraph) | — | M–L |
 | h | N-P4b, N-P4d | `src/Context/{CompactorConfig,IdleCompactionPolicy,MemoryBlock,ProjectMemoryWriter,RepoMapBlock,EnvironmentBlock}.php`, `src/Skills/SkillPathNudge.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/Backend/EngineBackend.php`, `src/Config/Settings/Definitions/{Compaction,Memory}.php` | RT: `memorySnapshot` + standing-rule constants. BS: `chat` (CompactorConfig), launch-notice constants. EB: `withCompactorConfig` | MEMORY caps; PROMPT_ENGINEERING; SETTINGS (generated) | — | M–L |
@@ -281,12 +266,12 @@ Columns:
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 3.I-3, 5.11-2 (incl. security findings force Ask in `auto`) | `src/Permissions/PermissionGate.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/ApplyPatch.php`, `src/Tools/Edit/PatchParser.php`, `src/Permissions/{ExecReviewer,ReviewVerdict}.php`, `src/Config/Settings/Definitions/Permissions.php` | BS: `permissionGate` | PERMISSIONS write-capable list, "What auto classifies", circuit breaker; HOOKS protect-files path table | — | L |
+| a | 3.I-3, 5.11-2 (incl. security findings force Ask in `auto`), 3.I-2 remainder (a `ToolBuildContext::$readLedger` built in `Bootstrap::unfilteredTools` in place of `ReadLedger::forContext()`'s WeakMap; the Chat-native tool path carrying the read ledger back from its per-call child; README Capabilities clause on the staleness refusal) | `src/Permissions/PermissionGate.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/ApplyPatch.php`, `src/Tools/Edit/PatchParser.php`, `src/Permissions/{ExecReviewer,ReviewVerdict}.php`, `src/Config/Settings/Definitions/Permissions.php` | BS: `permissionGate` | PERMISSIONS write-capable list, "What auto classifies", circuit breaker; HOOKS protect-files path table | — | L |
 | b | 5.7-2 | new `src/Tools/BuiltIn/{PlanExitTool,AskUserTool}.php`, `src/Cli/NonInteractive.php` | — | PERMISSIONS "`Ask` needs somewhere to ask" | — | M |
 | c | 4.5 | `src/Runtime.php`, `src/Tools/BuiltIn/TaskTool.php` (new `withBoard` method), new `src/Agents/Board/**`, `src/Tools/BuiltIn/{BoardReadTool,BoardPostTool}.php`, `src/Hooks/BuiltIn/BoardNoticeHook.php`, `src/Tools/SharesBoard.php`, `src/Cli/Bootstrap.php` | RT: `executeConcurrently` `ledger`. TT: class (new method only). BS: `hooks` (BoardNoticeHook). **R-STATE** (board dir), **R-HOOKS** | ARCHITECTURE "Sessions and state" | — | M |
 | d | P-E3 | `src/Chat.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Commands/KeyBindingRegistry.php` | Chat: `route` Ctrl+X b arm. TT: `execute`. **R-KEYBIND** | README "Keys" | — | M |
 | e | 5.14c, 5.14d | new `src/Host/Commands/{Handoff,NewRule}*.php`, `builtin-commands/NNNN-{handoff,new-rule}.php`, `src/Commands/RulesCommand.php`, `src/Chat.php` | Chat: `handlePaletteNewSession` | COMMANDS "`/rules`" | — | M |
-| f | 5.14i, 5.14l | `src/Chat.php`, `src/Host/TurnController.php`, `src/Skills/SkillRegistry.php`, new `src/Support/AiCommentWatcher.php`, `src/Skills/SkillMentions.php` | Chat: `subscriptions`, `completeMention`. TC: `userTurnMessage` | SKILLS "Invoking a skill"; SETTINGS (generated) | — | M |
+| f | 5.14i, 5.14l, 3.C remainder (a compact `MenuBar` tab strip below ~101 columns, which the Todo tab pushed past) | `src/Chat.php`, `src/Host/TurnController.php`, `src/Skills/SkillRegistry.php`, new `src/Support/AiCommentWatcher.php`, `src/Skills/SkillMentions.php` | Chat: `subscriptions`, `completeMention`. TC: `userTurnMessage` | SKILLS "Invoking a skill"; SETTINGS (generated) | — | M |
 | g | N-P5 | `src/Tui/Settings/**`, `src/Config/Settings/SettingsWriter.php` | — | README "Settings files" (project-shared tier) | — | S |
 | h | 5.9-1, 5.9-2 (D12) | `src/Cli/{ParsedArgs,Subcommands,Help}.php`, `src/McpMessage.php`, `src/ToolResult.php`, new `src/Acp/**`, `src/Cli/Acp.php` | **R-CLI** | README "Subcommands"; SERVER.md "ACP" | — | L |
 | i | LIVE-0.1, LIVE-X31b, LIVE-A15b, LIVE-A15v, LIVE-A21b, LIVE-CH, 15b-14-1 | new `scripts/provider-cache-live-probe.php`, new `src/Lang.php`, `lang/en.php`, `tests/LangParityTest.php`, root `LOCALES.md` | — | — | candy-core I18n (use) | M |
@@ -320,7 +305,7 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (69 steps)
+## 5. Step index (64 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -334,14 +319,15 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
 
 **Safety and self-management**
-- 3.B-3 M · 3.B-2, 1.C-1, 2.12 · W7-d
+- 3.B-3 remainder (live `ledger` frame, mid-turn apply, prune badge fed a ledger, Prune `PreCompact`) S–M · 3.B-3 · W8-a
 - 3.B-4 L · 3.B-3 · W8-a
 - 3.B-5 S–M · 3.B-4 · W9-b
-- 3.C S–M · 1.A-2, O-2f · W7-h
-- 3.D-2 M · 3.D-1, 2.12 · W7-a
+- 3.C remainder (`todo.updated` event) S · 3.C, O-6c · W9-e
+- 3.C remainder (compact menu strip) S · 3.C · W10-f
+- 3.D-2 remainder (`PreCompact`/`PostCompact` around the step-level summary) S · 3.D-2 · W8-a
 - 3.D-3 S–M · 3.D-2 · W8-j
 - 3.H M · 3.D-2 · W8-i
-- 3.I-2 S–M · 3.I-1, 1.B-2 · W7-g
+- 3.I-2 remainder (`ToolBuildContext` ledger field, Chat-native path ledger carry, README clause) S · 3.I-2 · W10-a
 - 3.I-3 M · 3.I-1, DH-TOOLS · W10-a
 
 **Sub-agents**
@@ -355,7 +341,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 4.10-2 M · 4.10-1, 4.2, RELAY · W8-f
 
 **Memory, codebase understanding, UX, integrations**
-- 5.4-3 M · 5.4-1, 5.4-2, 5.2 · W7-i
 - 5.7-1 M · 4.1-2, DEF-MODE, D8 · W9-j
 - 5.7-2 M · 5.7-1, 1.C-2 · W10-b
 - 5.9-1 M · — · W10-h
@@ -369,7 +354,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.14l S–M · O-2g · W10-f
 
 **Settings**
-- N-P4a M · N-P3, 1.C-1 · W7-j
 - N-P4b M · N-P3, 2.1, 2.9 · W9-h
 - N-P4c M · N-P3, 0.4, 2.8 · W9-i
 - N-P4d M · N-P3, 5.1, 1.A · W9-h
@@ -379,8 +363,7 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-C2 M · P-C1 · W7-f
-- P-D1 M · P-B1, 1.C-3 · W7-e
+- P-D1 remainder (mailbox and sub-agent log retention) S · P-D1 · W8-h
 - P-D2 M · P-D1, P-C2 · W8-h
 - P-D3 M · P-D1, P-C2 · W8-h
 - P-E1 S–M · P-D3, RELAY · W9-f
@@ -388,9 +371,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-2h L · O-2g, DH-CMDS · W7-b
-- O-3b L · O-3a, O-2g · W7-c
-- O-3c S–M · O-3b · W7-c
 - O-4b S–M · O-4a, O-3b, 4.3-3 · W8-g
 - O-5a M · — · W5-d
 - O-5b L · O-5a, O-3c · W8-c
