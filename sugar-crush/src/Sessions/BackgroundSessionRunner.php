@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\PermissionConfigException;
@@ -13,6 +14,7 @@ use SugarCraft\Crush\Permissions\ToolRefusal;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionLock;
 use SugarCraft\Crush\Support\ProcessReaper;
+use SugarCraft\Crush\Usage;
 
 /**
  * The agent loop that a `/bg` background session actually runs.
@@ -122,6 +124,21 @@ final class BackgroundSessionRunner
      * happens to hide it.
      */
     public const REFUSAL_RECORD = '[session:tool:refused]';
+
+    /**
+     * Record prefix for what a completed turn cost:
+     * `[session:usage] tokens=<int> cost=<usd>`, written once, just before
+     * the completion record.
+     *
+     * {@see BackgroundSupervisor} reads the last one when it reaps the
+     * session, which is what puts tokens and cost on the `/bg` result's stats
+     * line ({@see BackgroundSession::announcement()}); before it nothing ever
+     * set them. `[session:` first for the reason {@see REFUSAL_RECORD} gives:
+     * the line is bookkeeping, never restored as model output. `usage` and
+     * not `task:`, so it can never become the outcome the supervisor settles
+     * on.
+     */
+    public const USAGE_RECORD = '[session:usage]';
 
     /**
      * How often the daemon stamps a heartbeat record into the buffer file.
@@ -406,6 +423,22 @@ final class BackgroundSessionRunner
             }
         }
 
+        // The engine runs this turn AS a session (roadmap 0.13-a, background
+        // half): the `/fork` copy it continues, else this background session's
+        // own id — so a session-scoped hook, grant or ledger sees one id for
+        // the whole turn instead of none. Each billed step is summed on the
+        // way, because the reply's own usage covers only its last step.
+        $steps = null;
+        if ($backend instanceof EngineBackend) {
+            $backend = $backend
+                ->withSessionId($this->forkedSessionId !== '' ? $this->forkedSessionId : $this->sessionId)
+                ->withStepUsageObserver(static function (?Usage $usage) use (&$steps): void {
+                    if ($usage !== null) {
+                        $steps = $steps === null ? $usage : $steps->plus($usage);
+                    }
+                });
+        }
+
         $pending = '';
         $streamed = '';
         $onToken = function (string $token) use (&$pending, &$streamed): void {
@@ -446,6 +479,10 @@ final class BackgroundSessionRunner
         }
 
         $this->saveFork($fork, [$user, $message]);
+        $usage = $steps ?? $message->usage;
+        if ($usage !== null) {
+            $this->log(sprintf('%s tokens=%d cost=%.6F', self::USAGE_RECORD, $usage->totalTokens, $usage->costUsd));
+        }
         $this->log('[session:task:complete]');
 
         return 0;

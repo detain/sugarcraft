@@ -517,8 +517,8 @@ final class ReadPathCensusTest extends TestCase
                 . 'HEARTBEAT/RESUME/STOP (audit M5)',
         ],
         'Sessions/BackgroundSupervisor.php|file_get_contents' => [
-            'SELF_LOCATED — the IPC buffer this supervisor named for its own child',
-            'SELF_LOCATED — the same buffer, re-read while streaming',
+            'SELF_LOCATED — the IPC buffer this supervisor named for its own child (or one '
+                . 'reconnect() adopted from the index after vetting its directory)',
             'SELF_LOCATED — the per-spawn token file this supervisor minted, read to '
                 . 'authenticate a reconnect (audit M5)',
             'PROCESS_DERIVED — `/proc/<pid>/stat`, a kernel interface named by a '
@@ -528,6 +528,14 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — the startup sweep (audit BG-2) lists `sugar_crush_bg_<uid>_*` names in the '
                 . 'temp dir; each candidate is then lstat-checked as a real directory of this uid '
                 . 'in the exact minted shape, and no content is read',
+            'NAMES_ONLY — reconnect() (roadmap 4.3-3) lists `sess_*.json` records in the per-uid '
+                . 'index directory, which indexDir() lstat-verified as a 0700 directory of this uid; '
+                . 'the content is read by the fopen below',
+        ],
+        'Sessions/BackgroundSupervisor.php|fopen' => [
+            'SELF_LOCATED — one index record a supervisor of this uid wrote 0600 into its own 0700 '
+                . 'index directory, lstat-checked as a regular file of this uid, opened r+ and '
+                . 'flock()ed to claim it; every path it names is re-vetted before use (recordIpc())',
         ],
         'Sessions/BackgroundSupervisor.php|require' => [
             'PROCESS_DERIVED — inside the GENERATED child script: the composer autoload of the '

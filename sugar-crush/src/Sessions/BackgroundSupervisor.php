@@ -93,6 +93,34 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     private const IPC_DIR_PATTERN = '/^sugar_crush_bg_(\d+)_[0-9a-f]{16}$/';
 
     /**
+     * Name suffix of the per-uid session INDEX directory,
+     * `sugar_crush_bg_<uid>_index` beside the IPC directories (roadmap 4.3-3).
+     *
+     * One record per spawned session, `<sessionId>.json`, 0600 inside a 0700
+     * directory: where its daemon's IPC files are, the daemon's pid and
+     * `/proc` start time, the task, the agent, and the supervisor process that
+     * currently owns it. It is what lets {@see reconnect()} find a daemon that
+     * a PREVIOUS process spawned: the IPC directory itself is per-process and
+     * random, so without a stable place to look a restarted TUI adopted
+     * nothing. Deliberately not an IPC_DIR_PATTERN shape, so the startup sweep
+     * never reaps it; {@see reconnect()} prunes its dead records instead.
+     */
+    public const INDEX_DIR_SUFFIX = '_index';
+
+    /**
+     * The status a host records as "last reported" for a session
+     * {@see reconnect()} re-adopted from the index and has not yet told the
+     * user about. No {@see BackgroundSessionStatus} spells it, so the first
+     * poll after a restart always sees a change and reports the session's
+     * real status — including the result of one that finished while no TUI
+     * was running.
+     */
+    public const ADOPTED_STATUS = 'adopted';
+
+    /** A record names its session's three IPC files by these exact suffixes. */
+    private const IPC_FILE_SUFFIXES = ['socketPath' => '.sock', 'bufferPath' => '.buffer', 'tokenPath' => '.token'];
+
+    /**
      * How long EVERY entry of a private IPC directory (and the directory
      * itself) must have gone untouched before the startup sweep removes it
      * (audit BG-2).
@@ -153,6 +181,13 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     private StallDetector $stallDetector;
 
     /**
+     * The directory the private IPC directories AND the session index are
+     * created under — the system temp dir in production. A test passes a
+     * scratch directory so its records never meet another process's.
+     */
+    private string $tempRoot;
+
+    /**
      * Last observed buffer-file mtime per session — the daemon's liveness
      * signal. See {@see self::tick()}.
      *
@@ -163,9 +198,11 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     public function __construct(
         ?SessionNotificationInterface $listener = null,
         ?StallDetector $stallDetector = null,
+        ?string $tempRoot = null,
     ) {
         $this->listener = $listener;
         $this->stallDetector = $stallDetector ?? new StallDetector();
+        $this->tempRoot = rtrim($tempRoot ?? sys_get_temp_dir(), '/') ?: '/';
     }
 
     // =========================================================================
@@ -218,7 +255,10 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     public function hasActiveSessions(): bool
     {
         foreach ($this->sessions as $session) {
-            if ($session->isActive()) {
+            // A timed-out session is still "active" to the dashboard, which
+            // lists it, but nothing will ever change it again: counting it
+            // here would hold the host's background poll open for good.
+            if ($session->isActive() && !$session->isSettled()) {
                 return true;
             }
         }
@@ -483,6 +523,12 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             'startTime' => $startTime,
         ];
 
+        // Recorded so a LATER process can re-adopt this daemon (roadmap
+        // 4.3-3). Best effort: a session whose record could not be written
+        // still runs and still reports to this process — it only cannot be
+        // found again after a restart.
+        $this->writeIndexRecord($sessionId, $session, $agent);
+
         return $session;
     }
 
@@ -695,7 +741,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
         }
 
         $uid = function_exists('posix_getuid') ? posix_getuid() : (int) getmypid();
-        $dir = sys_get_temp_dir() . '/' . self::IPC_DIR_PREFIX . $uid . '_' . bin2hex(random_bytes(8));
+        $dir = $this->tempRoot . '/' . self::IPC_DIR_PREFIX . $uid . '_' . bin2hex(random_bytes(8));
 
         $previous = umask(0o077);
         try {
@@ -756,8 +802,19 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
     private function releaseIpcFiles(string $id): void
     {
         $ipc = $this->sessionIpc[$id] ?? null;
-        $dir = $this->ipcDir;
-        if ($ipc === null || $dir === '') {
+        if ($ipc === null) {
+            return;
+        }
+
+        // The session is settled and absorbed, so its index record goes too:
+        // there is nothing left for a later process to adopt (roadmap 4.3-3).
+        $this->dropIndexRecord($id);
+
+        // A session re-adopted from the index lives in the directory of the
+        // process that SPAWNED it, which {@see reconnect()} verified is a
+        // private directory of this uid before recording it here.
+        $dir = $ipc['dir'] ?? $this->ipcDir;
+        if ($dir === '') {
             return;
         }
 
@@ -772,7 +829,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             }
         }
 
-        if (@rmdir($dir)) {
+        if (@rmdir($dir) && $dir === $this->ipcDir) {
             $this->ipcDir = '';
         }
     }
@@ -889,7 +946,10 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
         $now = $now ?? time();
 
         foreach ($this->sessions as $id => $session) {
-            if (!$session->isActive()) {
+            // Settled is final: a timed-out session stays "active" for the
+            // dashboard, but re-reaping it would read a buffer already
+            // released and re-label it Failed.
+            if (!$session->isActive() || $session->isSettled()) {
                 continue;
             }
 
@@ -948,18 +1008,38 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
             $session = $session->withOutput($output);
         }
 
+        // What the turn cost, as the daemon's worker reported it (W4-i
+        // handoff): without it the `/bg` stats line never carried tokens or
+        // cost, because nothing ever set them.
+        $usage = self::lastUsage($buffer);
+        if ($usage !== null) {
+            $session = $session->withUsage($usage['tokens'], $usage['cost']);
+        }
+
         // A `stopped` outcome is its own terminal state (audit BG-1): the user
         // asked for it, so reporting it as Failed would be wrong, and it must
         // be decided HERE, from the buffer, so a stop that this process did
         // not observe completing (a wait that ran out, a stop issued before a
-        // TUI restart) still settles as what it was.
-        $stopped = self::lastTaskOutcome($buffer) === 'stopped';
-        $failed = !$stopped && self::bufferReportsFailure($buffer);
+        // TUI restart) still settles as what it was. A `timeout` is its own
+        // state for the same reason: the daemon stopped a turn that was still
+        // working, which is not the turn failing.
+        $outcome = self::lastTaskOutcome($buffer);
+        $stopped = $outcome === 'stopped';
+        $timedOut = $outcome === 'timeout';
+        $failed = !$stopped && !$timedOut && self::bufferReportsFailure($buffer);
         $session = $session->withStatus(match (true) {
             $stopped => BackgroundSessionStatus::Stopped,
+            $timedOut => BackgroundSessionStatus::TimedOut,
             $failed => BackgroundSessionStatus::Failed,
             default => BackgroundSessionStatus::Completed,
         });
+        if ($timedOut) {
+            $session = $session->withError(sprintf('ran past its %d s limit and was stopped', $session->timeoutSeconds));
+        } elseif ($failed) {
+            // The reason the worker gave, so the announcement can say WHY
+            // rather than only that it failed.
+            $session = $session->withError(self::failureReason($buffer) ?? 'the background task did not complete');
+        }
 
         $this->sessions[$id] = $session;
         unset($this->bufferMtimes[$id]);
@@ -970,7 +1050,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
 
         if ($stopped) {
             $this->onSessionStopped($session);
-        } elseif ($failed) {
+        } elseif ($failed || $timedOut) {
             $this->onSessionFailed($session);
         } else {
             $this->onSessionCompleted($session);
@@ -1032,6 +1112,49 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
         }
 
         return $outcome;
+    }
+
+    /**
+     * The reason in the last failure record that carries one, or null.
+     *
+     * The worker writes `[session:task:failed] <reason>` and the daemon then
+     * closes with a bare `[session:task:failed]` of its own once it reaps the
+     * worker, so the LAST record is usually the one without a reason; a
+     * daemon that never got as far as a worker leaves one of the
+     * `[session:<stage>:error] <reason>` records instead.
+     */
+    private static function failureReason(string $buffer): ?string
+    {
+        $reason = null;
+        foreach (explode("\n", $buffer) as $line) {
+            if (preg_match('/^\[session:(?:task:failed|[a-z]+:error)\]\s*(\S.*)$/', $line, $m) === 1) {
+                $reason = trim($m[1]);
+            }
+        }
+
+        return $reason;
+    }
+
+    /**
+     * The figures in the last `[session:usage]` record
+     * ({@see BackgroundSessionRunner::USAGE_RECORD}), or null when the daemon
+     * wrote none — a failed turn, or a backend that reports no usage.
+     *
+     * @return array{tokens: int, cost: float}|null
+     */
+    private static function lastUsage(string $buffer): ?array
+    {
+        $usage = null;
+        foreach (explode("\n", $buffer) as $line) {
+            if (!str_starts_with($line, BackgroundSessionRunner::USAGE_RECORD)) {
+                continue;
+            }
+            if (preg_match('/\btokens=(\d+)\b.*\bcost=(\d+(?:\.\d+)?)\b/', $line, $m) === 1) {
+                $usage = ['tokens' => (int) $m[1], 'cost' => (float) $m[2]];
+            }
+        }
+
+        return $usage;
     }
 
     /**
@@ -1109,7 +1232,7 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
         if ($session === null) {
             return BackgroundStopOutcome::UnknownSession;
         }
-        if (!$session->isActive()) {
+        if (!$session->isActive() || $session->isSettled()) {
             return BackgroundStopOutcome::AlreadyFinished;
         }
 
@@ -1303,15 +1426,43 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
     // =========================================================================
 
     /**
-     * Reconnect to existing sessions over IPC when the TUI reopens.
+     * Reconnect to background sessions when a TUI (re)opens: the ones this
+     * supervisor already holds, and — given the project they were spawned for
+     * — the ones a PREVIOUS process spawned (roadmap 4.3-3).
      *
-     * This restores state for all sessions that were running when the TUI
-     * closed, allowing the user to see partial output and continue interacting.
-     * Sessions must have been spawned via spawnSession() and have IPC data stored.
+     * THE SECOND HALF IS WHAT MAKES THIS USEFUL. A `/bg` daemon is built to
+     * outlive the TUI that started it, but everything this method used to read
+     * — `$this->sessions` and the IPC table — dies with that TUI, and the IPC
+     * directory is a fresh random name per process, so a restarted TUI
+     * adopted nothing even when something called this. {@see spawnSession()}
+     * now leaves a record in the per-uid index ({@see INDEX_DIR_SUFFIX}), and
+     * a record whose owning process is gone is ADOPTED here: registered as a
+     * running session with its daemon's IPC files, and the record re-stamped
+     * with this process as its owner so a second TUI cannot adopt it too.
      *
-     * @return array<string, BackgroundSession> Sessions that were reconnected
+     * An adopted session is not settled here, even when its daemon has
+     * already exited: {@see tick()} reaps it like any other, so its outcome,
+     * output and usage come from the buffer by the one path that reads them,
+     * and the host's background poll — armed because the session is active —
+     * reports it.
+     *
+     * Only records spawned for $workingDirectory are adopted, because a
+     * result is announced into the conversation that adopts it: a session
+     * started for one project must not report into another. A caller with no
+     * project (null) adopts nothing from the index. Records whose daemon is
+     * gone and whose IPC directory is gone, or that are older than
+     * {@see STALE_IPC_DIR_SECONDS} with a dead daemon, are pruned on the way.
+     *
+     * For a session this supervisor already holds: a daemon that has exited is
+     * settled from its buffer through {@see reapFinishedDaemon()} (its real
+     * outcome, not an assumed "Completed"), and a live one has its partial
+     * output restored and is sent an authenticated `RESUME`.
+     *
+     * @param string|null $workingDirectory the project whose orphaned sessions
+     *        to adopt; null adopts none
+     * @return array<string, BackgroundSession> Sessions reconnected or adopted
      */
-    public function reconnect(): array
+    public function reconnect(?string $workingDirectory = null): array
     {
         if ($this->reconnected) {
             return [];
@@ -1320,96 +1471,431 @@ exit(\SugarCraft\Crush\Sessions\BackgroundSessionRunner::main(json_decode(%s, tr
         $reconnected = [];
 
         foreach ($this->sessions as $id => $session) {
-            if (!$session->isActive()) {
+            if (!$session->isActive() || $session->isSettled()) {
                 continue;
             }
 
             $ipc = $this->sessionIpc[$id] ?? null;
-
-            // Restore partial output from buffer file
-            if ($ipc !== null && file_exists($ipc['bufferPath'])) {
-                $bufferContent = file_get_contents($ipc['bufferPath']);
-                if ($bufferContent !== '' && $session->output === '') {
-                    // Buffer has content and session output is empty (first reconnect)
-                    $restoredOutput = self::restoreOutput((string) $bufferContent);
-                    if ($restoredOutput !== '') {
-                        $session = $session->withOutput($restoredOutput);
-                        $this->sessions[$id] = $session;
-                    }
-                }
-            }
-
-            // If session has IPC data, check if child is still running and connect
-            if ($ipc !== null) {
-                $childRunning = $this->isProcessRunning($ipc['pid'], $ipc['startTime'] ?? null);
-
-                if ($childRunning && file_exists($ipc['socketPath'])) {
-                    // Child is still running — authenticate, then send RESUME
-                    // over IPC. The daemon's command loop refuses every
-                    // connection that does not open with the token line
-                    // ({@see BackgroundSessionRunner::serveClient()}), so an
-                    // unauthenticated reconnect simply gets nothing back —
-                    // the same shape as a dead socket, and the right shape for
-                    // a stranger. The token lives in a 0600 file only this
-                    // (owner-verified) process can read.
-                    $token = self::readToken($ipc);
-
-                    $supervisor = @stream_socket_client(
-                        'unix://' . $ipc['socketPath'],
-                        $errno,
-                        $errstr,
-                        1 // 1 second timeout
-                    );
-
-                    if ($supervisor !== false) {
-                        stream_set_timeout($supervisor, 1);
-                        if ($token !== '') {
-                            fwrite($supervisor, BackgroundSessionRunner::AUTH_PREFIX . $token . "\n");
-                        }
-                        fwrite($supervisor, "RESUME\n");
-                        fflush($supervisor);
-
-                        // Read responses (non-blocking)
-                        while (!feof($supervisor)) {
-                            $line = @fgets($supervisor);
-                            if ($line === false) {
-                                break;
-                            }
-                            $line = trim($line);
-                            if ($line === '' || str_starts_with($line, 'OK:')) {
-                                continue;
-                            }
-                            // This is a response line — could be output or status
-                            // For now, treat as confirmation
-                        }
-
-                        fclose($supervisor);
-                    }
-
-                    // Re-establish IPC entry in case session state changed
-                    $reconnected[$id] = $this->sessions[$id];
-                } else {
-                    // Child has exited — session is complete
-                    if ($session->isActive()) {
-                        $session = $session->withStatus(BackgroundSessionStatus::Completed);
-                        $this->sessions[$id] = $session;
-                    }
-                    $reconnected[$id] = $session;
-                    // Only when the daemon is really gone: this branch is also
-                    // reached by a live daemon whose socket path vanished, and
-                    // its files are still in use (audit BG-2).
-                    if (!$childRunning) {
-                        $this->releaseIpcFiles($id);
-                    }
-                }
-            } else {
+            if ($ipc === null) {
                 // Session without IPC data — just mark as reconnected
                 $reconnected[$id] = $session;
+                continue;
             }
+
+            if ($ipc['pid'] > 0 && !$this->isProcessRunning($ipc['pid'], $ipc['startTime'] ?? null)) {
+                // The daemon has exited: settle it from its buffer exactly as
+                // tick() would, which also releases its files (audit BG-2).
+                $this->reapFinishedDaemon($id, $session);
+                $reconnected[$id] = $this->sessions[$id];
+                continue;
+            }
+
+            // Restore partial output from buffer file
+            if (file_exists($ipc['bufferPath']) && $session->output === '') {
+                $restoredOutput = self::restoreOutput(self::readBuffer($ipc));
+                if ($restoredOutput !== '') {
+                    $this->sessions[$id] = $session->withOutput($restoredOutput);
+                }
+            }
+
+            if (file_exists($ipc['socketPath'])) {
+                // Child is still running — authenticate, then send RESUME
+                // over IPC. The daemon's command loop refuses every
+                // connection that does not open with the token line
+                // ({@see BackgroundSessionRunner::serveClient()}), so an
+                // unauthenticated reconnect simply gets nothing back —
+                // the same shape as a dead socket, and the right shape for
+                // a stranger. The token lives in a 0600 file only this
+                // (owner-verified) process can read.
+                $this->sendResume($ipc);
+            }
+
+            // A live daemon whose socket path vanished stays active: its
+            // files are still in use (audit BG-2), and tick() settles it when
+            // it exits.
+            $reconnected[$id] = $this->sessions[$id];
+        }
+
+        foreach ($this->adoptFromIndex($workingDirectory) as $id => $session) {
+            $reconnected[$id] = $session;
         }
 
         $this->reconnected = true;
         return $reconnected;
+    }
+
+    /**
+     * The authenticated `RESUME` exchange with a live daemon. Bounded: a 1 s
+     * connect and a 1 s read timeout, and the replies are only drained.
+     *
+     * @param array{socketPath: string, bufferPath: string, pid: int, tokenPath?: string, startTime?: int|null} $ipc
+     */
+    private function sendResume(array $ipc): void
+    {
+        $token = self::readToken($ipc);
+
+        $supervisor = @stream_socket_client('unix://' . $ipc['socketPath'], $errno, $errstr, 1);
+        if ($supervisor === false) {
+            return;
+        }
+
+        stream_set_timeout($supervisor, 1);
+        if ($token !== '') {
+            fwrite($supervisor, BackgroundSessionRunner::AUTH_PREFIX . $token . "\n");
+        }
+        fwrite($supervisor, "RESUME\n");
+        fflush($supervisor);
+
+        while (!feof($supervisor)) {
+            if (@fgets($supervisor) === false) {
+                break;
+            }
+        }
+
+        fclose($supervisor);
+    }
+
+    // =========================================================================
+    // Session index (roadmap 4.3-3)
+    // =========================================================================
+
+    /**
+     * The per-uid index directory, created 0700 when $create, or null when it
+     * does not exist or is not provably this uid's own private directory.
+     *
+     * Verified off `lstat` every time, like {@see ensurePrivateIpcDir()}: the
+     * name is predictable (that is its point), so a directory another uid
+     * planted there — or a symlink — must read as "no index", never be
+     * trusted. Without ext-posix there is no uid to name it by, and no index.
+     */
+    private function indexDir(bool $create): ?string
+    {
+        if (!function_exists('posix_getuid')) {
+            return null;
+        }
+
+        $uid = posix_getuid();
+        $dir = $this->tempRoot . '/' . self::IPC_DIR_PREFIX . $uid . self::INDEX_DIR_SUFFIX;
+
+        if ($create) {
+            $previous = umask(0o077);
+            try {
+                @mkdir($dir, 0700);
+            } finally {
+                umask($previous);
+            }
+        }
+
+        return self::isPrivateDirOf($dir, $uid) ? $dir : null;
+    }
+
+    /** Whether $dir is a real (not symlinked) directory owned by $uid with mode 0700. */
+    private static function isPrivateDirOf(string $dir, int $uid): bool
+    {
+        clearstatcache(true, $dir);
+        $stat = @lstat($dir);
+
+        return $stat !== false
+            && ($stat['mode'] & self::STAT_TYPE_MASK) === self::STAT_DIRECTORY
+            && $stat['uid'] === $uid
+            && ($stat['mode'] & 0o777) === 0700;
+    }
+
+    /**
+     * Leave the record a later process needs to adopt this session's daemon.
+     *
+     * The record carries paths and the token's PATH, never the token, and is
+     * written 0600 into the 0700 index directory: it is exactly as private as
+     * the IPC files it points at. One retry covers the one race there is — a
+     * sibling process removing the then-empty index directory between the
+     * mkdir and the write ({@see dropIndexRecord()}).
+     */
+    private function writeIndexRecord(string $id, BackgroundSession $session, Agent $agent): void
+    {
+        $ipc = $this->sessionIpc[$id] ?? null;
+        if ($ipc === null) {
+            return;
+        }
+
+        $record = json_encode([
+            'id' => $id,
+            'name' => $session->name,
+            'task' => $session->task,
+            'workingDirectory' => self::normalisedDirectory($session->workingDirectory) ?? $session->workingDirectory,
+            'timeoutSeconds' => $session->timeoutSeconds,
+            'tags' => $session->tags,
+            'createdAt' => $session->createdAt->getTimestamp(),
+            'agent' => $agent->toArray(),
+            'socketPath' => $ipc['socketPath'],
+            'bufferPath' => $ipc['bufferPath'],
+            'tokenPath' => $ipc['tokenPath'] ?? '',
+            'pid' => $ipc['pid'],
+            'startTime' => $ipc['startTime'] ?? null,
+            'owner' => self::ownerStamp(),
+        ], JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($record === false) {
+            return;
+        }
+
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $dir = $this->indexDir(true);
+            if ($dir === null || ToolIpcFiles::write($dir . '/' . $id . '.json', $record)) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Remove a settled session's record, and the index directory once it is
+     * empty — the BG-2 rule that a finished `/bg` leaves nothing in the temp
+     * dir. The `rmdir` fails harmlessly while any other record remains.
+     */
+    private function dropIndexRecord(string $id): void
+    {
+        $dir = $this->indexDir(false);
+        if ($dir === null || preg_match(self::SESSION_ID_PATTERN, $id) !== 1) {
+            return;
+        }
+
+        ToolIpcFiles::discard($dir . '/' . $id . '.json');
+        @rmdir($dir);
+    }
+
+    /**
+     * Adopt every orphaned index record spawned for $workingDirectory; see
+     * {@see reconnect()}.
+     *
+     * @return array<string, BackgroundSession>
+     */
+    private function adoptFromIndex(?string $workingDirectory): array
+    {
+        $want = self::normalisedDirectory($workingDirectory);
+        $dir = $want === null ? null : $this->indexDir(false);
+        if ($dir === null) {
+            return [];
+        }
+
+        $adopted = [];
+        foreach (glob($dir . '/sess_*.json', GLOB_NOSORT) ?: [] as $path) {
+            $id = basename($path, '.json');
+            if (preg_match(self::SESSION_ID_PATTERN, $id) !== 1 || isset($this->sessions[$id])) {
+                continue;
+            }
+
+            $session = $this->claimIndexRecord($path, $id, $want);
+            if ($session !== null) {
+                $adopted[$id] = $session;
+            }
+        }
+        if ($adopted === []) {
+            // Pruning may have emptied it.
+            @rmdir($dir);
+        }
+
+        return $adopted;
+    }
+
+    /**
+     * Read one record under an exclusive, non-blocking lock and adopt it when
+     * its owner is gone and it belongs to $want; prune it when it is garbage.
+     *
+     * The lock is what keeps two TUIs started together from both adopting the
+     * same daemon (and both announcing its result): the loser of the race
+     * either fails the lock or, re-reading under it, finds the winner's
+     * process stamped as the owner — alive, so not adoptable. The rewrite is
+     * in place, under the lock, rather than the write-and-rename
+     * {@see writeIndexRecord()} uses: a rename would hand the next reader a
+     * different inode from the one this lock is held on.
+     */
+    private function claimIndexRecord(string $path, string $id, string $want): ?BackgroundSession
+    {
+        $uid = posix_getuid();
+        clearstatcache(true, $path);
+        $stat = @lstat($path);
+        if ($stat === false
+            || ($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_FILE
+            || $stat['uid'] !== $uid
+        ) {
+            return null;
+        }
+
+        $handle = @fopen($path, 'r+');
+        if ($handle === false) {
+            return null;
+        }
+
+        try {
+            if (!flock($handle, LOCK_EX | LOCK_NB)) {
+                return null;
+            }
+
+            $record = json_decode((string) stream_get_contents($handle), true);
+            $ipc = is_array($record) ? $this->recordIpc($record, $id, $uid) : null;
+            if ($ipc === null) {
+                // Unreadable, or its IPC directory is gone: nothing left to
+                // adopt. It is in this uid's own private directory, so it is
+                // this uid's to delete.
+                @unlink($path);
+
+                return null;
+            }
+
+            if (self::ownerAlive($record['owner'] ?? null)) {
+                return null;
+            }
+
+            if (self::normalisedDirectory(is_string($record['workingDirectory'] ?? null) ? $record['workingDirectory'] : null) !== $want) {
+                // Another project's session, left for that project's next
+                // launch — unless it is long dead, when nothing will claim it.
+                if (!$this->isProcessRunning($ipc['pid'], $ipc['startTime'])
+                    && time() - (int) ($record['createdAt'] ?? 0) > self::STALE_IPC_DIR_SECONDS
+                ) {
+                    @unlink($path);
+                }
+
+                return null;
+            }
+
+            $record['owner'] = self::ownerStamp();
+            $encoded = json_encode($record, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+            if ($encoded === false || !ftruncate($handle, 0) || !rewind($handle) || fwrite($handle, $encoded) !== strlen($encoded)) {
+                return null;
+            }
+            fflush($handle);
+        } finally {
+            @flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+
+        $session = (new BackgroundSession(
+            id: $id,
+            name: is_string($record['name'] ?? null) ? $record['name'] : $id,
+            agent: self::recordAgent($record['agent'] ?? null),
+            task: is_string($record['task'] ?? null) ? $record['task'] : '',
+            workingDirectory: $want,
+            timeoutSeconds: is_int($record['timeoutSeconds'] ?? null) ? $record['timeoutSeconds'] : 3600,
+            tags: is_array($record['tags'] ?? null) ? array_values(array_filter($record['tags'], 'is_string')) : null,
+            createdAt: (new \DateTimeImmutable())->setTimestamp(is_int($record['createdAt'] ?? null) ? $record['createdAt'] : time()),
+        ))->withStatus(BackgroundSessionStatus::Running);
+
+        $this->sessions[$id] = $session;
+        $this->sessionIpc[$id] = $ipc;
+
+        return $session;
+    }
+
+    /**
+     * The IPC table entry a record describes, or null when it does not
+     * describe one this supervisor may act on.
+     *
+     * The record sits in a private directory, but it still decides which
+     * files {@see releaseIpcFiles()} deletes and which pid
+     * {@see stopSession()} signals, so it is checked as a claim rather than
+     * trusted as a fact: all three paths must be `<id>.sock|.buffer|.token`
+     * inside ONE directory that has the IPC-directory shape for this uid, sits
+     * in the same temp root, and is still a private directory of this uid.
+     *
+     * @param array<mixed> $record
+     * @return array{socketPath: string, bufferPath: string, tokenPath: string, pid: int, startTime: int|null, dir: string}|null
+     */
+    private function recordIpc(array $record, string $id, int $uid): ?array
+    {
+        if (($record['id'] ?? null) !== $id || !is_int($record['pid'] ?? null) || $record['pid'] <= 0) {
+            return null;
+        }
+        $startTime = $record['startTime'] ?? null;
+        if ($startTime !== null && !is_int($startTime)) {
+            return null;
+        }
+
+        $ipc = [];
+        $dir = null;
+        foreach (self::IPC_FILE_SUFFIXES as $key => $suffix) {
+            $path = $record[$key] ?? null;
+            if (!is_string($path) || basename($path) !== $id . $suffix) {
+                return null;
+            }
+            $dir ??= dirname($path);
+            if (dirname($path) !== $dir) {
+                return null;
+            }
+            $ipc[$key] = $path;
+        }
+
+        if ($dir === null
+            || dirname($dir) !== $this->tempRoot
+            || preg_match(self::IPC_DIR_PATTERN, basename($dir), $name) !== 1
+            || (int) $name[1] !== $uid
+            || !self::isPrivateDirOf($dir, $uid)
+        ) {
+            return null;
+        }
+
+        return $ipc + ['pid' => $record['pid'], 'startTime' => $startTime, 'dir' => $dir];
+    }
+
+    /** This process as a record owner: its pid and `/proc` start time. */
+    private static function ownerStamp(): array
+    {
+        $pid = (int) getmypid();
+
+        return ['pid' => $pid, 'startTime' => self::procStartTime($pid)];
+    }
+
+    /**
+     * Whether a record's owner is still running — the same identity test as
+     * a daemon's ({@see isProcessRunning()}), so a recycled pid does not keep
+     * a dead TUI's sessions from ever being adopted. A missing or malformed
+     * owner is a dead one.
+     */
+    private static function ownerAlive(mixed $owner): bool
+    {
+        if (!is_array($owner) || !is_int($owner['pid'] ?? null) || $owner['pid'] <= 0) {
+            return false;
+        }
+        $startTime = $owner['startTime'] ?? null;
+        $observed = self::procStartTime($owner['pid']);
+        if (is_int($startTime) && $observed !== null) {
+            return $observed === $startTime;
+        }
+
+        return function_exists('posix_kill') ? posix_kill($owner['pid'], 0) : $observed !== null;
+    }
+
+    /** The agent a record names, or a stand-in when it cannot be rebuilt. */
+    private static function recordAgent(mixed $data): Agent
+    {
+        if (is_array($data)) {
+            try {
+                return Agent::fromArray($data);
+            } catch (\Throwable) {
+                // Fall through to the stand-in: the agent only labels an
+                // adopted session; its daemon is already running.
+            }
+        }
+
+        return new Agent(
+            name: 'default',
+            description: 'Background session agent',
+            prompt: '',
+            model: 'unknown',
+            provider: 'unknown',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+    }
+
+    /** $dir resolved (symlinks and `.` included), or null for none. */
+    private static function normalisedDirectory(?string $dir): ?string
+    {
+        if ($dir === null || $dir === '') {
+            return null;
+        }
+        $real = realpath($dir);
+
+        return $real !== false ? $real : rtrim($dir, '/');
     }
 
     /**

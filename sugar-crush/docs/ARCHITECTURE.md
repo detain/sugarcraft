@@ -818,6 +818,7 @@ completion can legitimately run for tens of minutes.
 | `~/.sugar-crush/memory/` | `Memory\MemoryStore` | markdown + frontmatter, per scope |
 | `~/.sugar-crush/teams/` | `Agents\TeamManager` | team state |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
+| `<tmp>/sugar_crush_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running `/bg` session, so a restart re-adopts its daemon |
 
 **Transcript rows have an identity.** `EnhancedSessionStore::saveTranscript()`
 writes transcript schema version 2: every row has an id, `m_<session>_<ref>`, and a

@@ -9339,7 +9339,13 @@ final class Chat implements Model
         // REFUSES by trust tier - and a refusal can leave the path standing in
         // the text, so reading mentions out of the expansion would attach the
         // very file the tier just refused to include.
-        $mentionsAreTheUsers = $expanded === null;
+        //
+        // Nor in a background session's result (roadmap 4.3-1/4.3-3): the
+        // announcement reaches the agent through this same door, quoting the
+        // daemon's answer verbatim, and an `@path` in that answer is the
+        // model's text, not the user asking for a file.
+        $mentionsAreTheUsers = $expanded === null
+            && !\SugarCraft\Crush\Sessions\BackgroundSession::isAnnouncement($text);
         if ($expanded !== null) {
             // AN EXPANSION THAT PRODUCED NOTHING IS REFUSED, not sent. The
             // empty-draft guard at the top of this method runs against the

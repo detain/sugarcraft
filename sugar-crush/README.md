@@ -1098,7 +1098,10 @@ is running it is sent at once as the next turn; otherwise it waits in the queue
 and goes out when the running turn finishes, exactly like a prompt typed
 mid-turn, and the half-typed draft in the box is kept either way. Sessions that
 settle together share one turn, and a session you ended with `/bg stop` starts
-none. `/fork` branches the current session.
+none. The daemon outlives the TUI: quit and relaunch in the same project, and
+the new launch re-adopts it from a per-uid session index and reports its result
+the same way, even one that finished while sugarcrush was closed. `/fork`
+branches the current session.
 
 `/budget` reports what this launch has spent, as the **provider** counted it,
 and optionally caps it. `/budget 5` sets a $5 ceiling, `/budget off` clears one,
@@ -1541,6 +1544,7 @@ Things that are genuinely not finished, stated plainly rather than left for you 
 - **`pcntl` is required for real parallelism.** Without it `AgentWorkerPool` falls back to sequential execution and logs a one-time visible warning rather than pretending to fan out.
 - **Providers are unit-tested against mocked transports.** No test in this suite makes a live API call, so wire-format drift at a real endpoint is caught by the `doctor` tool (model-invocable; there is no `/doctor` slash command) and by using it, not by CI.
 - **The `doctor` tool reports capabilities, it does not repair them.**
+- **A background session is re-adopted only by a launch of the same project.** Its result is announced into the conversation that adopts it, so a relaunch elsewhere leaves it for the project it was started for. The index lives in the system temp directory, so a reboot (which ends the daemons anyway) or a temp cleaner forgets it.
 
 ## Custom provider
 

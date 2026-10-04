@@ -402,6 +402,25 @@ a day (`BackgroundSupervisor::STALE_IPC_DIR_SECONDS`). A running daemon writes a
 heartbeat to its buffer every few seconds, so a live session's directory never
 reaches that age.
 
+The answer comes back. When a session settles (completed, failed, timed out) its
+result reaches the model as a user-role message: a
+`[Background session <id> ('<name>') completed]` header, the task, the reason
+if it failed, the output, and a stats line with the runtime, the tokens and cost
+the daemon reported and, for `/fork`, the `--resume` id. It is sent at once when
+no turn is running and queued behind the running turn otherwise. An `@path` or
+`@url` inside that output is quoted, never attached: it is the model's text, not
+a mention you typed. A session you ended with `/bg stop` sends no result.
+
+A restart does not lose a session. Each spawn also writes a 0600 record, holding
+the daemon's pid and start time, its IPC paths and the launch that owns it, into
+an owner-only `sugar_crush_bg_<uid>_index` directory beside the IPC directories.
+At boot, sugarcrush re-adopts every record whose owning launch has exited and
+whose session was started for the same project. The first background poll then
+reports it, as running or with the result it reached while no TUI was open. The
+record is re-stamped with the new owner under a lock, so two launches started
+together cannot both adopt one daemon. A record is deleted when its session
+settles, and the index directory goes with its last record.
+
 Two guards apply to every arm, and both fall through to the model rather than
 guess. A draft must begin with the canonical spelling verbatim, so `/KEYS` is
 prose and `/compactfoo` is a prompt about foo rather than a mistyped `/compact`.

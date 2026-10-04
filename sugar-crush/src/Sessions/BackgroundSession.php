@@ -26,6 +26,12 @@ final class BackgroundSession
      */
     public const ANNOUNCE_OUTPUT_MAX_CHARS = 16_000;
 
+    /**
+     * How every {@see announcement()} opens, and therefore how a queued
+     * prompt is recognised as one ({@see isAnnouncement()}).
+     */
+    private const ANNOUNCEMENT_HEADER = '/\A\[Background session \S+ \(\'/';
+
     /** The tag prefix `/fork` marks a session's stored transcript copy with. */
     private const FORK_TAG_PREFIX = 'session:';
 
@@ -90,6 +96,32 @@ final class BackgroundSession
     public function withOutput(string $output): self
     {
         return $this->mutate($this->status, $output);
+    }
+
+    /**
+     * The same session with what its turn cost: $tokens consumed and $costUsd
+     * spent, as the daemon reported them ({@see BackgroundSessionRunner::USAGE_RECORD}).
+     * Negative figures are clamped to zero.
+     */
+    public function withUsage(int $tokens, float $costUsd): self
+    {
+        $next = $this->mutate($this->status, $this->output);
+        $next->tokensUsed = max(0, $tokens);
+        $next->costUsd = max(0.0, $costUsd);
+
+        return $next;
+    }
+
+    /**
+     * The same session with $error as the reason it did not complete — the
+     * `Error:` line {@see announcement()} prints. Null or '' clears it.
+     */
+    public function withError(?string $error): self
+    {
+        $next = $this->mutate($this->status, $this->output);
+        $next->error = $error === '' ? null : $error;
+
+        return $next;
     }
 
     /**
@@ -288,6 +320,23 @@ final class BackgroundSession
         $lines[] = 'Stats: ' . implode(' · ', $stats);
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Whether $text is one or more {@see announcement()}s — the prompt a host
+     * sends when background sessions settle — rather than something a person
+     * typed.
+     *
+     * A host asks so that it can refuse to read `@path` / `@url` mentions out
+     * of it (W4-i handoff): the announcement quotes a daemon's output
+     * verbatim, and an `@src/x.php` or `@https://…` token in a model's answer
+     * is not the user asking for that file or page to be attached. Erring the
+     * other way is harmless — a typed prompt that happens to open with this
+     * exact header only loses its own mentions.
+     */
+    public static function isAnnouncement(string $text): bool
+    {
+        return preg_match(self::ANNOUNCEMENT_HEADER, ltrim($text)) === 1;
     }
 
     /**

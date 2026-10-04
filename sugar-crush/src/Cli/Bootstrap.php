@@ -1295,6 +1295,16 @@ final class Bootstrap
             // launch: it owns the spawned sessions' IPC table, and a second
             // instance would not know about the first's children.
             backgroundSupervisor: $workspace->backgroundSupervisor,
+            // Roadmap 4.3-3: daemons an EARLIER run of this project spawned
+            // and outlived are re-adopted here, at boot — the caller
+            // BackgroundSupervisor::reconnect() never had. Each is folded in
+            // as ADOPTED_STATUS, a status nothing reports, so the first
+            // background poll announces what it really is: "now running", or
+            // the result of one that finished while no TUI was open.
+            backgroundStatuses: array_fill_keys(
+                array_keys($workspace->backgroundSupervisor?->reconnect($root) ?? []),
+                BackgroundSupervisor::ADOPTED_STATUS,
+            ),
             // The same root the tools above are jailed to. Chat's own
             // pipeline builds hook contexts and spawns background sessions
             // without an App or Runtime in reach, so it needs its own copy

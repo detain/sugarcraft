@@ -2805,12 +2805,13 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($tableEnd);
         $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
         preg_match_all('/\| `([^`]+)` \| `([^`]+)`/', $segment, $rows, \PREG_SET_ORDER);
-        self::assertCount(4, $rows, 'the sessions table no longer has its four directory/class rows');
+        self::assertCount(5, $rows, 'the sessions table no longer has its five directory/class rows');
         $orderedDirs = [
             '~/.sugar-crush/session.db',
             '~/.sugar-crush/memory/',
             '~/.sugar-crush/teams/',
             '<workflowsPath>/.running/',
+            '<tmp>/sugar_crush_bg_<uid>_index/',
         ];
         self::assertSame($orderedDirs, array_column($rows, 1), 'the table\'s directory column changed — re-derive each referent below before re-pinning');
         foreach ($rows as $row) {
@@ -2821,6 +2822,11 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("configDir() . '/memory'", $bootstrap, 'memory/ is no longer the store directory under the config dir — table cell drifted');
         self::assertStringContainsString("'~/.sugar-crush/teams'", self::sourceOf('Agents/TeamManager.php'), 'TeamManager no longer defaults to ~/.sugar-crush/teams — table cell drifted');
         self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Crush\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
+        self::assertSame(
+            'sugar_crush_bg_<uid>_index',
+            \SugarCraft\Crush\Sessions\BackgroundSupervisor::IPC_DIR_PREFIX . '<uid>' . \SugarCraft\Crush\Sessions\BackgroundSupervisor::INDEX_DIR_SUFFIX,
+            'the session index directory no longer spells sugar_crush_bg_<uid>_index — table cell drifted',
+        );
 
         self::assertSame(
             1,
