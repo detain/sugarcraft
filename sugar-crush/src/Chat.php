@@ -2387,7 +2387,7 @@ final class Chat implements Model
         if ($msg instanceof TranscriptFlushMsg) {
             // The debounce tick (audit R2): write whatever is newest. $this is
             // returned unchanged, so update() schedules nothing new.
-            $this->transcriptWriter->flush();
+            $this->transcripts()->flush();
 
             return [$this, null];
         }
@@ -13793,7 +13793,7 @@ final class Chat implements Model
                     // forkSession() copies the STORED transcript: write any
                     // debounced change first, or the fork starts behind the
                     // screen (audit R2) — the same flush /branch does.
-                    $this->transcriptWriter->flush();
+                    $this->transcripts()->flush();
                     $forkId = $store->forkSession($id);
 
                     return [$this->mutate(['sessionPicker' => null])->switchToSession($forkId, $this->storedSessionName($forkId)), null];
@@ -14474,18 +14474,25 @@ final class Chat implements Model
      * Any other Msg is relayed unchanged: nothing in the widget's vocabulary
      * may vanish between the model and the interpreter.
      *
-     * The notice rides {@see RuntimeNoticeSink::record()} — the transcript's
-     * own diagnostic channel, drained by the subscription this class already
-     * wires — and NOT stderr: an unarmed sink (one-shot hosts, embedded
-     * drivers) loses the notice and keeps the clip, which is disclosed here
-     * rather than papered over with a second channel.
+     * The notice rides this session's {@see \SugarCraft\Crush\Diagnostics\NoticeSink}
+     * — the workspace's (W2-e: a session's own inbox, so two sessions never
+     * read each other's notices), else the process's current one, resolved
+     * when the Cmd runs as {@see RuntimeNoticeSink::record()} resolved it — the
+     * transcript's own diagnostic channel, drained by the subscription this
+     * class already wires, and NOT stderr: an unarmed sink (one-shot hosts,
+     * embedded drivers) loses the notice and keeps the clip, which is
+     * disclosed here rather than papered over with a second channel.
      */
     private function relayWidgetCmd(\Closure $cmd): \Closure
     {
-        return static function () use ($cmd): ?Msg {
+        $workspaceSink = $this->workspace?->notices;
+
+        return static function () use ($cmd, $workspaceSink): ?Msg {
             $msg = $cmd();
 
-            return $msg instanceof RawMsg ? self::cappedOsc52($msg) : $msg;
+            return $msg instanceof RawMsg
+                ? self::cappedOsc52($msg, $workspaceSink ?? RuntimeNoticeSink::current())
+                : $msg;
         };
     }
 
@@ -14498,7 +14505,7 @@ final class Chat implements Model
      * constants so no raw escape byte appears in this file (the same law
      * that keeps the transcript free of hand-rolled SGR).
      */
-    private static function cappedOsc52(RawMsg $msg): RawMsg
+    private static function cappedOsc52(RawMsg $msg, \SugarCraft\Crush\Diagnostics\NoticeSink $notices): RawMsg
     {
         $pattern = '/\A' . preg_quote(Ansi::OSC, '/') . '52;(.);([A-Za-z0-9+\/=]*)'
             . preg_quote(Ansi::BEL, '/') . '\z/s';
@@ -14517,7 +14524,7 @@ final class Chat implements Model
         }
 
         $clipped = mb_substr($decoded, 0, self::OSC52_MAX_CHARS, 'UTF-8');
-        RuntimeNoticeSink::record(
+        $notices->record(
             'Clipboard copy clipped to ' . self::OSC52_MAX_CHARS . ' of ' . $chars . ' characters.'
         );
 
