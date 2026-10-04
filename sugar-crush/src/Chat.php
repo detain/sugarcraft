@@ -1449,6 +1449,35 @@ final class Chat implements Model
         private readonly ?\SugarCraft\Crush\Events\UsageUpdated $liveUsage = null,
         /** The generation {@see $liveStep} and {@see $liveUsage} belong to. */
         private readonly int $liveStepGeneration = -1,
+        /**
+         * Who set {@see $currentSessionName} (roadmap P-A4): `User` for
+         * `/rename` and the inline title editor, `Auto` for a latched
+         * generated title, null when unknown — unnamed, or a name read back
+         * from the store on a switch or resume. The UI half of the audit B2
+         * latch: the {@see SessionTitledMsg} arm never replaces a `User` name,
+         * nor any name it cannot vouch was generated. Reset to null by
+         * {@see mutate()} whenever the session changes.
+         */
+        private readonly ?\SugarCraft\Crush\Session\TitleSource $currentSessionTitleSource = null,
+        /**
+         * The inline session-title editor (roadmap P-A4), or null when closed.
+         * Opened by a bare `/rename`, the palette's "Rename session…" and a
+         * double-click on the current tab; while open it owns the keyboard
+         * ({@see handleTitleEditorKey()}), Renderer paints it as a row above
+         * the input box and mirrors the draft into the current tab. Closed by
+         * {@see mutate()} whenever the session changes, so a draft opened for
+         * one session can never rename another.
+         */
+        private readonly ?\SugarCraft\Forms\TextInput\TextInput $titleEditor = null,
+        /**
+         * The last click on a session tab — `[tab id, microtime]` — so a
+         * second click on the same tab within {@see TAB_DOUBLE_CLICK_SECONDS}
+         * reads as a double-click. Kept here because candy-mouse's
+         * `ClickResult` carries a zone and a button, never a click count.
+         *
+         * @var array{0: string, 1: float}|null
+         */
+        private readonly ?array $lastTabClick = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -2365,18 +2394,28 @@ final class Chat implements Model
             if ($msg->sessionId !== $this->currentSessionId) {
                 return [$this, null];
             }
-            // A name latched since the request went out — `/rename` typed
-            // while it was in flight — is the user's and stays (audit B2).
-            // The store refuses the write on the same rule; this guard keeps
-            // the UI from showing a title the store never took.
-            if ($this->currentSessionName !== null) {
+            // The latch (audit B2, P-A4): a name the USER set is never
+            // replaced, and neither is any name latched since the request
+            // went out — `/rename` typed while it was in flight, or a name
+            // read back from the store whose source this window cannot vouch
+            // for. `/rename --auto` and a blank inline rename clear the name
+            // first, which is the one way a generated title lands again. The
+            // store refuses the write on the same rule; this guard keeps the
+            // UI from showing a title the store never took.
+            if (
+                $this->currentSessionTitleSource === \SugarCraft\Crush\Session\TitleSource::User
+                || $this->currentSessionName !== null
+            ) {
                 return [$this, null];
             }
             $title = self::sanitizeSessionTitle($msg->title);
             if ($title === '') {
                 return [$this, null];
             }
-            return [$this->mutate(['currentSessionName' => $title]), null];
+            return [$this->mutate([
+                'currentSessionName' => $title,
+                'currentSessionTitleSource' => \SugarCraft\Crush\Session\TitleSource::Auto,
+            ]), null];
         }
         if ($msg instanceof BackgroundSessionSpawnedMsg) {
             // Unlike the title call above this is NOT session-scoped: the
@@ -2600,6 +2639,13 @@ final class Chat implements Model
         // Escape would abort the whole turn rather than refuse this one call.
         if ($this->pendingPermission !== null) {
             return $this->handlePermissionKey($msg);
+        }
+        // P-A4: the inline session-title editor owns the keyboard while it is
+        // open — ahead of the Escape arm, so Escape closes the editor instead
+        // of arming a turn cancel, and ahead of the mid-turn refusals, because
+        // naming a session starts no turn and rewrites no history.
+        if ($this->titleEditor !== null) {
+            return $this->handleTitleEditorKey($msg);
         }
         // Escape is checked before the inFlight blanket-swallow below (like
         // Ctrl+C above) because its whole point while a request is running
@@ -7824,6 +7870,35 @@ final class Chat implements Model
      */
     private function selectSessionTab(string $id): array
     {
+        // P-A4: a second click on the same tab inside the double-click window
+        // renames that session inline. The first click of the pair already
+        // switched to it (or it was current), so the editor always opens on
+        // the session the tab names. Under an open palette or picker the pair
+        // is not a rename — those overlays own the screen.
+        $now = microtime(true);
+        $previous = $this->lastTabClick;
+        $isDoubleClick = $previous !== null
+            && $previous[0] === $id
+            && $now - $previous[1] <= self::TAB_DOUBLE_CLICK_SECONDS;
+        if ($isDoubleClick && $id === $this->currentSessionId && $this->palette === null && $this->sessionPicker === null) {
+            $clicked = $this->mutate(['lastTabClick' => null]);
+
+            return $clicked->readOnlyRefusal('/rename') ?? $clicked->handleRenameCommand('/rename');
+        }
+
+        [$next, $cmd] = $this->switchToTab($id);
+
+        return [$next->mutate(['lastTabClick' => [$id, $now]]), $cmd];
+    }
+
+    /**
+     * {@see selectSessionTab()}'s single-click answer: switch to the session
+     * the tab names.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function switchToTab(string $id): array
+    {
         if ($id === '' || $id === $this->currentSessionId || $this->sessionStore === null) {
             return [$this, null];
         }
@@ -8204,6 +8279,18 @@ final class Chat implements Model
     public function currentSessionName(): ?string
     {
         return $this->currentSessionName;
+    }
+
+    /** Who set {@see currentSessionName()} — see {@see $currentSessionTitleSource}. */
+    public function currentSessionTitleSource(): ?\SugarCraft\Crush\Session\TitleSource
+    {
+        return $this->currentSessionTitleSource;
+    }
+
+    /** The open inline session-title editor, or null — read by Renderer. */
+    public function titleEditor(): ?\SugarCraft\Forms\TextInput\TextInput
+    {
+        return $this->titleEditor;
     }
 
     /**
@@ -8897,7 +8984,20 @@ final class Chat implements Model
             'liveStep' => $this->liveStep,
             'liveUsage' => $this->liveUsage,
             'liveStepGeneration' => $this->liveStepGeneration,
+            'currentSessionTitleSource' => $this->currentSessionTitleSource,
+            'titleEditor' => $this->titleEditor,
+            'lastTabClick' => $this->lastTabClick,
         ];
+
+        // P-A4: who named the session, and a half-typed title, both belong to
+        // ONE session. Every route that changes the session — a switch, a
+        // resume, /new, /branch, a picker fork — passes `currentSessionId`, so
+        // this is the one place that keeps them from leaking into the next
+        // session without each route having to remember.
+        if (array_key_exists('currentSessionId', $changes) && $changes['currentSessionId'] !== $this->currentSessionId) {
+            $constructorProps['currentSessionTitleSource'] = null;
+            $constructorProps['titleEditor'] = null;
+        }
 
         // The two write routes into the draft, kept from fighting.
         //
@@ -14893,7 +14993,13 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /rename command — rename the current session.
+     * Handle /rename — name the current session (roadmap P-A4).
+     *
+     *   /rename <title>  — the user's title; recorded as {@see \SugarCraft\Crush\Session\TitleSource::User},
+     *                      so no generated title ever replaces it
+     *   /rename          — opens the inline title editor, prefilled
+     *   /rename --auto   — drops the current title and asks the title model
+     *                      for a new one ({@see regenerateSessionTitle()})
      *
      * @return array{0:Chat,1:?\Closure}
      */
@@ -14903,36 +15009,188 @@ final class Chat implements Model
             return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /branch and /rename commands.');
         }
 
-        // /rename requires exactly one argument: the new name
-        $afterRename = self::commandArgument($inputText);
-
-        if ($afterRename === '') {
-            return $this->sessionResponse($inputText, 'Usage: /rename <newName>');
-        }
-
         if ($this->currentSessionId === null) {
             return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
         }
 
-        $newName = trim($afterRename);
-        if ($newName === '') {
-            return $this->sessionResponse($inputText, 'Usage: /rename <newName>');
+        $argument = trim(self::commandArgument($inputText));
+
+        if ($argument === '') {
+            return [$this->mutate(['inputBuf' => ''])->openTitleEditor(), null];
+        }
+
+        if ($argument === self::RENAME_AUTO_FLAG) {
+            [$next, $cmd, $response] = $this->regenerateSessionTitle();
+
+            return [$next->sessionResponse($inputText, $response)[0], $cmd];
         }
 
         try {
-            $this->sessionStore->renameSession($this->currentSessionId, $newName);
-            // Latch the name in-memory too: it is what suppresses the
-            // background auto-title (see scheduleTitleGeneration()) from
-            // later overwriting a name the user chose by hand.
-            return $this->mutate(['currentSessionName' => $newName])
-                ->sessionResponse($inputText, "Session renamed to '{$newName}'");
-        } catch (\InvalidArgumentException $e) {
-            $response = "Error: {$e->getMessage()}";
+            [$next, $response] = $this->applyUserSessionTitle($argument);
         } catch (\Throwable $e) {
             $response = "Error: {$e->getMessage()}";
+            $next = $this;
         }
 
-        return $this->sessionResponse($inputText, $response);
+        return $next->sessionResponse($inputText, $response);
+    }
+
+    /** The `/rename` argument that asks for a generated title. */
+    private const RENAME_AUTO_FLAG = '--auto';
+
+    /** Longest title the inline editor accepts — the session picker's own cap. */
+    private const TITLE_EDITOR_MAX = 120;
+
+    /**
+     * Two clicks on the same session tab this close together are a
+     * double-click (roadmap P-A4). candy-mouse reports no click count, so the
+     * window is this model's own; 400 ms is the common desktop default.
+     */
+    public const TAB_DOUBLE_CLICK_SECONDS = 0.4;
+
+    /**
+     * Name the current session as the USER: sanitised like every other title,
+     * written as {@see \SugarCraft\Crush\Session\TitleSource::User}, and latched in memory
+     * with that source so a generated title in flight can never displace it.
+     * A title that sanitises to nothing is refused rather than stored: a blank
+     * is the "back to automatic" request, which {@see regenerateSessionTitle()}
+     * answers.
+     *
+     * @return array{0: self, 1: string} the next model and the line to report
+     */
+    private function applyUserSessionTitle(string $raw): array
+    {
+        \assert($this->sessionStore !== null && $this->currentSessionId !== null);
+        $title = self::sanitizeSessionTitle($raw);
+        if ($title === '') {
+            return [$this, 'A session name needs at least one printable character.'];
+        }
+
+        $this->sessionStore->renameSession($this->currentSessionId, $title, \SugarCraft\Crush\Session\TitleSource::User);
+
+        return [
+            $this->mutate([
+                'currentSessionName' => $title,
+                'currentSessionTitleSource' => \SugarCraft\Crush\Session\TitleSource::User,
+            ]),
+            "Session renamed to '{$title}'",
+        ];
+    }
+
+    /**
+     * Drop the current title and ask the title model for a new one — the
+     * answer to `/rename --auto` and to a blank inline rename (roadmap P-A4,
+     * carried from W2-f: a blank rename resets the name so the auto-titler
+     * can name the session again).
+     *
+     * The store row is made unnamed first ({@see SessionStore::clearSessionName()}),
+     * because the titler's write is conditional on exactly that: it never
+     * overwrites a name, and a user's name least of all. The in-memory name
+     * and its source are cleared with it, so the {@see SessionTitledMsg} arm
+     * latches whatever comes back — unless the user names the session again
+     * while the request is in flight, which both halves still honour.
+     *
+     * With no title model there is nothing to regenerate with, and the name
+     * is left alone rather than cleared into a state nothing will ever fill.
+     * A session with no user turn yet is cleared and left to its first reply,
+     * which titles it the ordinary way.
+     *
+     * @return array{0: self, 1: ?\Closure, 2: string} the next model, the title Cmd, the line to report
+     */
+    private function regenerateSessionTitle(): array
+    {
+        \assert($this->sessionStore !== null && $this->currentSessionId !== null);
+        if ($this->titleBackend === null) {
+            return [$this, null, 'No title model is configured, so the session name is unchanged.'];
+        }
+
+        $this->sessionStore->clearSessionName($this->currentSessionId);
+        $next = $this->mutate(['currentSessionName' => null, 'currentSessionTitleSource' => null]);
+
+        $call = $this->titleService()->regenerateCall(
+            $this->titleBackend,
+            $this->sessionStore,
+            $this->currentSessionId,
+            $this->history,
+        );
+        if ($call === null) {
+            return [$next, null, 'Session name cleared; the first reply will name it.'];
+        }
+
+        return [$next, Cmd::promise($call), 'Asking the title model for a new session name…'];
+    }
+
+    /**
+     * Open the inline title editor on the current session, prefilled with its
+     * name and the cursor at the end. A no-op without a store or a session —
+     * there would be nothing to save into.
+     */
+    private function openTitleEditor(): self
+    {
+        if ($this->sessionStore === null || $this->currentSessionId === null) {
+            return $this;
+        }
+
+        $input = \SugarCraft\Forms\TextInput\TextInput::new()
+            ->withPrompt('')
+            ->withCharLimit(self::TITLE_EDITOR_MAX)
+            ->setValue($this->currentSessionName ?? '');
+        // The blink Cmd is dropped, as the picker's inline rename drops it:
+        // the row repaints on every keystroke.
+        [$input] = $input->focus();
+        \assert($input instanceof \SugarCraft\Forms\TextInput\TextInput);
+
+        return $this->mutate(['titleEditor' => $input->cursorEnd()]);
+    }
+
+    /**
+     * Every key while the inline title editor is open (roadmap P-A4): Enter
+     * saves, Escape closes it unchanged, anything else edits the draft. An
+     * empty draft saved is the "back to automatic" request — the name is
+     * cleared and regenerated ({@see regenerateSessionTitle()}) — never a
+     * blank user title that would block the auto-titler for good.
+     *
+     * The answer goes to the transcript as one UI-only row; nothing reaches
+     * the model.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleTitleEditorKey(KeyMsg $msg): array
+    {
+        $editor = $this->titleEditor;
+        \assert($editor !== null);
+
+        if ($msg->type === KeyType::Escape) {
+            return [$this->mutate(['titleEditor' => null]), null];
+        }
+
+        if ($msg->type !== KeyType::Enter) {
+            [$edited] = $editor->update($msg);
+            \assert($edited instanceof \SugarCraft\Forms\TextInput\TextInput);
+
+            return [$this->mutate(['titleEditor' => $edited]), null];
+        }
+
+        $closed = $this->mutate(['titleEditor' => null]);
+        if ($closed->sessionStore === null || $closed->currentSessionId === null) {
+            return [$closed, null];
+        }
+
+        $cmd = null;
+        try {
+            if (trim($editor->value) === '') {
+                [$next, $cmd, $response] = $closed->regenerateSessionTitle();
+            } else {
+                [$next, $response] = $closed->applyUserSessionTitle($editor->value);
+            }
+        } catch (\Throwable $e) {
+            [$next, $response] = [$closed, 'Error: ' . self::sanitizeSessionField($e->getMessage())];
+        }
+
+        return [
+            $next->mutate(['history' => [...$next->history, Message::assistant($response)->withUiOnly()]]),
+            $cmd,
+        ];
     }
 
     /**
@@ -17440,9 +17698,58 @@ final class Chat implements Model
             PaletteAction::LayoutReset => $closed->handleLayoutCommand('/layout reset'),
             // N-P1: the settings view is the shell's; this only asks for it.
             PaletteAction::OpenSettings => $closed->openSettingsView(),
+            // P-A4: the session actions. Rename opens the inline editor through
+            // the slash handler, refused in a read-only window as `/rename` is.
+            PaletteAction::RenameSession => $closed->readOnlyRefusal('/rename') ?? $closed->handleRenameCommand('/rename'),
+            PaletteAction::BranchSession => $closed->handleBranchCommand('/branch'),
+            PaletteAction::PinSession => $closed->togglePinCurrentSession(),
+            PaletteAction::DeleteSession => $closed->openSessionListToDelete(),
             PaletteAction::Exit => [$closed, Cmd::quit()],
             default => [$closed, null],
         };
+    }
+
+    /**
+     * The palette's "Pin or unpin session" (roadmap P-A4): flip the current
+     * session's pin — the picker's `p`, without opening the picker. Pinned
+     * sessions list first in the picker and the tab strip and survive pruning.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function togglePinCurrentSession(): array
+    {
+        if ($this->sessionStore === null || $this->currentSessionId === null) {
+            $line = 'No active session to pin. Start a new conversation first.';
+        } else {
+            $pinned = (bool) ($this->sessionStore->getSession($this->currentSessionId)['pinned'] ?? false);
+            $this->sessionStore->setPinned($this->currentSessionId, !$pinned);
+            $line = $pinned ? 'Unpinned this session.' : 'Pinned this session: it lists first in the session picker and the tab strip.';
+        }
+
+        return [$this->mutate(['history' => [...$this->history, Message::assistant($line)->withUiOnly()]]), null];
+    }
+
+    /**
+     * The palette's "Delete session…" (roadmap P-A4): the session list, open,
+     * with the delete keys named in its footer. Deleting stays the picker's
+     * two-press `d` — the press that shows what goes with a session (its
+     * sub-agent children) before anything is removed — so the palette never
+     * deletes blind, and the session on screen is refused there as everywhere.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function openSessionListToDelete(): array
+    {
+        [$next, $cmd] = $this->handleSessionsCommand('/sessions');
+        $picker = $next->sessionPicker;
+        if ($picker === null) {
+            return [$next, $cmd];
+        }
+
+        return [
+            $next->mutate(['sessionPicker' => $picker->withNotice('Highlight a session and press d twice to delete it; the session on screen cannot be deleted.')]),
+            $cmd,
+        ];
     }
 
     /**

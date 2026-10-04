@@ -137,10 +137,10 @@ final class BranchCommandTest extends TestCase
         $this->assertStringContainsString('No active session', $lastMsg->content);
     }
 
-    public function testRenameWithNoNameArgumentShowsUsageHelp(): void
+    public function testABareRenameWithNoSessionSaysSoAndOpensNoEditor(): void
     {
-        // /rename with no name argument should show usage help,
-        // not "No active session" (name argument is checked before session existence)
+        // P-A4: a bare /rename opens the inline title editor - on the CURRENT
+        // session, so with none there is nothing to name and it says so.
         $chat = new Chat(
             history: [],
             inputBuf: '/rename',
@@ -152,7 +152,8 @@ final class BranchCommandTest extends TestCase
 
         $this->assertFalse($next->inFlight);
         $lastMsg = $next->history[count($next->history) - 1];
-        $this->assertStringContainsString('Usage: /rename', $lastMsg->content);
+        $this->assertStringContainsString('No active session', $lastMsg->content);
+        $this->assertNull($next->titleEditor());
     }
 
     public function testRenameCommandWithValidName(): void

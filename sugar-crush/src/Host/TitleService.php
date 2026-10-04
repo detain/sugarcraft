@@ -173,6 +173,62 @@ final class TitleService
             return null;
         }
 
+        return self::titleThunk($titleBackend, $visible, $sessionId, $store);
+    }
+
+    /**
+     * The title request made ON DEMAND — `/rename --auto`, or a blank inline
+     * rename (roadmap P-A4) — or null when there is nothing to ask with.
+     *
+     * {@see titleCall()} without its two once-per-session gates: the caller
+     * has just made the session unnamed again
+     * ({@see SessionStore::clearSessionName()}), so "no name yet" holds by
+     * construction, and the first-turn gate is exactly what an on-demand
+     * request bypasses. What stays: a store, a session, the tool-less title
+     * backend (audit 15b-12) and at least one agent-visible user turn — a
+     * session with nothing said yet is named by its first reply instead.
+     *
+     * The write is the same conditional one, so a name the user types while
+     * this request is in flight still wins (audit B2).
+     *
+     * @param list<Message> $history
+     *
+     * @return (\Closure(): PromiseInterface<?Msg>)|null
+     */
+    public function regenerateCall(
+        ?Backend $titleBackend,
+        SessionStore|EnhancedSessionStore|null $store,
+        ?string $sessionId,
+        array $history,
+    ): ?\Closure {
+        if ($store === null || $sessionId === null || $titleBackend === null) {
+            return null;
+        }
+
+        $visible = Message::agentVisible($history);
+        foreach ($visible as $message) {
+            if ($message->role === Role::User) {
+                return self::titleThunk($titleBackend, $visible, $sessionId, $store);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The one title request both entry points send: {@see TITLE_PROMPT} over
+     * the agent-visible conversation, answered by a conditional store write.
+     *
+     * @param list<Message> $visible
+     *
+     * @return \Closure(): PromiseInterface<?Msg>
+     */
+    private static function titleThunk(
+        Backend $titleBackend,
+        array $visible,
+        string $sessionId,
+        SessionStore|EnhancedSessionStore $store,
+    ): \Closure {
         $titlePrompt = [Message::system(self::TITLE_PROMPT), ...$visible];
 
         return static function () use ($titleBackend, $titlePrompt, $sessionId, $store): PromiseInterface {

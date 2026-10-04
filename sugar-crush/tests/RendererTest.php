@@ -776,7 +776,7 @@ final class RendererTest extends TestCase
     {
         $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', Renderer::render($this->chat(buf: '/re')));
 
-        $this->assertStringContainsString('/rename <name> — Rename the current session', $plain);
+        $this->assertStringContainsString('/rename [<name>|--auto] — Rename the current session', $plain);
         $this->assertStringContainsString('/rewind [n] [--chat|--files|--both] — Restore an earlier checkpoint', $plain);
         // …and a row with no hint gains no stray spacing from the feature.
         // (`/theme`: `/rewind` was this example until it gained its `[n]`

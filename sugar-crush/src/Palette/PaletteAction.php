@@ -34,6 +34,11 @@ enum PaletteAction: string
     case DockPaneRight = 'dock_pane_right';
     case LayoutReset = 'layout_reset';
     case OpenSettings = 'open_settings';
+    // P-A4: the session row actions, reachable without opening the list.
+    case RenameSession = 'rename_session';
+    case PinSession = 'pin_session';
+    case DeleteSession = 'delete_session';
+    case BranchSession = 'branch_session';
 
     /**
      * This action's registry row. Throws rather than returning null: an

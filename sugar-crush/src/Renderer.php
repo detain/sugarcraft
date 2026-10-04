@@ -2908,6 +2908,10 @@ final class Renderer
         if (count($rows) < 2) {
             return '';
         }
+        // P-A4: pinned sessions lead the strip, as they lead the picker; the
+        // store's recency order is kept within each half (usort is stable).
+        usort($rows, static fn (array $a, array $b): int => (int) !empty($b['pinned']) <=> (int) !empty($a['pinned']));
+        $editor = $chat->titleEditor();
 
         $cols = max(1, $chat->cols());
         $current = $chat->currentSessionId();
@@ -2923,6 +2927,16 @@ final class Renderer
             $isCurrent = $id !== '' && $id === $current;
             if ($isCurrent) {
                 $currentIndex = count($tabs);
+                // P-A4: while the inline title editor is open the current tab
+                // shows the draft as it is typed, so the user sees which tab
+                // they are naming; the editor row above the input is where
+                // the cursor lives.
+                if ($editor !== null) {
+                    $name = '✎ ' . self::sessionTabName($editor->value);
+                }
+            }
+            if (!empty($row['pinned'])) {
+                $name = '★ ' . $name;
             }
             $tabs[] = [
                 'id' => $id,
@@ -6245,10 +6259,50 @@ final class Renderer
             $rows[] = ($indented ? ($i === 0 ? '> ' : '  ') : '') . $row;
         }
 
-        return Style::new()
+        $box = Style::new()
             ->border(Border::normal())
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $rows));
+
+        $titleRow = self::renderTitleEditorRow($chat, $theme);
+
+        return $titleRow === '' ? $box : $titleRow . "\n" . $box;
+    }
+
+    /** The inline title editor's label ({@see renderTitleEditorRow()}). */
+    private const TITLE_EDITOR_LABEL = '✎ Session title: ';
+
+    /** Its key hint, the first thing dropped when the row runs out of room. */
+    private const TITLE_EDITOR_HINT = '  ↵ save · esc cancel · empty = auto';
+
+    /**
+     * The inline session-title editor (roadmap P-A4) as ONE row above the
+     * input box, or '' when it is closed. One row and never more: like the
+     * box below it, a taller row would only cost history lines, and a title is
+     * one line by definition. Held to the terminal width — the hint goes
+     * first, then the label narrows to the glyph, then the draft is cut.
+     */
+    private static function renderTitleEditorRow(Chat $chat, Theme $theme): string
+    {
+        $editor = $chat->titleEditor();
+        if ($editor === null) {
+            return '';
+        }
+
+        $cols = max(1, $chat->cols());
+        $label = self::TITLE_EDITOR_LABEL;
+        $hint = self::TITLE_EDITOR_HINT;
+        if (Width::of($label) + Width::of($hint) + 12 > $cols) {
+            $hint = '';
+        }
+        if (Width::of($label) + 8 > $cols) {
+            $label = '✎ ';
+        }
+        $room = max(1, $cols - Width::of($label) - Width::of($hint));
+        $field = Width::truncateAnsi($editor->withWidth(max(1, $room - 1))->view(), $room);
+        $faint = Style::new()->foreground($theme->systemLabel)->faint();
+
+        return Width::truncateAnsi($faint->render($label) . $field . ($hint === '' ? '' : $faint->render($hint)), $cols);
     }
 }

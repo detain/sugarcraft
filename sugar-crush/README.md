@@ -166,6 +166,15 @@ running when its session was last saved comes back marked interrupted.
 sessions and sessions you have archived. The picker and the tab strip leave
 them out too.
 
+A session is named after its first reply by a cheap title model, and a name
+you give it always wins over a generated one — even one still in flight when
+you typed yours. `/rename <title>` names the current session; a bare `/rename`
+(or **Rename session…** in `Ctrl+P`, or a double-click on the current tab)
+opens an inline title row above the input box — `Enter` saves, `Esc` cancels,
+and saving it empty clears the name and asks the title model for a new one,
+which is also what `/rename --auto` does. Pinned sessions (`p` in the picker,
+or **Pin or unpin session** in `Ctrl+P`) lead the tab strip with a `★`.
+
 **One window writes a session at a time.** A launch that opens a session
 another sugarcrush already has open — `--continue` in a second terminal, the
 same `--resume` twice, or picking it in the picker — opens it **read-only**: the
@@ -1048,7 +1057,7 @@ local and calls no model.
 
 Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type
 (`/rwd` finds `/rewind`), **highlights the characters you typed** and shows each
-command's **argument hint** (`/rename <name>`) — fitting the whole row to the
+command's **argument hint** (`/rename [<name>|--auto]`) — fitting the whole row to the
 terminal rather than letting it run off the edge: the description gives up
 columns first, then the hint, and the name (the row's identity) last.
 
@@ -1064,7 +1073,8 @@ its id, its name on disk and its checkpoints all survive, so `/rewind` still
 reaches the turns it cleared. That is the opposite trade to **New session**,
 which mints a fresh id and leaves the conversation where it was.
 
-**New session** and **Open docs** are palette-only actions (`Ctrl+P`) — they
+**New session**, **Pin or unpin session**, **Delete session…** and **Open docs**
+are palette-only actions (`Ctrl+P`) — they
 have no slash spelling, so `CommandRegistry` keeps them out of the `/` popup and
 `tests/Commands/SlashDispatchTest.php` fails if a row gains a popup entry
 without gaining a dispatch handler.

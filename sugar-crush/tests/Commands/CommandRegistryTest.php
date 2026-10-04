@@ -195,7 +195,7 @@ final class CommandRegistryTest extends TestCase
             $hints[$spec->name] = $spec->argumentHint;
         }
 
-        $this->assertSame('<name>', $hints['rename']);
+        $this->assertSame('[<name>|--auto]', $hints['rename']);
         $this->assertSame('[md|html|json] [path]', $hints['share']);
         $this->assertSame('[name]', $hints['rules']);
         $this->assertSame('[focus]', $hints['compact']);

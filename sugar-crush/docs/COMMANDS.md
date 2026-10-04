@@ -307,6 +307,8 @@ edit it by hand.
 |---|---|---|---|---|
 | `/new` | | | — | Start a fresh session |
 | `/sessions` | ✓ | | `[<query>]` | List, search and manage sessions |
+| `/session-pin` | | | — | Pin the current session to the front of the list, or unpin it |
+| `/session-delete` | | | — | Open the session list to delete a session |
 | `/model` | ✓ | ✓ | `[provider]` | Switch the active model provider |
 | `/share` | ✓ | | `[md\|html\|json] [path]` | Export the session to a file |
 | `/docs` | | | — | Open the documentation |
@@ -333,7 +335,7 @@ edit it by hand.
 | `/memory` | ✓ | | — | Add, list, search, edit, import, or clear memory entries |
 | `/init` | ✓ | | `[focus]` | Study this project and write or improve its AGENTS.md |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
-| `/rename` | ✓ | | `<name>` | Rename the current session |
+| `/rename` | ✓ | | `[<name>\|--auto]` | Rename the current session |
 | `/rewind` | ✓ | | `[n] [--chat\|--files\|--both]` | Restore an earlier checkpoint: the conversation, the files, or both |
 | `/undo` | ✓ | | — | Take back the last turn: conversation and files |
 | `/redo` | ✓ | | — | Step forward again over what /rewind or /undo took back |
@@ -343,9 +345,10 @@ edit it by hand.
 | `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |
 <!-- commands:table:end -->
 
-**S** is blank on `new`, `docs`, `pane-dock-left` and `pane-dock-right`
-alone: they are palette-only (`slashVisible: false`), reachable from Ctrl+P and
-from no "/" popup. All four share the typed-name asymmetry —
+**S** is blank on `new`, `session-pin`, `session-delete`, `docs`,
+`pane-dock-left` and `pane-dock-right` alone: they are palette-only
+(`slashVisible: false`), reachable from Ctrl+P and from no "/" popup. All six
+share the typed-name asymmetry —
 their spec files name no handler, so `Chat::dispatchCommand()` dispatches
 nothing for the pseudo-names and a typed
 `/pane-dock-left` is a prompt to the model; the pair's palette arms instead

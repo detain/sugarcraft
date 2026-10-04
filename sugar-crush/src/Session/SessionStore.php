@@ -377,6 +377,26 @@ final class SessionStore
     }
 
     /**
+     * Make $id unnamed again — name and {@see TitleSource} both back to NULL —
+     * so the auto-titler may name it (roadmap P-A4); true when the row exists.
+     *
+     * The "back to auto" write a blank rename and `/rename --auto` need. A
+     * blank USER title cannot stand in for it: {@see renameSession()} with
+     * `''` would record `title_source = 'user'`, and the auto-titler's guarded
+     * UPDATE refuses a user-named row for good. Recency is bumped like any
+     * rename: the user just touched the session.
+     */
+    public function clearSessionName(string $id): bool
+    {
+        $stmt = $this->pdo->prepare('UPDATE sessions SET name = NULL, title_source = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+        $stmt->execute([$id]);
+        $cleared = $stmt->rowCount() > 0;
+        $this->sessionWriteSeq++;
+
+        return $cleared;
+    }
+
+    /**
      * Pin or unpin $id; true when the row exists. Pinned rows list first when
      * a {@see SessionQuery} asks for it and are exempt from
      * {@see pruneSessions()}. Recency (`updated_at`) is left alone: pinning

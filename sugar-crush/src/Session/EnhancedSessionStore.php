@@ -134,6 +134,12 @@ final class EnhancedSessionStore
         return $this->sessionStore->renameSessionIfUnnamed($id, $name);
     }
 
+    /** @see SessionStore::clearSessionName() */
+    public function clearSessionName(string $id): bool
+    {
+        return $this->sessionStore->clearSessionName($id);
+    }
+
     /** @see SessionStore::setPinned() */
     public function setPinned(string $id, bool $pinned): bool
     {

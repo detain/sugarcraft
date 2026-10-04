@@ -133,7 +133,11 @@ final class SessionCommandTest extends TestCase
         $this->assertSame('TestSession', $session['name']);
     }
 
-    public function testRenameRequiresArgs(): void
+    /**
+     * P-A4: a bare `/rename` no longer prints usage — it opens the inline
+     * title editor on the current session and writes nothing yet.
+     */
+    public function testABareRenameOpensTheInlineEditorAndWritesNothing(): void
     {
         $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
 
@@ -148,10 +152,9 @@ final class SessionCommandTest extends TestCase
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
         $this->assertFalse($next->inFlight);
-        $lastMsg = $next->history[count($next->history) - 1];
-        $this->assertSame(Role::Assistant, $lastMsg->role);
-        $this->assertStringContainsString('Usage:', $lastMsg->content);
-        $this->assertStringContainsString('/rename', $lastMsg->content);
+        $this->assertNotNull($next->titleEditor(), 'the editor is open');
+        $this->assertSame([], $next->history, 'opening the editor adds no transcript row');
+        $this->assertSame('', $next->inputBuf);
 
         // Session name should be unchanged
         $session = $this->sessionStore->getSession('test-session');

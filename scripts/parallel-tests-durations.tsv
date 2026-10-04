@@ -412,6 +412,7 @@ sugar-crush/tests/Context/Sections/MaximsSectionTest.php	0.142	9
 sugar-crush/tests/Support/ToolIpcFilesTest.php	0.142	22
 sugar-crush/tests/Cli/ConsolePermissionApproverWiringTest.php	0.141	13
 sugar-crush/tests/Context/RulebookPromptRenderTest.php	0.140	12
+sugar-crush/tests/Chat/RenameInlineTest.php	0.140	22
 sugar-crush/tests/Context/RuleLoaderTest.php	0.139	29
 sugar-crush/tests/Agents/SuspendedDelegationsTest.php	0.138	9
 sugar-crush/tests/Backend/EngineBackendServedModelTest.php	0.134	5
