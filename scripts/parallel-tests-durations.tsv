@@ -176,6 +176,7 @@ sugar-crush/tests/Support/HomeDirectoryPathReaderInventoryTest.php	1.721	7
 sugar-crush/tests/Cli/SessionLaunchFlagsTest.php	1.702	25
 sugar-crush/tests/Workflows/WorkflowIdentifierTest.php	1.695	10
 sugar-crush/tests/Tools/ToolPromptGuidanceTest.php	1.633	6
+sugar-crush/tests/Session/ContextLedgerPersistenceTest.php	1.600	7
 sugar-crush/tests/App/DockDragBytePathTest.php	1.567	14
 sugar-crush/tests/Cli/BootstrapConfigPathOverrideTest.php	1.560	17
 sugar-crush/tests/Backend/AwaitPromiseDiagnosticArmTest.php	1.536	11
@@ -299,6 +300,7 @@ sugar-crush/tests/Agents/AgentManagerRetentionTest.php	0.514	7
 sugar-crush/tests/Diagnostics/TuiErrorLogTest.php	0.513	40
 sugar-crush/tests/Tools/WebSearchTransportTest.php	0.504	13
 sugar-crush/tests/Runtime/ParallelGrandchildAskRelayTest.php	0.500	9
+sugar-crush/tests/Host/TurnRunnerLedgerTest.php	0.500	3
 sugar-crush/tests/MCP/StdioMcpEnvScrubTest.php	0.497	6
 sugar-crush/tests/Permissions/ChatAlwaysGrantScopeTest.php	0.491	5
 sugar-crush/tests/MCP/StdioMcpServerToolListRobustnessTest.php	0.486	9
@@ -360,6 +362,7 @@ sugar-crush/tests/Tui/AgentStripTest.php	0.300	15
 sugar-crush/tests/Tui/Settings/SettingsEditorKeysTest.php	0.300	10
 sugar-crush/tests/Backend/OverflowPruneAndRetryTest.php	0.300	5
 sugar-crush/tests/Backend/LengthStopContinuationTest.php	0.300	7
+sugar-crush/tests/Backend/EngineBackendLedgerFrameTest.php	0.300	5
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
@@ -602,6 +605,7 @@ sugar-crush/tests/Chat/SummaryRejectedWhenNotSmallerTest.php	0.040	4
 sugar-crush/tests/Server/HostAndOriginGuardTest.php	0.040	9
 sugar-crush/tests/Server/StaticFilesTest.php	0.040	6
 sugar-crush/tests/Server/TicketsTest.php	0.040	10
+sugar-crush/tests/Context/Pruning/ContextLedgerSyncTest.php	0.040	5
 sugar-crush/tests/Host/SpendLedgerTest.php	0.039	8
 sugar-crush/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.038	10
 sugar-crush/tests/Context/InstructionFileLoaderContainmentTest.php	0.037	29

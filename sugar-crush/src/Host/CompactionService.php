@@ -2180,6 +2180,7 @@ final class CompactionService
             stepId: $message->stepId,
             userVisible: $message->userVisible,
             turnTranscript: $message->turnTranscript,
+            contextLedger: $message->contextLedger,
             // O-2b: the live-row identity token, so the store sees the same
             // row and does not spend a fresh ref on the truncated copy.
             rowKey: $message->rowKey(),

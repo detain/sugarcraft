@@ -125,6 +125,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withSessionId('other-session'),
                 ['sessionId'],
             ],
+            // Roadmap 2.2-2: the session ledger the next turn starts from.
+            'withContextLedger' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withContextLedger(\SugarCraft\Crush\Context\Pruning\ContextLedger::new()->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('other', 'x')])),
+                ['contextLedger'],
+            ],
             // Audit R1: the per-turn App's compaction budgets.
             'withCompactorConfig' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 7)),
@@ -271,6 +276,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             stepUsageObserver: static function (): void {},
             maxConcurrentDelegations: 3,
             sessionId: 'populated-session',
+            contextLedger: \SugarCraft\Crush\Context\Pruning\ContextLedger::new()->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('populated', 'x')]),
         );
     }
 

@@ -545,6 +545,21 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          */
         private readonly ?string $summaryModel = null,
         /**
+         * Roadmap 2.2-2: the session's {@see \SugarCraft\Crush\Context\Pruning\ContextLedger}
+         * as the host holds it before this turn — what earlier turns pruned
+         * or summarised out of the model's view, and the refs their tool
+         * results keep. Seeded onto every turn's App ({@see sessionApp()}),
+         * so the first request is projected through it and the turn's own
+         * over-budget relief extends it rather than starting over; the turn
+         * hands back the ledger it ended with on its reply
+         * ({@see Message::$contextLedger}). Null — a host that keeps no
+         * ledger (`-p`, a background run) — runs exactly as before: every
+         * turn starts from an empty one and nothing comes back.
+         * Never inherited by a delegated sub-agent ({@see turnTools()}).
+         * @see withContextLedger()
+         */
+        private readonly ?\SugarCraft\Crush\Context\Pruning\ContextLedger $contextLedger = null,
+        /**
          * Step 4.2: set ONLY on the copy {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}
          * runs a delegated sub-agent on — the hook that holds each of that
          * run's calls to the preset's own declaration, argument halves
@@ -1009,6 +1024,21 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function withSessionId(?string $sessionId): self
     {
         return $this->mutate(['sessionId' => $sessionId === '' ? null : $sessionId]);
+    }
+
+    /**
+     * The same engine, running its next turn over the session ledger $ledger
+     * (roadmap 2.2-2) — see {@see $contextLedger}. Null runs without one.
+     */
+    public function withContextLedger(?\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger): self
+    {
+        return $this->mutate(['contextLedger' => $ledger]);
+    }
+
+    /** The session ledger the next turn starts from, or null — see {@see $contextLedger}. */
+    public function contextLedger(): ?\SugarCraft\Crush\Context\Pruning\ContextLedger
+    {
+        return $this->contextLedger;
     }
 
     /**
@@ -1976,7 +2006,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // The guard's own exit, named so Chat can say which loop it ended.
             ->withLoopGuardStoppedBy($stoppedByLoopGuard ? $loopGuard->endedBy() : null)
             ->withStepId($replyStepId)
-            ->withTurnTranscript($turnRows);
+            ->withTurnTranscript($turnRows)
+            // Roadmap 2.2-2: the session ledger as this turn leaves it, its
+            // results' provisional refs fixed in the order the model read
+            // them — the refs every request of the turn already showed.
+            ->withContextLedger($this->contextLedger === null ? null : ($app->contextLedger ?? $this->contextLedger)->withRefsAssigned($transcript));
         // @endregion return
     }
 
@@ -2029,7 +2063,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             ->withCompactorConfig($this->compactorConfig())
             // Step 0.13-a: before this, every engine-path hook was handed
             // `sessionId: ''` and no request named its session.
-            ->withSessionId($this->sessionId);
+            ->withSessionId($this->sessionId)
+            // Roadmap 2.2-2: the session's ledger, so the turn's first request
+            // is projected as the last one was and its relief extends it.
+            ->withContextLedger($this->contextLedger);
     }
 
     /**
@@ -2321,9 +2358,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // delegates is billed back into this one as a tool result (and
             // recorded from here), so recording it a second time under the
             // same member would count it twice.
+            // Nor this session's context ledger (roadmap 2.2-2): a delegated
+            // run's conversation is its own, and its refs and prunes must
+            // never be read against — or handed back as — the parent's.
             $bound ??= $spentSoFarUsd === null
-                ? $this->mutate(['siblingSpend' => null])
-                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null]);
+                ? $this->mutate(['siblingSpend' => null, 'contextLedger' => null])
+                : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null, 'contextLedger' => null]);
             $tools[] = $tool->withEngine($bound, $heartbeat, $subAgentEmitter);
         }
 
@@ -3783,6 +3823,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 // usage included as its own array (see 'usage' above).
                 'stepId' => $message->stepId,
                 'transcript' => $transcriptRows,
+                // Roadmap 2.2-2: the session ledger the turn ended with, as
+                // the plain array toArray() writes (allowed_classes => false,
+                // see 'usage'). Absent when the parent handed none.
+                'contextLedger' => $message->contextLedger?->toArray(),
             ];
         } catch (\Throwable $e) {
             $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
@@ -3996,6 +4040,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 ->withAttachmentNotice(is_string($data['attachmentNotice'] ?? null) ? $data['attachmentNotice'] : null)
                 ->withStepId(is_string($data['stepId'] ?? null) ? $data['stepId'] : null)
                 ->withTurnTranscript($turnRows)
+                // Roadmap 2.2-2: rebuilt leniently (ContextLedger::fromArray()
+                // skips what it cannot read). A frame without the key — an
+                // older child, or a turn handed no ledger — carries none.
+                ->withContextLedger(\is_array($data['contextLedger'] ?? null)
+                    ? \SugarCraft\Crush\Context\Pruning\ContextLedger::fromArray($data['contextLedger'])
+                    : null)
         );
     }
 

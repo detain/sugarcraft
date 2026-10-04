@@ -15,6 +15,7 @@ use SugarCraft\Crush\Backend\InteractiveTurn;
 use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\BackendToolEventsMsg;
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Diagnostics\NoticeSink;
 use SugarCraft\Crush\Events\PermissionAsked;
 use SugarCraft\Crush\Events\PermissionResolved;
@@ -72,6 +73,12 @@ use SugarCraft\Crush\Role;
  * Chat with none registered takes the one keyed to its own inbox
  * ({@see of()}), which every clone of that Chat shares.
  *
+ * THE SESSION'S CONTEXT LEDGER (roadmap 2.2-2). What the turns have pruned
+ * or summarised out of the model's view is session state, so it is kept
+ * here between turns ({@see ledger()} / {@see saveLedger()}), handed to each
+ * engine dispatch and taken back from its reply. Before this every turn
+ * started from an empty ledger.
+ *
  * NEVER FATAL TO THE TURN. The log is a second audience: a write that fails
  * (a locked database, a payload JSON cannot carry) drops that event — it is
  * not broadcast either, the {@see EventLog} contract — and a listener that
@@ -91,6 +98,17 @@ final class TurnRunner
 
     /** @var array<int, \Closure(SessionEvent): void> */
     private array $listeners = [];
+
+    /**
+     * The context ledger of each session this runner ran a turn for, keyed
+     * by session id ('' for a turn with none) — the copy a host that
+     * persists nothing keeps between turns (roadmap 2.2-2). A persisting
+     * host reads the store's instead, every dispatch, so a `/rewind`,
+     * `/branch` or another process's save is never shadowed by this copy.
+     *
+     * @var array<string, ContextLedger>
+     */
+    private array $ledgers = [];
 
     private int $nextListener = 0;
 
@@ -296,7 +314,18 @@ final class TurnRunner
 
         $runner = $this;
 
-        return static function () use ($runner, $backend, $visible, $onToken, $cancellation, $generation, $inbox): PromiseInterface {
+        return static function () use ($runner, $backend, $visible, $history, $onToken, $cancellation, $generation, $inbox, $transcripts, $sessionId): PromiseInterface {
+            // Roadmap 2.2-2: the session's context ledger rides into the
+            // turn, so its first request is projected exactly as the last
+            // turn's last one was — the cache-stable rewrite a prune bought
+            // is kept rather than re-derived from the full history. Read
+            // here, when the turn runs, not when it is queued; forgotten
+            // first for every row the history no longer has.
+            $carriesLedger = $backend instanceof EngineBackend;
+            if ($carriesLedger) {
+                $backend = $backend->withContextLedger($runner->ledger($transcripts, $sessionId)->syncAgainstHistory($history));
+            }
+
             // The permission events (1.C-2) share the inbox: a question has to
             // reach the screen in the turn's own event order, between the tool
             // events around it.
@@ -363,7 +392,14 @@ final class TurnRunner
                 return $events;
             };
 
-            $settle = static function (Message $message, bool $failed) use ($runner, $drain, $generation, $cancellation): Msg {
+            $settle = static function (Message $message, bool $failed) use ($runner, $drain, $generation, $cancellation, $transcripts, $sessionId, $carriesLedger): Msg {
+                // Roadmap 2.2-2: the ledger the turn ended with becomes the
+                // session's, and leaves the reply — it is transport, and the
+                // reply goes on to be a stored row.
+                if ($carriesLedger && $message->contextLedger !== null) {
+                    $runner->saveLedger($transcripts, $sessionId, $message->contextLedger);
+                    $message = $message->withContextLedger(null);
+                }
                 $events = $drain();
                 if ($events === []) {
                     // Nothing left to fold: the reply lands next, so the turn
@@ -425,6 +461,38 @@ final class TurnRunner
         $inbox->exchangeArray([]);
 
         return $events;
+    }
+
+    // ── the session's context ledger (roadmap 2.2-2) ───────────────────
+
+    /**
+     * $sessionId's context ledger as the next turn will start from it: the
+     * stored one when $transcripts persists, else the one this runner kept
+     * from the session's last turn, else an empty one.
+     */
+    public function ledger(?TranscriptStore $transcripts, ?string $sessionId): ContextLedger
+    {
+        if ($sessionId !== null && $transcripts?->persists() === true) {
+            $stored = $transcripts->loadLedger($sessionId);
+            if ($stored !== null) {
+                return $stored;
+            }
+        }
+
+        return $this->ledgers[$sessionId ?? ''] ?? ContextLedger::new();
+    }
+
+    /**
+     * Keep $ledger as $sessionId's: in this runner, and in the store when
+     * $transcripts persists. The one writer of the session's ledger — a
+     * settled turn's and a command's (`/sweep`, `/pruning`) both come here.
+     */
+    public function saveLedger(?TranscriptStore $transcripts, ?string $sessionId, ContextLedger $ledger): void
+    {
+        $this->ledgers[$sessionId ?? ''] = $ledger;
+        if ($sessionId !== null && $transcripts?->persists() === true) {
+            $transcripts->saveLedger($sessionId, $ledger);
+        }
     }
 
     // ── what the caller folded ─────────────────────────────────────────

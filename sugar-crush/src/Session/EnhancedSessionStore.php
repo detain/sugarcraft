@@ -237,13 +237,14 @@ final class EnhancedSessionStore
         }
 
         $stmt = $this->pdo->prepare('
-            SELECT "index", state_data, created_at, undone FROM checkpoints WHERE session_id = ? ORDER BY "index" ASC
+            SELECT "index", state_data, created_at, undone, context_ledger FROM checkpoints WHERE session_id = ? ORDER BY "index" ASC
         ');
         $stmt->execute([$fromId]);
         // The redo stack comes along (item 3.A-2): a branch taken right after
-        // a rewind can still /redo, from its own copies of the rows.
+        // a rewind can still /redo, from its own copies of the rows — each
+        // with the ledger it was taken with (roadmap 2.2-2).
         $insert = $this->pdo->prepare('
-            INSERT INTO checkpoints (session_id, "index", state_data, created_at, undone) VALUES (?, ?, ?, ?, ?)
+            INSERT INTO checkpoints (session_id, "index", state_data, created_at, undone, context_ledger) VALUES (?, ?, ?, ?, ?, ?)
         ');
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $stateData = $this->remapEnvelope((string) $row['state_data'], $idMap);
@@ -264,6 +265,7 @@ final class EnhancedSessionStore
                 $stateData,
                 $row['created_at'],
                 (int) $row['undone'],
+                $row['context_ledger'],
             ]);
         }
 
@@ -276,6 +278,14 @@ final class EnhancedSessionStore
                 INSERT INTO session_transcripts (session_id, state_data, updated_at) VALUES (?, ?, ?)
             ')->execute([$toId, $this->remapEnvelope($transcript, $idMap), gmdate('Y-m-d H:i:s')]);
         }
+
+        // Roadmap 2.2-2: the branch starts with the pruning state its copied
+        // transcript was being sent with, so its first turn sends the same
+        // projected bytes the parent's next one would have.
+        $this->pdo->prepare('
+            INSERT INTO context_ledgers (session_id, ledger_json, updated_at)
+            SELECT ?, ledger_json, ? FROM context_ledgers WHERE session_id = ?
+        ')->execute([$toId, gmdate('Y-m-d H:i:s'), $fromId]);
 
         // last_activity is the fork's, not the parent's: it was used just now.
         $this->pdo->prepare('
@@ -340,6 +350,74 @@ final class EnhancedSessionStore
     public function updateSession(string $id): void
     {
         $this->sessionStore->updateSession($id);
+    }
+
+    /**
+     * Store $ledger as $sessionId's context ledger (roadmap 2.2-2), replacing
+     * the one before. A session the store does not have is refused by the
+     * foreign key, which this reports as false rather than throwing: a
+     * ledger is a cache-stability aid, never worth failing a turn over.
+     */
+    public function saveContextLedger(string $sessionId, \SugarCraft\Crush\Context\Pruning\ContextLedger $ledger): bool
+    {
+        try {
+            $this->pdo->prepare('
+                INSERT INTO context_ledgers (session_id, ledger_json, updated_at) VALUES (?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET ledger_json = excluded.ledger_json, updated_at = excluded.updated_at
+            ')->execute([$sessionId, self::encodeJson($ledger->toArray()), gmdate('Y-m-d H:i:s')]);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * $sessionId's context ledger, or null when none was ever saved. A row
+     * that does not decode reads as an empty ledger
+     * ({@see \SugarCraft\Crush\Context\Pruning\ContextLedger::fromArray()}
+     * is lenient): losing a prune costs context, never the session.
+     */
+    public function loadContextLedger(string $sessionId): ?\SugarCraft\Crush\Context\Pruning\ContextLedger
+    {
+        $stmt = $this->pdo->prepare('SELECT ledger_json FROM context_ledgers WHERE session_id = ?');
+        $stmt->execute([$sessionId]);
+        $json = $stmt->fetchColumn();
+        $stmt->closeCursor();
+        if (!\is_string($json)) {
+            return null;
+        }
+
+        try {
+            $raw = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $raw = null;
+        }
+
+        return \SugarCraft\Crush\Context\Pruning\ContextLedger::fromArray($raw);
+    }
+
+    /**
+     * Inside a write: make the ledger the checkpoint row matching $where was
+     * taken with the session's current one. A row taken before checkpoints
+     * carried a ledger leaves the current ledger as it is.
+     *
+     * @param list<int|string> $params
+     */
+    private function restoreCheckpointLedger(string $sessionId, string $where, array $params): void
+    {
+        $stmt = $this->pdo->prepare('SELECT context_ledger FROM checkpoints WHERE ' . $where . ' LIMIT 1');
+        $stmt->execute($params);
+        $json = $stmt->fetchColumn();
+        $stmt->closeCursor();
+        if (!\is_string($json)) {
+            return;
+        }
+
+        $this->pdo->prepare('
+            INSERT INTO context_ledgers (session_id, ledger_json, updated_at) VALUES (?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET ledger_json = excluded.ledger_json, updated_at = excluded.updated_at
+        ')->execute([$sessionId, $json, gmdate('Y-m-d H:i:s')]);
     }
 
     /**
@@ -478,6 +556,14 @@ final class EnhancedSessionStore
         if (!\in_array('undone', $checkpointColumns, true)) {
             $this->pdo->exec('ALTER TABLE checkpoints ADD COLUMN undone INTEGER NOT NULL DEFAULT 0');
         }
+        // Roadmap 2.2-2: the session's context ledger as each checkpoint was
+        // taken, so `/rewind`, `/undo` and `/redo` put back the pruning state
+        // that matches the conversation they restore (DCP §13.2 B). NULL on
+        // every row written before it existed: restoring one keeps the
+        // current ledger, which the next turn syncs against the rows.
+        if (!\in_array('context_ledger', $checkpointColumns, true)) {
+            $this->pdo->exec('ALTER TABLE checkpoints ADD COLUMN context_ledger TEXT');
+        }
 
         $this->migrateCheckpointIndexUnique();
 
@@ -508,6 +594,21 @@ final class EnhancedSessionStore
             CREATE TABLE IF NOT EXISTS session_transcripts (
                 session_id TEXT PRIMARY KEY,
                 state_data TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            )
+        ');
+
+        // The session's context ledger (roadmap 2.2-2, DCP §13.2 B): what the
+        // turns have pruned or summarised out of the model's view, and the
+        // refs its tool results keep — the state that lets the next turn send
+        // the same projected bytes the last one did. One row per session,
+        // rewritten as it changes; the FK cascade deletes it with its session
+        // (DCP #557: a ledger outliving its session is a leak).
+        $this->pdo->exec('
+            CREATE TABLE IF NOT EXISTS context_ledgers (
+                session_id TEXT PRIMARY KEY,
+                ledger_json TEXT NOT NULL,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
@@ -1140,10 +1241,12 @@ final class EnhancedSessionStore
         // item is about. One turn per line, and every line held one open.
         $stmt->closeCursor();
 
-        // Insert the new checkpoint
+        // Insert the new checkpoint, with the session's context ledger as it
+        // stands (roadmap 2.2-2) — copied inside the same write, so the
+        // snapshot is the ledger the checkpointed conversation was sent with.
         $insertStmt = $this->pdo->prepare('
-            INSERT INTO checkpoints (session_id, "index", state_data, created_at, undone)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO checkpoints (session_id, "index", state_data, created_at, undone, context_ledger)
+            VALUES (?, ?, ?, ?, ?, (SELECT ledger_json FROM context_ledgers WHERE session_id = ?))
         ');
         $insertStmt->execute([
             $sessionId,
@@ -1153,6 +1256,7 @@ final class EnhancedSessionStore
             // process's local time (audit SES-5).
             gmdate('Y-m-d H:i:s'),
             $undone,
+            $sessionId,
         ]);
 
         return $nextIndex;
@@ -2120,6 +2224,9 @@ final class EnhancedSessionStore
                 $tipIndex = $this->insertCheckpointRow($sessionId, $redoTip, self::CHECKPOINT_REDO_TIP);
             }
 
+            // After the tip is written, which snapshots the ledger being left.
+            $this->restoreCheckpointLedger($sessionId, 'session_id = ? AND "index" = ?', [$sessionId, $index]);
+
             return $state;
         });
 
@@ -2194,6 +2301,7 @@ final class EnhancedSessionStore
                 $this->pdo->prepare('
                     UPDATE checkpoints SET undone = ? WHERE session_id = ? AND undone = ? AND "index" < ?
                 ')->execute([self::CHECKPOINT_LIVE, $sessionId, self::CHECKPOINT_UNDONE, (int) $to['index']]);
+                $this->restoreCheckpointLedger($sessionId, 'id = ?', [(int) $to['id']]);
 
                 if ($tip) {
                     $this->queueWorkspaceRefDrops('id = ?', [(int) $to['id']]);

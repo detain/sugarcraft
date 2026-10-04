@@ -108,7 +108,7 @@ re-prefills the whole conversation behind it.
 - **Pruned tool output and superseded turn-context rows.** When a step's request
   is over its budget, `EngineBackend::runTurn()` prunes before sending
   (`Context\Pruning\EmergencyPrune`), and `Runtime::buildMessages()` projects every
-  request through the turn's `Context\Pruning\ContextLedger`. An old tool result
+  request through the session's `Context\Pruning\ContextLedger`. An old tool result
   then reads, in place of its output,
   `[Read src/Tools/Bash.php — output pruned to save context; re-run the tool if you need it]`
   — the tool and its main argument, on one line, bounded to 120 characters

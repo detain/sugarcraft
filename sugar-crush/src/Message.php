@@ -251,6 +251,19 @@ final class Message implements \JsonSerializable
          */
         public readonly array $turnTranscript = [],
         /**
+         * The session's {@see \SugarCraft\Crush\Context\Pruning\ContextLedger}
+         * as the turn that produced this reply left it (roadmap 2.2-2): what
+         * the turn pruned or summarised out of the model's view, and the refs
+         * its tool results keep. Set only on the reply
+         * {@see \SugarCraft\Crush\Backend\EngineBackend} returns for a turn
+         * it was handed a ledger for, carried across the fork result frame as
+         * an array, and taken off by the host that keeps the session's ledger
+         * ({@see \SugarCraft\Crush\Host\TurnRunner}). Transport only, like
+         * {@see $turnTranscript}: never part of {@see toWire()} and never
+         * persisted with the row.
+         */
+        public readonly ?\SugarCraft\Crush\Context\Pruning\ContextLedger $contextLedger = null,
+        /**
          * The row-identity token {@see rowKey()} returns. Never pass one:
          * null mints a fresh token, which is what a new row is, and
          * {@see mutate()} passes the original's on so a wither's copy stays
@@ -651,6 +664,15 @@ final class Message implements \JsonSerializable
     }
 
     /**
+     * Attach (or clear, via null) the ledger the turn ended with - see
+     * $contextLedger's docblock.
+     */
+    public function withContextLedger(?\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger): self
+    {
+        return $this->mutate(['contextLedger' => $ledger]);
+    }
+
+    /**
      * Fold a settled engine reply's {@see $turnTranscript} into the history
      * the turn ran over (roadmap 1.B-2), so the next request replays the turn
      * as it happened - each step's assistant row with its `tool_calls`, its
@@ -792,6 +814,7 @@ final class Message implements \JsonSerializable
             'stepId' => $this->stepId,
             'userVisible' => $this->userVisible,
             'turnTranscript' => $this->turnTranscript,
+            'contextLedger' => $this->contextLedger,
             'rowKey' => $this->rowKey,
         ], $changes));
     }

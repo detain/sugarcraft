@@ -307,7 +307,7 @@ big-endian length plus a `serialize()`d array, decoded with
 |---|---|---|
 | child → parent | `token`, `reasoning` | assistant text / thinking deltas (an empty `reasoning` is a heartbeat) |
 | child → parent | `started`, `finished`, `subagent`, `spend_cap` | tool and sub-agent events, in turn order |
-| child → parent | `result` | the settled reply, usage and flags, the reply's `stepId` and the turn's `transcript` rows; always the last frame |
+| child → parent | `result` | the settled reply, usage and flags, the reply's `stepId`, the turn's `transcript` rows and the session's `contextLedger` as the turn left it (absent when the turn was handed none); always the last frame |
 | child → parent | `ask` | `askId`, `toolCallId`, `tool`, `arguments` (after any hook rewrite), `reason`, `source`, `mode`, `suggestions`, `alwaysScope` |
 | parent → child | `ask_reply` | `askId`, `reply` (`once`/`always`/`reject`), `note` (≤ 2 KiB) |
 | child → parent | `step` | `step`, `maxSteps`, `context` (the step's `ContextPressure` as an array); written before each provider call |
@@ -543,10 +543,19 @@ empty reply or a summary no smaller than its source makes no block, and the
 step goes out as it stands; past the spend cap no summary is asked for. Each
 relief is tried at most once per step.
 
-The ledger is the turn's own (it does not yet cross to Chat), and Chat's
-compaction applies the same age rule to the exchanges it condenses
-(`ContextCompactor::removeToolResults()`, which never touches the preserved
-tail).
+The ledger is the session's, not the turn's (roadmap 2.2-2). `Host\TurnRunner`
+keeps it between turns and stores it beside the transcript
+(`EnhancedSessionStore::saveContextLedger()`, table `context_ledgers`, deleted
+with the session, copied by a branch, snapshotted by each checkpoint and put
+back by `/rewind` and `/redo`). Each dispatch first forgets what names a row the
+history no longer has (`ContextLedger::syncAgainstHistory()`), hands it to the
+turn (`EngineBackend::withContextLedger()`, seeded onto the turn's App), and the
+reply hands back the ledger the turn ended with (`Message::$contextLedger`, the
+`result` frame's `contextLedger` key on the forked path), so the next turn's
+first request is projected exactly as this turn's last one was. A delegated
+sub-agent never inherits it. Chat's compaction applies the same age rule to the
+exchanges it condenses (`ContextCompactor::removeToolResults()`, which never
+touches the preserved tail).
 
 The two type worlds meet at the `EngineBackend` seam: the chassis works in the
 root `Message`/`ToolCall` value objects, the engine in the typed

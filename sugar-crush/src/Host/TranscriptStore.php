@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Host;
 
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Session\DebouncedTranscriptWriter;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
@@ -39,6 +40,11 @@ use SugarCraft\Crush\ToolResult;
  * it. Before this the memo was keyed by instance, so a placeholder finished
  * by a wither, or a tool row stamped with its step, was saved under a fresh
  * ref each time (the W1-b/W2-a handoff).
+ *
+ * THE CONTEXT LEDGER rides beside the transcript (roadmap 2.2-2,
+ * {@see loadLedger()} / {@see saveLedger()}): what the session's turns have
+ * pruned out of the model's view belongs to the session, and is forked,
+ * checkpointed and deleted with it.
  *
  * A store that is not an {@see EnhancedSessionStore} (or none) persists
  * nothing and loads nothing, the way Chat always degraded.
@@ -168,6 +174,41 @@ final class TranscriptStore
         }
 
         return array_map(static fn (array $row): Message => self::reviveRow($row), $rows);
+    }
+
+    /**
+     * $sessionId's saved context ledger (roadmap 2.2-2), or null when none
+     * was saved, the store cannot say, or nothing persists.
+     */
+    public function loadLedger(string $sessionId): ?ContextLedger
+    {
+        if ($this->store === null) {
+            return null;
+        }
+
+        try {
+            return $this->store->loadContextLedger($sessionId);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Save $ledger as $sessionId's context ledger, now. False when nothing
+     * persists or the store refused it — never thrown: the ledger is a
+     * cache-stability aid, and a turn is never failed over one.
+     */
+    public function saveLedger(string $sessionId, ContextLedger $ledger): bool
+    {
+        if ($this->store === null) {
+            return false;
+        }
+
+        try {
+            return $this->store->saveContextLedger($sessionId, $ledger);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
