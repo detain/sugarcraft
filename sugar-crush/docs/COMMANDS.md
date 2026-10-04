@@ -309,7 +309,7 @@ edit it by hand.
 | `/sessions` | ✓ | | `[<query>]` | List, search and manage sessions |
 | `/session-pin` | | | — | Pin the current session to the front of the list, or unpin it |
 | `/session-delete` | | | — | Open the session list to delete a session |
-| `/model` | ✓ | ✓ | `[provider]` | Switch the active model provider |
+| `/model` | ✓ | ✓ | `[provider [model]]` | Switch the active provider, or a provider and its model |
 | `/share` | ✓ | | `[md\|html\|json] [path]` | Export the session to a file |
 | `/docs` | | | — | Open the documentation |
 | `/exit` | ✓ | ✓ | — | Quit the app |

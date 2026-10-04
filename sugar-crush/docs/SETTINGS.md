@@ -71,7 +71,8 @@ docked, moved, undocked or reset — its value is the versioned `DockLayout`
 manifest, and the door is `App`'s own `onLayoutChange` hook rather than
 Chat's. The settings view's save is a door of its own too — `SettingsWriter`,
 see [Saving from the settings view](#saving-from-the-settings-view) — and it
-writes the keys the view changed, never `provider` or `theme`. Everything else
+writes the keys the view changed, never `provider` or `theme`; `/model
+<provider> <model>` writes `models` through the same writer. Everything else
 in it, including `trustedProjectSettings`, you hand-author.
 
 Two orderings on that table are deliberate and both cost something:
@@ -556,9 +557,15 @@ switch picked. `Bootstrap::selectedModelName()` resolves `--model`, then
 `$SUGARCRUSH_MODEL`, then the entry for the provider being built, then the
 provider's own default — at launch, on every `/model` switch, and for the
 status-bar caption alike. The Ctrl+P action called "Switch Model" still writes
-`provider`, not a model; `models` is written by the settings view's save (see
-[Saving from the settings view](#saving-from-the-settings-view)), or by
-hand.
+`provider`, not a model; `models` is written by `/model <provider> <model>`,
+by the settings view's save (see
+[Saving from the settings view](#saving-from-the-settings-view)) — both through
+the same `SettingsWriter` — or by hand. `/model` saves the entry before it
+builds the switched backend, so the provider is constructed on the chosen id
+rather than relabelled, and writes the whole map this launch resolves: a
+`models` in `config.json` masks one in `settings.json` key-wise, so the
+entries a `settings.json` map supplies are carried into `config.json` rather
+than masked by it.
 
 **`permissionMode` and `permissionRules` are readable from
 `~/.sugar-crush/settings.json`**, but not through this stack. They go through

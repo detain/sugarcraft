@@ -651,6 +651,31 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * A copy that sends every request to `$model` (roadmap N-P3b; roadmap 4.1
+     * reuses it for a preset's `model`).
+     *
+     * The id reaches the wire through {@see App::$model}, which every turn's
+     * App is built from ({@see sessionApp()}), so this is the whole switch for
+     * the requests themselves. The PROVIDER is not rebuilt: one constructed
+     * for another model keeps answering {@see contextWindow()} and its own
+     * pricing for the model it was built with. A caller that can rebuild
+     * should — `Chat`'s `/model <provider> <model>` persists the choice first
+     * and rebuilds through the launch factory, which builds the provider on
+     * the persisted id — and apply this on top, so the explicit choice wins
+     * even where `--model` or `$SUGARCRUSH_MODEL` outrank the persisted one.
+     *
+     * @throws \InvalidArgumentException for an empty or blank id
+     */
+    public function withModel(string $model): self
+    {
+        if (trim($model) === '') {
+            throw new \InvalidArgumentException('A model id cannot be empty.');
+        }
+
+        return $this->mutate(['model' => $model]);
+    }
+
+    /**
      * The provider this engine completes against — read by
      * {@see \SugarCraft\Crush\Agents\EngineExecutor} to refuse a workflow stage
      * on the offline echo fallback rather than pass echoed text off as work.

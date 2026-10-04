@@ -11560,11 +11560,17 @@ final class Chat implements Model
      * an unknown name into the transcript rather than throwing, and fires
      * `$onConfigChange('provider', …)`.
      *
-     * PERSISTENCE: session-only from this class's point of view. The
-     * `onConfigChange` callback is where a `provider` choice becomes durable,
-     * and the callback that writes `~/.sugar-crush/config.json` is installed by
-     * `Cli\Bootstrap::chat()`; a Chat built without one (every embedder, and
-     * every test here) switches for this session and persists nothing.
+     * `/model <provider> <model>` (roadmap N-P3b) switches the MODEL too, not
+     * just the provider - the same switch with the model id carried through
+     * {@see selectPaletteProvider()}'s second argument.
+     *
+     * PERSISTENCE: the `onConfigChange` callback is where a `provider` choice
+     * becomes durable, and the callback that writes
+     * `~/.sugar-crush/config.json` is installed by `Cli\Bootstrap::chat()`; a
+     * Chat built without one (every embedder, and most tests here) switches
+     * for this session and persists nothing. A MODEL choice persists through
+     * the workspace's {@see \SugarCraft\Crush\Config\Settings\SettingsWriter}
+     * instead, into the per-provider `models` setting (decision D9).
      *
      * @param list<string> $args
      * @return array{0: self, 1: ?\Closure}
@@ -11577,20 +11583,21 @@ final class Chat implements Model
             ]), null];
         }
 
-        // A provider name is a single token. More than one means the user typed
-        // a sentence, and guessing which word was the name would switch to
-        // something they did not ask for - so say what the command takes and
-        // which names exist, in the transcript, where the answer is readable.
-        if (count($args) !== 1) {
+        // A provider name is a single token and a model id another. More than
+        // two means the user typed a sentence, and guessing which words were
+        // the names would switch to something they did not ask for - so say
+        // what the command takes and which names exist, in the transcript,
+        // where the answer is readable.
+        if (count($args) > 2) {
             $available = implode(', ', $this->availableProviderNames());
 
             return [$this->withInputBuf('')->mutate(['history' => [
                 ...$this->history,
-                Message::assistant("Usage: /model [provider]. Available: {$available}")->withUiOnly(),
+                Message::assistant("Usage: /model [provider [model]]. Available: {$available}")->withUiOnly(),
             ]]), null];
         }
 
-        return $this->withInputBuf('')->selectPaletteProvider($args[0]);
+        return $this->withInputBuf('')->selectPaletteProvider($args[0], $args[1] ?? null);
     }
 
     /**
@@ -17779,10 +17786,52 @@ final class Chat implements Model
     }
 
     /**
+     * Switch to provider `$name`, and to `$model` on it when one is named
+     * (N-P3b: `/model <provider> <model>`).
+     *
+     * A MODEL CHOICE IS SAVED BEFORE THE BACKEND IS BUILT, into the
+     * per-provider `models` setting through the workspace's
+     * {@see \SugarCraft\Crush\Config\Settings\SettingsWriter} (decision D9;
+     * the user chose that the model choice persists). The order matters: the
+     * launch factory resolves the model through `Bootstrap::selectedModelName()`,
+     * which reads that setting, so the provider is BUILT on the chosen id - its
+     * context window and prices follow it - instead of being built on the old
+     * one and relabelled. {@see \SugarCraft\Crush\Backend\EngineBackend::withModel()}
+     * is applied on top so the choice wins this session even where `--model`
+     * or `$SUGARCRUSH_MODEL` outrank the saved entry, and where nothing could
+     * be saved. A save that fails is reported, never fatal: the switch still
+     * happens for this session.
+     *
      * @return array{0: self, 1: ?\Closure}
      */
-    private function selectPaletteProvider(string $name): array
+    private function selectPaletteProvider(string $name, ?string $model = null): array
     {
+        $model = $model === null || trim($model) === '' ? null : trim($model);
+        $saved = null;
+        if ($model !== null) {
+            $writer = $this->workspace?->service(\SugarCraft\Crush\Config\Settings\SettingsWriter::class);
+            if (!$writer instanceof \SugarCraft\Crush\Config\Settings\SettingsWriter) {
+                $saved = 'for this session only: nothing here saves a model choice';
+            } elseif (!\in_array($name, $this->availableProviderNames(), true)) {
+                // Never save a model under a name that is not a provider: the
+                // entry would sit in config.json, read by nothing.
+                $saved = null;
+            } else {
+                try {
+                    $layered = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()['models'] ?? [];
+                    $path = \SugarCraft\Crush\Config\Settings\ModelChoice::persist(
+                        $writer,
+                        $name,
+                        $model,
+                        \is_array($layered) ? $layered : [],
+                    );
+                    $saved = 'saved as models.' . self::reportField($name) . ' in ' . self::reportField($path);
+                } catch (\Throwable $e) {
+                    $saved = 'not saved: ' . self::reportField($e->getMessage());
+                }
+            }
+        }
+
         try {
             // The launch's ONE gate is carried across the switch rather than
             // left to be rebuilt: PermissionGate's Auto-mode circuit breaker
@@ -17834,19 +17883,40 @@ final class Chat implements Model
                     $backend = $backend->withRulesState($this->rulesState);
                 }
             }
+
+            // A model is a property of the engine; a command-line backend has
+            // no model to switch, and saying "switched" would be a lie.
+            if ($model !== null && !$backend instanceof \SugarCraft\Crush\Backend\EngineBackend) {
+                throw new \RuntimeException('this provider does not take a model choice');
+            }
+            if ($model !== null) {
+                $backend = $backend->withModel($model);
+            }
         } catch (\Throwable $e) {
+            // A model choice saved before the build failed stays saved (it is
+            // a valid entry for a real provider), so the reply says so rather
+            // than letting the next launch surprise the user with it.
+            $note = $model !== null && $saved !== null && str_starts_with($saved, 'saved')
+                ? " (model '" . self::reportField($model) . "' was {$saved})"
+                : '';
+
             return [$this->mutate([
                 'palette' => null,
-                'history' => [...$this->history, Message::assistant("Could not switch to provider '{$name}': {$e->getMessage()}")->withUiOnly()],
+                'history' => [...$this->history, Message::assistant("Could not switch to provider '{$name}': {$e->getMessage()}{$note}")->withUiOnly()],
             ]), null];
         }
 
         $this->onConfigChange?->__invoke('provider', $name);
 
+        $report = $model === null
+            ? "Switched to provider '{$name}'."
+            : "Switched to provider '{$name}', model '" . self::reportField($model) . "'"
+                . ($saved === null ? '.' : " ({$saved}).");
+
         return [$this->mutate([
             'palette' => null,
             'backend' => $backend,
-            'history' => [...$this->history, Message::assistant("Switched to provider '{$name}'.")->withUiOnly()],
+            'history' => [...$this->history, Message::assistant($report)->withUiOnly()],
         ]), null];
     }
 
