@@ -12,6 +12,8 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Tools\BuiltIn\Bash;
+use SugarCraft\Crush\Tools\Sandbox\Bubblewrap;
 
 /**
  * The "Tools" category's keys. One file per category so a step adding a
@@ -49,6 +51,17 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp('Tool names or globs removed from the model-facing tool set.')
                 ->withReaderSymbol(Bootstrap::class . '::filterToolSet')
                 ->withReadBy('`Bootstrap::tools()` → `filterToolSet()`'),
+            // User tier only: `off` is the direction that widens, and a
+            // checked-out repository must not be able to take it.
+            SettingDefinition::new('bashSandbox', SettingType::Enum, Bubblewrap::MODE_OFF)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withEnumValues(Bubblewrap::MODES)
+                ->withLabel('Bash sandbox')
+                ->withHelp('Linux only: run Bash inside bubblewrap, writable only in the working root (`no-network` also cuts the network). Refuses commands when bwrap cannot start.')
+                ->withReaderSymbol(Bash::class . '::fromCatalog')
+                ->withReadBy('`Bash::fromCatalog()` → `Bubblewrap::fromSetting()`'),
         ];
     }
 }

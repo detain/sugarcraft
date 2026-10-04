@@ -489,6 +489,7 @@ final class LayeredSettings
         'secretEnvAllowlist',
         'allowedTools',
         'disabledTools',
+        'bashSandbox',
         'instructions',
         'disabledRules',
         'embeddingModel',

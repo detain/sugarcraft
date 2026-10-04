@@ -267,14 +267,14 @@ cannot tell whether the sentence is about them.)
 > migrate *to*: `settings.json` is never written.
 
 <!-- settings:layered:begin -->
-Only these thirty keys are layered — `provider`, `models`, `titleModel`,
+Only these thirty-one keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `contextWindow`, `secretEnvAllowlist`, `allowedTools`,
-`disabledTools`, `instructions`, `disabledRules`, `embeddingModel`,
-`disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`,
-`attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`,
-`lintCommands`.
+`disabledTools`, `bashSandbox`, `instructions`, `disabledRules`,
+`embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
+`includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `theme`,
+`statusLine`, `layout`, `lintCommands`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -311,7 +311,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, twenty-four keys are **never** taken from a project file:
+Even for a trusted project, twenty-five keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -355,6 +355,9 @@ keys, because each moves the bill — an inflated window switches
 auto-compaction off so requests grow until the server refuses them, an extra
 body field such as `n` multiplies every request, a thinking budget is billed as
 output, and switching prompt caching off bills every prompt in full;
+`bashSandbox`, because its meaningful direction is `off` — a checkout able to
+set it could lift the write jail the operator put around every command `Bash`
+runs, from inside the very repository that jail confines;
 `attribution`, because it is the trailer the model is told to stamp on every
 commit it makes under the operator's git identity, and a checkout choosing that
 text would be a repository writing into the operator's own history (its sibling

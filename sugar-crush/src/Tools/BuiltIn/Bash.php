@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Tools\AcceptsHeartbeat;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
@@ -12,6 +13,7 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\PromptGuidance;
 use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
 use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
+use SugarCraft\Crush\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
@@ -33,8 +35,10 @@ use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
  * root so git/file operations run within that isolated tree. The command
  * itself is still unconstrained.
  *
- * Callers that need containment have two layers: run the process itself in a
- * real jail/container, and/or opt into
+ * Callers that need containment have three layers: the `bashSandbox` setting
+ * (roadmap 5.12), which runs every command inside a {@see Bubblewrap} write
+ * jail on Linux and refuses to run it at all when that jail cannot start; run
+ * the process itself in a real jail/container; and/or opt into
  * {@see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook}, a heuristic
  * PreToolUse hook that denies commands referencing paths outside `$root`.
  */
@@ -60,6 +64,9 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * block, and a non-empty attribution string is the trailer a commit
      * message (or the closing line a pull-request description) ends with.
      * The defaults are the shipped behaviour: the block on, no trailer.
+     *
+     * $sandbox is the `bashSandbox` setting's jail (roadmap 5.12); null — the
+     * default — runs commands exactly as before.
      */
     public function __construct(
         private ?string $root = null,
@@ -68,7 +75,22 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         private bool $includeGitInstructions = true,
         private string $commitAttribution = '',
         private string $prAttribution = '',
+        private ?Bubblewrap $sandbox = null,
     ) {}
+
+    /**
+     * This tool with its sandbox replaced (null runs unconfined), every other
+     * field kept — the {@see withGitGuidance()} rebuild.
+     */
+    public function withSandbox(?Bubblewrap $sandbox): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['sandbox' => $sandbox]));
+    }
+
+    public function sandbox(): ?Bubblewrap
+    {
+        return $this->sandbox;
+    }
 
     /**
      * This tool with the git-guidance settings replaced and every other field
@@ -85,9 +107,20 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         ]));
     }
 
+    /**
+     * Reads `bashSandbox` HERE rather than in `Bootstrap::tools()`, for the
+     * reason that method applies its filter where it does: every launch path
+     * that builds a Bash — the TUI, `-p`, the turn child, a Task sub-agent —
+     * builds it through this catalog entry, so a sandbox decided anywhere else
+     * is a sandbox one of them skips. The key is user-tier only, so a
+     * checked-out repository cannot switch it off.
+     */
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root);
+        return new self(
+            $context->root,
+            sandbox: Bubblewrap::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null),
+        );
     }
 
     public function name(): string
@@ -150,7 +183,19 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 . 'comes back with a line saying it timed out — raise it for a long build or test run.',
                 self::DEFAULT_TIMEOUT_SECONDS,
                 self::MAX_TIMEOUT_SECONDS,
-            );
+            )
+            . ($this->sandbox === null ? '' : ' ' . $this->sandbox->describe($this->writableRoot()));
+    }
+
+    /**
+     * The directory the sandbox leaves writable: the worktree jail's root for
+     * an isolated teammate, never the project root above it, else the root
+     * the commands `cd` into, else this process's working directory (which
+     * is where an unrooted command runs).
+     */
+    private function writableRoot(): string
+    {
+        return $this->worktreeJail?->root() ?? $this->root ?? (string) getcwd();
     }
 
     /**
@@ -340,7 +385,36 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // $maxOutputBytes by truncateMerged() below.
         $maxBytes = $this->captureBound($this->maxOutputBytes);
         $timeout = self::timeoutSeconds($args['timeout'] ?? null);
-        $run = ($args['interactive'] ?? false) === true
+        $interactive = ($args['interactive'] ?? false) === true;
+
+        // The sandbox (roadmap 5.12) is a PREFIX on the same shell string, so
+        // both capture mechanisms — and the setsid group kill the timeout
+        // fires — keep working unchanged. A configured sandbox that cannot
+        // start REFUSES the command: running it unconfined because the jail
+        // failed would turn the setting into a promise nobody keeps.
+        if ($this->sandbox !== null) {
+            $refusal = $this->sandbox->probe(function (string $probe): array {
+                $result = $this->runCaptured($probe, null, 4096, 10.0);
+
+                return ['exitCode' => $result['exitCode'], 'stderr' => $result['stderr']];
+            });
+            if ($refusal !== null) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: sprintf(
+                        'Not run: the bashSandbox setting is "%s" but the bubblewrap sandbox cannot start on this host (%s). '
+                        . 'Nothing ran, sandboxed or otherwise. Tell the user: they can fix bwrap '
+                        . '(on Ubuntu, unprivileged user namespaces are restricted by AppArmor) or set bashSandbox to "off".',
+                        $this->sandbox->mode(),
+                        $refusal,
+                    ),
+                    isError: true,
+                );
+            }
+            $cmd = $this->sandbox->wrap($cmd, $this->writableRoot(), $interactive);
+        }
+
+        $run = $interactive
             ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $heartbeat)
             : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $heartbeat);
         if (($run['timedOut'] ?? false) === true) {

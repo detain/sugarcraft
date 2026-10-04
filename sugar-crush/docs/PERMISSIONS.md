@@ -730,6 +730,55 @@ three refuse the launch and the fourth quietly contributes nothing — which is
 still fail-closed, since the project settings layer is the lowest-trust input
 in the stack and its absence is the pre-layering behaviour.
 
+## Sandbox
+
+The gate decides *whether* a `Bash` call runs; it cannot bound what the shell
+text does once it is allowed, because `Bash` is deliberately not path-jailed
+(a free-form command cannot be jailed by rewriting its string). On Linux the
+user-tier `bashSandbox` setting adds that bound underneath the gate by running
+every command inside [bubblewrap](https://github.com/containers/bubblewrap):
+
+```json
+{ "bashSandbox": "on" }
+```
+
+| Value | Effect |
+|---|---|
+| `off` (default) | Commands run as the user, unconfined. |
+| `on` | The whole filesystem is bound read-only; only the working root, a private `/tmp` and `$TMPDIR` are writable. Every namespace is unshared except the network. |
+| `no-network` | `on`, plus no network access. |
+
+What it holds and what it does not:
+
+- **Writes only.** It is a write jail, not a secrecy one: a sandboxed command
+  can still *read* anything you can (`~/.ssh` included). The credential env
+  scrub keeps running underneath it.
+- **The working root is the jail root.** A worktree-isolated teammate gets its
+  own worktree writable, never the project root above it. In a linked worktree
+  the worktree's gitdir and the common `.git` it points at are bound writable
+  too, so `git commit` still works there.
+- **Escape hatches stay read-only inside the root**: `.git/hooks`,
+  `.git/config` (a hook, `core.hooksPath` or `core.fsmonitor` written there
+  would run unsandboxed the next time *you* run git), the project's
+  `.sugar-crush/` and `.mcp.json`. Commits work; objects, refs and the index are
+  writable. A path that does not exist when a command starts is not protected.
+- **Your home directory is read-only**, so a tool that writes a cache under
+  `~` (composer, npm, pip) needs its cache pointed into the project or `/tmp`.
+- **Fail closed.** A host can ship `bwrap` and still refuse to run it — on
+  Ubuntu 24.04 AppArmor restricts unprivileged user namespaces and every call
+  dies with `setting up uid map: Permission denied`. The tool probes the exact
+  flag set once per process; when the sandbox cannot start (or `bwrap` is
+  missing, or the host is not Linux), every `Bash` call is **refused** with the
+  reason, and nothing runs unsandboxed. An unrecognised value is read as
+  `no-network`, never as `off`.
+- **User tier only.** `off` is the direction that widens, so a project file
+  can never set it — not even a trusted one.
+
+The model is told about the sandbox in the `Bash` tool's description while it
+is on, so a "Read-only file system" error reads as a boundary rather than
+something to work around. Where bubblewrap is unavailable, the opt-in
+heuristic `BashEscapeDenyHook` is the remaining layer.
+
 ## Inspecting the live policy
 
 ```sh

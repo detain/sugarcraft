@@ -438,6 +438,7 @@ sugar-crush/tests/Context/ModelFamilyPromptTest.php	0.150	32
 sugar-crush/tests/Chat/AutoMemoryConsolidationWiringTest.php	0.150	3
 sugar-crush/tests/Context/MemoryRecallBlockTest.php	0.150	13
 sugar-crush/tests/Tools/BuiltIn/ReadOutlineTest.php	0.150	5
+sugar-crush/tests/Tools/BashSandboxTest.php	0.150	17
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23

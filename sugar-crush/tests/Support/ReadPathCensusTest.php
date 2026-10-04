@@ -685,6 +685,12 @@ final class ReadPathCensusTest extends TestCase
         'Tools/IgnoreRules.php|file_get_contents' => [
             'CALLER_SUPPLIED — a `.gitignore`-shaped file inside the walk the calling tool jailed',
         ],
+        'Tools/Sandbox/Bubblewrap.php|file_get_contents' => [
+            'CALLER_SUPPLIED — the `.git` FILE at the root the Bash tool runs in (5.12), read bounded '
+                . 'only for its `gitdir:` line; the path it names is believed only after the next read',
+            'CALLER_SUPPLIED — git\'s back-pointer `<gitdir>/gitdir`, read bounded and compared to the '
+                . 'root\'s own `.git`; nothing reaches the model, a mismatch binds nothing',
+        ],
         'Workflows/WorkflowEngine.php|file_get_contents' => [
             'SELF_LOCATED — a pause file this engine wrote',
             'SELF_LOCATED — the same, on resume',
