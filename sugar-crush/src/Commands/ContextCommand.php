@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\ContextBreakdown;
+use SugarCraft\Crush\Context\Pruning\RefTag;
 use SugarCraft\Crush\Util\TokenCount;
 
 /**
@@ -15,8 +16,9 @@ use SugarCraft\Crush\Util\TokenCount;
  * Usage:
  *   /context  — the next request's estimated size, split into the system
  *               prompt (per layer), the tool schemas and the history; the
- *               largest messages; and how much of each prompt the provider
- *               served from its cache
+ *               largest messages; what the session's context ledger prunes
+ *               out of the history the model is sent; and how much of each
+ *               prompt the provider served from its cache
  *
  * READ-ONLY, like `/permissions` and `/notices`: it measures and prints, and
  * never changes the conversation or calls a model. Arguments are ignored —
@@ -85,6 +87,7 @@ final class ContextCommand
             self::plural($b->historyMessages, 'message'),
             self::plural($b->uiOnlyRows, 'UI-only row'),
         );
+        array_push($lines, ...self::pruningLines($b));
         $lines[] = sprintf('Free: ~%s', TokenCount::compact(max(0, $b->window - $b->totalTokens())));
 
         $lines[] = '';
@@ -117,6 +120,59 @@ final class ContextCommand
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The pruned part (roadmap 5.6 remainder): what the session's context
+     * ledger takes out of the history the model is sent, by kind, and the
+     * newest pruned outputs by ref. Nothing when not measured.
+     *
+     * @return list<string>
+     */
+    private static function pruningLines(ContextBreakdown $b): array
+    {
+        $p = $b->pruning;
+        if ($p === null) {
+            return [];
+        }
+        $mode = sprintf('mode %s, %s', $p['mode'], $p['sessionMode'] ? 'set for this session' : 'configured');
+        if ($b->prunedTokens() === 0 && $p['outputs'] === 0 && $p['contextRows'] === 0) {
+            return [sprintf('Pruned: nothing (%s) — /sweep prunes the last turn\'s tool outputs.', $mode)];
+        }
+
+        $parts = [];
+        if ($p['outputs'] > 0) {
+            $parts[] = sprintf('%s (~%s)', self::plural($p['outputs'], 'tool output'), TokenCount::compact($p['outputTokens']));
+        }
+        if ($p['contextRows'] > 0) {
+            $parts[] = sprintf('%s (~%s)', self::plural($p['contextRows'], 'superseded state row'), TokenCount::compact($p['contextRowTokens']));
+        }
+        if ($p['block'] !== null) {
+            $parts[] = sprintf(
+                'summary b%d (~%s → ~%s)',
+                $p['block']['id'],
+                TokenCount::compact($p['block']['compressed']),
+                TokenCount::compact($p['block']['summary']),
+            );
+        }
+        $lines = [sprintf(
+            'Pruned: ~%s out of what the model is sent (%s) — %s. The transcript keeps every row.',
+            TokenCount::compact($b->prunedTokens()),
+            $mode,
+            implode(', ', $parts),
+        )];
+        foreach ($p['rows'] as $row) {
+            $lines[] = sprintf(
+                '  %-6s %-9s ~%-7s %s by %s',
+                $row['ref'] === null ? '—' : RefTag::label($row['ref']),
+                Chat::reportField($row['tool']),
+                TokenCount::compact($row['tokens']),
+                $row['reason'],
+                $row['by'],
+            );
+        }
+
+        return $lines;
     }
 
     private static function plural(int $count, string $one, ?string $many = null): string

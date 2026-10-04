@@ -10964,7 +10964,9 @@ final class Chat implements Model
             $tools,
             $this->contextTokenLimit(),
             $this->contextTokens(),
-        );
+        )
+            // Roadmap 5.6 remainder: what the session's ledger prunes out.
+            ->withPruning($this->sessionContextLedger(), $this->history);
 
         return [
             $this->mutate([

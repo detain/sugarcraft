@@ -60,6 +60,10 @@ final readonly class ContextBreakdown
      *        1-based position in the transcript
      * @param array{read: int, prompt: int}|null $lastCache    the newest reply's cache split
      * @param array{read: int, prompt: int, replies: int}|null $sessionCache every reply's, summed
+     * @param array{mode: string, sessionMode: bool, outputs: int, outputTokens: int, contextRows: int, contextRowTokens: int, block: ?array{id: int, compressed: int, summary: int}, rows: list<array{ref: ?int, tool: string, reason: string, by: string, tokens: int}>}|null $pruning
+     *        what the session's context ledger takes out of the history the
+     *        model is sent (roadmap 5.6 / 3.B), null when not measured
+     *        ({@see withPruning()})
      */
     public function __construct(
         public int $window,
@@ -72,7 +76,87 @@ final readonly class ContextBreakdown
         public array $largest,
         public ?array $lastCache,
         public ?array $sessionCache,
+        public ?array $pruning = null,
     ) {
+    }
+
+    /** How many pruned outputs {@see withPruning()} lists, newest first. */
+    public const PRUNED_ROWS = 5;
+
+    /**
+     * This breakdown with what $ledger takes out of the history the model is
+     * sent (roadmap 5.6 remainder): the pruned tool outputs — the newest
+     * {@see PRUNED_ROWS} named by ref, tool, reason and author — the
+     * superseded `<turn-context>` rows left out, and the active step summary.
+     * Only what still names a row of $history counts ({@see
+     * \SugarCraft\Crush\Context\Pruning\ContextLedger::syncAgainstHistory()}),
+     * and the figures are the ledger's own estimates of what each saves.
+     *
+     * @param list<Message> $history
+     */
+    public function withPruning(\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger, array $history): self
+    {
+        $ledger = $ledger->syncAgainstHistory($history);
+        $tools = [];
+        foreach ($history as $row) {
+            foreach ($row->toolResults as $result) {
+                if ($result instanceof \SugarCraft\Crush\ToolResult && $result->id !== null) {
+                    $tools[$result->id] = $result->name;
+                }
+            }
+        }
+
+        $rows = [];
+        $outputTokens = 0;
+        foreach ($ledger->prunes as $id => $entry) {
+            $outputTokens += $entry->tokens;
+            $rows[] = [
+                'ref' => $ledger->refOf((string) $id),
+                'tool' => $tools[(string) $id] ?? 'tool',
+                'reason' => $entry->reason->value,
+                'by' => $entry->by->value,
+                'tokens' => $entry->tokens,
+            ];
+        }
+        $block = $ledger->activeBlock();
+
+        return new self(
+            $this->window,
+            $this->sections,
+            $this->toolCount,
+            $this->toolTokens,
+            $this->historyTokens,
+            $this->historyMessages,
+            $this->uiOnlyRows,
+            $this->largest,
+            $this->lastCache,
+            $this->sessionCache,
+            [
+                'mode' => $ledger->effectiveMode()->value,
+                'sessionMode' => $ledger->mode !== null,
+                'outputs' => \count($rows),
+                'outputTokens' => $outputTokens,
+                'contextRows' => \count($ledger->droppedContextRows),
+                'contextRowTokens' => array_sum($ledger->droppedContextRows),
+                'block' => $block === null ? null : ['id' => $block->id, 'compressed' => $block->compressedTokens, 'summary' => $block->summaryTokens],
+                'rows' => array_reverse(\array_slice($rows, -self::PRUNED_ROWS)),
+            ],
+        );
+    }
+
+    /**
+     * The tokens the ledger saves the next request — pruned outputs, left-out
+     * state rows and the active summary's net — or 0 when not measured.
+     */
+    public function prunedTokens(): int
+    {
+        if ($this->pruning === null) {
+            return 0;
+        }
+        $block = $this->pruning['block'];
+
+        return $this->pruning['outputTokens'] + $this->pruning['contextRowTokens']
+            + ($block === null ? 0 : max(0, $block['compressed'] - $block['summary']));
     }
 
     /**
@@ -190,10 +274,13 @@ final readonly class ContextBreakdown
         return $this->sections === null ? null : array_sum(array_column($this->sections, 'bytes'));
     }
 
-    /** Every measured part summed: the next request's estimated size. */
+    /**
+     * Every measured part summed, less what the context ledger prunes out of
+     * the history: the next request's estimated size.
+     */
     public function totalTokens(): int
     {
-        return ($this->systemTokens() ?? 0) + ($this->toolTokens ?? 0) + $this->historyTokens;
+        return max(0, ($this->systemTokens() ?? 0) + ($this->toolTokens ?? 0) + $this->historyTokens - $this->prunedTokens());
     }
 
     /** {@see totalTokens()} as a whole percentage of the window; not clamped. */

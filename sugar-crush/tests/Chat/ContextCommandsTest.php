@@ -88,6 +88,41 @@ final class ContextCommandsTest extends TestCase
         $this->assertTrue($store->loadContextLedger('s')?->isPruned('c1'), 'stored beside the transcript, so a resume keeps it');
     }
 
+    public function testContextShowsWhatTheLedgerPrunesOut(): void
+    {
+        [$swept] = $this->type(new Chat(history: self::history()), '/sweep');
+        [$shown, $cmd] = $this->type($swept, '/context');
+
+        $this->assertNull($cmd);
+        $report = $shown->history[array_key_last($shown->history)]->content;
+        $this->assertMatchesRegularExpression('/^Pruned: ~\S+ out of what the model is sent \(mode auto, configured\) — 1 tool output \(~\S+\)\. The transcript keeps every row\.$/m', $report);
+        $this->assertMatchesRegularExpression('/^  —\s+Read\s+~\S+\s+swept by user$/m', $report, 'no ref yet: no turn has read it since');
+
+        [$fresh] = $this->type(new Chat(history: self::history()), '/context');
+        $this->assertStringContainsString('Pruned: nothing (mode auto, configured) — /sweep prunes', $fresh->history[array_key_last($fresh->history)]->content);
+    }
+
+    public function testThePrunedPartIsMeasuredFromTheLedgerAndLowersTheTotal(): void
+    {
+        $history = self::history();
+        $plain = \SugarCraft\Crush\Context\ContextBreakdown::measure($history, null, null, 100_000, 5_000);
+        $ledger = ContextLedger::new()
+            ->withMode(PruningMode::Manual)
+            ->withPrune(new \SugarCraft\Crush\Context\Pruning\PruneEntry('c1', \SugarCraft\Crush\Context\Pruning\PruneKind::Output, PruneReason::Swept, \SugarCraft\Crush\Context\Pruning\PruneAuthor::User, 400))
+            ->withPrune(new \SugarCraft\Crush\Context\Pruning\PruneEntry('gone', \SugarCraft\Crush\Context\Pruning\PruneKind::Output, PruneReason::Aged, \SugarCraft\Crush\Context\Pruning\PruneAuthor::Strategy, 9_000))
+            ->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('c1', 'x')]);
+
+        $pruned = $plain->withPruning($ledger, $history);
+
+        $this->assertNull($plain->pruning);
+        $this->assertSame(400, $pruned->prunedTokens(), 'a prune naming a row the history lost is not counted');
+        $this->assertSame($plain->totalTokens() - 400, $pruned->totalTokens());
+        $this->assertSame([['ref' => 1, 'tool' => 'Read', 'reason' => 'swept', 'by' => 'user', 'tokens' => 400]], $pruned->pruning['rows'] ?? null);
+        $report = (new \SugarCraft\Crush\Commands\ContextCommand($pruned))->report();
+        $this->assertStringContainsString('(mode manual, set for this session)', $report);
+        $this->assertMatchesRegularExpression('/^  r1\s+Read\s+~400\s+swept by user$/m', $report);
+    }
+
     /** @return array{0: Chat, 1: mixed} */
     private function type(Chat $chat, string $draft): array
     {

@@ -363,7 +363,7 @@ sugar-crush/tests/Tui/Settings/SettingsEditorKeysTest.php	0.300	10
 sugar-crush/tests/Backend/OverflowPruneAndRetryTest.php	0.300	5
 sugar-crush/tests/Backend/LengthStopContinuationTest.php	0.300	7
 sugar-crush/tests/Backend/EngineBackendLedgerFrameTest.php	0.300	5
-sugar-crush/tests/Chat/ContextCommandsTest.php	0.300	3
+sugar-crush/tests/Chat/ContextCommandsTest.php	0.300	5
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10

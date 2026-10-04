@@ -1080,9 +1080,15 @@ estimated size split into the system prompt **per layer** (base, maxims, repo
 map, rules, project instructions, memory, skills, `<env>` — each with its
 stability), the tool schemas, the history (and how many UI-only rows were never
 sent), the five largest messages, and the share of each prompt the provider
-served from its cache — for the last reply and across the session. Token
-figures are script-weighted estimates (`~`); the cache figures are the
-provider's own. A part a backend cannot report — a command backend assembles no
+served from its cache — for the last reply and across the session. It also
+says what the session's pruning takes out of what the model is sent — pruned
+tool outputs (the newest named by ref, `r17`, with why and by whom), superseded
+state rows and an active step summary — and the total is the estimate after
+it. `/sweep` prunes the tool outputs since your last prompt (`/sweep 5`: the
+last five), and `/pruning auto|manual|off` sets how much happens on its own for
+this session (default from `contextPruning.mode`); the transcript keeps every
+row either way. Token figures are script-weighted estimates (`~`); the cache
+figures are the provider's own. A part a backend cannot report — a command backend assembles no
 prompt of its own — prints as "not measured", never as zero. It is read-only,
 local and calls no model.
 
