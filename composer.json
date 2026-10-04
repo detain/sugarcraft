@@ -80,6 +80,7 @@
         "sugarcraft/sugar-charts": "dev-master",
         "sugarcraft/sugar-crumbs": "dev-master",
         "sugarcraft/sugar-crush": "dev-master",
+        "sugarcraft/sugar-crush-web": "dev-master",
         "sugarcraft/sugar-dash": "dev-master",
         "sugarcraft/sugar-diff": "dev-master",
         "sugarcraft/sugar-gallery": "dev-master",
@@ -384,6 +385,13 @@
         {
             "type": "path",
             "url": "sugar-crush",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-crush-web",
             "options": {
                 "symlink": true
             }

@@ -85,6 +85,23 @@ If two words don't earn their place, the name is doing branding only.
 That's fine for the umbrella (`SugarCraft`) but a poor choice for a
 single-purpose lib.
 
+### Exception: app satellites (`<app>-<surface>`)
+
+A package that exists only to give an existing app a second **surface**
+takes the app's slug plus the surface word, even though that makes three
+words. The app's name is already the brand and the function; the suffix
+says which face of it you are installing, and the package sorts next to
+the app it belongs to.
+
+| Satellite | App | Surface | Decision |
+|---|---|---|---|
+| **SugarCrushWeb** (`sugar-crush-web/`, `sugarcraft/sugar-crush-web`, `SugarCraft\CrushWeb\`) | SugarCrush | browser UI for `sugarcrush serve` (Vite + Vue 3 bundle + one-class PHP shim) | User decision, 2026-10-01: keep the three-word name. A two-word candidate (e.g. a `Sugar-` + `Web` coinage) would hide that it is sugar-crush's UI and unusable without it. |
+
+The exception is narrow: a satellite has no use without its app, ships no
+standalone functionality, and keeps the app's prefix (no `Candy-` for an
+app's web face, per the prefix law below). A package that is useful on its
+own still needs a two-word name of its own.
+
 ---
 
 ## ✅ Strong (keep / build around)
@@ -127,6 +144,7 @@ single-purpose lib.
 | **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |
 | **SugarDiff** | sugar + diff = unified-diff engine. component/data per prefix law; extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter numbering model); first-party — no 1:1 upstream. |
 | **SugarMcp** | sugar + mcp = Model Context Protocol client core. component/data per prefix law; extracted from sugar-crush (src/MCP stdio stack + McpMessage codec); first-party — no 1:1 upstream (MCP is a spec, not a Go port). |
+| **SugarCrushWeb** | app satellite of SugarCrush — the browser UI for `sugarcrush serve`. Three words by the `<app>-<surface>` exception above (user decision); first-party — no 1:1 upstream (inspired by opencode web / OpenClaw Control UI). |
 | **CandyCrush** | candy + crush = candy crush = TUI AI coding assistant. Multi-provider (OpenAI, SGLANG, Claude Code, etc.), multi-agent, skill-aware. Pioneering — no direct upstream. |
 
 ## ⚠️ Functional half is weak / vague

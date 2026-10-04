@@ -1,0 +1,44 @@
+<p class="lede" style="margin-top: 28px;">The browser face of <a href="sugar-crush.html">SugarCrush</a>'s WebSocket server mode: <strong>a Vite + Vue 3 + TypeScript + Pinia app, built once and committed as <code>dist/</code>, plus a one-class PHP shim that tells <code>sugarcrush serve</code> where the bundle lives</strong>. PHP users get the UI from <code>composer require</code> alone and never need Node. First-party — inspired by the opencode web UI and the OpenClaw Control UI.</p>
+
+    <p><strong>Status: scaffold.</strong> This release carries the build pipeline, the PHP shim and the app shell. The protocol client, the multi-session dashboard, approvals and the settings form land with the <code>sugarcrush.v1</code> server protocol.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-crush-web:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\CrushWeb\Assets;
+
+$root = Assets::distPath();      // absolute, realpath()-resolved dist/ directory
+$manifest = Assets::manifest();  // Vite manifest: 'index.html' => ['file' => 'assets/index-….js', …]
+echo Assets::version(), PHP_EOL; // bundle version stamped into dist/build-info.json</code></pre>
+
+    <h3 style="margin-top: 32px;">How it ships</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Committed dist/</strong><span>The built bundle is part of the package, like the committed demo GIFs. Content-hashed file names and no timestamps make a clean rebuild byte-identical.</span></div>
+      <div class="feature"><strong>CI parity gate</strong><span>The web workflow runs npm ci, lint, typecheck, unit tests and a build, then fails if the committed dist/ differs from what the source produces.</span></div>
+      <div class="feature"><strong>One-class shim</strong><span>Assets::distPath() / manifest() / version(). sugar-crush lists the package under suggest, so headless installs stay lean.</span></div>
+      <div class="feature"><strong>Lean Packagist dist</strong><span>archive.exclude drops src-web/, node_modules/ and the Node config, so the Composer download is the bundle plus the shim.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Developing the UI</h3>
+    <pre class="code"><code class="language-shell">cd sugar-crush-web
+npm ci
+npm run dev        # Vite dev server; proxies /ws and /api to 127.0.0.1:7420
+npm run build      # rewrites dist/ — commit it with the source change</code></pre>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-crush-web">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-crush-web/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-crush-web/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Assets</td><td>static distPath(): string</td><td>Absolute, realpath()-resolved path of the committed bundle; throws RuntimeException when dist/index.html is missing (a broken install)</td></tr>
+<tr><td>Assets</td><td>static manifest(): array</td><td>The decoded Vite manifest (dist/manifest.json): source entry => file, css, isEntry</td></tr>
+<tr><td>Assets</td><td>static version(): string</td><td>The bundle's release version from dist/build-info.json (package.json is not shipped to Packagist)</td></tr>
+</table>
+  </div>
+</section>

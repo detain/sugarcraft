@@ -1,0 +1,11 @@
+{
+    "title": "SugarCrushWeb — SugarCraft",
+    "description": "SugarCrushWeb: browser UI for sugar-crush's WebSocket server mode. A Vite + Vue 3 bundle committed as dist/ and located by a one-class PHP shim, so sugarcrush serve needs no Node.",
+    "ogTitle": "SugarCrushWeb — SugarCraft",
+    "ogDescription": "The browser face of sugar-crush's server mode — Vite + Vue 3 + TypeScript + Pinia, shipped pre-built through Composer.",
+    "emoji": "",
+    "displayName": "SugarCrushWeb",
+    "tagline": "Browser UI for sugar-crush's server mode",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">app satellite</span>\n          <span class=\"tag-chip\">web-ui</span>\n          <span class=\"tag-chip\">vue</span>\n          <span class=\"tag-chip\">vite</span>"
+}

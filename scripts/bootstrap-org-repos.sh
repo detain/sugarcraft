@@ -32,6 +32,7 @@ declare -A DESCRIPTIONS=(
     [candy-tetris]="Tetris on the SugarCraft stack — port of Broderick-Westrope/tetrigo."
     [super-candy]="Dual-pane terminal file manager — port of yorukot/superfile."
     [sugar-crush]="AI coding-assistant chat shell — port of charmbracelet/crush."
+    [sugar-crush-web]="Browser UI for sugar-crush's WebSocket server mode — Vite + Vue 3 bundle with a one-class PHP shim."
     [sugar-stash]="Terminal Git client — port of jesseduffield/lazygit on the SugarCraft stack."
     [candy-query]="Terminal SQLite browser — port of jorgerojas26/lazysql on the SugarCraft stack."
     [sugar-tick]="Privacy-first coding-time tracker — port of Rtarun3606k/TakaTime."

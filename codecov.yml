@@ -108,6 +108,9 @@ flag_management:
     - name: sugar-crush
       paths: ["sugar-crush/src/**"]
       carryforward: true
+    - name: sugar-crush-web
+      paths: ["sugar-crush-web/src/**"]
+      carryforward: true
     - name: sugar-stash
       paths: ["sugar-stash/src/**"]
       carryforward: true
@@ -368,6 +371,12 @@ component_management:
         - "sugar-crush/src/**"
       flag_regexes:
         - "^sugar-crush$"
+    - component_id: sugar-crush-web
+      name: sugar-crush-web
+      paths:
+        - "sugar-crush-web/src/**"
+      flag_regexes:
+        - "^sugar-crush-web$"
     - component_id: sugar-stash
       name: sugar-stash
       paths:

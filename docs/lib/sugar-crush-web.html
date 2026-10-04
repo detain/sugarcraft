@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCrushWeb — SugarCraft</title>
+<meta name="description" content="SugarCrushWeb: browser UI for sugar-crush's WebSocket server mode. A Vite + Vue 3 bundle committed as dist/ and located by a one-class PHP shim, so sugarcrush serve needs no Node.">
+<meta property="og:title" content="SugarCrushWeb — SugarCraft">
+<meta property="og:description" content="The browser face of sugar-crush's server mode — Vite + Vue 3 + TypeScript + Pinia, shipped pre-built through Composer.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-crush-web.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-crush-web.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-crush-web.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-crush-web.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All 20 apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-crush-web.png" alt="SugarCrushWeb">
+      <div>
+        <h2>SugarCrushWeb</h2>
+        <p class="detail-sub">Browser UI for sugar-crush's server mode</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">app satellite</span>
+          <span class="tag-chip">web-ui</span>
+          <span class="tag-chip">vue</span>
+          <span class="tag-chip">vite</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-crush-web"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-crush-web" alt="SugarCrushWeb code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">The browser face of <a href="sugar-crush.html">SugarCrush</a>'s WebSocket server mode: <strong>a Vite + Vue 3 + TypeScript + Pinia app, built once and committed as <code>dist/</code>, plus a one-class PHP shim that tells <code>sugarcrush serve</code> where the bundle lives</strong>. PHP users get the UI from <code>composer require</code> alone and never need Node. First-party — inspired by the opencode web UI and the OpenClaw Control UI.</p>
+
+    <p><strong>Status: scaffold.</strong> This release carries the build pipeline, the PHP shim and the app shell. The protocol client, the multi-session dashboard, approvals and the settings form land with the <code>sugarcrush.v1</code> server protocol.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-crush-web:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\CrushWeb\Assets;
+
+$root = Assets::distPath();      // absolute, realpath()-resolved dist/ directory
+$manifest = Assets::manifest();  // Vite manifest: 'index.html' => ['file' => 'assets/index-….js', …]
+echo Assets::version(), PHP_EOL; // bundle version stamped into dist/build-info.json</code></pre>
+
+    <h3 style="margin-top: 32px;">How it ships</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Committed dist/</strong><span>The built bundle is part of the package, like the committed demo GIFs. Content-hashed file names and no timestamps make a clean rebuild byte-identical.</span></div>
+      <div class="feature"><strong>CI parity gate</strong><span>The web workflow runs npm ci, lint, typecheck, unit tests and a build, then fails if the committed dist/ differs from what the source produces.</span></div>
+      <div class="feature"><strong>One-class shim</strong><span>Assets::distPath() / manifest() / version(). sugar-crush lists the package under suggest, so headless installs stay lean.</span></div>
+      <div class="feature"><strong>Lean Packagist dist</strong><span>archive.exclude drops src-web/, node_modules/ and the Node config, so the Composer download is the bundle plus the shim.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Developing the UI</h3>
+    <pre class="code"><code class="language-shell">cd sugar-crush-web
+npm ci
+npm run dev        # Vite dev server; proxies /ws and /api to 127.0.0.1:7420
+npm run build      # rewrites dist/ — commit it with the source change</code></pre>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-crush-web">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-crush-web/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-crush-web/tree/master/tests">Test suite</a></li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Assets</td><td>static distPath(): string</td><td>Absolute, realpath()-resolved path of the committed bundle; throws RuntimeException when dist/index.html is missing (a broken install)</td></tr>
+<tr><td>Assets</td><td>static manifest(): array</td><td>The decoded Vite manifest (dist/manifest.json): source entry => file, css, isEntry</td></tr>
+<tr><td>Assets</td><td>static version(): string</td><td>The bundle's release version from dist/build-info.json (package.json is not shipped to Packagist)</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-crush-web">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-crush-web/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

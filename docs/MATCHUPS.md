@@ -81,6 +81,7 @@ Status legend:
 | [charmbracelet/pop](https://github.com/charmbracelet/pop) | **SugarPost** | `sugar-post/` | `sugarcraft/sugar-post` | `SugarCraft\Post` | 🟢 |
 | [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `sugarcraft/candy-serve` | `SugarCraft\Serve` | 🟢 |
 | [charmbracelet/crush](https://github.com/charmbracelet/crush) | **SugarCrush** | `sugar-crush/` | `sugarcraft/sugar-crush` | `SugarCraft\Crush` | 🟢 | TUI AI coding agent — 7 providers, tools, skills, hooks, agents, MCP, SQLite sessions |
+| — (first-party) | **SugarCrushWeb** | `sugar-crush-web/` | `sugarcraft/sugar-crush-web` | `SugarCraft\CrushWeb` | 🟡 | Browser UI for sugar-crush's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. Scaffold today (shell + build pipeline); inspired by opencode web / OpenClaw Control UI. |
 | [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) | **CandyTetris** | `candy-tetris/` | `sugarcraft/candy-tetris` | `SugarCraft\Tetris` | 🟢 | Tetris clone — SRS / 7-bag / NES scoring |
 | [yorukot/superfile](https://github.com/yorukot/superfile) | **CandyFiles** | `candy-files/` | `sugarcraft/candy-files` | `SugarCraft\Files` | 🟢 | Dual-pane file manager |
 | [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit) | **SugarStash** | `sugar-stash/` | `sugarcraft/sugar-stash` | `SugarCraft\Stash` | 🟢 | Three-pane git TUI — shells out to `git` |
