@@ -63,7 +63,16 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * written down because the sentence it replaces was the load-bearing half of a
  * safety argument and `plan` is the mode the differential test drives.
  *
- * `dont-ask` DENIES EVERY MCP TOOL OUTRIGHT — the row above, not an inference.
+ * THE TABLE IS FOR A TOOL WITH NO `readOnlyHint`. A tool its server
+ * declares read-only ({@see readOnly()}: `readOnlyHint: true` and not
+ * `openWorldHint: true`) is classified as a READ by
+ * {@see \SugarCraft\Crush\Permissions\PermissionGate::isReadOnlyTool()}
+ * (roadmap 5.11-1), so it runs unasked wherever `Read` does — `default`,
+ * `accept-edits`, `plan`, `auto` and `dont-ask` alike. That is the only
+ * direction the hint moves, and only for a server the user trusted enough
+ * to start (below).
+ *
+ * `dont-ask` DENIES EVERY UNHINTED MCP TOOL OUTRIGHT — the row above, not an inference.
  * Whether the servers were STARTED is a separate decision made in a separate
  * place: on a root the user has listed under `trustedProjectMcp` they start in
  * every mode including this one, and on a root they have not they start in none.
@@ -102,7 +111,66 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
         private McpClient $client,
         private McpTool $descriptor,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
-    ) {}
+    ) {
+        $name = $this->name();
+        self::$readOnlyByName[$name] = (self::$readOnlyByName[$name] ?? true) && $this->readOnly();
+    }
+
+    /**
+     * Wire name => whether EVERY bridge built under that name declared itself
+     * read-only ({@see readOnly()}), for
+     * {@see \SugarCraft\Crush\Permissions\PermissionGate}, which judges a
+     * {@see \SugarCraft\Crush\ToolCall} — a name and arguments — and never
+     * sees the bridge that will run it (roadmap 5.11-1).
+     *
+     * PROCESS-WIDE AND RECORDED AT CONSTRUCTION, because the gate is built in
+     * more places than the tool list is (the TUI, each backend, the agent
+     * manager's per-preset factory) and every one of them must agree; a
+     * forked turn child inherits the map with the bridges it was built beside.
+     *
+     * AND-ED, NEVER OVERWRITTEN: two bridges can share a wire name (one server
+     * key in two roots' `.mcp.json`, a test fixture), and a later
+     * non-read-only one must not be outvoted by an earlier read-only one —
+     * once any bridge under a name has not declared itself read-only, the
+     * name stays a write for the rest of the process. The conservative
+     * direction is the only one a server-asserted hint may move in.
+     *
+     * @var array<string, bool>
+     */
+    private static array $readOnlyByName = [];
+
+    /**
+     * Does this bridge's server declare the tool read-only, in the sense the
+     * permission gate means by it — "safe to run unasked"?
+     *
+     * `annotations.readOnlyHint === true` ({@see McpTool::readOnlyHint()}),
+     * UNLESS the same server also declared `openWorldHint: true`: a tool that
+     * says it reaches an open world (a fetch, a search) is the outbound-request
+     * shape that took `WebFetch` out of the read-only class (audit F-P6),
+     * whatever it says about writing. A server that is silent on
+     * `openWorldHint` is taken at its `readOnlyHint` word.
+     *
+     * HONOURED BECAUSE ONLY A TRUSTED SERVER IS EVER STARTED: a project's
+     * `.mcp.json` launches nothing until the user lists the root under
+     * `trustedProjectMcp` (and each server's fingerprint is pinned, MCP-5),
+     * and an operator-tier server is the user's own. The hint is therefore
+     * the claim of a server the user already chose to run, which is the same
+     * trust the launch itself spent.
+     */
+    public function readOnly(): bool
+    {
+        return $this->descriptor->readOnlyHint() && $this->descriptor->openWorldHint() !== true;
+    }
+
+    /**
+     * Whether every bridge built in this process under `$wireName` declared
+     * itself read-only — false for a name no bridge was built under, which is
+     * what an `mcp__*` name the model made up gets. See {@see $readOnlyByName}.
+     */
+    public static function declaredReadOnly(string $wireName): bool
+    {
+        return self::$readOnlyByName[$wireName] ?? false;
+    }
 
     /**
      * The descriptor this bridge speaks for, so a caller inspecting

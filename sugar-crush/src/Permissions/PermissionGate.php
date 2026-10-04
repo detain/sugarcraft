@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Permissions;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\Tools\Catalog\ToolCatalog;
 use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
+use SugarCraft\Crush\Tools\McpToolBridge;
 
 /**
  * PermissionGate evaluates every ToolCall against the active PermissionMode
@@ -31,7 +32,9 @@ use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
  *                and every other write Deny
  * - Auto:        everything runs gated by SafetyClassifier (Bash by command,
  *                Edit/Write by path, WebFetch by what its URL carries), and
- *                `mcp__*` Asks; 3-strike / 20-total circuit breaker
+ *                `mcp__*` Asks unless its trusted server declared it
+ *                read-only ({@see isReadOnlyMcpTool()}); 3-strike / 20-total
+ *                circuit breaker
  *
  * The Plan line has been wrong twice, and both are worth knowing. It first
  * read "all writes Deny" while {@see evaluatePlan()} allowed every `Bash` call
@@ -567,7 +570,10 @@ final class PermissionGate
      * ran unprompted under auto — so there is nothing a classifier could read.
      * It is neither a block nor a safe call, so it leaves the breaker's
      * counters exactly as they were: a prompt is not a strike, and an
-     * unjudged call must not reset a run of real ones.
+     * unjudged call must not reset a run of real ones. The one exception is a
+     * tool its trusted server declared read-only (roadmap 5.11-1,
+     * {@see isReadOnlyMcpTool()}), which is Allowed — equally unclassified, so
+     * equally invisible to the breaker.
      *
      * @see SafetyClassifier for the dangerous-action categories.
      */
@@ -581,7 +587,10 @@ final class PermissionGate
         }
 
         if (str_starts_with($call->name, 'mcp__')) {
-            return PermissionDecision::Ask;
+            // A trusted server's `readOnlyHint` (roadmap 5.11-1) is the one
+            // thing that says what an MCP tool does; like the Ask below it is
+            // not a classification, so it leaves the breaker untouched.
+            return $this->isReadOnlyTool($call) ? PermissionDecision::Allow : PermissionDecision::Ask;
         }
 
         $category = $this->classifier->classify($call, $projectRoot);
@@ -1024,7 +1033,29 @@ final class PermissionGate
      */
     private function isReadOnlyTool(ToolCall $call): bool
     {
-        return in_array($call->name, ToolCatalog::namesOf(ToolPermissionClass::Read), true);
+        return in_array($call->name, ToolCatalog::namesOf(ToolPermissionClass::Read), true)
+            || $this->isReadOnlyMcpTool($call);
+    }
+
+    /**
+     * An `mcp__*` tool whose server declared it read-only (roadmap 5.11-1):
+     * `annotations.readOnlyHint: true` and not `openWorldHint: true`, judged
+     * by {@see McpToolBridge::readOnly()} and recorded per wire name when the
+     * bridge is built.
+     *
+     * The hint is server-ASSERTED and nothing here can verify it; it is
+     * honoured because a server reaches the model only once the user has
+     * trusted it — a project `.mcp.json` launches nothing until its root is
+     * listed under `trustedProjectMcp`, each server pinned by fingerprint
+     * (MCP-5) — so the hint is the word of a process the user already chose
+     * to run. A name no bridge was built under (one the model made up) is
+     * never read-only. Everything else about an MCP tool stays as it was: an
+     * unhinted one is a write ({@see isWriteTool()}) and asks under `auto`.
+     */
+    private function isReadOnlyMcpTool(ToolCall $call): bool
+    {
+        return str_starts_with($call->name, McpToolBridge::NAME_PREFIX)
+            && McpToolBridge::declaredReadOnly($call->name);
     }
 
     /**
@@ -1033,12 +1064,17 @@ final class PermissionGate
      * delegates to can do whatever its own tools can, crush_code.md P8.13), and
      * MCP tools, which follow the `mcp__<server>__<tool>` naming convention
      * (@see PermissionRule): their capability is server-defined and unknowable
-     * here, so they are treated conservatively as writes.
+     * here, so they are treated conservatively as writes — unless their trusted
+     * server declared them read-only ({@see isReadOnlyMcpTool()}).
      */
     private function isWriteTool(ToolCall $call): bool
     {
         if (in_array($call->name, ToolCatalog::namesOf(ToolPermissionClass::Write), true)) {
             return true;
+        }
+
+        if ($this->isReadOnlyMcpTool($call)) {
+            return false;
         }
 
         return str_starts_with($call->name, 'mcp__');

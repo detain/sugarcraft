@@ -186,6 +186,9 @@ final class StdioMcpServer implements McpServer
                 $tool->description,
                 $tool->inputSchema,
                 $tool->serverName,
+                // Roadmap 5.11-1: the server's `annotations` ride through, or a
+                // stdio server's `readOnlyHint` would never reach the gate.
+                $tool->annotations,
             ),
             $this->transport->listTools(),
         );

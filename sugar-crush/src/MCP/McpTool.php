@@ -39,6 +39,7 @@ final readonly class McpTool
         'name' => 'is_string',
         'description' => 'is_string',
         'inputSchema' => 'is_array',
+        'annotations' => 'is_array',
     ];
 
     public function __construct(
@@ -46,6 +47,15 @@ final readonly class McpTool
         public string $description,
         public array $inputSchema,
         public string $serverName,
+        /**
+         * The definition's MCP `annotations` object (spec 2025-03-26:
+         * `readOnlyHint`, `destructiveHint`, `idempotentHint`,
+         * `openWorldHint`, `title`), kept whole so a later reader needs no
+         * second parse. Empty when the server sent none.
+         *
+         * @var array<string, mixed>
+         */
+        public array $annotations = [],
     ) {}
 
     public static function fromArray(array $data, string $serverName): self
@@ -55,7 +65,35 @@ final readonly class McpTool
             description: $data['description'] ?? '',
             inputSchema: $data['inputSchema'] ?? [],
             serverName: $serverName,
+            annotations: $data['annotations'] ?? [],
         );
+    }
+
+    /**
+     * Did the server declare this tool read-only (`annotations.readOnlyHint`)?
+     *
+     * STRICTLY `true`: the spec's default for an absent hint is `false`, and a
+     * `"true"` string or a `1` is a server that did not say it, so neither
+     * reads as a declaration. The hint is the SERVER's assertion and nothing
+     * here verifies it; what makes it worth honouring is that only a trusted
+     * server is ever started — see
+     * {@see \SugarCraft\Crush\Tools\McpToolBridge::readOnly()}.
+     */
+    public function readOnlyHint(): bool
+    {
+        return ($this->annotations['readOnlyHint'] ?? null) === true;
+    }
+
+    /**
+     * The server's `annotations.openWorldHint`, or null when it sent none (the
+     * spec reads an absent hint as `true`; this accessor reports what was
+     * SAID, and the one consumer decides what silence means).
+     */
+    public function openWorldHint(): ?bool
+    {
+        $hint = $this->annotations['openWorldHint'] ?? null;
+
+        return \is_bool($hint) ? $hint : null;
     }
 
     /**

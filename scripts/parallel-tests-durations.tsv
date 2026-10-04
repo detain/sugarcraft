@@ -328,6 +328,7 @@ sugar-crush/tests/Skills/SkillLoaderTest.php	0.353	61
 sugar-crush/tests/Backend/StructuredReplayTest.php	0.350	11
 sugar-crush/tests/Integration/TaskToolWiringTest.php	0.343	4
 sugar-crush/tests/Host/ContextMeterTest.php	0.338	12
+sugar-crush/tests/Permissions/McpReadOnlyHintTest.php	0.330	21
 sugar-crush/tests/Support/RequirementDirectiveProvenanceTest.php	0.326	18
 sugar-crush/tests/Workspace/CheckpointDiffTest.php	0.320	3
 sugar-crush/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.312	8

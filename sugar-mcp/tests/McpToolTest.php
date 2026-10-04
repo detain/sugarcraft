@@ -90,6 +90,7 @@ final class McpToolTest extends TestCase
             'description is a number' => [['name' => 'ok', 'description' => 7], 'description'],
             'inputSchema is a string' => [['name' => 'ok', 'inputSchema' => 'nope'], 'inputSchema'],
             'inputSchema is a number' => [['name' => 'ok', 'inputSchema' => 42], 'inputSchema'],
+            'annotations is a string' => [['name' => 'ok', 'annotations' => 'readOnly'], 'annotations'],
         ];
     }
 
@@ -102,6 +103,19 @@ final class McpToolTest extends TestCase
             McpTool::tryFromArray($definition, 'fs'),
             "field {$offendingField} of the wrong type must skip the definition",
         );
+    }
+
+    public function testAnnotationsAreCarriedVerbatimAndDefaultToEmpty(): void
+    {
+        $annotations = ['readOnlyHint' => true, 'openWorldHint' => false, 'title' => 'Query'];
+
+        $hinted = McpTool::tryFromArray(['name' => 'query', 'annotations' => $annotations], 'db');
+        self::assertNotNull($hinted);
+        self::assertSame($annotations, $hinted->annotations);
+
+        self::assertSame([], McpTool::fromArray(['name' => 'plain'], 'db')->annotations);
+        self::assertSame([], McpTool::fromArray(['name' => 'nulled', 'annotations' => null], 'db')->annotations);
+        self::assertSame([], (new McpTool('n', 'd', [], 's'))->annotations);
     }
 
     public function testValueObjectsAreIndependentInstances(): void

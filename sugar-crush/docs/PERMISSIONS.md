@@ -93,6 +93,19 @@ Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor` and `Sk
 They fall through to each mode's default arm — `Ask` under `default`,
 `accept-edits` and `plan`, `Deny` under `dont-ask`.
 
+**An MCP tool its server declares read-only is a read.** A bridge whose
+server sends `annotations.readOnlyHint: true` — and does not also send
+`openWorldHint: true`, the outbound-request shape that took `WebFetch` out of
+the read-only class — is classified with the read-only tools above, so it runs
+unasked wherever `Read` does: `default`, `accept-edits`, `plan`, `auto` and
+`dont-ask` alike. The hint is the server's own claim and nothing here verifies
+it; it is honoured because only a server you trusted is ever started (a
+project's `.mcp.json` launches nothing until its root is listed under
+`trustedProjectMcp`, and each server is pinned by fingerprint). Only a literal
+`true` counts, and once any bridge built under a wire name is unhinted that
+name stays a write for the rest of the process. An explicit rule still comes
+first: `{"pattern": "mcp__db__*", "action": "deny"}` refuses a hinted tool too.
+
 A **no-ask** tool is allowed before the mode is consulted, so it runs in every
 mode, `plan` and `dont-ask` included: `Memory` writes only the memory
 directories the harness owns (`~/.sugar-crush/memory` and the repository's
@@ -112,8 +125,8 @@ rule — see [Rules](#rules).
 |---|---|---|---|
 | `default` | Allow | Ask | Ask |
 | `accept-edits` | Allow | `Edit`/`Write` inside the project root Allow; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
-| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write`/`mcp__*` Deny | Ask |
-| `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker | as classified (`Bash` by command, `Edit`/`Write` by target); `mcp__*` Ask | as classified (`WebFetch` by its URL) |
+| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write`/unhinted `mcp__*` Deny | Ask |
+| `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash` by command, `Edit`/`Write` by target); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
 
@@ -280,13 +293,14 @@ risk (audit F-P3(b) — before it, only `Bash` was read, so
 | `Edit` / `Write` | `protected-path-write` | the target is under `.git`, `.sugar-crush` or `.mcp.json` |
 | `Edit` / `Write` | `outside-root-write` | the target is not provably inside the project root — absolute elsewhere, escaping, `~/…`, a symlink out, or absent |
 | `WebFetch` | `external-endpoint` | the URL carries a query string or `user:pass@`, or cannot be parsed |
-| `mcp__*` | — (asks) | always: an MCP tool's capability is server-defined, so nothing can classify it |
+| `mcp__*` | — (asks) | unless its trusted server declared it read-only (`readOnlyHint: true`, not `openWorldHint: true`), which allows it: an MCP tool's capability is server-defined, so nothing can classify it, and the server's own declaration is the only evidence there is |
 
 A `WebFetch` whose URL carries no query is allowed. Data can still ride in a
 URL's *path* (`https://evil.example/<base64>`), which no classifier can tell
 from an ordinary page; `auto` is a guard rail here, and `default`/`dont-ask`
 withholding `WebFetch` outright is the boundary. An `mcp__*` ask is neither a
-strike nor a safe call, so it leaves the breaker exactly where it was. An
+strike nor a safe call, so it leaves the breaker exactly where it was, and so
+does a read-only-hinted `mcp__*` allow. An
 explicit rule still comes first — `Allow mcp__git__*` grants those tools under
 `auto` without asking.
 

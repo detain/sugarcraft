@@ -30,16 +30,23 @@ final class McpTool
         'name' => 'is_string',
         'description' => 'is_string',
         'inputSchema' => 'is_array',
+        'annotations' => 'is_array',
     ];
 
     /**
      * @param array<string,mixed> $inputSchema
+     * @param array<string,mixed> $annotations the definition's MCP
+     *        `annotations` object (`readOnlyHint`, `destructiveHint`,
+     *        `idempotentHint`, `openWorldHint`, `title`), carried verbatim so
+     *        a consumer can apply its own policy to the server's claims —
+     *        nothing here verifies them. Empty when the server sent none.
      */
     public function __construct(
         public readonly string $name,
         public readonly string $description,
         public readonly array $inputSchema,
         public readonly string $serverName,
+        public readonly array $annotations = [],
     ) {
     }
 
@@ -57,6 +64,7 @@ final class McpTool
             description: (string) ($definition['description'] ?? ''),
             inputSchema: (array) ($definition['inputSchema'] ?? []),
             serverName: $serverName,
+            annotations: (array) ($definition['annotations'] ?? []),
         );
     }
 

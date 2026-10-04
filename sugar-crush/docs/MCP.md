@@ -199,7 +199,8 @@ mid-session edit cannot re-spawn anything until relaunch — and trust still
 gates the launch: an untrusted project never builds a client at all, so it
 never reaches the operator tier. What the entry DOES buy is a bridge set
 routed exactly like a stdio one: every forwarded call rides the PreToolUse
-chain, and plan mode denies all `mcp__*` names. Starting, though, IS the
+chain, and plan mode denies every `mcp__*` name its server has not declared
+read-only. Starting, though, IS the
 execution the tiers gate — the PreToolUse chain sees calls, never the
 `proc_open` behind them — which is why the grant sits a tier above the file
 the trust list controls rather than inside it.
@@ -508,6 +509,13 @@ in four of the six permission modes and diverges under `plan` and `auto`. Under
 name is denied as a write tool; under `auto` the classifier asks before every
 `mcp__*` call while a classified-safe `Bash` command is allowed. Both
 divergences run in the conservative direction.
+
+That paragraph is about a tool with no `readOnlyHint`. A tool whose server
+declares `annotations.readOnlyHint: true` (and not `openWorldHint: true`) is
+classified as a read, so it runs unasked in every mode that runs `Read`
+unasked — `plan` and `auto` included. The hint is honoured only because a
+server is started only once trusted; see
+[PERMISSIONS.md](PERMISSIONS.md#the-six-modes) for the full rule.
 
 No `denyPatterns` are passed on this path, deliberately: `McpClient` consults
 them only through `router()`, which only the `AgentPreset` arm reaches, so they
