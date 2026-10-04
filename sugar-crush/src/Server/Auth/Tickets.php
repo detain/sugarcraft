@@ -40,6 +40,11 @@ final class Tickets
         return $ticket === '' ? null : $this->tickets->consume($ticket);
     }
 
+    public function revokeAll(): void
+    {
+        $this->tickets->revokeAll();
+    }
+
     public function pending(): int
     {
         return $this->tickets->count();

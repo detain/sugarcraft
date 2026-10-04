@@ -86,6 +86,12 @@ final class ExpiringSecrets
         unset($this->entries[self::hash($secret)]);
     }
 
+    /** Forget every secret at once (the credential they were minted under changed). */
+    public function revokeAll(): void
+    {
+        $this->entries = [];
+    }
+
     /** How many live secrets are held. */
     public function count(): int
     {

@@ -115,7 +115,7 @@ as a new `error.type`: `{"result": {"listening": false, "address": "…",
 ```sh
 sugarcrush serve --detach        # background: prints the URL + pid once bound, exits 0
 sugarcrush serve status          # pid, URL, root, uptime, and whether /api/health answers
-sugarcrush serve stop [--force]  # SIGTERM, up to 30 s to drain, then SIGKILL (--force: SIGKILL now)
+sugarcrush serve stop [--force]  # SIGTERM, time to drain, then SIGKILL (--force: SIGKILL now)
 sugarcrush serve logs [-f]       # the end of server.log; -f follows it until the server stops
 sugarcrush serve url             # a sign-in URL with a fresh one-time code
 sugarcrush serve token [--rotate]
@@ -140,7 +140,7 @@ holds:
 | `token` | the owner token, `0600` |
 | `server.json` | the discovery record: `{pid, procStartTime, version, protocol: {min, max}, url, host, port, root, startedAt, detached, log}`, `0600`, replaced atomically. Never the token. |
 | `server.lock` | the singleton lock: `flock()` held for the server's whole life, so the kernel releases it however the server dies |
-| `control.sock` | the local socket `serve url` asks the running server on; every request carries the owner token |
+| `control.sock` | the local socket `serve url` and `serve token --rotate` reach the running server on; every request carries the owner token |
 | `server.log` | a detached server's stdout and stderr, rotated past 10 MiB into `server.log.1` and `server.log.2` |
 
 One server runs per state directory: a second `serve` finds the lock held and
@@ -154,11 +154,16 @@ to something else is never signalled. A record that fails the check — a server
 that was SIGKILLed cannot remove its own — is reported as stale, and `stop`
 removes it.
 
-**Stopping.** `SIGTERM` or `SIGINT` (what `serve stop` and `Ctrl+C` send)
-drains the server: it stops accepting, closes every WebSocket with `1001`,
-removes `server.json` and `control.sock` and releases the lock. `serve stop`
-waits up to 30 s for that, then sends `SIGKILL`; `--force` skips straight to
-`SIGKILL`. `SIGCHLD` is never handled — the turn children are reaped by the
+**Stopping.** `SIGTERM` or `SIGINT` (what `serve stop` and `Ctrl+C` send) —
+or a client's `server.shutdown` — drains the server. First it admits no new
+turn or session (`busy` / `draining`), tells every client how long it will
+wait (`server.shutdown` with `graceSeconds`), and waits for the turns already
+running to settle, up to `server.drainSeconds` (10 s; `0` skips the wait); a
+second signal stops it at once. Then it closes every WebSocket with `1001`,
+cancels any turn still running and releases every session, removes
+`server.json` and `control.sock` and releases the lock. `serve stop` waits 30
+s for that — or the configured drain plus 5 s, when that is longer — then
+sends `SIGKILL`; `--force` skips straight to `SIGKILL`. `SIGCHLD` is never handled — the turn children are reaped by the
 engine's own sweep.
 
 | Verb | Exit `0` | Exit `1` |
@@ -167,7 +172,7 @@ engine's own sweep.
 | `serve stop` | it stopped | none was running, or it did not exit |
 | `serve logs` | the log was printed | there is no `server.log` (only a detached server writes one) |
 | `serve url` | a fresh sign-in URL was printed | no server runs, or it refused the token |
-| `serve token` | the token was printed (`--rotate`: replaced first) | — (refused at `2` while `SUGARCRUSH_SERVER_TOKEN` is set) |
+| `serve token` | the token was printed (`--rotate`: replaced first, and a running server reloads it) | — (refused at `2` while `SUGARCRUSH_SERVER_TOKEN` is set) |
 
 Under `--output-format json` each prints one `{"result": …}` document — the
 "no server" answers included, as results rather than errors; `logs -f` streams
@@ -208,8 +213,13 @@ rebinding or a cross-site WebSocket, by any page your browser opens.
 owns. `SUGARCRUSH_SERVER_TOKEN` replaces it. It is compared with `hash_equals`
 and never printed by `serve` itself; `sugarcrush serve token` prints it on
 request for a script that needs a bearer credential, and `serve token
---rotate` replaces it (a running server keeps accepting the old one until it
-restarts).
+--rotate` replaces it. A running server is told at once over its control
+socket: it re-reads the file and **signs every client out** — every browser
+cookie, unspent ticket and login code is revoked and every open WebSocket is
+closed with `4001` — so the old token stops working now, not at the next
+restart (`--output-format json` reports `serverReloaded`). A server that
+cannot be reached keeps the old token until it restarts, and `serve token`
+says so.
 
 **Browsers** never hold the token:
 
@@ -378,7 +388,7 @@ that accept an `idempotencyKey`.
 | `server.health` | read |  | Liveness and load. |
 | `server.hello` | read |  | The handshake: protocol version, features, limits; optionally resume subscriptions. |
 | `server.info` | read |  | What this server offers: providers, agents, commands, tools, permission modes. |
-| `server.shutdown` | admin | yes | Stop the server. |
+| `server.shutdown` | admin | yes | Stop the server, draining running turns first. |
 | `session.cancel` | write | yes | Cancel the running turn (hard, or soft at the next step boundary). |
 | `session.close` | write | yes | Release a session (refused while a turn runs unless force). |
 | `session.create` | write | yes | Create a session and open it. |

@@ -52,6 +52,9 @@ use function React\Promise\resolve;
  */
 final class Server
 {
+    /** The WebSocket close code a rotated token ends a connection with. */
+    public const CLOSE_CREDENTIALS_ROTATED = 4001;
+
     private ?Listener $listener = null;
 
     /** @var array<string, Connection> */
@@ -170,6 +173,29 @@ final class Server
     public function loginUrl(): string
     {
         return $this->url() . '/#code=' . $this->auth->loginCodes->mint();
+    }
+
+    /**
+     * `serve token --rotate` reached this server (roadmap O-3b, carried from
+     * W6): re-read the token file and, when the token changed, sign every
+     * client out — cookies, tickets and login codes revoked, and every open
+     * WebSocket closed with {@see CLOSE_CREDENTIALS_ROTATED}, since each was
+     * authenticated with a credential that no longer exists. Answers how many
+     * sockets were closed, or null when the token did not change.
+     */
+    public function reloadToken(): ?int
+    {
+        if (!$this->auth->reloadToken()) {
+            return null;
+        }
+        $closed = 0;
+        foreach ($this->connections as $connection) {
+            $connection->close(self::CLOSE_CREDENTIALS_ROTATED, 'the server token was rotated; sign in again');
+            $closed++;
+        }
+        ($this->log)(\sprintf('token rotated: signed every client out (%d socket%s closed)', $closed, $closed === 1 ? '' : 's'));
+
+        return $closed;
     }
 
     public function connectionCount(): int

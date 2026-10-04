@@ -62,6 +62,13 @@ final class ServerConfig
     public const DEFAULT_ASK_TIMEOUT_SECONDS = 0.0;
 
     /**
+     * Appendix O §4.6: how long a stopping server waits for running turns
+     * (`server.drainSeconds`). Kept well inside `serve stop`'s own wait, which
+     * stretches to cover a longer configured drain.
+     */
+    public const DEFAULT_DRAIN_SECONDS = 10.0;
+
+    /**
      * @param list<string> $allowedOrigins normalised `scheme://host[:port]`
      * @param list<string> $allowedHosts   lower-cased `host` or `host:port`
      * @param list<string> $trustedProxies IPs or CIDRs whose X-Forwarded-* count
@@ -83,6 +90,7 @@ final class ServerConfig
         public readonly int $maxOpenSessions = self::DEFAULT_MAX_OPEN_SESSIONS,
         public readonly int $maxConcurrentTurns = self::DEFAULT_MAX_CONCURRENT_TURNS,
         public readonly float $askTimeoutSeconds = self::DEFAULT_ASK_TIMEOUT_SECONDS,
+        public readonly float $drainSeconds = self::DEFAULT_DRAIN_SECONDS,
     ) {
     }
 
@@ -167,6 +175,9 @@ final class ServerConfig
         }
         if (isset($userConfig['server.maxConcurrentTurns'])) {
             $config = $config->withMaxConcurrentTurns(self::countValue('server.maxConcurrentTurns', $userConfig['server.maxConcurrentTurns'], 1));
+        }
+        if (isset($userConfig['server.drainSeconds'])) {
+            $config = $config->withDrainSeconds(self::secondsValue('server.drainSeconds', $userConfig['server.drainSeconds']));
         }
         if (isset($userConfig['server.askTimeoutSeconds'])) {
             $config = $config->withAskTimeoutSeconds(self::secondsValue('server.askTimeoutSeconds', $userConfig['server.askTimeoutSeconds']));
@@ -327,6 +338,16 @@ final class ServerConfig
         }
 
         return $this->mutate(maxConcurrentTurns: $maxConcurrentTurns);
+    }
+
+    /** 0 stops at once, cancelling whatever runs. */
+    public function withDrainSeconds(float $seconds): self
+    {
+        if ($seconds < 0) {
+            throw new ServerConfigException('server.drainSeconds must not be negative');
+        }
+
+        return $this->mutate(drainSeconds: $seconds);
     }
 
     /** 0 (the default) waits for a permission answer forever. */

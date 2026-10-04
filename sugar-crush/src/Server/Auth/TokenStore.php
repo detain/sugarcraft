@@ -111,6 +111,24 @@ final class TokenStore
         return $this->cached = $token;
     }
 
+    /**
+     * Forget the cached token and read the file again (a `serve token
+     * --rotate` in another process replaced it). Answers whether the token
+     * changed. An override has no file behind it and never changes.
+     *
+     * @throws \RuntimeException when the state directory is unsafe or unwritable
+     */
+    public function reload(): bool
+    {
+        if ($this->override !== null) {
+            return false;
+        }
+        $before = $this->cached;
+        $this->cached = null;
+
+        return $this->token() !== $before;
+    }
+
     public function matches(string $candidate): bool
     {
         return $candidate !== '' && \hash_equals($this->token(), $candidate);

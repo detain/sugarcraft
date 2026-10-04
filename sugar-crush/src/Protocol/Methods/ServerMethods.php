@@ -40,7 +40,7 @@ final class ServerMethods
         $registry->add(MethodSpec::new(self::HELLO, Scope::Read, 'The handshake: protocol version, features, limits; optionally resume subscriptions.', self::hello(...)));
         $registry->add(MethodSpec::new('server.health', Scope::Read, 'Liveness and load.', self::health(...)));
         $registry->add(MethodSpec::new('server.info', Scope::Read, 'What this server offers: providers, agents, commands, tools, permission modes.', self::info(...)));
-        $registry->add(MethodSpec::new('server.shutdown', Scope::Admin, 'Stop the server.', self::shutdown(...), true));
+        $registry->add(MethodSpec::new('server.shutdown', Scope::Admin, 'Stop the server, draining running turns first.', self::shutdown(...), true));
         $registry->add(MethodSpec::new('client.viewing', Scope::Read, 'Say which sessions this client shows, and which is in front.', self::viewing(...)));
     }
 

@@ -88,8 +88,15 @@ final class Serve
         'token' => ['--rotate'],
     ];
 
-    /** How long `stop` waits after SIGTERM for the server to drain before SIGKILL. */
+    /**
+     * How long `stop` waits after SIGTERM for the server to drain before
+     * SIGKILL — at least, and longer when `server.drainSeconds` asks the
+     * server to wait longer ({@see stopWaitSeconds()}).
+     */
     public const STOP_DRAIN_SECONDS = 30.0;
+
+    /** What `stop` allows beyond the configured drain for the rest of the shutdown. */
+    public const STOP_DRAIN_MARGIN_SECONDS = 5.0;
 
     /** How long `stop` waits for the kernel to take a SIGKILLed server away. */
     public const STOP_KILL_WAIT_SECONDS = 5.0;
@@ -105,6 +112,13 @@ final class Serve
 
     /** The control-socket request `serve url` sends: `login-url <token>`. */
     private const CONTROL_LOGIN_URL = 'login-url';
+
+    /**
+     * The control-socket request `serve token --rotate` sends, carrying the
+     * NEW token: `reload-token <token>`. The server re-reads the token file
+     * first, so the request proves it was sent by someone who can read it.
+     */
+    private const CONTROL_RELOAD_TOKEN = 'reload-token';
 
     private const USAGE = 'Usage: sugarcrush serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-origin <origins>]'
         . ' [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>]'
@@ -407,7 +421,7 @@ final class Serve
 
         $stopping = false;
         $handlers = [];
-        $stop = static function (string $reason) use (&$stopping, &$handlers, $server, $protocol, $state, $record, $control, $watchdog, $rotation, $loop): void {
+        $finish = static function (string $reason) use (&$stopping, &$handlers, $server, $protocol, $state, $record, $control, $watchdog, $rotation, $loop): void {
             if ($stopping) {
                 return;
             }
@@ -430,6 +444,26 @@ final class Serve
             Loop::stop();
         };
 
+        // DRAIN FIRST (`server.drainSeconds`, Appendix O §4.6): admit nothing
+        // new, tell the clients, and give the turns in flight their time to
+        // settle; a second signal stops at once. What still runs when the
+        // drain ends is cancelled by the hub's closeAll() above.
+        $stop = static function (string $reason, ?float $drainSeconds = null) use ($finish, $protocol, $config): void {
+            $drainSeconds ??= $config->drainSeconds;
+            $protocol->drain($drainSeconds, static function (bool $settled) use ($finish, $reason): void {
+                $finish($settled ? $reason : $reason . '; cancelling the turns still running');
+            }, $reason);
+            if ($protocol->isDraining()) {
+                self::stderr(\sprintf(
+                    'sugarcrush serve: draining (%s) — waiting up to %s s for %d running turn%s; signal again to stop now',
+                    $reason,
+                    \rtrim(\rtrim(\sprintf('%.1f', $drainSeconds), '0'), '.'),
+                    $protocol->context()->turnsRunning(),
+                    $protocol->context()->turnsRunning() === 1 ? '' : 's',
+                ));
+            }
+        };
+
         // Never SIGCHLD: the turn children are reaped by EngineBackend's own
         // sweep, and a SIGCHLD handler would race it (Appendix O §4.6).
         foreach ([\SIGINT => 'SIGINT', \SIGTERM => 'SIGTERM'] as $signal => $name) {
@@ -443,7 +477,7 @@ final class Serve
         });
         $protocol->context()->onShutdown(static function (?float $drainSeconds) use ($stop, $loop): void {
             // Next tick: the client's answer goes out before the sockets close.
-            $loop->futureTick(static fn () => $stop('server.shutdown was requested'));
+            $loop->futureTick(static fn () => $stop('server.shutdown was requested', $drainSeconds));
         });
         $protocol->start();
 
@@ -510,9 +544,20 @@ final class Serve
                     return;
                 }
                 [$verb, $token] = \explode(' ', \substr($buffer, 0, $newline), 2) + [1 => ''];
+                $reloaded = null;
+                if ($verb === self::CONTROL_RELOAD_TOKEN) {
+                    try {
+                        $reloaded = $server->reloadToken();
+                    } catch (\RuntimeException) {
+                        $connection->end((string) \json_encode(['ok' => false, 'error' => 'the token file could not be read'], \JSON_UNESCAPED_SLASHES) . "\n");
+
+                        return;
+                    }
+                }
                 $answer = match (true) {
                     !$tokens->matches(\trim($token)) => ['ok' => false, 'error' => 'unauthorized'],
                     $verb === self::CONTROL_LOGIN_URL => ['ok' => true, 'loginUrl' => $server->loginUrl()],
+                    $verb === self::CONTROL_RELOAD_TOKEN => ['ok' => true, 'rotated' => $reloaded !== null, 'closed' => $reloaded ?? 0],
                     default => ['ok' => false, 'error' => 'unknown request'],
                 };
                 $connection->end((string) \json_encode($answer, \JSON_UNESCAPED_SLASHES) . "\n");
@@ -601,7 +646,7 @@ final class Serve
         $signal = $force ? 'KILL' : 'TERM';
         if (!$force) {
             @\posix_kill($record->pid, 15);
-            if (!self::waitForExit($record, self::STOP_DRAIN_SECONDS)) {
+            if (!self::waitForExit($record, self::stopWaitSeconds($env))) {
                 $signal = 'KILL';
             }
         }
@@ -731,15 +776,33 @@ final class Serve
         }
 
         $running = DiscoveryFile::read($state);
+        $reloaded = null;
         if ($rotate && $running !== null && $running->isLive()) {
-            self::stderr(\sprintf(
-                'sugarcrush serve token: the running server (pid %d) keeps accepting the old token until it restarts: sugarcrush serve stop && sugarcrush serve --detach',
-                $running->pid,
-            ));
+            // A running server reloads the file now and signs every client of
+            // the old token out; one that cannot be reached keeps the old
+            // token until it restarts, and says so.
+            $answer = self::controlRequest($state, self::CONTROL_RELOAD_TOKEN . ' ' . $token);
+            $reloaded = \is_array($answer) && ($answer['ok'] ?? false) === true;
+            self::stderr($reloaded
+                ? \sprintf(
+                    'sugarcrush serve token: the running server (pid %d) now accepts only the new token; every client was signed out (%d connection%s closed)',
+                    $running->pid,
+                    (int) ($answer['closed'] ?? 0),
+                    (int) ($answer['closed'] ?? 0) === 1 ? '' : 's',
+                )
+                : \sprintf(
+                    'sugarcrush serve token: the running server (pid %d) could not be told and keeps accepting the old token until it restarts: sugarcrush serve stop && sugarcrush serve --detach',
+                    $running->pid,
+                ));
         }
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
-            echo NonInteractive::encodeDocument(['result' => ['token' => $token, 'rotated' => $rotate, 'path' => $state->path . '/' . TokenStore::FILE]]) . "\n";
+            echo NonInteractive::encodeDocument(['result' => \array_filter([
+                'token' => $token,
+                'rotated' => $rotate,
+                'path' => $state->path . '/' . TokenStore::FILE,
+                'serverReloaded' => $reloaded,
+            ], static fn (mixed $value): bool => $value !== null)]) . "\n";
         } else {
             echo $token . "\n";
         }
@@ -918,6 +981,25 @@ final class Serve
         $decoded = \json_decode(\trim($answer), true);
 
         return \is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * How long `stop` waits for a drained exit: {@see STOP_DRAIN_SECONDS}, or
+     * the configured `server.drainSeconds` plus a margin when that is longer,
+     * so `stop` never SIGKILLs a server still inside the drain it was told to
+     * allow.
+     *
+     * @param array<string, string> $env
+     */
+    private static function stopWaitSeconds(array $env): float
+    {
+        try {
+            $drain = ServerConfig::resolve([], $env, Bootstrap::readUserConfig(), '')->drainSeconds;
+        } catch (\Throwable) {
+            return self::STOP_DRAIN_SECONDS;
+        }
+
+        return \max(self::STOP_DRAIN_SECONDS, $drain + self::STOP_DRAIN_MARGIN_SECONDS);
     }
 
     /** The token file's token, read without minting one; null when absent. */

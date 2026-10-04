@@ -37,6 +37,11 @@ final class LoginCodes
         return $code !== '' && $this->codes->consume($code) !== null;
     }
 
+    public function revokeAll(): void
+    {
+        $this->codes->revokeAll();
+    }
+
     public function pending(): int
     {
         return $this->codes->count();

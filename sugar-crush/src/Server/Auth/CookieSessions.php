@@ -47,6 +47,12 @@ final class CookieSessions
         $this->sessions->revoke($id);
     }
 
+    /** Sign every browser out: the token their sign-in was checked against is gone. */
+    public function revokeAll(): void
+    {
+        $this->sessions->revokeAll();
+    }
+
     public function count(): int
     {
         return $this->sessions->count();

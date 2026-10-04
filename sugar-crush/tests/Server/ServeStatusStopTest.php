@@ -219,6 +219,24 @@ final class ServeStatusStopTest extends TestCase
         self::assertStringNotContainsString(\str_repeat('a', 40), $override['stdout'] . $override['stderr']);
     }
 
+    public function testRotatingTheTokenReloadsTheRunningServer(): void
+    {
+        $started = $this->bin(['serve', '--detach', '--port', '0', '--no-web']);
+        self::assertSame(0, $started['status'], $started['stderr']);
+        $old = \trim((string) \file_get_contents($this->stateDir . '/token'));
+
+        $rotated = $this->bin(['--output-format', 'json', 'serve', 'token', '--rotate']);
+        self::assertSame(0, $rotated['status'], $rotated['stderr']);
+        $result = \json_decode($rotated['stdout'], true)['result'];
+        self::assertTrue($result['serverReloaded'], $rotated['stderr']);
+        self::assertStringContainsString('now accepts only the new token', $rotated['stderr']);
+
+        $stale = $this->bin(['serve', 'url'], ['SUGARCRUSH_SERVER_TOKEN' => $old]);
+        self::assertSame(1, $stale['status'], 'the old token is refused at once, not after a restart');
+        self::assertSame(0, $this->bin(['serve', 'url'])['status'], 'the new one is accepted');
+        self::assertSame(0, $this->bin(['serve', 'stop'])['status']);
+    }
+
     // ── harness ──────────────────────────────────────────────────────────
 
     /**

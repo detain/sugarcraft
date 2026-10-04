@@ -69,6 +69,9 @@ final class Dispatcher implements MessageHandler
     /** How often running turns' live events are folded. */
     public const PUMP_INTERVAL_SECONDS = 0.05;
 
+    /** How often a drain looks whether the running turns have settled. */
+    public const DRAIN_POLL_SECONDS = 0.1;
+
     /** Appendix O §6.2: the close code for a client that skipped the hello. */
     public const CLOSE_NOT_INITIALIZED = 4002;
 
@@ -81,6 +84,8 @@ final class Dispatcher implements MessageHandler
     private ?TimerInterface $pumpTimer = null;
 
     private ?TimerInterface $tickTimer = null;
+
+    private ?TimerInterface $drainTimer = null;
 
     private bool $stopped = false;
 
@@ -147,6 +152,57 @@ final class Dispatcher implements MessageHandler
     }
 
     /**
+     * Drain before stopping (carried from W6 to O-3b; `server.drainSeconds`):
+     * from now on no turn or session is admitted (`draining`), every client
+     * is told the server is going and for how long (`server.shutdown` with
+     * `graceSeconds`), and $then runs once the turns in flight have settled —
+     * or when $seconds have passed, whichever is first. With nothing running,
+     * or $seconds at 0, $then runs now. Calling it again while a drain waits
+     * cuts the wait short. The turns still running when $then runs are the
+     * caller's to cancel.
+     *
+     * @param \Closure(bool): void $then told whether every turn settled in time
+     */
+    public function drain(float $seconds, \Closure $then, string $reason = 'server shutting down'): void
+    {
+        if ($this->drainTimer !== null) {
+            $this->context->loop()->cancelTimer($this->drainTimer);
+            $this->drainTimer = null;
+            $then($this->context->turnsRunning() === 0);
+
+            return;
+        }
+
+        $this->context->beginDraining();
+        if ($seconds <= 0.0 || $this->context->turnsRunning() === 0) {
+            $then(true);
+
+            return;
+        }
+
+        $this->context->broadcast(EventEnvelope::server(EventType::SERVER_SHUTDOWN, ['reason' => $reason, 'graceSeconds' => $seconds]), false);
+        $clock = $this->context->clock();
+        $deadline = $clock() + $seconds;
+        $this->drainTimer = $this->context->loop()->addPeriodicTimer(self::DRAIN_POLL_SECONDS, function () use ($then, $clock, $deadline): void {
+            $idle = $this->context->turnsRunning() === 0;
+            if (!$idle && $clock() < $deadline) {
+                return;
+            }
+            if ($this->drainTimer !== null) {
+                $this->context->loop()->cancelTimer($this->drainTimer);
+                $this->drainTimer = null;
+            }
+            $then($idle);
+        });
+    }
+
+    /** Whether a drain is waiting on running turns. */
+    public function isDraining(): bool
+    {
+        return $this->drainTimer !== null;
+    }
+
+    /**
      * Tell every client the server is going (`server.shutdown`), then cancel
      * the ticks and detach every feed. The sockets are the transport's to close.
      */
@@ -158,13 +214,14 @@ final class Dispatcher implements MessageHandler
         $this->stopped = true;
         $this->context->broadcast(EventEnvelope::server(EventType::SERVER_SHUTDOWN, ['reason' => $reason, 'graceSeconds' => $graceSeconds]), false);
         $loop = $this->context->loop();
-        foreach ([$this->pumpTimer, $this->tickTimer] as $timer) {
+        foreach ([$this->pumpTimer, $this->tickTimer, $this->drainTimer] as $timer) {
             if ($timer !== null) {
                 $loop->cancelTimer($timer);
             }
         }
         $this->pumpTimer = null;
         $this->tickTimer = null;
+        $this->drainTimer = null;
         $this->context->dropFeeds();
     }
 

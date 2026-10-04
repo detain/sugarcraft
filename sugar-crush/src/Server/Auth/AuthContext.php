@@ -21,6 +21,24 @@ final class AuthContext
     ) {
     }
 
+    /**
+     * Re-read the owner token; when it changed, revoke everything minted
+     * under the old one — every cookie session, every unspent ticket and
+     * login code — so a rotation signs every client out at once rather than
+     * at the next restart. Answers whether it changed.
+     */
+    public function reloadToken(): bool
+    {
+        if (!$this->tokens->reload()) {
+            return false;
+        }
+        $this->sessions->revokeAll();
+        $this->tickets->revokeAll();
+        $this->loginCodes->revokeAll();
+
+        return true;
+    }
+
     /** @param (\Closure(): float)|null $clock one clock for every expiry */
     public static function new(TokenStore $tokens, ?\Closure $clock = null): self
     {
