@@ -1300,6 +1300,96 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // not be handed back as the sub-agent's report.
         $capStop = null;
 
+        // P-D3: the user's controls for this run — `cancel`, `pause`,
+        // `resume` control messages in its mailbox (AgentInbox::control(),
+        // sent from the Agent View or the agent dashboard). They are READ on
+        // every callback the run makes, throttled to a stat a quarter second
+        // (the same probe a step's drain does), so a control never waits for
+        // a whole step to be noticed; they are ACTED ON only where it is safe
+        // to throw or to wait: a soft cancel at the next tool start or step,
+        // as Esc's cancel_tool does, so the run stops resumable; a pause at
+        // the next step boundary, so the step it is in finishes first.
+        $control = ['cancel' => false, 'paused' => false, 'size' => -1, 'probedAt' => null];
+        $controlClock = $this->activityClock ?? static fn (): float => microtime(true);
+        $runId = $subAgent->id;
+        $readControls = static function (bool $force) use ($agentInbox, $runId, &$control, $controlClock, $log): void {
+            if ($agentInbox === null) {
+                return;
+            }
+            $now = $controlClock();
+            if (!$force && $control['probedAt'] !== null && $now - $control['probedAt'] < 0.25) {
+                return;
+            }
+            $control['probedAt'] = $now;
+            try {
+                $size = $agentInbox->size($runId);
+                if ($size === 0 || $size === $control['size']) {
+                    return;
+                }
+                $verbs = $agentInbox->takeControls($runId, static function (string $msgId, string $from, string $reason) use ($log): void {
+                    $log?->append(SubAgentTranscriptLog::T_STATUS, [
+                        'status' => 'inbox',
+                        'outcome' => 'dropped a control message',
+                        'error' => sprintf('%s (id %s, claimed sender %s)', $reason, $msgId, $from),
+                    ]);
+                });
+                $control['size'] = $agentInbox->size($runId);
+            } catch (\InvalidArgumentException|\RuntimeException) {
+                // A run whose id names no mailbox, or a mailbox gone unreadable:
+                // it cannot be controlled, and it still runs.
+                return;
+            }
+            foreach ($verbs as $verb) {
+                match ($verb->text) {
+                    'cancel' => $control['cancel'] = true,
+                    'pause' => $control['paused'] = true,
+                    'resume' => $control['paused'] = false,
+                    default => null,
+                };
+            }
+        };
+        // Pause is CAPPED: the parent's Task call blocks on this run, so a
+        // pause left on would hang the parent turn. It holds for at most
+        // ten minutes, feeding the parent's no-progress watchdog a heartbeat
+        // every slice, and then the run goes on by itself.
+        $pauseCapSeconds = 600.0;
+        $stopIfControlled = static function (bool $stepBoundary) use (
+            &$control, $readControls, $controlClock, $pauseCapSeconds, $record, $log, $orphanGuard, $onHeartbeat,
+        ): void {
+            $readControls(true);
+            if ($control['cancel']) {
+                throw new \SugarCraft\Crush\Support\ToolCallCancelled();
+            }
+            if (!$stepBoundary || !$control['paused']) {
+                return;
+            }
+
+            $until = $controlClock() + $pauseCapSeconds;
+            $record('⏸ paused by the user · auto-resumes in 10 min', ActivityItem::text('⏸ paused by the user · auto-resumes in 10 min'));
+            $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'paused', 'outcome' => 'paused by the user', 'error' => null]);
+            while ($control['paused']) {
+                $left = $until - $controlClock();
+                if ($left <= 0.0) {
+                    $control['paused'] = false;
+                    $record('▶ resumed: the 10 min pause cap ran out', ActivityItem::text('▶ resumed: the pause cap ran out'));
+                    $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'resumed', 'outcome' => 'resumed after the 10 min pause cap', 'error' => null]);
+
+                    return;
+                }
+                $orphanGuard();
+                if ($onHeartbeat !== null) {
+                    $onHeartbeat();
+                }
+                usleep((int) (min(1.0, $left) * 1_000_000));
+                $readControls(true);
+                if ($control['cancel']) {
+                    throw new \SugarCraft\Crush\Support\ToolCallCancelled();
+                }
+            }
+            $record('▶ resumed by the user', ActivityItem::text('▶ resumed by the user'));
+            $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'resumed', 'outcome' => 'resumed by the user', 'error' => null]);
+        };
+
         try {
             $turn = $engine
                 ->withTools($tools)
@@ -1316,11 +1406,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     // SpendCapBreached IS: the run's own cap check emits it, and
                     // a narrower type here made that emit a TypeError that
                     // surfaced as an unexplained "failed" (audit B4).
-                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($onProgress, $stopIfCancelled, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent, $log, $flushLog): void {
+                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($onProgress, $stopIfCancelled, $stopIfControlled, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent, $log, $flushLog): void {
                         // Before the call runs; a throw from a finished
                         // event would only become that call's result.
                         if ($event instanceof ToolStarted) {
                             $stopIfCancelled();
+                            $stopIfControlled(false);
                         }
                         $onProgress();
                         // A tool boundary ends the thought before it: the
@@ -1360,8 +1451,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                             $event->result->durationMs() ?? 0,
                         ));
                     },
-                    onReasoning: static function (string $delta) use ($onProgress, &$think, $foldThink, $flushIfDue, &$logThought): void {
+                    onReasoning: static function (string $delta) use ($onProgress, $readControls, &$think, $foldThink, $flushIfDue, &$logThought): void {
                         $onProgress();
+                        $readControls(false);
                         $logThought .= $delta;
                         // The heartbeat's "alive, nothing to show" frame is an
                         // empty delta ({@see EngineBackend::turnTools()}) — it
@@ -1375,13 +1467,19 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                         }
                         $flushIfDue();
                     },
-                    onHeartbeat: $onHeartbeat,
+                    onHeartbeat: static function () use ($onHeartbeat, $readControls): void {
+                        $readControls(false);
+                        if ($onHeartbeat !== null) {
+                            $onHeartbeat();
+                        }
+                    },
                     // P-B2: the run's prose, as `text` items — the parent's
                     // live line shows the newest fragment when the run is
                     // writing rather than calling tools. Items only: the v1
                     // tail stays the run's trail of what it did.
-                    onToken: static function (string $delta) use ($onProgress, $buffer, $flushIfDue, &$logProse): void {
+                    onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse): void {
                         $onProgress();
+                        $readControls(false);
                         $logProse .= $delta;
                         if ($delta !== '') {
                             $buffer->add(ActivityItem::text($delta));
@@ -1395,9 +1493,11 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     // last step leave now rather than after a long call.
                     // The step count and token totals stay with the usage
                     // observer, which bills each step as it lands.
-                    onStep: static function (\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated $event) use (&$stats, $flushIfDue, $stopIfCancelled): void {
+                    onStep: static function (\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated $event) use (&$stats, $flushIfDue, $stopIfCancelled, $stopIfControlled): void {
                         if ($event instanceof \SugarCraft\Crush\Events\StepStarted) {
                             $stopIfCancelled();
+                            // The step boundary: where a pause holds.
+                            $stopIfControlled(true);
                             $stats['maxSteps'] = $event->maxSteps;
                         }
                         $flushIfDue();
@@ -1412,7 +1512,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             self::bill($subAgent, $spent, $baseTokens, $baseCost);
             $cancelled = $failure->getPrevious() instanceof \SugarCraft\Crush\Support\ToolCallCancelled;
             $why = $cancelled
-                ? sprintf('sub-agent "%s" was cancelled by the user (Esc)', $agentName)
+                ? sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc')
                 : sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
             $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath);
             $finish(

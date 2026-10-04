@@ -132,9 +132,9 @@ final class KeyboardHandler
      * 7. The {@see shellCtrlRunes()} chords.
      *
      * Element 1 is consumed by {@see App::consumeShellCmd()}, which translates
-     * it into shell state or into keystrokes the hosted Chat already answers.
-     * {@see App::consumeShellCmd()} names the commands that are still
-     * deliberately inert and why.
+     * it into shell state, into keystrokes the hosted Chat already answers, or
+     * (the agent commands, roadmap P-D3) into an
+     * {@see \SugarCraft\Crush\AgentControlMsg} for the runs it names.
      *
      * @return array{0: App, 1: ?object}|null [newApp, command], or null when
      *         the key is not the shell's and must fall through to Chat.
@@ -829,8 +829,10 @@ final class KeyboardHandler
     /**
      * What a key means to the open Agent View (roadmap P-C2), or null when
      * the view does not answer it: `back` (`Esc`, `Alt+↑`), `next`/`prev`
-     * (`Alt+N`/`Alt+P`, the runs of the same Task batch) and `send` (`Enter`
-     * on a draft the composer sends, P-D2 — {@see composerSends()}).
+     * (`Alt+N`/`Alt+P`, the runs of the same Task batch), `send` (`Enter`
+     * on a draft the composer sends, P-D2 — {@see composerSends()}),
+     * `leader` (`Ctrl+X`) and, while the leader is down, `chord` for any key
+     * (P-D3).
      *
      * Only in the chat pane, with the view open and nothing modal over the
      * chat — a permission prompt, the key reference, the palette, the session
@@ -846,6 +848,15 @@ final class KeyboardHandler
             || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
             || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->titleEditor() !== null) {
             return null;
+        }
+
+        // P-D3: with the `Ctrl+X` leader down, the next key is a chord — any
+        // key, so a stray one is dropped rather than typed.
+        if ($app->agentViewLeader) {
+            return 'chord';
+        }
+        if ($msg->ctrl && !$msg->alt && !$msg->shift && $msg->type === KeyType::Char && strtolower($msg->rune) === 'x') {
+            return 'leader';
         }
 
         if ($msg->ctrl || $msg->shift) {
@@ -895,7 +906,26 @@ final class KeyboardHandler
      */
     private function handleOpenAgentViewKey(string $key, App $app): ?array
     {
+        // P-D3's chords (Appendix P §5.5). The leader is consumed whatever
+        // follows it; `b` (background) is claimed but waits for roadmap 4.3.
+        if ($app->agentViewLeader) {
+            $app = $app->withAgentViewLeader(false);
+            $target = (string) $app->agentViewTarget;
+
+            return match (strtolower($key)) {
+                'c' => [$app, new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::CANCEL, [$target])],
+                'p' => [$app, new \SugarCraft\Crush\AgentControlMsg(
+                    $app->isAgentPaused($target) ? \SugarCraft\Crush\AgentControlMsg::RESUME : \SugarCraft\Crush\AgentControlMsg::PAUSE,
+                    [$target],
+                )],
+                's' => [$app, new StopAllAgentsCmd()],
+                'o' => [$app, new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::OPEN_SESSION, [$target])],
+                default => [$app, null],
+            };
+        }
+
         return match (strtolower($key)) {
+            'ctrl+x' => [$app->withAgentViewLeader(true), null],
             'escape', 'alt+up' => [$app, new \SugarCraft\Crush\CloseAgentViewMsg()],
             'enter' => self::composerSends($app)
                 ? [$app, new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::MESSAGE, $app->agentComposerTargets())]
@@ -995,7 +1025,7 @@ final class KeyboardHandler
      * `[App, null]` (not `null`) so it can never fall through to the
      * quick-action shortcuts in {@see handleAgentViewKey()} — that fallthrough
      * was the P5.S4 bug. Typing to the agent is P-D2's composer, in the chat
-     * pane, not here. What this method guarantees today: a key typed while
+     * pane, not here; its controls are the view's `Ctrl+X` chords (P-D3). What this method guarantees today: a key typed while
      * attached is never reinterpreted as CancelAgentCmd/ResumeAgentCmd/
      * StopAllAgentsCmd/QuitAgentViewCmd.
      *

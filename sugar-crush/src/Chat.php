@@ -2191,12 +2191,15 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        // Roadmap P-D2: the shell's word for something the user asked of one
-        // or more delegated runs — the Agent View composer's Enter. The runs'
-        // mailboxes and the live registry the ids name are this chat's, so
-        // the shell only translates and this arm acts.
+        // Roadmaps P-D2/P-D3: the shell's word for something the user asked
+        // of one or more delegated runs — the Agent View composer's Enter,
+        // its Ctrl+X chords, the dashboard's c/r/s, Ctrl+G's broadcast. The
+        // runs' mailboxes and the live registry the ids name are this
+        // chat's, so the shell only translates and this arm acts.
         if ($msg instanceof AgentControlMsg) {
-            return $this->submitToAgents($msg);
+            return $msg->verb === AgentControlMsg::MESSAGE
+                ? $this->submitToAgents($msg)
+                : $this->controlAgents($msg);
         }
 
         if ($msg instanceof AssistantMsg) {
@@ -9619,6 +9622,99 @@ final class Chat implements Model
 
         if ($sent) {
             $chat = $chat->mutate(['inputBuf' => '']);
+        }
+
+        return [$chat, $cmds === [] ? null : (\count($cmds) === 1 ? $cmds[0] : Cmd::batch(...$cmds))];
+    }
+
+    /**
+     * The user's controls for delegated runs (roadmap P-D3, Appendix P §5.5)
+     * — every verb of {@see AgentControlMsg} but the composer's message.
+     *
+     * - cancel / pause / resume: a `control` line in the run's mailbox
+     *   ({@see \SugarCraft\Crush\Agents\Live\AgentInbox::control()}), which
+     *   the run reads while it works and acts on at its next tool or step
+     *   ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}). It is the one
+     *   route that reaches every run alike — a lone Task in the turn's child,
+     *   a parallel member in its own process, a detached follow-up.
+     * - stop: the hard second press — the turn's own `cancel_tool` for the
+     *   run's Task call (as the agents strip's `c` does), plus the soft
+     *   cancel for a run no call of this turn holds.
+     * - resume on a FINISHED run continues it ({@see followUpAgent()}).
+     * - open-session: the run's stored child session becomes the session on
+     *   screen, a normal one to type into — refused mid-turn, as every
+     *   session switch is.
+     *
+     * What could not be done is said in one notice row, never silently.
+     *
+     * @return array{0: Chat, 1: ?\Closure}
+     */
+    private function controlAgents(AgentControlMsg $msg): array
+    {
+        $registry = $this->agentLive();
+        $sessionId = $this->currentSessionId;
+        $inbox = $sessionId === null
+            ? null
+            : ($this->workspace?->agentInbox($sessionId) ?? \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($sessionId));
+
+        $chat = $this;
+        $cmds = [];
+        $problems = [];
+        foreach (array_values(array_unique($msg->agentIds)) as $id) {
+            $state = $registry->get($id);
+            if ($state === null) {
+                $problems[] = sprintf('"%s" is not a delegated run of this session', $id);
+
+                continue;
+            }
+
+            if ($msg->verb === AgentControlMsg::OPEN_SESSION) {
+                $child = $state->childSessionId;
+                if ($child === null || $child === '') {
+                    $problems[] = sprintf('%s opens as a session once it has finished and been stored', $state->name);
+                } elseif ($chat->inFlight) {
+                    $problems[] = sprintf('a turn is running; open %s as a session once it ends', $state->name);
+                } elseif ($chat->sessionStore === null) {
+                    $problems[] = 'this chat keeps no sessions to switch to';
+                } else {
+                    $chat = $chat->switchToSession($child, $state->name . ' (agent)');
+                }
+
+                break;
+            }
+
+            if ($msg->verb === AgentControlMsg::RESUME && $state->isFinished()) {
+                [$chat, $cmd] = $chat->followUpAgent($state, $msg->text === '' ? \SugarCraft\Crush\Host\AgentResume::CONTINUE_TEXT : $msg->text);
+                $cmds[] = $cmd;
+
+                continue;
+            }
+            if ($state->isFinished()) {
+                // Nothing left to cancel, pause or stop.
+                continue;
+            }
+
+            if ($msg->verb === AgentControlMsg::STOP) {
+                [$chat] = $chat->route(new CancelAgentRunMsg($state->parentCallId));
+            }
+            if ($inbox === null) {
+                $problems[] = sprintf('%s cannot be reached: this session keeps no agent mailboxes', $state->name);
+
+                continue;
+            }
+            try {
+                $inbox->control($id, match ($msg->verb) {
+                    AgentControlMsg::PAUSE => 'pause',
+                    AgentControlMsg::RESUME => 'resume',
+                    default => 'cancel',
+                });
+            } catch (\Throwable $e) {
+                $problems[] = sprintf('%s: %s', $state->name, $e->getMessage());
+            }
+        }
+
+        if ($problems !== []) {
+            $chat = $chat->mutate(['history' => [...$chat->history, Message::notice(implode('; ', $problems) . '.')]]);
         }
 
         return [$chat, $cmds === [] ? null : (\count($cmds) === 1 ? $cmds[0] : Cmd::batch(...$cmds))];

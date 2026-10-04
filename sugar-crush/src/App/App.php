@@ -111,6 +111,9 @@ final class App implements Model
     /** Composer messages remembered for the view's `you → <agent>` rows ({@see $agentMessages}). */
     public const AGENT_MESSAGES_KEPT = 32;
 
+    /** A second cancel of the same runs within this many seconds stops them at once ({@see $agentCancelArmed}). */
+    public const AGENT_HARD_CANCEL_SECONDS = 3.0;
+
     private function __construct(
         public readonly ProviderInterface $provider,
         public readonly string $model,
@@ -385,6 +388,35 @@ final class App implements Model
          * @var list<\SugarCraft\Crush\AgentMessageSentMsg>
          */
         public readonly array $agentMessages = [],
+        /**
+         * `Ctrl+G` (roadmap P-D3): the composer sends to every running
+         * agent of the batch on screen at once instead of the one on screen
+         * ({@see agentComposerTargets()}). Off again on a second `Ctrl+G` or
+         * when the view closes.
+         */
+        public readonly bool $agentBroadcast = false,
+        /**
+         * The Agent View's `Ctrl+X` leader is down (roadmap P-D3): the next
+         * key is a control chord (`c`, `p`, `s`, `o`, `b`), never text.
+         */
+        public readonly bool $agentViewLeader = false,
+        /**
+         * The runs a soft cancel was just asked of, and when — a second
+         * cancel of the same runs within {@see AGENT_HARD_CANCEL_SECONDS}
+         * stops them at once (P-D3, Appendix P §5.5).
+         *
+         * @var array{ids: list<string>, at: float}|null
+         */
+        public readonly ?array $agentCancelArmed = null,
+        /**
+         * The runs the user paused and has not let go yet, so `Ctrl+X p`
+         * knows which way it toggles. A run that hit the pause cap goes on by
+         * itself; the next `Ctrl+X p` then only re-sends `resume`, which it
+         * ignores.
+         *
+         * @var list<string>
+         */
+        public readonly array $agentPaused = [],
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -687,6 +719,8 @@ final class App implements Model
             agentViewItems: [],
             agentViewRows: [],
             agentViewName: null,
+            agentBroadcast: false,
+            agentViewLeader: false,
         );
     }
 
@@ -728,13 +762,172 @@ final class App implements Model
 
     /**
      * The runs the Agent View's composer sends to (roadmap P-D2): the run on
-     * screen. Empty while no view is open — the box is then the main chat's.
+     * screen — or, while `Ctrl+G`'s broadcast is on (P-D3), every running
+     * run of its batch (every running run, for one not in a batch), and the
+     * one on screen when none is running any more. Empty while no view is
+     * open — the box is then the main chat's.
      *
      * @return list<string> run ids
      */
     public function agentComposerTargets(): array
     {
-        return $this->agentViewTarget === null ? [] : [$this->agentViewTarget];
+        $id = $this->agentViewTarget;
+        if ($id === null) {
+            return [];
+        }
+        if (!$this->agentBroadcast) {
+            return [$id];
+        }
+
+        // A lone Task is a batch of one; its broadcast is every running run.
+        $siblings = \count($batch = $this->agentViewSiblings()) > 1 ? $batch : [];
+        $running = array_values(array_filter(
+            $this->runningAgentIds(),
+            static fn (string $run): bool => $siblings === [] || \in_array($run, $siblings, true),
+        ));
+
+        return $running === [] ? [$id] : $running;
+    }
+
+    /**
+     * Every delegated run of this session that has not finished, oldest
+     * first — what stop-all and a broadcast address.
+     *
+     * @return list<string> run ids
+     */
+    public function runningAgentIds(): array
+    {
+        $ids = [];
+        foreach ($this->chat?->agentLive()->all() ?? [] as $state) {
+            if (!$state->isFinished()) {
+                $ids[] = $state->id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /** The same shell with the Agent View's `Ctrl+X` leader down or up ({@see $agentViewLeader}). */
+    public function withAgentViewLeader(bool $down): self
+    {
+        return $down === $this->agentViewLeader ? $this : $this->mutate(agentViewLeader: $down);
+    }
+
+    /** Whether the user paused run $id and has not let it go ({@see $agentPaused}). */
+    public function isAgentPaused(string $id): bool
+    {
+        return \in_array($id, $this->agentPaused, true);
+    }
+
+    /**
+     * `Ctrl+G` (roadmap P-D3, Appendix P §5.5): the composer's broadcast —
+     * send to every running agent of the batch at once. Turned on, it opens
+     * the Agent View on the newest running run when none is open, so the
+     * box that broadcasts is the composer that says it does. Turned off by
+     * the second press. With nothing running there is no one to address,
+     * and the status line says so.
+     */
+    public function toggleAgentBroadcast(): self
+    {
+        if ($this->agentBroadcast) {
+            return $this->mutate(agentBroadcast: false)->withStatus('Messages go to the agent on screen again.');
+        }
+
+        $running = $this->runningAgentIds();
+        if ($running === []) {
+            return $this->withStatus('No agent is running to message.');
+        }
+
+        $app = $this->agentViewTarget === null || !\in_array($this->agentViewTarget, $running, true)
+            ? $this->openAgentView($running[\count($running) - 1])
+            : $this;
+        $app = $app->mutate(agentBroadcast: true);
+
+        return $app->withStatus(sprintf('Messages go to all %d running agents (Ctrl+G again to stop).', \count($app->agentComposerTargets())));
+    }
+
+    /**
+     * Deliver a control to the hosted chat, which owns the runs' mailboxes
+     * (roadmap P-D3) — after the shell's own half: a second cancel of the
+     * same runs within {@see AGENT_HARD_CANCEL_SECONDS} becomes the hard
+     * stop, pause/resume keep {@see $agentPaused} current, opening a run as
+     * a session leaves the view, and the status line says what was asked.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function deliverAgentControl(\SugarCraft\Crush\AgentControlMsg $control): array
+    {
+        if ($control->agentIds === []) {
+            return [$this->withStatus('No agent to ' . match ($control->verb) {
+                \SugarCraft\Crush\AgentControlMsg::RESUME => 'resume',
+                \SugarCraft\Crush\AgentControlMsg::PAUSE => 'pause',
+                \SugarCraft\Crush\AgentControlMsg::OPEN_SESSION => 'open',
+                \SugarCraft\Crush\AgentControlMsg::MESSAGE => 'message',
+                default => 'stop',
+            } . '.'), null];
+        }
+
+        $app = $this->mutate(agentCancelArmed: null);
+        $names = $this->agentNames($control->agentIds);
+        $now = microtime(true);
+        switch ($control->verb) {
+            case \SugarCraft\Crush\AgentControlMsg::CANCEL:
+                $armed = $this->agentCancelArmed;
+                if ($armed !== null && $armed['ids'] === $control->agentIds && $now - $armed['at'] <= self::AGENT_HARD_CANCEL_SECONDS) {
+                    $control = new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::STOP, $control->agentIds);
+                    $app = $app->withStatus(sprintf('Stopping %s now.', $names));
+                } else {
+                    $app = $app->mutate(agentCancelArmed: ['ids' => $control->agentIds, 'at' => $now])
+                        ->withStatus(sprintf('Asked %s to stop at its next step — again within 3 s to stop it now.', $names));
+                }
+                break;
+            case \SugarCraft\Crush\AgentControlMsg::PAUSE:
+                $app = $app->mutate(agentPaused: array_values(array_unique([...$this->agentPaused, ...$control->agentIds])))
+                    ->withStatus(sprintf('%s pauses at its next step (for 10 min at most).', ucfirst($names)));
+                break;
+            case \SugarCraft\Crush\AgentControlMsg::RESUME:
+                $app = $app->mutate(agentPaused: array_values(array_diff($this->agentPaused, $control->agentIds)))
+                    ->withStatus(sprintf('%s goes on.', ucfirst($names)));
+                break;
+            case \SugarCraft\Crush\AgentControlMsg::OPEN_SESSION:
+                $app = $app->closeAgentView();
+                break;
+        }
+
+        return $app->delegateToChat($control);
+    }
+
+    /**
+     * "explore", "explore and reviewer" or "3 agents", for the status line.
+     *
+     * @param list<string> $ids
+     */
+    private function agentNames(array $ids): string
+    {
+        if (\count($ids) > 2) {
+            return \count($ids) . ' agents';
+        }
+
+        $names = [];
+        foreach ($ids as $id) {
+            $names[] = \SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames($this->chat?->agentLive()->get($id)?->name ?? $id);
+        }
+
+        return implode(' and ', $names);
+    }
+
+    /**
+     * The delegated run behind dashboard row $index, or no run: a worker
+     * that is not one (a workflow stage, a background session) has no
+     * mailbox to control (roadmap P-D3).
+     *
+     * @return list<string>
+     */
+    private function dashboardRunIds(int $index): array
+    {
+        $key = \SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($this)[$index]->key ?? null;
+
+        return $key !== null && $this->chat?->agentLive()->get($key) !== null ? [$key] : [];
     }
 
     /**
@@ -793,7 +986,7 @@ final class App implements Model
      * {@see Renderer::setAgentView()} — or null while no view is open. Read in
      * view(): it computes from state and reads nothing from disk.
      *
-     * @return array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<\SugarCraft\Crush\Message>, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null
+     * @return array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<\SugarCraft\Crush\Message>, composer: ?string, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null
      */
     public function agentViewFrame(): ?array
     {
@@ -819,6 +1012,11 @@ final class App implements Model
             'name' => $state?->name ?? $this->agentViewName ?? $attach?->name ?? $this->chat->agentManager()?->getSubAgent($id)?->agent->name ?? $id,
             'state' => $state,
             'rows' => [...$this->agentViewRows, ...$this->agentViewSentRows($id)],
+            // P-D3: what the composer's placeholder names — the broadcast's
+            // audience, when Ctrl+G turned it on for more than this run.
+            'composer' => $this->agentBroadcast && \count($targets = $this->agentComposerTargets()) > 1
+                ? sprintf('all %d agents', \count($targets))
+                : null,
             'attach' => $attach,
             'siblings' => $this->agentViewSiblings(),
             'transcript' => $transcript,
@@ -2737,16 +2935,15 @@ final class App implements Model
      * {@see \SugarCraft\Crush\Tui\Commands\QuitAgentViewCmd} is no longer
      * among them (P-C2): leaving the dashboard also leaves an open Agent View.
      *
-     * Still deliberately inert, and honestly so:
-     * {@see \SugarCraft\Crush\Tui\Commands\GroupInputCmd},
-     * {@see \SugarCraft\Crush\Tui\Commands\CancelAgentCmd},
+     * Nor, since roadmap P-D3, are the four that stayed inert for want of
+     * anything to translate into: {@see \SugarCraft\Crush\Tui\Commands\CancelAgentCmd},
      * {@see \SugarCraft\Crush\Tui\Commands\ResumeAgentCmd} and
-     * {@see \SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd}. The first has no
-     * counterpart anywhere in the live app to translate INTO, and the agent
-     * three would have to reach into a worker pool the shell does not hold —
-     * their pane/selection half is already applied by
-     * {@see KeyboardHandler::handleAgentViewKey()}. Inventing a consumer for
-     * them here would be a fabricated call path, not a fix.
+     * {@see \SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd} now become an
+     * {@see \SugarCraft\Crush\AgentControlMsg} for the runs they name —
+     * delivered through each run's mailbox, which reaches a run wherever it
+     * runs, so the shell needs no worker pool of its own — and
+     * {@see \SugarCraft\Crush\Tui\Commands\GroupInputCmd} turns the Agent
+     * View composer's broadcast on ({@see toggleAgentBroadcast()}).
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -2768,7 +2965,20 @@ final class App implements Model
             $cmd instanceof \SugarCraft\Crush\CancelAgentRunMsg => $this->delegateToChat($cmd),
             // The Agent View composer (P-D2): the runs' mailboxes are the
             // chat's, so the shell names the runs and the chat sends.
-            $cmd instanceof \SugarCraft\Crush\AgentControlMsg => $this->delegateToChat($cmd),
+            $cmd instanceof \SugarCraft\Crush\AgentControlMsg => $this->deliverAgentControl($cmd),
+            // P-D3: the four commands that used to be inert. The dashboard's
+            // c/r name its selected row's run; s stops every running run;
+            // Ctrl+G turns the composer's broadcast on or off.
+            $cmd instanceof \SugarCraft\Crush\Tui\Commands\CancelAgentCmd => $this->deliverAgentControl(
+                new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::CANCEL, $this->dashboardRunIds($cmd->agentIndex)),
+            ),
+            $cmd instanceof \SugarCraft\Crush\Tui\Commands\ResumeAgentCmd => $this->deliverAgentControl(
+                new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::RESUME, $this->dashboardRunIds($cmd->agentIndex)),
+            ),
+            $cmd instanceof \SugarCraft\Crush\Tui\Commands\StopAllAgentsCmd => $this->deliverAgentControl(
+                new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::CANCEL, $this->runningAgentIds()),
+            ),
+            $cmd instanceof \SugarCraft\Crush\Tui\Commands\GroupInputCmd => [$this->toggleAgentBroadcast(), null],
             // The Agent View (P-C2): the dashboard's Peek → Attach `Enter`
             // opens it, and `Esc`/`Alt+↑` in it, or the dashboard's `q`,
             // leave it — the chat hears the close, to disarm its `Esc` `Esc`.
@@ -3351,6 +3561,10 @@ final class App implements Model
             agentViewRows: array_key_exists('agentViewRows', $changes) ? $changes['agentViewRows'] : $this->agentViewRows,
             agentViewName: array_key_exists('agentViewName', $changes) ? $changes['agentViewName'] : $this->agentViewName,
             agentMessages: array_key_exists('agentMessages', $changes) ? $changes['agentMessages'] : $this->agentMessages,
+            agentBroadcast: array_key_exists('agentBroadcast', $changes) ? $changes['agentBroadcast'] : $this->agentBroadcast,
+            agentViewLeader: array_key_exists('agentViewLeader', $changes) ? $changes['agentViewLeader'] : $this->agentViewLeader,
+            agentCancelArmed: array_key_exists('agentCancelArmed', $changes) ? $changes['agentCancelArmed'] : $this->agentCancelArmed,
+            agentPaused: array_key_exists('agentPaused', $changes) ? $changes['agentPaused'] : $this->agentPaused,
         );
     }
 }

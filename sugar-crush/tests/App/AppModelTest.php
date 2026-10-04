@@ -949,17 +949,20 @@ final class AppModelTest extends TestCase
     }
 
     /**
-     * The commands consumeShellCmd() deliberately leaves inert must stay
-     * inert AND schedulable - no fabricated effect, no Cmd the loop chokes on.
+     * No command is inert any more (roadmap P-D3), but with no agent running
+     * the agent ones have nobody to act on: they say so on the status line,
+     * send nothing to the chat and schedule no Cmd the loop could choke on.
+     * Their real effect is pinned in tests/App/AgentShellCommandsTest.php.
      */
-    public function testDeliberatelyInertCommandsAreNoOps(): void
+    public function testAgentCommandsWithNoAgentRunningOnlySaySo(): void
     {
         $app = $this->app()->withChat(new Chat());
 
-        foreach ([new GroupInputCmd(), new StopAllAgentsCmd()] as $inert) {
-            [$next, $cmd] = $app->consumeShellCmd($inert);
+        foreach ([new GroupInputCmd(), new StopAllAgentsCmd()] as $command) {
+            [$next, $cmd] = $app->consumeShellCmd($command);
             $this->assertNull($cmd);
-            $this->assertSame($app, $next);
+            $this->assertSame($app->chat, $next->chat, 'nothing reached the chat');
+            $this->assertNotNull($next->status, 'the status line says why nothing happened');
         }
     }
 

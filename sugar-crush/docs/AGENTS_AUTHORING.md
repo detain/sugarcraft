@@ -322,6 +322,16 @@ is idle as well as mid-turn, and the parent model is not told about it: the
 parent transcript gets one `you → <agent> · … (follow-up)` row for your eyes
 only.
 
+The user can also **control** a running delegation from the Agent View
+(`Ctrl+X c`/`p`/`s`) or the agent dashboard (`c`/`r`/`s`): each sends a
+`control` line (`cancel`, `pause`, `resume`) the run reads while it works and
+the model never sees. A cancel stops the run at its next tool or step, as a
+failure that stays resumable; a pause holds it at its next step boundary,
+feeding the parent's watchdog a heartbeat, for ten minutes at most — the
+parent's `Task` call is waiting on it — and then it goes on by itself. A
+`control` line claiming to be the user's carries the same HMAC check as any
+user message; a forged one is dropped and logged.
+
 ---
 
 ## What you can actually do with a preset today

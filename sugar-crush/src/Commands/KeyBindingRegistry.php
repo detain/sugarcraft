@@ -531,15 +531,8 @@ final class KeyBindingRegistry
             KeyBinding::new('shell.palette', 'Ctrl+K', 'Open the command palette', $c),
             KeyBinding::new('shell.skills', 'Ctrl+S', 'Open the skill picker', $c),
             KeyBinding::new('shell.settings', 'Ctrl+,', 'Focus the settings pane; again to open the view', $c),
-            KeyBinding::new(
-                'shell.group-input',
-                'Ctrl+G',
-                'Group the input',
-                $c,
-                dormantReason: 'GroupInputCmd has no consumer — App::consumeShellCmd() names it '
-                    . 'as one of the deliberately inert commands, so the chord is claimed (which is '
-                    . 'what keeps it from typing a literal "g") but does nothing observable.',
-            ),
+            // P-D3: GroupInputCmd became the Agent View composer's broadcast.
+            KeyBinding::new('shell.group-input', 'Ctrl+G', 'Message every running agent at once', $c),
         ];
     }
 
@@ -640,16 +633,10 @@ final class KeyBindingRegistry
     private static function agents(): array
     {
         $c = self::CONTEXT_AGENTS;
-        // The criterion is "nothing observable happens", not "the command is on
-        // App::consumeShellCmd()'s inert list". That list names FOUR commands
-        // now; QuitAgentViewCmd, behind `q`, left it with P-C2 (it also closes
-        // an open Agent View). These three have no pane/selection half either.
-        $inert = 'KeyboardHandler::handleAgentViewKey() claims the key and returns a command with '
-            . 'no consumer: App::consumeShellCmd() lists it among the deliberately inert ones, and '
-            . 'unlike QuitAgentViewCmd it has no pane/selection half that lands anyway — the shell '
-            . 'holds no worker pool to translate the action into. So the key does nothing the user '
-            . 'can see, and the reference must not promise it.';
 
+        // c/r/s went live with P-D3: each becomes an AgentControlMsg for the
+        // selected row's run (every running run, for `s`), delivered through
+        // the runs' mailboxes — App::consumeShellCmd() names none inert now.
         return [
             KeyBinding::new('agents.move', '↑ / ↓', 'Move the selection (or k / j)', $c),
             KeyBinding::new('agents.peek', 'Enter', 'Look at the selected agent (or Space)', $c),
@@ -657,9 +644,9 @@ final class KeyBindingRegistry
             KeyBinding::new('agents.slot', 'Alt+1…9', 'Jump to that numbered dashboard row', $c),
             KeyBinding::new('agents.back', 'Esc', 'Drop the selection, then leave the view', $c),
             KeyBinding::new('agents.quit', 'q', 'Leave the view and any open agent transcript', $c),
-            KeyBinding::new('agents.cancel', 'c', 'Cancel the selected agent', $c, dormantReason: $inert),
-            KeyBinding::new('agents.resume', 'r', 'Resume the selected agent', $c, dormantReason: $inert),
-            KeyBinding::new('agents.stop-all', 's', 'Stop every agent', $c, dormantReason: $inert),
+            KeyBinding::new('agents.cancel', 'c', 'Cancel the selected agent; again to stop now', $c),
+            KeyBinding::new('agents.resume', 'r', 'Resume the selected agent, or continue it', $c),
+            KeyBinding::new('agents.stop-all', 's', 'Stop every running agent', $c),
         ];
     }
 
@@ -704,6 +691,23 @@ final class KeyBindingRegistry
             // open — a draft goes to the run's mailbox (or continues a
             // finished run), never to the main model.
             KeyBinding::new('agentview.send', 'Enter', 'Send the draft to the agent on screen', $c),
+            // P-D3: the view's controls, behind a `Ctrl+X` leader (opencode's
+            // chord) — the composer has the plain letters. Read back as
+            // two-key sequences by KeyBindingDriftTest; their rune tail is
+            // not one character, so they claim no Ctrl rune of their own.
+            KeyBinding::new('agentview.cancel', 'Ctrl+X c', 'Cancel this agent; again to stop it now', $c),
+            KeyBinding::new('agentview.pause', 'Ctrl+X p', 'Pause this agent, or let it go on', $c),
+            KeyBinding::new('agentview.stop-all', 'Ctrl+X s', 'Stop every running agent', $c),
+            KeyBinding::new('agentview.open-session', 'Ctrl+X o', 'Open this agent as a session', $c),
+            KeyBinding::new(
+                'agentview.background',
+                'Ctrl+X b',
+                'Send this agent to the background',
+                $c,
+                dormantReason: 'Promoting a running Task to the background needs roadmap 4.3 (P-E3): '
+                    . 'the chord is claimed — so the `b` is not typed into the composer — but '
+                    . 'nothing hands the run to the BackgroundSupervisor yet.',
+            ),
             KeyBinding::new('agentview.next', 'Alt+N', 'Open the next agent of the same batch', $c),
             KeyBinding::new('agentview.prev', 'Alt+P', 'Open the previous agent of the same batch', $c),
         ];

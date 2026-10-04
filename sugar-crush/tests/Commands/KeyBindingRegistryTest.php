@@ -300,12 +300,18 @@ final class KeyBindingRegistryTest extends TestCase
      * 114 -> 115 live (118 -> 119 all) with the Agent View's composer
      * (roadmap P-D2): `agentview.send`, `Enter` sends the draft to the agent
      * on screen.
+     *
+     * 115 -> 123 live (119 -> 124 all) and 4 -> 1 dormant with the agent
+     * controls (roadmap P-D3): `shell.group-input`, `agents.cancel`,
+     * `.resume` and `.stop-all` went live, and the Agent View's `Ctrl+X`
+     * chords arrived — `agentview.cancel`, `.pause`, `.stop-all` and
+     * `.open-session` live, `agentview.background` dormant until 4.3.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(119, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(115, KeyBindingRegistry::live(), 'update the docblocks that state this count');
-        $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
+        $this->assertCount(124, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(123, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(1, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(12, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
@@ -323,42 +329,36 @@ final class KeyBindingRegistryTest extends TestCase
     }
 
     /**
-     * A dormant chord must stay in the claim set: an unclaimed Ctrl+<rune>
-     * does not become inert, it falls through to Chat's generic Char arm and
-     * types its own letter into the input box.
+     * `Ctrl+G` stays in the shell's claim set now that it is live (P-D3, the
+     * composer's broadcast): it was claimed while dormant precisely so the
+     * chord would not type a literal "g", and it is the same claim that
+     * delivers it now.
      */
-    public function testADormantShellChordIsStillClaimed(): void
+    public function testTheGroupInputChordIsLiveAndClaimed(): void
     {
         $this->assertContains('g', KeyBindingRegistry::shellCtrlRunes());
-        $this->assertNotContains(
+        $this->assertContains(
             'shell.group-input',
             array_map(static fn(KeyBinding $b): string => $b->id, KeyBindingRegistry::live()),
         );
     }
 
     /**
-     * The other half of {@see KeyBinding::$dormantReason}'s per-row rationale:
-     * the three dormant agent-view rows route NOTHING. None of them is a
-     * `Ctrl+<rune>` chord, so none can reach a rune set, which is why
-     * "a dormant chord must keep being claimed or it types its own letter"
-     * is true of `shell.group-input` alone — `handleAgentViewKey()` claims
-     * c/r/s whether or not this table declares them.
+     * The one dormant row left, `agentview.background` (`Ctrl+X b`, waiting
+     * for roadmap 4.3), routes NOTHING: a two-key sequence has no
+     * single-rune tail, so it cannot feed a derived rune set — the view's
+     * `Ctrl+X` leader claims the `b` whether or not this table declares it.
+     * The agent dashboard's `c`/`r`/`s`, dormant until P-D3, are live.
      */
-    public function testTheDormantAgentRowsRouteNothing(): void
+    public function testTheDormantRowRoutesNothing(): void
     {
-        $agents = 0;
-        foreach (KeyBindingRegistry::dormant() as $binding) {
-            if ($binding->context !== KeyBindingRegistry::CONTEXT_AGENTS) {
-                continue;
-            }
-            $agents++;
-            $this->assertNull(
-                $binding->ctrlRune(),
-                $binding->id . ' would now feed a derived rune set, so its dormant reason is wrong',
-            );
-        }
+        $dormant = KeyBindingRegistry::dormant();
+        $this->assertSame(['agentview.background'], array_map(static fn(KeyBinding $b): string => $b->id, $dormant));
+        $this->assertNull($dormant[0]->ctrlRune(), 'it would feed a derived rune set, so its dormant reason is wrong');
 
-        $this->assertSame(3, $agents);
+        foreach (['agents.cancel', 'agents.resume', 'agents.stop-all'] as $id) {
+            $this->assertTrue(KeyBindingRegistry::byId($id)?->isLive(), "{$id} is live since P-D3");
+        }
     }
 
     public function testCtrlRuneReadsOnlyBareSingleCharacterChords(): void

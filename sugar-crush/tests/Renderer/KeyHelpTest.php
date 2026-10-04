@@ -1108,8 +1108,11 @@ final class KeyHelpTest extends TestCase
         // separator more, plus `agents.attach` and `mouse.agent`: 137 lines,
         // 105 -> 112, fitting at 100x142. The Agent View's composer (P-D2)
         // declared `agentview.send`: 138 lines, 112 -> 113, fitting at
-        // 100x143.
-        foreach ([[100, 30, 113], [100, 143, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // 100x143. The agent controls (P-D3) put eight more live: the four
+        // formerly dormant `shell.group-input` and `agents.cancel/.resume/
+        // .stop-all`, and four `Ctrl+X` chords — 146 lines, 113 -> 121,
+        // fitting at 100x151.
+        foreach ([[100, 30, 121], [100, 151, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1173,8 +1176,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 143 rows, not 80: the list is 138 content lines now (115 live
-            // rows, 12 headers, 11 separators; 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
+            // 151 rows, not 80: the list is 146 content lines now (123 live
+            // rows, 12 headers, 11 separators; 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
             // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
@@ -1183,7 +1186,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 143))),
+                Width::of($this->footer($this->chat('', $cols, 151))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

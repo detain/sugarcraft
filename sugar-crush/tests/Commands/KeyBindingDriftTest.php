@@ -537,7 +537,10 @@ final class KeyBindingDriftTest extends TestCase
      *
      * `chat.cancel` is that row: "Esc Esc … twice, quickly" is two presses one
      * after the other, and rewriting the label as `Esc / Esc` would read as two
-     * ways to do it while its observation kept passing unchanged.
+     * ways to do it while its observation kept passing unchanged. The Agent
+     * View's four live `Ctrl+X <letter>` chords (P-D3) are the same shape: a
+     * leader, then the letter — and each observation presses the two keys
+     * in that order and asserts the leader went down first.
      *
      * Asserted in both directions — a new sequence row shows up here as an
      * unexpected entry, which is the prompt to decide whether its observation
@@ -553,7 +556,7 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         $this->assertSame(
-            ['chat.cancel'],
+            ['chat.cancel', 'agentview.cancel', 'agentview.pause', 'agentview.stop-all', 'agentview.open-session'],
             $sequences,
             'chord() cannot tell a sequence from a choice, so the set of rows written as a sequence is '
             . 'held here explicitly',
@@ -1519,6 +1522,32 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame(Pane::Chat, $app->pane);
                 $this->assertInstanceOf(QuitAgentViewCmd::class, $cmd);
             },
+            // P-D3: the dashboard's c/r/s act on the runs, through their
+            // mailboxes. Through App::update(), the live route.
+            'agents.cancel' => function (array $k): void {
+                $token = new \SugarCraft\Crush\Backend\CancellationToken();
+                [$app, $session] = $this->dashboardOn($this->stripApp($token), 'run-2');
+
+                [$asked] = $app->update($k[0]);
+                $this->assertSame(['cancel'], $this->controls($session, 'run-2'), 'the selected run is asked to stop');
+                $this->assertSame([], $this->controls($session, 'run-1'));
+                $this->assertSame([], $token->takeToolCancels(), 'softly: the turn\'s call is left alone');
+
+                $asked->update($k[0]);
+                $this->assertSame(['call_2'], $token->takeToolCancels(), 'a second press stops it at once');
+            },
+            'agents.resume' => function (array $k): void {
+                [$app, $session] = $this->dashboardOn($this->stripApp(), 'run-2');
+                $app->update($k[0]);
+                $this->assertSame(['resume'], $this->controls($session, 'run-2'));
+            },
+            'agents.stop-all' => function (array $k): void {
+                [$app, $session] = $this->dashboardOn($this->stripApp(), 'run-2');
+                $app->update($k[0]);
+                foreach (['run-1', 'run-2', 'run-3'] as $run) {
+                    $this->assertSame(['cancel'], $this->controls($session, $run), "{$run} is asked to stop");
+                }
+            },
 
             // ── Skill picker ─────────────────────────────────────────────
             // Three options, for the reason picker.move gives: the picker wraps,
@@ -1567,6 +1596,60 @@ final class KeyBindingDriftTest extends TestCase
                 [$app] = $this->batchApp()->openAgentView('b-2')->update($k[0]);
                 $this->assertSame('b-1', $app->agentViewTarget);
             },
+            // P-D3: the view's Ctrl+X chords, pressed as the sequence the
+            // label names.
+            'agentview.cancel' => function (array $k): void {
+                $session = 'drift-x-' . bin2hex(random_bytes(4));
+                $app = $this->composing($this->stripApp(), $session, '')->openAgentView('run-2');
+                [$leader] = $app->update($k[0]);
+                $this->assertTrue($leader->agentViewLeader, 'the first key is the leader');
+                [$after] = $leader->update($k[1]);
+                $this->assertFalse($after->agentViewLeader);
+                $this->assertSame(['cancel'], $this->controls($session, 'run-2'));
+                $this->assertSame('', $after->chat?->inputBuf, 'no letter was typed');
+            },
+            'agentview.pause' => function (array $k): void {
+                $session = 'drift-x-' . bin2hex(random_bytes(4));
+                $app = $this->composing($this->stripApp(), $session, '')->openAgentView('run-2');
+                [$paused] = $app->update($k[0])[0]->update($k[1]);
+                $this->assertSame(['pause'], $this->controls($session, 'run-2'));
+                $this->assertTrue($paused->isAgentPaused('run-2'));
+
+                [$going] = $paused->update($k[0])[0]->update($k[1]);
+                $this->assertSame(['resume'], $this->controls($session, 'run-2'), 'and the same chord lets it go on');
+                $this->assertFalse($going->isAgentPaused('run-2'));
+            },
+            'agentview.stop-all' => function (array $k): void {
+                $session = 'drift-x-' . bin2hex(random_bytes(4));
+                $app = $this->composing($this->stripApp(), $session, '')->openAgentView('run-2');
+                $app->update($k[0])[0]->update($k[1]);
+                foreach (['run-1', 'run-2', 'run-3'] as $run) {
+                    $this->assertSame(['cancel'], $this->controls($session, $run), "{$run} is asked to stop");
+                }
+            },
+            'agentview.open-session' => function (array $k): void {
+                $store = new \SugarCraft\Crush\Session\EnhancedSessionStore($this->sandbox . '/open-session.db');
+                $store->createSession('parent', 'p', 'm', null, 'Parent');
+                $child = $store->createChildSession('parent', \SugarCraft\Crush\Session\SessionKind::Subagent, 'explore', 'call_1', 'p', 'm', 'Map it (@explore)');
+                $store->saveTranscript($child, [['role' => 'user', 'content' => 'map the login flow']]);
+                $chat = (new Chat(history: [Message::user('go')], backend: new EchoBackend(), sessionStore: $store, currentSessionId: 'parent'))
+                    ->withSize(120, 20);
+                $chat->agentLive()->apply((new \SugarCraft\Crush\Events\SubAgentActivity(
+                    \SugarCraft\Crush\Events\SubAgentActivity::OP_FINISHED,
+                    'run-1',
+                    'explore',
+                    '',
+                    2,
+                    'done',
+                    parentCallId: 'call_1',
+                    outcome: \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_COMPLETE,
+                ))->withChildSessionId($child));
+                $app = $this->app()->withChat($chat)->openAgentView('run-1');
+
+                [$opened] = $app->update($k[0])[0]->update($k[1]);
+                $this->assertNull($opened->agentViewTarget, 'the view gave way');
+                $this->assertSame($child, $opened->chat?->currentSessionId(), 'to the agent\'s session, a normal one to type into');
+            },
             // P-D2: the box is the open run's composer. Mid-turn on purpose:
             // the same Enter in the main view would steer the parent's turn.
             'agentview.send' => function (array $k): void {
@@ -1580,6 +1663,21 @@ final class KeyBindingDriftTest extends TestCase
 
                 $mail = \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($session)?->drain('run-2') ?? [];
                 $this->assertSame(['also check the cookie'], array_map(static fn ($m): string => $m->text, $mail), 'into that run\'s mailbox');
+            },
+            // P-D3: Ctrl+G turns the composer into a broadcast — it opens the
+            // view on the newest running run, and Enter reaches every one.
+            'shell.group-input' => function (array $k): void {
+                $session = 'drift-group-' . bin2hex(random_bytes(4));
+                [$group] = $this->composing($this->stripApp(), $session, 'wrap up')->update($k[0]);
+                $this->assertTrue($group->agentBroadcast);
+                $this->assertSame('run-3', $group->agentViewTarget, 'the view opened on the newest running run');
+                $this->assertSame(['run-1', 'run-2', 'run-3'], $group->agentComposerTargets());
+
+                $group->update(new KeyMsg(KeyType::Enter));
+                foreach (['run-1', 'run-2', 'run-3'] as $run) {
+                    $mail = \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($session)?->drain($run) ?? [];
+                    $this->assertSame(['wrap up'], array_map(static fn ($m): string => $m->text, $mail), "{$run} got it");
+                }
             },
             'strip.cancel' => function (array $k): void {
                 $token = new \SugarCraft\Crush\Backend\CancellationToken();
@@ -2285,6 +2383,38 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         return $this->app()->withChat($chat);
+    }
+
+    /**
+     * $app on session $session with the agent dashboard focused and run
+     * $run's row selected (P-D3).
+     *
+     * @return array{0: App, 1: string} the app and the session
+     */
+    private function dashboardOn(App $app, string $run): array
+    {
+        $session = 'drift-dash-' . bin2hex(random_bytes(4));
+        $app = $this->composing($app, $session, '')->withPane(Pane::Agents);
+        foreach (\SugarCraft\Crush\Tui\Components\AgentDashboardPane::entries($app) as $index => $entry) {
+            if ($entry->key === $run) {
+                return [$app->withSelectedAgentIndex($index), $session];
+            }
+        }
+        $this->fail("fixture: no dashboard row for {$run}");
+    }
+
+    /**
+     * The control verbs waiting in run $run's mailbox on session $session,
+     * taken (so the next read starts clean).
+     *
+     * @return list<string>
+     */
+    private function controls(string $session, string $run): array
+    {
+        $inbox = \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($session);
+        $this->assertNotNull($inbox);
+
+        return array_map(static fn ($m): string => $m->text, $inbox->takeControls($run));
     }
 
     /**
