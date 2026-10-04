@@ -116,6 +116,18 @@ re-prefills the whole conversation behind it.
   alone) still appends the row to each wire request itself.
   Payload bytes are already `PromptFence`-escaped by `EnvironmentBlock`, and the row neutralises its
   own fence name inside them, so a commit subject spelling the closer cannot end the row early.
+- **Files changed since the model read them.** `Tools\ReadLedger` (roadmap 3.I-2) is the
+  session's read ledger: for each file, the stat signature and an `xxh128` hash of the bytes `Read`
+  showed the model (hashed during the line-count pass, so it costs no second read) or that `Edit` and
+  `Write` wrote. An `Edit`, or a `Write` with `overwrite`, of a file whose content no longer matches
+  is refused in place — the error names the path, says the file was left unchanged and tells the
+  model to Read it again — and the instance that enforces this says so in its tool description. It
+  compares content, not the clock, so a `touch` or a rewrite of identical bytes is not a change, and
+  a file the model never read is never refused (this is staleness, not read-before-write). The
+  ledger crosses a parallel `Read` child through `CarriesSessionState` and the turn child through
+  the `result` frame's `readLedger` key, so it lives as long as the session's tool set; at most 256
+  paths are kept. `ReadLedger::notice()` renders the matching "files changed on disk since you last
+  read them" paragraph for the `<turn-context>` row, which does not carry it yet.
 - **Pruned tool output and superseded turn-context rows.** When a step's request
   is over its budget, `EngineBackend::runTurn()` prunes before sending
   (`Context\Pruning\EmergencyPrune`), and `Runtime::buildMessages()` projects every

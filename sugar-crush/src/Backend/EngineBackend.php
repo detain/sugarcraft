@@ -4133,6 +4133,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // streak would never advance on this path and the notice would be
         // raised again by every later turn's child.
         $payload['cacheHealth'] = $this->cacheHealth->state();
+        // Roadmap 3.I-2: what the model saw and wrote this turn, on success
+        // AND failure (a failed turn's reads still happened). The tools'
+        // ledger here is this child's copy and dies with it; plain arrays on
+        // the frame rule. Without it every turn would start from the parent's
+        // ledger as it stood before the turn, blind to the reads it made and
+        // to its own last write.
+        $payload['readLedger'] = \SugarCraft\Crush\Tools\ReadLedger::in($this->tools)?->toArray();
 
         self::writeFrame($childSocket, $payload);
         fclose($childSocket);
@@ -4282,6 +4289,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // P10.S3: the child's cache-health streak, before the verdict for the
         // same reason. The watch is shared by every clone of this backend.
         $this->cacheHealth->adopt($data['cacheHealth'] ?? null);
+
+        // Roadmap 3.I-2: the child's read ledger, before the verdict for the
+        // same reason. Merged into the tools' shared ledger, last-recorded-wins
+        // per path; a frame without the key (an older child) merges nothing.
+        \SugarCraft\Crush\Tools\ReadLedger::in($this->tools)?->merge($data['readLedger'] ?? null);
 
         if (($data['ok'] ?? false) !== true) {
             $deferred->reject(new \RuntimeException((string) ($data['error'] ?? 'Provider worker process failed')));

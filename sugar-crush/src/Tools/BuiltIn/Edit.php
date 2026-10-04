@@ -19,6 +19,7 @@ use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
+use SugarCraft\Crush\Tools\ReadLedger;
 use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
 use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
@@ -44,6 +45,11 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
      * $writeSeam is a TEST SEAM only (audit F-T7): the payload writer handed
      * to {@see AtomicFileWriter::replace()}, so a test can fail a write
      * part-way and prove the original bytes survive. Production passes null.
+     *
+     * $readLedger is the session's record of what the model has seen (roadmap
+     * 3.I-2): with one, an edit of a file that changed on disk since the
+     * model last read it is refused, and every edit that lands is recorded as
+     * the model's new picture of the file. Null skips both.
      */
     public function __construct(
         private ?string $root = null,
@@ -54,11 +60,18 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
         private ?SkillPathNudge $skillNudge = null,
         private ?RulePathNudge $ruleNudge = null,
         private ?\Closure $writeSeam = null,
+        private ?ReadLedger $readLedger = null,
     ) {}
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge);
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, readLedger: ReadLedger::forContext($context));
+    }
+
+    /** The read ledger this instance checks and records into, or null. */
+    public function readLedger(): ?ReadLedger
+    {
+        return $this->readLedger;
     }
 
     public function name(): string
@@ -99,7 +112,11 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
             . 'ones produced, and if any fails none is written. The file must already exist — use Write to '
             . 'create one. On success the result names the path and counts the lines added and removed, as '
             . '"(+2 -1 lines)"; it does not echo the new file contents back, so Read the file again if you '
-            . 'need to see the edit in context.';
+            . 'need to see the edit in context.'
+            // Claimed only by an instance that enforces it (roadmap 3.I-2).
+            . ($this->readLedger === null ? '' : ' If the file changed on disk after you last read it — '
+                . 'an edit by the user, a formatter or a command — the edit is refused and the file left '
+                . 'untouched: Read it again and retry against what is there now.');
     }
 
     public function inputSchema(): array
@@ -271,6 +288,19 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
         // prepending the instruction file's text into it.
         $originalContent = $content;
 
+        // Roadmap 3.I-2: an old_string that still matches proves the model
+        // saw SOME version of this text, not the current one — everything
+        // around it may have moved since the read. Compared by content, so a
+        // touch or a rewrite of identical bytes is not a change.
+        $stale = $this->readLedger?->staleness($path, $originalContent);
+        if ($stale !== null) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: self::staleRefusal($path),
+                isError: true,
+            );
+        }
+
         $nestedContent = $this->instructionLoader?->loadForPath($path);
 
         // Which text to replace, found by the staged matcher chain (audit
@@ -332,6 +362,10 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
                 isError: true,
             );
         }
+
+        // The model's own change is its new picture of the file, so its next
+        // edit here is not refused as stale.
+        $this->readLedger?->record($path, $newContent);
 
         // Mirrors opencode's and Claude Code's Edit tool: the transcript always
         // shows a real before/after diff, never just a bare confirmation string.
@@ -451,6 +485,17 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
         );
 
         return $head . (str_starts_with($failure, 'Error: ') ? substr($failure, 7) : $failure);
+    }
+
+    /**
+     * The refusal for an edit of a file that changed since the model last
+     * read it (roadmap 3.I-2). Names the cure, since the model cannot tell a
+     * stale picture from a bad old_string on its own.
+     */
+    private static function staleRefusal(string $path): string
+    {
+        return "Error: {$path} changed on disk since you last read it (an edit by the user, a formatter or a command); "
+            . 'Read it again before editing it; file left unchanged';
     }
 
     /**

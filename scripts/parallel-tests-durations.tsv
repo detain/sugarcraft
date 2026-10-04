@@ -351,6 +351,7 @@ sugar-crush/tests/Agents/ForeignAgentPresetRegistryTest.php	0.403	39
 sugar-crush/tests/Agents/MailboxTest.php	0.401	23
 sugar-crush/tests/Host/EventLogTest.php	0.400	8
 sugar-crush/tests/Chat/CacheReusingSummaryRouteTest.php	0.400	8
+sugar-crush/tests/Tools/ReadLedgerStalenessTest.php	0.400	18
 sugar-crush/tests/Tools/BuiltIn/EditTest.php	0.398	15
 sugar-crush/tests/Cli/BootstrapClaudeMcpGrantTest.php	0.394	10
 sugar-crush/tests/Config/TrustKeyDocumentationDriftTest.php	0.394	12

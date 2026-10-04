@@ -18,6 +18,7 @@ use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\PathJail;
+use SugarCraft\Crush\Tools\ReadLedger;
 use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
 use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
@@ -86,7 +87,17 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         // Step 3.F: the launch's language servers, for the outline of a file
         // too long for one page. Null outlines from the source text alone.
         private ?LspClient $lsp = null,
+        // Roadmap 3.I-2: the session's record of what the model has seen, so
+        // Edit and Write can refuse to act on a file that changed since. Null
+        // records nothing.
+        private ?ReadLedger $readLedger = null,
     ) {}
+
+    /** The read ledger this instance records into, or null. */
+    public function readLedger(): ?ReadLedger
+    {
+        return $this->readLedger;
+    }
 
     /**
      * Opening a file mutates nothing a sibling call could observe, so a batch
@@ -106,11 +117,12 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
     /**
      * @return array<string, mixed>
      *
-     * Kept byte-identical to {@see Glob::exportSessionState()}: both tools are
-     * wired to the SAME two collaborators (see
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}), so a key one of them
-     * exported and the other did not would leave that half re-announcing
-     * forever.
+     * The four announce-once keys are kept byte-identical to
+     * {@see Glob::exportSessionState()}: both tools are wired to the SAME
+     * collaborators (see {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}), so
+     * a key one of them exported and the other did not would leave that half
+     * re-announcing forever. The read ledger (roadmap 3.I-2) is Read's alone —
+     * Glob lists paths, it never shows the model a file's content.
      */
     public function exportSessionState(): array
     {
@@ -119,6 +131,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             'announcedInstructionRefusals' => $this->instructionLoader?->announcedRefusals() ?? [],
             'announcedSkills' => $this->skillNudge?->announced() ?? [],
             'announcedRules' => $this->ruleNudge?->announcedPaths() ?? [],
+            ReadLedger::SESSION_STATE_KEY => $this->readLedger?->toArray() ?? [],
         ];
     }
 
@@ -146,11 +159,14 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         if (is_array($rules)) {
             $this->ruleNudge?->markAnnouncedPaths(array_values($rules));
         }
+
+        // Last-recorded-wins per path, so the merge is order-independent.
+        $this->readLedger?->merge($state[ReadLedger::SESSION_STATE_KEY] ?? null);
     }
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, lsp: $context->lsp);
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, lsp: $context->lsp, readLedger: ReadLedger::forContext($context));
     }
 
     public function name(): string
@@ -345,8 +361,16 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         });
         try {
             clearstatcache(true, $path);
-            $content = $this->readPage($path, $offset ?? 1, $limit ?? self::PAGE_LINES);
+            $observed = null;
+            $content = $this->readPage($path, $offset ?? 1, $limit ?? self::PAGE_LINES, $observed);
             restore_error_handler();
+
+            // Roadmap 3.I-2: what the model now holds of this file — the stat
+            // taken when it was opened and the hash of the bytes the counting
+            // pass read — so a later Edit or Write can tell it changed since.
+            if ($observed !== null) {
+                $this->readLedger?->observe($path, ...$observed);
+            }
 
             // A FILE TOO LONG FOR ONE PAGE, read with no window named, gets an
             // outline of its declarations after the first page (step 3.F,
@@ -581,8 +605,14 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      *
      * Every fread() asks for min({@see SCAN_CHUNK}, $maxBytes) bytes, so a
      * non-positive $maxBytes still throws on the first one, as it always has.
+     *
+     * $observed receives, when a ledger is wired, the file's stat signature
+     * at open and the hash of every byte pass 1 read — the whole file, so the
+     * ledger's hash costs no second read (roadmap 3.I-2).
+     *
+     * @param ?array{mtime: int, size: int, ino: int, hash: ?string} $observed
      */
-    private function readPage(string $path, int $offset, int $limit): string
+    private function readPage(string $path, int $offset, int $limit, ?array &$observed = null): string
     {
         $handle = fopen($path, 'rb');
         if ($handle === false) {
@@ -590,6 +620,9 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         }
 
         try {
+            $stat = $this->readLedger !== null ? fstat($handle) : false;
+            $hash = $stat !== false ? ReadLedger::hashContext() : null;
+
             $chunkLength = min(self::SCAN_CHUNK, $this->maxBytes);
             $read = static function () use ($handle, $chunkLength, $path): string {
                 $chunk = fread($handle, $chunkLength);
@@ -606,6 +639,12 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             while (($chunk = $read()) !== '') {
                 $total += substr_count($chunk, "\n");
                 $lastByte = $chunk[-1];
+                if ($hash !== null) {
+                    hash_update($hash, $chunk);
+                }
+            }
+            if ($stat !== false && $hash !== null) {
+                $observed = ['mtime' => (int) $stat['mtime'], 'size' => (int) $stat['size'], 'ino' => (int) $stat['ino'], 'hash' => hash_final($hash)];
             }
             if ($lastByte !== '' && $lastByte !== "\n") {
                 $total++;

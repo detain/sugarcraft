@@ -13,6 +13,7 @@ use SugarCraft\Crush\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Tools\PathJail;
 use SugarCraft\Crush\Tools\PromptGuidance;
+use SugarCraft\Crush\Tools\ReadLedger;
 use SugarCraft\Crush\Tools\AcceptsWorktreeJail;
 use SugarCraft\Crush\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Crush\Tools\Tool;
@@ -69,6 +70,11 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
      * $writeSeam is a TEST SEAM only (audit F-T7): the payload writer handed
      * to {@see AtomicFileWriter::replace()}, so a test can fail a write
      * part-way and prove the original bytes survive. Production passes null.
+     *
+     * $readLedger is the session's record of what the model has seen (roadmap
+     * 3.I-2): with one, overwriting a file that changed on disk since the
+     * model last read it is refused, and every write that lands is recorded
+     * as the model's picture of the file. Null skips both.
      */
     public function __construct(
         private ?string $root = null,
@@ -78,11 +84,18 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
         private ?RulePathNudge $ruleNudge = null,
         private int $maxDiffBytes = self::DEFAULT_MAX_DIFF_BYTES,
         private ?\Closure $writeSeam = null,
+        private ?ReadLedger $readLedger = null,
     ) {}
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge);
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, readLedger: ReadLedger::forContext($context));
+    }
+
+    /** The read ledger this instance checks and records into, or null. */
+    public function readLedger(): ?ReadLedger
+    {
+        return $this->readLedger;
     }
 
     public function name(): string
@@ -97,7 +110,10 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
             . 'the overwrite flag is true, because that flag discards the previous contents '
             . 'with no undo. The result is a one-line confirmation naming the path, not the '
             . 'file contents echoed back. For changing only part of a file that exists, '
-            . '`Edit` is the right operation.';
+            . '`Edit` is the right operation.'
+            // Claimed only by an instance that enforces it (roadmap 3.I-2).
+            . ($this->readLedger === null ? '' : ' Overwriting a file that changed on disk after you last '
+                . 'read it is refused the same way: Read it again first.');
     }
 
     /**
@@ -250,6 +266,18 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
             }
         }
 
+        // Roadmap 3.I-2: an overwrite discards what is there now, so a file
+        // that changed since the model read it is refused — the model would be
+        // deleting content it has never seen. By content when the previous
+        // bytes were read above, by stat signature when they were too large.
+        if ($exists && $this->readLedger?->staleness($path, $previousTooLarge === null ? $previous : null) !== null) {
+            return $this->error(
+                $args,
+                "Error: {$path} changed on disk since you last read it (an edit by the user, a formatter or a command); "
+                . 'Read it again before overwriting it; file left unchanged',
+            );
+        }
+
         // Creating the parent directories here rather than making the model
         // shell out to `mkdir -p` is the whole point of the tool: a heredoc
         // round-trip is what P8.12 exists to remove, and half a round-trip is
@@ -272,6 +300,9 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
         } catch (\RuntimeException) {
             return $this->error($args, "Error writing file: $path");
         }
+
+        // What the model just wrote is its picture of the file from here on.
+        $this->readLedger?->record($path, $content);
 
         // Same contract as Edit: the diff rides its own ToolResult field so a
         // renderer hands it straight to DiffViewer. For a new file the old side
