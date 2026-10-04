@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 
@@ -41,10 +42,19 @@ final class BackendToolEventsMsg implements Msg
      *                                event queue for an aborted or superseded
      *                                turn is dropped rather than applied on top
      *                                of whatever the user did since.
+     * @param CancellationToken|null $turn The dispatch this queue settles, as
+     *                                {@see Host\TurnRunner} keyed it (roadmap
+     *                                O-2f): carried down the chain so the
+     *                                turn's durable `turn.completed` is
+     *                                written once the LAST queued event is
+     *                                folded, never above the tool rows it
+     *                                ended. Null (a test, an embedder) records
+     *                                nothing.
      */
     public function __construct(
         public readonly array $events,
         public readonly Message $message,
         public readonly ?int $generation = null,
+        public readonly ?CancellationToken $turn = null,
     ) {}
 }

@@ -155,6 +155,32 @@ skipping terminal teardown and leaving the real terminal in raw/alt-screen state
 That is why `/agents`, `/workflow` and `/memory` all answer politely on an
 unwired `Chat`.
 
+**A turn runs in `Host\TurnRunner`, and its tool events become rows in
+`Host\TranscriptProjector`.** `Chat::scheduleBackendCompletion()` reads the
+fields a dispatch needs and wraps `TurnRunner::start()` in a `Cmd`; the runner
+wires the backend for that one dispatch (spend cap, compactor config, session
+id, the session's "always" grants), hands the backend its four callbacks, and
+settles the promise into the `AssistantMsg` or `BackendToolEventsMsg` `Chat`
+folds. The callbacks still queue onto the `Chat`'s live inbox, so the live pump
+keeps the backend's event order. Both of `Chat`'s folds — the live pump and the
+settled queue — build their rows through the projector: the running
+placeholder, the newest-first replace by call id, and the finished-row shape.
+A host without a screen therefore writes exactly the rows the TUI writes. Both
+services are reached through `Host\WorkspaceContext::service()`; without a
+registered runner, `Chat` uses the one keyed to its own inbox
+(`TurnRunner::of()`), so no constructor state was added.
+
+The runner is also the first writer of the session's event log
+(`Host\EventLog`). Each dispatch is bracketed by a durable `turn.started` and
+`turn.completed`. Between them, each fold reports what it did — tool start and
+finish, the permission question and its answer, a delegated run's start and
+finish, step usage, a spend-cap stop — and the settle reports
+`assistant.completed`. Every row is named by the id its save keeps
+(`Host\TranscriptStore::identify()`). Durable events are written before any
+`TurnRunner::listen()` listener hears them. Streaming deltas are only heard,
+never logged. A failed write or a throwing listener drops the event, never the
+turn.
+
 ### `App` hosts `Chat`
 
 > **⚠️ `App` WEARS TWO HATS — DO NOT "RETIRE" IT.** This warning is the reason

@@ -4285,27 +4285,38 @@ final class Chat implements Model
             // superseded plain turn's was recorded. Reached at most once per
             // turn, for the same reason: the chain stops here.
             $this->accountUsage($msg->message->usage);
+            // And the turn's durable record closes here for the same reason
+            // (roadmap O-2f): nothing after this point will.
+            $this->turnRunner()->completeParked($msg->turn);
 
             return [$this, null];
         }
 
+        $runner = $this->turnRunner();
         $remaining = $msg->events;
         $event = array_shift($remaining);
 
         // Queue drained: hand the turn's reply to the ordinary AssistantMsg
         // arm so tool calls the model asked for on TOP of the engine's own
-        // (Chat-native $tools) still get picked up by beginToolCalls().
+        // (Chat-native $tools) still get picked up by beginToolCalls(). The
+        // turn's durable end is written now, after the last row it produced
+        // and before the reply it settles on lands.
         if ($event === null) {
+            $runner->completeParked($msg->turn);
+
             return [$this, Cmd::send(new AssistantMsg($msg->message, $msg->generation))];
         }
+
+        $rest = new BackendToolEventsMsg($remaining, $msg->message, $msg->generation, $msg->turn);
 
         if ($event instanceof SpendCapBreached) {
             // E20's mid-turn abort lands in the SAME ordered story as the
             // tool calls around it — appended, then the chain continues to
             // the turn's settled message exactly as any other event does.
             $next = $this->appendSpendCapNotice($event);
+            $runner->recordEvent($msg->turn, $event);
 
-            return [$next, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
+            return [$next, Cmd::send($rest)];
         }
 
         if ($event instanceof SubAgentActivity) {
@@ -4324,15 +4335,44 @@ final class Chat implements Model
             // really did and ends on its real outcome; nothing pretends it
             // was live.
             $this->agentLive()->apply($event);
+            $runner->recordEvent($msg->turn, $event);
 
-            return [$this, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
+            return [$this, Cmd::send($rest)];
         }
 
         $next = $event instanceof ToolStarted
-            ? $this->appendToolRunningPlaceholder($event)
-            : $this->replaceToolRunningPlaceholder($event);
+            ? $this->appendToolRunningPlaceholder($event, '', $msg->turn)
+            : $this->replaceToolRunningPlaceholder($event, $msg->turn);
 
-        return [$next, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
+        return [$next, Cmd::send($rest)];
+    }
+
+    /**
+     * This session's {@see \SugarCraft\Crush\Host\TurnRunner} (roadmap O-2f):
+     * the one the workspace registered on its
+     * {@see \SugarCraft\Crush\Host\WorkspaceContext::service()} locator, else
+     * the one keyed to this Chat lineage's live inbox, which every `mutate()`
+     * clone shares by identity — so a turn {@see scheduleBackendCompletion()}
+     * opened is found again by the folds that report it, and no constructor
+     * slot is spent on it.
+     */
+    private function turnRunner(): \SugarCraft\Crush\Host\TurnRunner
+    {
+        $registered = $this->workspace?->service(\SugarCraft\Crush\Host\TurnRunner::class);
+
+        return $registered instanceof \SugarCraft\Crush\Host\TurnRunner
+            ? $registered
+            : \SugarCraft\Crush\Host\TurnRunner::of($this->liveToolEvents);
+    }
+
+    /**
+     * The turn whose events the live pump is folding: the dispatch in flight,
+     * for an entry stamped with the current generation. An entry of any other
+     * generation belongs to a turn this Chat has already let go of.
+     */
+    private function liveTurn(int $generation): ?CancellationToken
+    {
+        return $generation === $this->generation ? $this->inFlightCancellation : null;
     }
 
     /**
@@ -4442,10 +4482,11 @@ final class Chat implements Model
      * WHAT THIS SAID BEFORE: that it is "written through by a
      * {@see Backend\ObservesReasoning} backend's `$onReasoning` callback".
      * WHAT IS TRUE NOW: it never was. Measured — this method has no caller
-     * under `src/` or `bin/` at all. The live path's `$onReasoning` closure in
-     * {@see scheduleBackendCompletion()} appends to the shared inbox DIRECTLY,
-     * because it must be a `static` closure and so has no `$this` to call a
-     * method on. WHY IT STILL EARNS ITS PLACE (rule 6 — a dormant seam gets
+     * under `src/` or `bin/` at all. The live path's `$onReasoning` closure —
+     * built by {@see \SugarCraft\Crush\Host\TurnRunner::start()} for
+     * {@see scheduleBackendCompletion()} since O-2f — appends to the shared
+     * inbox DIRECTLY, because it runs where no Chat exists to call a method
+     * on. WHY IT STILL EARNS ITS PLACE (rule 6 — a dormant seam gets
      * wired or justified, never deleted): it is the same public shape
      * {@see enqueueToken()} has, and it is how anything OUTSIDE a
      * {@see Backend} — an embedder hosting this model, or a test driving the
@@ -4607,6 +4648,9 @@ final class Chat implements Model
         // settlement for anything else (the user's own answer, already
         // applied) changes nothing.
         if ($event instanceof \SugarCraft\Crush\Events\PermissionResolved) {
+            // Every settlement of the turn's questions is part of its durable
+            // story (roadmap O-2f), whoever settled it.
+            $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
             $open = $this->pendingPermission?->pendingAsk;
             if ($open === null || $open->askId !== $event->askId) {
                 return [$this, $more];
@@ -4641,6 +4685,7 @@ final class Chat implements Model
             if ($ask->offers(PermissionReply::Always)
                 && \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants)
                     ->allows($ask->tool, $ask->arguments, $this->projectRoot())) {
+                $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
                 $ask->reply(PermissionReply::Once);
 
                 return [$this, $more];
@@ -4654,6 +4699,9 @@ final class Chat implements Model
                 return [$this, null];
             }
 
+            // Recorded once, as it goes up: a question re-queued behind an
+            // open modal (above) is not asked again until it is shown.
+            $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
             [$asking, $wait] = $this->requestPermission(new PermissionRequestMsg(
                 // No parked batch on this path — the child owns the call — so
                 // the assistant message is a placeholder answerPermission()'s
@@ -4677,6 +4725,7 @@ final class Chat implements Model
         // describes one turn: the first event of a new turn clears the other.
         if ($event instanceof \SugarCraft\Crush\Events\StepStarted || $event instanceof \SugarCraft\Crush\Events\UsageUpdated) {
             $sameTurn = $this->liveStepGeneration === $generation;
+            $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
 
             return [$this->mutate([
                 'liveStep' => $event instanceof \SugarCraft\Crush\Events\StepStarted ? $event : ($sameTurn ? $this->liveStep : null),
@@ -4686,14 +4735,22 @@ final class Chat implements Model
         }
 
         if ($text !== null) {
+            // Ephemeral (Appendix O §6.5): heard live by a listener, never
+            // logged — the settled reply is the durable copy of these bytes.
+            $this->turnRunner()->recordEvent($this->liveTurn($generation), new TokenDelta($text));
+
             return [$this->mutate(['streamingText' => $this->streamingText . $text]), $more];
         }
 
         if ($thought !== null) {
+            $this->turnRunner()->recordEvent($this->liveTurn($generation), new ReasoningDelta($thought));
+
             return [$this->mutate(['reasoningText' => $this->reasoningText . $thought]), $more];
         }
 
         if ($event instanceof SpendCapBreached) {
+            $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
+
             return [$this->appendSpendCapNotice($event), $more];
         }
 
@@ -4726,6 +4783,9 @@ final class Chat implements Model
                 $more = count($this->liveToolEvents) > 0 ? Cmd::send(new ToolEventPumpMsg()) : null;
             }
             $this->agentLive()->applyBatch($batch);
+            foreach ($batch as $beat) {
+                $this->turnRunner()->recordEvent($this->liveTurn($generation), $beat);
+            }
 
             return [$this, $more];
         }
@@ -4734,12 +4794,12 @@ final class Chat implements Model
             // The step's thinking is parked on the placeholder rather than
             // dropped with the reset below: it is what led to this call, and
             // it becomes the finished row's collapsible "💭 Thought".
-            ? $this->appendToolRunningPlaceholder($event, $this->reasoningText)
+            ? $this->appendToolRunningPlaceholder($event, $this->reasoningText, $this->liveTurn($generation))
             // A ToolFinished deliberately does NOT reset the partial: the
             // model has not spoken since the reset its ToolStarted already
             // did, so there is nothing to clear and clearing would be
             // indistinguishable either way.
-            : $this->replaceToolRunningPlaceholder($event);
+            : $this->replaceToolRunningPlaceholder($event, $this->liveTurn($generation));
 
         // The model stopped talking and started doing. Whatever prose
         // introduced this call belongs to the step that is now over, and the
@@ -4760,24 +4820,19 @@ final class Chat implements Model
     /**
      * Append the "running" placeholder for an engine-dispatched tool call -
      * {@see beginToolCalls()}'s first half, driven by a {@see ToolStarted}
-     * instead of by a Message's own `$toolCalls`.
-     *
-     * The event's engine-side identity is converted through
-     * {@see ToolCall::fromEngineCall()} rather than by hand so the placeholder's
-     * `pendingToolCallId` keys exactly the way the rest of the Chat-side
-     * pipeline keys (W2.S1b).
+     * instead of by a Message's own `$toolCalls`. The row is
+     * {@see \SugarCraft\Crush\Host\TranscriptProjector::placeholder()}'s, so
+     * a host with no screen appends exactly this one (roadmap O-2f), and the
+     * turn's durable `tool.started` is recorded beside it.
      */
-    private function appendToolRunningPlaceholder(ToolStarted $event, string $reasoning = ''): self
+    private function appendToolRunningPlaceholder(ToolStarted $event, string $reasoning = '', ?CancellationToken $turn = null): self
     {
-        $call = ToolCall::fromEngineCall(
-            new EngineToolCall($event->toolCallId, $event->toolName, $event->arguments),
-        );
-        $placeholder = Message::toolRunning($call);
-        if (trim($reasoning) !== '') {
-            $placeholder = $placeholder->withReasoning($reasoning);
-        }
+        $runner = $this->turnRunner();
+        $placeholder = $runner->projector()->placeholder($event, $reasoning);
+        $next = $this->mutate(['history' => [...$this->history, $placeholder]]);
+        $runner->recordToolStarted($turn, $event, $placeholder);
 
-        return $this->mutate(['history' => [...$this->history, $placeholder]]);
+        return $next;
     }
 
     /**
@@ -4830,77 +4885,34 @@ final class Chat implements Model
 
     /**
      * Replace an engine-dispatched call's placeholder with its real result -
-     * {@see finishToolCalls()}'s replace-by-id half, and deliberately building
-     * the same `Message::assistant(…)->withToolResults([…])` shape so
-     * {@see Renderer::renderToolResults()} renders both pipelines identically
-     * (including the W1.F1 diff and the image bytes that ride along on
-     * {@see ToolResult}).
-     *
-     * Correlation is on {@see ToolFinished::$toolCallId}, NOT on the adapted
-     * result's own `id`: a tool never sees its own call id, so built-ins
-     * routinely return an invented one and only the event carries the id the
-     * placeholder was keyed with (see {@see ToolFinished::fromResult()}).
-     *
-     * An unmatched result is appended rather than dropped - losing a tool's
-     * output entirely is worse than showing it without a preceding placeholder.
-     *
-     * The search runs NEWEST FIRST (audit 15b-02). Call ids are not unique
-     * across a session - the DSML and MiniMax parsers restart at `dsml_call_0`
-     * on every response - so a top-down walk resolved the OLDEST row with the
-     * id, which is a previous turn's whenever one survived, and left this
-     * call's own placeholder spinning. The call this event finishes is the
-     * most recent one started under its id.
+     * {@see finishToolCalls()}'s replace-by-id half, through
+     * {@see \SugarCraft\Crush\Host\TranscriptProjector::finish()} so a host
+     * with no screen writes the same row (roadmap O-2f). That method keeps the
+     * account of how the placeholder is found — by the event's call id, newest
+     * first (audit 15b-02) — and why an unmatched result is appended rather
+     * than dropped. The turn's durable `tool.finished` is recorded beside it,
+     * naming the finished row by the identity its save will keep.
      */
-    private function replaceToolRunningPlaceholder(ToolFinished $event): self
+    private function replaceToolRunningPlaceholder(ToolFinished $event, ?CancellationToken $turn = null): self
     {
-        $result = ToolResult::fromEngineResult($event->result, $event->toolName);
+        $runner = $this->turnRunner();
+        [$history, $row, $replaced] = $runner->projector()->finish($this->history, $event);
+        $next = $this->mutate(['history' => $history]);
+        $runner->recordToolFinished($turn, $event, $row, $replaced);
 
-        $newHistory = array_values($this->history);
-        for ($i = count($newHistory) - 1; $i >= 0; $i--) {
-            $historyMessage = $newHistory[$i];
-            if ($historyMessage->pendingToolCallId !== $event->toolCallId) {
-                continue;
-            }
-
-            // Same reasoning as finishToolCalls(): the placeholder content
-            // is Message::describeToolCall()'s one-liner, and ToolFinished
-            // carries no arguments, so this is the only point at which the
-            // finished row can learn WHAT ran (crush_feat.md §3 E2).
-            // The thought that led to this call rides along from the
-            // placeholder (see pumpLiveToolEvents()), so the finished row
-            // keeps its collapsible "💭 Thought" above it.
-            $newHistory[$i] = self::toolResultMessage(
-                $result
-                    ->withDescription($historyMessage->content)
-                    ->withArguments($historyMessage->pendingToolArguments),
-                $historyMessage->reasoning,
-            );
-
-            return $this->mutate(['history' => $newHistory]);
-        }
-
-        $newHistory[] = self::toolResultMessage($result);
-
-        return $this->mutate(['history' => $newHistory]);
+        return $next;
     }
 
     /**
-     * The finished-tool-call history entry {@see replaceToolRunningPlaceholder()}
-     * writes, in both its replace and its append branch.
-     *
-     * Split out only so the two branches cannot drift apart now that the
-     * replace branch attaches a description the append branch has no way of
-     * knowing (there is no placeholder to read it off).
+     * The finished-tool-call history entry: {@see finishToolCalls()} writes it
+     * for a Chat-native call, and the engine path through
+     * {@see replaceToolRunningPlaceholder()}. One builder —
+     * {@see \SugarCraft\Crush\Host\TranscriptProjector::resultRow()} — so the
+     * two pipelines cannot drift apart on what a finished row looks like.
      */
     private static function toolResultMessage(ToolResult $result, ?string $reasoning = null): Message
     {
-        // $reasoning is display-only here: EngineBackend::toTypedMessages()
-        // replays a tool row as its result alone - paired with its call once
-        // the settled turn stamps the row with its step (roadmap 1.B-2), as
-        // prose before that - so a thought parked on a tool row never reaches
-        // the model from here. The step's hidden assistant row carries it.
-        return Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result, reasoning: $reasoning)
-            ->withToolResults([$result]);
+        return \SugarCraft\Crush\Host\TranscriptProjector::resultRow($result, $reasoning);
     }
 
     /**
@@ -11771,314 +11783,60 @@ final class Chat implements Model
      * pipeline (see {@see beginToolCalls()}/{@see ToolResultsMsg}) both
      * schedule once their turn's history is settled.
      *
+     * The turn itself runs in {@see \SugarCraft\Crush\Host\TurnRunner::start()}
+     * (roadmap O-2f): the per-dispatch backend wiring, the four callbacks the
+     * backend reports through, and the settle. What stays here is what is
+     * this Chat's to decide — which of its fields the dispatch reads, whether
+     * it owns the runtime-notice drain — and the `Cmd` wrapper, which is the
+     * only part of the old body that ever needed a TUI.
+     *
      * Also the point where the backend's `$onEvent` tool-lifecycle seam is
-     * consumed (crush_feat.md §1 E1). The callback only QUEUES events: it runs
-     * inside the backend, where there is no dispatcher and no way to mutate an
-     * immutable Chat, so the queue rides out on the resolved Msg and
-     * {@see applyBackendToolEvent()} turns it into transcript states one event
-     * at a time. A turn that called no tools resolves to a plain
+     * consumed (crush_feat.md §1 E1). The callback only QUEUES events on
+     * {@see $liveToolEvents}: it runs inside the backend, where there is no
+     * dispatcher and no way to mutate an immutable Chat, so the live pump
+     * ({@see pumpLiveToolEvents()}) folds what it reaches and the rest rides
+     * out on the resolved {@see BackendToolEventsMsg}, which
+     * {@see applyBackendToolEvent()} turns into transcript states one event at
+     * a time. A turn that called no tools resolves to a plain
      * {@see AssistantMsg} exactly as before.
      */
     private function scheduleBackendCompletion(self $next, CancellationToken $cancellation, int $generation): \Closure
     {
-        // E199's wiring seam, landed round 70: the per-turn notice budget was
-        // shipped by round 69 with {@see RuntimeNoticeSink::beginTurn()} as its
-        // only armer and no drain-owner call site, deliberately inert until one
-        // existed. This is that call site. ONE DISPATCH, ONE BUDGET — a
-        // tool-continuation re-enters here and re-opens the budget, which is
-        // exactly the rhythm beginTurn()'s doc-block names ("re-calling it per
-        // turn is the intended rhythm"): the cap protects what ONE engine loop
-        // can push into the transcript between reads, and every loop's rows
-        // ride to the model on the turns that follow it.
-        //
-        // GATED ON $drainsRuntimeNotices FOR THE SAME REASON THE POLL AND THE
-        // WAKE ARE: `beginTurn()` is the DRAIN OWNER'S act, not the emitters'
-        // and not any Chat's. A hosted or embedder Chat nobody appointed still
-        // dispatches through here; arming from it would re-open the budget
-        // underneath the appointed owner's turn and hand that turn back rows
-        // its cap had already refused. Unarmed, {@see RuntimeNoticeSink::drain()}
-        // bounds per batch exactly as it did before E199, which is the contract
-        // every non-owner host keeps.
-        if ($this->drainsRuntimeNotices) {
-            RuntimeNoticeSink::beginTurn();
-        }
+        $run = $this->turnRunner()->start(
+            backend: \SugarCraft\Crush\Host\TurnRunner::backendForTurn(
+                $next->backend,
+                $this->maxCostUsd,
+                $this->spentUsd(),
+                $this->compactorConfig,
+                $next->currentSessionId,
+                \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($next->permissionGrants),
+            ),
+            history: $next->history,
+            inbox: $next->liveToolEvents,
+            generation: $generation,
+            cancellation: $cancellation,
+            // `$next->streaming` gates incremental delivery of the ANSWER;
+            // thinking is always delivered (it has no non-incremental form).
+            streaming: $next->streaming,
+            // An embedder's raw-chunk observer. A throwing one is detached for
+            // the rest of the turn either way; whether that is REPORTED is
+            // {@see DEBUG_STREAM_ENV}'s call (E175), read when it throws.
+            tokenObserver: $next->onToken,
+            reportObserverFailure: self::debugStreamRequested(...),
+            // E199: opening the per-turn notice budget is the DRAIN OWNER'S
+            // act, not any Chat's — a hosted or embedder Chat nobody appointed
+            // must not re-open it underneath the owner's turn. The workspace's
+            // sink is this session's inbox (W2-e); without a workspace, the
+            // process's current one.
+            notices: $this->drainsRuntimeNotices ? ($this->workspace?->notices ?? RuntimeNoticeSink::current()) : null,
+            agentManager: $next->agentManager,
+            // The durable story of the turn (Appendix O §6.5) goes to this
+            // session's event log, rows named by the identity their save keeps.
+            transcripts: $next->transcripts(),
+            sessionId: $next->currentSessionId,
+        );
 
-        // ONE DISPATCH, ONE PROJECTION WINDOW. The mirror rows a delegated
-        // run leaves in the parent's AgentManager describe beats of whatever
-        // turn is about to run; rows from before it are ghosts by
-        // construction — a child killed at the end of the last turn stopped
-        // sending mid-run, and its RUNNING row would claim a delegation that
-        // no longer exists for the rest of the session. Rows of the turn that
-        // just settled SURVIVE until this next dispatch, which is the point:
-        // between turns is where the finished report gets read.
-        $next->agentManager?->clearProjectedSubAgents();
-
-        $backend = $next->backend;
-        // E20: thread the session's dollar ceiling DOWN into the engine that
-        // will spend it. instanceof rather than a Backend-interface method
-        // because EchoBackend has no steps to cap and every other implementer
-        // is an embedder's; a capability check is the honest shape, and the
-        // cap arriving as (ceiling, baseline) PAIRED with the dispatch — not
-        // installed at launch — is what keeps a `/budget` raised mid-session
-        // from applying retroactively to a turn already forked.
-        if ($backend instanceof Backend\EngineBackend && $this->maxCostUsd !== null) {
-            $backend = $backend->withSpendCap($this->maxCostUsd, $this->spentUsd());
-        }
-        // Audit R1: the engine's per-turn App prices its skill budget against
-        // the SAME CompactorConfig this Chat compacts with, so one object is
-        // authoritative. Null keeps the backend's own default
-        // (CompactorConfig::new()), which is what Chat's compactor uses too.
-        if ($backend instanceof Backend\EngineBackend && $this->compactorConfig !== null) {
-            $backend = $backend->withCompactorConfig($this->compactorConfig);
-        }
-        // Step 0.13-a: the session this turn belongs to, read per DISPATCH so
-        // `/resume`, `/branch` and Ctrl+Tab are followed — it reaches the
-        // hooks' `sessionId` and the providers' session-affinity header. A
-        // chat with no session yet dispatches the shared backend untouched.
-        if ($backend instanceof Backend\EngineBackend && $next->currentSessionId !== null) {
-            $backend = $backend->withSessionId($next->currentSessionId);
-        }
-        // Roadmap 1.C-2: the "always allow (this session)" answers given on
-        // the engine path ride into this turn's gate as Allow rules — read per
-        // DISPATCH, like the session id above, so a grant given mid-turn
-        // covers every later turn. They can only answer an Ask, never lift a
-        // Deny ({@see \SugarCraft\Crush\Permissions\PermissionGate::withSessionRules()}).
-        $sessionGrants = \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($next->permissionGrants);
-        if ($backend instanceof Backend\EngineBackend && $sessionGrants->patterns() !== []
-            && ($gate = $backend->permissionGate()) !== null) {
-            $backend = $backend->withPermissionGate($gate->withSessionRules($sessionGrants->rules()));
-        }
-        // Only the rows the model may see (audit 15b-03): command echoes and
-        // their output, notices and error strings live in the same list for
-        // the transcript's sake and never go out as turns.
-        $history = Message::agentVisible($next->history);
-
-        $inbox = $next->liveToolEvents;
-
-        // The consuming half of the backend's `$onToken` seam, and the fix for
-        // the second half of crush_code.md Phase 0 item 13: this used to be
-        // `$next->streaming ? $next->onToken : null`, i.e. null on every real
-        // run, because nothing ever set either field — so even a backend that
-        // streamed perfectly had nowhere to stream TO.
-        //
-        // The Chat's own live rendering no longer depends on an embedder
-        // supplying a callback: deltas go onto the same inbox the tool events
-        // use and {@see pumpLiveToolEvents()} folds them into
-        // {@see $streamingText}. $onToken stays an ADDITIONAL, optional
-        // observer for embedders that want the raw chunks (a logger, a
-        // non-TUI shell), and is invoked after the queue append so a throwing
-        // embedder callback cannot cost the UI the delta it is holding.
-        //
-        // Nor may it cost the UI the REST of the turn. An exception raised
-        // here unwinds through the backend and out of the Cmd::promise()
-        // factory below, so no promise is created, no AssistantMsg is ever
-        // dispatched, and the Chat sits inFlight with no way to settle short
-        // of an abort — a whole turn lost to a misbehaving logger. A broken
-        // observer is therefore detached for the remainder of THIS turn
-        // (per-turn because $userSink is a local of this call, so one bad
-        // delta does not disable the embedder's sink forever) and — when asked
-        // for — reported once through error_log rather than once per token.
-        //
-        // THE REPORT IS GATED; THE DETACH IS NOT (E175, E154's channel half).
-        // The CHANNEL was the interesting half of E154's argument: this closure
-        // runs inside the streaming loop of a turn already in flight, so by the
-        // time it can fire the alternate screen has been up for the whole
-        // session and an ungated write lands on a frame the renderer believes
-        // it owns — every launch-time stderr write in this application was
-        // routed for exactly that reason, onto
-        // {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}.
-        // That seam is UNREACHABLE from here, verified rather than assumed: it
-        // appends to a static list `Bootstrap::chat()` drains into
-        // {@see withLaunchNotices()} ONCE, at construction, and this fires
-        // mid-turn long afterwards. So the surviving choice was fd 2 versus
-        // quiet, and the app's own precedent —
-        // {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()}'s
-        // quiet-by-default contract, joined since by CommandLoader and
-        // RuleLoader — answers it: quiet by default, loud on
-        // {@see DEBUG_STREAM_ENV}, because the audience is the EMBEDDER whose
-        // `onToken` threw rather than the person at the terminal, who cannot
-        // act on "your logger raised" and whose turn completes normally either
-        // way. The gate decides who is TOLD, never whether the turn survives:
-        // `$userSink = null` above sits OUTSIDE it, so no debug flag can make a
-        // broken sink abort the reply. Amending
-        // `StreamingWiringTest::testAThrowingObserverLosesItsOwnDeltasButNotTheTurn()`
-        // to set the flag — and pinning the off-by-default silence — landed in
-        // this same commit, as the two-file rule demanded.
-        $userSink = $next->onToken;
-        $onToken = !$next->streaming ? null : static function (string $delta) use ($inbox, $generation, &$userSink): void {
-            if ($delta === '') {
-                return;
-            }
-            $inbox[] = [$generation, new TokenDelta($delta)];
-            if ($userSink === null) {
-                return;
-            }
-
-            try {
-                $userSink($delta);
-            } catch (\Throwable $e) {
-                $userSink = null;
-                if (self::debugStreamRequested()) {
-                    error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
-                }
-            }
-        };
-
-        return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation, $inbox): PromiseInterface {
-            // The permission events (1.C-2) share the inbox: a question has to
-            // reach the screen in the turn's own event order, between the tool
-            // events around it, and {@see pumpLiveToolEvents()} is what puts
-            // it up as the modal.
-            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|\SugarCraft\Crush\Events\PermissionAsked|\SugarCraft\Crush\Events\PermissionResolved $event) use ($inbox, $generation): void {
-                $inbox[] = [$generation, $event];
-            };
-
-            // E494 - the last hop of E456, and the reason the user could watch
-            // a frozen "assistant is thinking..." for two minutes while the
-            // thinking itself was already crossing EngineBackend's socket. The
-            // channel was built end to end in round 56 and then nobody passed a
-            // sink, so every reasoning frame reached the parent process and was
-            // dropped on the floor.
-            //
-            // NO embedder seam and no `$next->streaming` gate, deliberately, on
-            // both counts unlike $onToken above. Reasoning is display-only: it
-            // never enters $history, never reaches the model and never reaches
-            // a checkpoint (see {@see ReasoningDelta}), so there is nothing here
-            // an embedder's callback could be needed for and nothing a
-            // streaming-off session would be protected from. What "streaming
-            // off" turns off is incremental delivery of the ANSWER; a thought
-            // has no non-incremental form to fall back to - the settled
-            // Message's own `reasoning` is what the transcript shows afterwards,
-            // and this is the only chance to show it as it happens.
-            $onReasoning = static function (string $delta) use ($inbox, $generation): void {
-                if ($delta === '') {
-                    return;
-                }
-                $inbox[] = [$generation, new ReasoningDelta($delta)];
-            };
-
-            // All three handlers share the inbox with the LIVE pump
-            // ({@see Chat::pumpLiveToolEvents()}), and both drain it
-            // destructively - so an event is applied exactly once no matter
-            // which of the two got to it first.
-            //
-            // ASKED STRUCTURALLY, never by class name and never by arity
-            // sniffing: a backend that can report thinking declares
-            // {@see Backend\ObservesReasoning}, and one that cannot is called
-            // with the four arguments its signature actually documents. Passing
-            // the fifth unconditionally would "work" - PHP drops surplus
-            // positional arguments to a userland method without a murmur - and
-            // that silence is exactly the failure mode this branch exists to
-            // make impossible to reintroduce.
-            //
-            // AND A BACKEND THAT CAN PUT A QUESTION TO US IS ASKED TO (1.C-2):
-            // {@see Backend\InteractiveTurn} is the promise to answer every
-            // ASK the turn raises, which this Chat keeps through the modal. A
-            // plain backend keeps settling its own asks, as before.
-            // Roadmap 1.C-4: the turn's `step` / `usage` frames ride the same
-            // inbox, in turn order, for the live pump to put on the status bar
-            // (the step, its context pressure, the spend so far) — and to tell
-            // the Escape arm this turn can take a soft cancel.
-            $onStep = static function (\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated $event) use ($inbox, $generation): void {
-                $inbox[] = [$generation, $event];
-            };
-
-            $promise = match (true) {
-                $backend instanceof Backend\InteractiveTurn
-                    => $backend->completeInteractive($history, $onToken, $cancellation, $onEvent, $onReasoning, $onStep),
-                $backend instanceof ObservesReasoning
-                    => $backend->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning),
-                default => $backend->completeAsync($history, $onToken, $cancellation, $onEvent),
-            };
-
-            // The permission events are not tool lifecycle states and never
-            // ride a BackendToolEventsMsg: they stay on the inbox for the live
-            // pump, which takes down a modal whose question the turn's end
-            // settled (`cancelled`) — the settle below would otherwise drain
-            // that fact away with the turn and leave the modal up over a
-            // question nobody is waiting on.
-            $drain = static function () use ($inbox, $generation): array {
-                $held = [];
-                $rest = [];
-                foreach ($inbox as $entry) {
-                    if ($entry[1] instanceof \SugarCraft\Crush\Events\PermissionAsked
-                        || $entry[1] instanceof \SugarCraft\Crush\Events\PermissionResolved) {
-                        $held[] = $entry;
-                    } elseif ($entry[1] instanceof \SugarCraft\Crush\Events\StepStarted
-                        || $entry[1] instanceof \SugarCraft\Crush\Events\UsageUpdated) {
-                        // Live-only (1.C-4): the settled reply carries the
-                        // turn's real usage, and a finished turn has no step.
-                        continue;
-                    } else {
-                        $rest[] = $entry;
-                    }
-                }
-                $inbox->exchangeArray($rest);
-                $events = self::drainToolEventInbox($inbox, $generation);
-                $inbox->exchangeArray($held);
-
-                return $events;
-            };
-
-            return $promise->then(
-                static function (Message $msg) use ($drain, $generation): ?Msg {
-                    $events = $drain();
-
-                    return $events === []
-                        ? new AssistantMsg($msg, $generation)
-                        : new BackendToolEventsMsg($events, $msg, $generation);
-                },
-                static function (\Throwable $e) use ($drain, $generation): ?Msg {
-                    // A turn that failed AFTER running tools still shows what
-                    // those tools did - otherwise the placeholders queued for
-                    // them would be the only trace and they never even render.
-                    // UI-only (audit 15b-03): the model did not say this, so it
-                    // must not be replayed to it as its own words next turn.
-                    $message = Message::assistant('_[error: ' . $e->getMessage() . ']_')->withUiOnly();
-                    $events = $drain();
-
-                    return $events === []
-                        ? new AssistantMsg($message, $generation)
-                        : new BackendToolEventsMsg($events, $message, $generation);
-                },
-            );
-        });
-    }
-
-    /**
-     * Take everything this turn queued but the live pump never got to, and
-     * leave the inbox empty.
-     *
-     * Called once per turn, when the backend's promise settles. Events
-     * belonging to some OTHER generation are discarded rather than returned:
-     * they can only be an aborted turn's, and the resolving turn's
-     * {@see BackendToolEventsMsg} would carry them under the wrong stamp.
-     *
-     * Undrained {@see TokenDelta}s and {@see ReasoningDelta}s are discarded
-     * outright, whatever their generation. They share the inbox (see
-     * {@see $liveToolEvents}) but not this destination:
-     * {@see BackendToolEventsMsg} carries tool lifecycle states, and the
-     * settled Message beside them already contains every byte those deltas
-     * described — its content for the one, its `reasoning` for the other.
-     * Applying them here would in any case be too late to be streaming — the
-     * turn is over.
-     *
-     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|TokenDelta|ReasoningDelta}> $inbox
-     * @return list<ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity>
-     */
-    private static function drainToolEventInbox(\ArrayObject $inbox, int $generation): array
-    {
-        $events = [];
-        foreach ($inbox as [$eventGeneration, $event]) {
-            if ($eventGeneration === $generation
-                && !$event instanceof TokenDelta
-                && !$event instanceof ReasoningDelta) {
-                $events[] = $event;
-            }
-        }
-        $inbox->exchangeArray([]);
-
-        return $events;
+        return Cmd::promise($run);
     }
 
     /**

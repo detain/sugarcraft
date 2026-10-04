@@ -344,13 +344,7 @@ final class StderrEmitterCensusTest extends TestCase
         // the call was first written, through MCP_PARTIAL_START_LOG_FORMAT, and
         // that literal is already one of the four the file is credited for on
         // MESSAGE_SHAPES above; a comment claiming the row unprefixed had
-        // contradicted this test's own roster for three weeks. Chat.php's site
-        // is the onToken-detach log: lane de's E154c/E175 gated it behind
-        // SUGARCRUSH_DEBUG_STREAM and kept its self-label `Chat: ` — a
-        // programmer-facing diagnostic, not a launch notice — so it earns no
-        // `sugarcrush: ` literal and no MESSAGE_SHAPES row by design, exactly
-        // like the default-off RuleLoader funnel below.
-        'src/Chat.php' => 1,
+        // contradicted this test's own roster for three weeks.
         'src/Cli/Bootstrap.php' => 1,
         'src/Commands/CommandLoader.php' => 1,
         // The three-tier rules surface's refusal funnel, added P6.S2: the
@@ -364,6 +358,14 @@ final class StderrEmitterCensusTest extends TestCase
         // longer DO, so it is not transcript-seam material.
         'src/Context/RuleLoader.php' => 1,
         'src/Diagnostics/RuntimeNoticeSink.php' => 1,
+        // The onToken-detach log, moved out of Chat.php with the rest of the
+        // turn by O-2f (Chat::scheduleBackendCompletion() → TurnRunner::start()):
+        // lane de's E154c/E175 gated it behind SUGARCRUSH_DEBUG_STREAM (Chat
+        // still reads the flag and hands the runner the decision) and kept its
+        // self-label `Chat: ` — a programmer-facing diagnostic, not a launch
+        // notice — so it earns no `sugarcrush: ` literal and no MESSAGE_SHAPES
+        // row by design, exactly like the default-off RuleLoader funnel above.
+        'src/Host/TurnRunner.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
         // 3 until round 48 routed the two argument-decode refusals onto the
         // seam (E192). The one left is flagTruncationRiskInLatestToolResults(),
