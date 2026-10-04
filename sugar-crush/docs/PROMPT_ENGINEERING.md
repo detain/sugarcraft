@@ -52,7 +52,9 @@ static `<env>` block last. Counted from the live method, there are eleven slots:
    opening words, tags), never the note text; the user's own cross-project notes first (at most 4
    notes / 1 KB), then the project's, memoized per session like the repo map, followed outside the
    fence by the standing instructions on when to save a note and what not to save (anything the
-   code already says). Agent-scope notes never reach it.
+   code already says), and the mandatory recall step: search memory — the turn's `memory-recall`
+   block, then the `Memory` tool's `recall` — before answering about prior work. Agent-scope notes
+   never reach it.
 9. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
    `Skill::systemPromptContribution()` as a PerTurn section, name and body through
    `PromptFence::escape()`. Held to `CompactorConfig`'s `skillBudgetPerSkill` and
@@ -91,7 +93,10 @@ re-prefills the whole conversation behind it.
 - **The `<turn-context>` row.** `Runtime::turnContext()` builds a `Context\TurnContextBlock`: the
   git section (`EnvironmentBlock::renderVolatile()` — caveat, branch, porcelain status, recent
   log and, after a write step, both diffs), the files this conversation's Edit and Write calls
-  touched (`TurnContextBlock::recentlyModifiedIn()`), and the share of the context window in use
+  touched (`TurnContextBlock::recentlyModifiedIn()`), the memory notes most relevant to the latest
+  user message (`Runtime::memoryRecall()` — a `Context\MemoryRecallBlock` fenced `memory-recall`, at
+  most three notes, ranked once per turn by `Memory\HybridMemoryRanker` in the parent before the
+  fork and re-sent only when the ranking changes; see MEMORY.md "Recall"), and the share of the context window in use
   once it reaches `TurnContextBlock::CONTEXT_NOTICE_PERCENT` (floored to 5% so the figure does
   not change the row every step). `EngineBackend::runTurn()` appends it to the history at the top
   of each step as a **user-role** row, fenced `turn-context` and opened by a harness-voice preamble

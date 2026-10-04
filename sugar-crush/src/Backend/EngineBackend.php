@@ -2725,6 +2725,47 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // Step 1.A-2: in the parent, before the fork — see beginSessionTurn().
         $this->beginSessionTurn($history);
 
+        // Roadmap 5.3-2: this turn's memory recall, ranked HERE in the parent
+        // before the fork, so the note reads and the one embedding request
+        // happen once per turn and the child's `<turn-context>` row reads the
+        // ranking warm (Runtime::memoryRecall()). Embeddings are opt-in
+        // (`embeddingModel`): without one the ranking is keyword-only, and a
+        // configured model that fails degrades to keyword-only and is
+        // reported once per process rather than silently.
+        if ($this->memoryStore !== null) {
+            $embeddingModel = self::userConfig()['embeddingModel'] ?? null;
+            $embeddingModel = \is_string($embeddingModel) ? trim($embeddingModel) : '';
+            $embedder = null;
+            if ($embeddingModel !== '') {
+                $provider = $this->provider;
+                $vectors = \SugarCraft\Crush\Memory\EmbeddingCache::new();
+                $embedder = static fn (array $texts): array => $vectors->vectors(
+                    $embeddingModel,
+                    $texts,
+                    static fn (array $batch): array => $provider->embeddings(
+                        new \SugarCraft\Crush\Providers\EmbeddingsRequest($embeddingModel, $batch),
+                    )->embeddings,
+                );
+            }
+            try {
+                $recall = $this->newRuntime(new HookManager(new HookRegistry()))->primeMemoryRecall(
+                    $this->sessionApp(),
+                    \SugarCraft\Crush\Context\MemoryRecallBlock::queryFrom($history),
+                    $embedder,
+                );
+                $degraded = $recall->degradedReason();
+                if ($degraded !== null && \SugarCraft\Crush\Context\MemoryRecallBlock::firstReportOf($degraded)) {
+                    \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn(sprintf(
+                        'Memory recall: embedding model "%s" failed (%s); ranking memory notes by keyword only.',
+                        $embeddingModel,
+                        $degraded,
+                    ));
+                }
+            } catch (\Throwable) {
+                // Left to the child, which ranks keyword-only on first use.
+            }
+        }
+
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
             return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning, $interactive);
         }

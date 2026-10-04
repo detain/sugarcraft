@@ -666,7 +666,9 @@ works travels outside it.
 
 - **`<turn-context>`** — `Runtime::turnContext()` renders the git section
   (`EnvironmentBlock::renderVolatile()`), the files the agent's Edit/Write
-  calls touched and, from 60%, the context-window share, and
+  calls touched, the memory notes recalled for the latest user message
+  (`Runtime::memoryRecall()`, ranked once per turn in the parent; see
+  MEMORY.md "Recall") and, from 60%, the context-window share, and
   `EngineBackend::runTurn()` persists it into the history at the top of each
   step, user-role, only when its bytes differ from the latest such row there,
   so each step's request is a byte prefix of the next; it returns to Chat in

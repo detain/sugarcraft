@@ -151,6 +151,8 @@ Do not save what the code says. Anything you can read from the files, the git hi
 
 Use the `Memory` tool when it is available: `view` a note by id (or the whole index), `recall` to search, `save` a new note, `str_replace` to correct one, `delete` one that is wrong. The user manages the same notes with the memory slash command.
 
+Search memory before answering a question about prior work: earlier decisions, dates, people, preferences or open todos. Read the memory-recall block in the turn context first, which holds the notes ranked most relevant to the latest message; when it is absent or does not answer, `recall` with the Memory tool before you answer, and say so when memory holds nothing.
+
 
 
 ## Skill: fixture-helper

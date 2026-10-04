@@ -45,7 +45,14 @@ use SugarCraft\Crush\Memory\MemoryStore;
  * match, so a whole user turn as the query matches nothing; a per-term search
  * would re-scan the store on every step of the loop; and turn-varying text in
  * the system prompt voids the cached prefix behind it. Turn-dependent
- * retrieval belongs in the turn (roadmap 5.3), not in the preamble.
+ * retrieval belongs in the turn, not in the preamble — and that is where it
+ * now lives: roadmap 5.3-2 ranks every note against the user's latest message
+ * once per turn ({@see \SugarCraft\Crush\Memory\HybridMemoryRanker}, BM25
+ * plus optional embeddings) and sends the few that matter as a
+ * {@see MemoryRecallBlock} inside the `<turn-context>` row, at the tail of
+ * the request. This index stays query-independent, so the two never compete
+ * for the same bytes: the index says a note exists, the recall puts the
+ * relevant ones' text in front of the model for this message.
  *
  * USER SCOPE FIRST, UNDER ITS OWN SUB-BUDGET (roadmap 0.6, decision D4)
  * ---------------------------------------------------------------------
@@ -219,6 +226,8 @@ final readonly class MemoryBlock implements PromptSection
         Do not save what the code says. Anything you can read from the files, the git history or the docs is already remembered, and a note that restates it goes stale the moment the code changes. Do not save secrets, one-off task details or the transcript of this conversation. Prefer updating an existing note to adding a near-duplicate.
 
         Use the `Memory` tool when it is available: `view` a note by id (or the whole index), `recall` to search, `save` a new note, `str_replace` to correct one, `delete` one that is wrong. The user manages the same notes with the memory slash command.
+
+        Search memory before answering a question about prior work: earlier decisions, dates, people, preferences or open todos. Read the memory-recall block in the turn context first, which holds the notes ranked most relevant to the latest message; when it is absent or does not answer, `recall` with the Memory tool before you answer, and say so when memory holds nothing.
         TXT;
 
     /**

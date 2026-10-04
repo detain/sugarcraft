@@ -946,8 +946,12 @@ final class BaseSystemPromptTest extends TestCase
         // (Execution Bias, Promised Work) appended to the `## Maxims` list. The
         // golden's model, claude-sonnet-4-6, is outside the three families,
         // so the per-family paragraph adds no byte to the base here.
+        // MEASURED 2026-10-04 at roadmap 5.3-2: 10,309 -> 10,678, one pure
+        // insertion of 369 B (the mandatory memory-recall paragraph plus its
+        // blank line) at the end of the standing memory instructions; every
+        // byte before and after it is identical.
         self::assertSame(
-            10309,
+            10678,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',

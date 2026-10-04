@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Config\Settings\Definitions;
 
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Config\Settings\ApplyMode;
 use SugarCraft\Crush\Config\Settings\OptionsSource;
 use SugarCraft\Crush\Config\Settings\RiskClass;
 use SugarCraft\Crush\Config\Settings\SettingCategory;
@@ -46,6 +48,14 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withHelp('User-tier rule packs kept out of the prompt from the first turn.')
                 ->withReaderSymbol(Bootstrap::class . '::rulePacksToDisable')
                 ->withReadBy('`Bootstrap::chat()` → `RulesState::new()`'),
+            SettingDefinition::new('embeddingModel', SettingType::String)
+                ->withCategory(SettingCategory::MemoryRules)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withLabel('Embedding model')
+                ->withHelp('Embedding model for the per-turn memory recall; unset ranks notes by keyword only.')
+                ->withReaderSymbol(EngineBackend::class . '::completeAsync'),
         ];
     }
 }

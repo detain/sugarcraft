@@ -5270,7 +5270,8 @@ final class Runtime
     {
         return Context\TurnContextBlock::new()
             ->withGitState($this->environmentSnapshot($app)->renderVolatile())
-            ->withRecentlyModifiedFiles(Context\TurnContextBlock::recentlyModifiedIn($app->messages));
+            ->withRecentlyModifiedFiles(Context\TurnContextBlock::recentlyModifiedIn($app->messages))
+            ->withMemoryRecall($this->memoryRecall($app)->render());
     }
 
     /**
@@ -5380,6 +5381,75 @@ final class Runtime
                 'memory:' . hash('xxh128', self::projectRoot($app) . "\0" . spl_object_id($app->memoryStore)),
                 fn(): MemoryBlock => MemoryBlock::capture($app->memoryStore, $this->projectMemoryStore($app)),
             );
+    }
+
+    /**
+     * The memory notes recalled for $app's latest user message (roadmap
+     * 5.3-2), carried by the `<turn-context>` row ({@see turnContext()}).
+     *
+     * Read from the session memo, where {@see primeMemoryRecall()} — run by
+     * EngineBackend in the parent before the turn's child is forked — left
+     * the ranking for this query. A Runtime that finds no ranking for its
+     * query (a path that never primed, or a mid-turn steering message that
+     * changed the latest user row) ranks keyword-only here, once: the result
+     * is stored the same way, so every later step of the turn reads it.
+     */
+    public function memoryRecall(App $app): Context\MemoryRecallBlock
+    {
+        if ($app->memoryStore === null) {
+            return Context\MemoryRecallBlock::empty();
+        }
+
+        $query = Context\MemoryRecallBlock::queryFrom($app->messages);
+        $holder = $this->memoryRecallHolder($app);
+        if (($holder['query'] ?? null) === $query && ($holder['block'] ?? null) instanceof Context\MemoryRecallBlock) {
+            return $holder['block'];
+        }
+
+        return $this->primeMemoryRecall($app, $query, null);
+    }
+
+    /**
+     * Rank $app's memory notes against $query and keep the result as this
+     * session's recall — the parent-side half of roadmap 5.3-2, run by
+     * EngineBackend before it forks a turn, so the note reads and the one
+     * embedding request ($embedder, null for keyword-only) happen once per
+     * turn in the process that outlives it.
+     *
+     * ONE memo slot per session, holding only the LATEST query's ranking:
+     * a slot per query would grow by one every turn and, past the memo's
+     * per-session cap, evict the session's oldest slots — the static
+     * `<env>` and the repo map — and move message 0.
+     *
+     * @param ?\Closure(list<string>): list<list<float>> $embedder
+     */
+    public function primeMemoryRecall(App $app, string $query, ?\Closure $embedder): Context\MemoryRecallBlock
+    {
+        if ($app->memoryStore === null) {
+            return Context\MemoryRecallBlock::empty();
+        }
+
+        $block = Context\MemoryRecallBlock::capture($app->memoryStore, $this->projectMemoryStore($app), $query, $embedder);
+        $holder = $this->memoryRecallHolder($app);
+        $holder['query'] = $query;
+        $holder['block'] = $block;
+
+        return $block;
+    }
+
+    /**
+     * The session's recall slot: a mutable holder, so a new turn replaces
+     * the previous turn's ranking in place.
+     *
+     * @return \ArrayObject<string, mixed>
+     */
+    private function memoryRecallHolder(App $app): \ArrayObject
+    {
+        return $this->sessionPromptMemo()->remember(
+            $app->sessionId,
+            'memory-recall:' . hash('xxh128', self::projectRoot($app) . "\0" . spl_object_id($app->memoryStore)),
+            static fn (): \ArrayObject => new \ArrayObject(),
+        );
     }
 
     /**

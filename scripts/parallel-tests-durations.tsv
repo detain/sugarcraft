@@ -368,6 +368,7 @@ sugar-crush/tests/Backend/OverflowPruneAndRetryTest.php	0.300	5
 sugar-crush/tests/Backend/LengthStopContinuationTest.php	0.300	7
 sugar-crush/tests/Backend/EngineBackendLedgerFrameTest.php	0.300	5
 sugar-crush/tests/Chat/ContextCommandsTest.php	0.300	5
+sugar-crush/tests/Backend/MemoryRecallPrimeTest.php	0.300	3
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
@@ -428,6 +429,7 @@ sugar-crush/tests/Tools/BuiltIn/MemoryToolTest.php	0.150	8
 sugar-crush/tests/Memory/MemoryWriterTest.php	0.150	10
 sugar-crush/tests/Context/ModelFamilyPromptTest.php	0.150	32
 sugar-crush/tests/Chat/AutoMemoryConsolidationWiringTest.php	0.150	3
+sugar-crush/tests/Context/MemoryRecallBlockTest.php	0.150	13
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23
@@ -492,6 +494,7 @@ sugar-crush/tests/Memory/SecretRedactorTest.php	0.100	21
 sugar-crush/tests/Memory/ConsolidationPlanTest.php	0.100	8
 sugar-crush/tests/Providers/SglangContinueFinalMessageTest.php	0.100	5
 sugar-crush/tests/Agents/Live/TranscriptLogTailTest.php	0.100	11
+sugar-crush/tests/Memory/EmbeddingCacheTest.php	0.100	9
 sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
 sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35
@@ -583,6 +586,7 @@ sugar-crush/tests/Support/FrontmatterKeyAuditTest.php	0.050	22
 sugar-crush/tests/Runtime/SteerSkipsUnstartedSequentialCallsTest.php	0.050	3
 sugar-crush/tests/Tui/Components/AgentDashboardPerInstanceTest.php	0.050	3
 sugar-crush/tests/Agents/PresetUnsupportedFieldFailsLoudTest.php	0.050	5
+sugar-crush/tests/Memory/HybridMemoryRankerTest.php	0.050	13
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5

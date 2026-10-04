@@ -27,8 +27,11 @@ use SugarCraft\Crush\Tools\ToolCall;
  * WHAT IT CARRIES. The git section of {@see EnvironmentBlock}
  * ({@see EnvironmentBlock::renderVolatile()}: caveat, branch, status, recent
  * log and, after a write, both diffs), the files this conversation's own
- * Edit/Write calls touched ({@see recentlyModifiedIn()}), and the share of the
- * context window in use once it reaches {@see CONTEXT_NOTICE_PERCENT}. Each is
+ * Edit/Write calls touched ({@see recentlyModifiedIn()}), the memory notes
+ * recalled for the latest user message ({@see MemoryRecallBlock}, roadmap
+ * 5.3-2 — query-dependent, so it can only live here and never in message 0),
+ * and the share of the context window in use once it reaches
+ * {@see CONTEXT_NOTICE_PERCENT}. Each is
  * optional; a block with nothing to say renders `''` and {@see message()} is
  * null, so no empty row is ever sent. Later steps add fields here (todo list,
  * turn budget, files changed since read) rather than to message 0.
@@ -79,11 +82,13 @@ final readonly class TurnContextBlock
      * @param string       $gitState         The git section, as {@see EnvironmentBlock::renderVolatile()} renders it; '' outside a work tree.
      * @param list<string> $recentlyModified Files the agent wrote, most recent first.
      * @param ?int         $contextPercent   Context-window share in use (0-100+), or null when unknown.
+     * @param string       $memoryRecall     The rendered {@see MemoryRecallBlock}; '' for none.
      */
     public function __construct(
         private string $gitState = '',
         private array $recentlyModified = [],
         private ?int $contextPercent = null,
+        private string $memoryRecall = '',
     ) {
     }
 
@@ -109,6 +114,20 @@ final readonly class TurnContextBlock
     public function contextPercent(): ?int
     {
         return $this->contextPercent;
+    }
+
+    /** The rendered memory recall this row carries, or '' for none. */
+    public function memoryRecall(): string
+    {
+        return $this->memoryRecall;
+    }
+
+    /**
+     * @param string $memoryRecall a rendered {@see MemoryRecallBlock}; '' clears it
+     */
+    public function withMemoryRecall(string $memoryRecall): self
+    {
+        return $this->mutate(memoryRecall: $memoryRecall);
     }
 
     public function withGitState(string $gitState): self
@@ -157,6 +176,12 @@ final readonly class TurnContextBlock
                 $lines[] = '- ' . self::escapeOwnFence(PromptFence::escape($path));
             }
             $parts[] = implode("\n", $lines);
+        }
+
+        // Already escaped and fenced by MemoryRecallBlock; this row's own
+        // fence is neutralised in it like in every other payload.
+        if (trim($this->memoryRecall) !== '') {
+            $parts[] = self::escapeOwnFence($this->memoryRecall);
         }
 
         if ($this->contextPercent !== null && $this->contextPercent >= self::CONTEXT_NOTICE_PERCENT) {
@@ -336,11 +361,13 @@ final readonly class TurnContextBlock
         ?array $recentlyModified = null,
         ?int $contextPercent = null,
         bool $contextPercentSet = false,
+        ?string $memoryRecall = null,
     ): self {
         return new self(
             $gitState ?? $this->gitState,
             $recentlyModified ?? $this->recentlyModified,
             $contextPercentSet ? $contextPercent : $this->contextPercent,
+            $memoryRecall ?? $this->memoryRecall,
         );
     }
 }

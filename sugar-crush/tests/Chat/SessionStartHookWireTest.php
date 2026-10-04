@@ -521,10 +521,11 @@ final class SessionStartHookWireTest extends TestCase
         // then added 327, landing at 8,086. 5.1-1/5.1-2 then added the memory
         // index header, note ids, the standing save instructions and the
         // Memory tool's entry: 9,533. Roadmap 5.10 then added the Execution
-        // Bias and Promised Work maxims: 10,309.)
-        $this->assertSame(10309, filesize($fixtures . 'golden-system-prompt.txt'));
+        // Bias and Promised Work maxims: 10,309. Roadmap 5.3-2's mandatory
+        // memory-recall paragraph then added 369: 10,678.)
+        $this->assertSame(10678, filesize($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame(1060, filesize($fixtures . 'golden-agent-prompt.txt'));
-        $this->assertSame('baf15fa32ae9f59f4a52d52999959d33', md5_file($fixtures . 'golden-system-prompt.txt'));
+        $this->assertSame('9b5168e30307c9d41745227905e1325f', md5_file($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame('ef0326dd38535aaa2f1d715919bff26e', md5_file($fixtures . 'golden-agent-prompt.txt'));
 
         // And a hooked turn changes neither.
@@ -533,7 +534,7 @@ final class SessionStartHookWireTest extends TestCase
             $this->noteHook('ss', HookEvent::SessionStart, self::SESSION_NOTE),
         ]), 'a turn with a session note attached');
 
-        $this->assertSame('baf15fa32ae9f59f4a52d52999959d33', md5_file($fixtures . 'golden-system-prompt.txt'));
+        $this->assertSame('9b5168e30307c9d41745227905e1325f', md5_file($fixtures . 'golden-system-prompt.txt'));
         $this->assertSame('ef0326dd38535aaa2f1d715919bff26e', md5_file($fixtures . 'golden-agent-prompt.txt'));
     }
 

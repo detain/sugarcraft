@@ -4,7 +4,7 @@
 04	PerSession	<user-rules>	513	f82fefbb39fe5843
 05	PerSession	<project-instructions>	412	838a398c2ae30d99
 06	PerSession	<project-instructions>	397	eb17e95f5fa6b6c1
-07	PerSession	<project-memory>	2055	88853964cbe848c7
+07	PerSession	<project-memory>	2424	be616c9954bc187a
 08	PerTurn	-	69	07aa52713915bbd9
 09	PerTurn	<available-skills>	0	e3b0c44298fc1c14
 10	PerSession	<env>	199	3464c3dc8891bb37

@@ -350,12 +350,65 @@ truncation is something the model can see and discount.
 Everything is frozen at `capture()`; `render()` reads no filesystem. So a note
 written mid-turn reaches the prompt on the **next** `Runtime`, not the next step.
 
-**Recall is `list()`, not `search()`, and that is deliberate.**
-`MemoryStore::search()` is a case-insensitive *substring* match, so passing a
-whole user turn as the query asks "does this entire sentence appear verbatim
-inside a memory entry" — essentially never true. Recall built that way would be
-permanently and silently empty: a wired feature that never fires, which is worse
-than an unwired one, because nothing looks broken.
+**The index is `list()`, not `search()`, and that is deliberate.** It is the
+same for every turn of the session, so it can sit in the cached system prompt.
+Ranking notes against what the user just asked is the job of the per-turn
+recall below, which rides the turn rather than the prompt.
+
+### Recall
+
+Every turn, the notes most relevant to the user's latest message are recalled
+into the `<turn-context>` row (roadmap 5.3-2) — at the tail of the request, never
+in the system prompt, because a block that changes with every message would move
+message 0 and void the cached prefix behind it. The block is fenced
+`<memory-recall>` and holds at most `MemoryRecallBlock::MAX_ENTRIES` (3) notes,
+each one line — `- [type] id (origin; tags: …): body` — clipped to
+`MemoryRecallBlock::MAX_ENTRY_BYTES` (640) bytes, cut visibly with the same
+truncation marker the index uses. Origin says where the note came from: `user scope`, `project`, or
+`shipped in this repository`. The candidates are the notes the index lists
+(user and project scope; never agent scope), with the repository's copy winning
+an id collision as it does there. A turn whose message matches no note sends no
+block at all.
+
+`HybridMemoryRanker` (`src/Memory/HybridMemoryRanker.php`) ranks them, with
+OpenClaw's hybrid-search defaults:
+
+| Stage | Rule |
+|---|---|
+| Keyword leg | Okapi BM25 (k1 1.2, b 0.75) over the body, type and tags, weighted 1.0 / 0.5 / 2.0 like the `/memory search` index. Disjunctive: each query word that matches adds its weight, stopwords excluded, camelCase and snake_case split. Normalised so the best note scores 1. |
+| Vector leg | Cosine similarity of each note's embedding to the message's, when an embedding model is configured. |
+| Merge | `0.7 × vector + 0.3 × keyword`; keyword alone when there is no vector leg. |
+| Gate | a note is a candidate when the merged score reaches 0.35, or when the keyword leg matched it at all. |
+| Recency | the score is multiplied by `0.5^(age / 30 days)`, age from the note's last edit. It reorders; it never removes a relevant note. |
+| Diversity | MMR, λ 0.7, over the Jaccard overlap of the notes' word sets, so near-duplicates do not fill every slot. |
+
+**Embeddings are opt-in.** Set `embeddingModel` (see [`SETTINGS.md`](SETTINGS.md))
+to a model the active provider serves on its embeddings endpoint. Without it the
+recall is keyword-only, silently — the default, since many local servers serve no
+embedding model. With it, a configured model that fails (endpoint down, model not
+served, a malformed response) degrades that turn to keyword-only and says so once
+per process in a runtime notice, rather than going quiet. Vectors are cached by
+model and exact text in `~/.sugar-crush/cache/embeddings.sqlite`
+(`EmbeddingCache`, owner-only, at most 50,000 vectors, least recently used out),
+so a turn embeds its message and only the notes that are new or edited.
+
+**When it runs:** once per turn, in the parent process before the turn's child
+is forked (`EngineBackend::completeAsync()` → `Runtime::primeMemoryRecall()`);
+the child reads the ranking from the session prompt memo
+(`Runtime::memoryRecall()`). A path that runs a turn without that step — a
+mid-turn message that changed the latest user row, `-p`, a sub-agent — ranks
+keyword-only on first use instead. The row is re-sent only when its bytes change,
+so a turn whose recall matches the previous one adds nothing.
+
+The standing instructions make the recall step mandatory: before answering a
+question about prior work — decisions, dates, people, preferences, open todos —
+the model reads the recall block and, when it does not answer, calls the
+`Memory` tool's `recall` action.
+
+The recalled lines are the operator's (or, for `shipped in this repository`, the
+checkout's) text: each passes through `PromptFence::escape()`, the block's own
+`<memory-recall>` fence is neutralised inside it, and the block opens by saying
+the notes are context, not instructions, and may be stale.
 
 ### The `<project-memory>` fence — and why every note line is escaped
 
@@ -595,6 +648,7 @@ transcript notice the first time it happens.
 ├── memory/.auto-memory-<key>.json  the auto-memory throttle
 ├── memory/.compaction-journal-<key>.jsonl  every model-written compaction summary
 ├── memory/.git/       the memory history (`/memory log`, `/memory restore`)
+├── cache/embeddings.sqlite  memory-recall vectors (derived; safe to delete)
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md
 ├── skills/*/SKILL.md  skills                   → SKILLS.md
 ├── commands/*.md      custom slash commands    → COMMANDS.md

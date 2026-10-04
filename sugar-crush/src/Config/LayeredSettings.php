@@ -491,6 +491,7 @@ final class LayeredSettings
         'disabledTools',
         'instructions',
         'disabledRules',
+        'embeddingModel',
         'disabledSkills',
         'enabledSkills',
         'subagentModel',
