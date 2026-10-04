@@ -428,6 +428,7 @@ sugar-crush/tests/MCP/McpNestedArgumentsWireTest.php	0.125	2
 sugar-crush/tests/App/AppBuilderTest.php	0.124	40
 sugar-crush/tests/Context/MemoryBlockUserScopeTest.php	0.124	8
 sugar-crush/tests/Tools/BuiltIn/GlobTest.php	0.123	68
+sugar-crush/tests/Chat/PreCompactHookTest.php	0.123	9
 sugar-crush/tests/Tui/RendererTest.php	0.118	23
 sugar-crush/tests/Backend/UiOnlyWireFilterTest.php	0.117	5
 sugar-crush/tests/Integration/SkillPathScopingWiringTest.php	0.117	6
@@ -545,6 +546,7 @@ sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5
 sugar-crush/tests/Commands/NoticesCommandTest.php	0.046	12
 sugar-crush/tests/Tui/PaneDataWiringTest.php	0.046	24
 sugar-crush/tests/Commands/CommandTableRenderingTest.php	0.046	18
+sugar-crush/tests/Chat/CompactFocusSteersSummaryTest.php	0.046	9
 sugar-crush/tests/Hooks/ProtectFilesHookTest.php	0.045	130
 sugar-crush/tests/ToolCallClickTest.php	0.045	16
 sugar-crush/tests/Hooks/HookConfigTest.php	0.045	60

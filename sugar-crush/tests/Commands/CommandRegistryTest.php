@@ -198,7 +198,7 @@ final class CommandRegistryTest extends TestCase
         $this->assertSame('<name>', $hints['rename']);
         $this->assertSame('[md|html|json] [path]', $hints['share']);
         $this->assertSame('[name]', $hints['rules']);
-        $this->assertNull($hints['compact']);
+        $this->assertSame('[focus]', $hints['compact']);
     }
 
     public function testFilterIsFuzzyNotJustAPrefixMatch(): void

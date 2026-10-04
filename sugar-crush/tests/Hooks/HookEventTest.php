@@ -16,11 +16,11 @@ final class HookEventTest extends TestCase
     // Enum Value Tests
     // =========================================================================
 
-    public function testAllElevenEventsExist(): void
+    public function testAllTwelveEventsExist(): void
     {
         $events = HookEvent::cases();
 
-        $this->assertCount(11, $events);
+        $this->assertCount(12, $events);
     }
 
     public function testPreToolUseValue(): void
@@ -61,6 +61,11 @@ final class HookEventTest extends TestCase
     public function testPreCompactValue(): void
     {
         $this->assertSame('PreCompact', HookEvent::PreCompact->value);
+    }
+
+    public function testPostCompactValue(): void
+    {
+        $this->assertSame('PostCompact', HookEvent::PostCompact->value);
     }
 
     public function testTeammateIdleValue(): void
@@ -163,6 +168,11 @@ final class HookEventTest extends TestCase
         $this->assertTrue(HookEvent::PreCompact->stderrToUserOnly());
     }
 
+    public function testStderrToUserOnlyForPostCompact(): void
+    {
+        $this->assertTrue(HookEvent::PostCompact->stderrToUserOnly());
+    }
+
     public function testStderrToUserOnlyForSessionStart(): void
     {
         $this->assertTrue(HookEvent::SessionStart->stderrToUserOnly());
@@ -179,7 +189,7 @@ final class HookEventTest extends TestCase
     }
 
     // =========================================================================
-    // Exhaustive Coverage - All 11 events tested
+    // Exhaustive Coverage - All 12 events tested
     // =========================================================================
 
     public function testAllEventsHaveValue(): void

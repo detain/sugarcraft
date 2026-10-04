@@ -13,6 +13,8 @@ use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\HistoryCompactedMsg;
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\ToolResult;
@@ -757,6 +759,13 @@ final class CompactionService
      */
     public function modelSummaryFallbackPrefix(HistoryCompactedMsg $msg): string
     {
+        // The model was never asked: a PreCompact chain ran first and this
+        // landing is the heuristic's, so the preface (if any) is the one the
+        // scheduling route chose, never "the model failed".
+        if ($msg->heuristicNotice !== null) {
+            return $msg->heuristicNotice;
+        }
+
         if ($msg->error !== null) {
             return 'Model summarisation failed (' . self::sanitizeSummaryLine($msg->error)
                 . ') — compacted with the local heuristic instead. ';
@@ -767,6 +776,152 @@ final class CompactionService
         }
 
         return '';
+    }
+
+    /**
+     * The focus a `/compact <focus>` command asks the summary to steer toward
+     * (roadmap 2.12): everything after the command word, trimmed, in either
+     * spelling the dispatcher accepts (`/compact text` and `/compact:text`).
+     * '' for a bare `/compact`, and for anything that is not the command — the
+     * automatic tier has no focus.
+     */
+    public static function compactFocus(string $inputText): string
+    {
+        if (preg_match('#^\s*/compact(?::|\s+|$)(.*)$#su', $inputText, $m) !== 1) {
+            return '';
+        }
+
+        return trim($m[1]);
+    }
+
+    /**
+     * What `/compact` (`manual`) and the automatic tier (`auto`) are called in a
+     * compaction hook's context — Claude Code's `trigger` values.
+     */
+    public const TRIGGER_MANUAL = 'manual';
+
+    public const TRIGGER_AUTO = 'auto';
+
+    /**
+     * The context a `PreCompact` / `PostCompact` hook is handed (roadmap 2.12),
+     * smuggled through the tool-shaped {@see HookContext} exactly as the turn
+     * events are ({@see \SugarCraft\Crush\Hooks\HookManager::sessionStart()}):
+     * `toolName` is the event name — the only slot a matcher tests — and
+     * `toolInput` is the JSON $payload, encoded the way `CRUSH_TOOL_INPUT` is
+     * documented (slashes and non-ASCII unescaped, invalid UTF-8 substituted so
+     * one bad byte cannot empty the payload). `model`/`provider` are empty, per
+     * the turn-event precedent.
+     *
+     * @param array<string, string> $payload
+     */
+    public function compactionHookContext(string $event, array $payload, string $sessionId, string $projectRoot): HookContext
+    {
+        return new HookContext(
+            sessionId: $sessionId,
+            toolName: $event,
+            toolArgs: [],
+            toolInput: json_encode(
+                $payload,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+            ) ?: '{}',
+            toolOutput: '',
+            model: '',
+            provider: '',
+            projectRoot: $projectRoot,
+        );
+    }
+
+    /**
+     * Why a `PreCompact` verdict stops the compaction, or null when it lets it
+     * run. An ASK fails closed — no compaction path can put a question to
+     * anyone — and a silent refusal still gets a sentence.
+     */
+    public static function preCompactRefusal(HookResult $verdict): ?string
+    {
+        if ($verdict->permitsExecution()) {
+            return null;
+        }
+
+        if ($verdict->isAsk()) {
+            return 'a PreCompact hook asked for a decision no compaction path can present';
+        }
+
+        return $verdict->message !== '' ? $verdict->message : 'a PreCompact hook refused without giving a reason';
+    }
+
+    /**
+     * The transcript line a refused compaction leaves (roadmap 2.12). UI-only
+     * on every route: the reason is the operator's, and
+     * {@see \SugarCraft\Crush\Hooks\HookEvent::stderrToUserOnly()} says it
+     * never reaches the agent. On the parked route the prompt still goes out,
+     * against the uncompacted history, and the sentence says so.
+     */
+    public function compactionBlockedNotice(string $reason, bool $parked): string
+    {
+        return 'Compaction skipped: PreCompact hook blocked it (' . self::sanitizeSummaryLine($reason) . '). '
+            . ($parked
+                ? 'Your prompt goes out against the uncompacted history.'
+                : 'The history is unchanged.');
+    }
+
+    /**
+     * `/compact`'s answer while a PreCompact chain runs off the render loop on
+     * the heuristic route (no model to ask): the transcript compacts when the
+     * hooks have answered.
+     */
+    public function preCompactPendingNotice(): string
+    {
+        return 'Running PreCompact hooks — the transcript will compact when they answer.';
+    }
+
+    /** The longest `compact_summary` a PostCompact hook is handed, in characters. */
+    public const COMPACT_SUMMARY_HOOK_MAX_CHARS = 16000;
+
+    /**
+     * What a `PostCompact` hook is handed as `compact_summary` (roadmap 2.12):
+     * the summary rows the model now reads in place of what was condensed —
+     * every agent-visible {@see SUMMARY_ROW_PREFIX} row of $history, marker
+     * stripped, one per line, bounded at {@see COMPACT_SUMMARY_HOOK_MAX_CHARS}.
+     *
+     * @param list<Message> $history
+     */
+    public static function latestCompactSummary(array $history): string
+    {
+        $rows = [];
+        foreach (Message::agentVisible($history) as $message) {
+            if (str_starts_with($message->content, self::SUMMARY_ROW_PREFIX)) {
+                $rows[] = substr($message->content, \strlen(self::SUMMARY_ROW_PREFIX));
+            }
+        }
+
+        $summary = implode("\n", $rows);
+
+        return mb_strlen($summary) > self::COMPACT_SUMMARY_HOOK_MAX_CHARS
+            ? mb_substr($summary, 0, self::COMPACT_SUMMARY_HOOK_MAX_CHARS - 1) . '…'
+            : $summary;
+    }
+
+    /**
+     * The user-role message that steers a summarization (roadmap 2.12): the
+     * `/compact` focus and a permitting PreCompact hook's note. '' when there is
+     * neither, and then no message is sent, so an unfocused request keeps the
+     * exact shape it always had. Each part is escaped with
+     * {@see PromptFence::escape()} like every other carried text.
+     */
+    public static function renderFocusForSummary(string $focus, string $hookGuidance): string
+    {
+        $parts = [];
+        if (trim($focus) !== '') {
+            $parts[] = "Focus for this summary, from the user's /compact command — give it priority in every "
+                . "record and in the state block, and keep everything it names in full detail:\n"
+                . PromptFence::escape(trim($focus));
+        }
+        if (trim($hookGuidance) !== '') {
+            $parts[] = "Guidance for this summary from the operator's PreCompact hook:\n"
+                . PromptFence::escape(trim($hookGuidance));
+        }
+
+        return implode("\n\n", $parts);
     }
 
     /**
@@ -832,7 +987,14 @@ final class CompactionService
      * {@see HistoryCompactedMsg} — it always resolves, a failed call included —
      * so the TUI wraps it in a Cmd and a headless host simply calls it.
      *
-     * @return array{id:string,count:int,promise:\Closure(): PromiseInterface<HistoryCompactedMsg>}|null
+     * $focus is `/compact`'s focus text ({@see compactFocus()}, roadmap 2.12):
+     * when non-empty it is sent as its own message after the exchanges
+     * ({@see renderFocusForSummary()}), so the model is steered rather than the
+     * focus being only echoed. The `promise` closure takes the permitting
+     * PreCompact chain's note as `$hookGuidance`, which joins the focus there —
+     * the chain runs before the request is sent, so its note is only known then.
+     *
+     * @return array{id:string,count:int,promise:\Closure(string=): PromiseInterface<HistoryCompactedMsg>}|null
      */
     public function buildSummarizationRequest(
         ?Backend $backend,
@@ -840,6 +1002,7 @@ final class CompactionService
         array $probeHistory,
         ?string $parkedSubmission,
         ?CancellationToken $cancellation = null,
+        string $focus = '',
     ): ?array {
         if ($backend === null) {
             return null;
@@ -874,7 +1037,12 @@ final class CompactionService
         }
         $keys = array_map(static fn (array $e): string => $e['key'], $exchanges);
 
-        $promise = static function () use ($backend, $prompt, $compactionId, $keys, $parkedSubmission, $cancellation): PromiseInterface {
+        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $compactionId, $keys, $parkedSubmission, $cancellation, $focus): PromiseInterface {
+            $steer = self::renderFocusForSummary($focus, $hookGuidance);
+            if ($steer !== '') {
+                $prompt[] = Message::user($steer);
+            }
+
             return $backend->completeAsync($prompt, null, $cancellation)->then(
                 // The usage rides along so update() can bill it. A compaction
                 // asks a model to read the WHOLE earlier conversation, so it is

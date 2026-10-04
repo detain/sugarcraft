@@ -157,7 +157,7 @@ already run:
 
 ## Events
 
-`src/Hooks/HookEvent.php` defines eleven:
+`src/Hooks/HookEvent.php` defines twelve:
 
 | Event | Fires | Dispatched from |
 |---|---|---|
@@ -168,14 +168,15 @@ already run:
 | `SessionStart` | the first prompt submitted into an empty history | `Chat::dispatchTurnHooks()` |
 | `SessionEnd` | the session is ending | — |
 | `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()` |
-| `PreCompact` | before history compaction | — |
+| `PreCompact` | before a compaction condenses the history — the one that can skip it | `Chat::preCompactGate()` |
+| `PostCompact` | after a compaction was applied | `Chat::postCompactCmd()` |
 | `TeammateIdle` | a teammate went idle | — |
 | `TaskCreated` / `TaskCompleted` | task lifecycle | — |
 
 The `—` rows are **dormant, not removed**: an entry naming one of them parses
 from `hooks.yaml`, registers, and keeps the block semantics below — but nothing
 in `src/` reaches them at this tip, and the two halves are worth telling apart.
-`Stop`, `SubagentStop`, `SessionEnd` and `PreCompact` have no dispatch call site
+`Stop`, `SubagentStop` and `SessionEnd` have no dispatch call site
 at all: `HookDispatcher` carries a method for each and nothing in `src/` calls
 it. `TaskCreated`, `TaskCompleted` and `TeammateIdle` do have call sites, all
 three in `TaskList`, but each is guarded on an injected `HookDispatcher`, and
@@ -217,8 +218,10 @@ the action has already happened:
 - `SubagentStop`, `TaskCompleted` — too late to stop; surfaces through
   `continueOnBlock` on the `HookDispatcher`, which `src/` never builds (see
   above).
-- `PreCompact`, `SessionStart` — stderr reaches **you only**; there is no agent
-  action to feed it to. (The two wired events are elaborated under *The two turn
+- `PreCompact` — **skips the compaction**: the history is left as it was, and
+  stderr reaches **you only**. See *The two compaction events* below.
+- `PostCompact`, `SessionStart` — stderr reaches **you only**; there is no agent
+  action to feed it to. (`SessionStart` is elaborated under *The two turn
   events* below, including where a shipped block reason actually surfaces.)
 - `UserPromptSubmit` — discards the prompt entirely; nothing goes to the agent.
 
@@ -283,6 +286,36 @@ from the tool gates:
 Hook notes go onto **history**, never into the prompt assembler — `role: system`
 is the non-spoofable operator channel — which is why wiring these two events
 moves no prompt golden.
+
+### The two compaction events
+
+`Chat::preCompactGate()` fires `PreCompact` for every compaction that would
+condense the history through the TUI: `/compact` (`trigger: manual`), and the
+automatic 85% tier when it parks a prompt behind a model-written summary
+(`trigger: auto`). `Chat::postCompactCmd()` fires `PostCompact` once such a
+compaction has been applied. The automatic tier's heuristic route (no summary
+model configured) and the engine's step-level compaction do not fire them yet.
+
+- **Never on the render loop.** A wired `PreCompact` chain runs inside the
+  compaction's own Cmd — before the summarization request is sent, so a block
+  costs nothing — and a chain with a script hook in it runs in a forked child,
+  the way the turn events do, so the screen keeps painting. With no
+  `PreCompact` hook wired, `/compact` behaves exactly as before.
+- **A `PreCompact` block skips the compaction.** Nothing is condensed and the
+  transcript says `Compaction skipped: PreCompact hook blocked it (<reason>).`
+  On the automatic tier your prompt still goes out, against the uncompacted
+  history. An `ASK` fails closed, and a hook that throws — or a forked child
+  that reports nothing — counts as a block.
+- **A permitting `PreCompact` hook's note steers the summary.** Its stdout is
+  sent to the summarising model beside `/compact <focus>`'s focus text; it is
+  not written into history.
+- **`PostCompact` is observe-only.** The rewrite already happened, so neither
+  its exit code nor its stdout is read back — use it for side effects such as
+  logging or archiving the summary.
+- **Context.** `toolName` carries the event name (write the `matcher:` against
+  it), and `toolInput` is JSON: `{"trigger": …, "custom_instructions": "<the
+  /compact focus>"}` for `PreCompact`, `{"trigger": …, "compact_summary": "<the
+  summary rows the model now reads>"}` for `PostCompact`.
 
 ---
 

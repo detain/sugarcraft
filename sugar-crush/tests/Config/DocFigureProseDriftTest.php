@@ -2306,10 +2306,10 @@ final class DocFigureProseDriftTest extends TestCase
         $paraEnd = strpos($hooksRaw, 'What a **block**');
         self::assertIsInt($paraEnd);
         $para = self::markdownProse(substr($hooksRaw, $sectionEnd, $paraEnd - $sectionEnd));
-        self::assertSame(1, preg_match('/`(\w+)`, `(\w+)`, `(\w+)` and `(\w+)` have no dispatch call site at all/', $para, $quartet), 'the no-call-site half of the dormancy split moved');
+        self::assertSame(1, preg_match('/`(\w+)`, `(\w+)` and `(\w+)` have no dispatch call site\s+at all/', $para, $trioNone), 'the no-call-site half of the dormancy split moved');
         self::assertSame(1, preg_match('/`(\w+)`, `(\w+)` and `(\w+)` do have call sites, all three in `(\w+)`, but each is guarded on an injected `HookDispatcher`, and `src\/` constructs that class nowhere/', $para, $trio), 'the guarded-trio half of the dormancy split moved');
-        self::assertEqualsCanonicalizing($dashes, [$quartet[1], $quartet[2], $quartet[3], $quartet[4], $trio[1], $trio[2], $trio[3]], 'the two dormancy halves no longer split the dash rows');
-        foreach ([$quartet[1], $quartet[2], $quartet[3], $quartet[4]] as $event) {
+        self::assertEqualsCanonicalizing($dashes, [$trioNone[1], $trioNone[2], $trioNone[3], $trio[1], $trio[2], $trio[3]], 'the two dormancy halves no longer split the dash rows');
+        foreach ([$trioNone[1], $trioNone[2], $trioNone[3]] as $event) {
             self::assertSame([], self::srcOccurrences('->dispatch' . $event . '('), "{$event} gained a dispatch call site — the page still lists it under no-call-site-at-all");
         }
         $trioFile = $trio[4];

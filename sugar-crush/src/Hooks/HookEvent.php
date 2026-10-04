@@ -13,7 +13,8 @@ namespace SugarCraft\Crush\Hooks;
  * - 2 (block): hard block; effect is event-specific:
  *   - PreToolUse/Stop/TaskCreated: stops action outright, feeds stderr back to agent
  *   - PostToolUse/SubagentStop/TaskCompleted: action already happened, surfaces via continueOnBlock
-     *   - PreCompact/SessionStart: stderr only reaches the user (no agent action possible)
+ *   - PreCompact: the compaction is skipped; stderr only reaches the user (no agent turn to feed)
+ *   - PostCompact/SessionStart: stderr only reaches the user (no agent action possible)
  *   - UserPromptSubmit: discards prompt entirely, nothing goes to the agent
  *
  * @see https://github.com/charmbracelet/sugar-craft/blob/master/docs/hooks.md
@@ -42,7 +43,25 @@ enum HookEvent: string
     case SessionStart = 'SessionStart';
     case SessionEnd = 'SessionEnd';
     case UserPromptSubmit = 'UserPromptSubmit';
+
+    /**
+     * Fires before a compaction condenses the history (roadmap 2.12): `/compact`
+     * (trigger `manual`) and the automatic 85% tier's model route (trigger
+     * `auto`). The context's `toolInput` is JSON `{"trigger", "custom_instructions"}`
+     * — the latter is `/compact`'s focus text. A verdict that does not permit
+     * SKIPS that compaction: the history is left as it was and the reason reaches
+     * the user only ({@see stderrToUserOnly()}). An allowing hook's note joins the
+     * focus as guidance the summariser reads.
+     */
     case PreCompact = 'PreCompact';
+
+    /**
+     * Fires after a compaction has been applied (roadmap 2.12), with
+     * `toolInput` JSON `{"trigger", "compact_summary"}`. Observe-only: the
+     * rewrite already happened, so a block cannot undo it and its reason
+     * reaches the user only.
+     */
+    case PostCompact = 'PostCompact';
     case TeammateIdle = 'TeammateIdle';
     case TaskCreated = 'TaskCreated';
     case TaskCompleted = 'TaskCompleted';
@@ -93,6 +112,7 @@ enum HookEvent: string
     {
         return match ($this) {
             self::PreCompact,
+            self::PostCompact,
             self::SessionStart => true,
             default => false,
         };

@@ -325,7 +325,7 @@ edit it by hand.
 | `/pane-dock-left` | | | — | Dock the focused pane to the left |
 | `/pane-dock-right` | | | — | Dock the focused pane to the right |
 | `/editor` | ✓ | | `[text]` | Compose the prompt in $VISUAL or $EDITOR |
-| `/compact` | ✓ | | — | Manually compact chat history to save context |
+| `/compact` | ✓ | | `[focus]` | Manually compact chat history to save context |
 | `/clear` | ✓ | ✓ | — | Clear the transcript, keeping this session |
 | `/budget` | ✓ | ✓ | `[amount\|off]` | Show this session's reported spend, or cap it |
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |

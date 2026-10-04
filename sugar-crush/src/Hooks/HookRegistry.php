@@ -18,6 +18,7 @@ final class HookRegistry
         'SessionEnd' => [],
         'UserPromptSubmit' => [],
         'PreCompact' => [],
+        'PostCompact' => [],
         'Notification' => [],
         'TeammateIdle' => [],
         'TaskCreated' => [],

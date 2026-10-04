@@ -108,6 +108,23 @@ final class HistoryCompactedMsg implements Msg
      *                             is not lost when a cancel drops it: the tier
      *                             echoes it into the transcript before the request
      *                             leaves.
+     * @param ?string $blockedBy   Why a PreCompact hook stopped this compaction
+     *                             (roadmap 2.12), or null when it was let through
+     *                             or no chain is wired. Non-null means NOTHING is
+     *                             condensed: {@see Chat::applyModelCompaction()}
+     *                             reports the reason to the user and, on the
+     *                             parked route, sends the prompt against the
+     *                             uncompacted history. No summarization was paid
+     *                             for — the chain runs before the request leaves.
+     * @param ?string $heuristicNotice Non-null when the model was never asked: the
+     *                             landing is the heuristic's, reached through a
+     *                             PreCompact chain that had to run off the render
+     *                             loop first, and this is the report's preface
+     *                             ('' for none — e.g. the spend-cap sentence when
+     *                             the cap is why the model was not asked). Null
+     *                             is the model route, whose preface
+     *                             {@see Host\CompactionService::modelSummaryFallbackPrefix()}
+     *                             derives from $error and $summaries.
      */
     public function __construct(
         public readonly string $compactionId,
@@ -115,5 +132,7 @@ final class HistoryCompactedMsg implements Msg
         public readonly ?string $error = null,
         public readonly ?Usage $usage = null,
         public readonly ?string $parkedSubmission = null,
+        public readonly ?string $blockedBy = null,
+        public readonly ?string $heuristicNotice = null,
     ) {}
 }

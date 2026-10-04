@@ -12827,7 +12827,191 @@ final class Chat implements Model
             return $scheduled;
         }
 
-        return $this->compactNow($inputText, $this->history, []);
+        return $this->scheduleHookGatedCompaction($inputText)
+            ?? $this->compactNow($inputText, $this->history, []);
+    }
+
+    /**
+     * The heuristic `/compact` behind a wired PreCompact chain (roadmap 2.12),
+     * or null when no PreCompact hook is wired — then the caller compacts
+     * synchronously exactly as before.
+     *
+     * The chain never runs inside `update()`: like the model route, the command
+     * answers at once with a notice, sets the summarization latch, and the
+     * compaction happens when the {@see HistoryCompactedMsg} lands — carrying
+     * the chain's refusal, if any, in `blockedBy`, and `$prefix` as its
+     * `heuristicNotice` (the model was never asked, so the report must not say
+     * the model failed).
+     *
+     * @return array{0:Chat,1:\Closure}|null
+     */
+    private function scheduleHookGatedCompaction(string $inputText, string $prefix = ''): ?array
+    {
+        $gate = $this->preCompactGate(
+            \SugarCraft\Crush\Host\CompactionService::TRIGGER_MANUAL,
+            \SugarCraft\Crush\Host\CompactionService::compactFocus($inputText),
+            new CancellationToken(),
+        );
+        if ($gate === null) {
+            return null;
+        }
+
+        $compactionId = bin2hex(random_bytes(8));
+        $cmd = Cmd::promise(static fn (): PromiseInterface => $gate()->then(
+            static fn (?\SugarCraft\Crush\Hooks\HookResult $verdict): ?HistoryCompactedMsg => $verdict === null
+                ? null
+                : new HistoryCompactedMsg(
+                    $compactionId,
+                    blockedBy: \SugarCraft\Crush\Host\CompactionService::preCompactRefusal($verdict),
+                    heuristicNotice: $prefix,
+                ),
+        ));
+
+        return [$this->mutate([
+            'history' => [
+                ...$this->history,
+                Message::user($inputText)->withUiOnly(),
+                Message::assistant($this->compactionService()->preCompactPendingNotice())->withUiOnly(),
+            ],
+            'inputBuf' => '',
+            'inFlight' => false,
+            'pendingCompactionId' => $compactionId,
+        ]), $cmd];
+    }
+
+    /**
+     * The `PreCompact` chain for one compaction (roadmap 2.12), as a closure
+     * that runs it OFF `update()` and resolves its verdict — or null when no
+     * PreCompact hook is wired, so an unhooked session's route is unchanged.
+     *
+     * The one dispatch site docs/HOOKS.md's events table names for the event.
+     * An out-of-process chain (a {@see \SugarCraft\Crush\Hooks\ScriptHook})
+     * runs in a forked child exactly as the turn hooks do (audit 15b-04,
+     * {@see forkedPayloadCmd()}), so the frame keeps painting; an in-process
+     * chain runs inline when the closure is called, which is already off the
+     * update path. The closure resolves null when $cancellation fired — nothing
+     * is dispatched then.
+     *
+     * @return (\Closure(): PromiseInterface<?\SugarCraft\Crush\Hooks\HookResult>)|null
+     */
+    private function preCompactGate(string $trigger, string $focus, CancellationToken $cancellation): ?\Closure
+    {
+        $event = \SugarCraft\Crush\Hooks\HookEvent::PreCompact;
+        $hooks = $this->hooks;
+        if ($hooks === null || !$hooks->hasHooksFor($event, $event->value)) {
+            return null;
+        }
+
+        $context = $this->compactionService()->compactionHookContext(
+            $event->value,
+            ['trigger' => $trigger, 'custom_instructions' => $focus],
+            $this->currentSessionId ?? '',
+            $this->projectRoot(),
+        );
+        $fork = $this->turnHooksMustFork([$event]);
+
+        return static fn (): PromiseInterface => self::compactionHookPromise(
+            static fn (): \SugarCraft\Crush\Hooks\HookResult => $hooks->preCompact($context),
+            $fork,
+            $cancellation,
+        );
+    }
+
+    /**
+     * The `PostCompact` chain for a compaction that was just applied (roadmap
+     * 2.12), as a fire-and-forget Cmd — or null when no PostCompact hook is
+     * wired or $before → $after condensed nothing (no new
+     * {@see \SugarCraft\Crush\Host\CompactionService::COMPACTION_BOUNDARY} row).
+     *
+     * Observe-only: the rewrite already happened, so the Cmd resolves null
+     * whatever the chain says. It runs off `update()` on the same fork-or-inline
+     * split as {@see preCompactGate()}. `compact_summary` is the newest summary
+     * row the model now reads in place of the condensed rows.
+     *
+     * @param list<Message> $before
+     * @param list<Message> $after
+     */
+    private function postCompactCmd(string $trigger, array $before, array $after): ?\Closure
+    {
+        $event = \SugarCraft\Crush\Hooks\HookEvent::PostCompact;
+        $hooks = $this->hooks;
+        if ($hooks === null || !$hooks->hasHooksFor($event, $event->value)) {
+            return null;
+        }
+
+        $boundaries = static fn (array $rows): int => count(array_filter(
+            $rows,
+            static fn (Message $row): bool => \SugarCraft\Crush\Host\CompactionService::isCompactionBoundary($row),
+        ));
+        if ($boundaries($after) <= $boundaries($before)) {
+            return null;
+        }
+
+        $context = $this->compactionService()->compactionHookContext(
+            $event->value,
+            ['trigger' => $trigger, 'compact_summary' => \SugarCraft\Crush\Host\CompactionService::latestCompactSummary($after)],
+            $this->currentSessionId ?? '',
+            $this->projectRoot(),
+        );
+        $fork = $this->turnHooksMustFork([$event]);
+
+        return Cmd::promise(static fn (): PromiseInterface => self::compactionHookPromise(
+            static fn (): \SugarCraft\Crush\Hooks\HookResult => $hooks->postCompact($context),
+            $fork,
+            new CancellationToken(),
+        )->then(static fn (): ?Msg => null));
+    }
+
+    /**
+     * Run one compaction hook chain and resolve its verdict, forked when
+     * $fork (the chain leaves the process) and inline otherwise — the shape
+     * {@see forkTurnHooksCmd()} gives the turn hooks, through the same
+     * {@see forkedPayloadCmd()}, so no new fork site exists for it.
+     *
+     * FAILS CLOSED: a chain that throws, or a child that reports nothing, is a
+     * DENY — for PreCompact that skips the compaction rather than letting an
+     * unvetted rewrite through. Resolves null when $cancellation fired.
+     *
+     * @param \Closure(): \SugarCraft\Crush\Hooks\HookResult $run
+     * @return PromiseInterface<?\SugarCraft\Crush\Hooks\HookResult>
+     */
+    private static function compactionHookPromise(\Closure $run, bool $fork, CancellationToken $cancellation): PromiseInterface
+    {
+        $guarded = static function () use ($run): \SugarCraft\Crush\Hooks\HookResult {
+            try {
+                return $run();
+            } catch (\Throwable $e) {
+                return \SugarCraft\Crush\Hooks\HookResult::deny('hook failed: ' . $e::class . ': ' . $e->getMessage());
+            }
+        };
+
+        if (!$fork) {
+            return \React\Promise\resolve($cancellation->isCancelled() ? null : $guarded());
+        }
+
+        // The verdict rides home on a TurnHooksResolvedMsg because that is the
+        // Msg forkedPayloadCmd()'s collector contract returns; it is unwrapped
+        // below and never reaches update().
+        $async = self::forkedPayloadCmd(
+            static fn (): string => json_encode(
+                ['verdict' => self::turnHookResultToArray($guarded())],
+                JSON_INVALID_UTF8_SUBSTITUTE,
+            ) ?: '',
+            static function (string $file): Msg {
+                $data = self::takeIpcPayload($file);
+                $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
+                $verdict = (\is_array($decoded) ? self::turnHookResultFromArray($decoded['verdict'] ?? null) : null)
+                    ?? \SugarCraft\Crush\Hooks\HookResult::deny('the compaction hooks ended without reporting a verdict');
+
+                return new TurnHooksResolvedMsg(0, '', $verdict);
+            },
+            static fn (): Msg => new TurnHooksResolvedMsg(0, '', $guarded()),
+            $cancellation,
+        )();
+
+        return $async->promise->then(
+            static fn (?Msg $msg): ?\SugarCraft\Crush\Hooks\HookResult => $msg instanceof TurnHooksResolvedMsg ? $msg->prompt : null,
+        );
     }
 
     /**
@@ -12866,13 +13050,15 @@ final class Chat implements Model
      */
     private function compactNow(string $inputText, array $baseHistory, array $summaries, string $prefix = ''): array
     {
-        return [$this->mutate([
+        $next = $this->mutate([
             ...$this->compactionChanges($inputText, $baseHistory, $summaries, $prefix),
             // The draft became this command when Enter was pressed, and this
             // command starts no turn.
             'inputBuf' => '',
             'inFlight' => false,
-        ]), null];
+        ]);
+
+        return [$next, $this->postCompactCmd(\SugarCraft\Crush\Host\CompactionService::TRIGGER_MANUAL, $baseHistory, $next->history)];
     }
 
     /**
@@ -12990,12 +13176,10 @@ final class Chat implements Model
             // downgrade to the heuristic is indistinguishable from having no
             // provider at all — and the user set the ceiling that caused it, so
             // they are the one person who can lift it.
-            return $this->compactNow(
-                $inputText,
-                $this->history,
-                [],
-                $this->compactionService()->compactCommandCapNotice($this->spentUsd(), (float) $this->maxCostUsd),
-            );
+            $capNotice = $this->compactionService()->compactCommandCapNotice($this->spentUsd(), (float) $this->maxCostUsd);
+
+            return $this->scheduleHookGatedCompaction($inputText, $capNotice)
+                ?? $this->compactNow($inputText, $this->history, [], $capNotice);
         }
 
         // The probe mirrors what is about to be appended - the `/compact` echo
@@ -13004,7 +13188,12 @@ final class Chat implements Model
         // are UI-only, so neither is an exchange: compactionWire() drops them and
         // the offered set is the one the CURRENT conversation earns.
         $echoed = [...$this->history, Message::user($inputText)->withUiOnly()];
-        $request = $this->buildSummarizationRequest([...$echoed, Message::assistant('')->withUiOnly()], null);
+        $request = $this->buildSummarizationRequest(
+            [...$echoed, Message::assistant('')->withUiOnly()],
+            null,
+            null,
+            \SugarCraft\Crush\Host\CompactionService::compactFocus($inputText),
+        );
         if ($request === null) {
             return null;
         }
@@ -13030,10 +13219,16 @@ final class Chat implements Model
      * The request is wrapped in a Cmd here; it always lands as a
      * {@see HistoryCompactedMsg}.
      *
+     * A wired PreCompact chain ({@see preCompactGate()}, roadmap 2.12) runs
+     * FIRST inside the same Cmd — `manual` on the `/compact` route, `auto` on the
+     * parked one — so a refusal lands as a {@see HistoryCompactedMsg} carrying
+     * `blockedBy` before any summarization is paid for, and a permitting chain's
+     * note steers the summary beside `/compact`'s $focus.
+     *
      * @param list<Message> $probeHistory
      * @return array{id:string,count:int,cmd:\Closure}|null
      */
-    private function buildSummarizationRequest(array $probeHistory, ?string $parkedSubmission, ?CancellationToken $cancellation = null): ?array
+    private function buildSummarizationRequest(array $probeHistory, ?string $parkedSubmission, ?CancellationToken $cancellation = null, string $focus = ''): ?array
     {
         $request = $this->compactionService()->buildSummarizationRequest(
             $this->summaryBackend,
@@ -13041,12 +13236,42 @@ final class Chat implements Model
             $probeHistory,
             $parkedSubmission,
             $cancellation,
+            $focus,
         );
         if ($request === null) {
             return null;
         }
 
-        return ['id' => $request['id'], 'count' => $request['count'], 'cmd' => Cmd::promise($request['promise'])];
+        $gate = $this->preCompactGate(
+            $parkedSubmission === null
+                ? \SugarCraft\Crush\Host\CompactionService::TRIGGER_MANUAL
+                : \SugarCraft\Crush\Host\CompactionService::TRIGGER_AUTO,
+            $focus,
+            $cancellation ?? new CancellationToken(),
+        );
+        if ($gate === null) {
+            return ['id' => $request['id'], 'count' => $request['count'], 'cmd' => Cmd::promise($request['promise'])];
+        }
+
+        $summarize = $request['promise'];
+        $compactionId = $request['id'];
+
+        return ['id' => $compactionId, 'count' => $request['count'], 'cmd' => Cmd::promise(
+            static fn (): PromiseInterface => $gate()->then(
+                static function (?\SugarCraft\Crush\Hooks\HookResult $verdict) use ($summarize, $compactionId, $parkedSubmission): mixed {
+                    if ($verdict === null) {
+                        return null;
+                    }
+
+                    $refusal = \SugarCraft\Crush\Host\CompactionService::preCompactRefusal($verdict);
+                    if ($refusal !== null) {
+                        return new HistoryCompactedMsg($compactionId, parkedSubmission: $parkedSubmission, blockedBy: $refusal);
+                    }
+
+                    return $summarize($verdict->additionalContext);
+                },
+            ),
+        )];
     }
 
     /**
@@ -13435,16 +13660,57 @@ final class Chat implements Model
      */
     private function applyModelCompaction(HistoryCompactedMsg $msg): array
     {
+        [$next, $cmd] = $this->landModelCompaction($msg);
+
+        // PostCompact (roadmap 2.12) fires for a compaction that was APPLIED —
+        // never for one a PreCompact hook blocked — and rides beside whatever
+        // the landing itself returned (on the parked route, the turn).
+        $post = $msg->blockedBy === null
+            ? $this->postCompactCmd(
+                $msg->parkedSubmission === null
+                    ? \SugarCraft\Crush\Host\CompactionService::TRIGGER_MANUAL
+                    : \SugarCraft\Crush\Host\CompactionService::TRIGGER_AUTO,
+                $this->history,
+                $next->history,
+            )
+            : null;
+
+        return [$next, $post === null ? $cmd : ($cmd === null ? $post : Cmd::batch($cmd, $post))];
+    }
+
+    /**
+     * The landing {@see applyModelCompaction()} wraps — see that method's
+     * account above for what is condensed and when the parked turn is sent.
+     *
+     * A PreCompact refusal (`$msg->blockedBy`, roadmap 2.12) condenses
+     * nothing: the reason is reported as a UI-only line and, on the parked
+     * route, the turn continues against the uncompacted history through every
+     * check below exactly as a compaction that freed nothing would.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function landModelCompaction(HistoryCompactedMsg $msg): array
+    {
         $prefix = $this->compactionService()->modelSummaryFallbackPrefix($msg);
+        $blocked = $msg->blockedBy === null ? [] : [
+            'history' => [
+                ...$this->history,
+                Message::notice($this->compactionService()->compactionBlockedNotice(
+                    $msg->blockedBy,
+                    $msg->parkedSubmission !== null,
+                )),
+            ],
+            'pendingCompactionId' => null,
+        ];
 
         // The '/compact' line - or, on the parked route, the user's prompt - is
         // already in the transcript from the scheduling pass, so this must not
         // append a second one.
         if ($msg->parkedSubmission === null) {
-            return [$this->mutate($this->compactionChanges('', $this->history, $msg->summaries, $prefix)), null];
+            return [$this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $msg->summaries, $prefix)), null];
         }
 
-        $compacted = $this->mutate($this->compactionChanges('', $this->history, $msg->summaries, $prefix, true));
+        $compacted = $this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $msg->summaries, $prefix, true));
 
         // Hoisted above every judgement below because the breaker's measurement and
         // the 95% tier must read the SAME post-compaction state, or the two would

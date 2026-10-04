@@ -319,6 +319,32 @@ final class HookManager
     }
 
     /**
+     * Pre-compaction hook execution (roadmap 2.12).
+     *
+     * Context smuggling follows {@see self::sessionStart()}: `toolName` is the
+     * `'PreCompact'` sentinel the matcher tests, `toolInput` is JSON
+     * `{"trigger": "manual"|"auto", "custom_instructions": "<the /compact focus>"}`
+     * (Claude Code's field names), `model`/`provider` are empty. A verdict that
+     * does not permit is the caller's cue to SKIP the compaction; the verdict is
+     * passed through verbatim, as every turn event's is.
+     */
+    public function preCompact(HookContext $context): HookResult
+    {
+        return $this->registry->executeHooks(HookEvent::PreCompact->value, $context);
+    }
+
+    /**
+     * Post-compaction hook execution (roadmap 2.12): `toolInput` is JSON
+     * `{"trigger": …, "compact_summary": "<the state summary the model now reads>"}`.
+     * Observe-only — the compaction has already been applied, so the caller
+     * reports a refusal and changes nothing.
+     */
+    public function postCompact(HookContext $context): HookResult
+    {
+        return $this->registry->executeHooks(HookEvent::PostCompact->value, $context);
+    }
+
+    /**
      * True when at least one enabled hook that would run for $event against
      * $matchSubject executes OUT OF PROCESS ({@see BoundedHookInterface}, i.e. a
      * {@see ScriptHook}) — the hooks whose run is a blocking `proc_open()` drain
@@ -346,6 +372,19 @@ final class HookManager
         }
 
         return false;
+    }
+
+    /**
+     * True when at least one enabled hook would run for $event against
+     * $matchSubject — the same {@see HookRegistry::findMatches()} selection
+     * {@see runsOutOfProcess()} reads. A caller that must take a slower route
+     * only when something is actually wired ({@see \SugarCraft\Crush\Chat}'s
+     * compaction gate, roadmap 2.12) asks this first, so an unhooked session's
+     * path is unchanged.
+     */
+    public function hasHooksFor(HookEvent $event, string $matchSubject): bool
+    {
+        return $this->registry->findMatches($event->value, $matchSubject) !== [];
     }
 
     /**

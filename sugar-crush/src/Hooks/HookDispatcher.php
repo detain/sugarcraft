@@ -493,7 +493,7 @@ final class HookDispatcher
      * - discardsOnBlock() (UserPromptSubmit): the prompt is discarded
      *   entirely — nothing, not even the hook's message, survives to reach
      *   the agent. The block still happens; the message is wiped.
-     * - stderrToUserOnly() (PreCompact/SessionStart): there's no agent turn
+     * - stderrToUserOnly() (PreCompact/PostCompact/SessionStart): there's no agent turn
      *   to hand the message to at these lifecycle points, so it can only
      *   ever reach the user. Tagged with self::STDERR_ONLY_PREFIX — the one
      *   runtime-visible signal (short of a dedicated HookDispatchResult
@@ -567,6 +567,11 @@ final class HookDispatcher
     public function dispatchPreCompact(HookContext $context): HookDispatchResult
     {
         return $this->dispatch(HookEvent::PreCompact, $context);
+    }
+
+    public function dispatchPostCompact(HookContext $context): HookDispatchResult
+    {
+        return $this->dispatch(HookEvent::PostCompact, $context);
     }
 
     public function dispatchTeammateIdle(HookContext $context): HookDispatchResult
