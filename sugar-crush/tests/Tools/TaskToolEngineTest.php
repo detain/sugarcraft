@@ -78,18 +78,25 @@ final class TaskToolEngineTest extends TestCase
         $this->assertContains('tool', array_column(self::turns($provider->requests[1]), 0), 'the tool result was fed back');
     }
 
-    public function testTheSubAgentNeverInheritsTheTaskToolItself(): void
+    /**
+     * Roadmap 4.7-3: the sub-agent inherits Task one level down — this used
+     * to pin "minus Task", when delegation was one level deep — and under a
+     * depth cap of 1 it does not.
+     */
+    public function testTheSubAgentInheritsTaskBelowTheDepthCapAndNotAtIt(): void
     {
-        $probe = self::probe('probe');
-        $provider = new ScriptedProvider([new CompleteResponse(content: 'nothing to delegate')]);
-        // No registry: the preset's grant resolves to "no narrowing", so the
-        // sub-agent inherits the engine's own tools — minus Task.
-        $manager = self::manager([], RosterAgent::named('coder'));
-        $engine = EngineBackend::new($provider, 'm')->withTools([$probe, new TaskTool($manager)]);
+        foreach ([TaskTool::MAX_DELEGATION_DEPTH => ['probe', 'Task'], 1 => ['probe']] as $maxDepth => $expected) {
+            $probe = self::probe('probe');
+            $provider = new ScriptedProvider([new CompleteResponse(content: 'nothing to delegate')]);
+            // No registry: the preset's grant resolves to "no narrowing", so
+            // the sub-agent inherits the engine's own tools.
+            $manager = self::manager([], RosterAgent::named('coder'));
+            $engine = EngineBackend::new($provider, 'm')->withTools([$probe, new TaskTool($manager)]);
 
-        (new TaskTool($manager))->withEngine($engine)->execute(self::call());
+            (new TaskTool($manager))->withDelegationLimits($maxDepth, 8)->withEngine($engine)->execute(self::call());
 
-        $this->assertSame(['probe'], self::toolNames($provider->requests[0]));
+            $this->assertSame($expected, self::toolNames($provider->requests[0]), "depth cap {$maxDepth}");
+        }
     }
 
     public function testASubAgentThatEndsWithoutAReportIsRefusedNamingTheStepCap(): void
@@ -180,7 +187,7 @@ final class TaskToolEngineTest extends TestCase
 
         $this->assertSame('all done', $reply->content);
         $this->assertCount(3, $provider->requests);
-        $this->assertSame([], self::toolNames($provider->requests[1]), 'the sub-agent was not handed Task');
+        $this->assertSame(['Task'], self::toolNames($provider->requests[1]), 'the sub-agent was handed Task one level down (4.7-3)');
         $toolTurns = array_values(array_filter(
             self::turns($provider->requests[2]),
             static fn (array $turn): bool => $turn[0] === 'tool',

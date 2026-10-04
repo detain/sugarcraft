@@ -322,7 +322,12 @@ one":
   it hands a bounded task to a sub-agent named from the session's agent
   roster and returns that worker's final text. With no session
   `AgentManager` bound it refuses rather than fabricating, and a call can
-  never widen what the named agent declared.
+  never widen what the named agent declared. A sub-agent with no `tools:`
+  list inherits `Task` and can delegate in turn, down to three levels below
+  the session's agent (`TaskTool::MAX_DELEGATION_DEPTH`); one session runs at
+  most eight delegated runs at once across every level and process
+  (`TaskTool::MAX_CONCURRENT_AGENTS`), and the call past that is refused, not
+  queued.
 - **`/agents` is inspect-only.** `AgentsCommand::execute()` lists the agents
   currently *working* (normally none) and, with a name, shows one agent's
   details. It does not start anything.

@@ -578,7 +578,11 @@ final class BackgroundSessionRunner
             ));
         }
 
-        $tool = (new \SugarCraft\Crush\Tools\BuiltIn\TaskTool($agents))->withEngine($backend);
+        // Its seat (roadmap 4.7-3) is counted against the session that
+        // started it, not against this daemon's own id.
+        $tool = (new \SugarCraft\Crush\Tools\BuiltIn\TaskTool($agents))
+            ->withEngine($backend)
+            ->withDelegationScope($this->delegation['scope'] ?? null);
         $result = $tool->execute(\array_filter([
             'id' => 'bg_' . $this->sessionId,
             'agent' => $agentName,

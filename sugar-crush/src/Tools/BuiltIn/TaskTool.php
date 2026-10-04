@@ -99,8 +99,20 @@ use SugarCraft\Crush\Usage;
  * the turn that called it, with the tool list narrowed to the preset's grant
  * ({@see AgentManager::grantedToolsFor()}), its prompt and skills as a system
  * turn ({@see AgentManager::systemPromptFor()}), and `maxTurns` as the step
- * cap. `Task` itself is withheld from the sub-agent, so delegation is one
- * level deep. The pool path stays as the unbound fallback.
+ * cap. The pool path stays as the unbound fallback.
+ *
+ * DELEGATION NESTS, TO A FIXED DEPTH AND A FIXED WIDTH (roadmap 4.7-3). A
+ * sub-agent that inherits the whole tool set keeps `Task`, so it can delegate
+ * in turn — down to {@see MAX_DELEGATION_DEPTH} levels below the session's own
+ * agent (Claude Code's default of 3); the agent at the last level gets no
+ * `Task` at all, as Zed and OpenClaw withhold their spawn tool from leaves.
+ * Across every level, every parallel member and every background agent, one
+ * session runs at most {@see MAX_CONCURRENT_AGENTS} delegated runs at once
+ * (OpenClaw's 8) — a seat in {@see \SugarCraft\Crush\Agents\DelegationSlots}
+ * held for the run's life — and a run that finds none free is refused, never
+ * queued, since a parent waiting on its children already holds a seat. A
+ * nested run's frames reach the Agents pane through the delegating run's own
+ * emitter and name it as their parent.
  *
  * THE PROVIDER IS THE SESSION'S; THE MODEL AND EFFORT ARE THE AGENT'S
  * (roadmap 4.1-1). The sub-agent talks to whatever provider the calling turn
@@ -232,6 +244,19 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     public const ELLIPSIS_BYTES = 3;
 
     /**
+     * The deepest a delegated run may be (roadmap 4.7-3): the session's agent
+     * is level 0, its sub-agents level 1, theirs level 2, and a level-3 run
+     * gets no `Task`. Claude Code's default; OpenClaw allows 5.
+     */
+    public const MAX_DELEGATION_DEPTH = 3;
+
+    /**
+     * Delegated runs one session may have going at once, every level, member
+     * and background agent counted (roadmap 4.7-3) — OpenClaw's 8.
+     */
+    public const MAX_CONCURRENT_AGENTS = \SugarCraft\Crush\Agents\DelegationSlots::DEFAULT_MAX_CONCURRENT;
+
+    /**
      * @param \Closure(): void|null $heartbeat see {@see DelegatesToEngine}
      * @param \Closure(SubAgentActivity): void|null $subAgentEmitter see {@see DelegatesToEngine}
      * @param SuspendedDelegations|null $suspended where resumable runs are kept;
@@ -248,6 +273,16 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      *        {@see withBackgroundSupervisor()}); null runs every call in the
      *        foreground
      * @param string $backgroundDirectory the project a background run works in
+     * @param int $delegationDepth how deep the agent CALLING this tool runs:
+     *        0 for the session's own agent, 1 for a sub-agent it delegated to
+     *        (roadmap 4.7-3, {@see nestedFor()})
+     * @param int $maxDelegationDepth the deepest level a delegated run may be
+     * @param int $maxConcurrentAgents the session's seats ({@see \SugarCraft\Crush\Agents\DelegationSlots})
+     * @param string|null $parentAgentId the delegating run's id, when nested
+     * @param string|null $delegationScope the session the seats are counted
+     *        for; null is the engine's session id
+     * @param string|null $slotRoot where the seat files live; null is the
+     *        system temp dir (a test seam)
      */
     public function __construct(
         private ?AgentManager $agentManager = null,
@@ -261,6 +296,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         private ?string $transcriptRoot = null,
         private ?\SugarCraft\Crush\Sessions\BackgroundSupervisor $backgroundSupervisor = null,
         private string $backgroundDirectory = '',
+        private int $delegationDepth = 0,
+        private int $maxDelegationDepth = self::MAX_DELEGATION_DEPTH,
+        private int $maxConcurrentAgents = self::MAX_CONCURRENT_AGENTS,
+        private ?string $parentAgentId = null,
+        private ?string $delegationScope = null,
+        private ?string $slotRoot = null,
     ) {}
 
     /**
@@ -303,6 +344,66 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     public function backgroundSupervisor(): ?\SugarCraft\Crush\Sessions\BackgroundSupervisor
     {
         return $this->backgroundSupervisor;
+    }
+
+    /**
+     * The same tool under other nesting caps (roadmap 4.7-3): delegated runs
+     * at most $maxDepth levels deep, at most $maxConcurrent of them at once in
+     * the session. The settings rows that set them are N-P4f's.
+     *
+     * @throws \InvalidArgumentException for a cap below 1
+     */
+    public function withDelegationLimits(int $maxDepth, int $maxConcurrent): self
+    {
+        if ($maxDepth < 1 || $maxConcurrent < 1) {
+            throw new \InvalidArgumentException('Delegation caps must be at least 1.');
+        }
+
+        return $this->mutate(['maxDelegationDepth' => $maxDepth, 'maxConcurrentAgents' => $maxConcurrent]);
+    }
+
+    /**
+     * The same tool, counting its seats for $scope instead of the engine's
+     * session — what a background daemon passes, so its agent counts against
+     * the session that started it rather than against itself.
+     */
+    public function withDelegationScope(?string $scope): self
+    {
+        return $this->mutate(['delegationScope' => $scope === '' ? null : $scope]);
+    }
+
+    /** The same tool, keeping its seat files below $root (a test seam). */
+    public function withDelegationSlotRoot(string $root): self
+    {
+        return $this->mutate(['slotRoot' => $root]);
+    }
+
+    /** How deep the agent calling this tool runs: 0 for the session's own. */
+    public function delegationDepth(): int
+    {
+        return $this->delegationDepth;
+    }
+
+    /**
+     * The copy a delegated run at $depth is handed, so it can delegate one
+     * level further: its frames go out through $emitter (the delegating run's,
+     * which reaches the parent from any process the run is in) naming
+     * $parentAgentId, and its seats are counted in $scope. Never backgrounds:
+     * a background agent is announced into the session's conversation, which
+     * a nested run is not having.
+     *
+     * @param \Closure(SubAgentActivity): void $emitter
+     */
+    public function nestedFor(int $depth, string $parentAgentId, \Closure $emitter, ?string $scope): self
+    {
+        return $this->mutate([
+            'delegationDepth' => $depth,
+            'parentAgentId' => $parentAgentId,
+            'subAgentEmitter' => $emitter,
+            'delegationScope' => $scope,
+            'backgroundSupervisor' => null,
+            'siblingSpend' => null,
+        ]);
     }
 
     public function withEngine(
@@ -597,7 +698,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             ? $args['background']
             : ($this->agentManager->get($agentName)?->background ?? false);
         if ($wantsBackground) {
-            if ($this->backgroundSupervisor !== null && $this->engine !== null) {
+            if ($this->backgroundSupervisor !== null && $this->engine !== null && $this->delegationDepth === 0) {
                 return $this->startInBackground($toolCallId, $agentName, $prompt, $args, $resumeId, $startedAt);
             }
             $backgroundNote = '[background was requested, but this launch cannot start background sessions,'
@@ -731,7 +832,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             'model' => is_string($args['model'] ?? null) ? trim($args['model']) : '',
             'resume' => $resumeId,
             'permissionMode' => $engine->permissionGate()?->mode()->value ?? '',
-            'scope' => $engine->sessionId() ?? '',
+            'scope' => $this->delegationScope ?? $engine->sessionId() ?? '',
         ], static fn (string $value): bool => $value !== '');
 
         try {
@@ -831,10 +932,46 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             return $this->refusal($toolCallId, $refusal->getMessage());
         }
 
-        $tools = array_values(array_filter(
-            $granted ?? $engine->tools(),
-            static fn (Tool $tool): bool => !$tool instanceof DelegatesToEngine,
-        ));
+        // Roadmap 4.7-3: one seat of the session's concurrent-run cap, held
+        // for as long as this method runs — every return below, and a throw,
+        // gives it back. Refused, not queued: see DelegationSlots.
+        // A run with no session (an embedder's engine) has nothing to count
+        // seats against, and is held to the per-batch cap alone. $seat is
+        // never read again: it is a local so that it lives exactly as long
+        // as this call.
+        $scope = $this->delegationScope ?? $engine->sessionId();
+        $seat = $scope === null ? null : \SugarCraft\Crush\Agents\DelegationSlots::acquire($scope, $this->maxConcurrentAgents, $this->slotRoot);
+        if ($seat === false) {
+            $why = sprintf(
+                '%d sub-agents are already running in this session, which is its limit (background agents and'
+                . ' nested delegations count). Do not retry this call right away: do the work yourself, or wait'
+                . ' until a running sub-agent reports',
+                $this->maxConcurrentAgents,
+            );
+            $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $why);
+
+            return $this->refusal($toolCallId, $why);
+        }
+
+        // Roadmap 4.7-3: the run delegates in turn while it is above the
+        // depth cap — the session's Task, handed down one level deeper, its
+        // frames riding THIS run's emitter (the one that reaches the parent
+        // from whatever process this runs in) and its seats counted in the
+        // same session. Every other engine-bound tool stays withheld, and at
+        // the cap Task goes too.
+        $childDepth = $this->delegationDepth + 1;
+        $nestedEmitter = $this->subAgentEmitter ?? static function (SubAgentActivity $activity): void {
+        };
+        $tools = [];
+        foreach ($granted ?? $engine->tools() as $tool) {
+            if (!$tool instanceof DelegatesToEngine) {
+                $tools[] = $tool;
+            } elseif ($tool instanceof self && $childDepth < $this->maxDelegationDepth) {
+                $tools[] = $tool->nestedFor($childDepth, $subAgent->id, $nestedEmitter, $scope)
+                    ->withDelegationLimits($this->maxDelegationDepth, $this->maxConcurrentAgents)
+                    ->mutate(['slotRoot' => $this->slotRoot]);
+            }
+        }
         $maxTurns = max(1, $subAgent->agent->maxTurns ?? self::DEFAULT_MAX_TURNS);
 
         // The roster above is narrowed by tool NAME only, so `Bash(git *)`
@@ -1015,8 +1152,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // One v2 frame. Its items get whatever byte budget the rest of the
         // frame leaves under SubAgentActivityBuffer::MAX_BYTES; the v1 fields
         // (tail, recent calls) keep their own bounds.
+        $parentAgentId = $this->parentAgentId;
         $frame = static function (string $op, array $extra = []) use (
-            $subAgent, $agentName, $toolCallId, $description, $buffer, &$seq, &$lines, &$stats, $logPath, $parentSessionId,
+            $subAgent, $agentName, $toolCallId, $description, $buffer, &$seq, &$lines, &$stats, $logPath, $parentSessionId, $parentAgentId,
         ): SubAgentActivity {
             // P-C1: the log and the parent session ride the two frames that
             // bracket the run, not every progress beat.
@@ -1036,6 +1174,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $subAgent->contextTokens,
                 $op === SubAgentActivity::OP_STARTED ? [] : $subAgent->recentCalls,
                 parentCallId: $toolCallId,
+                parentAgentId: $parentAgentId,
                 description: $description,
                 items: $items,
                 stats: $stats,

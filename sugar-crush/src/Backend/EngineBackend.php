@@ -2666,7 +2666,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * and the events it is rare enough to be worth every one. It exists
      * because the delegated run happens inside THIS process when the turn
      * itself was forked — without a wire back, the parent's AgentManager never
-     * learns a sub-agent exists ({@see SubAgentActivity}).
+     * learns a sub-agent exists ({@see SubAgentActivity}). A NESTED `Task`
+     * (roadmap 4.7-3) keeps the emitter it was handed instead: the
+     * delegating run's, which is the one that reaches the parent.
      *
      * The bound engine carries `$spentSoFarUsd` as its {@see $turnSpendProbe},
      * so the delegated run's spend cap starts from what this turn has really
@@ -2764,7 +2766,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             $bound ??= $spentSoFarUsd === null
                 ? $this->mutate(['siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null])
                 : $this->mutate(['turnSpendProbe' => $spentSoFarUsd, 'siblingSpend' => null, 'contextLedger' => null, 'turnInbox' => null]);
-            $tools[] = $tool->withEngine($bound, $heartbeat, $subAgentEmitter);
+            // Roadmap 4.7-3: a nested `Task` (one a delegated run handed its
+            // sub-agent) arrives already carrying the emitter that reaches
+            // the parent — the delegating run's. It keeps it: this turn's
+            // $onEvent is that run's own tool-event callback, which neither
+            // takes a SubAgentActivity nor could carry one anywhere.
+            $emitter = $tool instanceof \SugarCraft\Crush\Tools\BuiltIn\TaskTool && $tool->delegationDepth() > 0
+                ? $tool->subAgentEmitter()
+                : $subAgentEmitter;
+            $tools[] = $tool->withEngine($bound, $heartbeat, $emitter);
         }
 
         return $tools;

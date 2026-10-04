@@ -1401,6 +1401,16 @@ an `<active-subagents>` row, so it never has to poll. The session runs under the
 stricter of its own launch's permission mode and the session's that started it,
 and a call that would ask is refused, since nobody is there to answer.
 
+**Delegation nests, within caps.** A sub-agent whose preset lists no `tools:`
+inherits `Task` too, so it can delegate in turn — up to three levels below your
+own agent; the agent at the third level gets no `Task`. A nested run reports to
+the Agents pane like any other, naming the run that delegated it as its parent. A
+session runs at most eight delegated runs at once, every level, parallel member
+and background agent counted; the call past that is refused at once with a
+reason the model reads ("do not retry this call right away"), never queued,
+because a parent waiting on its children already holds a seat. (The per-batch
+`◌ queued:` cap above still applies inside one message.)
+
 **Agent View.** A click on a live line (or `Enter` on the agents strip, or on
 the agent dashboard's peek) swaps the transcript area for **that agent's own
 transcript** — its task, every tool call with its result, its thoughts and its
