@@ -10,7 +10,9 @@ use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Session\DebouncedTranscriptWriter;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionLock;
+use SugarCraft\Crush\Session\SessionMeta;
 use SugarCraft\Crush\Session\SessionStore;
+use SugarCraft\Crush\Todo\TodoList;
 use SugarCraft\Crush\ToolResult;
 
 /**
@@ -45,6 +47,11 @@ use SugarCraft\Crush\ToolResult;
  * {@see loadLedger()} / {@see saveLedger()}): what the session's turns have
  * pruned out of the model's view belongs to the session, and is forked,
  * checkpointed and deleted with it.
+ *
+ * THE TODO LIST rides there too (roadmap 3.C, {@see loadTodos()} /
+ * {@see saveTodos()}), in the session metadata row's `tasks` slot that had
+ * been written by nothing until it: the agent's checklist is session state,
+ * and it must outlive the compaction that summarises the call which wrote it.
  *
  * A store that is not an {@see EnhancedSessionStore} (or none) persists
  * nothing and loads nothing, the way Chat always degraded.
@@ -206,6 +213,50 @@ final class TranscriptStore
 
         try {
             return $this->store->saveContextLedger($sessionId, $ledger);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * $sessionId's saved todo list (roadmap 3.C), read from
+     * {@see SessionMeta::$tasks}, or null when the session has no metadata
+     * row, the store cannot say, or nothing persists.
+     */
+    public function loadTodos(string $sessionId): ?TodoList
+    {
+        if ($this->store === null) {
+            return null;
+        }
+
+        try {
+            $meta = $this->store->getSessionMeta($sessionId);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $meta === null ? null : TodoList::fromArray($meta->tasks);
+    }
+
+    /**
+     * Save $todos as $sessionId's todo list, now — into the metadata row's
+     * `tasks` slot, keeping the row's other fields. False when nothing
+     * persists or the store refused it; never thrown, for the reason
+     * {@see saveLedger()} gives: a turn is never failed over its checklist.
+     */
+    public function saveTodos(string $sessionId, TodoList $todos): bool
+    {
+        if ($this->store === null) {
+            return false;
+        }
+
+        try {
+            $meta = $this->store->getSessionMeta($sessionId) ?? SessionMeta::new($sessionId);
+            $this->store->saveSessionMeta(
+                $meta->withTasks($todos->toArray())->withLastActivity(new \DateTimeImmutable()),
+            );
+
+            return true;
         } catch (\Throwable) {
             return false;
         }

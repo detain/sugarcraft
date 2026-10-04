@@ -97,6 +97,7 @@ final class MenuBar
         Pane::Skills,
         Pane::Agents,
         Pane::Settings,
+        Pane::Todo,
     ];
 
     private static int $activeMenu = 0;

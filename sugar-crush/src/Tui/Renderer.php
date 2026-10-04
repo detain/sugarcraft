@@ -24,6 +24,7 @@ use SugarCraft\Crush\Tui\Components\AgentSplitColumn;
 use SugarCraft\Crush\Tui\Components\AgentsPane;
 use SugarCraft\Crush\Tui\Components\FilesPane;
 use SugarCraft\Crush\Tui\Components\SettingsPane;
+use SugarCraft\Crush\Tui\Components\TodoPane;
 use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Chat;
@@ -1650,7 +1651,7 @@ final class Renderer
     }
 
     /**
-     * Paint one sidebar pane at the given box size. The five component
+     * Paint one sidebar pane at the given box size. The six component
      * renderers share this signature; anything else has no sidebar form and
      * paints nothing.
      */
@@ -1664,6 +1665,7 @@ final class Renderer
             Pane::Skills => SkillsPane::render($a, $width, $rows),
             Pane::Settings => SettingsPane::render($a, $width, $rows),
             Pane::Agents => self::keyed($pane, AgentsPane::layout($a, $width, $rows)),
+            Pane::Todo => TodoPane::render($a, $width, $rows),
             default => '',
         };
     }

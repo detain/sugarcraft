@@ -3889,8 +3889,10 @@ DOC;
         // model composes is not safe to run unasked, so the gate no longer
         // lists it. (`src/Runtime.php`'s census paragraph still names three;
         // it is wave-7-locked, so the integrator owns that one-word edit.)
+        // `Todo` (roadmap 3.C) is here for `Memory`'s reason: the gate
+        // classes it no-ask, not read, because it writes harness state.
         $this->assertSame(
-            ['Memory', 'Prune', 'Skill', 'WebFetch', 'WebSearch', 'doctor'],
+            ['Memory', 'Prune', 'Skill', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
@@ -4084,8 +4086,10 @@ DOC;
         // 5.5-4) likewise: its one write is the tag cache under the home
         // directory, made by TagCache, never a file in the checkout. `Prune`
         // (roadmap 3.B-3) changes only the turn's context ledger — what the
-        // model is sent, never a byte on disk.
-        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune'];
+        // model is sent, never a byte on disk. `Todo` (roadmap 3.C) writes
+        // nothing at all: it returns the rendered list, and the parent saves
+        // it to the session's metadata row.
+        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo'];
     }
 
     /**

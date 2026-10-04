@@ -82,7 +82,7 @@ final class MenuBarMouseTest extends TestCase
     public function testTheComposedFrameCarriesNoZoneSentinels(): void
     {
         MenuBar::openMenu(1);
-        $frame = TuiRenderer::renderView($this->app(), 100, 30)->body;
+        $frame = TuiRenderer::renderView($this->app(), 120, 30)->body;
 
         self::assertStringNotContainsString(Sentinel::OPEN, $frame);
         self::assertStringNotContainsString(Sentinel::CLOSE, $frame);
@@ -99,7 +99,7 @@ final class MenuBarMouseTest extends TestCase
      */
     public function testTheMenuTitleZoneCoversTheCellsTheTitleIsPaintedAt(): void
     {
-        $frame = TuiRenderer::renderView($this->app(), 100, 30)->body;
+        $frame = TuiRenderer::renderView($this->app(), 120, 30)->body;
 
         [$col, $row] = $this->locate($frame, $this->menuName(1));
         $zone = TuiRenderer::chromeScanner()->get(MenuBar::MENU_TITLE_ZONE_PREFIX . '1');
@@ -143,8 +143,9 @@ final class MenuBarMouseTest extends TestCase
     public function testAClickWhereAMenuTitleIsPaintedOpensThatMenu(): void
     {
         $app = $this->app();
-        // 120 columns: the icons widened the tab strip, and at 100 the
-        // second menu name is already beyond the budget — see the pin above.
+        // 120 columns, like every frame in this file: the icons widened the
+        // tab strip, and since the Todo tab joined it (roadmap 3.C) a 100-column
+        // bar has no room left for even the first menu name.
         $frame = TuiRenderer::renderView($app, 120, 30)->body;
         [$col, $row] = $this->locate($frame, $this->menuName(2));
 
@@ -157,13 +158,13 @@ final class MenuBarMouseTest extends TestCase
     public function testClickingTheOpenMenusTitleAgainClosesIt(): void
     {
         $app = $this->app();
-        $frame = TuiRenderer::renderView($app, 100, 30)->body;
+        $frame = TuiRenderer::renderView($app, 120, 30)->body;
         [$col, $row] = $this->locate($frame, $this->menuName(1));
 
         [$app] = $this->click($app, $col, $row);
         self::assertSame(1, MenuBar::getActiveMenu());
 
-        TuiRenderer::renderView($app, 100, 30);
+        TuiRenderer::renderView($app, 120, 30);
         $this->click($app, $col, $row);
 
         self::assertSame(0, MenuBar::getActiveMenu());
@@ -177,7 +178,7 @@ final class MenuBarMouseTest extends TestCase
     public function testAPressOnATitleReleasedElsewhereOpensNothing(): void
     {
         $app = $this->app();
-        $frame = TuiRenderer::renderView($app, 100, 30)->body;
+        $frame = TuiRenderer::renderView($app, 120, 30)->body;
         [$col, $row] = $this->locate($frame, $this->menuName(1));
 
         [$app] = $app->update(new MouseClickMsg($col, $row, MouseButton::Left, MouseAction::Press));
@@ -192,11 +193,11 @@ final class MenuBarMouseTest extends TestCase
 
     public function testDropdownRowZonesExistOnlyWhileAMenuIsOpen(): void
     {
-        TuiRenderer::renderView($this->app(), 100, 30);
+        TuiRenderer::renderView($this->app(), 120, 30);
         self::assertSame([], TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_ITEM_ZONE_PREFIX));
 
         MenuBar::openMenu(1);
-        TuiRenderer::renderView($this->app(), 100, 30);
+        TuiRenderer::renderView($this->app(), 120, 30);
 
         self::assertNotSame([], TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_ITEM_ZONE_PREFIX));
     }
@@ -204,7 +205,7 @@ final class MenuBarMouseTest extends TestCase
     public function testTheDropdownRowZoneCoversTheCellsItsLabelIsPaintedAt(): void
     {
         MenuBar::openMenu(1);
-        $frame = TuiRenderer::renderView($this->app(), 100, 30)->body;
+        $frame = TuiRenderer::renderView($this->app(), 120, 30)->body;
 
         $label = MenuBar::getMenuItems($this->menuName(1))[1];
         [$col, $row] = $this->locate($frame, $label);
@@ -227,7 +228,7 @@ final class MenuBarMouseTest extends TestCase
     {
         $app = $this->app();
         MenuBar::openMenu(1);
-        $frame = TuiRenderer::renderView($app, 100, 30)->body;
+        $frame = TuiRenderer::renderView($app, 120, 30)->body;
 
         [$col, $row] = $this->locate($frame, MenuBar::getMenuItems($this->menuName(1))[1]);
         [$app] = $this->click($app, $col, $row);
@@ -272,7 +273,7 @@ final class MenuBarMouseTest extends TestCase
     public function testAClickOnTheTranscriptStillReachesTheHostedChat(): void
     {
         $app = $this->app($this->chatWithTool());
-        $frame = TuiRenderer::renderView($app, 100, 30)->body;
+        $frame = TuiRenderer::renderView($app, 120, 30)->body;
         [$col, $row] = $this->locate($frame, 'tool: bash');
 
         [$app] = $this->click($app, $col, $row);
@@ -284,7 +285,7 @@ final class MenuBarMouseTest extends TestCase
 
     public function testDisablingClicksSuppressesTheChromeHitTest(): void
     {
-        $frame = TuiRenderer::renderView($this->app(), 100, 30)->body;
+        $frame = TuiRenderer::renderView($this->app(), 120, 30)->body;
         [$col, $row] = $this->locate($frame, $this->menuName(1));
 
         self::assertNotNull(TuiRenderer::chromeZoneAt($col, $row));
@@ -301,7 +302,7 @@ final class MenuBarMouseTest extends TestCase
     public function testTheAgentDashboardFrameStillRecordsTheMenuTitles(): void
     {
         $app = $this->app()->withPane(Pane::Agents);
-        $frame = TuiRenderer::renderView($app, 100, 30)->body;
+        $frame = TuiRenderer::renderView($app, 120, 30)->body;
 
         [$col, $row] = $this->locate($frame, $this->menuName(1));
         $zone = TuiRenderer::chromeZoneAt($col, $row);
@@ -317,10 +318,10 @@ final class MenuBarMouseTest extends TestCase
      */
     public function testAFrameThatClipsTheBarOffTheTopRecordsNoChromeZones(): void
     {
-        TuiRenderer::renderView($this->app(), 100, 30);
+        TuiRenderer::renderView($this->app(), 120, 30);
         self::assertNotSame([], TuiRenderer::chromeScanner()->all());
 
-        TuiRenderer::renderView($this->app(), 100, 3);
+        TuiRenderer::renderView($this->app(), 120, 3);
 
         self::assertSame([], TuiRenderer::chromeScanner()->all());
     }

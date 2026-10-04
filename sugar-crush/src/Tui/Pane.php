@@ -23,13 +23,14 @@ enum Pane: string
     case Files = 'files';
     case Tools = 'tools';
     case Settings = 'settings';
+    case Todo = 'todo';
     case Help = 'help';
     case Menu = 'menu';
 
     /**
      * The panes Tab walks, in display order — the ring, and only the ring.
      *
-     * This is SIX of the nine cases, and the three that are missing are
+     * This is SEVEN of the ten cases, and the three that are missing are
      * missing for a reason the history below records. Kept public so the
      * traversal order can be asserted against the tab strip that advertises
      * it; the two lists are declared separately (this one, and
@@ -47,6 +48,7 @@ enum Pane: string
             self::Skills,
             self::Agents,
             self::Settings,
+            self::Todo,
         ];
     }
 
@@ -57,7 +59,7 @@ enum Pane: string
      * traversal — including the wrap at both ends, which is the part a
      * hand-rolled `match` chain gets subtly wrong — is the library's problem
      * rather than this enum's. Built per call because a PHP enum may not hold
-     * state of any kind, static properties included; six ids is not worth a
+     * state of any kind, static properties included; seven ids is not worth a
      * cache.
      *
      * `ofStrict()` rather than `of()`: a duplicate id would silently shorten
@@ -74,7 +76,7 @@ enum Pane: string
     /**
      * Returns the next pane in the cycling order.
      *
-     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Chat.
+     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Todo → Chat.
      *
      * @see step() for the fold-back rule and the history behind it.
      */
@@ -86,7 +88,7 @@ enum Pane: string
     /**
      * Returns the previous pane in the cycling order — Shift+Tab.
      *
-     * Cycle: Chat → Settings → Agents → Skills → Tools → Files → Chat.
+     * Cycle: Chat → Todo → Settings → Agents → Skills → Tools → Files → Chat.
      *
      * Tab could only ever walk forward, so escaping a pane you overshot meant
      * five more presses. The reverse walk is {@see FocusRing::previous()}, so
@@ -121,7 +123,7 @@ enum Pane: string
      * the reason it was excluded no longer holds. Input, Help and Menu still
      * draw nothing, so they stay off the strip.
      *
-     * A six-id ring on its own expresses only "Input is not a member". It says
+     * A seven-id ring on its own expresses only "Input is not a member". It says
      * nothing about what Tab does while the user is somehow ON Input, and the
      * ring cannot be asked — `focus('input')` is a documented no-op for an
      * unregistered id, so handing it through unguarded would leave the ring
@@ -131,11 +133,11 @@ enum Pane: string
      * directions land on Chat.
      *
      * BOTH directions, symmetrically, and that is the decision worth naming.
-     * The alternative — Shift+Tab from Input landing on Settings, the member
+     * The alternative — Shift+Tab from Input landing on Todo, the member
      * before Chat — is defensible as "the exact inverse of next()", but the
      * inverse property is unavailable here whatever we choose: fold-back is not
      * injective (three panes map onto Chat), so `X->next()->previous() === X`
-     * cannot hold for them under any rule. It holds over the ring's six
+     * cannot hold for them under any rule. It holds over the ring's seven
      * members and only there, which is the domain the tests state it over.
      * Given that, the tie is broken by what fold-back is FOR: the user is
      * stranded on a pane that renders nothing and is pressing Tab to get out.
@@ -171,7 +173,7 @@ enum Pane: string
     {
         return match ($this) {
             self::Files, self::Tools => Side::Left,
-            self::Skills, self::Settings, self::Agents => Side::Right,
+            self::Skills, self::Settings, self::Agents, self::Todo => Side::Right,
             default => null,
         };
     }
@@ -227,6 +229,8 @@ enum Pane: string
             self::Agents => "\u{2756}",
             // ⚙ gear — the settings dials
             self::Settings => "\u{2699}",
+            // ☑ ballot box with check — the agent's checklist (roadmap 3.C)
+            self::Todo => "\u{2611}",
             self::Input, self::Help, self::Menu => '',
         };
     }
@@ -244,6 +248,7 @@ enum Pane: string
             self::Files => 'Files',
             self::Tools => 'Tools',
             self::Settings => 'Settings',
+            self::Todo => 'Todo',
             self::Help => 'Help',
             self::Menu => 'Menu',
         };

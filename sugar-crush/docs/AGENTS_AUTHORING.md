@@ -317,7 +317,7 @@ delegating model knows why the run covered more than it asked.
 Be precise about this, because "agent preset" reads like "the model can spawn
 one":
 
-- **`Task` delegates.** `Bootstrap::tools()` ships fifteen
+- **`Task` delegates.** `Bootstrap::tools()` ships sixteen
   built-in tools and one of them — `Task` — is exactly the delegation seam:
   it hands a bounded task to a sub-agent named from the session's agent
   roster and returns that worker's final text. With no session

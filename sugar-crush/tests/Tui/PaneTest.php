@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class PaneTest extends TestCase
 {
     /**
-     * @testdox All 8 enum cases exist and have correct string values
+     * @testdox All 10 enum cases exist and have correct string values
      */
     public function testEnumCasesExistWithCorrectStringValues(): void
     {
@@ -22,7 +22,10 @@ final class PaneTest extends TestCase
         $this->assertSame('files', Pane::Files->value);
         $this->assertSame('tools', Pane::Tools->value);
         $this->assertSame('settings', Pane::Settings->value);
+        $this->assertSame('todo', Pane::Todo->value);
         $this->assertSame('help', Pane::Help->value);
+        $this->assertSame('menu', Pane::Menu->value);
+        $this->assertCount(10, Pane::cases());
     }
 
     /**
@@ -37,12 +40,13 @@ final class PaneTest extends TestCase
         $this->assertSame('Files', Pane::Files->label());
         $this->assertSame('Tools', Pane::Tools->label());
         $this->assertSame('Settings', Pane::Settings->label());
+        $this->assertSame('Todo', Pane::Todo->label());
         $this->assertSame('Help', Pane::Help->label());
     }
 
     /**
      * @testdox next() cycles exactly the panes the tab strip advertises
-     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Chat
+     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Todo → Chat
      *
      * This once walked all eight cases, so Tab stopped on Input, Settings
      * and Help — none of which appeared in MenuBar::PANE_TABS and none of
@@ -57,7 +61,8 @@ final class PaneTest extends TestCase
         $this->assertSame(Pane::Skills, Pane::Tools->next());
         $this->assertSame(Pane::Agents, Pane::Skills->next());
         $this->assertSame(Pane::Settings, Pane::Agents->next());
-        $this->assertSame(Pane::Chat, Pane::Settings->next());
+        $this->assertSame(Pane::Todo, Pane::Settings->next());
+        $this->assertSame(Pane::Chat, Pane::Todo->next());
     }
 
     /** Panes outside the strip are not somewhere Tab can leave you. */
@@ -75,8 +80,8 @@ final class PaneTest extends TestCase
     {
         $pane = Pane::Chat;
 
-        // 6 transitions: one per advertised tab
-        for ($i = 0; $i < 6; $i++) {
+        // 7 transitions: one per advertised tab
+        for ($i = 0; $i < 7; $i++) {
             $pane = $pane->next();
         }
 
@@ -95,6 +100,7 @@ final class PaneTest extends TestCase
         $this->assertSame(Pane::Files, Pane::from('files'));
         $this->assertSame(Pane::Tools, Pane::from('tools'));
         $this->assertSame(Pane::Settings, Pane::from('settings'));
+        $this->assertSame(Pane::Todo, Pane::from('todo'));
         $this->assertSame(Pane::Help, Pane::from('help'));
     }
 
@@ -117,7 +123,7 @@ final class PaneTest extends TestCase
     }
 
     /**
-     * @testdox The six framed panes carry the adopted glyphs
+     * @testdox The seven framed panes carry the adopted glyphs
      *
      * The table IS the design record: swapping a glyph for a lookalike is a
      * visual change a reader of the frame cannot audit without this pin.
@@ -130,6 +136,7 @@ final class PaneTest extends TestCase
         $this->assertSame("\u{2726}", Pane::Skills->icon());
         $this->assertSame("\u{2756}", Pane::Agents->icon());
         $this->assertSame("\u{2699}", Pane::Settings->icon());
+        $this->assertSame("\u{2611}", Pane::Todo->icon());
     }
 
     /**
@@ -150,7 +157,7 @@ final class PaneTest extends TestCase
      * render Ambiguous wide even though mb_strwidth never counts it as 2.
      * The staleness arm at the bottom of
      * {@see self::testEveryFramedPaneIconIsWidthOneAndDistinct()} compares
-     * icon()'s codepoints against these keys, so adopting a 7th icon — or
+     * icon()'s codepoints against these keys, so adopting an 8th icon — or
      * respelling one — without adjudicating its property here first reddens
      * the suite.
      */
@@ -161,10 +168,11 @@ final class PaneTest extends TestCase
         "\u{2726}" => 'N', // Skills — BLACK FOUR POINTED STAR
         "\u{2756}" => 'N', // Agents — BLACK DIAMOND MINUS WHITE X
         "\u{2699}" => 'N', // Settings — GEAR
+        "\u{2611}" => 'N', // Todo — BALLOT BOX WITH CHECK (2610..2613 ; N, adjudicated 2026-10-04)
     ];
 
     /**
-     * @testdox Every framed-pane icon is one BMP codepoint of display width 1 under BOTH width oracles, and all six differ
+     * @testdox Every framed-pane icon is one BMP codepoint of display width 1 under BOTH width oracles, and all seven differ
      *
      * The width law from Pane::icon()'s contract, executed: a double-width
      * or combining picture in a border title pushes the closing corner off
@@ -178,7 +186,7 @@ final class PaneTest extends TestCase
     public function testEveryFramedPaneIconIsWidthOneAndDistinct(): void
     {
         $icons = [];
-        foreach ([Pane::Chat, Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Settings] as $pane) {
+        foreach ([Pane::Chat, Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Settings, Pane::Todo] as $pane) {
             $icon = $pane->icon();
             $this->assertNotSame('', $icon, $pane->name . ' lost its frame icon');
             $this->assertSame(1, mb_strlen($icon), $pane->name . "'s icon must be a single codepoint");
@@ -188,7 +196,7 @@ final class PaneTest extends TestCase
             $icons[$pane->name] = $icon;
         }
 
-        $this->assertCount(6, array_unique($icons), 'two framed panes advertise the same picture');
+        $this->assertCount(7, array_unique($icons), 'two framed panes advertise the same picture');
 
         $this->assertSame(
             array_keys(self::ICON_EAW_WHITELIST),

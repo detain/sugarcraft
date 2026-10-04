@@ -1330,8 +1330,8 @@ final class KeyboardHandlerTest extends TestCase
      * Domain, in three parts:
      *
      * 1. the 8 table rows below, one cold press each;
-     * 2. an exhaustive sweep of 2 menu states × 9 panes × 95 printable runes ×
-     *    Ctrl on/off = 3420 cold presses, with the panes at their DEFAULT
+     * 2. an exhaustive sweep of 2 menu states × 10 panes × 95 printable runes ×
+     *    Ctrl on/off = 3800 cold presses, with the panes at their DEFAULT
      *    sub-state (no skill-picker options, no agent selection);
      * 3. the same rune × Ctrl sweep across the 8 keyboard-owning sub-states of
      *    {@see keyboardOwningSubStates()} = 1520 more cold presses.
@@ -1397,7 +1397,7 @@ final class KeyboardHandlerTest extends TestCase
             $printable[] = chr($c);
         }
         $this->assertCount(95, $printable, 'fixture: the sweep width the docblock states');
-        $this->assertCount(9, Pane::cases(), 'fixture: the pane count the docblock states');
+        $this->assertCount(10, Pane::cases(), 'fixture: the pane count the docblock states');
 
         $presses = 0;
         $histogram = [0 => 0, 1 => 0, 2 => 0];
@@ -1427,9 +1427,9 @@ final class KeyboardHandlerTest extends TestCase
         }
 
         $this->resetMenuBarState();
-        $this->assertSame(3420, $presses, '2 menu states x 9 panes x 95 runes x ctrl on/off');
+        $this->assertSame(3800, $presses, '2 menu states x 10 panes x 95 runes x ctrl on/off');
         $this->assertSame(
-            [0 => 1710, 1 => 936, 2 => 774],
+            [0 => 1900, 1 => 1031, 2 => 869],
             $histogram,
             'the distribution the memo docblock states, over the sweep it names',
         );
@@ -1444,7 +1444,7 @@ final class KeyboardHandlerTest extends TestCase
         // 'q' or 'escape' closes that menu — measured, building once let the
         // first such rune turn the remaining presses into ordinary-pane presses
         // and pulled shellCtrlRunes() into the histogram, which is exactly the
-        // leak the 3420-press sweep above resets per press to avoid.
+        // leak the 3800-press sweep above resets per press to avoid.
         $subStates = $this->keyboardOwningSubStates();
         $this->assertCount(8, $subStates, 'fixture: the sub-state count the docblock states');
 

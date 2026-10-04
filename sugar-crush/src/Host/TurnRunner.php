@@ -24,6 +24,7 @@ use SugarCraft\Crush\Events\ReasoningDelta;
 use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Events\StepStarted;
 use SugarCraft\Crush\Events\SubAgentActivity;
+use SugarCraft\Crush\Events\TodoUpdated;
 use SugarCraft\Crush\Events\TokenDelta;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
@@ -31,6 +32,9 @@ use SugarCraft\Crush\Events\UsageUpdated;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\SessionPermissionMemo;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\Todo\TodoList;
+use SugarCraft\Crush\Todo\TodoReminder;
+use SugarCraft\Crush\Tools\BuiltIn\Todo;
 
 /**
  * Runs one backend dispatch of a session's turn and says what happened in it
@@ -80,6 +84,17 @@ use SugarCraft\Crush\Role;
  * engine dispatch and taken back from its reply. Before this every turn
  * started from an empty ledger.
  *
+ * THE SESSION'S TODO LIST (roadmap 3.C) is kept the same way
+ * ({@see todos()} / {@see saveTodos()}). A `Todo` call runs in the turn's
+ * forked child, so the runner reads the new list off the call's finished
+ * frame as the live events arrive ({@see observeTodo()}) — the dock pane
+ * shows it mid-turn — and saves it to the session's metadata. At dispatch it
+ * re-shows the list to the model when {@see TodoReminder::due()} says so
+ * (stale, or {@see TodoReminder::INTERVAL_STEPS} steps unseen), as a hidden
+ * row that rides the reply's turn transcript into the history, so the row is
+ * persisted where the model read it and the next request's prefix still hits
+ * the cache.
+ *
  * NEVER FATAL TO THE TURN. The log is a second audience: a write that fails
  * (a locked database, a payload JSON cannot carry) drops that event — it is
  * not broadcast either, the {@see EventLog} contract — and a listener that
@@ -110,6 +125,15 @@ final class TurnRunner
      * @var array<string, ContextLedger>
      */
     private array $ledgers = [];
+
+    /**
+     * The todo list of each session this runner heard of, keyed like
+     * {@see $ledgers} (roadmap 3.C) — what the dock pane reads without
+     * touching the store from `view()`.
+     *
+     * @var array<string, TodoList>
+     */
+    private array $todos = [];
 
     private int $nextListener = 0;
 
@@ -333,12 +357,32 @@ final class TurnRunner
                 );
             }
 
+            // Roadmap 3.C: the session's todo list, re-shown at the tail when
+            // the history no longer shows it current (compaction took the
+            // call that wrote it; it went stale) or the model has not seen it
+            // for INTERVAL_STEPS steps. Engine turns only: the tool is the
+            // engine's, and only an engine reply carries the turn transcript
+            // the row is persisted through (below).
+            $reminder = null;
+            if ($carriesLedger) {
+                $todos = $runner->todos($transcripts, $sessionId);
+                if (TodoReminder::due($todos, $history)) {
+                    $reminder = TodoReminder::row($todos);
+                    $visible[] = $reminder;
+                }
+            }
+
             // The permission events (1.C-2) share the inbox: a question has to
             // reach the screen in the turn's own event order, between the tool
             // events around it.
             $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|PermissionAsked|PermissionResolved $event) use ($inbox, $generation, $runner, $cancellation): void {
                 if ($event instanceof SpendCapBreached) {
                     $runner->markSpendCapped($cancellation);
+                }
+                // Roadmap 3.C: a `Todo` call's new list becomes the session's
+                // as its frame arrives, so the pane follows the turn live.
+                if ($event instanceof ToolFinished) {
+                    $runner->observeTodo($cancellation, $event);
                 }
                 $inbox[] = [$generation, $event];
             };
@@ -399,13 +443,23 @@ final class TurnRunner
                 return $events;
             };
 
-            $settle = static function (Message $message, bool $failed) use ($runner, $drain, $generation, $cancellation, $transcripts, $sessionId, $carriesLedger): Msg {
+            $settle = static function (Message $message, bool $failed) use ($runner, $drain, $generation, $cancellation, $transcripts, $sessionId, $carriesLedger, $reminder): Msg {
                 // Roadmap 2.2-2: the ledger the turn ended with becomes the
                 // session's, and leaves the reply — it is transport, and the
                 // reply goes on to be a stored row.
                 if ($carriesLedger && $message->contextLedger !== null) {
                     $runner->saveLedger($transcripts, $sessionId, $message->contextLedger);
                     $message = $message->withContextLedger(null);
+                }
+                // Roadmap 3.C: the todo reminder this dispatch sent goes into
+                // the history at the place the model read it — ahead of the
+                // turn's own rows — so it is a copy the next due() check sees
+                // and the next request's cached prefix. A tool-free answer
+                // may bring no transcript at all; it still carries its step
+                // id, which is what lets the fold keep it as the turn's reply.
+                // A failed turn has neither, and its next dispatch decides again.
+                if ($reminder !== null && !$failed && ($message->turnTranscript !== [] || $message->stepId !== null)) {
+                    $message = $message->withTurnTranscript([$reminder, ...$message->turnTranscript]);
                 }
                 $events = $drain();
                 if ($events === []) {
@@ -500,6 +554,73 @@ final class TurnRunner
         if ($sessionId !== null && $transcripts?->persists() === true) {
             $transcripts->saveLedger($sessionId, $ledger);
         }
+    }
+
+    // ── the session's todo list (roadmap 3.C) ───────────────────────────
+
+    /**
+     * $sessionId's todo list: the one this runner holds, else the one the
+     * store saved (then held), else an empty one. Held first because the
+     * runner is the list's only writer; read at dispatch, never from `view()`.
+     */
+    public function todos(?TranscriptStore $transcripts, ?string $sessionId): TodoList
+    {
+        $key = $sessionId ?? '';
+        if (isset($this->todos[$key])) {
+            return $this->todos[$key];
+        }
+        if ($sessionId !== null && $transcripts?->persists() === true) {
+            $stored = $transcripts->loadTodos($sessionId);
+            if ($stored !== null) {
+                return $this->todos[$key] = $stored;
+            }
+        }
+
+        return TodoList::new();
+    }
+
+    /**
+     * $sessionId's todo list as this runner holds it, or null when it holds
+     * none — the store is never read, so the dock pane can call it per frame.
+     */
+    public function heldTodos(?string $sessionId): ?TodoList
+    {
+        return $this->todos[$sessionId ?? ''] ?? null;
+    }
+
+    /**
+     * Keep $todos as $sessionId's: in this runner, and in the store's session
+     * metadata when $transcripts persists. The one writer of the list.
+     */
+    public function saveTodos(?TranscriptStore $transcripts, ?string $sessionId, TodoList $todos): void
+    {
+        $this->todos[$sessionId ?? ''] = $todos;
+        if ($sessionId !== null && $transcripts?->persists() === true) {
+            $transcripts->saveTodos($sessionId, $todos);
+        }
+    }
+
+    /**
+     * The {@see TodoUpdated} a finished `Todo` call means, applied — kept as
+     * the turn's session's list and saved — or null for any other event: a
+     * different tool, a call that failed (the list did not change), a result
+     * a hook replaced so it no longer carries the rendering, or a turn this
+     * runner did not start.
+     */
+    public function observeTodo(?CancellationToken $turn, ToolFinished $event): ?TodoUpdated
+    {
+        $state = $this->state($turn);
+        if ($state === null || $event->toolName !== Todo::NAME || $event->result->isError()) {
+            return null;
+        }
+        $todos = TodoList::parse($event->result->content());
+        if ($todos === null) {
+            return null;
+        }
+
+        $this->saveTodos($state['transcripts'], $state['sessionId'], $todos);
+
+        return new TodoUpdated($event->toolCallId, $todos, $state['sessionId']);
     }
 
     // ── what the caller folded ─────────────────────────────────────────
@@ -665,7 +786,7 @@ final class TurnRunner
         $prompt = null;
         for ($i = \count($history) - 1; $i >= 0; $i--) {
             $row = $history[$i] ?? null;
-            if ($row instanceof Message && $row->role === Role::User && !$row->uiOnly && $row->stepId === null) {
+            if ($row instanceof Message && $row->role === Role::User && !$row->uiOnly && $row->userVisible && $row->stepId === null) {
                 $prompt = $row;
                 break;
             }

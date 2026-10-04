@@ -283,6 +283,7 @@ sugar-crush/tests/Host/TranscriptStoreTest.php	0.800	12
 sugar-crush/tests/Chat/BangShellTest.php	0.800	9
 sugar-crush/tests/Context/SymbolMapBlockTest.php	0.800	8
 sugar-crush/tests/Hooks/BuiltIn/PostEditDiagnosticsHookTest.php	0.800	7
+sugar-crush/tests/Host/TurnRunnerTodoTest.php	0.800	6
 sugar-crush/tests/StdinConstantReaderCensusTest.php	0.796	23
 sugar-crush/tests/Backend/EngineBackendLengthStopTest.php	0.795	34
 sugar-crush/tests/Integration/StreamingWiringTest.php	0.787	20
@@ -456,6 +457,7 @@ sugar-crush/tests/Context/MemoryRecallBlockTest.php	0.150	13
 sugar-crush/tests/Tools/BuiltIn/ReadOutlineTest.php	0.150	5
 sugar-crush/tests/Tools/BashSandboxTest.php	0.150	17
 sugar-crush/tests/Server/BackpressureTest.php	0.150	5
+sugar-crush/tests/Tui/TodoPaneTest.php	0.150	6
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23
@@ -621,6 +623,7 @@ sugar-crush/tests/Workspace/CommitMessageWriterTest.php	0.050	3
 sugar-crush/tests/Config/ServerProtocolDocumentationDriftTest.php	0.050	5
 sugar-crush/tests/Tools/BuiltIn/PruneToolTest.php	0.050	8
 sugar-crush/tests/Renderer/PruneBadgeTest.php	0.050	2
+sugar-crush/tests/Tools/BuiltIn/TodoToolTest.php	0.050	15
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5
@@ -659,6 +662,8 @@ sugar-crush/tests/Context/Pruning/PruningModeTest.php	0.040	7
 sugar-crush/tests/Commands/SweepCommandTest.php	0.040	5
 sugar-crush/tests/Protocol/JsonRpcTest.php	0.040	11
 sugar-crush/tests/Hooks/HookManagerStopEventsTest.php	0.040	8
+sugar-crush/tests/Todo/TodoListTest.php	0.040	19
+sugar-crush/tests/Todo/TodoReminderTest.php	0.040	10
 sugar-crush/tests/Host/SpendLedgerTest.php	0.039	8
 sugar-crush/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.038	10
 sugar-crush/tests/Context/InstructionFileLoaderContainmentTest.php	0.037	29
