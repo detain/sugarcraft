@@ -2233,6 +2233,19 @@ final class Bootstrap
             $manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)));
         }
 
+        // Step P-C1: a finished delegation becomes a `subagent` child session
+        // of the session that delegated it. The manager writes it from the
+        // parent process (its projection runs there), into this launch's
+        // session database — opened on the first finish, not at launch, and
+        // without the launch-time prune, which sessionStore() leaves to chat().
+        $childStore = null;
+        $manager->recordChildSessionsIn(
+            static function () use (&$childStore): EnhancedSessionStore {
+                return $childStore ??= self::sessionStore(false);
+            },
+            \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::defaultRoot(),
+        );
+
         return $manager;
     }
 

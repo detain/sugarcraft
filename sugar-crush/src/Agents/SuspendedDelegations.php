@@ -50,6 +50,13 @@ use SugarCraft\Crush\Usage;
  * user a name nobody else's ordinary use contends for; the verification still
  * runs on that name, since another user can still PLANT it, and a planted one
  * is refused rather than written through.
+ *
+ * ONE CONVERSATION, TWO VIEWS (roadmap P-C1). A run's saved transcript is the
+ * model's copy — the exact typed messages a resume replays; the run's
+ * {@see \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog} is the
+ * human's, the one its child session is built from. The suspension records
+ * that log's path, so a resumed run keeps writing the SAME file and the stored
+ * session follows the conversation the model continues.
  */
 final class SuspendedDelegations
 {
@@ -114,12 +121,14 @@ final class SuspendedDelegations
      * under a fresh id.
      *
      * @param list<Message> $transcript
+     * @param string|null $transcriptLog the run's human-readable log, which a
+     *        resume keeps appending to (see the class doc); null for none
      *
      * @return string the resume id
      *
      * @throws \RuntimeException when the store directory is unsafe or unwritable
      */
-    public function save(string $agent, array $transcript, int $resumes, ?string $id = null): string
+    public function save(string $agent, array $transcript, int $resumes, ?string $id = null, ?string $transcriptLog = null): string
     {
         $dir = HookContextFiles::verifiedDirectory($this->dir);
         $this->sweep($dir);
@@ -133,6 +142,7 @@ final class SuspendedDelegations
             'transcript' => array_values($transcript),
             'resumes' => $resumes,
             'savedAt' => time(),
+            'transcriptLog' => $transcriptLog,
         ]);
 
         $temp = @tempnam($dir, 'suspending-');
@@ -150,8 +160,9 @@ final class SuspendedDelegations
     }
 
     /**
-     * @return array{agent: string, transcript: list<Message>, resumes: int}|null
-     *         null for an id that is malformed, unknown, expired or unreadable
+     * @return array{agent: string, transcript: list<Message>, resumes: int, transcriptLog: ?string}|null
+     *         null for an id that is malformed, unknown, expired or unreadable;
+     *         `transcriptLog` is null for a run saved without one (or before P-C1)
      */
     public function load(string $id): ?array
     {
@@ -192,6 +203,7 @@ final class SuspendedDelegations
             'agent' => $data['agent'],
             'transcript' => array_values($data['transcript']),
             'resumes' => $data['resumes'],
+            'transcriptLog' => \is_string($data['transcriptLog'] ?? null) && $data['transcriptLog'] !== '' ? $data['transcriptLog'] : null,
         ];
     }
 

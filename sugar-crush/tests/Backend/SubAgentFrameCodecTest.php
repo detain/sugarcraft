@@ -103,6 +103,11 @@ final class SubAgentFrameCodecTest extends TestCase
             'outcome' => '',
             'error' => null,
             'resumeId' => null,
+            // Step P-C1: the run's log, its parent session, and the child
+            // session the parent stamps on a finished beat.
+            'transcriptLog' => null,
+            'parentSessionId' => null,
+            'childSessionId' => null,
         ], $frame, 'the literal wire keys are the protocol — renaming one silently orphans the other side');
     }
 

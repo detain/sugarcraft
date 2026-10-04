@@ -128,8 +128,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-SIX
- *     of them, in NINE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — TWENTY-SEVEN
+ *     of them, in TEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -495,6 +495,11 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const RUNTIME_NOTICE_SITES = [
+        // Roadmap P-C1: a finished Task sub-agent the parent could not store
+        // as a child session. The routing decision: the run is gone from the
+        // session's reach — it cannot be reopened — which the user cannot see
+        // from anywhere else. One site, fired at most once per finished run.
+        'src/Agents/AgentManager.php' => 1,
         // E192, round 48: all four of this class's diagnostics, plus E259's
         // fifth — the cleanupStaleWorktrees() catch that used to skip
         // silently. Its own doc-block records the per-site decision, including

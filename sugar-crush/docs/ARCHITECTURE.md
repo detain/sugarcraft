@@ -877,6 +877,7 @@ completion can legitimately run for tens of minutes.
 | `~/.sugar-crush/session.db` | `Session\EnhancedSessionStore` (PDO/SQLite) | transcripts, checkpoints, titles |
 | `~/.sugar-crush/memory/` | `Memory\MemoryStore` | markdown + frontmatter, per scope |
 | `~/.sugar-crush/teams/` | `Agents\TeamManager` | team state |
+| `~/.sugar-crush/subagents/` | `Agents\Live\SubAgentTranscriptLog` | one JSONL transcript per delegated run, `<session>/<agent>.jsonl` |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
 | `<tmp>/sugar_crush_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running `/bg` session, so a restart re-adopts its daemon |
 
@@ -929,6 +930,20 @@ its branches. Retention spares named and pinned rows. `title_source`
 (`Session\TitleSource`) records whether a name came from the user or the
 auto-titler, and the titler never overwrites a user's name. The columns are
 added to an older database the next time it is opened.
+
+**A finished `Task` sub-agent becomes a `subagent` child session.** The
+process that runs the sub-agent (the turn child, or a parallel member's
+grandchild) appends its whole conversation to
+`~/.sugar-crush/subagents/<session>/<agent>.jsonl`
+(`Agents\Live\SubAgentTranscriptLog`, `0700`/`0600`, one `flock`ed line per
+item, a tool result clipped to 16 KB) and names the file on its `started` and
+`finished` frames. Only the parent writes SQLite: when the `finished` frame
+arrives, `AgentManager::projectRemoteSubAgent()` creates the child row
+(`kind='subagent'`, `parent_id`, the Task call id as `parent_call_id`, named
+`<description> (@<agent>)`), saves the transcript `Agents\Live\AgentTranscriptTail`
+reads back from the log, records how the run ended, and stamps the child
+session id on the frame. A resumed run continues the same log and re-saves the
+same child.
 
 **Checkpoints snapshot the files too.** Each turn's checkpoint row also records
 a snapshot of the project's files, taken by `Workspace\WorkspaceCheckpointer`

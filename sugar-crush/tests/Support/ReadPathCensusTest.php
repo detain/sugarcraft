@@ -148,6 +148,12 @@ final class ReadPathCensusTest extends TestCase
         'Agents/ForeignAgentPresetRegistry.php|file_get_contents' => [
             'CONTAINED — the foreign preset body, behind the same pair',
         ],
+        'Agents/Live/AgentTranscriptTail.php|fopen' => [
+            'CALLER_SUPPLIED — a sub-agent transcript log; AgentManager::recordChildSession() opens one only after SubAgentTranscriptLog::isLogPath() held it under the transcript root',
+        ],
+        'Agents/Live/SubAgentTranscriptLog.php|fopen' => [
+            'SELF_LOCATED — the run\'s own log under ~/.sugar-crush/subagents, opened to append',
+        ],
         'Agents/Mailbox.php|fopen' => [
             'SELF_LOCATED — an inbox file under the team store this process writes',
             'SELF_LOCATED — the same inbox, re-opened to compact it',

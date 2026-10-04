@@ -317,6 +317,13 @@ putenv('TMPDIR=' . $sandbox);
 AuditHook::pinDefaultLogDirectory($sandbox . '/audit');
 
 /*
+ * Sub-agent transcript logs (roadmap P-C1), pinned for the audit log's
+ * reason: a Task test whose engine carries a session id writes one, and
+ * without the pin it lands in the developer's own ~/.sugar-crush/subagents.
+ */
+\SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::pinDefaultRoot($sandbox . '/subagents');
+
+/*
  * The ↑/↓ prompt history, pinned into the sandbox for the same reason as the
  * audit log above: a test that presses Enter on a Bootstrap::chat()-built Chat
  * appends its prompt, and without the pin that lands in the developer's own

@@ -2805,11 +2805,12 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($tableEnd);
         $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
         preg_match_all('/\| `([^`]+)` \| `([^`]+)`/', $segment, $rows, \PREG_SET_ORDER);
-        self::assertCount(5, $rows, 'the sessions table no longer has its five directory/class rows');
+        self::assertCount(6, $rows, 'the sessions table no longer has its six directory/class rows');
         $orderedDirs = [
             '~/.sugar-crush/session.db',
             '~/.sugar-crush/memory/',
             '~/.sugar-crush/teams/',
+            '~/.sugar-crush/subagents/',
             '<workflowsPath>/.running/',
             '<tmp>/sugar_crush_bg_<uid>_index/',
         ];
@@ -2821,6 +2822,8 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("configDir() . '/session.db'", $bootstrap, 'session.db is no longer the store file under the config dir — table cell drifted');
         self::assertStringContainsString("configDir() . '/memory'", $bootstrap, 'memory/ is no longer the store directory under the config dir — table cell drifted');
         self::assertStringContainsString("'~/.sugar-crush/teams'", self::sourceOf('Agents/TeamManager.php'), 'TeamManager no longer defaults to ~/.sugar-crush/teams — table cell drifted');
+        self::assertSame('subagents', \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::DIR_NAME, 'the transcript log directory no longer spells subagents — table cell drifted');
+        self::assertStringContainsString("'/.sugar-crush/' . self::DIR_NAME", self::sourceOf('Agents/Live/SubAgentTranscriptLog.php'), 'SubAgentTranscriptLog no longer roots its logs under ~/.sugar-crush — table cell drifted');
         self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Crush\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
         self::assertSame(
             'sugar_crush_bg_<uid>_index',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\MCP\McpRouter;
 use SugarCraft\Crush\Permissions\PermissionAction;
@@ -73,6 +74,31 @@ final class AgentManager
     private array $projectedSubAgentIds = [];
 
     private ?TeamManager $teamManager = null;
+
+    /**
+     * Step P-C1: where a finished delegated run becomes a `subagent` child
+     * session — a resolver for the parent's session store, so the store opens
+     * only when the first run finishes. Null (every manager but the launch's)
+     * records nothing. @see recordChildSessionsIn()
+     *
+     * @var (\Closure(): (\SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null))|null
+     */
+    private ?\Closure $childSessionStore = null;
+
+    /** The directory a run's transcript log must live under to be read back. */
+    private ?string $transcriptRoot = null;
+
+    /**
+     * Child sessions this manager created, by the transcript log they were
+     * read from — a resumed run continues the same log, so its finish
+     * re-saves the same child rather than storing the conversation twice.
+     *
+     * @var array<string, string>
+     */
+    private array $childSessionsByLog = [];
+
+    /** @var array<string, string> sub-agent id => child session id */
+    private array $childSessionIds = [];
 
     /**
      * @param \Closure(PermissionMode): PermissionGate $permissionGateFactory Factory to create PermissionGate from PermissionMode
@@ -402,13 +428,28 @@ final class AgentManager
      * Projection builds no {@see createSubAgent()} permission gate on purpose:
      * a mirror launches nothing, it reports a run the session's own engine
      * child already governed, so the row carries no PermissionGate.
+     *
+     * @return SubAgentActivity the beat as projected: $activity itself, or —
+     *         for a finished run stored as a child session (step P-C1,
+     *         {@see recordChildSessionsIn()}) — a copy naming that session, for
+     *         the consumers after this one to carry on
      */
-    public function projectRemoteSubAgent(SubAgentActivity $activity): void
+    public function projectRemoteSubAgent(SubAgentActivity $activity): SubAgentActivity
     {
+        // Step P-C1: a finished run becomes a child session first, whatever
+        // the mirror row below makes of the beat — a run whose started beat
+        // was never seen still ran, and its log is still complete.
+        if ($activity->op === SubAgentActivity::OP_FINISHED) {
+            $childSessionId = $this->recordChildSession($activity);
+            if ($childSessionId !== null) {
+                $activity = $activity->withChildSessionId($childSessionId);
+            }
+        }
+
         if ($activity->op === SubAgentActivity::OP_STARTED || $activity->op === SubAgentActivity::OP_QUEUED) {
             $agent = $this->get($activity->name);
             if ($agent === null) {
-                return;
+                return $activity;
             }
 
             $queued = $activity->op === SubAgentActivity::OP_QUEUED;
@@ -430,12 +471,12 @@ final class AgentManager
             $this->subAgents[$row->id] = $row;
             $this->projectedSubAgentIds[$row->id] = true;
 
-            return;
+            return $activity;
         }
 
         $row = $this->subAgents[$activity->id] ?? null;
         if ($row === null || !isset($this->projectedSubAgentIds[$activity->id]) || !$row->isRunning()) {
-            return;
+            return $activity;
         }
 
         self::applyTotals($row, $activity);
@@ -444,7 +485,7 @@ final class AgentManager
             $row->output = $activity->tail;
             $row->status = SubAgent::STATUS_STREAMING;
 
-            return;
+            return $activity;
         }
 
         // OP_FINISHED. The frame says the run ended; what its tail carries is
@@ -462,6 +503,101 @@ final class AgentManager
             $row->error = $activity->error;
         }
         $row->completedAt = new \DateTimeImmutable();
+
+        return $activity;
+    }
+
+    /**
+     * Store finished runs as `subagent` child sessions of the session that
+     * delegated them (step P-C1, Appendix P §5.6): the row, the transcript
+     * read back from the run's own log, and how it ended. $store resolves the
+     * session store when the first run finishes; $transcriptRoot is the
+     * directory a log a frame names must live under
+     * ({@see \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::isLogPath()}).
+     *
+     * ONLY THE PARENT WRITES. {@see projectRemoteSubAgent()} runs in the
+     * process that owns the screen, never in a forked turn child, so the
+     * inherited PDO handle is never used across a fork.
+     *
+     * @param \Closure(): (\SugarCraft\Crush\Session\SessionStore|\SugarCraft\Crush\Session\EnhancedSessionStore|null) $store
+     */
+    public function recordChildSessionsIn(\Closure $store, ?string $transcriptRoot = null): void
+    {
+        $this->childSessionStore = $store;
+        $this->transcriptRoot = $transcriptRoot;
+    }
+
+    /** The child session run $subAgentId was stored as, or null. */
+    public function childSessionIdOf(string $subAgentId): ?string
+    {
+        return $this->childSessionIds[$subAgentId] ?? null;
+    }
+
+    /**
+     * The child session $finished was stored as, or null when nothing could
+     * be stored: no store bound, no parent session or log on the frame, a log
+     * outside the transcript root, or a store that refused. A refusal is said
+     * once on the notice channel — a run that is not stored is a run the user
+     * cannot reopen — and never fails the projection.
+     */
+    private function recordChildSession(SubAgentActivity $finished): ?string
+    {
+        $log = $finished->transcriptLog;
+        $parent = $finished->parentSessionId;
+        if ($this->childSessionStore === null || $log === null || $parent === null
+            || !\SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::isLogPath($log, $this->transcriptRoot)) {
+            return null;
+        }
+
+        try {
+            $store = ($this->childSessionStore)();
+            if ($store === null) {
+                return null;
+            }
+
+            $childId = $this->childSessionsByLog[$log] ?? null;
+            if ($childId === null) {
+                $row = $this->subAgents[$finished->id] ?? null;
+                $model = $row?->runModel !== null && $row->runModel !== '' ? $row->runModel : $finished->model;
+                $label = trim($finished->description) !== '' ? trim($finished->description) : $finished->name;
+                $childId = $store->createChildSession(
+                    $parent,
+                    \SugarCraft\Crush\Session\SessionKind::Subagent,
+                    $finished->name,
+                    $finished->parentCallId === '' ? null : $finished->parentCallId,
+                    $this->provider->name(),
+                    $model,
+                    "{$label} (@{$finished->name})",
+                );
+                $this->childSessionsByLog[$log] = $childId;
+            }
+
+            if ($store instanceof \SugarCraft\Crush\Session\EnhancedSessionStore) {
+                $store->saveTranscript(
+                    $childId,
+                    \SugarCraft\Crush\Agents\Live\AgentTranscriptTail::messages(
+                        \SugarCraft\Crush\Agents\Live\AgentTranscriptTail::readAll($log),
+                    ),
+                );
+            }
+            $store->markSubAgentStatus($childId, match ($finished->outcome) {
+                SubAgentActivity::OUTCOME_FAILED => 'failed',
+                SubAgentActivity::OUTCOME_CANCELLED => 'cancelled',
+                default => 'complete',
+            });
+        } catch (\Throwable $unstored) {
+            RuntimeNoticeSink::warn(sprintf(
+                'sub-agent "%s" finished but could not be stored as a session: %s',
+                $finished->name,
+                $unstored->getMessage(),
+            ));
+
+            return null;
+        }
+
+        $this->childSessionIds[$finished->id] = $childId;
+
+        return $childId;
     }
 
     /**

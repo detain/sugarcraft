@@ -49,6 +49,17 @@ use SugarCraft\Crush\Agents\Live\ActivityItem;
  * The v1 fields stay: $tail and the running totals still feed the Agents
  * pane and {@see \SugarCraft\Crush\Agents\AgentManager::liveOutput()}.
  *
+ * STEP P-C1 adds, still optional:
+ *  - $transcriptLog: the run's own JSONL transcript
+ *    ({@see \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog}), written
+ *    by the process that runs it, announced on started and finished;
+ *  - $parentSessionId: the session the delegating turn belongs to — the
+ *    parent of the child session the finished run becomes;
+ *  - $childSessionId: that child session's id. Never set by the child (only
+ *    the parent writes SQLite): the parent stamps it on the finished beat it
+ *    projects ({@see withChildSessionId()}) so every consumer after the
+ *    projection — the live line, the server's `agent.status` — names it.
+ *
  * {@see toArray()} is the wire shape the fork frame, the grandchild relay and
  * (later) the server's `agent.*` events share; {@see fromArray()} is the one
  * validator for all of them.
@@ -109,8 +120,8 @@ final readonly class SubAgentActivity
      *                     $tail is clipped, so this is what an "N more
      *                     lines" count reads.
      * @param string $model      the model the run really executes on (the
-     *                     session's own — a preset's `model:` is a request a
-     *                     Task run does not honour); '' when unknown.
+     *                     one TaskTool chose for it, roadmap 4.1-1); '' when
+     *                     unknown.
      * @param int    $contextTokens the run's CURRENT context: what its latest
      *                     request carried, not a running total; 0 when unknown.
      * @param list<array{id: string, label: string, state: string, at: int}> $calls
@@ -126,6 +137,9 @@ final readonly class SubAgentActivity
      * @param string $outcome one of the OUTCOME_* constants on finished; '' otherwise.
      * @param string|null $error why a run that did not complete ended.
      * @param string|null $resumeId the id a later Task call resumes this run by.
+     * @param string|null $transcriptLog the run's JSONL transcript path (P-C1).
+     * @param string|null $parentSessionId the delegating turn's session (P-C1).
+     * @param string|null $childSessionId the child session the finished run became (P-C1).
      */
     public function __construct(
         public string $op,
@@ -148,7 +162,20 @@ final readonly class SubAgentActivity
         public string $outcome = '',
         public ?string $error = null,
         public ?string $resumeId = null,
+        public ?string $transcriptLog = null,
+        public ?string $parentSessionId = null,
+        public ?string $childSessionId = null,
     ) {}
+
+    /**
+     * This beat naming the child session its finished run was stored as —
+     * the parent's stamp after {@see \SugarCraft\Crush\Agents\AgentManager::projectRemoteSubAgent()}
+     * created it (step P-C1).
+     */
+    public function withChildSessionId(string $childSessionId): self
+    {
+        return new self(...array_merge(get_object_vars($this), ['childSessionId' => $childSessionId]));
+    }
 
     /**
      * The id a queued member's placeholder row is keyed by, until its own
@@ -190,6 +217,9 @@ final readonly class SubAgentActivity
             'outcome' => $this->outcome,
             'error' => $this->error,
             'resumeId' => $this->resumeId,
+            'transcriptLog' => $this->transcriptLog,
+            'parentSessionId' => $this->parentSessionId,
+            'childSessionId' => $this->childSessionId,
         ];
     }
 
@@ -236,7 +266,18 @@ final readonly class SubAgentActivity
             outcome: is_string($outcome) && in_array($outcome, self::OUTCOMES, true) ? $outcome : '',
             error: is_string($frame['error'] ?? null) ? self::text($frame['error'], self::MAX_TEXT_BYTES) : null,
             resumeId: is_string($frame['resumeId'] ?? null) && $frame['resumeId'] !== '' ? self::text($frame['resumeId'], 64) : null,
+            transcriptLog: self::optionalText($frame['transcriptLog'] ?? null, 4096),
+            parentSessionId: self::optionalText($frame['parentSessionId'] ?? null, 256),
+            childSessionId: self::optionalText($frame['childSessionId'] ?? null, 256),
         );
+    }
+
+    /**
+     * A non-empty string field, clipped like {@see text()}, or null.
+     */
+    private static function optionalText(mixed $value, int $bytes): ?string
+    {
+        return is_string($value) && $value !== '' ? self::text($value, $bytes) : null;
     }
 
     /**
