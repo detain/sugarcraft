@@ -160,6 +160,8 @@ subdirectory.
 /memory edit <id> <new_content>
 /memory clear --scope <scope> --confirm
 /memory import claude|opencode            one-shot import of a foreign tree
+/memory log [count]                       the memory history, newest first (default 20, at most 200)
+/memory restore <commit>                  memory as it stood at <commit>, as a new commit
 ```
 
 `--scope` may come before or after the content, and `list` and `add` both
@@ -188,6 +190,31 @@ keeps its index in memory, so no cache file ever lands in the checkout. A PHP
 build whose SQLite lacks FTS5, or a cache that cannot be opened, falls back to
 the case-insensitive substring scan, in file order; a damaged cache file is
 deleted and rebuilt by the next search.
+
+**History (roadmap 5.4-2).** The home memory directory, `~/.sugar-crush/memory`,
+is a git repository of its own (`Memory\MemoryHistory`), started — with a
+first commit, `memory: start history`, that holds only its `.gitignore` — the
+first time a changing `/memory` sub-command runs or `/memory log` is asked. Every `add`,
+`delete`, `edit`, `clear` and `import` that changes a file is one commit
+(`memory: /memory add`, …), and anything that changed since the last commit —
+a `Memory` tool save, auto-memory, a hand edit — is committed first under
+`memory: changes made outside /memory`, so no command is credited with a change
+it did not make. `/memory log` records any such change and then lists the
+commits: id, time and subject. `/memory restore <commit>` takes a hex commit id
+from that list (never a branch, range or option), commits what is on disk, puts
+every note back as it stood at that commit — notes added since are removed —
+regenerates the `MEMORY.md` indexes, re-applies the notes' `0600`, and commits
+the result as `memory: restore to <id>`. A restore is a new commit, not a
+rewind, so it is undone by restoring the commit before it. The search cache,
+the auto-memory throttle and the atomic writer's temps are `.gitignore`d. Only the home directory is
+versioned: a repository's `.sugar-crush/memory/` already lives in the user's
+own checkout, where a nested `.git` would be an embedded repository, so there
+`/memory log` and `/memory restore` say so instead. Every git call is pinned to
+this directory's own `.git` (never discovered, so a home directory that is
+itself a dotfiles repository is never written to) and runs through
+`Workspace\GitRunner`, the bounded spawn checkpoints use, with hooks, signing
+and pagers off and a fixed `sugar-crush` identity. Without `git` on `PATH` the
+history is simply not kept, and `/memory log` says so.
 
 If no store was wired, `/memory` answers "Memory store not configured" rather
 than failing. `Bootstrap::memoryStoreOrNull()` exists for the same asymmetry:
@@ -566,6 +593,7 @@ transcript notice the first time it happens.
 ├── memory/<scope>/    the memory store (project/<key>/ per project)
 ├── memory/.search-<key>.sqlite  the search cache (derived; safe to delete)
 ├── memory/.auto-memory-<key>.json  the auto-memory throttle
+├── memory/.git/       the memory history (`/memory log`, `/memory restore`)
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md
 ├── skills/*/SKILL.md  skills                   → SKILLS.md
 ├── commands/*.md      custom slash commands    → COMMANDS.md

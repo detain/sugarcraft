@@ -15818,7 +15818,23 @@ final class Chat implements Model
         $command = $parts[0];
         $args = $parts[1] ?? '';
 
-        return match ($command) {
+        // Roadmap 5.4-2: the HOME memory directory is a git repository (null
+        // for a repository store - see MemoryHistory). A change a `/memory`
+        // command makes is its own commit, and whatever changed since the
+        // last one (the Memory tool, auto-memory, a hand edit) is committed
+        // first under its own subject, so `/memory log` never credits a
+        // command with a change it did not make.
+        $history = \SugarCraft\Crush\Memory\MemoryHistory::forStore($this->memoryStore);
+        $mutates = \in_array($command, ['add', 'delete', 'clear', 'edit', 'import'], true);
+        $warnings = [];
+        if ($mutates) {
+            $warnings[] = \SugarCraft\Crush\Commands\MemoryHistoryCommand::record(
+                $history,
+                \SugarCraft\Crush\Commands\MemoryHistoryCommand::OUTSIDE_SUBJECT,
+            );
+        }
+
+        [$next, $cmd] = match ($command) {
             'list' => $this->memoryList($inputText, $args),
             'add' => $this->memoryAdd($inputText, $args),
             'search' => $this->memorySearch($inputText, $args),
@@ -15826,8 +15842,24 @@ final class Chat implements Model
             'clear' => $this->memoryClear($inputText, $args),
             'edit' => $this->memoryEdit($inputText, $args),
             'import' => $this->memoryImport($inputText, $args),
+            'log' => $this->memoryResponse($inputText, \SugarCraft\Crush\Commands\MemoryHistoryCommand::log($history, $args)),
+            'restore' => $this->memoryResponse($inputText, \SugarCraft\Crush\Commands\MemoryHistoryCommand::restore($history, $args)),
             default => $this->memoryHelpResponse($inputText, "Unknown command '{$command}'."),
         };
+
+        if ($mutates) {
+            $warnings[] = \SugarCraft\Crush\Commands\MemoryHistoryCommand::record($history, "memory: /memory {$command}");
+        }
+
+        $warnings = array_values(array_filter($warnings, static fn(?string $w): bool => $w !== null));
+        if ($warnings !== []) {
+            $next = $next->mutate(['history' => [
+                ...$next->history,
+                ...array_map(static fn(string $w): Message => Message::assistant($w)->withUiOnly(), $warnings),
+            ]]);
+        }
+
+        return [$next, $cmd];
     }
 
     /**
@@ -15866,11 +15898,16 @@ final class Chat implements Model
         $lines[] = '`/memory edit <id> <new_content>` — Edit an existing memory';
         $lines[] = '`/memory clear --scope <scope> --confirm` — Clear all memories for a scope';
         $lines[] = '`/memory import claude|opencode` — Import foreign memory files (one-shot per tool)';
+        $lines[] = '`/memory log [count]` — List the memory history, newest first (default '
+            . \SugarCraft\Crush\Memory\MemoryHistory::DEFAULT_LOG_ENTRIES . ')';
+        $lines[] = '`/memory restore <commit>` — Put memory back as it stood at a commit `/memory log` lists';
         $lines[] = '`/memory` — Show this help text';
         $lines[] = '';
         $lines[] = 'Scopes: `project` (default), `user`, `agent`. Project and user notes reach the prompt '
             . '(user notes first, at most ' . \SugarCraft\Crush\Context\MemoryBlock::USER_MAX_ENTRIES . '); '
             . 'agent-scope notes are listable but never reach the prompt.';
+        $lines[] = 'History: every change to the home memory directory is a git commit (when `git` is on PATH); '
+            . 'a restore is a new commit, so it can be undone the same way.';
 
         return $this->memoryResponse($inputText, implode("\n", $lines));
     }

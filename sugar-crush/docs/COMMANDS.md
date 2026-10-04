@@ -332,7 +332,7 @@ edit it by hand.
 | `/clear` | ✓ | ✓ | — | Clear the transcript, keeping this session |
 | `/budget` | ✓ | ✓ | `[amount\|off]` | Show this session's reported spend, or cap it |
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |
-| `/memory` | ✓ | | — | Add, list, search, edit, import, or clear memory entries |
+| `/memory` | ✓ | | — | Add, list, search, edit, import, clear, or restore memory entries, and show their history |
 | `/init` | ✓ | | `[focus]` | Study this project and write or improve its AGENTS.md |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `[<name>\|--auto]` | Rename the current session |
