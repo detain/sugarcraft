@@ -963,7 +963,7 @@ final class KeyBindingDriftTest extends TestCase
             'chat.stop' => function (array $k): void {
                 $token = new \SugarCraft\Crush\Backend\CancellationToken();
                 $chat = (new Chat(
-                    history: [Message::user('go')],
+                    history: [Message::user('go'), Message::toolRunning(new ToolCall('Bash', ['command' => 'sleep 600'], 'call_run'))],
                     backend: new EchoBackend(),
                     inFlight: true,
                     generation: 1,
@@ -973,8 +973,9 @@ final class KeyBindingDriftTest extends TestCase
                 ))->withSize(120, 20);
                 $this->assertCount(1, $k, 'the label names one press');
                 [$asked] = $chat->update($k[0]);
-                $this->assertTrue($token->isSoftCancelled(), 'the press asks for a soft stop');
-                $this->assertFalse($token->isCancelled(), 'and kills nothing');
+                $this->assertSame(['call_run'], $token->takeToolCancels(), 'the press stops the running tool (cancel_tool)');
+                $this->assertTrue($token->isSoftCancelled(), 'then the turn, at its step boundary');
+                $this->assertFalse($token->isCancelled(), 'and kills nothing else');
                 $this->assertTrue($asked->inFlight, 'the turn runs on to its step boundary');
             },
             'chat.cancel' => function (array $k): void {

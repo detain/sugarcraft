@@ -2421,6 +2421,35 @@ final class Runtime
                     }
                 }
 
+                // 1.C-4b: Esc stopped one running call (`cancel_tool{callId}`).
+                // Only that member goes — its process tree killed, exactly as
+                // the deadline would — and it settles as cancelled; a member
+                // still queued for a slot is never started. Its siblings and
+                // the turn go on.
+                foreach ($jobs as $index => $job) {
+                    if ($job['settled'] || !\SugarCraft\Crush\Support\ToolCancelRequests::isRequested($job['call']->id())) {
+                        continue;
+                    }
+                    if ($job['pid'] !== null) {
+                        ProcessContainment::killTree($job['pid']);
+                        self::reapKilled($job['pid']);
+                    } elseif (!($job['queued'] ?? false)) {
+                        continue;
+                    }
+                    if ($job['file'] !== null) {
+                        ToolIpcFiles::discard((string) $job['file']);
+                        $jobs[$index]['file'] = null;
+                    }
+                    $jobs[$index]['queued'] = false;
+                    $jobs[$index]['settled'] = true;
+                    $jobs[$index]['cancelled'] = true;
+                    $jobs[$index]['result'] = new ToolResult(
+                        toolCallId: $job['call']->id(),
+                        content: \SugarCraft\Crush\Support\ToolCancelRequests::CANCELLED,
+                        isError: true,
+                    );
+                }
+
                 // A delegation slot freed by the exit check above goes to the
                 // next queued member in provider order (step 0.16). Started
                 // here, before the release pass, so the cursor never waits a
@@ -2483,10 +2512,14 @@ final class Runtime
                                     parentAgentId: $last->parentAgentId,
                                     description: $last->description,
                                     stats: $last->stats,
-                                    outcome: $failed
-                                        ? \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_FAILED
-                                        : \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_COMPLETE,
-                                    error: $failed ? 'the sub-agent\'s process exited before it reported how the run ended' : null,
+                                    outcome: ($jobs[$next]['cancelled'] ?? false)
+                                        ? \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_CANCELLED
+                                        : ($failed
+                                            ? \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_FAILED
+                                            : \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_COMPLETE),
+                                    error: ($jobs[$next]['cancelled'] ?? false)
+                                        ? \SugarCraft\Crush\Support\ToolCancelRequests::CANCELLED
+                                        : ($failed ? 'the sub-agent\'s process exited before it reported how the run ended' : null),
                                 ));
                             }
                         }

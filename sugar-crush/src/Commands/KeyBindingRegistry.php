@@ -467,7 +467,9 @@ final class KeyBindingRegistry
             // Roadmap 1.C-4a: on an engine turn that reports its steps the
             // first Esc asks for a soft stop at the step boundary, and any
             // later Esc cancels hard; a turn with no steps keeps Esc Esc.
-            KeyBinding::new('chat.stop', 'Esc', 'Stop the turn after the current step', $c),
+            // 1.C-4b: that first Esc also stops the call running right now
+            // (`cancel_tool`) instead of waiting for it to finish.
+            KeyBinding::new('chat.stop', 'Esc', 'Stop the running tool, then the turn', $c),
             KeyBinding::new('chat.cancel', 'Esc Esc', 'Cancel the turn in flight — twice, quickly', $c),
             // E744: with a draft selection held this chord COPIES first and the
             // next press quits (Chat's Ctrl+C arm). The nuance stays out of the

@@ -46,7 +46,11 @@ use SugarCraft\Crush\Tools\ToolCall;
  * so a `cancel_soft` from the parent ends the turn once the step's tools have
  * finished. Steering (1.C-3) reads {@see takeSteers()} through
  * {@see SocketSteerInbox}, which answers each delivered steer with a
- * `steer_ack`; `cancel_tool` (1.C-4b) is still to come.
+ * `steer_ack`. A `cancel_tool{callId}` (1.C-4b) stops only that running
+ * call: the turn child reads it through {@see takeToolCancels()} (behind
+ * {@see \SugarCraft\Crush\Support\ToolCancelRequests}), kills a concurrent
+ * member's process or stops a lone Task at its next boundary, and the call
+ * settles as cancelled while the turn goes on to its boundary.
  *
  * ## No deadline in the child
  *
@@ -359,6 +363,42 @@ final class ChildChannel
         $this->controls = $kept;
 
         return $this->softCancelled;
+    }
+
+    /**
+     * The call ids the parent has asked to stop (`cancel_tool{callId}`,
+     * roadmap 1.C-4b), each handed out once, in arrival order. Polls the
+     * socket without blocking first, and takes only the `cancel_tool` frames
+     * out of the buffered controls, so a `cancel_soft` waiting for
+     * {@see softCancelRequested()} is never consumed here.
+     *
+     * Always empty in a process that does not own the socket.
+     *
+     * @return list<string>
+     */
+    public function takeToolCancels(): array
+    {
+        if ((int) getmypid() !== $this->ownerPid) {
+            return [];
+        }
+
+        $this->poll();
+        $ids = [];
+        $kept = [];
+        foreach ($this->controls as $control) {
+            if (($control['kind'] ?? null) !== self::CANCEL_TOOL) {
+                $kept[] = $control;
+
+                continue;
+            }
+            $callId = $control['callId'] ?? null;
+            if (is_string($callId) && $callId !== '') {
+                $ids[] = $callId;
+            }
+        }
+        $this->controls = $kept;
+
+        return $ids;
     }
 
     /**

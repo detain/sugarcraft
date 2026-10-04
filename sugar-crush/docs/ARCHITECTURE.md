@@ -279,7 +279,7 @@ big-endian length plus a `serialize()`d array, decoded with
 | parent → child | `cancel_soft` | — : stop at the next step boundary, once the step's tools have finished |
 | parent → child | `steer` | `steerId`, `text`: a message the user sent mid-turn (`CancellationToken::steer()`), drained at the next step boundary by `Backend\SocketSteerInbox` and appended as a `[steering] …` user row; once one is waiting, the step's unstarted sequential calls are answered `Skipped to process an incoming message.` |
 | child → parent | `steer_ack` | `steerId`, `step`: where the steer landed (`CancellationToken::acknowledgedSteers()`) |
-| parent → child | `cancel_tool` | reserved: parsed and buffered by the child, not sent yet |
+| parent → child | `cancel_tool` | `callId`: stop that running call now (`CancellationToken::cancelTool()`); sent ahead of the same Escape's `cancel_soft` |
 
 - `askId` is the first 16 hex digits of a hash over `{toolCallId, tool, args}`.
   The parent hands each question to `$onEvent` as an `Events\PermissionAsked`
@@ -314,6 +314,18 @@ big-endian length plus a `serialize()`d array, decoded with
   reply. In the TUI the first Escape of a turn that reports steps is the soft
   cancel; the next Escape, or a second one inside the double-press window, is
   still the hard cancel that kills the whole tree.
+- **Tool cancel (1.C-4b).** The same first Escape also names every call that is
+  running (`CancellationToken::cancelTool()`), and the parent's cancel poll
+  writes one `cancel_tool{callId}` per call. In the child,
+  `ChildChannel::takeToolCancels()` feeds `Support\ToolCancelRequests`, which
+  answers only in the turn child. The concurrent reap loop kills that member's
+  process tree (or never starts a member still queued for a delegation slot)
+  and settles it as `Cancelled by the user (Esc) while it was running.`, with a
+  relayed run closed as `cancelled`; its siblings carry on. A lone `Task` stops
+  itself at its sub-agent's next tool start or provider step
+  (`Support\ToolCallCancelled`), cancelled and resumable. A sequential tool run
+  in the turn child itself has no stop point and runs to its end, after which
+  the soft cancel ends the turn.
 
 **The `subagent` frame (version 2).** `Events\SubAgentActivity::toArray()` is
 the one wire shape for a delegated run's beats; the fork frame, the relay

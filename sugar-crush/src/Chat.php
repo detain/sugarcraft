@@ -2684,6 +2684,15 @@ final class Chat implements Model
                 // second Escape inside the window does anything.
                 if ($this->liveStep() !== null) {
                     $this->inFlightCancellation?->cancelSoft();
+                    // 1.C-4b: and the call running right now stops too
+                    // (`cancel_tool{callId}`), rather than holding the turn
+                    // until it finishes — it settles as cancelled, and the
+                    // turn ends at the boundary with every result in place.
+                    foreach ($this->history as $message) {
+                        if ($message->pendingToolCallId !== null) {
+                            $this->inFlightCancellation?->cancelTool($message->pendingToolCallId);
+                        }
+                    }
                 }
 
                 return [$this->mutate(['lastEscapeAt' => $now]), null];

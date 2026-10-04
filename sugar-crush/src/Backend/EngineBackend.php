@@ -2819,6 +2819,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             foreach ($cancellation->takeSteers() as $steer) {
                 $sendToChild(['kind' => ChildChannel::STEER] + $steer);
             }
+            // 1.C-4b: each running call the user stopped, as `cancel_tool`,
+            // ahead of the `cancel_soft` the same Escape raised.
+            foreach ($cancellation->takeToolCancels() as $callId) {
+                $sendToChild(['kind' => ChildChannel::CANCEL_TOOL, 'callId' => $callId]);
+            }
             if (!$softCancelSent && $cancellation->isSoftCancelled()) {
                 $softCancelSent = true;
                 $sendToChild(['kind' => ChildChannel::CANCEL_SOFT]);
@@ -3174,6 +3179,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 );
             };
             $stopRequested = static fn (): bool => $channel->softCancelRequested();
+            // 1.C-4b: `cancel_tool{callId}` stops one running call. The
+            // code that can stop it — the concurrent reap loop, a lone Task's
+            // progress hook — asks by call id; this is where it learns.
+            \SugarCraft\Crush\Support\ToolCancelRequests::listen(
+                static fn (): array => $channel->takeToolCancels(),
+            );
             // complete()'s body, inlined so the loop gets the channel's two
             // per-step hooks: complete() is the frozen Backend contract
             // (BackendContractWideningTest) and cannot grow parameters.

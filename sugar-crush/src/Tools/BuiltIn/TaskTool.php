@@ -675,6 +675,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $heartbeat();
             }
         };
+        // 1.C-4b: Esc stopped this call (`cancel_tool{callId}`). A run in
+        // this process cannot be killed from outside it without killing the
+        // turn, so it stops itself at the next point that is safe to throw
+        // from — a tool about to start, a provider step about to go out —
+        // and the failure boundary below settles it cancelled and resumable.
+        // In a concurrent member this never fires: the turn child kills the
+        // member's process instead (ToolCancelRequests answers only there).
+        $stopIfCancelled = static function () use ($toolCallId): void {
+            if (\SugarCraft\Crush\Support\ToolCancelRequests::isRequested($toolCallId)) {
+                throw new \SugarCraft\Crush\Support\ToolCallCancelled();
+            }
+        };
 
         $emit = $this->subAgentEmitter;
         // The run executes on THIS engine's model whatever the preset's
@@ -866,7 +878,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     // SpendCapBreached IS: the run's own cap check emits it, and
                     // a narrower type here made that emit a TypeError that
                     // surfaced as an unexplained "failed" (audit B4).
-                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($onProgress, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent): void {
+                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($onProgress, $stopIfCancelled, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent): void {
+                        // Before the call runs; a throw from a finished
+                        // event would only become that call's result.
+                        if ($event instanceof ToolStarted) {
+                            $stopIfCancelled();
+                        }
                         $onProgress();
                         // A tool boundary ends the thought before it: the
                         // next burst opens under a fresh label.
@@ -935,8 +952,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     // last step leave now rather than after a long call.
                     // The step count and token totals stay with the usage
                     // observer, which bills each step as it lands.
-                    onStep: static function (\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated $event) use (&$stats, $flushIfDue): void {
+                    onStep: static function (\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated $event) use (&$stats, $flushIfDue, $stopIfCancelled): void {
                         if ($event instanceof \SugarCraft\Crush\Events\StepStarted) {
+                            $stopIfCancelled();
                             $stats['maxSteps'] = $event->maxSteps;
                         }
                         $flushIfDue();
@@ -949,9 +967,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             // resumed run's earlier, already-billed steps are not counted twice.
             $spent = self::spentSince($failure->transcript, count($messages));
             self::bill($subAgent, $spent, $baseTokens, $baseCost);
-            $why = sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
+            $cancelled = $failure->getPrevious() instanceof \SugarCraft\Crush\Support\ToolCallCancelled;
+            $why = $cancelled
+                ? sprintf('sub-agent "%s" was cancelled by the user (Esc)', $agentName)
+                : sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
             $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId);
-            $finish(SubAgent::STATUS_FAILED, '', $why, SubAgentActivity::OUTCOME_FAILED, $resumeId);
+            $finish(
+                $cancelled ? SubAgent::STATUS_STOPPED : SubAgent::STATUS_FAILED,
+                '',
+                $why,
+                $cancelled ? SubAgentActivity::OUTCOME_CANCELLED : SubAgentActivity::OUTCOME_FAILED,
+                $resumeId,
+            );
 
             return $this->refusal(
                 $toolCallId,

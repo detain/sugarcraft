@@ -24,7 +24,8 @@ namespace SugarCraft\Crush\Backend;
  * work now. {@see cancelSoft()} asks only that the work stop at its next
  * natural boundary — a forked engine turn finishes the step's tools and makes
  * no further provider call. A holder that has no boundary to stop at simply
- * ignores the soft flag; a later hard cancel always wins.
+ * ignores the soft flag; a later hard cancel always wins. {@see cancelTool()}
+ * (roadmap 1.C-4b) is narrower still: stop one running call by its id.
  *
  * STEERING (roadmap 1.C-3) rides the same per-turn handle: {@see steer()}
  * queues a message the user typed while the turn runs, the forked turn's
@@ -47,6 +48,12 @@ final class CancellationToken
 
     /** @var list<array{steerId: string, text: string}> queued, not yet taken by the turn's parent */
     private array $steers = [];
+
+    /** @var list<string> call ids asked to stop, not yet taken by the turn's parent */
+    private array $toolCancels = [];
+
+    /** @var array<string, true> every call id ever asked to stop, so each goes down once */
+    private array $toolCancelled = [];
 
     /** @var array<string, int> steerId => the step it was delivered at */
     private array $acknowledged = [];
@@ -90,6 +97,44 @@ final class CancellationToken
     public function isSoftCancelled(): bool
     {
         return $this->softCancelled || $this->cancelled;
+    }
+
+    /**
+     * Ask the work to stop ONE running tool call now (roadmap 1.C-4b,
+     * `cancel_tool{callId}`): a forked engine turn's parent takes it with
+     * {@see takeToolCancels()} on the tick it polls this token on and sends
+     * it down; the call settles as cancelled and the rest of the turn goes
+     * on. Each id is queued once, however often it is asked. A holder that
+     * cannot stop a single call never takes them.
+     */
+    public function cancelTool(string $callId): void
+    {
+        if ($callId === '' || isset($this->toolCancelled[$callId])) {
+            return;
+        }
+
+        $this->toolCancelled[$callId] = true;
+        $this->toolCancels[] = $callId;
+    }
+
+    /**
+     * The call ids {@see cancelTool()} queued since the last call, oldest
+     * first, each handed out once.
+     *
+     * @return list<string>
+     */
+    public function takeToolCancels(): array
+    {
+        $ids = $this->toolCancels;
+        $this->toolCancels = [];
+
+        return $ids;
+    }
+
+    /** Whether {@see cancelTool()} was ever called for $callId. */
+    public function isToolCancelled(string $callId): bool
+    {
+        return isset($this->toolCancelled[$callId]);
     }
 
     /**
