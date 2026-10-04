@@ -10,6 +10,7 @@ use SugarCraft\Crush\Backend\TurnInterrupted;
 use SugarCraft\Crush\Context\Compaction\StepSummarizer;
 use SugarCraft\Crush\Context\Pruning\CompressionBlock;
 use SugarCraft\Crush\Context\Pruning\PrunedOutputPlaceholder;
+use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
@@ -239,6 +240,6 @@ final class OverflowPruneAndRetryTest extends TestCase
     /** @param list<mixed> $messages */
     private static function wire(array $messages): string
     {
-        return (string) json_encode(array_map(static fn (object $m): array => $m->toArray(), $messages));
+        return (string) json_encode(array_map(static fn (Message $m): array => $m->toArray(), $messages));
     }
 }

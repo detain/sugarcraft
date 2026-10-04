@@ -3418,9 +3418,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $noticeSink = \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::current();
         $pid = $sockets === false ? -1 : pcntl_fork();
         if ($pid === -1) {
-            if ($sockets !== false) {
-                fclose($sockets[0]);
-                fclose($sockets[1]);
+            // A loop, not an `if`: the fork-exit guard reads the branches
+            // after a fork as the -1 and the 0 one, and a nested `if` here
+            // would hide the child's branch from it.
+            foreach ($sockets === false ? [] : $sockets as $end) {
+                fclose($end);
             }
             try {
                 $deferred->resolve($this->summaryReply($history, $instruction));

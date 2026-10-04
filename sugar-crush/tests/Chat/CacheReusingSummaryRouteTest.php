@@ -64,7 +64,7 @@ final class CacheReusingSummaryRouteTest extends TestCase
         } else {
             $_SERVER['HOME'] = $this->originalServerHome;
         }
-        exec('rm -rf ' . escapeshellarg($this->sandbox));
+        exec('rm -rf ' . escapeshellarg($this->sandbox) . ' 2>&1');
     }
 
     /** A switched engine takes the summaries with it, keeping the launch's summary model. */
@@ -285,10 +285,10 @@ final class CacheReusingSummaryRouteTest extends TestCase
     }
 
     /** @return list<Message> */
-    private static function history(): array
+    private static function history(int $pairs = 6): array
     {
         $out = [];
-        for ($i = 1; $i <= 6; $i++) {
+        for ($i = 1; $i <= $pairs; $i++) {
             $out[] = Message::user("question {$i}");
             $out[] = Message::assistant("answer {$i} " . str_repeat('detail ', 60));
         }

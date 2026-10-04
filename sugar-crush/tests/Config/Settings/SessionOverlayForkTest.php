@@ -7,7 +7,9 @@ namespace SugarCraft\Crush\Tests\Config\Settings;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\Settings\SessionSettings;
+use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * Roadmap N-P3 (Appendix N §4.3): the session tier reaches the turn child.
@@ -21,6 +23,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 final class SessionOverlayForkTest extends TestCase
 {
     use HomeSandboxTrait;
+    use ReapsForkedChildrenTrait;
 
     private string $home = '';
 
@@ -37,6 +40,7 @@ final class SessionOverlayForkTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         SessionSettings::reset();
         $this->restoreHomeSandbox();
         @unlink($this->home . '/.sugar-crush/config.json');
@@ -75,13 +79,13 @@ final class SessionOverlayForkTest extends TestCase
         $pair = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
         self::assertIsArray($pair);
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === 0) {
             fclose($pair[0]);
             fwrite($pair[1], (string) json_encode(Bootstrap::readUserConfig()['maxOutputTokens'] ?? null));
             fclose($pair[1]);
             // The child of a PHPUnit process must not run shutdown handlers.
-            posix_kill(getmypid(), \SIGKILL);
+            ForkedChild::exitNow(0);
         }
 
         fclose($pair[1]);

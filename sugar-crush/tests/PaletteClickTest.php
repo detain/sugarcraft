@@ -512,9 +512,12 @@ final class PaletteClickTest extends TestCase
             'palette' => $chat->palette()?->mode,
             'selected' => $chat->palette()?->selectedIndex,
             'historyCount' => count($chat->history),
+            // The UTC second ShareCommand stamps an export's default file name
+            // with is masked: the click and the Enter run a moment apart, and
+            // across a second boundary the two names differ by that alone.
             'lastLine' => $chat->history === []
                 ? null
-                : $chat->history[count($chat->history) - 1]->content,
+                : preg_replace('/\d{8}T\d{6}Z/', '<stamp>', $chat->history[count($chat->history) - 1]->content),
             'mru' => $chat->paletteMru(),
             'cmd' => $cmd !== null,
         ];

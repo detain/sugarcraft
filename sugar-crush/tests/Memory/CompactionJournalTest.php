@@ -50,7 +50,7 @@ final class CompactionJournalTest extends TestCase
         } else {
             $_SERVER['HOME'] = $this->originalServerHome;
         }
-        exec('rm -rf ' . escapeshellarg($this->dir));
+        exec('rm -rf ' . escapeshellarg($this->dir) . ' 2>&1');
     }
 
     public function testAnAppendedCompactionReadsBackTaggedWithItsRecordsAndState(): void

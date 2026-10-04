@@ -44,7 +44,7 @@ final class ContextCommandsTest extends TestCase
         $this->env === false ? putenv(PruningMode::ENV) : putenv(PruningMode::ENV . '=' . $this->env);
         $this->restoreHomeSandbox();
         if (is_dir($this->sandbox)) {
-            exec('rm -rf ' . escapeshellarg($this->sandbox));
+            exec('rm -rf ' . escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 

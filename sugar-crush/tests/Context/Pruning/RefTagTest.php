@@ -118,7 +118,7 @@ final class RefTagTest extends TestCase
     private static function step(string $id): array
     {
         return [
-            new AssistantMessage('', [new ToolCall($id, 'Read', ['file_path' => "{$id}.php"])]),
+            new AssistantMessage('', [new \SugarCraft\Crush\Tools\ToolCall($id, 'Read', ['file_path' => "{$id}.php"])]),
             new ToolResultMessage($id, "contents of {$id}"),
         ];
     }

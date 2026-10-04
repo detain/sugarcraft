@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Live\AgentTranscriptTail;
 use SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * Roadmap P-C1: a delegated run's JSONL transcript — written by the process
@@ -15,6 +16,8 @@ use SugarCraft\Crush\Role;
  */
 final class TranscriptLogTailTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private string $root;
 
     protected function setUp(): void
@@ -24,6 +27,7 @@ final class TranscriptLogTailTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         $this->remove($this->root);
     }
 
@@ -175,7 +179,7 @@ final class TranscriptLogTailTest extends TestCase
         $log->user('start');
         $pids = [];
         foreach (['A', 'B'] as $who) {
-            $pid = pcntl_fork();
+            $pid = $this->forkTracked();
             if ($pid === 0) {
                 for ($i = 0; $i < 200; $i++) {
                     $log->assistant(str_repeat($who, 1500) . $i);

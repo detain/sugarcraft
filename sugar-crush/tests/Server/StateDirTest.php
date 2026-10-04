@@ -72,12 +72,14 @@ final class StateDirTest extends TestCase
         $this->open();
         \chmod($this->path, 0o755);
 
+        $caught = null;
         try {
             StateDir::existing($this->path);
-            self::fail('a 0755 state directory was trusted');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('not 0700', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a 0755 state directory was trusted');
+        self::assertStringContainsString('not 0700', $caught->getMessage());
 
         \chmod($this->path, 0o700);
         $link = $this->path . '-link';
