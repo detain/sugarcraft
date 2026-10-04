@@ -177,8 +177,10 @@ final class SessionHostTest extends TestCase
         $host = $this->host(self::scripted());
 
         self::assertSame(TurnTicket::REFUSED, $host->submit('   ')->admitted);
-        self::assertStringContainsString('run in the TUI only', (string) $host->submit('!git status')->reason);
-        self::assertStringContainsString('not available in a headless session', (string) $host->submit('/compact')->reason);
+        // Roadmap O-2h: built-ins run headless now; the ones whose body is a
+        // screen (or has not left Chat yet) say so — see SessionHostCommandsTest.
+        self::assertStringContainsString('runs in the TUI client only', (string) $host->submit('/compact')->reason);
+        self::assertStringContainsString('runs in the TUI client only', (string) $host->submit('/theme dark')->reason);
         self::assertFalse($host->isBusy());
 
         $noBackend = SessionHost::new('s', WorkspaceContext::new(sessionStore: $this->store));

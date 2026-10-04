@@ -14,4 +14,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'Agents',
     paletteAction: PaletteAction::SwitchAgent,
     paletteLabel: 'Switch agent',
-))->withHandler('handleAgentsCommand')->withAliases('agent');
+))->withHandler('handleAgentsCommand')->withAliases('agent')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\AgentsHostCommand::class);

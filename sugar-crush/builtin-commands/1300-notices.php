@@ -15,4 +15,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'notices',
     'Show every warning this launch raised, un-capped and un-aggregated',
     'App',
-))->withHandler('handleNoticesCommand');
+))->withHandler('handleNoticesCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\NoticesHostCommand::class);

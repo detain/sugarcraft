@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands\Specs;
 
 use SugarCraft\Crush\Commands\CommandSpec;
+use SugarCraft\Crush\Host\Commands\HostCommand;
 
 /**
  * One built-in command: its registry row plus how `Chat::dispatchCommand()`
@@ -22,22 +23,33 @@ use SugarCraft\Crush\Commands\CommandSpec;
  *   file is not; `BuiltInCommandsTest` reds when a name stops resolving.
  * - {@see $aliases} dispatch to the same handler but own no row, so no surface
  *   advertises them — README's slash roster prints them in parentheses.
+ * - {@see $hostCommand} names the {@see HostCommand} that holds the command's
+ *   LOGIC (roadmap O-2h), or null for a command that only exists where there
+ *   is a screen (`/theme`, `/pane`, the pickers) or whose logic has not left
+ *   `Chat` yet. The TUI still routes through {@see $handler} — a thin delegate
+ *   that applies the result to the model — while a headless
+ *   {@see \SugarCraft\Crush\Host\SessionHost} runs the host command directly,
+ *   and answers a null one with `CommandResult::clientOnly()`.
  */
 final class BuiltInCommand
 {
-    /** @param list<string> $aliases */
+    /**
+     * @param list<string> $aliases
+     * @param class-string<HostCommand>|null $hostCommand
+     */
     private function __construct(
         public readonly CommandSpec $spec,
         public readonly ?string $handler,
         public readonly CommandArguments $arguments,
         public readonly array $aliases,
+        public readonly ?string $hostCommand,
     ) {
     }
 
     /** A row with no dispatch: palette-only until {@see withHandler()} gives it one. */
     public static function new(CommandSpec $spec): self
     {
-        return new self($spec, null, CommandArguments::Text, []);
+        return new self($spec, null, CommandArguments::Text, [], null);
     }
 
     /** Route `/name` to the private `Chat` method `$method`, handing it `$arguments`. */
@@ -50,6 +62,33 @@ final class BuiltInCommand
     public function withAliases(string ...$aliases): self
     {
         return $this->mutate(['aliases' => array_values($aliases)]);
+    }
+
+    /**
+     * Run the command's logic through $class without a screen as well
+     * (roadmap O-2h): it is what `SessionHost::runCommand()` constructs.
+     *
+     * @param class-string<HostCommand> $class
+     */
+    public function withHostCommand(string $class): self
+    {
+        if (!is_subclass_of($class, HostCommand::class)) {
+            throw new \InvalidArgumentException("/{$this->spec->name}'s host command {$class} is not a " . HostCommand::class);
+        }
+
+        return $this->mutate(['hostCommand' => $class]);
+    }
+
+    /** A fresh instance of the command's {@see $hostCommand}, or null when it runs in the TUI only. */
+    public function instantiateHostCommand(): ?HostCommand
+    {
+        if ($this->hostCommand === null) {
+            return null;
+        }
+
+        $class = $this->hostCommand;
+
+        return new $class();
     }
 
     public function name(): string
@@ -83,6 +122,6 @@ final class BuiltInCommand
     {
         $state = array_merge(get_object_vars($this), $changes);
 
-        return new self($state['spec'], $state['handler'], $state['arguments'], $state['aliases']);
+        return new self($state['spec'], $state['handler'], $state['arguments'], $state['aliases'], $state['hostCommand']);
     }
 }

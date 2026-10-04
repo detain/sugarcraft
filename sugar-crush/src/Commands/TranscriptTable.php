@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Host\Commands\CommandContext;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Table\Table;
 
@@ -101,7 +102,7 @@ final class TranscriptTable
      * R4): under 26 columns the table was fitted to a pane wider than the
      * one it is painted in.
      */
-    public static function paneWidth(Chat $chat): int
+    public static function paneWidth(Chat|CommandContext $chat): int
     {
         return max(1, $chat->cols() - self::CHROME_COLS);
     }

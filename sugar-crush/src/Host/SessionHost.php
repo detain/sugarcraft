@@ -10,9 +10,13 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\InteractiveTurn;
 use SugarCraft\Crush\BackendToolEventsMsg;
+use SugarCraft\Crush\BangShellResultMsg;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\CommandParser;
 use SugarCraft\Crush\Commands\BangShell;
 use SugarCraft\Crush\Commands\CommandSpec;
+use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Commands\Specs\BuiltInCommands;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
@@ -20,6 +24,11 @@ use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Host\Commands\CommandContext;
+use SugarCraft\Crush\Host\Commands\CommandEffect;
+use SugarCraft\Crush\Host\Commands\CommandEffectKind;
+use SugarCraft\Crush\Host\Commands\CommandResult;
+use SugarCraft\Crush\Host\Commands\CommandText;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\SessionPermissionMemo;
 use SugarCraft\Crush\Session\SessionLock;
@@ -45,9 +54,12 @@ use SugarCraft\Crush\Util\TokenTracker;
  *   running turn (roadmap 1.C-3, and also held as a follow-up so it is never
  *   lost), queued, or — a host's own delivery — sent after cancelling the
  *   running turn;
- * - idle: a `!cmd` and every slash command are refused (both are TUI
- *   surfaces until O-2h); a command FILE is expanded exactly as the TUI
- *   expands it, off this thread when its body runs a shell (audit 15b-20);
+ * - idle: a `!cmd` runs off this thread and holds the session until its
+ *   row lands, as in the TUI; a command FILE is expanded exactly as the TUI
+ *   expands it, off this thread when its body runs a shell (audit 15b-20); a
+ *   built-in slash command runs through the same `Host\Commands` body the TUI
+ *   runs (roadmap O-2h, {@see runCommand()}) — a screen-only one is answered
+ *   with `CommandResult::clientOnly()`;
  *   the spend cap refuses; the automatic compaction tier compacts the
  *   history with the synchronous heuristic (roadmap 2.5) — the TUI's
  *   model-written route is not wired here yet — or refuses at the blocking
@@ -78,6 +90,9 @@ final class SessionHost
     private ?CancellationToken $turn = null;
 
     private int $generation = 0;
+
+    /** Whether the work holding {@see $turn} is a workflow run (`/workflow pause|status` may still run). */
+    private bool $workflowTurn = false;
 
     /** Thrash breaker's run of refilled compactions (roadmap 2.10 / §4.23). */
     private int $consecutiveRefills = 0;
@@ -285,6 +300,7 @@ final class SessionHost
 
         $this->turn->cancel();
         $this->turn = null;
+        $this->workflowTurn = false;
         $this->generation++;
         $this->inbox->exchangeArray([]);
         $this->history = array_map(static function (Message $message): Message {
@@ -312,6 +328,35 @@ final class SessionHost
         $this->queue = [];
 
         return $count;
+    }
+
+    /**
+     * Run the built-in command `/$name $args` (roadmap O-2h, Appendix O §6.3
+     * `command.exec`) and say what it produced. Its rows are already in the
+     * transcript and its effects applied when this returns; off-turn work it
+     * started lands later as a row.
+     *
+     * Refused while a turn holds the session — a command would rewrite the
+     * history that turn is about to append to — except `/workflow pause|status`
+     * inside the workflow run they control. A name that is no built-in is
+     * refused too: unlike {@see submit()}, this never sends text to the model.
+     */
+    public function runCommand(string $name, string $args = ''): CommandResult
+    {
+        $name = ltrim(trim($name), '/');
+        $text = trim('/' . $name . ' ' . trim($args));
+
+        if ($this->isBusy() && !$this->isWorkflowControl($text)) {
+            return CommandResult::refused($this->turns()->hostCommandNotice($text, true));
+        }
+
+        $result = $this->dispatchCommand($text)
+            ?? CommandResult::refused(sprintf('/%s is not a built-in command.', $name));
+        if (!$result->isRefused()) {
+            $this->applyCommandResult($result);
+        }
+
+        return $result;
     }
 
     /**
@@ -361,9 +406,13 @@ final class SessionHost
     {
         $turns = $this->turns();
 
-        switch ($turns->midTurnRoute($text, false, $options)) {
-            case TurnController::ROUTE_QUIT:
+        switch ($turns->midTurnRoute($text, $this->isWorkflowControl($text), $options)) {
             case TurnController::ROUTE_WORKFLOW_CONTROL:
+                // `/workflow pause|status` inside the run they control (audit
+                // WF-4): run, and leave the run holding the session.
+                return $this->command($text) ?? TurnTicket::refused($turns->hostCommandNotice($text, true));
+
+            case TurnController::ROUTE_QUIT:
             case TurnController::ROUTE_REFUSE_COMMAND:
                 return TurnTicket::refused($turns->hostCommandNotice($text, true));
 
@@ -396,20 +445,21 @@ final class SessionHost
     {
         $turns = $this->turns();
 
+        // `!cmd` (roadmap 5.14g): the user's own shell command, run here as the
+        // TUI runs it. It calls no model, so it needs no backend.
         $bang = BangShell::commandOf($text);
         if ($bang !== null) {
-            return TurnTicket::refused($turns->hostBangNotice($bang));
+            return $this->runBang($bang);
         }
 
-        if ($this->workspace->backend === null) {
-            return TurnTicket::refused($turns->noBackendNotice());
-        }
-
-        // FILE-BASED COMMANDS FIRST, ahead of the slash-command refusal: a
-        // project `compact.md` replaces `/compact`, and a command file IS a
-        // prompt, so everything below applies to its expansion.
+        // FILE-BASED COMMANDS FIRST, ahead of the built-ins: a project
+        // `compact.md` replaces `/compact`, and a command file IS a prompt, so
+        // everything below applies to its expansion.
         $command = $turns->resolveCustomCommand($text, $this->customCommands);
         if ($command !== null) {
+            if ($this->workspace->backend === null) {
+                return TurnTicket::refused($turns->noBackendNotice());
+            }
             if ($turns->customCommandMustFork($text, $this->customCommands, null, $this->workspace->projectCommandsTrusted)) {
                 return $this->parkExpansion($text, $command);
             }
@@ -420,8 +470,15 @@ final class SessionHost
             );
         }
 
-        if (str_starts_with($text, '/') || TurnController::isBareMcpAuthCommand($text)) {
-            return TurnTicket::refused($turns->hostCommandNotice($text, false));
+        // A built-in runs through its `Host\Commands` body, as in the TUI; a
+        // `/word` that names none is prose, as it is there.
+        $ran = $this->command($text);
+        if ($ran !== null) {
+            return $ran;
+        }
+
+        if ($this->workspace->backend === null) {
+            return TurnTicket::refused($turns->noBackendNotice());
         }
 
         return $this->admitPrompt($text, $options->resolveMentions, $text);
@@ -656,6 +713,257 @@ final class SessionHost
                     $this->releaseQueue();
                 }
             },
+        );
+    }
+
+    // ── commands (roadmap O-2h) ────────────────────────────────────────
+
+    /**
+     * Run $text when it is a built-in command and say how it was taken, or
+     * null when it is not one (prose, or a `/word` no built-in answers to).
+     */
+    private function command(string $text): ?TurnTicket
+    {
+        $result = $this->dispatchCommand($text);
+        if ($result === null) {
+            return null;
+        }
+        if ($result->isRefused()) {
+            return TurnTicket::refused((string) $result->error);
+        }
+
+        $this->applyCommandResult($result);
+
+        return TurnTicket::handled();
+    }
+
+    /**
+     * The built-in $text dispatches to, run through its host command — the
+     * TUI's table (`builtin-commands/`), so the two cannot route one draft
+     * differently. Null when $text names no built-in. A built-in with no host
+     * body, or one whose answer is a screen ({@see CommandEffectKind::OpenTitleEditor}),
+     * is {@see CommandResult::clientOnly()}.
+     */
+    private function dispatchCommand(string $text): ?CommandResult
+    {
+        if (TurnController::isBareMcpAuthCommand($text)) {
+            $spec = BuiltInCommands::forSpelling('mcp');
+        } else {
+            $parsed = (new CommandParser())->parse($text);
+            if ($parsed === null || !str_starts_with($text, '/' . $parsed->name)) {
+                return null;
+            }
+            $spec = BuiltInCommands::forSpelling($parsed->name);
+            if ($spec !== null && !$spec->accepts($text, $parsed->name)) {
+                return null;
+            }
+        }
+        if (!$spec instanceof BuiltInCommand) {
+            return null;
+        }
+
+        $command = $spec->instantiateHostCommand();
+        if ($command === null) {
+            return CommandResult::clientOnly($spec->name());
+        }
+
+        $result = $command->run($this->commandContext(), $text);
+
+        return $result->effect(CommandEffectKind::OpenTitleEditor) !== null
+            ? CommandResult::clientOnly($spec->name())
+            : $result;
+    }
+
+    /**
+     * Whether $text is `/workflow pause|status`, typed while the workflow run
+     * it controls holds the session — the one command a busy session runs
+     * (audit WF-4). A command file of that name is a prompt, so it queues.
+     */
+    private function isWorkflowControl(string $text): bool
+    {
+        if (!$this->workflowTurn || $this->workspace->workflowEngine === null) {
+            return false;
+        }
+
+        $tokens = CommandText::tokens($text);
+
+        return $tokens[0] === '/workflow'
+            && \in_array($tokens[1] ?? '', ['pause', 'status'], true)
+            && $this->turns()->resolveCustomCommand($text, $this->customCommands) === null;
+    }
+
+    /**
+     * Apply what a command decided to this session — `Chat::applyCommandResult()`'s
+     * headless twin. Effects first, then the rows, then a save.
+     *
+     * - The session id is this host's for life, so a `/branch` does not move
+     *   it: the branch exists in the store (its reply names it) and a client
+     *   opens it through the hub.
+     * - A rename is already in the store; a host keeps no title in memory.
+     * - Off-turn work runs on the loop; its answer lands as a UI-only row.
+     * - An occupying run (a workflow) holds the session as a turn does, until
+     *   its report lands; a cancelled run's report still lands, and releases
+     *   nothing.
+     */
+    private function applyCommandResult(CommandResult $result): void
+    {
+        foreach ($result->effects as $effect) {
+            switch ($effect->kind) {
+                case CommandEffectKind::ClearTranscript:
+                    $this->history = [];
+                    // The breaker counted rewrites of the transcript just cleared.
+                    $this->consecutiveRefills = 0;
+                    break;
+
+                case CommandEffectKind::RestoreCheckpoint:
+                    $this->history = $effect->messages();
+                    break;
+
+                case CommandEffectKind::Async:
+                    $this->runAsync($effect);
+                    break;
+
+                case CommandEffectKind::OccupyTurn:
+                    $this->occupy($effect);
+                    break;
+
+                case CommandEffectKind::SwitchSession:
+                case CommandEffectKind::RenameSession:
+                case CommandEffectKind::OpenTitleEditor:
+                    break;
+            }
+        }
+
+        $this->history = [...$this->history, ...$result->rows];
+        $this->save();
+    }
+
+    private function runAsync(CommandEffect $effect): void
+    {
+        $describe = $effect->describe();
+        try {
+            $promise = ($effect->run())();
+        } catch (\Throwable $e) {
+            $this->appendCommandRow("**Error:** {$e->getMessage()}");
+
+            return;
+        }
+
+        $promise->then(
+            function (mixed $value) use ($describe): void {
+                $text = $describe === null ? null : $describe($value);
+                if ($text !== null) {
+                    $this->appendCommandRow($text);
+                }
+            },
+            function (\Throwable $e): void {
+                $this->appendCommandRow("**Error:** {$e->getMessage()}");
+            },
+        );
+    }
+
+    private function occupy(CommandEffect $effect): void
+    {
+        $cancellation = $effect->cancellation() ?? new CancellationToken();
+        $this->turn = $cancellation;
+        $this->workflowTurn = $effect->isWorkflow();
+        $generation = ++$this->generation;
+
+        $land = function (string $report) use ($generation): void {
+            $this->appendCommandRow($report);
+            if ($generation !== $this->generation) {
+                // Cancelled: the report is the record of what ran, and the
+                // session it held was released by the cancel.
+                return;
+            }
+            $this->turn = null;
+            $this->workflowTurn = false;
+            $this->releaseQueue();
+        };
+
+        try {
+            $promise = ($effect->run())();
+        } catch (\Throwable $e) {
+            $land("**Error:** {$e->getMessage()}");
+
+            return;
+        }
+
+        $promise->then($land, static fn (\Throwable $e) => $land("**Error:** {$e->getMessage()}"));
+    }
+
+    /** One UI-only reply row a command's later answer lands as, saved. */
+    private function appendCommandRow(string $text): void
+    {
+        $this->history[] = Message::assistant($text)->withUiOnly();
+        $this->save();
+    }
+
+    /**
+     * `!$bang` (roadmap 5.14g), as the TUI runs it: a Deny rule or plan mode's
+     * read-only rule refuses it ({@see BangShell::refusal()}); otherwise it
+     * runs off this thread, holding the session under its own token so a
+     * prompt typed meanwhile queues behind it and {@see cancel()} kills its
+     * process tree, and its result lands as the user-role row the model reads
+     * on the next turn.
+     */
+    private function runBang(string $bang): TurnTicket
+    {
+        $turns = $this->turns();
+        $root = $this->root();
+        $refused = BangShell::refusal($bang, $this->workspace->permissionGate, $root);
+        if ($refused !== null) {
+            $notice = $turns->bangRefusedNotice($bang, $refused);
+            $this->history[] = Message::notice($notice);
+            $this->save();
+
+            return TurnTicket::refused($notice);
+        }
+
+        $this->history[] = Message::notice($turns->bangRunningNotice($bang));
+        $cancellation = new CancellationToken();
+        $this->turn = $cancellation;
+        $generation = ++$this->generation;
+        $this->save();
+
+        $cmd = (BangShell::cmd($bang, $root, $cancellation, $generation))();
+        $cmd->promise->then(function (mixed $msg) use ($generation): void {
+            // A result for a command already cancelled is stale, as in the TUI.
+            if (!$msg instanceof BangShellResultMsg || $generation !== $this->generation) {
+                return;
+            }
+            $this->history[] = $msg->message;
+            $this->turn = null;
+            $this->save();
+            $this->releaseQueue();
+        });
+
+        return TurnTicket::handled();
+    }
+
+    /** The session as a host command reads it ({@see CommandContext}). */
+    private function commandContext(): CommandContext
+    {
+        $backend = $this->workspace->backend;
+
+        return CommandContext::new(
+            history: $this->history,
+            sessionId: $this->sessionId,
+            root: $this->workspace->root,
+            permissionGate: $this->workspace->permissionGate,
+            backend: $backend,
+            titleBackend: $this->workspace->titleBackend,
+            agentManager: $this->workspace->agentManager,
+            sessionStore: $this->workspace->sessionStore,
+            transcripts: $this->transcripts,
+            turnRunner: $this->runner(),
+            rulesState: $this->workspace->rulesState,
+            workflowEngine: $this->workspace->workflowEngine,
+            backgroundSupervisor: $this->workspace->backgroundSupervisor,
+            memoryStore: $this->workspace->memoryStore,
+            contextTokenLimit: $backend === null ? null : $this->meter()->limit($backend),
+            contextTokens: $this->estimate($this->history),
+            workspace: $this->workspace,
         );
     }
 

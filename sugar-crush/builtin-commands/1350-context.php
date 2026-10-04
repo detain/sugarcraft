@@ -13,4 +13,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'context',
     'Show what fills the context window: prompt layers, tools, history, cache',
     'App',
-))->withHandler('handleContextCommand')->withAliases('tokens');
+))->withHandler('handleContextCommand')->withAliases('tokens')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\ContextHostCommand::class);

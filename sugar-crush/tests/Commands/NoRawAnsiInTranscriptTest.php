@@ -107,7 +107,13 @@ final class NoRawAnsiInTranscriptTest extends TestCase
      */
     private static function capturedCommandClasses(): array
     {
+        // Since roadmap O-2h the command bodies that capture live in
+        // `src/Host/Commands/`, where a headless session runs them too; the
+        // handlers left in Chat delegate there. Both are scanned.
         $chat = (string) file_get_contents(__DIR__ . '/../../src/Chat.php');
+        foreach (glob(__DIR__ . '/../../src/Host/Commands/*.php') ?: [] as $hostCommand) {
+            $chat .= "\n" . (string) file_get_contents($hostCommand);
+        }
 
         $classes = [];
         $offset = 0;

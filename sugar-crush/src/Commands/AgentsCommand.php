@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Commands;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Host\Commands\CommandContext;
 
 /**
  * Implements the /agents and /agent commands for listing and inspecting agents.
@@ -76,11 +77,11 @@ final class AgentsCommand
     /**
      * Execute the /agents or /agent command.
      *
-     * @param Chat  $chat  The current chat session
+     * @param Chat|CommandContext $chat The session the command runs in (TUI or headless), for the pane width
      * @param array $args  Parsed command arguments (from CommandParser)
      * @return int         Exit code: 0 on success, non-zero on failure
      */
-    public function execute(Chat $chat, array $args = []): int
+    public function execute(Chat|CommandContext $chat, array $args = []): int
     {
         // /agents with no args lists all active agents
         if ($args === []) {

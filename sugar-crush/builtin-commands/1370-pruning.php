@@ -12,4 +12,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'Show or set how this session prunes its context: auto, manual or off',
     'App',
     argumentHint: '[auto|manual|off|default]',
-))->withHandler('handlePruningCommand');
+))->withHandler('handlePruningCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\PruningHostCommand::class);

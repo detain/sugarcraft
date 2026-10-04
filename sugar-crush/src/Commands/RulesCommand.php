@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Host\Commands\CommandContext;
 use SugarCraft\Crush\Context\Rule;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulesState;
@@ -99,11 +100,11 @@ final class RulesCommand
     /**
      * Execute /rules: list with no argument, toggle with one.
      *
-     * @param Chat  $chat  The current chat session, for the pane width the table fits to
+     * @param Chat|CommandContext $chat The session the command runs in, for the pane width the table fits to
      * @param array $args  Parsed command arguments (from CommandParser)
      * @return int         Exit code: 0 on success, non-zero on failure
      */
-    public function execute(Chat $chat, array $args = []): int
+    public function execute(Chat|CommandContext $chat, array $args = []): int
     {
         if ($args === []) {
             return $this->listPacks($chat, $this->packs());
@@ -139,7 +140,7 @@ final class RulesCommand
      *
      * @param list<Rule> $packs
      */
-    private function listPacks(Chat $chat, array $packs): int
+    private function listPacks(Chat|CommandContext $chat, array $packs): int
     {
         if ($packs === []) {
             echo "\n  No rule packs found.\n";

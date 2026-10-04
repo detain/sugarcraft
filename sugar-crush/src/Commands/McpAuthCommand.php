@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Host\Commands\CommandContext;
 use SugarCraft\Crush\MCP\McpAuthStore;
 
 /**
@@ -114,11 +115,11 @@ final class McpAuthCommand
     /**
      * Execute the `mcp auth` command.
      *
-     * @param Chat  $chat  The current chat session (unused but part of the contract)
+     * @param Chat|CommandContext $chat The session the command runs in, for the pane width
      * @param array $args  Parsed sub-command arguments: [subCommand, ...rest]
      * @return int         Exit code: 0 on success, non-zero on failure
      */
-    public function execute(Chat $chat, array $args = []): int
+    public function execute(Chat|CommandContext $chat, array $args = []): int
     {
         $subCommand = $args[0] ?? 'list';
 
@@ -164,7 +165,7 @@ final class McpAuthCommand
      * discovery path — {@see \SugarCraft\Crush\Cli\Bootstrap::mcpServerInventory()}
      * — so the panel and `sugarcrush mcp --json` can never disagree.
      */
-    private function listWithProjectPanel(Chat $chat, int $paneWidth): int
+    private function listWithProjectPanel(Chat|CommandContext $chat, int $paneWidth): int
     {
         // E698: the same render also gets THIS PROCESS's started-servers map —
         // read from the memo only, so opening the panel can never be the act

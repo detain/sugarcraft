@@ -27,6 +27,10 @@ namespace SugarCraft\Crush\Host;
  *   answers.
  * - {@see REFUSED}: nothing was sent; {@see $reason} is the sentence a user
  *   reads, the same one the TUI writes into its transcript.
+ * - {@see HANDLED}: it was a slash command or a `!cmd`, run by the host
+ *   (roadmap O-2h) rather than sent to the model; its rows are already in the
+ *   transcript, and one that occupies the session (a `!cmd`, a workflow run)
+ *   holds it until its result lands.
  */
 final class TurnTicket
 {
@@ -35,8 +39,9 @@ final class TurnTicket
     public const STEERED = 'steered';
     public const PENDING = 'pending';
     public const REFUSED = 'refused';
+    public const HANDLED = 'handled';
 
-    private const ADMISSIONS = [self::STARTED, self::QUEUED, self::STEERED, self::PENDING, self::REFUSED];
+    private const ADMISSIONS = [self::STARTED, self::QUEUED, self::STEERED, self::PENDING, self::REFUSED, self::HANDLED];
 
     private function __construct(
         public readonly string $admitted,
@@ -91,6 +96,12 @@ final class TurnTicket
         return self::new(self::PENDING);
     }
 
+    /** The submission was a command the host ran itself (roadmap O-2h). */
+    public static function handled(): self
+    {
+        return self::new(self::HANDLED);
+    }
+
     /** A refused ticket, with the sentence that says why. */
     public static function refused(string $reason): self
     {
@@ -103,7 +114,7 @@ final class TurnTicket
         return $this->mutate(['idempotencyKey' => $key]);
     }
 
-    /** Whether anything will reach the model for this submission (now or later). */
+    /** Whether the host took this submission — to the model (now or later), or as a command it ran. */
     public function isAdmitted(): bool
     {
         return $this->admitted !== self::REFUSED;

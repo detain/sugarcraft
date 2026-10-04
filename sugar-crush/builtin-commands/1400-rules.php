@@ -16,4 +16,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'List the rule packs, or toggle one for this session',
     'Rules',
     argumentHint: '[name]',
-))->withHandler('handleRulesCommand');
+))->withHandler('handleRulesCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\RulesHostCommand::class);

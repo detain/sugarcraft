@@ -279,8 +279,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // `settings.json` too and `permissionConfigLayers()` merges both. Naming
         // one of two files sends half of the people who follow it to the wrong
         // one. User-tier for the same reason as the entry above: the file is
-        // under `~`, so a repository cannot write it.
-        'Chat.php|.sugar-crush/settings.json' => self::USER,
+        // under `~`, so a repository cannot write it. The report left `Chat` for
+        // `Host\Commands\PermissionsCommand` (roadmap O-2h), so a headless
+        // session prints the same sentence — which is why its `config.json`
+        // half is now a second occurrence beside the `refuseCommandShell()` one.
+        'Host/Commands/PermissionsCommand.php|.sugar-crush/config.json' => self::USER,
+        'Host/Commands/PermissionsCommand.php|.sugar-crush/settings.json' => self::USER,
         // The two sentences `/rules` prints when there is nothing to list: where
         // a pack goes, and the older directory that holds packs too. Neither is a
         // path this file reads or builds — same shape as the
@@ -389,7 +393,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY occurrences — one per entry
+     * APPEARS IN. On this tree that is FIFTY-ONE occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY-ONE distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
@@ -582,7 +586,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             39 => 'THIRTY-NINE', 40 => 'FORTY', 41 => 'FORTY-ONE',
             42 => 'FORTY-TWO', 43 => 'FORTY-THREE', 44 => 'FORTY-FOUR', 45 => 'FORTY-FIVE',
             46 => 'FORTY-SIX', 47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT', 49 => 'FORTY-NINE',
-            50 => 'FIFTY'];
+            50 => 'FIFTY', 51 => 'FIFTY-ONE', 52 => 'FIFTY-TWO', 53 => 'FIFTY-THREE',
+            54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE'];

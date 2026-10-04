@@ -11,6 +11,8 @@ use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommands;
 use SugarCraft\Crush\Commands\Specs\CommandArguments;
+use SugarCraft\Crush\Host\Commands\HostCommand;
+use SugarCraft\Crush\Host\Commands\PermissionsCommand;
 
 /**
  * DH-CMDS: the built-in commands are one spec file each under
@@ -133,5 +135,37 @@ final class BuiltInCommandsTest extends TestCase
         self::assertSame(CommandArguments::None, $routed->arguments);
         self::assertSame(['zz', 'zzz'], $routed->spellings());
         self::assertSame($spec, $routed->spec);
+    }
+
+    /**
+     * Roadmap O-2h: a command's `hostCommand` is what a headless session runs,
+     * built by class name — so every one must be a {@see HostCommand} with a
+     * no-argument constructor, and only a dispatching row can carry one.
+     */
+    public function testEveryHostCommandIsAHostCommandBuiltWithNoArguments(): void
+    {
+        $hosted = [];
+        foreach (BuiltInCommands::all() as $command) {
+            if ($command->hostCommand === null) {
+                self::assertNull($command->instantiateHostCommand());
+                continue;
+            }
+
+            self::assertNotNull($command->handler, "/{$command->name()} runs headless, so it must dispatch in the TUI too");
+            self::assertInstanceOf(HostCommand::class, $command->instantiateHostCommand());
+            $hosted[] = $command->name();
+        }
+
+        self::assertContains('permissions', $hosted);
+        self::assertNotContains('theme', $hosted, 'a screen-only command has no host body');
+    }
+
+    public function testAHostCommandMustImplementTheContract(): void
+    {
+        $spec = BuiltInCommand::new(CommandSpec::new('zz', 'z', 'App'))->withHandler('handleKeysCommand');
+
+        self::assertSame(PermissionsCommand::class, $spec->withHostCommand(PermissionsCommand::class)->hostCommand);
+        $this->expectException(\InvalidArgumentException::class);
+        $spec->withHostCommand(\stdClass::class);
     }
 }

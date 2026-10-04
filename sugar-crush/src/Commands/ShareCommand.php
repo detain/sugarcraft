@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Commands;
 
 use RuntimeException;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Host\Commands\CommandContext;
 use SugarCraft\Crush\Share\ShareResult;
 use SugarCraft\Crush\Share\ShareSession;
 use SugarCraft\Crush\Support\AtomicFileWriter;
@@ -52,7 +53,7 @@ final class ShareCommand
     /**
      * @param list<string> $args Command arguments: [format] [path]
      */
-    public function execute(Chat $chat, array $args = []): int
+    public function execute(Chat|CommandContext $chat, array $args = []): int
     {
         $args = array_values(array_filter($args, static fn(string $a): bool => $a !== ''));
 
@@ -134,7 +135,7 @@ final class ShareCommand
     /**
      * @throws RuntimeException When no safe destination can be named.
      */
-    private function targetPath(Chat $chat, ShareSession $session, ?string $path): string
+    private function targetPath(Chat|CommandContext $chat, ShareSession $session, ?string $path): string
     {
         $fileName = $this->defaultFileName($chat, $session);
 
@@ -176,7 +177,7 @@ final class ShareCommand
         return rtrim($home, '/') . '/' . self::EXPORTS_SUBDIR;
     }
 
-    private function defaultFileName(Chat $chat, ShareSession $session): string
+    private function defaultFileName(Chat|CommandContext $chat, ShareSession $session): string
     {
         $sessionId = preg_replace('/[^A-Za-z0-9_-]+/', '-', $chat->currentSessionId() ?? '') ?: 'session';
         $stamp = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Ymd\THis\Z');

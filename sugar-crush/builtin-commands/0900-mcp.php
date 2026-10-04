@@ -22,4 +22,5 @@ return BuiltInCommand::new(CommandSpec::new(
     paletteAction: PaletteAction::ToggleMcp,
     paletteLabel: 'List MCP servers',
     argumentHint: '<list|add|remove|login> [server]',
-))->withHandler('handleMcpAuthCommand');
+))->withHandler('handleMcpAuthCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\McpAuthHostCommand::class);

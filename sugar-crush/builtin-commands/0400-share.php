@@ -15,4 +15,5 @@ return BuiltInCommand::new(CommandSpec::new(
     paletteAction: PaletteAction::ShareSession,
     paletteLabel: 'Share session',
     argumentHint: '[md|html|json] [path]',
-))->withHandler('handleShareCommand');
+))->withHandler('handleShareCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\ShareHostCommand::class);

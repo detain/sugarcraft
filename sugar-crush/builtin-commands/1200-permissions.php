@@ -25,4 +25,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'permissions',
     'Show this session\'s permission mode, its source, and the rules it decides by',
     'App',
-))->withHandler('handlePermissionsCommand');
+))->withHandler('handlePermissionsCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\PermissionsCommand::class);

@@ -206,12 +206,19 @@ through the same `TranscriptStore`, so a server and the TUI cannot disagree
 about what a prompt becomes or what the event log says about it.
 `submit(string, SubmitOptions): TurnTicket` answers with the admission
 (`started`, `queued`, `steered`, `pending` behind forked hooks or an
-expansion, or `refused` with the sentence the TUI would write), `snapshot()`
-gives a client the rows, status, queue and the log seq to follow from,
-`cancel()` heals running tool rows exactly as Esc Esc does, and `pump()` folds
-the turn's live events on the host's own tick. What it does not do yet:
-slash commands and `!cmd` are refused (O-2h), and the 85% tier compacts with
-the heuristic only — the model-written route is the TUI's. `Host\SessionHub`
+expansion, `handled` for a command it ran, or `refused` with the sentence the
+TUI would write), `snapshot()` gives a client the rows, status, queue and the
+log seq to follow from, `cancel()` heals running tool rows exactly as Esc Esc
+does, and `pump()` folds the turn's live events on the host's own tick. Slash
+commands run through the same `Host\Commands` bodies the TUI's handlers
+delegate to: each spec file in `builtin-commands/` names its `hostCommand`,
+whose `run()` answers with `CommandResult{rows[], effects[]}` that `Chat` and
+the host each apply in their own terms. `runCommand(name, args)` is the wire
+door; a screen-only command (`/theme`, `/pane`, the pickers) or one whose logic
+is still in `Chat` answers `CommandResult::clientOnly()` (`-32030`), and `!cmd`
+runs off the loop, holding the session as it does in the TUI. What it does not
+do yet: the 85% tier compacts with the heuristic only — the model-written
+route is the TUI's. `Host\SessionHub`
 owns the open hosts of one workspace: opening a session loads its transcript
 and takes the same `SessionLock` a TUI takes, so a session another process
 holds is refused, and only an idle host is ever evicted past the open-session

@@ -10,4 +10,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'Search the web via SearXNG',
     'Tools',
     argumentHint: '<query> [--safesearch 0|1|2] [--time-range day|month|year]',
-))->withHandler('handleWebSearchCommand');
+))->withHandler('handleWebSearchCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\WebSearchHostCommand::class);

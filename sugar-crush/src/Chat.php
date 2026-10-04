@@ -11085,6 +11085,188 @@ final class Chat implements Model
     }
 
     /**
+     * The session as a {@see \SugarCraft\Crush\Host\Commands\HostCommand}
+     * reads it (roadmap O-2h): this model's history and collaborators, with
+     * the services shared by identity so a command that writes a memory or
+     * toggles a rule pack changes the same objects the next turn reads. A
+     * headless {@see \SugarCraft\Crush\Host\SessionHost} builds the same
+     * value from its own state, which is how the two run one command body.
+     */
+    private function commandContext(): \SugarCraft\Crush\Host\Commands\CommandContext
+    {
+        return \SugarCraft\Crush\Host\Commands\CommandContext::new(
+            history: $this->history,
+            sessionId: $this->currentSessionId,
+            root: $this->projectRoot,
+            cols: $this->cols(),
+            readOnly: $this->readOnlySession,
+            permissionGate: $this->permissionGate(),
+            backend: $this->backend,
+            titleBackend: $this->titleBackend,
+            agentManager: $this->agentManager,
+            sessionStore: $this->sessionStore,
+            transcripts: $this->transcripts(),
+            turnRunner: $this->turnRunner(),
+            rulesState: $this->rulesState,
+            workflowEngine: $this->workflowEngine,
+            backgroundSupervisor: $this->backgroundSupervisor,
+            memoryStore: $this->memoryStore,
+            webSearch: $this->webSearch,
+            contextTokenLimit: $this->contextTokenLimit(),
+            contextTokens: $this->contextTokens(),
+            workspace: $this->workspace,
+        );
+    }
+
+    /**
+     * Run $command's logic for $text and apply what it decided — the body of
+     * every handler whose command moved to `Host\Commands` (roadmap O-2h).
+     * The handler names stay, because the spec files route to them and the
+     * docs and tests cite them.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function runHostCommand(\SugarCraft\Crush\Host\Commands\HostCommand $command, string $text): array
+    {
+        return $this->applyCommandResult($command->run($this->commandContext(), $text));
+    }
+
+    /**
+     * Apply a {@see \SugarCraft\Crush\Host\Commands\CommandResult} to this
+     * model: the box is consumed, the effects become this model's own state
+     * (a cleared transcript also drops the stream, the scroll and the
+     * expansions; a restored checkpoint puts its draft and caret back; an
+     * off-turn effect becomes a Cmd), and the rows are appended last.
+     *
+     * The turn is released unless the result holds it: every command but
+     * `/workflow pause|status` runs idle, where that changes nothing, and
+     * those two run inside the workflow turn they control (audit WF-4).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult $result): array
+    {
+        $history = $this->history;
+        $changes = ['inputBuf' => ''];
+        if (!$result->holdsTurn) {
+            $changes['inFlight'] = false;
+        }
+        $cmds = [];
+        $cursor = null;
+        $openTitleEditor = false;
+
+        foreach ($result->effects as $effect) {
+            switch ($effect->kind) {
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::ClearTranscript:
+                    $history = [];
+                    $changes = [
+                        ...$changes,
+                        'streamingText' => '',
+                        'reasoningText' => '',
+                        'scrollOffset' => 0,
+                        'expanded' => [],
+                        // An outstanding `/compact` summarization is abandoned:
+                        // the exchanges it summarised are gone.
+                        'pendingCompactionId' => null,
+                        // Unarm the breaker with the transcript that tripped it.
+                        'consecutiveRefillCompactions' => 0,
+                    ];
+                    break;
+
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::RestoreCheckpoint:
+                    $history = $effect->messages();
+                    // E681: the draft the checkpoint captured goes back into the
+                    // box — one of mutate()'s replace-the-whole-draft routes.
+                    $changes['inputBuf'] = $effect->draft();
+                    // A summary landing after a restore would compact the
+                    // transcript the user just recovered (see applyModelCompaction()).
+                    $changes['pendingCompactionId'] = null;
+                    $cursor = $effect->cursor();
+                    break;
+
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::SwitchSession:
+                    $changes['currentSessionId'] = $effect->sessionId();
+                    // Out of a read-only window, the draft it refused comes
+                    // back: this window can send it now ({@see refuseReadOnly()}).
+                    $changes['inputBuf'] = $this->readOnlyDraft ?? '';
+                    $changes['readOnlyDraft'] = null;
+                    break;
+
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::RenameSession:
+                    $changes['currentSessionName'] = $effect->title();
+                    $changes['currentSessionTitleSource'] = $effect->titleSource();
+                    break;
+
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::OpenTitleEditor:
+                    $openTitleEditor = true;
+                    break;
+
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::Async:
+                    $cmds[] = Cmd::promise($effect->run());
+                    break;
+
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::OccupyTurn:
+                    // The run is a turn: it occupies the session, the spinner
+                    // runs, and a second prompt queues behind it. Released by
+                    // the AssistantMsg arm when its report settles.
+                    $cancellation = $effect->cancellation() ?? new CancellationToken();
+                    $changes['inFlight'] = true;
+                    $changes['inFlightCancellation'] = $cancellation;
+                    $changes['workflowTurnInFlight'] = $effect->isWorkflow();
+                    $cmds[] = self::settleCommandRun($effect->run(), $cancellation);
+                    break;
+            }
+        }
+
+        $changes['history'] = [...$history, ...$result->rows];
+        $next = $this->mutate($changes);
+        // AFTER the mutate: naming `inputBuf` rebuilds the draft with the caret
+        // at the end, so a captured offset is re-applied to the rebuilt draft.
+        if ($cursor !== null) {
+            $next = $next->withInputCursor($cursor);
+        }
+        if ($openTitleEditor) {
+            $next = $next->openTitleEditor();
+        }
+
+        return [$next, match (\count($cmds)) {
+            0 => null,
+            1 => $cmds[0],
+            default => Cmd::batch(...$cmds),
+        }];
+    }
+
+    /**
+     * The Cmd that settles an occupying command run ({@see \SugarCraft\Crush\Host\Commands\CommandEffect::occupyTurn()}):
+     * its report becomes the reply that releases the turn — or, when Esc Esc
+     * already released it, a {@see CancelledWorkflowReportMsg} that only
+     * appends the row, so it cannot settle a turn started since.
+     *
+     * Resolves, never rejects: a rejection would surface as candy-core's
+     * `ExceptionMsg`, which nothing handles, and leave `inFlight` latched.
+     *
+     * @param \Closure(): PromiseInterface<string> $run
+     */
+    private static function settleCommandRun(\Closure $run, CancellationToken $cancellation): \Closure
+    {
+        return Cmd::promise(static function () use ($run, $cancellation): PromiseInterface {
+            $land = static function (string $text) use ($cancellation): Msg {
+                $report = Message::assistant($text)->withUiOnly();
+
+                return $cancellation->isCancelled()
+                    ? new CancelledWorkflowReportMsg($report)
+                    : new AssistantMsg($report);
+            };
+
+            try {
+                return $run()->then($land, static fn (\Throwable $e): Msg => $land("**Error:** {$e->getMessage()}"));
+            } catch (\Throwable $e) {
+                return \React\Promise\resolve($land("**Error:** {$e->getMessage()}"));
+            }
+        });
+    }
+
+    /**
      * `/exit` (`/quit`) — the same quit Ctrl+C and the palette's Exit action
      * send, reachable without a modifier key.
      *
@@ -11245,413 +11427,90 @@ final class Chat implements Model
     }
 
     /**
-     * `/permissions` — what this session is actually gated by.
-     *
-     * The name sat in {@see CommandRegistry::CONTROL_PLANE} for two rounds with
-     * no row and no arm: reserved against a project's `permissions.md`, on
-     * behalf of a command that did not exist. Typing it sent the word
-     * "/permissions" to the MODEL, which is the one place a question about
-     * local policy has no business going.
-     *
-     * A TRANSCRIPT MESSAGE, not a modal overlay like `/keys`. The answer is
-     * text worth scrolling back to, worth having above the turn it explains,
-     * and worth still being there when the next refusal lands — which is
-     * exactly when it gets typed.
-     *
-     * READ-ONLY, in the strong sense: see {@see permissionsReport()} for the
-     * accessors it is built on and why reaching for
-     * {@see PermissionGate::evaluate()} here would have been a bug rather
-     * than a shortcut.
+     * `/permissions` — what this session is actually gated by; the report is
+     * {@see \SugarCraft\Crush\Host\Commands\PermissionsCommand}'s (roadmap
+     * O-2h), read off the launch's live gate and never through its evaluator.
      *
      * @return array{0: self, 1: ?\Closure}
      */
     private function handlePermissionsCommand(string $inputText): array
     {
-        return [
-            $this->mutate([
-                'history' => [
-                    ...$this->history,
-                    Message::user($inputText)->withUiOnly(),
-                    Message::assistant($this->permissionsReport())->withUiOnly(),
-                ],
-                'inputBuf' => '',
-                'inFlight' => false,
-            ]),
-            null,
-        ];
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\PermissionsCommand(), $inputText);
     }
 
     /**
      * `/context` (and `/tokens`): where the next request's context window
-     * goes — the system prompt per layer, the tool schemas, the history, the
-     * largest messages and the cache-hit share (roadmap 5.6). Read-only and
-     * local: it measures in this process, sends nothing and calls no model.
-     *
-     * The history figure is {@see contextTokens()} — the status bar's own —
-     * so the two surfaces cannot disagree. The prompt layers come from a
-     * backend that assembles its own prompt
-     * ({@see \SugarCraft\Crush\Backend\ReportsPromptSections}); the tool
-     * schemas from an engine backend's tool list. Either may be unknown, and
-     * the report then says so instead of printing a zero.
+     * goes (roadmap 5.6) — {@see \SugarCraft\Crush\Host\Commands\ContextHostCommand}.
+     * The history figure is {@see contextTokens()}, the status bar's own, so
+     * the two surfaces cannot disagree.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleContextCommand(string $inputText): array
     {
-        $sections = null;
-        if ($this->backend instanceof \SugarCraft\Crush\Backend\ReportsPromptSections) {
-            try {
-                $sections = $this->backend->promptSectionSizes();
-            } catch (\Throwable) {
-                // A layer that fails to build here fails the next turn too and
-                // is reported there; this read-only panel just says "not measured".
-                $sections = null;
-            }
-        }
-        $tools = $this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend ? $this->backend->tools() : null;
-
-        $breakdown = \SugarCraft\Crush\Context\ContextBreakdown::measure(
-            $this->history,
-            $sections,
-            $tools,
-            $this->contextTokenLimit(),
-            $this->contextTokens(),
-        )
-            // Roadmap 5.6 remainder: what the session's ledger prunes out.
-            ->withPruning($this->sessionContextLedger(), $this->history);
-
-        return [
-            $this->mutate([
-                'history' => [
-                    ...$this->history,
-                    Message::user($inputText)->withUiOnly(),
-                    Message::assistant((new \SugarCraft\Crush\Commands\ContextCommand($breakdown))->report())->withUiOnly(),
-                ],
-                'inputBuf' => '',
-                'inFlight' => false,
-            ]),
-            null,
-        ];
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\ContextHostCommand(), $inputText);
     }
 
     /**
      * `/sweep [n]` (roadmap 3.B-2): prune by hand the tool outputs since the
-     * last prompt, or the last n — see {@see \SugarCraft\Crush\Commands\SweepCommand}.
-     * The session's ledger is the one {@see \SugarCraft\Crush\Host\TurnRunner}
-     * keeps, so the next turn sends the placeholders; the transcript is
-     * untouched. Never mid-turn: {@see submit()} refuses every slash command
-     * while one runs, so the turn's own ledger cannot overwrite the sweep.
+     * last prompt, or the last n — {@see \SugarCraft\Crush\Host\Commands\SweepHostCommand}.
+     * Never mid-turn: {@see submit()} refuses every slash command while one
+     * runs, so the turn's own ledger cannot overwrite the sweep.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleSweepCommand(string $inputText): array
     {
-        $before = $this->sessionContextLedger();
-        [$ledger, $reply] = \SugarCraft\Crush\Commands\SweepCommand::run($this->history, $before, self::commandArgument($inputText));
-
-        return $this->contextLedgerCommandResponse($inputText, $before, $ledger, $reply);
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\SweepHostCommand(), $inputText);
     }
 
     /**
      * `/pruning [auto|manual|off|default]` (roadmap 3.B-2): show or set this
-     * session's pruning mode — see {@see \SugarCraft\Crush\Commands\PruningCommand}.
+     * session's pruning mode — {@see \SugarCraft\Crush\Host\Commands\PruningHostCommand}.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handlePruningCommand(string $inputText): array
     {
-        $before = $this->sessionContextLedger();
-        [$ledger, $reply] = \SugarCraft\Crush\Commands\PruningCommand::run($before, self::commandArgument($inputText));
-
-        return $this->contextLedgerCommandResponse($inputText, $before, $ledger, $reply);
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\PruningHostCommand(), $inputText);
     }
 
     /**
      * This session's context ledger as its next turn would start from it
-     * (roadmap 2.2-2): the one its {@see \SugarCraft\Crush\Host\TurnRunner}
-     * keeps, synced against the history, following the configured pruning
-     * mode where the session chose none.
+     * (roadmap 2.2-2) — {@see \SugarCraft\Crush\Host\Commands\CommandContext::contextLedger()},
+     * the one the ledger commands read, over this model's runner and store.
      */
     private function sessionContextLedger(): \SugarCraft\Crush\Context\Pruning\ContextLedger
     {
-        return $this->turnRunner()
-            ->ledger($this->transcripts(), $this->currentSessionId)
-            ->syncAgainstHistory($this->history)
-            ->withDefaultMode(\SugarCraft\Crush\Context\Pruning\PruningMode::configured());
+        return \SugarCraft\Crush\Host\Commands\CommandContext::new(
+            history: $this->history,
+            sessionId: $this->currentSessionId,
+            transcripts: $this->transcripts(),
+            turnRunner: $this->turnRunner(),
+        )->contextLedger();
     }
 
     /**
-     * One exit for the ledger commands: keep $ledger as the session's when it
-     * is not $before, and append the command and its reply as UI-only rows.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function contextLedgerCommandResponse(
-        string $inputText,
-        \SugarCraft\Crush\Context\Pruning\ContextLedger $before,
-        \SugarCraft\Crush\Context\Pruning\ContextLedger $ledger,
-        string $reply,
-    ): array {
-        if ($ledger !== $before) {
-            $this->turnRunner()->saveLedger($this->transcripts(), $this->currentSessionId, $ledger);
-        }
-
-        return [
-            $this->mutate([
-                'history' => [
-                    ...$this->history,
-                    Message::user($inputText)->withUiOnly(),
-                    Message::assistant($reply)->withUiOnly(),
-                ],
-                'inputBuf' => '',
-                'inFlight' => false,
-            ]),
-            null,
-        ];
-    }
-
-    /**
-     * `/notices` — every warning this launch raised, whole on the transcript.
-     *
-     * E653 Shape A capped what the transcript could carry (a ≤2-row grant
-     * aggregate; a 24-slot notice shelf whose overflow rows arrive clipped) and
-     * sent the whole sentences only to stderr — a scrollback the app cannot
-     * re-read. This is the other half: the same stores, un-capped, one line per
-     * fact. {@see NoticesCommand} owns the why of reading the stores rather
-     * than keeping one; this handler is the permissions-shaped transcript write
-     * that rides on top of it — a message worth scrolling back to, not an
-     * overlay, because the question "what did I ignore at launch?" gets asked
-     * mid-session, above whatever turn prompted it.
+     * `/notices` — every warning this launch raised, whole on the transcript
+     * ({@see \SugarCraft\Crush\Host\Commands\NoticesHostCommand}).
      *
      * @return array{0: self, 1: ?\Closure}
      */
     private function handleNoticesCommand(string $inputText): array
     {
-        return [
-            $this->mutate([
-                'history' => [
-                    ...$this->history,
-                    Message::user($inputText)->withUiOnly(),
-                    Message::assistant((new NoticesCommand($this->agentManager))->report())->withUiOnly(),
-                ],
-                'inputBuf' => '',
-                'inFlight' => false,
-            ]),
-            null,
-        ];
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\NoticesHostCommand(), $inputText);
     }
 
     /**
-     * The `/permissions` body, DERIVED from the launch's live
-     * {@see PermissionGate} rather than restating what the config said.
-     *
-     * WHY DERIVED MATTERS HERE MORE THAN USUAL. A permission screen that
-     * disagrees with the enforcing gate is worse than no screen: it tells
-     * somebody they are in `plan` while `bypass-permissions` runs. So every
-     * line comes off the gate itself — {@see PermissionGate::mode()},
-     * {@see PermissionGate::modeSource()}, {@see PermissionGate::rules()},
-     * {@see PermissionGate::autoBreaker()} — the mode's own sentence comes off
-     * {@see PermissionMode::description()}, and the breaker's thresholds come
-     * back from the gate alongside the counters so this method never writes
-     * "of 3" in its own hand.
-     *
-     * WHAT IT MUST NOT USE, and this is the trap the item was really about:
-     * {@see PermissionGate::evaluate()} MUTATES the Auto-mode circuit breaker.
-     * Building a preview on it — "what would this gate say about a Write?" —
-     * would advance or reset the strike counters every time a user opened a
-     * read-only screen, i.e. a safety state changed by being looked at. The
-     * gate grew read-only doors for this; nothing here calls the evaluator.
-     *
-     * Rule patterns, classifier categories AND the mode source are run through
-     * {@see reportField()} on the way out — NOT through
-     * {@see Sanitize::untrusted()} directly, which preserves the two bytes that
-     * matter most to a report built line-per-fact. All three are
-     * caller-supplied text landing in the transcript — the source label is
-     * built around a config path that `--config` can name — and an ESC byte in
-     * any of them would put raw ANSI in front of the frame-diff renderer. That
-     * is the `[33m`-as-literal-text defect `Commands\NoRawAnsiInTranscriptTest`
-     * guards at the SOURCE for the `ob_start()`-captured commands; this one is
-     * not among them (it writes no stdout, so that census cannot see it by
-     * construction), and its guard is
-     * `Commands\PermissionsCommandTest::testTheReportHasExactlyTheLinesTheRendererIntended()`
-     * — a RUNTIME check on the bytes actually produced, which is the stronger
-     * half of that pair anyway. The mode source was measured getting through
-     * before that test was written.
-     *
-     * A LINE OF THIS REPORT IS ONE LINE BY CONSTRUCTION, and that is a property
-     * of the whole method rather than of any field: `$lines` is assembled here
-     * and joined with `"\n"` at the bottom, so the report's line count is
-     * exactly `count($rules) + 6` for every possible config — the mode line,
-     * the description, a blank, one rules line (the header, or the "none
-     * configured" sentence that stands in its place, which is why the formula
-     * needs no special case at zero), one line per rule, a blank, and the
-     * breaker. Nothing a caller supplies may change it.
-     * {@see reportField()} is what enforces
-     * that, and the paragraph there records what got through before it existed.
-     */
-    private function permissionsReport(): string
-    {
-        $gate = $this->permissionGate();
-        if ($gate === null) {
-            // NOT "you are unprotected": this Chat has no gate to report, which
-            // is the ordinary shape for an embedder and for a Chat built with
-            // neither a hook chain nor an engine backend. Whatever hooks are
-            // installed still run — see checkProjectCommandShell()'s own
-            // "no gate is not a refusal" note.
-            return 'No permission gate is attached to this session, so no mode and no rule are '
-                . 'deciding anything here. That is what an embedder gets, and a Chat built without a '
-                . 'hook chain and without an engine backend; a `sugarcrush` launch always builds one. '
-                . 'Any hooks that are installed still run.';
-        }
-
-        $mode = $gate->mode();
-
-        $lines = [
-            sprintf(
-                'Permission mode: %s — from %s',
-                // The mode is enum-constrained and safe by construction; the
-                // SOURCE is not. Bootstrap builds it around a file path, and
-                // that path can come from `--config`, so it is caller text on
-                // its way into the transcript exactly as a rule pattern is.
-                $mode->value,
-                $gate->modeSource() === null
-                    ? 'a source this gate did not record'
-                    : self::reportField($gate->modeSource()),
-            ),
-            $mode->description(),
-            '',
-        ];
-
-        $rules = $gate->rules();
-        if ($rules === []) {
-            // The path is deliberately not sentence-final. `Cli\ProjectTierRefusalInventoryTest`
-            // enumerates every dot-path literal in src/ and a trailing period
-            // makes `config.json.` a second, unclassified entry — measured, it
-            // reds that inventory.
-            // BOTH files are named, and the omission this replaces was one the
-            // feature already knew about: `Cli\Bootstrap::PERMISSION_SETTINGS_KEYS`
-            // lists `permissionRules`, `permissionConfigLayers()` merges the
-            // `settings.json` layer beneath `config.json`, and
-            // `Cli\BootstrapToolAndPermissionSettingsTest::testTheGateRemembersWhichFileSetTheMode()`
-            // asserts the source label printed one line above this one can read
-            // `settings.json`. Sending a user to edit one of two files
-            // is a coin flip they lose half the time, and they lose it silently
-            // — rules in the file this sentence did not name still load.
-            $lines[] = 'Rules: none configured, so every decision above is the mode\'s own. '
-                . 'A `permissionRules` array in ~/.sugar-crush/config.json or in '
-                . '~/.sugar-crush/settings.json is where they go; config.json wins where both set a key.';
-        } else {
-            $lines[] = sprintf(
-                'Rules (%d), tried in this order — the first one that matches decides, ahead of the mode:',
-                count($rules),
-            );
-            foreach ($rules as $index => $rule) {
-                $lines[] = sprintf(
-                    '  %d. %-5s %s',
-                    $index + 1,
-                    $rule->action->value,
-                    self::reportField($rule->pattern),
-                );
-            }
-        }
-
-        $lines[] = '';
-        $lines[] = self::autoBreakerLine($gate);
-
-        return implode("\n", $lines);
-    }
-
-    /**
-     * One caller-supplied value, made safe to be PART OF A REPORT LINE.
-     *
-     * {@see Sanitize::untrusted()} is the wrong tool on its own here, and the
-     * reason is a deliberate feature of it: it PRESERVES `\t`, `\n` and `\r`
-     * (`Util\Sanitize` strips `[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, and those
-     * three are excluded). That is right for a sink that renders a paragraph
-     * and wrong for one that builds a line-per-fact report and joins with
-     * `"\n"`: an LF inside a rule pattern or a `--config` path does not become
-     * visible text, it becomes A NEW REPORT LINE, indistinguishable from one
-     * this method wrote.
-     *
-     * MEASURED, on the build that shipped this screen. A single rule whose
-     * `pattern` carried two LFs added
-     * `Permission mode: bypass-permissions - from --permission-mode` to a
-     * report drawn off a gate that was in `default`; a `modeSource` carrying
-     * LFs added `Rules (9), tried in this order:` to a gate holding no rules at
-     * all; and a CR mid-pattern let the tail of the value overwrite the head of
-     * its own line on a real terminal. So the screen whose entire purpose is to
-     * stop a lie about permissions could be made to tell one, in the gate's own
-     * voice, by the config it reads — and `permissionRules[].pattern` is
-     * validated only by `is_string()` in {@see \SugarCraft\Crush\Cli\Bootstrap},
-     * while `~/.sugar-crush/config.json` is writable by any model holding
-     * `Write` under `auto` or `bypass-permissions`.
-     *
-     * ESCAPED, not stripped. A pattern that really does contain a newline is a
-     * broken rule its author needs to SEE; deleting the byte silently would
-     * print a pattern that is not the one the gate is matching with, which is
-     * the same class of lie one step quieter. `\n` renders as the two
-     * characters a user would have typed. TAB goes with them: it forges no
-     * line, but it does move the cursor across the `%-5s` action column and
-     * mis-set the alignment that makes the rule list readable as a table.
-     *
-     * The guard is
-     * `Commands\PermissionsCommandTest::testTheReportHasExactlyTheLinesTheRendererIntended()`,
-     * which counts LINES against the count the renderer intended rather than
-     * scanning for residue bytes — the residue scan that shipped with this
-     * screen asserted a byte class that was a strict SUBSET of what
-     * `untrusted()` already removes, so it could only ever confirm that
-     * `untrusted()` had been called.
-     *
-     * Promoted to public for `Commands\NoticesCommand` (E653 Shape B), which
-     * renders config paths and on-disk preset names into the same class of
-     * transcript surface — the second sibling screen to need this guard, in
-     * the E164 promotion line rather than a copy that could drift.
+     * One caller-supplied value, made safe to be PART OF A REPORT LINE — see
+     * {@see \SugarCraft\Crush\Host\Commands\PermissionsCommand::reportField()},
+     * where the `/permissions` report moved (roadmap O-2h). Kept here because
+     * `Commands\NoticesCommand`, `Commands\MemoryHistoryCommand` and the
+     * provider switch's report all render through this name.
      */
     public static function reportField(string $value): string
     {
-        return strtr(Sanitize::untrusted($value), [
-            "\n" => '\\n',
-            "\r" => '\\r',
-            "\t" => '\\t',
-        ]);
-    }
-
-    /**
-     * Where the Auto-mode circuit breaker stands, in the gate's own numbers.
-     *
-     * Reported for every mode rather than only for `auto`, and saying plainly
-     * that it is idle elsewhere: the counters exist on every gate, and a line
-     * that simply vanished under the other five modes reads as "there is no
-     * such thing" rather than "it is not counting right now".
-     *
-     * Both thresholds come back from {@see PermissionGate::autoBreaker()}. They
-     * are private constants of the evaluator, and printing this method's own
-     * copy of them is precisely the drift that would let the screen advertise
-     * "of 3" the day the evaluator started escalating at 4.
-     */
-    private static function autoBreakerLine(PermissionGate $gate): string
-    {
-        $breaker = $gate->autoBreaker();
-
-        if ($gate->mode() !== PermissionMode::Auto) {
-            return sprintf(
-                'Auto-mode circuit breaker: idle. It only counts under `%s`, and this session is `%s`.',
-                PermissionMode::Auto->value,
-                $gate->mode()->value,
-            );
-        }
-
-        return sprintf(
-            'Auto-mode circuit breaker: %d of %d consecutive blocks (%s), %d of %d blocks this session. '
-            . 'Reaching either threshold turns the next block into a prompt instead of a refusal.',
-            $breaker['consecutiveBlocks'],
-            $breaker['strikeThreshold'],
-            $breaker['lastBlockedCategory'] === null
-                ? 'nothing blocked yet'
-                : 'last category: ' . self::reportField($breaker['lastBlockedCategory']),
-            $breaker['totalBlocks'],
-            $breaker['totalBlockThreshold'],
-        );
+        return \SugarCraft\Crush\Host\Commands\PermissionsCommand::reportField($value);
     }
 
     /**
@@ -11894,19 +11753,12 @@ final class Chat implements Model
      */
     private function handleClearCommand(): array
     {
-        return [$this->mutate([
-            'history' => [],
-            'inputBuf' => '',
-            'streamingText' => '',
-            'reasoningText' => '',
-            'scrollOffset' => 0,
-            'expanded' => [],
-            'pendingCompactionId' => null,
-            // Unarm the breaker with the transcript that tripped it - see the
-            // docblock bullet above for why this is the only reset that is not
-            // derived from a compaction's own result.
-            'consecutiveRefillCompactions' => 0,
-        ]), null];
+        // The decision is {@see \SugarCraft\Crush\Host\Commands\ClearCommand}'s
+        // (roadmap O-2h); what it means for THIS model — the stream, the scroll,
+        // the expansions, a pending `/compact` and the breaker all reset with
+        // the transcript, the breaker being the one reset not derived from a
+        // compaction's own result — is {@see applyCommandResult()}'s.
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\ClearCommand(), '/clear');
     }
 
     /**
@@ -12652,251 +12504,74 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /share: export the session to a local file (roadmap X-35a). The
-     * reply is {@see ShareCommand}'s own output, which names the written path.
+     * Handle /share: export the session to a local file (roadmap X-35a) —
+     * {@see \SugarCraft\Crush\Host\Commands\ShareHostCommand}. The reply is
+     * {@see ShareCommand}'s own output, which names the written path.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleShareCommand(string $inputBuf): array
     {
-        // Parse args from the command (after "/share")
-        $afterShare = self::commandArgument($inputBuf);
-        $args = $afterShare !== '' ? preg_split('/\s+/', $afterShare) : [];
-
-        // Execute the ShareCommand - it outputs directly to stdout, capture via output buffering
-        ob_start();
-        $shareCommand = new ShareCommand();
-        $exitCode = $shareCommand->execute($this, $args);
-        $output = ob_get_clean();
-
-        // ShareCommand returns 0 for success, non-zero for errors
-        if ($exitCode !== 0) {
-            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
-        }
-
-        return $this->shareResponse($inputBuf, trim((string) $output));
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\ShareHostCommand(), $inputBuf);
     }
 
     /**
-     * Handle /websearch command.
+     * Handle /websearch — {@see \SugarCraft\Crush\Host\Commands\WebSearchHostCommand},
+     * the one command whose exchange the model reads.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleWebSearchCommand(string $inputBuf): array
     {
-        $afterCommand = self::commandArgument($inputBuf);
-        $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
-
-        ob_start();
-        $command = new WebSearchCommand($this->webSearch);
-        $exitCode = $command->execute($this, $args);
-        $output = ob_get_clean();
-
-        if ($exitCode !== 0) {
-            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
-        }
-
-        return $this->webSearchResponse($inputBuf, $output);
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\WebSearchHostCommand(), $inputBuf);
     }
 
     /**
-     * Return a share command response, adding both user command and assistant response to history.
+     * A slash command that exited non-zero, reported IN the transcript —
+     * {@see \SugarCraft\Crush\Host\Commands\CommandResult::failure()}.
      *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function shareResponse(string $inputBuf, string $response): array
-    {
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            'inputBuf' => '',
-            'inFlight' => false,
-        ]);
-        return [$next, null];
-    }
-
-    /**
-     * A slash command that exited non-zero, reported IN the transcript.
-     *
-     * USER-REPORTED CRASH. The three callers each did
+     * USER-REPORTED CRASH. The callers each did
      * `return [$this, static fn() => print $output];`, and that is a fatal
      * rather than a diagnostic: `print` is an EXPRESSION whose value is
-     * `int 1`, so the closure is a `Cmd` returning an int.
-     * {@see \SugarCraft\Core\Program::scheduleCmd()} dispatches whatever
-     * non-null a Cmd returns, and {@see \SugarCraft\Core\Program::dispatch()}
-     * requires a `Msg` — so the app died with
-     * "Argument #1 ($msg) must be of type Msg, int given" on the first
-     * `/websearch` with no query. `/share` and `/agents` carried the identical
-     * line, and `/agents` is one Ctrl+A away.
-     *
-     * Writing to stdout was the wrong shape even before the TypeError: the
-     * screen belongs to candy-core's frame renderer, so a bare `print` during
-     * a TUI run paints over a frame it did not compose and is erased by the
-     * next one. The old comment at the `/agents` site said "output error but
-     * don't add to history", which is why the failure had nowhere to appear.
-     *
-     * Both messages are added, unlike before: the command ECHO so the
-     * transcript shows what was typed, and the output as `Role::System`
-     * rather than `assistant` because an app-generated failure notice is not
-     * a model reply and must not be replayed to the provider as one.
-     *
-     * `$exitCode` is named in the fallback only — a command that fails
-     * silently would otherwise produce an empty transcript line, which reads
-     * as "nothing happened" for the one case where something did.
+     * `int 1`, so the closure is a `Cmd` returning an int, and
+     * {@see \SugarCraft\Core\Program::dispatch()} requires a `Msg` — the app
+     * died on the first `/websearch` with no query. Writing to stdout was the
+     * wrong shape even before the TypeError: the screen belongs to
+     * candy-core's frame renderer. So the echo and the output both land, the
+     * output as `Role::System` — an app-generated failure notice is not a
+     * model reply and must not be replayed to the provider as one.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function commandFailureResponse(string $inputBuf, string $output, int $exitCode): array
     {
-        $trimmed = trim($output);
-        $notice = $trimmed !== ''
-            ? $trimmed
-            : sprintf('Command failed with exit code %d and produced no output.', $exitCode);
-
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::notice($notice)],
-            'inputBuf' => '',
-            'inFlight' => false,
-        ]);
-
-        return [$next, null];
+        return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::failure($inputBuf, $output, $exitCode));
     }
 
     /**
-     * Return a websearch command response, adding both user command and assistant response to history.
+     * `/agents` (`/agent`) — {@see \SugarCraft\Crush\Host\Commands\AgentsHostCommand}.
+     * A Chat built without an agent manager (an embedder; a launch always has
+     * one) answers "not configured" rather than throwing out of `update()`.
      *
      * @return array{0:Chat,1:?\Closure}
      */
-    private function webSearchResponse(string $inputBuf, string $response): array
-    {
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
-            'inputBuf' => '',
-            'inFlight' => false,
-        ]);
-        return [$next, null];
-    }
-
     private function handleAgentsCommand(string $inputBuf): array
     {
-        // R20.fix: Bootstrap::chat() USED to pass no `agentManager:` -- so
-        // this was reachable with zero configuration via a typed "/agents"
-        // *and*, since R20 added the Ctrl+A shortcut below in update(), via a
-        // single accidental keystroke. crush_code.md Phase 1 item 1 closed
-        // that gap (Bootstrap::agentManager() now supplies a real one on every
-        // launch), so the branch below is no longer what a CLI user hits; it
-        // remains the degradation for embedders that construct a Chat
-        // directly, and is kept because that is a supported construction --
-        // Chat's every other collaborator is optional the same way. The
-        // former "?? throw" here escaped
-        // uncaught out of Chat::update(): candy-core's Program has no
-        // try/catch around its synchronous update() dispatch, so the
-        // exception propagated out of the event loop entirely, skipping
-        // teardownTerminal() and leaving the real terminal in whatever
-        // raw/alt-screen state it was in. Degrade gracefully instead, the
-        // same "<thing> not configured" pattern every other optional
-        // collaborator on this class already follows (see
-        // handleWorkflowCommand()/handleSessionsCommand()/
-        // handleMemoryCommand() above).
-        if ($this->agentManager === null) {
-            return $this->agentsResponse($inputBuf, 'Agent manager not configured. Set an AgentManager to use /agents commands.');
-        }
-
-        // Parse args from the command (after "/agent" or "/agents"). The
-        // helper ends the name where the parser does, so neither alias needs
-        // its own length - which is what a bare "/agents" once got wrong,
-        // yielding the trailing "s" as an argument.
-        $afterCommand = self::commandArgument($inputBuf);
-        $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
-
-        // Execute the AgentsCommand - it outputs directly to stdout, capture via output buffering
-        ob_start();
-        $agentsCommand = new AgentsCommand($this->agentManager);
-        $exitCode = $agentsCommand->execute($this, $args);
-        $output = ob_get_clean();
-
-        if ($exitCode !== 0) {
-            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
-        }
-
-        return $this->agentsResponse($inputBuf, $output);
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\AgentsHostCommand(), $inputBuf);
     }
 
     /**
-     * Return an agents command response, adding both user command and assistant response to history.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function agentsResponse(string $inputBuf, string $response): array
-    {
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            'inputBuf' => '',
-            'inFlight' => false,
-        ]);
-        return [$next, null];
-    }
-
-    /**
-     * `/rules` — list the operator's rule packs, or toggle one for this session
-     * only (prompt_plan.md P6.S3).
-     *
-     * The shape is {@see handleAgentsCommand()}'s, including the two parts that
-     * look incidental: the output is captured with `ob_start()` because
-     * {@see \SugarCraft\Crush\Commands\RulesCommand} writes to stdout, and a
-     * non-zero exit goes through {@see commandFailureResponse()} so a bad pack
-     * name lands in the transcript as a `Role::System` notice rather than as an
-     * assistant reply the provider would be shown on the next turn.
-     *
-     * NO "not configured" degradation, unlike the agents handler above it. The two
-     * collaborators this needs are ones a Chat always has: {@see $rulesState} is
-     * allocated in the constructor when nobody injects one, and the loader is built
-     * here against {@see projectRoot()} — the same resolution the prompt splice
-     * uses, so the listing and the prompt cannot be looking at different
-     * directories. Walking per COMMAND rather than caching per keystroke is the
-     * right trade here: the walk happens once when the user asks, and a pack file
-     * dropped in mid-session shows up immediately, which is the behaviour an
-     * operator editing those files expects.
-     *
-     * THE STATE MUTATION AND THE HISTORY WRITE ARE THE SAME STEP. `execute()`
-     * mutates the shared {@see RulesState} in place and the returned Chat carries
-     * the same object, so there is nothing to thread through `mutate()`'s changes
-     * array and no window in which the transcript says one thing about a pack and
-     * the next prompt says another. It also means a toggle survives the next
-     * `mutate()` by identity, which is what the session-scoped-but-not-volatile
-     * property rests on.
+     * `/rules` — list the operator's rule packs, or toggle one for this
+     * session only (prompt_plan.md P6.S3) —
+     * {@see \SugarCraft\Crush\Host\Commands\RulesHostCommand}. The toggle
+     * mutates the shared {@see RulesState} this model carries by identity, so
+     * the transcript and the next prompt cannot disagree about a pack.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleRulesCommand(string $inputBuf): array
     {
-        $afterCommand = self::commandArgument($inputBuf);
-        $args = $afterCommand !== '' ? (preg_split('/\s+/', $afterCommand) ?: []) : [];
-
-        ob_start();
-        $rulesCommand = new RulesCommand(new RuleLoader($this->projectRoot()), $this->rulesState);
-        $exitCode = $rulesCommand->execute($this, $args);
-        $output = ob_get_clean();
-
-        if ($exitCode !== 0) {
-            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
-        }
-
-        return $this->rulesResponse($inputBuf, $output);
-    }
-
-    /**
-     * Return a rules command response, adding both user command and assistant response to history.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function rulesResponse(string $inputBuf, string $response): array
-    {
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            'inputBuf' => '',
-            'inFlight' => false,
-        ]);
-        return [$next, null];
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\RulesHostCommand(), $inputBuf);
     }
 
     /**
@@ -15059,55 +14734,25 @@ final class Chat implements Model
     }
 
     /**
-     * The argument text of a dispatched command: everything after "/name" and
-     * the ONE separator {@see CommandParser} accepted there, trimmed; '' when
-     * the command was typed bare.
-     *
-     * The separator is a space OR a ':', because CommandParser ends the name
-     * at whichever comes first and {@see dispatchCommand()} routes on that
-     * name - so `/rename:Release prep` reaches the same arm as `/rename
-     * Release prep`. The handlers used to slice the raw draft at a fixed
-     * offset (`substr($inputText, 7)` for "/rename"), which only ever skipped
-     * the name: the colon spelling arrived with its ':' still on the front
-     * and stored a session called ":Release prep", and `/rewind:all` read as
-     * a step count (audit 15b-22). Only one separator is consumed, so a
-     * space-spelled argument that itself begins with ':' keeps it.
-     *
-     * Kept in this one place rather than as each handler's own offset so the
-     * name/argument boundary cannot drift from the parser's again. Not
-     * `$parsed->args`: those are CommandParser's unquoted tokens, and these
-     * handlers want the raw text (a session name keeps its spacing, a
-     * workflow sub-command re-splits it its own way).
+     * The argument text of a dispatched command — the rule is
+     * {@see \SugarCraft\Crush\Host\Commands\CommandText::argument()}, which
+     * the moved command bodies read too (roadmap O-2h), so the name/argument
+     * boundary cannot drift from the parser's (audit 15b-22).
      */
     private static function commandArgument(string $inputText): string
     {
-        if (preg_match('/^\s*\/[^\s:]*[\s:]?(.*)$/s', $inputText, $m) !== 1) {
-            return '';
-        }
-
-        return trim($m[1]);
+        return \SugarCraft\Crush\Host\Commands\CommandText::argument($inputText);
     }
 
     /**
-     * A slash command split into whitespace tokens, the command word first
-     * and {@see commandArgument()}'s argument after it — for the arms that
-     * read positional words (`/pane`, `/layout`, `/mcp`).
-     *
-     * Splitting the whole draft instead left the colon spelling's
-     * sub-command glued to the name: `/pane:dock left` came out as
-     * `["/pane:dock", "left"]`, so the arm read `left` as its verb and
-     * answered with usage (audit 15b-24). The command word is normalised to
-     * `/name` so a caller can still index the argument words from 1.
+     * A slash command split into whitespace tokens, the command word first —
+     * {@see \SugarCraft\Crush\Host\Commands\CommandText::tokens()} (audit 15b-24).
      *
      * @return list<string>
      */
     private static function commandTokens(string $inputText): array
     {
-        $name = preg_match('/^\s*(\/[^\s:]*)/', $inputText, $m) === 1 ? $m[1] : '';
-        $argument = self::commandArgument($inputText);
-        $words = $argument === '' ? [] : (preg_split('/\s+/', $argument, -1, PREG_SPLIT_NO_EMPTY) ?: []);
-
-        return [$name, ...$words];
+        return \SugarCraft\Crush\Host\Commands\CommandText::tokens($inputText);
     }
 
     /**
@@ -19988,13 +19633,7 @@ final class Chat implements Model
      */
     private function handleMcpAuthCommand(string $inputBuf): array
     {
-        ob_start();
-        $authStore = \SugarCraft\Crush\MCP\McpAuthStore::create();
-        $command = new McpAuthCommand($authStore);
-        $command->execute($this, self::parseMcpArgs($inputBuf));
-        $output = (string) ob_get_clean();
-
-        return $this->mcpAuthResponse($inputBuf, $output);
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\McpAuthHostCommand(), $inputBuf);
     }
 
     /**
@@ -20029,36 +19668,6 @@ final class Chat implements Model
      */
     private static function parseMcpArgs(string $inputBuf): array
     {
-        // The slash form goes through commandTokens(), so `/mcp:list` is
-        // `/mcp list` (audit 15b-24); the bare `mcp auth …` form has no
-        // colon spelling to honour.
-        $tokens = str_starts_with(ltrim($inputBuf), '/')
-            ? self::commandTokens($inputBuf)
-            : (preg_split('/\s+/', trim($inputBuf), -1, PREG_SPLIT_NO_EMPTY) ?: []);
-
-        if (isset($tokens[0]) && ltrim($tokens[0], '/') === 'mcp') {
-            array_shift($tokens);
-        }
-
-        if (($tokens[0] ?? null) === 'auth') {
-            array_shift($tokens);
-        }
-
-        return array_values($tokens);
-    }
-
-    /**
-     * Return an mcp auth command response, adding both user command and assistant response to history.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function mcpAuthResponse(string $inputBuf, string $response): array
-    {
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputBuf)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            'inputBuf' => '',
-            'inFlight' => false,
-        ]);
-        return [$next, null];
+        return \SugarCraft\Crush\Host\Commands\McpAuthHostCommand::arguments($inputBuf);
     }
 }

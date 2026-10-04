@@ -134,6 +134,7 @@ sugar-crush/tests/Tools/CapturedProcessDeadlineTest.php	2.539	5
 sugar-crush/tests/Backend/ProviderErrorSurfacingTest.php	2.506	10
 sugar-crush/tests/Session/TranscriptSchemaV2MigrationTest.php	2.500	10
 sugar-crush/tests/Chat/ChildSessionCreatedOnFinishTest.php	2.500	5
+sugar-crush/tests/Host/SessionHostCommandsTest.php	2.500	10
 sugar-crush/tests/Context/GlobDialectDifferentialTest.php	2.497	13
 sugar-crush/tests/Workflows/WorkflowAgentResultsTest.php	2.494	13
 sugar-crush/tests/Config/Settings/SettingsWriterCensusTest.php	2.430	4

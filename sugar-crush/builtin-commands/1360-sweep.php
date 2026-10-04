@@ -12,4 +12,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'Prune the tool outputs since your last prompt (or the last n) from what the model sees',
     'App',
     argumentHint: '[n]',
-))->withHandler('handleSweepCommand');
+))->withHandler('handleSweepCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\SweepHostCommand::class);

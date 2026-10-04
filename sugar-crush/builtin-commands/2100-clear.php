@@ -12,4 +12,5 @@ use SugarCraft\Crush\Commands\Specs\CommandArguments;
 // does not touch.
 return BuiltInCommand::new(
     CommandSpec::new('clear', 'Clear the transcript, keeping this session', 'Session'),
-)->withHandler('handleClearCommand', CommandArguments::None);
+)->withHandler('handleClearCommand', CommandArguments::None)
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\ClearCommand::class);

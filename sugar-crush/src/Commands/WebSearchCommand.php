@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Host\Commands\CommandContext;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -32,7 +33,7 @@ final class WebSearchCommand
     /**
      * @param list<string> $args Command arguments (whitespace-split)
      */
-    public function execute(Chat $chat, array $args = []): int
+    public function execute(Chat|CommandContext $chat, array $args = []): int
     {
         // Parse flags and extract query
         $safesearch = null;
