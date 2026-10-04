@@ -296,11 +296,15 @@ final class KeyBindingRegistryTest extends TestCase
      * read-only Agent View (roadmap P-C2): the three rows of the new
      * `Agent transcript` context (`agentview.back`, `.next`, `.prev`),
      * `agents.attach` (the peek's `Enter`) and `mouse.agent`.
+     *
+     * 114 -> 115 live (118 -> 119 all) with the Agent View's composer
+     * (roadmap P-D2): `agentview.send`, `Enter` sends the draft to the agent
+     * on screen.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(118, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(114, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(119, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(115, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(12, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

@@ -6641,6 +6641,21 @@ final class Renderer
         // transcript up on every turn. The accept hint is the first thing
         // dropped when room runs out, then the suggestion is cut.
         $suggestion = $chat->inputBuf === '' ? $chat->promptSuggestion() : null;
+        // Roadmap P-D2: with an Agent View open the box is THAT agent's
+        // composer (Enter sends to it, not to the main model), and an empty
+        // box says so in place of the main chat's guess — which would only
+        // tempt a message to the wrong recipient.
+        $composer = self::$agentView;
+        if ($composer !== null && $chat->inputBuf === '') {
+            $ghost = Width::truncate(
+                self::oneLine('message ' . self::untrusted((string) ($composer['composer'] ?? $composer['name'])) . '…'),
+                max(0, $textWidth - Width::of($cursor)),
+            );
+            if (trim($ghost) !== '') {
+                $draft = $cursor . Style::new()->foreground($theme->systemLabel)->faint()->render($ghost);
+            }
+            $suggestion = null;
+        }
         if ($suggestion !== null) {
             $ghost = self::oneLine($suggestion);
             $room = $textWidth - Width::of($cursor);

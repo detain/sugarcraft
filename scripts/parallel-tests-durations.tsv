@@ -250,6 +250,7 @@ sugar-crush/tests/Support/ReapsForkedChildrenTraitTest.php	1.114	7
 sugar-crush/tests/Support/ProcessTreeKillAsyncTest.php	1.112	5
 sugar-crush/tests/Cli/RefusalStderrSurfaceTest.php	1.108	4
 sugar-crush/tests/Chat/LiveStepWiringTest.php	1.100	3
+sugar-crush/tests/Chat/ColdResumeFinishedAgentTest.php	1.100	4
 sugar-crush/tests/Cli/ProjectTierRefusalInventoryTest.php	1.095	15
 sugar-crush/tests/Chat/SessionStartHookWireTest.php	1.095	14
 sugar-crush/tests/Integration/UsageWiringTest.php	1.085	43
@@ -421,6 +422,7 @@ sugar-crush/tests/Skills/SkillManagerTest.php	0.261	44
 sugar-crush/tests/Diagnostics/NoticeSinkIsolationTest.php	0.260	6
 sugar-crush/tests/Workflows/WorkflowUserTierContainmentTest.php	0.253	9
 sugar-crush/tests/Tui/MenuBarMouseTest.php	0.252	16
+sugar-crush/tests/Chat/AgentComposerTest.php	0.250	8
 sugar-crush/tests/Chat/ChatToolCancelKillsCommandTreeTest.php	0.241	1
 sugar-crush/tests/Integration/ContextWindowWiringTest.php	0.241	15
 sugar-crush/tests/Chat/InFlightInputQueueTest.php	0.240	26

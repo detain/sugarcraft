@@ -685,9 +685,10 @@ final class KeyBindingRegistry
     }
 
     /**
-     * The read-only Agent View (roadmap P-C2, Appendix P §5.5): a delegated
-     * run's own transcript in the main area, opened by a click on its live
-     * line, `Enter` on the strip, or `Enter` in the dashboard's peek.
+     * The Agent View (roadmap P-C2, Appendix P §5.5): a delegated run's own
+     * transcript in the main area, opened by a click on its live line,
+     * `Enter` on the strip, or `Enter` in the dashboard's peek, with the
+     * input box as that run's composer (P-D2).
      * {@see \SugarCraft\Crush\Tui\KeyboardHandler} answers these; every other
      * key reaches the chat as before.
      *
@@ -699,6 +700,10 @@ final class KeyBindingRegistry
 
         return [
             KeyBinding::new('agentview.back', 'Esc', 'Back to the main transcript (or Alt+↑)', $c),
+            // P-D2: the input box is the agent's composer while its view is
+            // open — a draft goes to the run's mailbox (or continues a
+            // finished run), never to the main model.
+            KeyBinding::new('agentview.send', 'Enter', 'Send the draft to the agent on screen', $c),
             KeyBinding::new('agentview.next', 'Alt+N', 'Open the next agent of the same batch', $c),
             KeyBinding::new('agentview.prev', 'Alt+P', 'Open the previous agent of the same batch', $c),
         ];

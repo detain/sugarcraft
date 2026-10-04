@@ -173,10 +173,11 @@ final class KeyboardHandler
             return true;
         }
 
-        // The read-only Agent View (roadmap P-C2): `Esc`/`Alt+↑` leave it and
+        // The Agent View (roadmap P-C2): `Esc`/`Alt+↑` leave it and
         // `Alt+N`/`Alt+P` walk the run's batch, while it is open in the chat
-        // pane with nothing modal over it. Every other key falls through to
-        // the chat as before — the input box stays the main chat's.
+        // pane with nothing modal over it; `Enter` on a sendable draft sends
+        // it to the run (P-D2). Every other key falls through to the chat as
+        // before — typing still edits the one input box.
         if (self::agentViewKey($msg, $app) !== null) {
             return true;
         }
@@ -826,9 +827,10 @@ final class KeyboardHandler
     }
 
     /**
-     * What a key means to the open read-only Agent View (roadmap P-C2), or
-     * null when the view does not answer it: `back` (`Esc`, `Alt+↑`) and
-     * `next`/`prev` (`Alt+N`/`Alt+P`, the runs of the same Task batch).
+     * What a key means to the open Agent View (roadmap P-C2), or null when
+     * the view does not answer it: `back` (`Esc`, `Alt+↑`), `next`/`prev`
+     * (`Alt+N`/`Alt+P`, the runs of the same Task batch) and `send` (`Enter`
+     * on a draft the composer sends, P-D2 — {@see composerSends()}).
      *
      * Only in the chat pane, with the view open and nothing modal over the
      * chat — a permission prompt, the key reference, the palette, the session
@@ -852,11 +854,33 @@ final class KeyboardHandler
 
         return match (true) {
             !$msg->alt && $msg->type === KeyType::Escape => 'back',
+            !$msg->alt && $msg->type === KeyType::Enter && self::composerSends($app) => 'send',
             $msg->alt && $msg->type === KeyType::Up => 'back',
             $msg->alt && $msg->type === KeyType::Char && strtolower($msg->rune) === 'n' => 'next',
             $msg->alt && $msg->type === KeyType::Char && strtolower($msg->rune) === 'p' => 'prev',
             default => null,
         };
+    }
+
+    /**
+     * Whether `Enter` in the open Agent View sends the draft to the agent on
+     * screen (roadmap P-D2): the box is that agent's composer. Not for an
+     * empty draft, nor for a `/command` or a `!command` — those are the
+     * user's commands to this app, and run as they do anywhere — nor while
+     * the "/" popup would take the `Enter` itself.
+     */
+    private static function composerSends(App $app): bool
+    {
+        $chat = $app->chat;
+        if ($chat === null || $app->agentComposerTargets() === []) {
+            return false;
+        }
+        $draft = trim($chat->inputBuf);
+
+        return $draft !== ''
+            && !str_starts_with($draft, '/')
+            && !str_starts_with($draft, '!')
+            && $chat->slashMenuMatches() === [];
     }
 
     /**
@@ -873,6 +897,9 @@ final class KeyboardHandler
     {
         return match (strtolower($key)) {
             'escape', 'alt+up' => [$app, new \SugarCraft\Crush\CloseAgentViewMsg()],
+            'enter' => self::composerSends($app)
+                ? [$app, new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::MESSAGE, $app->agentComposerTargets())]
+                : null,
             'alt+n' => [($next = $app->agentViewSibling(1)) === null ? $app : $app->openAgentView($next), null],
             'alt+p' => [($prev = $app->agentViewSibling(-1)) === null ? $app : $app->openAgentView($prev), null],
             default => null,

@@ -108,6 +108,9 @@ final class App implements Model
     /** Newest log items the view keeps; a longer run drops its oldest rows. */
     private const AGENT_VIEW_MAX_ITEMS = 4000;
 
+    /** Composer messages remembered for the view's `you → <agent>` rows ({@see $agentMessages}). */
+    public const AGENT_MESSAGES_KEPT = 32;
+
     private function __construct(
         public readonly ProviderInterface $provider,
         public readonly string $model,
@@ -370,6 +373,18 @@ final class App implements Model
          * child session opened from the session picker.
          */
         public readonly ?string $agentViewName = null,
+        /**
+         * What became of the messages the user sent delegated runs from the
+         * Agent View composer (roadmap P-D2), newest last and capped at
+         * {@see AGENT_MESSAGES_KEPT} — one {@see \SugarCraft\Crush\AgentMessageSentMsg}
+         * per run and message, a follow-up's later state replacing its
+         * earlier one. The view draws each as a `you → <agent> · …` row
+         * until the run's own log shows it delivered
+         * ({@see agentViewSentRows()}).
+         *
+         * @var list<\SugarCraft\Crush\AgentMessageSentMsg>
+         */
+        public readonly array $agentMessages = [],
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -537,7 +552,9 @@ final class App implements Model
      * Open the read-only Agent View on run $id (roadmap P-C2, Appendix P
      * §5.1): the chat pane's transcript area shows that run's own transcript,
      * with {@see \SugarCraft\Crush\Tui\AgentViewHeader} pinned above it,
-     * until {@see closeAgentView()}. The input box stays the main chat's.
+     * until {@see closeAgentView()}. The input box becomes that run's
+     * composer (P-D2): `Enter` sends the draft to it
+     * ({@see agentComposerTargets()}).
      *
      * {@see AgentViewMode::Attach} now means exactly this — "the main area
      * shows the agent" — so the dashboard's Peek → Attach `Enter` lands here,
@@ -710,6 +727,68 @@ final class App implements Model
     }
 
     /**
+     * The runs the Agent View's composer sends to (roadmap P-D2): the run on
+     * screen. Empty while no view is open — the box is then the main chat's.
+     *
+     * @return list<string> run ids
+     */
+    public function agentComposerTargets(): array
+    {
+        return $this->agentViewTarget === null ? [] : [$this->agentViewTarget];
+    }
+
+    /**
+     * Keep what became of a composer message ({@see $agentMessages}): a later
+     * state of the same message — a follow-up that replied or failed —
+     * replaces the earlier one, so each message keeps one row.
+     */
+    public function recordAgentMessage(\SugarCraft\Crush\AgentMessageSentMsg $sent): self
+    {
+        $kept = $this->agentMessages;
+        if ($sent->status === \SugarCraft\Crush\AgentMessageSentMsg::REPLIED || $sent->status === \SugarCraft\Crush\AgentMessageSentMsg::FAILED) {
+            for ($i = \count($kept) - 1; $i >= 0; $i--) {
+                if ($kept[$i]->agentId === $sent->agentId && $kept[$i]->text === $sent->text
+                    && $kept[$i]->status === \SugarCraft\Crush\AgentMessageSentMsg::RESUMING) {
+                    array_splice($kept, $i, 1);
+                    break;
+                }
+            }
+        }
+        $kept[] = $sent;
+
+        return $this->mutate(agentMessages: \array_slice($kept, -self::AGENT_MESSAGES_KEPT));
+    }
+
+    /**
+     * The `you → <agent> · …` rows the open view draws below the run's own
+     * transcript for run $id: every message the user sent it that its log
+     * does not yet show delivered. A queued message drops out once the run
+     * logs it (the log's own row then stands where it was read); a
+     * follow-up's row stays, carrying how it ended.
+     *
+     * @return list<\SugarCraft\Crush\Message>
+     */
+    private function agentViewSentRows(string $id): array
+    {
+        $delivered = [];
+        foreach ($this->agentViewItems as $item) {
+            if (($item['t'] ?? null) === \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::T_INBOX && \is_string($item['msgId'] ?? null)) {
+                $delivered[$item['msgId']] = true;
+            }
+        }
+
+        $rows = [];
+        foreach ($this->agentMessages as $sent) {
+            if ($sent->agentId !== $id || ($sent->msgId !== null && isset($delivered[$sent->msgId]))) {
+                continue;
+            }
+            $rows[] = \SugarCraft\Crush\Message::toAgent(\SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames($sent->name), \SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames($sent->text), $sent->badge());
+        }
+
+        return $rows;
+    }
+
+    /**
      * What one frame of the open view draws, for
      * {@see Renderer::setAgentView()} — or null while no view is open. Read in
      * view(): it computes from state and reads nothing from disk.
@@ -739,7 +818,7 @@ final class App implements Model
             'id' => $id,
             'name' => $state?->name ?? $this->agentViewName ?? $attach?->name ?? $this->chat->agentManager()?->getSubAgent($id)?->agent->name ?? $id,
             'state' => $state,
-            'rows' => $this->agentViewRows,
+            'rows' => [...$this->agentViewRows, ...$this->agentViewSentRows($id)],
             'attach' => $attach,
             'siblings' => $this->agentViewSiblings(),
             'transcript' => $transcript,
@@ -1788,6 +1867,8 @@ final class App implements Model
             // sub-agent row, and the open view's own tail tick (P-C2).
             $msg instanceof \SugarCraft\Crush\OpenAgentViewMsg => [$this->openAgentView($msg->agentId, $msg->childSessionId, $msg->name), null],
             $msg instanceof \SugarCraft\Crush\CloseAgentViewMsg => $this->closeAgentView()->delegateToChat($msg),
+            // P-D2: the chat's answer to the Agent View composer's send.
+            $msg instanceof \SugarCraft\Crush\AgentMessageSentMsg => [$this->recordAgentMessage($msg), null],
             $msg instanceof KeyMsg => $this->handleKey($msg),
             $msg instanceof MouseMsg => $this->handleShellMouse($msg),
             $msg instanceof BackgroundColorMsg => $this->observeBackground($msg),
@@ -2685,6 +2766,9 @@ final class App implements Model
             // The live agents strip's stop (P-B3): the turn's own cancel_tool
             // for that run's Task call, which the chat owns.
             $cmd instanceof \SugarCraft\Crush\CancelAgentRunMsg => $this->delegateToChat($cmd),
+            // The Agent View composer (P-D2): the runs' mailboxes are the
+            // chat's, so the shell names the runs and the chat sends.
+            $cmd instanceof \SugarCraft\Crush\AgentControlMsg => $this->delegateToChat($cmd),
             // The Agent View (P-C2): the dashboard's Peek → Attach `Enter`
             // opens it, and `Esc`/`Alt+↑` in it, or the dashboard's `q`,
             // leave it — the chat hears the close, to disarm its `Esc` `Esc`.
@@ -3266,6 +3350,7 @@ final class App implements Model
             agentViewItems: array_key_exists('agentViewItems', $changes) ? $changes['agentViewItems'] : $this->agentViewItems,
             agentViewRows: array_key_exists('agentViewRows', $changes) ? $changes['agentViewRows'] : $this->agentViewRows,
             agentViewName: array_key_exists('agentViewName', $changes) ? $changes['agentViewName'] : $this->agentViewName,
+            agentMessages: array_key_exists('agentMessages', $changes) ? $changes['agentMessages'] : $this->agentMessages,
         );
     }
 }

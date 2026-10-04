@@ -890,6 +890,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Ctrl+A` | Same dispatch as typing `/agents` |
 | `Alt+↓` | Focus the **live agents strip**, the one row above the input box that lists the delegated runs that are live, plus finished ones for 30 s: `agents: ⠋ explore · ✗ reviewer   (alt+↓)`. Then `←`/`→` (or `↑`/`↓`) move, `Enter` opens the run in the **Agent View** (its own transcript in place of the main one — see *What you see while a turn runs*), `c` stops it (only that run's `Task` call; the turn goes on), `x` dismisses a finished run or stops a running one, and `Esc` or `Alt+↑` gives the keyboard back. Any other key gives it back too, and lands in the input box. A click on a run on the strip opens it the same way. While the strip shows, it replaces the agent list below the input |
 | `Esc` / `Alt+↑` (Agent View) | Back to the main transcript; the `Esc` that leaves the view is never the first half of an `Esc` `Esc` cancel. `Alt+N` / `Alt+P` open the next / previous agent of the same `Task` batch |
+| `Enter` (Agent View) | Send the draft **to the agent on screen** — the input box is its composer while the view is open (an empty box says `message <agent>…`). A running agent reads it at its next step; a finished one is continued by a follow-up run of the same conversation. Idle or mid-turn alike, and never to the main model. A `/command` or `!command` still runs as one |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
 | `Up` (empty input) | Recall the last prompt you sent — press again to walk further back, into earlier sessions too (a fresh launch's first `Up` is the previous session's last prompt). History lives in `~/.sugar-crush/prompt_history.jsonl`; editing a recalled prompt ends the walk |
 | `Down` (while recalling) | Step forward through recalled prompts; past the newest one, the draft you were typing comes back |
@@ -1419,9 +1420,16 @@ sub-agent's log (`~/.sugar-crush/subagents/`) while it runs. A header row stays
 pinned above it: `main ▸ explore  ‹ 1 of 3 ›  ⠋ running · step 4/50 · 0:12 ·
 4.1K tok   esc back`. `Esc` (or `Alt+↑`, or a click on `main`) goes back to the
 main transcript without counting toward an `Esc` `Esc` cancel, and `Alt+N` /
-`Alt+P` (or a click on `‹` / `›`) open the other agents of the same batch. The
-view is read-only: the input box below it is still the main chat's. A finished
-agent reopens from its stored sub-agent session — `Enter` on a sub-agent row of
+`Alt+P` (or a click on `‹` / `›`) open the other agents of the same batch.
+While the view is open the input box is **that agent's composer** (an empty box
+reads `message explore…`): `Enter` sends the draft to the agent, idle or
+mid-turn, and the view shows it as `you → explore · … ⧗ queued` until the agent
+reads it at its next step, where its own transcript then shows it. Message a
+**finished** agent and it is continued instead — a follow-up run of the same
+conversation that streams into the view (`↻ follow-up running`, then `↩
+replied`), with one `you → explore · … (follow-up)` row left in the main
+transcript; the main model is not told. A `/command` or `!command` typed there
+still runs as a command. A finished agent reopens from its stored sub-agent session — `Enter` on a sub-agent row of
 the session picker opens it the same way — and a dashboard worker that keeps no
 transcript (a workflow stage, a background session) shows its live output pane
 instead.

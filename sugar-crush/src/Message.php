@@ -301,6 +301,22 @@ final class Message implements \JsonSerializable
     }
 
     /**
+     * The row that records a message the user sent a delegated run from the
+     * Agent View (roadmap P-D2, Appendix P §5.3): `you → explore · also
+     * check the cookie   ⧗ queued`. A {@see notice()}: the parent model is
+     * never shown it — what the run did with the message reaches the parent
+     * through the Task result's trailer, or not at all for a follow-up the
+     * user keeps to themselves. $text is folded to one line; $badge says
+     * where the message is.
+     */
+    public static function toAgent(string $agentName, string $text, string $badge = '', ?int $now = null): self
+    {
+        $line = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        return self::notice('you → ' . $agentName . ' · ' . $line . ($badge === '' ? '' : '   ' . $badge), $now);
+    }
+
+    /**
      * $history without its {@see $uiOnly} rows - what a backend may be shown.
      *
      * ONE filter for every boundary (Chat's turn, title, suggestion and

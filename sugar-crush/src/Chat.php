@@ -2191,6 +2191,14 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // Roadmap P-D2: the shell's word for something the user asked of one
+        // or more delegated runs — the Agent View composer's Enter. The runs'
+        // mailboxes and the live registry the ids name are this chat's, so
+        // the shell only translates and this arm acts.
+        if ($msg instanceof AgentControlMsg) {
+            return $this->submitToAgents($msg);
+        }
+
         if ($msg instanceof AssistantMsg) {
             // Account the turn FIRST - before the staleness guard, before the
             // tool-call routing, before anything that can return early. Three
@@ -9538,6 +9546,144 @@ final class Chat implements Model
     public function getTools(): array
     {
         return $this->tools;
+    }
+
+    /**
+     * The Agent View composer's send (roadmap P-D2, Appendix P §5.3): the
+     * draft goes to the delegated runs the shell named, not to the main
+     * model — so it is the one `Enter` that works the same idle and
+     * mid-turn, and that never steers or queues the parent's turn.
+     *
+     * - A run that is still going gets the draft as a `from:'user'` line in
+     *   its mailbox, signed with this launch's key
+     *   ({@see \SugarCraft\Crush\Host\WorkspaceContext::agentInbox()}), which
+     *   it reads at its next step boundary.
+     * - A run that has finished is CONTINUED instead
+     *   ({@see followUpAgent()}): there is nobody left to read a mailbox.
+     *
+     * Each run is answered with an {@see AgentMessageSentMsg}, which the
+     * shell turns into the view's `you → <agent> · …` row. The draft is
+     * consumed when anything was sent; when nothing could be, it stays in
+     * the box for another try and the reason is the row's badge.
+     *
+     * @return array{0: Chat, 1: ?\Closure}
+     */
+    private function submitToAgents(AgentControlMsg $msg): array
+    {
+        $text = trim($msg->text !== '' ? $msg->text : $this->inputBuf);
+        if ($text === '' || $msg->agentIds === []) {
+            return [$this, null];
+        }
+
+        $registry = $this->agentLive();
+        $sessionId = $this->currentSessionId;
+        $inbox = $sessionId === null
+            ? null
+            : ($this->workspace?->agentInbox($sessionId) ?? \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($sessionId));
+
+        $chat = $this;
+        $cmds = [];
+        $sent = false;
+        foreach (array_values(array_unique($msg->agentIds)) as $id) {
+            $state = $registry->get($id);
+            $name = $state?->name ?? $id;
+            $answer = static fn (string $status, ?string $msgId = null, ?string $detail = null): \Closure
+                => static fn (): AgentMessageSentMsg => new AgentMessageSentMsg($id, $name, $text, $status, $msgId, $detail);
+
+            if ($state === null) {
+                $cmds[] = $answer(AgentMessageSentMsg::FAILED, null, 'not a delegated run of this session');
+
+                continue;
+            }
+            if ($state->isFinished()) {
+                [$chat, $cmd, $ok] = $chat->followUpAgent($state, $text);
+                $cmds[] = $cmd;
+                $sent = $sent || $ok;
+
+                continue;
+            }
+            if ($inbox === null) {
+                $cmds[] = $answer(AgentMessageSentMsg::FAILED, null, 'this session keeps no agent mailboxes');
+
+                continue;
+            }
+
+            try {
+                $message = $inbox->send($id, \SugarCraft\Crush\Agents\Live\AgentMessage::fromUser($text));
+                $cmds[] = $answer(AgentMessageSentMsg::QUEUED, $message->msgId);
+                $sent = true;
+            } catch (\Throwable $e) {
+                $cmds[] = $answer(AgentMessageSentMsg::FAILED, null, $e->getMessage());
+            }
+        }
+
+        if ($sent) {
+            $chat = $chat->mutate(['inputBuf' => '']);
+        }
+
+        return [$chat, $cmds === [] ? null : (\count($cmds) === 1 ? $cmds[0] : Cmd::batch(...$cmds))];
+    }
+
+    /**
+     * Continue a FINISHED run with $text (roadmap P-D2 "cold resume",
+     * Appendix P §5.3) through {@see \SugarCraft\Crush\Host\AgentResume}: a
+     * follow-up run of the same conversation, detached from any parent turn.
+     * Its frames land in the live registry and the agent dashboard as a
+     * turn's would, its transcript goes on in the log the Agent View tails,
+     * and the parent transcript gets one ui-only `you → <agent> · …
+     * (follow-up)` row — the parent model hears of it only if the user
+     * brings the result to it.
+     *
+     * @return array{0: Chat, 1: \Closure, 2: bool} the chat, the Cmd answering
+     *         the run, and whether the follow-up started
+     */
+    private function followUpAgent(\SugarCraft\Crush\Agents\Live\AgentLiveState $state, string $text): array
+    {
+        $id = $state->id;
+        $name = $state->name;
+        $failed = static fn (string $why): \Closure
+            => static fn (): AgentMessageSentMsg => new AgentMessageSentMsg($id, $name, $text, AgentMessageSentMsg::FAILED, null, $why);
+
+        $sessionId = $this->currentSessionId;
+        $resumeId = $state->resumeId;
+        if ($resumeId === null || $resumeId === '') {
+            return [$this, $failed('this run cannot be continued (it kept no resume id)'), false];
+        }
+        if ($sessionId === null || !$this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend) {
+            return [$this, $failed('continuing a run needs the engine backend and a session'), false];
+        }
+
+        $resume = \SugarCraft\Crush\Host\AgentResume::new($this->backend->withSessionId($sessionId));
+        if (!$resume->available()) {
+            return [$this, $failed('this session has no Task tool to continue the run with'), false];
+        }
+
+        // The follow-up's beats go where a turn's go: the dashboard's mirror
+        // (which also stores the finished run as a child session) and the
+        // live registry — both services this model deliberately mutates.
+        $registry = $this->agentLive();
+        $manager = $this->agentManager;
+        $onActivity = static function (SubAgentActivity $activity) use ($registry, $manager): void {
+            $registry->apply($manager?->projectRemoteSubAgent($activity) ?? $activity);
+        };
+        $description = $state->description;
+
+        return [
+            $this->mutate(['history' => [...$this->history, Message::toAgent($name, $text, '(follow-up)')]]),
+            Cmd::batch(
+                static fn (): AgentMessageSentMsg => new AgentMessageSentMsg($id, $name, $text, AgentMessageSentMsg::RESUMING),
+                Cmd::promise(static fn (): PromiseInterface => $resume
+                    ->run($name, $resumeId, $text, $description, $onActivity)
+                    ->then(static function (\SugarCraft\Crush\Tools\ToolResult $result) use ($id, $name, $text): AgentMessageSentMsg {
+                        $why = trim(strtok($result->content(), "\n") ?: '');
+
+                        return $result->isError()
+                            ? new AgentMessageSentMsg($id, $name, $text, AgentMessageSentMsg::FAILED, null, $why === '' ? 'the follow-up failed' : $why)
+                            : new AgentMessageSentMsg($id, $name, $text, AgentMessageSentMsg::REPLIED);
+                    })),
+            ),
+            true,
+        ];
     }
 
     /**

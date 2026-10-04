@@ -1567,6 +1567,20 @@ final class KeyBindingDriftTest extends TestCase
                 [$app] = $this->batchApp()->openAgentView('b-2')->update($k[0]);
                 $this->assertSame('b-1', $app->agentViewTarget);
             },
+            // P-D2: the box is the open run's composer. Mid-turn on purpose:
+            // the same Enter in the main view would steer the parent's turn.
+            'agentview.send' => function (array $k): void {
+                $session = 'drift-send-' . bin2hex(random_bytes(4));
+                $open = $this->composing($this->stripApp(), $session, 'also check the cookie')->openAgentView('run-2');
+
+                [$sent, $cmd] = $open->update($k[0]);
+                $this->assertSame('', $sent->chat?->inputBuf, 'the draft was sent');
+                $this->assertTrue($sent->chat?->inFlight, 'and the main turn was neither steered nor touched');
+                $this->assertInstanceOf(\Closure::class, $cmd);
+
+                $mail = \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($session)?->drain('run-2') ?? [];
+                $this->assertSame(['also check the cookie'], array_map(static fn ($m): string => $m->text, $mail), 'into that run\'s mailbox');
+            },
             'strip.cancel' => function (array $k): void {
                 $token = new \SugarCraft\Crush\Backend\CancellationToken();
                 $this->stripApp($token)->withAgentStripFocus('run-2')->update($k[0]);
@@ -2271,6 +2285,23 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         return $this->app()->withChat($chat);
+    }
+
+    /**
+     * $app with its chat on session $session and $draft typed into the box —
+     * the composer fixture (P-D2). Typed key by key, so the draft is what the
+     * input widget holds, not a field set behind its back.
+     */
+    private function composing(App $app, string $session, string $draft): App
+    {
+        $chat = $app->chat?->withCurrentSessionId($session);
+        $this->assertNotNull($chat);
+        foreach (mb_str_split($draft) as $rune) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
+        }
+        $this->assertInstanceOf(Chat::class, $chat);
+
+        return $app->withChat($chat);
     }
 
     /**

@@ -310,6 +310,18 @@ speak as the harness. Its `Task` result ends with a note
 listing the user's messages and the step each was delivered at, so the
 delegating model knows why the run covered more than it asked.
 
+The user writes these from the **Agent View**: while a run's transcript is on
+screen the input box is that run's composer, and `Enter` sends the draft to it
+as a `steer` message from the user (a `/command` or `!command` still runs as a
+command). A run that has already **finished** has no step left to read a
+mailbox, so the message continues it instead: a follow-up run of the same
+conversation — the `Task` call the model would make with `resume`, under the
+same preset, grants and step cap, appending to the same transcript log —
+detached from any parent turn (`Host\AgentResume`). It runs while the parent
+is idle as well as mid-turn, and the parent model is not told about it: the
+parent transcript gets one `you → <agent> · … (follow-up)` row for your eyes
+only.
+
 ---
 
 ## What you can actually do with a preset today
