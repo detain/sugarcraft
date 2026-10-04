@@ -38,6 +38,96 @@
                 "admitted"
             ]
         },
+        "BackgroundSession": {
+            "type": "object",
+            "properties": {
+                "bgId": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "task": {
+                    "type": "string"
+                },
+                "status": {
+                    "enum": [
+                        "pending",
+                        "running",
+                        "streaming",
+                        "stalled",
+                        "completed",
+                        "failed",
+                        "stopped",
+                        "timed_out"
+                    ]
+                },
+                "agent": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "workingDirectory": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "completedAt": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "tokensUsed": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "costUsd": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "error": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "outputBytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "bg.output reads the output itself, from an offset."
+                },
+                "forkedSessionId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "The stored session a /fork session continues; null for /bg."
+                },
+                "adopted": {
+                    "type": "boolean",
+                    "description": "Re-adopted at boot from an earlier server or TUI."
+                }
+            },
+            "required": [
+                "bgId",
+                "name",
+                "task",
+                "status",
+                "createdAt",
+                "outputBytes",
+                "adopted"
+            ],
+            "description": "A background (/bg) session; never its output."
+        },
         "Error": {
             "type": "object",
             "properties": {
@@ -602,8 +692,82 @@
                 ]
             }
         },
+        "bg.inject": {
+            "description": "Send a settled background session's result into a session as a prompt.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "bgId": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "delivery": {
+                        "enum": [
+                            "queue",
+                            "steer",
+                            "interrupt"
+                        ]
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "bgId",
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "bgId": {
+                        "type": "string"
+                    },
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "admitted": {
+                        "enum": [
+                            "started",
+                            "queued",
+                            "steered",
+                            "pending"
+                        ]
+                    },
+                    "turnId": {
+                        "type": "string"
+                    },
+                    "messageId": {
+                        "type": "string"
+                    },
+                    "steerId": {
+                        "type": "string"
+                    },
+                    "queuePosition": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "queueId": {
+                        "type": "string",
+                        "maxLength": 32
+                    }
+                },
+                "required": [
+                    "bgId",
+                    "sessionId",
+                    "admitted"
+                ]
+            }
+        },
         "bg.list": {
-            "description": "The background sessions this server supervises.",
+            "description": "The background sessions this server supervises, running and settled.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -615,9 +779,7 @@
                     "items": {
                         "type": "array",
                         "items": {
-                            "type": "object",
-                            "additionalProperties": {},
-                            "description": "A background session (`BackgroundSession::toArray()`, without its output)."
+                            "$ref": "#/$defs/BackgroundSession"
                         }
                     }
                 },
@@ -678,6 +840,39 @@
                     "total",
                     "status"
                 ]
+            }
+        },
+        "bg.spawn": {
+            "description": "Start a background session on a task, as /bg does.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "maxLength": 1048576
+                    },
+                    "agent": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 256
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "task"
+                ]
+            },
+            "result": {
+                "$ref": "#/$defs/BackgroundSession"
             }
         },
         "bg.stop": {
@@ -2573,6 +2768,46 @@
                 "required": [
                     "partId",
                     "tail"
+                ]
+            }
+        },
+        "bg.completed": {
+            "description": "A background session settled; bg.output reads its answer, bg.inject sends it to a session.",
+            "durable": false,
+            "scope": "server",
+            "data": {
+                "$ref": "#/$defs/BackgroundSession"
+            }
+        },
+        "bg.started": {
+            "description": "A background session started, or one an earlier server or TUI left running was re-adopted.",
+            "durable": false,
+            "scope": "server",
+            "data": {
+                "$ref": "#/$defs/BackgroundSession"
+            }
+        },
+        "bg.status": {
+            "description": "A background session's status changed (running, stalled, …).",
+            "durable": false,
+            "scope": "server",
+            "data": {
+                "type": "object",
+                "properties": {
+                    "bgId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "previous": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "bgId",
+                    "status",
+                    "previous"
                 ]
             }
         },

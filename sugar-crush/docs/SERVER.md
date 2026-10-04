@@ -376,8 +376,10 @@ it and the two tables below are generated from the code
 |---|---|---|---|---|
 | `agents.list` | read |  | — | The agents a turn can delegate to. |
 | `agents.subtree` | read |  | `sessionId` | The sub-agents a session's turns have delegated to, with their latest activity. |
-| `bg.list` | read |  | — | The background sessions this server supervises. |
+| `bg.inject` | write | yes | `bgId`, `sessionId` | Send a settled background session's result into a session as a prompt. |
+| `bg.list` | read |  | — | The background sessions this server supervises, running and settled. |
 | `bg.output` | read |  | `bgId` | A background session's output from an offset. |
+| `bg.spawn` | write | yes | `task` | Start a background session on a task, as /bg does. |
 | `bg.stop` | write | yes | `bgId` | Stop a background session. |
 | `client.viewing` | read |  | — | Say which sessions this client shows, and which is in front. |
 | `command.exec` | write | yes | `sessionId`, `name` | Run a slash command in a session (command files, and the built-ins that run headless). |
@@ -443,6 +445,9 @@ one re-reads what it describes (`session.list`).
 | `assistant.completed` | session | durable | The reply, complete; repairs any delta a client dropped. |
 | `assistant.delta` | session | live | Streamed reply text. |
 | `assistant.narration` | session | live | The tail of the reply so far, at most every 2 s, for narration subscriptions. |
+| `bg.completed` | server | live | A background session settled; bg.output reads its answer, bg.inject sends it to a session. |
+| `bg.started` | server | live | A background session started, or one an earlier server or TUI left running was re-adopted. |
+| `bg.status` | server | live | A background session's status changed (running, stalled, …). |
 | `compaction.completed` | session | durable | The history was compacted before a turn. |
 | `message.created` | session | durable | A transcript row was added: the prompt, a notice, a summary. |
 | `permission.requested` | session | durable | A tool call is waiting for an answer (permission.respond). |
@@ -595,6 +600,32 @@ permissions or the server's own binding, holds a secret, or is owned by a live
 command (`theme` is `/theme`'s, `provider` is `/model`'s) — and only to your
 config or a trusted project's local file, through the same writer and refusals
 as the TUI editor.
+
+### Background sessions
+
+The workspace's background (`/bg`) sessions are reachable over the wire too.
+`bg.list` lists them — running ones and the ones that have settled, so their
+answers stay reachable — and `bg.output` reads one's output from an offset.
+`bg.spawn` starts one on a task the way `/bg` does (scope `write`: it runs
+code, like `session.send`), as the agent you name or the one `/bg` would pick,
+in the served root; it answers once the daemon has authenticated its
+handshake. `bg.stop` stops one. `bg.inject` sends a settled session's report —
+its task, outcome, answer and stats, the same report the TUI hands its agent —
+into a session as a prompt, admitted like `session.send` (`delivery` included);
+the report's `@path` tokens stay text, because they are the background model's
+words, not a request to attach a file. A session that has not settled is
+refused `bg_not_settled`.
+
+**A starting server re-adopts what an earlier one left.** A background daemon
+outlives whatever started it, so on start the server adopts the daemons an
+earlier server — or a TUI of the same project — left running for its root,
+exactly as a relaunched TUI does; one whose owner is still running stays that
+owner's. From then on it polls them every 2 s and broadcasts what moved, as
+server-scope events: `bg.started` when one starts or is re-adopted
+(`adopted: true`), `bg.status` when one's status changes, and `bg.completed`
+when one settles, after which `bg.output` reads its answer and `bg.inject`
+delivers it. A daemon that finished while no server was running is reported on
+the first poll. A client that connects later reads `bg.list`.
 
 ## More than one project root (workspace hosts)
 

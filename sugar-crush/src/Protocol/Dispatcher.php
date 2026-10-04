@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Protocol;
 
 use React\EventLoop\TimerInterface;
 use Ratchet\RFC6455\Messaging\Frame;
+use SugarCraft\Crush\Host\BackgroundEvents;
 use SugarCraft\Crush\Protocol\Methods\AgentsMethods;
 use SugarCraft\Crush\Protocol\Methods\BgMethods;
 use SugarCraft\Crush\Protocol\Methods\CommandMethods;
@@ -50,6 +51,13 @@ use SugarCraft\Crush\Server\Ws\Outbox;
  * how a permission question reaches a client while the child waits on it —
  * and every {@see TICK_INTERVAL_SECONDS} a `server.tick` tells clients the
  * server is alive.
+ *
+ * BACKGROUND SESSIONS AT BOOT (roadmap O-4b). {@see start()} re-adopts the
+ * `/bg` daemons an earlier server or TUI of this root left running
+ * ({@see BackgroundEvents::boot()}, the server's caller of
+ * `BackgroundSupervisor::reconnect()`), and from then on polls the
+ * workspace's supervisor every {@see BackgroundEvents::POLL_SECONDS} for the
+ * `bg.*` events.
  */
 final class Dispatcher implements MessageHandler
 {
@@ -88,6 +96,8 @@ final class Dispatcher implements MessageHandler
     private ?TimerInterface $tickTimer = null;
 
     private ?TimerInterface $drainTimer = null;
+
+    private ?TimerInterface $backgroundTimer = null;
 
     private bool $stopped = false;
 
@@ -137,7 +147,11 @@ final class Dispatcher implements MessageHandler
         return $this->methods;
     }
 
-    /** Arm the host tick and the liveness tick. Idempotent. */
+    /**
+     * Arm the host tick and the liveness tick, re-adopt the background
+     * sessions an earlier process left running, and arm their poll.
+     * Idempotent.
+     */
     public function start(): void
     {
         if ($this->stopped) {
@@ -145,6 +159,11 @@ final class Dispatcher implements MessageHandler
         }
         $loop = $this->context->loop();
         $this->pumpTimer ??= $loop->addPeriodicTimer(self::PUMP_INTERVAL_SECONDS, fn () => $this->context->pump());
+        $background = $this->context->background();
+        if ($background !== null && $this->backgroundTimer === null) {
+            $background->boot();
+            $this->backgroundTimer = $loop->addPeriodicTimer(BackgroundEvents::POLL_SECONDS, static fn () => $background->poll());
+        }
         $this->tickTimer ??= $loop->addPeriodicTimer(self::TICK_INTERVAL_SECONDS, function (): void {
             $this->context->broadcast(EventEnvelope::server(EventType::SERVER_TICK, [
                 'now' => (int) \floor(($this->context->clock())() * 1000),
@@ -216,11 +235,12 @@ final class Dispatcher implements MessageHandler
         $this->stopped = true;
         $this->context->broadcast(EventEnvelope::server(EventType::SERVER_SHUTDOWN, ['reason' => $reason, 'graceSeconds' => $graceSeconds]), false);
         $loop = $this->context->loop();
-        foreach ([$this->pumpTimer, $this->tickTimer, $this->drainTimer] as $timer) {
+        foreach ([$this->pumpTimer, $this->tickTimer, $this->drainTimer, $this->backgroundTimer] as $timer) {
             if ($timer !== null) {
                 $loop->cancelTimer($timer);
             }
         }
+        $this->backgroundTimer = null;
         $this->pumpTimer = null;
         $this->tickTimer = null;
         $this->drainTimer = null;

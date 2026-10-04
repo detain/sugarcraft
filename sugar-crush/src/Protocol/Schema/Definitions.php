@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Protocol\Schema;
 
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 
 /**
  * The shapes several methods and events share, published once under the
@@ -24,6 +25,7 @@ final class Definitions
     public const ENVELOPE = 'EventEnvelope';
     public const ERROR = 'Error';
     public const USAGE = 'Usage';
+    public const BACKGROUND_SESSION = 'BackgroundSession';
 
     private function __construct()
     {
@@ -128,6 +130,24 @@ final class Definitions
                     'retryAfterMs' => Schema::integer(0),
                 ], ['kind']),
             ], ['code', 'message', 'data']),
+            self::BACKGROUND_SESSION => Schema::object([
+                'bgId' => Schema::string(),
+                'name' => Schema::string(),
+                'task' => Schema::string(),
+                'status' => Schema::enum(\array_map(static fn (BackgroundSessionStatus $status): string => $status->value, BackgroundSessionStatus::cases())),
+                'agent' => Schema::string(),
+                'model' => Schema::string(),
+                'tags' => Schema::arrayOf(Schema::string()),
+                'workingDirectory' => Schema::string(),
+                'createdAt' => Schema::string(),
+                'completedAt' => Schema::string()->nullable(),
+                'tokensUsed' => Schema::integer(0),
+                'costUsd' => Schema::number(0),
+                'error' => Schema::string()->nullable(),
+                'outputBytes' => Schema::integer(0)->describe('bg.output reads the output itself, from an offset.'),
+                'forkedSessionId' => Schema::string()->nullable()->describe('The stored session a /fork session continues; null for /bg.'),
+                'adopted' => Schema::boolean()->describe('Re-adopted at boot from an earlier server or TUI.'),
+            ], ['bgId', 'name', 'task', 'status', 'createdAt', 'outputBytes', 'adopted'])->describe('A background (/bg) session; never its output.'),
             self::USAGE => Schema::object([
                 'totalTokens' => Schema::integer(0),
                 'inputTokens' => Schema::integer(0)->nullable(),

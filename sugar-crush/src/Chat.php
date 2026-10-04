@@ -16584,13 +16584,18 @@ final class Chat implements Model
         $notices = [];
         $announcements = [];
         foreach ($statuses as $id => $status) {
-            if (($this->backgroundStatuses[$id] ?? null) === $status) {
+            $previous = $this->backgroundStatuses[$id] ?? null;
+            if ($previous === $status) {
                 continue;
             }
             $session = $supervisor->getSession($id);
             $name = $session?->name ?? $id;
+            // A session re-adopted at launch (roadmap 4.3-3) was not started
+            // by this run: "is now running" read as if it had just begun.
             $notices[] = Message::notice(sprintf(
-                "Background session %s ('%s') is now %s.",
+                $previous === \SugarCraft\Crush\Sessions\BackgroundSupervisor::ADOPTED_STATUS
+                    ? "Background session %s ('%s') was re-adopted from an earlier run and is %s."
+                    : "Background session %s ('%s') is now %s.",
                 $id,
                 $name,
                 $status,

@@ -17,6 +17,7 @@ use SugarCraft\Crush\Protocol\Dispatcher;
 use SugarCraft\Crush\Protocol\ServerContext;
 use SugarCraft\Crush\Server\ServerConfig;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 
 /**
  * A `sugarcrush.v1` server without a socket: a workspace over a temporary
@@ -43,7 +44,7 @@ final class ProtocolFixture
 
     public readonly Dispatcher $dispatcher;
 
-    private function __construct(?ServerConfig $config, int $retain)
+    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor)
     {
         $this->dir = \sys_get_temp_dir() . '/crush-protocol-' . \bin2hex(\random_bytes(6));
         $this->root = $this->dir . '/project';
@@ -52,7 +53,7 @@ final class ProtocolFixture
         $this->backend = new ScriptedTurnBackend();
 
         $transcripts = TranscriptStore::new($this->store, null, EventLog::new($this->store, $retain));
-        $workspace = WorkspaceContext::new(root: $this->root, sessionStore: $this->store, backend: $this->backend)
+        $workspace = WorkspaceContext::new(root: $this->root, sessionStore: $this->store, backend: $this->backend, backgroundSupervisor: $supervisor)
             ->withService(TurnRunner::class, TurnRunner::new())
             ->withService(TurnController::class, TurnController::new())
             ->withService(TranscriptStore::class, $transcripts)
@@ -73,10 +74,13 @@ final class ProtocolFixture
         $this->dispatcher = Dispatcher::new($this->context);
     }
 
-    /** @param int $retain events kept per session (EventLog retention) */
-    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN): self
+    /**
+     * @param int $retain events kept per session (EventLog retention)
+     * @param BackgroundSupervisor|null $supervisor the workspace's `/bg` supervisor; none by default
+     */
+    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null): self
     {
-        return new self($config, $retain);
+        return new self($config, $retain, $supervisor);
     }
 
     /** A client that has said hello. */

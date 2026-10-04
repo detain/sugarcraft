@@ -250,7 +250,7 @@ final class BackgroundReconnectAfterRestartTest extends TestCase
 
         $this->assertSame(['sess_20261004120000_abababab' => 'completed'], $next->backgroundStatuses());
         $contents = array_map(static fn (Message $m): string => $m->content, $next->history);
-        $this->assertContains("Background session sess_20261004120000_abababab ('planted job') is now completed.", $contents);
+        $this->assertContains("Background session sess_20261004120000_abababab ('planted job') was re-adopted from an earlier run and is completed.", $contents);
         $announced = array_values(array_filter($next->history, static fn (Message $m): bool => $m->role === Role::User));
         $this->assertCount(1, $announced);
         $this->assertStringContainsString('finished while you were away', $announced[0]->content);

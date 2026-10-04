@@ -37,7 +37,8 @@ use SugarCraft\Crush\Server\ServerConfig;
  */
 final class TurnMethods
 {
-    private const DELIVERY = ['queue' => QueueMode::Followup, 'steer' => QueueMode::Steer, 'interrupt' => QueueMode::Interrupt];
+    /** A request's `delivery` => what the host does with the prompt while a turn runs (`bg.inject` takes it too). */
+    public const DELIVERY = ['queue' => QueueMode::Followup, 'steer' => QueueMode::Steer, 'interrupt' => QueueMode::Interrupt];
 
     private function __construct()
     {
@@ -68,20 +69,23 @@ final class TurnMethods
 
     /**
      * Submit $text to $host and answer how it was admitted (the shape
-     * `session.send` and `command.exec` share).
+     * `session.send`, `command.exec` and `bg.inject` share). $resolveMentions
+     * is false for text the user did not type — a background session's
+     * answer, quoted — whose `@path` tokens are the model's, not a request to
+     * attach a file.
      *
      * @return array<string, mixed>
      *
      * @throws RpcError busy past the concurrent-turn cap; conflict / refused
      */
-    public static function admit(CallContext $call, SessionHost $host, string $text, QueueMode $delivery, ?string $key = null): array
+    public static function admit(CallContext $call, SessionHost $host, string $text, QueueMode $delivery, ?string $key = null, bool $resolveMentions = true): array
     {
         $limit = $call->server->config()->maxConcurrentTurns;
         if (!$host->isBusy() && $call->server->turnsRunning() >= $limit) {
             throw RpcError::of(ErrorCode::Busy, \sprintf('%d turns are already running', $limit), 'too_many_turns', ['retryAfterMs' => 1000]);
         }
 
-        $ticket = $host->submit($text, SubmitOptions::new()->withDelivery($delivery)->withIdempotencyKey($key));
+        $ticket = $host->submit($text, SubmitOptions::new()->withDelivery($delivery)->withIdempotencyKey($key)->withResolveMentions($resolveMentions));
         $feed = $call->feed($host);
 
         return match ($ticket->admitted) {

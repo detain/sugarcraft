@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Protocol;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use SugarCraft\Crush\Host\BackgroundEvents;
 use SugarCraft\Crush\Host\SessionHost;
 use SugarCraft\Crush\Host\SessionHub;
 use SugarCraft\Crush\Server\ServerConfig;
@@ -33,6 +34,10 @@ final class ServerContext
     private array $feeds = [];
 
     private bool $draining = false;
+
+    private ?BackgroundEvents $background = null;
+
+    private bool $backgroundResolved = false;
 
     /** @var (\Closure(?float): void)|null */
     private ?\Closure $shutdown = null;
@@ -98,6 +103,31 @@ final class ServerContext
         $store = $this->hub->workspace()->sessionStore;
 
         return $store instanceof EnhancedSessionStore ? $store : null;
+    }
+
+    /**
+     * The workspace's background sessions as `bg.*` events broadcast to every
+     * client (roadmap O-4b), built on first use; null when the workspace
+     * supervises none. The {@see Dispatcher} boots it — re-adopting what an
+     * earlier server left running — and polls it.
+     */
+    public function background(): ?BackgroundEvents
+    {
+        if (!$this->backgroundResolved) {
+            $this->backgroundResolved = true;
+            $workspace = $this->hub->workspace();
+            if ($workspace->backgroundSupervisor !== null) {
+                $this->background = BackgroundEvents::new(
+                    $workspace->backgroundSupervisor,
+                    $workspace->root,
+                    function (string $type, array $data): void {
+                        $this->broadcast(EventEnvelope::server($type, $data));
+                    },
+                );
+            }
+        }
+
+        return $this->background;
     }
 
     // ── lifecycle ──────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Protocol;
 
+use SugarCraft\Crush\Host\BackgroundEvents;
 use SugarCraft\Crush\Host\SessionEvent;
 
 /**
@@ -66,6 +67,9 @@ final class EventType
         self::SESSION_CREATED => [false, self::SCOPE_SERVER, 'A session was created.'],
         self::SESSION_UPDATED => [false, self::SCOPE_SERVER, 'A session was renamed or its mode changed.'],
         self::SESSION_DELETED => [false, self::SCOPE_SERVER, 'A session was deleted.'],
+        BackgroundEvents::STARTED => [false, self::SCOPE_SERVER, 'A background session started, or one an earlier server or TUI left running was re-adopted.'],
+        BackgroundEvents::STATUS => [false, self::SCOPE_SERVER, 'A background session\'s status changed (running, stalled, …).'],
+        BackgroundEvents::COMPLETED => [false, self::SCOPE_SERVER, 'A background session settled; bg.output reads its answer, bg.inject sends it to a session.'],
         self::SERVER_TICK => [false, self::SCOPE_SERVER, 'Liveness, every tickIntervalMs.'],
         self::SERVER_SHUTDOWN => [false, self::SCOPE_SERVER, 'The server is stopping.'],
         self::SERVER_OVERFLOW => [false, self::SCOPE_SERVER, 'This client fell behind; ephemeral events were dropped — resubscribe.'],

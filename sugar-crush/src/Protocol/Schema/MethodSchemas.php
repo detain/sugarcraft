@@ -262,7 +262,24 @@ final class MethodSchemas
             ], ['name']))],
             'agents.subtree' => [$sessionOnly, $items(Schema::map(Schema::any())->describe('A sub-agent\'s latest `subagent.*` event data.'))],
 
-            'bg.list' => [$empty, $items(Schema::map(Schema::any())->describe('A background session (`BackgroundSession::toArray()`, without its output).'))],
+            'bg.list' => [$empty, $items(Schema::ref(D::BACKGROUND_SESSION))],
+            'bg.spawn' => [
+                Schema::object(['task' => Schema::string(ServerConfig::MAX_CLIENT_MESSAGE_BYTES), 'agent' => Schema::string(128), 'name' => Schema::string(256)], ['task']),
+                Schema::ref(D::BACKGROUND_SESSION),
+            ],
+            'bg.inject' => [
+                Schema::object([...$sid, 'bgId' => Schema::string(128), 'delivery' => Schema::enum(['queue', 'steer', 'interrupt'])], ['bgId', 'sessionId']),
+                Schema::object([
+                    'bgId' => Schema::string(),
+                    'sessionId' => Schema::ref(D::SESSION_ID),
+                    'admitted' => Schema::enum(['started', 'queued', 'steered', 'pending']),
+                    'turnId' => Schema::string(),
+                    'messageId' => Schema::string(),
+                    'steerId' => Schema::string(),
+                    'queuePosition' => Schema::integer(1),
+                    'queueId' => Schema::string(32),
+                ], ['bgId', 'sessionId', 'admitted']),
+            ],
             'bg.output' => [
                 Schema::object(['bgId' => Schema::string(128), 'offset' => Schema::integer(0), 'limit' => Schema::integer(1)], ['bgId']),
                 Schema::object(['bgId' => Schema::string(), 'offset' => Schema::integer(0), 'text' => Schema::string(), 'total' => Schema::integer(0), 'status' => Schema::string()], ['bgId', 'offset', 'text', 'total', 'status']),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Protocol\Schema;
 
+use SugarCraft\Crush\Host\BackgroundEvents;
 use SugarCraft\Crush\Host\SessionEvent as E;
 use SugarCraft\Crush\Protocol\EventType;
 use SugarCraft\Crush\Protocol\Schema\Definitions as D;
@@ -141,6 +142,13 @@ final class EventSchemas
                 'after' => Schema::integer(0),
                 'savedPct' => Schema::number(0),
             ], ['kind', 'before', 'after']),
+            BackgroundEvents::STARTED => Schema::ref(D::BACKGROUND_SESSION),
+            BackgroundEvents::STATUS => Schema::object([
+                'bgId' => Schema::string(),
+                'status' => Schema::string(),
+                'previous' => Schema::string(),
+            ], ['bgId', 'status', 'previous']),
+            BackgroundEvents::COMPLETED => Schema::ref(D::BACKGROUND_SESSION),
             EventType::SESSION_CREATED => $summary,
             EventType::SESSION_UPDATED => $summary,
             EventType::SESSION_DELETED => Schema::object(['id' => Schema::ref(D::SESSION_ID)], ['id']),
