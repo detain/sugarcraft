@@ -31,7 +31,7 @@ use SugarCraft\Crush\Providers\Concerns\ToolSchema;
 use SugarCraft\Crush\Usage;
 use SugarCraft\Crush\Util\TokenEstimate;
 
-final readonly class SglangProvider implements ProviderInterface, ReportsServedModel
+final readonly class SglangProvider implements ProviderInterface, ReportsServedModel, AcceptsAssistantPrefill
 {
     use ToolSchema;
 
@@ -963,6 +963,16 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
         return true;
     }
 
+    /**
+     * Roadmap 2.7-2: every model SGLang serves continues a final assistant
+     * turn on `continue_final_message` (see {@see buildParams()}), so a
+     * length-stopped or dropped reply is continued exactly.
+     */
+    public function acceptsAssistantPrefill(string $model): bool
+    {
+        return true;
+    }
+
     public function supportsFunctionCalling(): bool
     {
         return true;
@@ -1817,6 +1827,17 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
 
         if ($request->tools !== null) {
             $params['tools'] = $this->formatTools($request->tools);
+        }
+
+        // Roadmap 2.7-2: a request that ends on the assistant's own partial
+        // reply asks for the REST of that message (a length-stopped reply, a
+        // dropped stream — see ReplyContinuation). SGLang renders the final
+        // assistant turn open, with no generation prompt after it, only when
+        // asked; without these two the template closes the turn and starts a
+        // new one, and the model answers its own half-sentence.
+        if ($request->continuesFinalMessage()) {
+            $params['continue_final_message'] = true;
+            $params['add_generation_prompt'] = false;
         }
 
         if ($request->maxTokens === null) {

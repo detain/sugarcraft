@@ -1297,7 +1297,16 @@ request is still over, the agent's own model summarises what it has already been
 sent — same system prompt and tools, so the request reuses the provider's cache,
 plus an instruction not to call tools (`SUGARCRUSH_SUMMARY_MODEL` picks another
 model) — and the summary stands in for those rows while the step in progress
-goes out whole. Your transcript keeps every output and every row. While the turn runs, the status
+goes out whole. Your transcript keeps every output and every row. A request the
+provider still refuses as too long for its window gets the same relief at full
+strength — every older tool output becomes its placeholder, then the summary —
+and is sent once more before the turn fails. A reply the provider cuts off at
+its output limit without calling a tool is continued where it stopped, up to
+three times, and reads as one answer: the cut reply goes back as the start of
+the model's own message where the provider allows that (`sglang`, and Claude on
+`vertex` or `bedrock`), and with a request to continue elsewhere. Only a reply
+still cut off after that carries the notice that it stopped at the output
+limit. While the turn runs, the status
 bar names the step it is on, adds that step's context figure once the request
 is over budget, and moves the spend readout as each step is billed. On such a
 turn the first `Esc` stops it after the current step's tools finish, with its

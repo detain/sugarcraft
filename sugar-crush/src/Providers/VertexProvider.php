@@ -84,7 +84,7 @@ use SugarCraft\Crush\Usage;
  * what selects between the two bodies. A `gemini-*` id used to be handed the
  * PaLM 2 envelope; it now gets its own.
  */
-final readonly class VertexProvider implements ProviderInterface, MarksPromptCache
+final readonly class VertexProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill
 {
     use ToolSchema;
 
@@ -816,6 +816,19 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
     public function isAnthropicModel(string $model): bool
     {
         return str_contains(strtolower($model), 'claude');
+    }
+
+    /**
+     * Roadmap 2.7-2: the Anthropic Messages API (rawPredict) continues a
+     * trailing assistant turn as a prefill, so a cut-off Claude reply is asked
+     * for its exact rest. Gemini and the legacy route take no prefill and are
+     * asked with a user row instead. A Claude model that refuses prefill
+     * outright answers with an error naming it, which
+     * {@see ReplyContinuation::rejectsPrefill()} turns into the same fallback.
+     */
+    public function acceptsAssistantPrefill(string $model): bool
+    {
+        return $this->isAnthropicModel($model !== '' ? $model : $this->defaultModel);
     }
 
     /**

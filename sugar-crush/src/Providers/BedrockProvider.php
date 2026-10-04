@@ -36,7 +36,7 @@ use SugarCraft\Crush\Usage;
  * and out of the provider unwrapped. Every Bedrock completion failed, always,
  * before a single byte reached AWS.
  */
-final readonly class BedrockProvider implements ProviderInterface, MarksPromptCache
+final readonly class BedrockProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill
 {
     use HttpClientDefaults;
 
@@ -375,6 +375,18 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     public function supportsStreaming(): bool
     {
         return true;
+    }
+
+    /**
+     * Roadmap 2.7-2: Converse continues a trailing assistant turn as a
+     * prefill for Anthropic models, so a cut-off Claude reply is asked for its
+     * exact rest; every other family is asked with a user row. A Claude model
+     * that refuses prefill outright fails with an error naming it, which
+     * {@see ReplyContinuation::rejectsPrefill()} turns into the same fallback.
+     */
+    public function acceptsAssistantPrefill(string $model): bool
+    {
+        return str_contains(self::family($model !== '' ? $model : $this->defaultModel), 'anthropic.');
     }
 
     public function supportsFunctionCalling(): bool

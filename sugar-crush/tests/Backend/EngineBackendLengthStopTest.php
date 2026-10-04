@@ -265,7 +265,9 @@ final class EngineBackendLengthStopTest extends TestCase
         );
 
         $this->assertInstanceOf(Message::class, $resolved);
-        $this->assertSame('the stop says cut', $resolved->content);
+        // Roadmap 2.7-2: the double cuts EVERY reply, so the reply and its
+        // three continuations are joined into one before the verdict stands.
+        $this->assertSame(str_repeat('the stop says cut', 1 + \SugarCraft\Crush\Providers\ReplyContinuation::MAX_LENGTH_CONTINUATIONS), $resolved->content);
         $this->assertTrue($resolved->lengthStopped, 'the async half of the app must tell the same truth as the sync half');
     }
 

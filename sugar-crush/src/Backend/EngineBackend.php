@@ -1435,11 +1435,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             $summaryLiveness = $progressSink === null ? null : static function () use ($progressSink): void {
                 $progressSink('');
             };
+            // Roadmap 2.7-2: a reply cut at the output ceiling with no tool
+            // call is CONTINUED, up to ReplyContinuation::MAX_LENGTH_CONTINUATIONS
+            // times, before the step is over: the partial reply goes back as
+            // a prefill (or with a "continue" row, for a provider that takes
+            // none) and the answer is joined onto it. $continuing is the reply
+            // so far while a continuation is being asked for.
+            $continuing = null;
+            $continuePrefill = false;
+            $prefillRejected = false;
+            $lengthContinuations = 0;
             while (true) {
                 $requestRows = $app->messages;
+                $runApp = $continuing === null
+                    ? $app
+                    : $app->withMessages([
+                        ...$app->messages,
+                        ...\SugarCraft\Crush\Providers\ReplyContinuation::rows($continuing, $continuePrefill, \SugarCraft\Crush\Providers\ReplyContinuation::LENGTH_PROMPT),
+                    ]);
+                $wireRows = $runApp->messages;
                 $mayRelieve = !($pruneTried && $summaryTried);
-                $observeRequest = static function (\SugarCraft\Crush\Providers\CompleteRequest $request) use ($contextBudget, $requestRows, $pressureAnchor, $onStep, $step, $maxSteps, $mayRelieve): void {
-                    $pressure = \SugarCraft\Crush\Context\ContextPressure::measure($contextBudget, $request, $requestRows, $pressureAnchor[0], $pressureAnchor[1]);
+                $observeRequest = static function (\SugarCraft\Crush\Providers\CompleteRequest $request) use ($contextBudget, $wireRows, $pressureAnchor, $onStep, $step, $maxSteps, $mayRelieve): void {
+                    $pressure = \SugarCraft\Crush\Context\ContextPressure::measure($contextBudget, $request, $wireRows, $pressureAnchor[0], $pressureAnchor[1]);
                     if ($mayRelieve && $pressure->isOverBudget()) {
                         throw new \SugarCraft\Crush\Context\Pruning\StepOverBudget($pressure);
                     }
@@ -1449,7 +1466,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 };
 
                 try {
-                    foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat, $observeRequest) as $message) {
+                    foreach ($runtime->run($runApp, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat, $observeRequest) as $message) {
                         if ($message instanceof AssistantMessage) {
                             $assistant = $message;
                             // 2.1: the next step's anchor — this request as the
@@ -1500,6 +1517,31 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         }
                     }
 
+                    // 2.7-2: the continuation's answer is the rest of the
+                    // reply it was asked for — one reply, joined.
+                    if ($continuing !== null && $assistant !== null) {
+                        $assistant = \SugarCraft\Crush\Providers\ReplyContinuation::merge($continuing, $assistant, $continuePrefill);
+                    }
+                    $continuing = null;
+                    if ($assistant !== null
+                        && $toolResults === []
+                        && $assistant->lengthStopped()
+                        && \SugarCraft\Crush\Providers\ReplyContinuation::continuable($assistant)
+                        && $lengthContinuations < \SugarCraft\Crush\Providers\ReplyContinuation::MAX_LENGTH_CONTINUATIONS
+                        // Another provider call: not past the spend cap, and
+                        // not once the person asked the turn to stop.
+                        && ($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd)
+                        && ($stopRequested === null || !$stopRequested())
+                    ) {
+                        $lengthContinuations++;
+                        $continuing = $assistant;
+                        $continuePrefill = !$prefillRejected
+                            && \SugarCraft\Crush\Providers\ReplyContinuation::prefills($this->provider, $app->model);
+                        $assistant = null;
+
+                        continue;
+                    }
+
                     break;
                 } catch (\SugarCraft\Crush\Context\Pruning\StepOverBudget) {
                     $relieved = null;
@@ -1541,6 +1583,29 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         $pressureAnchor = [null, 0];
                     }
                 } catch (\Throwable $failure) {
+                    // 2.7-2: a continuation is best effort — the reply it was
+                    // continuing already stands. A provider that refuses the
+                    // prefill itself is asked again with a "continue" row;
+                    // any other failure ends the step on the reply as it was,
+                    // and its length-stop notice says it was cut short.
+                    if ($continuing !== null
+                        && !\SugarCraft\Crush\Providers\ContextOverflow::matches($failure)
+                    ) {
+                        if ($continuePrefill && \SugarCraft\Crush\Providers\ReplyContinuation::rejectsPrefill($failure)) {
+                            $continuePrefill = false;
+                            $prefillRejected = true;
+                            $assistant = null;
+                            $toolResults = [];
+
+                            continue;
+                        }
+                        $assistant = $continuing;
+                        $continuing = null;
+                        $toolResults = [];
+
+                        break;
+                    }
+
                     // Roadmap 2.7-1b: the provider refused the request as too
                     // long for its window (ContextOverflow, 2.7-1a) — the one
                     // permanent failure a smaller request fixes. The budget

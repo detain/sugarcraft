@@ -205,4 +205,30 @@ final readonly class CompleteRequest
          */
         public ?string $sessionId = null,
     ) {}
+
+    /**
+     * Whether this request asks the model to CONTINUE its last reply rather
+     * than write a new one (roadmap 2.7-2): the last message is an assistant
+     * reply with text and no tool call — the prefill
+     * {@see ReplyContinuation} appends. Derived from the messages rather than
+     * carried as a flag, because that is exactly what the Anthropic Messages
+     * API already does with a trailing assistant turn: the request's shape IS
+     * the instruction, on every provider alike. {@see SglangProvider} turns it
+     * into `continue_final_message`; a provider that takes no prefill is
+     * never sent this shape ({@see AcceptsAssistantPrefill}).
+     */
+    public function continuesFinalMessage(): bool
+    {
+        $last = $this->messages === [] ? null : $this->messages[array_key_last($this->messages)];
+
+        return $last instanceof \SugarCraft\Crush\Messages\AssistantMessage
+            && $last->content() !== ''
+            && ($last->toolCalls() ?? []) === [];
+    }
+
+    /** The same request carrying $messages instead. */
+    public function withMessages(array $messages): self
+    {
+        return new self(...[...get_object_vars($this), 'messages' => $messages]);
+    }
 }

@@ -353,6 +353,7 @@ sugar-crush/tests/Chat/ModelCommandSelectsModelTest.php	0.300	11
 sugar-crush/tests/Tui/AgentStripTest.php	0.300	15
 sugar-crush/tests/Tui/Settings/SettingsEditorKeysTest.php	0.300	10
 sugar-crush/tests/Backend/OverflowPruneAndRetryTest.php	0.300	5
+sugar-crush/tests/Backend/LengthStopContinuationTest.php	0.300	7
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
@@ -474,6 +475,7 @@ sugar-crush/tests/Cli/PersistedModelResolutionTest.php	0.100	8
 sugar-crush/tests/Config/Settings/SettingsWriterTest.php	0.100	34
 sugar-crush/tests/Memory/SecretRedactorTest.php	0.100	21
 sugar-crush/tests/Memory/ConsolidationPlanTest.php	0.100	8
+sugar-crush/tests/Providers/SglangContinueFinalMessageTest.php	0.100	5
 sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
 sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35
