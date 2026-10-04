@@ -153,15 +153,17 @@ final class CancelSoftStopsAtBoundaryTest extends TestCase
     }
 
     /**
-     * A model that calls the slow tool for as long as tools are offered, and
-     * says SUMMARY when they are not (the stopped-turn summary request).
+     * A model that calls the slow tool on every step, and says SUMMARY when
+     * the last row asks it to stop calling tools (the stopped-turn summary
+     * request).
      */
     private static function backend(float $toolSeconds = 0.6): EngineBackend
     {
         $step = 0;
         $provider = new ScriptedProvider([
             static function (CompleteRequest $request) use (&$step): CompleteResponse {
-                if ($request->tools === null) {
+                $last = $request->messages[array_key_last($request->messages)] ?? null;
+                if ($last instanceof \SugarCraft\Crush\Messages\UserMessage && str_contains($last->content(), 'Do not call any tools')) {
                     return new CompleteResponse(content: 'SUMMARY');
                 }
                 $step++;

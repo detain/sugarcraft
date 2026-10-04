@@ -368,9 +368,15 @@ result, and rides the hook chain as a fresh `RepeatCallGuardHook`
 warns) pair registered on a per-turn copy of the manager: the 3rd identical
 call gets a warning appended to its result, the 5th is refused, the 8th ends
 the turn. When the budget runs out, or the guard ends the turn,
-`summariseStoppedTurn()` makes one more `Runtime::run()` with
-`App::withTools([])` and a user message asking for done / remaining / next, so
-the turn ends in an answer.
+`summariseStoppedTurn()` makes one more request — the turn's last request plus
+a user message saying not to call tools and asking for done / remaining / next
+— so the turn ends in an answer. It goes through
+`Context\Compaction\StepSummarizer::summaryStep()`, the one summary request the
+engine makes: the step's tools stay advertised, so the request's whole prefix is
+one the provider has cached (a tool-less request changed the tool block and
+re-prefilled the turn), and they can never run, because the reply is taken the
+moment `run()` yields the assistant message — before it dispatches a call — and
+any calls it asked for anyway are dropped from it.
 
 The loop's ordinary exit — a step with no tool results — has one more check in
 front of it. A reply with no text is not an answer: a reasoning-only reply gets
@@ -415,10 +421,28 @@ turns and the newest 40k tokens of older tool output stay, `Task`, `Skill`,
 and the superseded `<turn-context>` rows (`Strategies\SupersededTurnContextStrategy`
 — every one but the newest). It is made only when it frees at least 20k
 estimated tokens, because a prune rewrites bytes the provider has cached: the
-ledger changes rarely and in bulk, never a little each step. The ledger is the
-turn's own (it does not yet cross to Chat), and Chat's compaction applies the
-same age rule to the exchanges it condenses (`ContextCompactor::removeToolResults()`,
-which never touches the preserved tail).
+ledger changes rarely and in bulk, never a little each step.
+
+**A step still over budget is summarised.** When the prune is not enough —
+typically one long turn, whose output the age rule protects as the newest user
+turn — `Context\Compaction\StepSummarizer::summarise()` asks for a summary of
+everything the model has already been sent, through `summaryStep()` (the turn's
+own model unless `SUGARCRUSH_SUMMARY_MODEL` names another).
+The cut snaps back to the step that opens the unsent tail (`cutIndex()`), so no
+call is separated from its result and that tail — the last step's calls and
+results, the new state row, a mid-turn message — goes out verbatim. The summary
+becomes a `Context\Pruning\CompressionBlock` written by the harness: the
+projector replaces every row before that step with one user-role row,
+`[Conversation summary b1 — …]` followed by the summary, and a later block
+consumes an earlier one. A range under 10k estimated tokens, a failed call, an
+empty reply or a summary no smaller than its source makes no block, and the
+step goes out as it stands; past the spend cap no summary is asked for. Each
+relief is tried at most once per step.
+
+The ledger is the turn's own (it does not yet cross to Chat), and Chat's
+compaction applies the same age rule to the exchanges it condenses
+(`ContextCompactor::removeToolResults()`, which never touches the preserved
+tail).
 
 The two type worlds meet at the `EngineBackend` seam: the chassis works in the
 root `Message`/`ToolCall` value objects, the engine in the typed

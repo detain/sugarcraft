@@ -104,7 +104,7 @@ sugar-crush/tests/Session/CheckpointRefLifecycleTest.php	3.612	9
 sugar-crush/tests/Chat/CustomCommandShellAsyncTest.php	3.562	10
 sugar-crush/tests/MCP/StdioMcpServerTest.php	3.502	19
 sugar-crush/tests/Session/SessionQueryTest.php	3.500	14
-sugar-crush/tests/Backend/EngineBackendStepBudgetTest.php	3.498	7
+sugar-crush/tests/Backend/EngineBackendStepBudgetTest.php	3.498	8
 sugar-crush/tests/Renderer/FrameWidthClipTest.php	3.498	328
 sugar-crush/tests/Chat/ReadOnlySessionTest.php	3.472	20
 sugar-crush/tests/Hooks/HookRegistryTest.php	3.191	71
@@ -337,6 +337,7 @@ sugar-crush/tests/Tui/Settings/SettingsEditorRenderTest.php	0.300	5
 sugar-crush/tests/Backend/TurnContextPersistedTest.php	0.300	3
 sugar-crush/tests/Chat/PermissionRejectNoteAndStopTest.php	0.300	5
 sugar-crush/tests/Memory/MemorySearchIndexTest.php	0.300	15
+sugar-crush/tests/Backend/StepLevelSummaryTest.php	0.300	4
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
@@ -512,7 +513,7 @@ sugar-crush/tests/Chat/EscapeSoftCancelTest.php	0.060	6
 sugar-crush/tests/Tools/Catalog/ToolCatalogTest.php	0.060	8
 sugar-crush/tests/Tools/Catalog/ToolDocDriftTest.php	0.060	5
 sugar-crush/tests/Chat/EnterWhileBusySteersTest.php	0.060	5
-sugar-crush/tests/Context/Pruning/Strategies/ToolOutputAgeStrategyTest.php	0.060	7
+sugar-crush/tests/Context/Pruning/Strategies/ToolOutputAgeStrategyTest.php	0.060	8
 sugar-crush/tests/Permissions/PermissionGateTest.php	0.059	165
 sugar-crush/tests/SessionTest.php	0.059	18
 sugar-crush/tests/Context/ProjectMemoryWriterTest.php	0.058	10
@@ -559,6 +560,7 @@ sugar-crush/tests/Context/ContextBudgetTest.php	0.040	12
 sugar-crush/tests/Tui/Settings/SettingsSourcesLaunchDefaultsTest.php	0.040	4
 sugar-crush/tests/Context/Pruning/ContextProjectorTest.php	0.040	6
 sugar-crush/tests/Context/Pruning/ContextLedgerTest.php	0.040	5
+sugar-crush/tests/Context/Pruning/CompressionBlockProjectionTest.php	0.040	6
 sugar-crush/tests/Host/SpendLedgerTest.php	0.039	8
 sugar-crush/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.038	10
 sugar-crush/tests/Context/InstructionFileLoaderContainmentTest.php	0.037	29

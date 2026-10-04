@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Context\Pruning\Strategies;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Context\Pruning\CompressionBlock;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Context\Pruning\PruneAuthor;
 use SugarCraft\Crush\Context\Pruning\PruneEntry;
@@ -100,6 +101,17 @@ final class ToolOutputAgeStrategyTest extends TestCase
         $rows[] = new UserMessage('second');
 
         // One real turn behind the newest prompt is not two: nothing is old enough.
+        $this->assertTrue(ToolOutputAgeStrategy::new()->propose($rows, ContextLedger::new(), PruningPolicy::new())->isEmpty());
+    }
+
+    public function testAStepSummaryRowIsNotAUserTurn(): void
+    {
+        $rows = [(new CompressionBlock(1, 'a1', 'earlier work', 50_000, 10, PruneAuthor::Harness))->summaryRow()];
+        for ($i = 1; $i <= 6; $i++) {
+            array_push($rows, ...self::step("a{$i}", 'Read', ['file_path' => "a{$i}.php"]));
+        }
+        $rows[] = new UserMessage('second');
+
         $this->assertTrue(ToolOutputAgeStrategy::new()->propose($rows, ContextLedger::new(), PruningPolicy::new())->isEmpty());
     }
 

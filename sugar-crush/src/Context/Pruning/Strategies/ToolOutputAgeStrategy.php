@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Context\Pruning\Strategies;
 
+use SugarCraft\Crush\Context\Pruning\CompressionBlock;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Context\Pruning\ContextProjector;
 use SugarCraft\Crush\Context\Pruning\LedgerDelta;
@@ -138,11 +139,13 @@ final class ToolOutputAgeStrategy implements PruningStrategy
     }
 
     /**
-     * A prompt that opens a user turn: a user row that is not the harness's
-     * own `<turn-context>` row.
+     * A prompt that opens a user turn: a user row that is neither the
+     * harness's own `<turn-context>` row nor a step summary's row.
      */
     private static function isUserTurn(TypedMessage $message): bool
     {
-        return $message instanceof UserMessage && !TurnContextBlock::isTurnContext($message);
+        return $message instanceof UserMessage
+            && !TurnContextBlock::isTurnContext($message)
+            && !CompressionBlock::isSummaryRow($message);
     }
 }

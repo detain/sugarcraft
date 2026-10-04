@@ -54,7 +54,10 @@ final class EngineBackendStepBudgetTest extends TestCase
             $this->assertNotNull($provider->requests[$step]->tools, "step {$step} still advertises tools");
         }
         $summaryRequest = $provider->requests[3];
-        $this->assertNull($summaryRequest->tools, 'tools are disabled for the summary');
+        // Roadmap 2.4-1: the same tools stay advertised, so the summary
+        // request is the last step's request plus one row and its prefix is
+        // cached; the reply is taken before any call it asks for could run.
+        $this->assertSame($provider->requests[2]->tools, $summaryRequest->tools, 'the summary keeps the step\'s tool block');
         $asked = \SugarCraft\Crush\Context\TurnContextBlock::strip($summaryRequest->messages);
         $ask = $asked[array_key_last($asked)];
         $this->assertInstanceOf(UserMessage::class, $ask);
@@ -85,7 +88,7 @@ final class EngineBackendStepBudgetTest extends TestCase
 
         // The summary request: the 8th call's turn-ending refusal, then the ask.
         $summaryRequest = $provider->requests[ToolCallLoopGuard::END_TURN_AT];
-        $this->assertNull($summaryRequest->tools);
+        $this->assertSame($provider->requests[0]->tools, $summaryRequest->tools);
         $messages = \SugarCraft\Crush\Context\TurnContextBlock::strip($summaryRequest->messages);
         $this->assertStringContainsString('identical call #8 to probe', $messages[count($messages) - 2]->content());
         $this->assertStringContainsString('The turn is being ended', $messages[count($messages) - 2]->content());
@@ -139,6 +142,26 @@ final class EngineBackendStepBudgetTest extends TestCase
         $this->assertSame(8, $probe->runs);
     }
 
+    public function testCallsTheSummaryAsksForAnywayNeverRun(): void
+    {
+        // A model that ignores "do not call any tools": its calls are dropped
+        // from the reply and none of them runs — the tools were advertised
+        // only so the request could reuse the cached prefix.
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'step', toolCalls: [new ToolCall('call_1', 'probe', ['n' => 1])], tokensUsed: 10),
+            new CompleteResponse(content: 'summary anyway', toolCalls: [new ToolCall('call_2', 'probe', ['n' => 2])], tokensUsed: 10),
+        ]);
+        $probe = self::probe();
+
+        $turn = EngineBackend::new($provider, 'm')->withTools([$probe])->withMaxSteps(1)->completeTranscript([new UserMessage('go')]);
+
+        $this->assertSame(1, $probe->runs, 'only the step\'s own call ran');
+        $this->assertSame('summary anyway', $turn->reply->content);
+        $last = $turn->transcript[array_key_last($turn->transcript)];
+        $this->assertInstanceOf(AssistantMessage::class, $last);
+        $this->assertNull($last->toolCalls(), 'no call is left without a result');
+    }
+
     public function testTheSummaryExchangeIsPartOfTheTranscriptAResumeReplays(): void
     {
         $provider = self::toolCallingProvider(distinctArgs: true, summary: 'where I stopped');
@@ -157,8 +180,8 @@ final class EngineBackendStepBudgetTest extends TestCase
     }
 
     /**
-     * A model that calls `probe` whenever tools are offered and answers with
-     * $summary when they are not.
+     * A model that calls `probe` on every step and answers with $summary when
+     * the last row asks it to stop calling tools (the summary request).
      */
     private static function toolCallingProvider(bool $distinctArgs, string $summary): ScriptedProvider
     {
@@ -166,7 +189,8 @@ final class EngineBackendStepBudgetTest extends TestCase
 
         return new ScriptedProvider([
             static function (CompleteRequest $request) use (&$step, $distinctArgs, $summary): CompleteResponse {
-                if ($request->tools === null) {
+                $last = $request->messages[array_key_last($request->messages)] ?? null;
+                if ($last instanceof UserMessage && str_contains($last->content(), 'Do not call any tools')) {
                     return new CompleteResponse(content: $summary, tokensUsed: 10);
                 }
                 $step++;

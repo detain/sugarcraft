@@ -23,14 +23,19 @@ use SugarCraft\Crush\Tools\ToolCall;
  * at the deliberate points its owner chooses.
  *
  * Steps, in order:
- *  1. a superseded `<turn-context>` row the ledger names is left out — never
+ *  1. the active {@see CompressionBlock} (roadmap 2.4-1): every row before
+ *     the step opener it keeps from is replaced by its summary row, a
+ *     user-role row — never a system one, which some providers hoist into
+ *     message 0. The kept part starts with an assistant row, so the summary
+ *     never sits next to another user row of the block's making;
+ *  2. a superseded `<turn-context>` row the ledger names is left out — never
  *     the last one, which is the state the model must read;
- *  2. a pruned tool result keeps its call id and error flag and has its
+ *  3. a pruned tool result keeps its call id and error flag and has its
  *     content replaced by {@see PrunedOutputPlaceholder}, named from the call
  *     that asked for it.
  *
- * Row count changes only in step 1, and only for user-role rows that pair
- * with nothing, so every tool call keeps its result.
+ * Steps 1 and 2 remove rows only at step boundaries or rows that pair with
+ * nothing, so every tool call that is sent keeps its result.
  */
 final class ContextProjector
 {
@@ -52,6 +57,14 @@ final class ContextProjector
         }
 
         $calls = self::callsById($messages);
+        $block = $ledger->activeBlock();
+        if ($block !== null) {
+            $keepFrom = self::stepOpening($messages, $block->keepFromToolCallId);
+            if ($keepFrom !== null) {
+                $messages = [$block->summaryRow(), ...\array_slice($messages, $keepFrom)];
+            }
+        }
+
         $lastContextRow = null;
         foreach ($messages as $index => $message) {
             if (TurnContextBlock::isTurnContext($message)) {
@@ -97,6 +110,28 @@ final class ContextProjector
         }
 
         return $calls;
+    }
+
+    /**
+     * The index of the assistant row that issued $toolCallId, or null when no
+     * row in $messages did.
+     *
+     * @param list<TypedMessage> $messages
+     */
+    public static function stepOpening(array $messages, string $toolCallId): ?int
+    {
+        foreach ($messages as $index => $message) {
+            if (!$message instanceof AssistantMessage) {
+                continue;
+            }
+            foreach ($message->toolCalls() ?? [] as $call) {
+                if ($call instanceof ToolCall && $call->id() === $toolCallId) {
+                    return $index;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static function pruned(ToolResultMessage $result, PruneEntry $entry, ?ToolCall $call): ToolResultMessage

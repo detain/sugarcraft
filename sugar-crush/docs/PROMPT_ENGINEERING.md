@@ -117,6 +117,17 @@ re-prefills the whole conversation behind it.
   pure functions of the rows and the ledger, and the ledger moves only at that
   over-budget point, in one batch worth at least 20k tokens: the bytes before
   the first pruned row are the bytes the previous request sent.
+- **Step summaries.** When a request is still over its budget after that prune,
+  the engine asks the turn's model for a summary with the request it last sent
+  plus one user row, `StepSummarizer::INSTRUCTION` ("…Do not call any tools —
+  answer with the summary only. Cover, in this order: the user's requests (quote
+  the most recent one verbatim); what has been done so far…"), keeping the same
+  system prompt and tool block so the request is a cached prefix. The summary
+  then stands in for those rows as one user-role row opening
+  `[Conversation summary b1 — the harness condensed the earlier part of this
+  conversation to free context; this summary replaces it]`
+  (`Context\Pruning\CompressionBlock::HEADER`) — user-role, not system, because
+  a system row past index 0 is hoisted or refused by several templates.
 - **History system rows stay in place.** `SglangProvider::placeSystemRows()` — shared by
   `CustomProvider` — keeps ONE leading `system` row: the assembled prompt, then any history system
   rows that precede the first non-system row (a launch notice, the title one-shot's instruction).

@@ -1408,6 +1408,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                             // provider counted it, and how many rows it was built
                             // from, so the delta is only what this step adds.
                             $pressureAnchor = [\SugarCraft\Crush\Context\ContextPressure::promptTokensOf($assistant->usage()), count($requestRows)];
+                            // 2.4-1: the rows the model has now been sent; a
+                            // step summary covers these and never the rows after.
+                            $sentRows = count($requestRows);
                             // Counted ON ARRIVAL, before this step's tools run: a Task
                             // call among them reads $spentSoFarUsd as its sub-agent's
                             // cap baseline, and the step that asked for it is paid.
@@ -1463,6 +1466,38 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     }
                     if ($relieved === null && !$summaryTried) {
                         $summaryTried = true;
+                        // Not past the spend cap: a summary is a provider call,
+                        // and the cap refuses the next one by definition.
+                        if ($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd) {
+                            $block = \SugarCraft\Crush\Context\Compaction\StepSummarizer::summarise(
+                                $runtime,
+                                $app,
+                                $contextLedger,
+                                // Everything is "sent" on a turn's first step:
+                                // the history came from earlier requests.
+                                $sentRows ?? count($app->messages),
+                                function (AssistantMessage $summary) use (&$stepUsages, $onStep, $step): void {
+                                    $stepUsages[] = $summary->usage();
+                                    $this->siblingSpend?->record($summary->usage());
+                                    if ($this->stepUsageObserver !== null) {
+                                        ($this->stepUsageObserver)($summary->usage());
+                                    }
+                                    if ($onStep !== null) {
+                                        $onStep(new \SugarCraft\Crush\Events\UsageUpdated($step + 1, $summary->usage(), Usage::sum($stepUsages)));
+                                    }
+                                    $this->observeCacheHealth($summary->usage());
+                                },
+                                // Liveness only: an empty reasoning delta is the
+                                // frame the parent's idle deadline counts, and
+                                // the summary's own text is never painted.
+                                $progressSink === null ? null : static function () use ($progressSink): void {
+                                    $progressSink('');
+                                },
+                                $onHeartbeat,
+                                \SugarCraft\Crush\Context\Compaction\StepSummarizer::modelOverride(),
+                            );
+                            $relieved = $block === null ? null : $contextLedger->withBlock($block);
+                        }
                     }
                     if ($relieved !== null) {
                         $contextLedger = $relieved;
@@ -1905,21 +1940,25 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * answering the summary's assistant message — or null when the provider
      * produced none.
      *
-     * One more {@see Runtime::run()} over the turn's whole transcript with
-     * `App::withTools([])`, so the request advertises no tools at all (Runtime
-     * sends `tools: null` for an empty list, and the tool-guidance prompt layer
-     * renders from the same list), plus a user message naming why the turn
-     * stopped and asking for done / remaining / next. It streams on the turn's
-     * own token channel, so the operator sees it arrive like any other reply,
-     * and its usage is billed into the turn like any other step.
+     * One more request over the turn's whole transcript plus a user message
+     * naming why the turn stopped, saying not to call tools, and asking for
+     * done / remaining / next. Since roadmap 2.4-1 it is
+     * {@see \SugarCraft\Crush\Context\Compaction\StepSummarizer::summaryStep()},
+     * the request every engine-side summary makes: the tools stay ADVERTISED,
+     * so the request is the previous step's request plus one row and its whole
+     * prefix is already in the provider's cache — a tool-less request changed
+     * the tool block and re-prefilled the turn — and they can never RUN,
+     * because the reply is taken the moment the assistant message arrives,
+     * before Runtime dispatches a call, and any calls it asked for anyway are
+     * dropped from it. It streams on the turn's own token channel, so the
+     * operator sees it arrive like any other reply, and its usage is billed
+     * into the turn like any other step.
      *
      * The exchange is appended to `$transcript`: it IS what the conversation
      * now holds, and a resumed delegated run ({@see completeTranscript()})
      * must see that it already summarised rather than replay a dangling
-     * tool-result tail. A model that emits tool calls anyway gets them settled
-     * as unknown-tool errors by Runtime, and those results ride along in the
-     * transcript to keep every call paired with its result; they are not fed
-     * back — there is no next step.
+     * tool-result tail. With its calls dropped, the reply leaves no call
+     * without a result — and no call runs, so `$onEvent` has nothing to carry.
      *
      * @param list<TypedMessage> $transcript
      * @param list<?Usage>       $stepUsages
@@ -1939,15 +1978,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ? sprintf(self::BUDGET_EXHAUSTED_SUMMARY_PROMPT, $this->maxSteps)
             : sprintf(self::LOOP_GUARD_SUMMARY_PROMPT, $loopedTool, ToolCallLoopGuard::END_TURN_AT));
 
-        $summaryApp = $app
-            ->withMessages([...$transcript, $request])
-            ->withTools([]);
-
-        $assistant = null;
-        $toolResults = [];
-        foreach ($runtime->run($summaryApp, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat) as $message) {
-            if ($message instanceof AssistantMessage) {
-                $assistant = $message;
+        $assistant = \SugarCraft\Crush\Context\Compaction\StepSummarizer::summaryStep(
+            $runtime,
+            $app->withMessages($transcript),
+            $request,
+            function (AssistantMessage $assistant) use (&$stepUsages): void {
                 $stepUsages[] = $assistant->usage();
                 $this->siblingSpend?->record($assistant->usage());
                 if ($this->stepUsageObserver !== null) {
@@ -1955,16 +1990,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 }
                 // A request like any other step's, carrying the same marks.
                 $this->observeCacheHealth($assistant->usage());
-            } elseif ($message instanceof ToolResultMessage) {
-                $toolResults[] = $message;
-            }
-        }
+            },
+            $tokenSink,
+            $progressSink,
+            $onHeartbeat,
+        );
 
         $transcript = [
             ...$transcript,
             $request,
             ...($assistant !== null ? [$assistant] : []),
-            ...$toolResults,
         ];
 
         return $assistant;

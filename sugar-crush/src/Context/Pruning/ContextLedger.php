@@ -15,21 +15,28 @@ namespace SugarCraft\Crush\Context\Pruning;
  * request sends change only when the ledger does, and the ledger changes only
  * at a few deliberate points (today: the engine's over-budget emergency).
  *
- * Holds the pruned tool results ({@see PruneEntry}, keyed by tool-call id) and
+ * Holds the pruned tool results ({@see PruneEntry}, keyed by tool-call id),
  * the superseded `<turn-context>` rows to leave out (keyed by a hash of the
  * row's bytes — the row has no other identity, and two rows with the same
- * bytes say the same thing).
+ * bytes say the same thing), and the step summaries that stand in for the
+ * start of the conversation ({@see CompressionBlock}, roadmap 2.4-1).
  */
 final readonly class ContextLedger
 {
     /**
-     * @param array<string, PruneEntry> $prunes             by tool-call id
-     * @param array<string, int>        $droppedContextRows by {@see contextRowKey()}
-     *                                                      => estimated tokens
+     * @param array<string, PruneEntry>     $prunes             by tool-call id
+     * @param array<string, int>            $droppedContextRows by {@see contextRowKey()}
+     *                                                          => estimated tokens
+     * @param array<int, CompressionBlock>  $blocks             by block id
+     * @param int                           $nextBlockId        the id the next
+     *                                                          block takes; never
+     *                                                          reused
      */
     private function __construct(
         public array $prunes,
         public array $droppedContextRows,
+        public array $blocks = [],
+        public int $nextBlockId = 1,
     ) {
     }
 
@@ -51,7 +58,7 @@ final readonly class ContextLedger
             return $this;
         }
 
-        return new self([...$this->prunes, $entry->toolCallId => $entry], $this->droppedContextRows);
+        return new self([...$this->prunes, $entry->toolCallId => $entry], $this->droppedContextRows, $this->blocks, $this->nextBlockId);
     }
 
     public function withDroppedContextRow(string $key, int $tokens): self
@@ -60,7 +67,46 @@ final readonly class ContextLedger
             return $this;
         }
 
-        return new self($this->prunes, [...$this->droppedContextRows, $key => $tokens]);
+        return new self($this->prunes, [...$this->droppedContextRows, $key => $tokens], $this->blocks, $this->nextBlockId);
+    }
+
+    /**
+     * This ledger with $block active. Every block already active is consumed
+     * by it — a step summary covers the conversation's whole start, so the
+     * newer one covers the older one's rows and its summary too. A block id
+     * already present changes nothing, which keeps {@see apply()} idempotent.
+     */
+    public function withBlock(CompressionBlock $block): self
+    {
+        if (isset($this->blocks[$block->id])) {
+            return $this;
+        }
+
+        $blocks = [];
+        $consumed = [];
+        foreach ($this->blocks as $id => $existing) {
+            if ($existing->active) {
+                $consumed[] = $id;
+                $existing = $existing->deactivated();
+            }
+            $blocks[$id] = $existing;
+        }
+        $blocks[$block->id] = $block->withConsumedBlockIds([...$block->consumedBlockIds, ...$consumed]);
+
+        return new self($this->prunes, $this->droppedContextRows, $blocks, max($this->nextBlockId, $block->id + 1));
+    }
+
+    /** The block the projection applies, or null. */
+    public function activeBlock(): ?CompressionBlock
+    {
+        $active = null;
+        foreach ($this->blocks as $block) {
+            if ($block->active) {
+                $active = $block;
+            }
+        }
+
+        return $active;
     }
 
     /** $delta applied; applying the same delta again changes nothing. */
@@ -73,13 +119,16 @@ final readonly class ContextLedger
         foreach ($delta->droppedContextRows as $key => $tokens) {
             $ledger = $ledger->withDroppedContextRow((string) $key, $tokens);
         }
+        foreach ($delta->blocks as $block) {
+            $ledger = $ledger->withBlock($block);
+        }
 
         return $ledger;
     }
 
     public function isEmpty(): bool
     {
-        return $this->prunes === [] && $this->droppedContextRows === [];
+        return $this->prunes === [] && $this->droppedContextRows === [] && $this->blocks === [];
     }
 
     public function isPruned(string $toolCallId): bool
@@ -97,12 +146,14 @@ final readonly class ContextLedger
         return isset($this->droppedContextRows[self::contextRowKey($content)]);
     }
 
-    /** @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>} */
+    /** @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>,nextBlockId:int} */
     public function toArray(): array
     {
         return [
             'prunes' => array_values(array_map(static fn (PruneEntry $entry): array => $entry->toArray(), $this->prunes)),
             'droppedContextRows' => $this->droppedContextRows,
+            'blocks' => array_values(array_map(static fn (CompressionBlock $block): array => $block->toArray(), $this->blocks)),
+            'nextBlockId' => $this->nextBlockId,
         ];
     }
 
@@ -130,7 +181,21 @@ final readonly class ContextLedger
                 $ledger = $ledger->withDroppedContextRow($key, $tokens);
             }
         }
+        // Blocks are restored as written — active flag and consumed ids
+        // included — not replayed through withBlock(), which would re-derive
+        // which one is active from their order.
+        $blocks = [];
+        foreach (is_array($raw['blocks'] ?? null) ? $raw['blocks'] : [] as $row) {
+            $block = CompressionBlock::fromArray($row);
+            if ($block !== null) {
+                $blocks[$block->id] = $block;
+            }
+        }
+        $next = is_int($raw['nextBlockId'] ?? null) ? $raw['nextBlockId'] : 1;
+        foreach ($blocks as $id => $_) {
+            $next = max($next, $id + 1);
+        }
 
-        return $ledger;
+        return new self($ledger->prunes, $ledger->droppedContextRows, $blocks, $next);
     }
 }

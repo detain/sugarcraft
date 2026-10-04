@@ -1238,8 +1238,12 @@ pruned before it goes out: older tool output — outside the last two prompts an
 the newest 40k tokens of it, and never a `Task` or `Skill` result — is sent as
 a one-line placeholder naming the call (`[Read src/Foo.php — output pruned to save
 context; re-run the tool if you need it]`), along with superseded copies of the
-harness's own state row, but only when that frees at least 20k tokens. Your
-transcript keeps every output. While the turn runs, the status
+harness's own state row, but only when that frees at least 20k tokens. If the
+request is still over, the agent's own model summarises what it has already been
+sent — same system prompt and tools, so the request reuses the provider's cache,
+plus an instruction not to call tools (`SUGARCRUSH_SUMMARY_MODEL` picks another
+model) — and the summary stands in for those rows while the step in progress
+goes out whole. Your transcript keeps every output and every row. While the turn runs, the status
 bar names the step it is on, adds that step's context figure once the request
 is over budget, and moves the spend readout as each step is billed. On such a
 turn the first `Esc` stops it after the current step's tools finish, with its

@@ -110,8 +110,8 @@ final class TaskToolEngineTest extends TestCase
 
     public function testAStepCappedSubAgentReportsItsSummaryAndKeepsItsResumeId(): void
     {
-        // WAVE_PLAN_2 §5: the capped run's engine makes one no-tools summary
-        // request. Its answer is the report — and the run, still unfinished,
+        // WAVE_PLAN_2 §5: the capped run's engine makes one summary request
+        // that says not to call tools. Its answer is the report — and the run, still unfinished,
         // stays resumable instead of the summary silently costing it that.
         $probe = self::probe('probe');
         $provider = new ScriptedProvider([
@@ -126,7 +126,9 @@ final class TaskToolEngineTest extends TestCase
         $this->assertFalse($result->isError(), $result->content());
         $this->assertStringStartsWith(\SugarCraft\Crush\Context\DelegatedOutputFence::wrap('done: probed once; remaining: everything else'), $result->content());
         $this->assertStringContainsString('stopped at its step cap (1)', $result->content());
-        $this->assertNull($provider->requests[1]->tools, 'the summary request offered no tools');
+        // Roadmap 2.4-1: the summary keeps the step's tool block (a cached
+        // prefix) and is answered before any call could run.
+        $this->assertSame($provider->requests[0]->tools, $provider->requests[1]->tools, 'the summary request keeps the step\'s tool block');
         $this->assertNotNull($this->store->load(self::resumeId($result->content())), 'the capped run was saved for a resume');
     }
 

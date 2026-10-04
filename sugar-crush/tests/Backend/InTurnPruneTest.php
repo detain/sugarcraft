@@ -24,6 +24,26 @@ use SugarCraft\Crush\Tools\ToolCall;
  */
 final class InTurnPruneTest extends TestCase
 {
+    private ?string $root = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->root !== null) {
+            @rmdir($this->root);
+        }
+    }
+
+    /** An engine on an empty, non-git root, so the turn-context row is the same everywhere. */
+    private function engine(ScriptedProvider $provider): EngineBackend
+    {
+        $this->root ??= sys_get_temp_dir() . '/crush-prune-' . bin2hex(random_bytes(6));
+        if (!is_dir($this->root)) {
+            mkdir($this->root, 0o700, true);
+        }
+
+        return EngineBackend::new($provider, 'm')->withoutHooks()->withRoot($this->root);
+    }
+
     public function testAnOverBudgetRequestIsSentPruned(): void
     {
         // 100k window, no output ceiling: the step budget is 80k. Six old
@@ -31,7 +51,7 @@ final class InTurnPruneTest extends TestCase
         $provider = new ScriptedProvider([new CompleteResponse(content: 'done')], contextWindow: 100_000);
         $events = [];
 
-        $turn = EngineBackend::new($provider, 'm')->completeTranscript(
+        $turn = $this->engine($provider)->completeTranscript(
             self::history(6),
             onStep: static function (object $event) use (&$events): void {
                 if ($event instanceof StepStarted) {
@@ -69,7 +89,7 @@ final class InTurnPruneTest extends TestCase
     {
         $provider = new ScriptedProvider([new CompleteResponse(content: 'done')], contextWindow: 100_000);
 
-        EngineBackend::new($provider, 'm')->completeTranscript(self::history(6));
+        $this->engine($provider)->completeTranscript(self::history(6));
 
         $this->assertCount(1, $provider->requests);
         $this->assertSame(PrunedOutputPlaceholder::for('Read', ['file_path' => 'old1.php']), self::results($provider->requests[0]->messages)['old1']);
@@ -79,7 +99,7 @@ final class InTurnPruneTest extends TestCase
     {
         $provider = new ScriptedProvider([new CompleteResponse(content: 'done')], contextWindow: 1_000_000);
 
-        EngineBackend::new($provider, 'm')->completeTranscript(self::history(6));
+        $this->engine($provider)->completeTranscript(self::history(6));
 
         $this->assertSame(self::bigOutput(), self::results($provider->requests[0]->messages)['old1']);
     }
@@ -88,23 +108,17 @@ final class InTurnPruneTest extends TestCase
     {
         // Three old results: the newest two are the protected 30k and the
         // third would free 15k, under the 20k floor. Over budget all the same
-        // (40k window: 32k budget), so the request is sent as it stands.
-        $provider = new ScriptedProvider([new CompleteResponse(content: 'done')], contextWindow: 40_000);
-        $events = [];
+        // (40k window: 32k budget), so the next relief — a step summary
+        // (2.4-1) — is asked over the rows as they stand.
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'what happened so far'),
+            new CompleteResponse(content: 'done'),
+        ], contextWindow: 40_000);
 
-        EngineBackend::new($provider, 'm')->completeTranscript(
-            self::history(3),
-            onStep: static function (object $event) use (&$events): void {
-                if ($event instanceof StepStarted) {
-                    $events[] = $event;
-                }
-            },
-        );
+        $this->engine($provider)->completeTranscript(self::history(3));
 
-        $this->assertCount(1, $provider->requests);
-        $this->assertSame(self::bigOutput(), self::results($provider->requests[0]->messages)['old1']);
-        $this->assertCount(1, $events);
-        $this->assertTrue($events[0]->pressure?->isOverBudget(), 'the figure says so; nothing could relieve it');
+        $this->assertCount(2, $provider->requests, 'the summary request, then the step');
+        $this->assertSame(self::bigOutput(), self::results($provider->requests[0]->messages)['old1'], 'no prune was made');
     }
 
     /**

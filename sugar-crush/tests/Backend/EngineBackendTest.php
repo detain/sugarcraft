@@ -1029,7 +1029,9 @@ final class EngineBackendTest extends TestCase
         // 3 tool steps, then ONE no-tools summary request (WAVE_PLAN_2 §5):
         // the loop still stops at maxSteps, and the turn ends in an answer.
         $this->assertSame(4, $provider->calls, 'loop must stop at maxSteps, plus the one summary request');
-        $this->assertNull($provider->requests[3]->tools, 'the summary request advertises no tools');
+        // Roadmap 2.4-1: the step's tools stay advertised (a cached prefix);
+        // the reply is taken before any call it asks for could run.
+        $this->assertSame($provider->requests[2]->tools, $provider->requests[3]->tools, 'the summary request keeps the step\'s tool block');
         // The last row the LOOP appended; the `<turn-context>` row Runtime
         // adds behind it (step 1.A-1) is harness metadata, not the ask.
         $asked = array_values(array_filter(
