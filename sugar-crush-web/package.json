@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc --build",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gen:protocol": "node scripts/gen-protocol.mjs"
   },
   "dependencies": {
     "pinia": "^4.0.3",

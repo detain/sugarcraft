@@ -57,7 +57,8 @@
             "/tsconfig.json",
             "/tsconfig.app.json",
             "/tsconfig.node.json",
-            "/eslint.config.js"
+            "/eslint.config.js",
+            "/scripts"
         ]
     },
     "minimum-stability": "dev",

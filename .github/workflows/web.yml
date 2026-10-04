@@ -10,20 +10,26 @@ name: web
 # artifact in the tree, like docs/lib/*.html: a source edit without a rebuild,
 # or a hand-edit to the bundle, must go red here rather than ship.
 #
-# Path-scoped on purpose: nothing outside sugar-crush-web/ feeds the bundle
-# yet, so it is not in affected-libs.php's FORCE_ALL_FILES. When the protocol
-# schema lands (sugar-crush/docs/protocol/**), add that path and a
-# `npm run gen:protocol` + diff step beside the dist/ check.
+# THE SECOND GENERATED ARTIFACT is src-web/protocol/generated.ts: the
+# client's types are generated from sugar-crush's protocol schema
+# (sugar-crush/docs/protocol/sugarcrush.v1.schema.json, itself generated from
+# the PHP value objects). A server change that the client was not regenerated
+# for goes red here, at the diff after `npm run gen:protocol`, before it can
+# become a runtime surprise.
+#
+# Path-scoped on purpose — not in affected-libs.php's FORCE_ALL_FILES.
 
 on:
   push:
     branches: [master]
     paths:
       - 'sugar-crush-web/**'
+      - 'sugar-crush/docs/protocol/**'
       - '.github/workflows/web.yml'
   pull_request:
     paths:
       - 'sugar-crush-web/**'
+      - 'sugar-crush/docs/protocol/**'
       - '.github/workflows/web.yml'
   workflow_dispatch:
 
@@ -53,6 +59,14 @@ jobs:
 
       - name: Install (lockfile only)
         run: npm ci
+
+      - name: Protocol types match the server schema
+        run: |
+          npm run gen:protocol
+          if ! git diff --exit-code -- src-web/protocol/generated.ts; then
+            echo "::error::sugar-crush-web/src-web/protocol/generated.ts is stale. Run 'npm run gen:protocol' in sugar-crush-web/ and commit it."
+            exit 1
+          fi
 
       - name: Lint
         run: npm run lint
