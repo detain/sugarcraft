@@ -170,6 +170,13 @@ final class MemoryStore
     private ?array $boundLegacy = null;
 
     /**
+     * The BM25 index {@see search()} ranks through (roadmap 5.3-1), built on
+     * first search; false once a caller switched it off with
+     * {@see useSearchIndex()}.
+     */
+    private MemorySearchIndex|false|null $searchIndex = null;
+
+    /**
      * @param string|null $projectKey The home store's per-project partition of
      *                          the `project` scope; null keeps the one shared
      *                          directory -- see {@see forProject()}.
@@ -345,6 +352,12 @@ final class MemoryStore
         return $this->writesIndex;
     }
 
+    /** The directory this store's scopes live under. */
+    public function path(): string
+    {
+        return $this->memoryPath;
+    }
+
     /**
      * Add a new memory entry with the given content and scope.
      *
@@ -379,19 +392,97 @@ final class MemoryStore
     }
 
     /**
-     * Search all memory entries, across every scope, for content matching the query string.
+     * Search all memory entries, across every scope, for $query.
      *
-     * Case-insensitive search that reads all .md files under every scope
-     * subdirectory and filters by whether the query appears in the content field.
+     * Ranked by BM25 through the store's {@see MemorySearchIndex} (roadmap
+     * 5.3-1): every word of the query must match a note's content, type or
+     * tags (as a prefix, stemmed), best match first; notes that contain the
+     * query only as a substring follow. The index is a derived cache rebuilt
+     * from the files' mtimes, so a hand-edited note is found as it now reads.
+     * Without FTS5 (or ext-sqlite3), the case-insensitive substring scan over
+     * every note -- this method's behaviour before the index -- answers
+     * instead, in path order.
+     *
+     * Either way a note that cannot be read is skipped and recorded in
+     * {@see skipped()}.
      *
      * @param string $query The search query string.
-     * @return MemoryEntry[] Matching entries.
+     * @return MemoryEntry[] Matching entries, best first.
      */
     public function search(string $query): array
     {
+        $files = array_values(array_filter(
+            $this->allNoteFiles(),
+            static fn(string $file): bool => basename($file) !== self::MEMORY_INDEX_FILENAME,
+        ));
+
+        $index = $this->searchIndex();
+        $ranked = $index?->rank($files, $query, function (string $file): MemoryEntry|string {
+            return $this->readEntry($file) ?? ($this->skipped[$file] ?? 'the note could not be read');
+        });
+        if ($ranked === null) {
+            return $this->scanSearch($files, $query);
+        }
+
+        // Unchanged files are not re-read, so the reasons the index kept for
+        // them are what makes skipped() as complete as the scan left it.
+        foreach ($ranked['unreadable'] as $file => $reason) {
+            $this->skipped[$file] = $reason;
+        }
+
+        $results = [];
+        foreach ($ranked['paths'] as $file) {
+            $entry = $this->readEntry($file);
+            if ($entry !== null) {
+                $results[] = $entry;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Replace the search index {@see search()} uses; null switches it off,
+     * leaving the substring scan. For a caller that must not create the cache
+     * file, and for tests of the no-FTS5 path.
+     */
+    public function useSearchIndex(?MemorySearchIndex $index): void
+    {
+        $this->searchIndex = $index ?? false;
+    }
+
+    /**
+     * This store's search index: a dot-file beside the notes in the home
+     * store, `.search-<key>.sqlite` when the store is project-keyed (the
+     * home directory is shared by every project, and one file per key keeps
+     * each project's rows from evicting another's), and an in-process index
+     * in a repository store, whose directory is git-visible.
+     */
+    private function searchIndex(): ?MemorySearchIndex
+    {
+        if ($this->searchIndex === null) {
+            $this->searchIndex = $this->writesIndex
+                ? MemorySearchIndex::at($this->memoryPath . '/' . ($this->projectKey === null
+                    ? MemorySearchIndex::FILENAME
+                    : '.search-' . $this->projectKey . '.sqlite'))
+                : MemorySearchIndex::inMemory();
+        }
+
+        return $this->searchIndex === false ? null : $this->searchIndex;
+    }
+
+    /**
+     * The search before the index, and its fallback: a case-insensitive
+     * substring match against each note's content, type and tags.
+     *
+     * @param list<string> $files
+     * @return list<MemoryEntry>
+     */
+    private function scanSearch(array $files, string $query): array
+    {
         $results = [];
 
-        foreach ($this->allNoteFiles() as $file) {
+        foreach ($files as $file) {
             $entry = $this->readEntry($file);
             if ($entry === null) {
                 continue;
@@ -494,6 +585,7 @@ final class MemoryStore
         $newFile = $this->scopeDirectory($entry->scope(), false) . '/' . $id . '.md';
         if ($oldFile !== null && $oldFile !== $newFile) {
             unlink($oldFile);
+            $this->forgetIndexed($oldFile);
         }
 
         $this->generateIndex($entry->scope());
@@ -523,6 +615,7 @@ final class MemoryStore
             }
 
             unset($this->skipped[$file]);
+            $this->forgetIndexed($file);
         }
 
         $this->generateIndex($scope);
@@ -546,6 +639,7 @@ final class MemoryStore
             }
             unlink($file);
             unset($this->skipped[$file]);
+            $this->forgetIndexed($file);
         }
 
         $this->generateIndex($scope);
@@ -1219,6 +1313,20 @@ final class MemoryStore
             AtomicFileWriter::write($file, $fileContent, 0600);
         } catch (\RuntimeException $e) {
             throw new \RuntimeException("Failed to write memory file: {$file}", 0, $e);
+        }
+
+        $this->forgetIndexed($file);
+    }
+
+    /**
+     * Mark $file stale in the search index after this store changed it, so
+     * the next {@see search()} re-reads it without relying on the mtime rule.
+     * Never opens an index no search has opened.
+     */
+    private function forgetIndexed(string $file): void
+    {
+        if ($this->searchIndex instanceof MemorySearchIndex) {
+            $this->searchIndex->forget($file);
         }
     }
 

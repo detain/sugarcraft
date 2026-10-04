@@ -4507,7 +4507,12 @@ final class DocFigureProseDriftTest extends TestCase
         }
         foreach (['memoryList', 'memorySearch'] as $arm) {
             $body = self::bodyExcerpt($chatText, $arm);
-            self::assertStringContainsString('forRoot', $body, sprintf('the page says list and search read both stores, yet %s() stopped consulting the repo resolver', $arm));
+            // The repo resolver directly, or through MemoryWriter::repository()
+            // (the router the Memory tool shares; memorySearch moved there in 5.3-1).
+            self::assertTrue(
+                str_contains($body, 'forRoot') || str_contains($body, '->repository()'),
+                sprintf('the page says list and search read both stores, yet %s() stopped consulting the repo resolver', $arm),
+            );
             self::assertStringContainsString('memoryStoreBanner(', $body, sprintf('%s() no longer groups rows under the store banners the page names', $arm));
         }
 

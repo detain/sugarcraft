@@ -155,7 +155,7 @@ subdirectory.
 ```
 /memory list [scope]                      list one scope (default: project)
 /memory add <content> [--scope <scope>]    scope: project (default) | user | agent
-/memory search <query>                    substring match, across every scope
+/memory search <query>                    ranked keyword search, across every scope
 /memory delete <id>
 /memory edit <id> <new_content>
 /memory clear --scope <scope> --confirm
@@ -168,6 +168,26 @@ are listable but never reach the prompt. `add` creates the entry with
 `type: pattern` and no tags; `MemoryEntry` supports `pattern`, `convention`,
 `decision` and `preference`, but the chat command only ever writes the first
 (the `Memory` tool's `save` takes any of the four, and tags).
+
+`search` is a keyword search ranked by BM25 (roadmap 5.3-1). Every word of the
+query must appear in a note's content, type or tags, in any order; a word also
+matches as a prefix and through the porter stemmer, so `deploy` finds
+`deploying`. The best match is listed first, and a word in a note's tags counts
+for more than the same word in its body. A note that contains the query only as
+a substring (`oy-sta` inside `deploy-staging`) is still found and follows the
+ranked ones, so nothing the earlier substring scan found is lost. Query syntax
+is never interpreted: `OR`, `NEAR`, `-` and `:` are searched as words.
+
+The ranking comes from `Memory\MemorySearchIndex`, a SQLite FTS5 index that is
+only a cache of the note files. Every search re-syncs it first: a note whose
+size or modification time changed since it was indexed (a hand edit included)
+is read again, and a deleted note leaves it. The home store keeps the cache
+beside its scopes as `~/.sugar-crush/memory/.search-<key>.sqlite` (owner-only,
+a dot-file no listing reads; deleting it loses nothing). A repository store
+keeps its index in memory, so no cache file ever lands in the checkout. A PHP
+build whose SQLite lacks FTS5, or a cache that cannot be opened, falls back to
+the case-insensitive substring scan, in file order; a damaged cache file is
+deleted and rebuilt by the next search.
 
 If no store was wired, `/memory` answers "Memory store not configured" rather
 than failing. `Bootstrap::memoryStoreOrNull()` exists for the same asymmetry:
@@ -187,7 +207,7 @@ The model reads and writes the same notes through the `Memory` tool
 | `save` | `content`, `scope` (`project` default, or `user`), `type` (`pattern` default, `convention`, `decision`, `preference`), `tags` | a new note; content over `ProjectMemoryWriter::MAX_CONTENT_BYTES` (8192) is refused |
 | `str_replace` | `id`, `old_str`, `new_str` | replaces the one occurrence of `old_str`; zero or several occurrences are refused |
 | `delete` | `id` | removes the note |
-| `recall` | `query` | the notes whose content, type or tags contain the text, at most 20 |
+| `recall` | `query` | the notes whose content, type or tags match the query, best first (the `/memory search` ranking), at most 20 |
 
 Every write goes through `Memory\MemoryWriter`, the router `/memory add` uses
 too, so a note the model saves lands exactly where the user's would: a
@@ -481,6 +501,7 @@ transcript notice the first time it happens.
 ├── settings.json      hand-authored settings   → SETTINGS.md
 ├── session.db         SQLite session store
 ├── memory/<scope>/    the memory store (project/<key>/ per project)
+├── memory/.search-<key>.sqlite  the search cache (derived; safe to delete)
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md
 ├── skills/*/SKILL.md  skills                   → SKILLS.md
 ├── commands/*.md      custom slash commands    → COMMANDS.md

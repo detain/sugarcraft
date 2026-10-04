@@ -15897,8 +15897,12 @@ final class Chat implements Model
         try {
             // E694 slice-A: repo notes are searchable too. Same byte-stability
             // rule as memoryList() — the grouped banners join the answer only
-            // when the repo store actually contributes a hit.
-            $repoStore = ProjectMemoryWriter::forRoot($this->projectRoot())?->store();
+            // when the repo store actually contributes a hit. Both stores come
+            // from MemoryWriter, the router the Memory tool's `recall` uses,
+            // so the command and the tool search the same notes; each store
+            // answers best match first (MemoryStore::search(), BM25, 5.3-1).
+            $writer = \SugarCraft\Crush\Memory\MemoryWriter::new($this->memoryStore, $this->projectRoot());
+            $repoStore = $writer->repository();
             $repoEntries = $repoStore?->search($query) ?? [];
             $entries = $this->memoryStore->search($query);
             $total = count($repoEntries) + count($entries);
