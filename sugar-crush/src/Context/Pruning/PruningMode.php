@@ -9,10 +9,13 @@ namespace SugarCraft\Crush\Context\Pruning;
  * DCP §13.2 B "PruningMode", §4.13 manual mode).
  *
  * - {@see Auto}: the deterministic strategies run at every turn start
- *   ({@see TurnStartPruning}), and every tool result carries its ref tag
- *   ({@see RefTag}) so it can be named.
- * - {@see Manual}: nothing is pruned on its own; `/sweep` (and, later, the
- *   model's own `Prune` calls) still work, and the ref tags are still shown.
+ *   ({@see TurnStartPruning}), the model may prune its own tool outputs
+ *   through the `Prune` tool (roadmap 3.B-3,
+ *   {@see \SugarCraft\Crush\Tools\BuiltIn\Prune}), and every tool result
+ *   carries its ref tag ({@see RefTag}) so it can be named.
+ * - {@see Manual}: nothing is pruned on its own — no strategies, and the
+ *   model is not offered `Prune`; `/sweep` still works, and the ref tags are
+ *   still shown.
  * - {@see Off}: no strategies, no ref tags, and `/sweep` refuses. What the
  *   ledger already holds still applies, and the over-budget relief inside a
  *   turn (roadmap 2.2-1 / 2.4-1) is not pruning by choice but overflow
@@ -77,6 +80,16 @@ enum PruningMode: string
 
     /** Whether the deterministic strategies run at a turn's start. */
     public function runsStrategies(): bool
+    {
+        return $this === self::Auto;
+    }
+
+    /**
+     * Whether the model is offered its own `Prune` tool (roadmap 3.B-3): only
+     * when pruning happens on its own. The roadmap's default — `Prune` auto,
+     * `Compress` manual — so a session set to `manual` prunes only by hand.
+     */
+    public function allowsModelPruning(): bool
     {
         return $this === self::Auto;
     }

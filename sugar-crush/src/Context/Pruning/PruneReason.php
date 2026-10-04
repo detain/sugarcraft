@@ -32,7 +32,8 @@ enum PruneReason: string
 
     /**
      * A `Write`'s content superseded by a later write or whole-file read of
-     * the same file ({@see Strategies\SupersededWriteInputStrategy}).
+     * the same file ({@see Strategies\SupersededWriteInputStrategy}) — or,
+     * from the model's own `Prune` call, an output a later one replaced.
      */
     case Superseded = 'superseded';
 
@@ -47,4 +48,26 @@ enum PruneReason: string
      * outputs are done with.
      */
     case Swept = 'swept';
+
+    /**
+     * The model's own `Prune` call (roadmap 3.B-3): the output was noise —
+     * nothing in it bears on the task.
+     */
+    case Noise = 'noise';
+
+    /**
+     * The model's own `Prune` call (roadmap 3.B-3): the output served its
+     * purpose and the model is done with it.
+     */
+    case Done = 'done';
+
+    /**
+     * The reasons a model's `Prune` call may give, as its schema spells them.
+     *
+     * @return list<string>
+     */
+    public static function modelReasons(): array
+    {
+        return [self::Noise->value, self::Superseded->value, self::Done->value];
+    }
 }

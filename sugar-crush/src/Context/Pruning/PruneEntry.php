@@ -12,14 +12,22 @@ namespace SugarCraft\Crush\Context\Pruning;
  * today: unique per session since step 0.2, and already persisted on Chat's
  * rows (`toolResults[].id`), so an entry means the same result whether the turn
  * runs in-process, in a forked child, or replays a stored transcript. Row refs
- * arrive later (1.B-1 / 3.B) and resolve to ids.
+ * ({@see RefTag}) resolve to ids through {@see ContextLedger::refsFor()}.
+ *
+ * A {@see PruneKind::Distilled} entry (roadmap 3.B-3, the model's own
+ * `Prune` with a distillation) carries the text that stands in for the
+ * output; every other kind carries none.
  */
 final readonly class PruneEntry
 {
     /**
-     * @param int $tokens estimated tokens the projection saves (the output's
-     *                    estimate less its placeholder's), for the receipts
-     *                    and the strategies' "worth it" gate
+     * @param int         $tokens       estimated tokens the projection saves
+     *                                   (the output's estimate less its
+     *                                   placeholder's), for the receipts and
+     *                                   the strategies' "worth it" gate
+     * @param string|null $distillation  what a {@see PruneKind::Distilled}
+     *                                   entry shows in the output's place;
+     *                                   null for every other kind
      */
     public function __construct(
         public string $toolCallId,
@@ -27,10 +35,16 @@ final readonly class PruneEntry
         public PruneReason $reason,
         public PruneAuthor $by,
         public int $tokens,
+        public ?string $distillation = null,
     ) {
     }
 
-    /** @return array{toolCallId:string,kind:string,reason:string,by:string,tokens:int} */
+    /**
+     * The `distillation` key is written only when there is one, so an entry
+     * of every other kind keeps the shape it was stored in before 3.B-3.
+     *
+     * @return array{toolCallId:string,kind:string,reason:string,by:string,tokens:int,distillation?:string}
+     */
     public function toArray(): array
     {
         return [
@@ -39,6 +53,7 @@ final readonly class PruneEntry
             'reason' => $this->reason->value,
             'by' => $this->by->value,
             'tokens' => $this->tokens,
+            ...($this->distillation === null ? [] : ['distillation' => $this->distillation]),
         ];
     }
 
@@ -54,7 +69,20 @@ final readonly class PruneEntry
         if ($kind === null || $reason === null || $by === null) {
             return null;
         }
+        // A distilled entry without its text would project an empty
+        // stand-in for the output: unreadable, so skipped like any other.
+        $distillation = is_string($raw['distillation'] ?? null) ? $raw['distillation'] : null;
+        if ($kind === PruneKind::Distilled && ($distillation === null || trim($distillation) === '')) {
+            return null;
+        }
 
-        return new self($raw['toolCallId'], $kind, $reason, $by, is_int($raw['tokens'] ?? null) ? $raw['tokens'] : 0);
+        return new self(
+            $raw['toolCallId'],
+            $kind,
+            $reason,
+            $by,
+            is_int($raw['tokens'] ?? null) ? $raw['tokens'] : 0,
+            $kind === PruneKind::Distilled ? $distillation : null,
+        );
     }
 }

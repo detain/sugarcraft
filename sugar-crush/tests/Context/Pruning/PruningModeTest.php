@@ -40,6 +40,15 @@ final class PruningModeTest extends TestCase
         $this->assertSame([false, false, false], [PruningMode::Off->runsStrategies(), PruningMode::Off->showsRefs(), PruningMode::Off->allowsManualPruning()]);
     }
 
+    public function testOnlyAnAutoSessionLetsTheModelPrune(): void
+    {
+        $this->assertSame([true, false, false], [
+            PruningMode::Auto->allowsModelPruning(),
+            PruningMode::Manual->allowsModelPruning(),
+            PruningMode::Off->allowsModelPruning(),
+        ]);
+    }
+
     public function testTheSchemaRowIsTheEnumsOwn(): void
     {
         $definition = SettingsSchema::byKey(PruningMode::SETTING);

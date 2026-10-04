@@ -32,7 +32,8 @@ use SugarCraft\Crush\Tools\ToolCall;
  *     the last one, which is the state the model must read;
  *  3. a pruned tool result keeps its call id and error flag and has its
  *     content replaced by {@see PrunedOutputPlaceholder}, named from the call
- *     that asked for it;
+ *     that asked for it — a distilled one (roadmap 3.B-3) by the model's own
+ *     text under that name ({@see PrunedOutputPlaceholder::distilled()});
  *  4. a call whose INPUT is pruned (roadmap 2.3: a superseded write's
  *     content, a long-failed call's arguments) is rewritten on its assistant
  *     row by {@see PrunedInputPlaceholder}, keeping its id, name and keys;
@@ -198,7 +199,10 @@ final class ContextProjector
 
     private static function pruned(ToolResultMessage $result, PruneEntry $entry, ?ToolCall $call): ToolResultMessage
     {
-        $content = PrunedOutputPlaceholder::for($call?->name() ?? 'tool', $call?->arguments() ?? []);
+        // Roadmap 3.B-3: a distilled output keeps the model's own stand-in.
+        $content = $entry->kind === PruneKind::Distilled && $entry->distillation !== null
+            ? PrunedOutputPlaceholder::distilled($call?->name() ?? 'tool', $call?->arguments() ?? [], $entry->distillation)
+            : PrunedOutputPlaceholder::for($call?->name() ?? 'tool', $call?->arguments() ?? []);
 
         // The image and the tool's own spend stay behind: neither is part of
         // the wire (toArray() omits them), and a placeholder carries neither.

@@ -37,6 +37,27 @@ final class PrunedOutputPlaceholder
     }
 
     /**
+     * What a distilled output reads as (roadmap 3.B-3, DCP §13.2 C step 3):
+     * a one-line header naming the tool and its main argument, then the text
+     * the model wrote in the output's place —
+     *
+     *     [Read src/Tools/Bash.php — distilled by the model; re-run the tool for the full output]
+     *     <distillation>
+     *
+     * Pure, like {@see for()}.
+     *
+     * @param array<array-key, mixed> $arguments
+     */
+    public static function distilled(string $tool, array $arguments, string $distillation): string
+    {
+        $tool = trim($tool) === '' ? 'tool' : self::oneLine($tool);
+        $argument = self::mainArgument($arguments);
+
+        return '[' . $tool . ($argument === null ? '' : ' ' . $argument)
+            . " — distilled by the model; re-run the tool for the full output]\n" . $distillation;
+    }
+
+    /**
      * The call's main argument on one line and bounded, or null when it
      * carries no string argument at all.
      *

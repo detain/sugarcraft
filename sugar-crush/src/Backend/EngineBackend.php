@@ -1358,7 +1358,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $app = $this->sessionApp()
             // Roadmap 4.1-1: a sub-agent's preset effort, per request.
             ->withReasoningEffort($this->reasoningEffort)
-            ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd))
+            ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd, $contextLedger, $app))
             ->withMessages($messages);
 
         $lastAssistant = null;
@@ -2479,11 +2479,23 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * so the delegated run's spend cap starts from what this turn has really
      * spent by then, not from this turn's starting baseline (audit B4).
      *
+     * Roadmap 3.B-3: every {@see \SugarCraft\Crush\Tools\MutatesContextLedger}
+     * tool (the model's `Prune`) is bound to THE TURN'S OWN ledger — the
+     * caller's `$turnLedger` and `$turnApp` variables, taken by reference, so
+     * what the tool applies is what the turn's next request is projected
+     * through, with no copy to fold back after the step. Bound to the current
+     * pid like the heartbeat: a write from any other process would land in a
+     * copy of the turn and vanish. Offered only where a host keeps the
+     * session's ledger ({@see $contextLedger}) and its mode lets the model
+     * prune ({@see \SugarCraft\Crush\Context\Pruning\PruningMode::allowsModelPruning()});
+     * anywhere else — a delegated run, `-p`, a session in `manual` or `off` —
+     * the tool is left out of the turn, so its schema is never sent.
+     *
      * @param \Closure(): float $spentSoFarUsd
      *
      * @return list<Tool>
      */
-    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat, ?callable $onEvent, ?\Closure $spentSoFarUsd = null): array
+    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat, ?callable $onEvent, ?\Closure $spentSoFarUsd = null, ?\SugarCraft\Crush\Context\Pruning\ContextLedger &$turnLedger = null, ?App &$turnApp = null): array
     {
         $heartbeat = null;
         if ($onHeartbeat !== null || $onReasoning !== null) {
@@ -2513,9 +2525,35 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             };
         }
 
+        $ledgerRead = null;
+        $ledgerApply = null;
+        if ($this->contextLedger !== null && $this->contextLedger->effectiveMode()->allowsModelPruning()) {
+            $sessionLedger = $this->contextLedger;
+            $ledgerPid = getmypid();
+            $ledgerRead = static function () use (&$turnLedger, &$turnApp, $sessionLedger): array {
+                return [$turnLedger ?? $turnApp?->contextLedger ?? $sessionLedger, $turnApp?->messages ?? []];
+            };
+            $ledgerApply = static function (\SugarCraft\Crush\Context\Pruning\LedgerDelta $delta) use (&$turnLedger, &$turnApp, $sessionLedger, $ledgerPid): ?\SugarCraft\Crush\Context\Pruning\ContextLedger {
+                if (getmypid() !== $ledgerPid) {
+                    return null;
+                }
+                $turnLedger = ($turnLedger ?? $turnApp?->contextLedger ?? $sessionLedger)->apply($delta);
+                $turnApp = $turnApp?->withContextLedger($turnLedger);
+
+                return $turnLedger;
+            };
+        }
+
         $bound = null;
         $tools = [];
         foreach ($this->tools as $tool) {
+            if ($tool instanceof \SugarCraft\Crush\Tools\MutatesContextLedger) {
+                if ($ledgerRead !== null && $ledgerApply !== null) {
+                    $tools[] = $tool->withLedger($ledgerRead, $ledgerApply);
+                }
+
+                continue;
+            }
             if (!$tool instanceof DelegatesToEngine) {
                 $tools[] = $tool;
 

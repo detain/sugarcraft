@@ -6,9 +6,9 @@ namespace SugarCraft\Crush\Context\Pruning;
 
 /**
  * Who changed the {@see ContextLedger}: a deterministic strategy, or the
- * harness itself writing a step summary ({@see CompressionBlock}), or the
- * person at a command (`/sweep`, roadmap 3.B-2). The model's own
- * `Prune`/`Compress` calls arrive later (3.B-3/3.B-4) as a further case.
+ * harness itself writing a step summary ({@see CompressionBlock}), the
+ * person at a command (`/sweep`, roadmap 3.B-2), or the model through its own
+ * `Prune` call (roadmap 3.B-3).
  */
 enum PruneAuthor: string
 {
@@ -20,4 +20,7 @@ enum PruneAuthor: string
 
     /** The person asked for it (`/sweep`). */
     case User = 'user';
+
+    /** The model asked for it, through its `Prune` tool (roadmap 3.B-3). */
+    case Model = 'model';
 }

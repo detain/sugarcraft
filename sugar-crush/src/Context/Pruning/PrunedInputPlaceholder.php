@@ -34,7 +34,7 @@ final class PrunedInputPlaceholder
         return match ($kind) {
             PruneKind::WriteContent => self::withoutWriteContent($arguments),
             PruneKind::Input => self::blanked($arguments),
-            PruneKind::Output => $arguments,
+            PruneKind::Output, PruneKind::Distilled => $arguments,
         };
     }
 

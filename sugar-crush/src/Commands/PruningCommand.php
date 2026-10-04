@@ -73,8 +73,8 @@ final class PruningCommand
     private static function meaning(PruningMode $mode): string
     {
         return match ($mode) {
-            PruningMode::Auto => 'superseded rows are pruned at each turn start, and tool results carry their ref tags',
-            PruningMode::Manual => 'nothing is pruned on its own; /sweep prunes by hand, and tool results carry their ref tags',
+            PruningMode::Auto => 'superseded rows are pruned at each turn start, the model may prune its own tool outputs (Prune), and tool results carry their ref tags',
+            PruningMode::Manual => 'nothing is pruned on its own, by the strategies or the model; /sweep prunes by hand, and tool results carry their ref tags',
             PruningMode::Off => 'no strategies and no ref tags, and /sweep is refused; an over-full request is still relieved',
         };
     }

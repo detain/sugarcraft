@@ -287,6 +287,7 @@ sugar-crush/tests/StdinConstantReaderCensusTest.php	0.796	23
 sugar-crush/tests/Backend/EngineBackendLengthStopTest.php	0.795	34
 sugar-crush/tests/Integration/StreamingWiringTest.php	0.787	20
 sugar-crush/tests/Agents/WorktreeRemovalReportingTest.php	0.759	10
+sugar-crush/tests/Backend/ModelPruneInTurnTest.php	0.750	3
 sugar-crush/tests/Agents/TeamManagerTest.php	0.747	30
 sugar-crush/tests/Cli/BootstrapPermissionGateTest.php	0.740	65
 sugar-crush/tests/Providers/ClaudeCodeProviderStreamReapTest.php	0.729	6
@@ -614,6 +615,8 @@ sugar-crush/tests/Agents/PresetUnsupportedFieldFailsLoudTest.php	0.050	5
 sugar-crush/tests/Memory/HybridMemoryRankerTest.php	0.050	13
 sugar-crush/tests/Workspace/CommitMessageWriterTest.php	0.050	3
 sugar-crush/tests/Config/ServerProtocolDocumentationDriftTest.php	0.050	5
+sugar-crush/tests/Tools/BuiltIn/PruneToolTest.php	0.050	8
+sugar-crush/tests/Renderer/PruneBadgeTest.php	0.050	2
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5
@@ -648,7 +651,7 @@ sugar-crush/tests/Server/StaticFilesTest.php	0.040	6
 sugar-crush/tests/Server/TicketsTest.php	0.040	10
 sugar-crush/tests/Context/Pruning/ContextLedgerSyncTest.php	0.040	5
 sugar-crush/tests/Context/Pruning/RefTagTest.php	0.040	7
-sugar-crush/tests/Context/Pruning/PruningModeTest.php	0.040	5
+sugar-crush/tests/Context/Pruning/PruningModeTest.php	0.040	7
 sugar-crush/tests/Commands/SweepCommandTest.php	0.040	5
 sugar-crush/tests/Protocol/JsonRpcTest.php	0.040	11
 sugar-crush/tests/Hooks/HookManagerStopEventsTest.php	0.040	8
@@ -666,6 +669,8 @@ sugar-crush/tests/Chat/ParkedCompactionHookTest.php	0.035	7
 sugar-crush/tests/Config/ReadmeSettingsTierClaimTest.php	0.035	6
 sugar-crush/tests/Permissions/WritePathScopeTest.php	0.035	23
 sugar-crush/tests/Chat/IdleSubscriptionsTest.php	0.035	3
+sugar-crush/tests/Events/ContextLedgerChangedTest.php	0.035	2
+sugar-crush/tests/Context/Pruning/DistilledPruneTest.php	0.035	2
 sugar-crush/tests/Cli/BootstrapTrustedHomeOwnershipTest.php	0.034	5
 sugar-crush/tests/Cli/BootstrapLaunchNoticeCapCensusTest.php	0.034	4
 sugar-crush/tests/Tools/BuiltIn/LspToolTest.php	0.034	38

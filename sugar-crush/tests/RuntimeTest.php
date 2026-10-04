@@ -3890,7 +3890,7 @@ DOC;
         // lists it. (`src/Runtime.php`'s census paragraph still names three;
         // it is wave-7-locked, so the integrator owns that one-word edit.)
         $this->assertSame(
-            ['Memory', 'Skill', 'WebFetch', 'WebSearch', 'doctor'],
+            ['Memory', 'Prune', 'Skill', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
@@ -4082,8 +4082,10 @@ DOC;
         // so a Memory step does not re-arm that diff. Its own source calls no
         // write primitive; MemoryWriter/MemoryStore do. `RepoMap` (roadmap
         // 5.5-4) likewise: its one write is the tag cache under the home
-        // directory, made by TagCache, never a file in the checkout.
-        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap'];
+        // directory, made by TagCache, never a file in the checkout. `Prune`
+        // (roadmap 3.B-3) changes only the turn's context ledger — what the
+        // model is sent, never a byte on disk.
+        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune'];
     }
 
     /**

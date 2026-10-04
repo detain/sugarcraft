@@ -3738,8 +3738,12 @@ final class Renderer
      * @param \SugarCraft\Crush\Agents\Live\AgentLiveRegistry|null $agents the delegated runs' live state
      *                                       ({@see Chat::agentLive()}), for the line
      *                                       under each Task row; null draws none
+     * @param \SugarCraft\Crush\Context\Pruning\ContextLedger|null $ledger the session's context
+     *                                       ledger (roadmap 3.B-3): a tool row whose
+     *                                       output the model is no longer sent wears a
+     *                                       `pruned` / `distilled` badge; null draws none
      */
-    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null): string
+    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger = null): string
     {
         // Roadmap 1.B-2: a row the model reads but the user does not - a
         // turn's step record ({@see Message::$userVisible}) - is not painted.
@@ -3797,7 +3801,7 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
-                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows, $agents);
+                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows, $agents, $ledger);
 
                 continue;
             }
@@ -4149,6 +4153,24 @@ final class Renderer
     }
 
     /**
+     * The badge a tool row wears once the model is no longer sent its output
+     * (roadmap 3.B-3): `⊟ distilled` for one the model replaced with its own
+     * text, `⊟ pruned` for one a placeholder stands in for — by a strategy,
+     * `/sweep` or the model's `Prune` alike. Null for a row the ledger leaves
+     * as it is, and for one whose call's INPUT was elided instead (the
+     * output is still sent).
+     */
+    private static function pruneBadge(?\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger, \SugarCraft\Crush\ToolResult $result): ?string
+    {
+        $entry = $ledger === null || $result->id === null ? null : $ledger->prune($result->id);
+        if ($entry === null || $entry->kind->rewritesInput()) {
+            return null;
+        }
+
+        return $entry->kind === \SugarCraft\Crush\Context\Pruning\PruneKind::Distilled ? '⊟ distilled' : '⊟ pruned';
+    }
+
+    /**
      * A message carrying {@see ToolResult}s (see {@see Message::withToolResults()})
      * gets a distinct "🔧 tool" marker per result instead of the plain
      * assistant bubble {@see renderHistory()} uses for real replies -
@@ -4205,7 +4227,7 @@ final class Renderer
      *
      * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null): string
+    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null, ?\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger = null): string
     {
         $lines = [];
         // The thought that led to this call (parked on its placeholder by
@@ -4233,6 +4255,15 @@ final class Renderer
                 $result->isError() => Style::new()->foreground($theme->systemLabel)->bold()->render('✗ error'),
                 default            => Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
             };
+            // Roadmap 3.B-3: the model is no longer sent this output — the
+            // ledger replaced it with a placeholder, or with the model's own
+            // distillation. Part of the status, so the bound below makes room
+            // for it; the row and its body are untouched (Ctrl+O still shows
+            // what the tool printed).
+            $badge = self::pruneBadge($ledger, $result);
+            if ($badge !== null) {
+                $status .= ' ' . self::dim($theme)->render($badge);
+            }
             // The name is model-chosen and arbitrarily long, and this row is a
             // single-line click zone: {@see markToolCalls()} finds it by
             // `str_contains()` on the label recorded just below, so a label

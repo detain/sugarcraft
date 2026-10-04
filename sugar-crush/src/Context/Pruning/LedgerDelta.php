@@ -64,6 +64,55 @@ final readonly class LedgerDelta
         return $this->prunes === [] && $this->droppedContextRows === [] && $this->blocks === [];
     }
 
+    /**
+     * The plain-array form a frame carries across the fork (roadmap 3.B-3's
+     * {@see \SugarCraft\Crush\Events\ContextLedgerChanged}): the parent
+     * unserializes with `allowed_classes => false`, so no object may ride it.
+     *
+     * @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>}
+     */
+    public function toArray(): array
+    {
+        return [
+            'prunes' => array_map(static fn (PruneEntry $entry): array => $entry->toArray(), $this->prunes),
+            'droppedContextRows' => $this->droppedContextRows,
+            'blocks' => array_map(static fn (CompressionBlock $block): array => $block->toArray(), $this->blocks),
+        ];
+    }
+
+    /**
+     * Rebuild from {@see toArray()}, LENIENTLY like
+     * {@see ContextLedger::fromArray()}: an entry it cannot read is skipped,
+     * and anything that is not an array is an empty delta. Applying a delta
+     * is idempotent, so one that lost an entry costs only that entry.
+     */
+    public static function fromArray(mixed $raw): self
+    {
+        $delta = self::new();
+        if (!is_array($raw)) {
+            return $delta;
+        }
+        foreach (is_array($raw['prunes'] ?? null) ? $raw['prunes'] : [] as $row) {
+            $entry = PruneEntry::fromArray($row);
+            if ($entry !== null) {
+                $delta = $delta->withPrune($entry);
+            }
+        }
+        foreach (is_array($raw['droppedContextRows'] ?? null) ? $raw['droppedContextRows'] : [] as $key => $tokens) {
+            if (is_string($key) && $key !== '' && is_int($tokens)) {
+                $delta = $delta->withDroppedContextRow($key, $tokens);
+            }
+        }
+        foreach (is_array($raw['blocks'] ?? null) ? $raw['blocks'] : [] as $row) {
+            $block = CompressionBlock::fromArray($row);
+            if ($block !== null) {
+                $delta = $delta->withBlock($block);
+            }
+        }
+
+        return $delta;
+    }
+
     /** Estimated tokens the delta frees from the projected request. */
     public function freedTokens(): int
     {

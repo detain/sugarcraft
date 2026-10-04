@@ -143,6 +143,17 @@ re-prefills the whole conversation behind it.
   (`ContextLedger::refsFor()`, fixed where the turn ends), so the tag is the
   same bytes on every request. A tag the model copies into its own reply is
   stripped from the assistant text before the next request is built.
+- **The model prunes too.** In the `auto` mode the model is offered `Prune`
+  (`Tools\BuiltIn\Prune`): `{"targets": [{"ref": "r17", "distillation": "…"}],
+  "reason": "noise|superseded|done"}`. Each target's output is replaced by the
+  same one-line placeholder, or — with a distillation — by
+  `[Read src/A.php — distilled by the model; re-run the tool for the full output]`
+  and the model's own text. It lands in the turn's own ledger, so the turn's
+  very next request already carries it, and the session keeps it like any other
+  prune. Outputs of `Task`, `Skill`, `Edit` and `Write` (and `Prune`'s own
+  receipts) are never pruned, and a distillation must be shorter than the
+  output; such targets are skipped and named in the receipt. A `manual` or
+  `off` session, a sub-agent and a `-p` run are not offered the tool.
 - **Step summaries.** When a request is still over its budget after that prune,
   the engine asks the turn's model for a summary with the request it last sent
   plus one user row, `StepSummarizer::INSTRUCTION` ("…Do not call any tools —
