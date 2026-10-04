@@ -8,6 +8,7 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\TranscriptTurn;
 use SugarCraft\Crush\Backend\TurnInterrupted;
 use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\Message;
@@ -15,6 +16,7 @@ use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\EchoProvider;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\ParentProcessGuard;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\Tool;
@@ -68,13 +70,41 @@ final class EngineExecutor implements ExecutorInterface
     /** A tool line in the live stream is one line, capped here. */
     private const TOOL_LINE_MAX = 120;
 
+    /**
+     * @param ?AgentManager $grantManager the manager whose
+     *        {@see AgentManager::grantRefusalFor()} judges each stage call
+     *        against the stage's own `tools:` declaration (the W2-g carry of
+     *        step 4.2); null judges through a manager built for the bound
+     *        engine — the matcher reads only the agent's declaration and the
+     *        root, so the grant binds whether or not a session manager exists.
+     * @param ?\Closure(): void $heartbeat the calling turn's liveness sink
+     *        ({@see \SugarCraft\Crush\Tools\DelegatesToEngine}), beaten on
+     *        every provider chunk and tool event of an INLINE run — the
+     *        `Workflow` tool's, which runs its stages inside the turn child
+     *        whose parent measures silence on the turn socket. Null on the
+     *        TUI's forking `/workflow` path, which has no such deadline.
+     */
     public function __construct(
         private ?EngineBackend $engine = null,
+        private ?AgentManager $grantManager = null,
+        private ?\Closure $heartbeat = null,
     ) {}
 
-    public function bind(EngineBackend $engine): void
+    /**
+     * Bind the session's current engine and, when given, the session's
+     * AgentManager the stage grants are judged through. A null manager keeps
+     * the one already bound.
+     */
+    public function bind(EngineBackend $engine, ?AgentManager $grantManager = null): void
     {
         $this->engine = $engine;
+        $this->grantManager = $grantManager ?? $this->grantManager;
+    }
+
+    /** The manager stage grants are judged through, or null for the built-in fallback. */
+    public function grantManager(): ?AgentManager
+    {
+        return $this->grantManager;
     }
 
     public function engine(): ?EngineBackend
@@ -209,13 +239,20 @@ final class EngineExecutor implements ExecutorInterface
             }
         };
 
-        $onProgress = static function () use ($guard, $checkDeadline): void {
+        $heartbeat = $this->heartbeat;
+        $onProgress = static function () use ($guard, $checkDeadline, $heartbeat): void {
             $guard();
             $checkDeadline();
+            if ($heartbeat !== null) {
+                $heartbeat();
+            }
         };
-        $onEvent = static function (object $event) use ($guard, $checkDeadline, $onToolStarted): void {
+        $onEvent = static function (object $event) use ($guard, $checkDeadline, $onToolStarted, $heartbeat): void {
             $guard();
             $checkDeadline();
+            if ($heartbeat !== null) {
+                $heartbeat();
+            }
             if ($onToolStarted !== null && $event instanceof ToolStarted) {
                 $onToolStarted($event);
             }
@@ -223,7 +260,21 @@ final class EngineExecutor implements ExecutorInterface
 
         $messages = self::messages($agent, $request);
 
-        $engine = $this->engine->withTools($tools)->withMaxSteps($maxTurns);
+        // The stage's OWN declaration binds every call it makes (W2-g, the
+        // workflow half of step 4.2): the request's tools are narrowed by
+        // NAME only, so `tools: ['Bash(git *)']` puts the whole Bash tool on
+        // the wire, and without this hook the stage ran any command the
+        // session gate allowed. Same hook, same matcher and same placement as
+        // Task's — ahead of the session gate, registered even under
+        // withoutHooks() — so a call outside the grant is a denied call the
+        // model reads and works around, never a failed stage.
+        $engine = $this->engine
+            ->withTools($tools)
+            ->withMaxSteps($maxTurns)
+            ->withSubAgentGrant(new SubAgentGrantHook(
+                $this->grantManager ?? new AgentManager($this->engine->provider(), new SkillRegistry()),
+                $agent,
+            ));
 
         try {
             // A delegated run (step 3.D-2): the turn ends on `SubagentStop`,
@@ -236,6 +287,7 @@ final class EngineExecutor implements ExecutorInterface
                     $messages,
                     onEvent: $onEvent,
                     onReasoning: $onProgress,
+                    onHeartbeat: $heartbeat,
                     onToken: $onToken,
                 ),
             );

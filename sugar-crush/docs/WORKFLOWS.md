@@ -341,6 +341,16 @@ permission prompt. See [`PERMISSIONS.md`](PERMISSIONS.md) — and note that a ba
 `Bash` call by its command — read-only commands run, everything else is denied
 — and a declaration has no command to judge.
 
+A `tools:` entry may be **argument-scoped**, in the `permissionRules` dialect:
+`tools: [Read, "Bash(git *)"]`. The stage's tool list is resolved by the
+name half (`Bash`), and every call the stage agent then makes is held to the
+whole declaration by the same `SubAgentGrantHook` a `Task` preset's grant uses
+(`EngineExecutor` binds it, ahead of the session gate and even under
+`withoutHooks()`): `git status` runs, `rm x` and `git log && rm x` come back to
+the agent as denied calls it can work around. A stage with no `tools:` is not
+policed by the grant, and a malformed entry (`Bash(git *`) fails the stage
+naming why.
+
 ---
 
 ## Three limits to know before you design around this

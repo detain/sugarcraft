@@ -16,7 +16,9 @@ use SugarCraft\Crush\Agents\EngineExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionRule;
 use SugarCraft\Crush\Permissions\ToolDeclaration;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Tools\Tool;
@@ -445,6 +447,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
     public function setAgentManager(AgentManager $agentManager): void
     {
         $this->agentManager = $agentManager;
+
+        // The stage grants are judged through the session's manager too
+        // (W2-g): an executor bound before the manager arrived picks it up.
+        $executor = $this->pool->forkedExecutor();
+        if ($executor instanceof EngineExecutor && $executor->engine() !== null) {
+            $executor->bind($executor->engine(), $agentManager);
+        }
     }
 
     /**
@@ -463,12 +472,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * pool is built once at launch, while Chat replaces its backend on a
      * provider switch — so Chat re-binds on every construction. A pool without
      * an EngineExecutor (a test double, an embedder's own) is left untouched.
+     *
+     * The session's AgentManager, when one is set, rides along: it is what
+     * judges each stage call against the stage's own `tools:` declaration
+     * ({@see \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook}).
      */
     public function bindEngineBackend(EngineBackend $engine): void
     {
         $executor = $this->pool->forkedExecutor();
         if ($executor instanceof EngineExecutor) {
-            $executor->bind($engine);
+            $executor->bind($engine, $this->agentManager);
         }
     }
 
@@ -2392,6 +2405,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
             return null;
         }
 
+        // Each declaration by its tool-NAME half, so an argument-scoped grant
+        // (`Bash(git *)`) puts `Bash` on the wire and the stage agent's
+        // SubAgentGrantHook ({@see EngineExecutor}) holds every call to the
+        // argument half — the same split Task's grants get
+        // ({@see AgentManager::grantedToolsFor()}). A malformed pattern is
+        // refused here, never read as a name that happens to match nothing.
         $declared = [];
         foreach ($taskTools as $tool) {
             if (!is_string($tool) || $tool === '') {
@@ -2401,7 +2420,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 ));
             }
 
-            $declared[$tool] = true;
+            $declared[$tool] = self::declaredToolName($tool);
         }
 
         $resolved = [];
@@ -2415,9 +2434,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 ));
             }
 
-            if (isset($declared[$tool->name()])) {
-                $resolved[] = $tool;
-                $matched[$tool->name()] = true;
+            foreach ($declared as $declaration => $namePattern) {
+                if (PermissionRule::matchesToolName($namePattern, $tool->name())) {
+                    $resolved[] = $tool;
+                    $matched[$declaration] = true;
+                    break;
+                }
             }
         }
 
@@ -2431,6 +2453,27 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         return $resolved;
+    }
+
+    /**
+     * The tool-name half of a `tools:` declaration — `Bash` for `Bash(git *)`,
+     * the declaration itself for a bare name — through the one parser the
+     * grant matcher uses ({@see PermissionRule}).
+     *
+     * @throws \RuntimeException on a malformed pattern, naming why.
+     */
+    private static function declaredToolName(string $declaration): string
+    {
+        $reason = PermissionRule::patternRejectionReason($declaration);
+        if ($reason !== null) {
+            throw new \RuntimeException(sprintf(
+                'A workflow task declares the tool pattern "%s", which %s.',
+                $declaration,
+                $reason,
+            ));
+        }
+
+        return (new PermissionRule($declaration, PermissionAction::Allow))->toolNamePattern();
     }
 
     /**
@@ -2513,7 +2556,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 ));
             }
 
-            if ($this->permissionGate->refuses(new ToolDeclaration($tool))) {
+            if ($this->permissionGate->refuses(new ToolDeclaration(self::declaredToolName($tool)))) {
                 throw new \RuntimeException(sprintf(
                     '%s declares tool "%s", which this session\'s permission mode (%s) denies.',
                     $where,
