@@ -18,8 +18,8 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  *  - an INERT key: parsed, typed, carried on the value object, and consumed by
  *    nothing on a live path. `context: fork` on a skill was documented in the
  *    README as running the skill in an isolated sub-agent; no production code
- *    dispatches it. A preset's `permissionMode:` rides onto the roster row and
- *    `Task` still runs under the session's mode.
+ *    dispatches it. A preset's `isolation:` rides onto the roster row and
+ *    `Task` still runs in the session's checkout.
  *  - an UNKNOWN key: a typo (`permisionMode`, `keyword`, `enable: false`) or
  *    another tool's field. The typo is the dangerous one — a rule written
  *    `enable: false` stays enabled — and nothing said so.
@@ -35,7 +35,7 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  * (`docs/SKILLS.md`'s field table, `docs/COMMANDS.md`'s frontmatter table,
  * `docs/AGENTS_AUTHORING.md`'s field table) are pinned to it by
  * `InertFrontmatterDocumentationDriftTest`, so the step that finally honours
- * a field (as 4.1-1 did for a preset's `model`/`effort`) deletes its
+ * a field (as 4.1 did for a preset's `model`/`effort`/`permissionMode`) deletes its
  * entry here and the docs go red until they stop calling it inert.
  */
 final class FrontmatterKeyAudit
@@ -73,11 +73,11 @@ final class FrontmatterKeyAudit
      * of those is not reported: `model: inherit` and `context: thread` ask for
      * exactly what happens.
      *
-     * - agent preset: `Task` honours `model` and `effort` since roadmap 4.1-1
-     *   ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}) but still runs
-     *   under the session's permission gate; `memory`, `background`,
-     *   `isolation` and `color` are carried onto the roster row and read by
-     *   nothing.
+     * - agent preset: `Task` honours `model`, `effort` and (narrow-only)
+     *   `permissionMode` since roadmap 4.1
+     *   ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}); `memory`,
+     *   `background`, `isolation` and `color` are carried onto the roster row
+     *   and read by nothing.
      * - skill: no tool-scoping code reads `allowed-tools`/`disallowed-tools`;
      *   `model` is read only by `App::dispatchSkill()`, which has no
      *   production caller; `effort` is read by nothing; `context: fork` has no
@@ -89,7 +89,6 @@ final class FrontmatterKeyAudit
      */
     public const INERT = [
         self::AGENT => [
-            'permissionMode' => ['default'],
             'memory' => [],
             'background' => ['false'],
             'isolation' => ['none'],

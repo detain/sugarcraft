@@ -115,11 +115,16 @@ use SugarCraft\Crush\Usage;
  * reasoning effort, and is refused on a provider that would silently drop it
  * ({@see EngineBackend::honoursReasoningEffort()}).
  *
- * THE PERMISSION MODE IS THE SESSION'S. A preset's `permissionMode:` is not
- * applied on the engine path: the session's gate governs every call the
- * sub-agent makes, exactly as it governs the caller's own, and the preset's
- * `tools:` grant is what narrows it. A delegation can therefore never do more
- * than the session that asked for it could.
+ * THE PERMISSION MODE NARROWS, NEVER WIDENS (roadmap 4.1-2). The session's
+ * gate governs every call the sub-agent makes, exactly as it governs the
+ * caller's own, and the preset's `tools:` grant narrows it. A preset's
+ * `permissionMode:` narrows it further when it is the stricter of the two:
+ * the sub-agent's own gate ({@see AgentManager::createSubAgent()}, built for
+ * the stricter mode) is put to every call as a second gate through
+ * {@see \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook} — so a `plan`
+ * reviewer cannot write under a `default` session — while a WIDER preset mode
+ * (`bypass-permissions` under `default`) changes nothing. A delegation can
+ * therefore never do more than the session that asked for it could.
  *
  * SEVERAL TASK CALLS IN ONE MESSAGE RUN CONCURRENTLY. Bound, this tool is
  * {@see ParallelSafe}, which the interface's rule 1 would forbid for a tool
@@ -513,7 +518,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         }
 
         try {
-            $subAgent = $this->agentManager->createSubAgent($agentName, $prompt);
+            // 4.1-2: the agent's own mode, narrowed to the session's — see
+            // AgentManager::createSubAgent().
+            $subAgent = $this->agentManager->createSubAgent(
+                $agentName,
+                $prompt,
+                $this->agentManager->get($agentName)?->permissionMode,
+                $this->engine?->permissionGate()?->mode(),
+            );
         } catch (\RuntimeException|\LogicException $refusal) {
             return $this->refusal($toolCallId, $refusal->getMessage());
         }
@@ -668,8 +680,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // put all of Bash on the wire. Every call the run makes is held to the
         // preset's whole declaration — argument halves and argument-scoped
         // denials included — by this hook, ahead of the session gate (4.2).
+        // 4.1-2: and to the preset's permission mode, as a second gate beside
+        // the session's (both must pass), when it is the stricter one — a gate
+        // no stricter than the session's could only repeat its questions. An
+        // engine with no gate (an embedder's) compares against `default`: it
+        // is the mode every agent carries when its preset declared none, so
+        // only a declared `plan`/`dont-ask` narrows there.
+        $sessionMode = $engine->permissionGate()?->mode() ?? \SugarCraft\Crush\Permissions\PermissionMode::Default;
+        $modeGate = $subAgent->permissionGate !== null && $subAgent->permissionGate->mode()->isStricterThan($sessionMode)
+            ? $subAgent->permissionGate
+            : null;
         $engine = $engine->withSubAgentGrant(
-            new \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook($manager, $subAgent),
+            new \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook($manager, $subAgent, $modeGate),
         );
 
         if ($suspension !== null) {

@@ -10,7 +10,9 @@ the roster now reads every one of them onto the `Agent` row. The per-field
 account is below rather than implied, because a preset whose
 `permissionMode: bypass-permissions` is honoured by a cloned checkout and one
 where that mode collapses to the safe default are very different objects to
-reason about.
+reason about — and because even an honoured mode only ever narrows a
+delegation: a sub-agent runs under the stricter of its preset's mode and the
+session's, never the wider.
 
 ---
 
@@ -180,7 +182,11 @@ cloned repository must not grant itself one. The gate is one `SkillSource`
 check inside `fromPreset()`, written next to the source copy it reads, so the
 two cannot drift apart. The launch's own permission mode is still decided by
 `SUGARCRUSH_PERMISSION_MODE` or the `permissionMode` key in
-`~/.sugar-crush/config.json` — see [`PERMISSIONS.md`](PERMISSIONS.md).
+`~/.sugar-crush/config.json` — see [`PERMISSIONS.md`](PERMISSIONS.md). Even a
+native preset's mode only narrows: `Task` runs the sub-agent under the stricter
+of the preset's mode and the session's
+([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)), so
+`bypass-permissions` on a preset never lifts a `default` session's questions.
 
 `source` rides along now, so an imported row carries its provenance in state;
 whether any surface renders it differently is a `/agents` question, not a
@@ -191,8 +197,8 @@ wiring one.
 Reaching the roster is not the same as changing what a delegated run does.
 `Task` runs every sub-agent on the session's provider and under the session's
 permission gate (`TaskTool`); its model and reasoning effort are the agent's,
-and several fields are carried onto the `Agent` row and read by nothing after
-that:
+its permission mode can only narrow the session's, and several fields are
+carried onto the `Agent` row and read by nothing after that:
 
 | Field | Effect today |
 |---|---|
@@ -201,7 +207,7 @@ that:
 | `skills`, `mcpServers`, `maxTurns` | Live on the delegated run. |
 | `model` | Live: see [Which model a delegation runs on](#which-model-a-delegation-runs-on). |
 | `effort` | Live: sent with every request of the run as its reasoning effort. |
-| `permissionMode` | **Inert.** The session's gate judges every call; `default` is what happens anyway. |
+| `permissionMode` | Live, narrow-only: when stricter than the session's mode, a second gate judges every call ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). |
 | `memory` | **Inert.** Carried; no memory tier is selected by it. |
 | `background` | **Inert.** `false` is what happens anyway. |
 | `isolation` | **Inert.** `none` is what happens anyway; see [Teams and worktrees](#teams-and-worktrees). |

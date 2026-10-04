@@ -50,6 +50,24 @@ not already refuse earlier and more broadly. What it buys is a gate that is
 reachable and configurable. `sugarcrush doctor` names both defaults when
 nothing is configured.
 
+### A sub-agent's mode
+
+A `Task` sub-agent runs under the **stricter** of the session's mode and its
+preset's `permissionMode:` — never the wider. The session's gate judges every
+call the sub-agent makes, exactly as it judges the caller's own; when the preset
+asks for a stricter mode, the sub-agent's own gate (`AgentManager::createSubAgent()`,
+built for that mode) judges each call as well, and both must allow it. So a
+`permissionMode: plan` reviewer is denied a write that a `default` session would
+only have asked about, and `permissionMode: bypass-permissions` under a `default`
+session changes nothing — each write still asks. Strictness runs
+`bypass-permissions` < `auto` < `accept-edits` < `default` < `plan` <
+`dont-ask` (`PermissionMode::strictness()`). The preset's gate rides the
+sub-agent's reserved `subagent-grant` hook, so it is applied on a turn with hooks
+switched off and cannot be disabled. A foreign preset (`.claude/agents`,
+`.opencode/agents`) never carries a mode at all: its `permissionMode:` collapses
+to `default` on import (see
+[`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#which-fields-reach-the-roster)).
+
 ---
 
 ## The six modes

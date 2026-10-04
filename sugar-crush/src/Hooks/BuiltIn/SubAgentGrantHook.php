@@ -10,6 +10,8 @@ use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\PermissionDecision;
+use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\ToolCall;
 
 /**
@@ -47,6 +49,18 @@ use SugarCraft\Crush\ToolCall;
  * statement about itself and a hooks switch is not a way to widen it. It is the
  * second gate, never a substitute for the first — the session's
  * {@see PermissionGateHook} still judges every call this one admits.
+ *
+ * AND THE PRESET'S PERMISSION MODE (roadmap 4.1-2), when it is stricter than
+ * the session's: `$modeGate` is the sub-agent's own
+ * {@see \SugarCraft\Crush\Agents\SubAgent::$permissionGate}, built for the
+ * stricter of the two modes ({@see AgentManager::createSubAgent()}), and every
+ * call the grant admits is put to it as well — `permissionMode: plan` denies a
+ * write the `default` session would only have asked about. It rides this hook
+ * rather than a second {@see PermissionGateHook} because that hook's name is
+ * the session gate's and re-registering it would REPLACE the session gate;
+ * this one's name is reserved the same way, so the preset's mode cannot be
+ * claimed or disabled either. Null — a preset no stricter than its session,
+ * whose gate could add nothing — skips it.
  */
 final readonly class SubAgentGrantHook implements HookInterface
 {
@@ -59,6 +73,7 @@ final readonly class SubAgentGrantHook implements HookInterface
     public function __construct(
         private AgentManager $manager,
         private SubAgent $subAgent,
+        private ?PermissionGate $modeGate = null,
     ) {}
 
     public function name(): string
@@ -86,6 +101,12 @@ final readonly class SubAgentGrantHook implements HookInterface
         return $this->subAgent;
     }
 
+    /** The preset's stricter-than-the-session gate, or null — see the class doc. */
+    public function modeGate(): ?PermissionGate
+    {
+        return $this->modeGate;
+    }
+
     public function execute(HookContext $context): HookResult
     {
         $call = new ToolCall($context->toolName, $context->toolArgs);
@@ -102,10 +123,25 @@ final readonly class SubAgentGrantHook implements HookInterface
             ));
         }
 
-        if ($why === null) {
+        if ($why !== null) {
+            return HookResult::deny(sprintf('Tool call "%s" %s.', $context->toolName, $why));
+        }
+
+        if ($this->modeGate === null) {
             return HookResult::allow();
         }
 
-        return HookResult::deny(sprintf('Tool call "%s" %s.', $context->toolName, $why));
+        $mode = $this->modeGate->mode()->value;
+        $agent = $this->subAgent->agent->name;
+
+        return match ($this->modeGate->evaluate($call, $root)) {
+            PermissionDecision::Allow => HookResult::allow(),
+            PermissionDecision::Deny => HookResult::deny(
+                "Permission mode '{$mode}' of agent \"{$agent}\" does not allow {$context->toolName}.",
+            ),
+            PermissionDecision::Ask => HookResult::ask(
+                "Allow {$context->toolName} to run? (agent \"{$agent}\" runs in permission mode: {$mode})",
+            ),
+        };
     }
 }

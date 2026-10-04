@@ -18,6 +18,45 @@ enum PermissionMode: string
     case BypassPermissions = 'bypass-permissions';
 
     /**
+     * How much this mode refuses, as a rank: 0 for the mode that gates
+     * nothing, 5 for the one that denies everything but reads (roadmap
+     * 4.1-2). Read in the order {@see description()} states each mode's
+     * policy — `bypass-permissions` < `auto` (runs unless the classifier
+     * objects) < `accept-edits` (runs edits, asks the rest) < `default`
+     * (asks every write) < `plan` (denies writes) < `dont-ask` (denies
+     * everything but reads, the read-only shell included).
+     *
+     * It is an ORDER FOR CHOOSING, not a proof that one mode's allowed set
+     * contains another's: `plan` and `accept-edits` disagree about different
+     * tools. A caller that must never widen therefore runs the stricter mode
+     * as a SECOND gate beside the first rather than instead of it — both must
+     * pass — and uses this only to skip a gate that could add nothing.
+     */
+    public function strictness(): int
+    {
+        return match ($this) {
+            self::BypassPermissions => 0,
+            self::Auto => 1,
+            self::AcceptEdits => 2,
+            self::Default => 3,
+            self::Plan => 4,
+            self::DontAsk => 5,
+        };
+    }
+
+    /** Whether this mode ranks stricter than $other ({@see strictness()}). */
+    public function isStricterThan(self $other): bool
+    {
+        return $this->strictness() > $other->strictness();
+    }
+
+    /** The stricter of this mode and $other — this one on a tie. */
+    public function stricterOf(self $other): self
+    {
+        return $other->isStricterThan($this) ? $other : $this;
+    }
+
+    /**
      * One sentence on what this mode actually does, for a surface that has to
      * SHOW the policy back to the person running under it — `/permissions`,
      * via {@see \SugarCraft\Crush\Chat}.

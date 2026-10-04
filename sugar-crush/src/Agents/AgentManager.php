@@ -22,17 +22,6 @@ use SugarCraft\Crush\Tools\Tool;
 final class AgentManager
 {
     /**
-     * Modes Plan is allowed to exit into once sub-agents are live: approving
-     * a plan hands control to normal working modes, so this is a deliberate
-     * carve-out from the seal rather than a mid-session mode change.
-     */
-    private const array PLAN_EXIT_MODES = [
-        PermissionMode::Auto,
-        PermissionMode::AcceptEdits,
-        PermissionMode::Default,
-    ];
-
-    /**
      * How many FINISHED (complete, failed, stopped) sub-agents this manager
      * keeps once they have settled — audit AG-3.
      *
@@ -84,16 +73,6 @@ final class AgentManager
     private array $projectedSubAgentIds = [];
 
     private ?TeamManager $teamManager = null;
-
-    /**
-     * Tracks the permission mode locked for this session.
-     * Once the first sub-agent is created, the session mode is sealed except
-     * for the explicit Plan -> {Auto, AcceptEdits, Default} exit carved out
-     * below.
-     *
-     * @see createSubAgent() enforcement
-     */
-    private ?PermissionMode $sessionPermissionMode = null;
 
     /**
      * @param \Closure(PermissionMode): PermissionGate $permissionGateFactory Factory to create PermissionGate from PermissionMode
@@ -345,10 +324,24 @@ final class AgentManager
     /**
      * Create and start a subagent.
      *
-     * @param PermissionMode|null $permissionMode Override the default permission mode for this sub-agent.
-     *                                            When null, uses PermissionMode::Default.
+     * EVERY SUB-AGENT GETS ITS OWN MODE, NARROW-ONLY (roadmap 4.1-2). The
+     * gate is built for the stricter of $permissionMode and $sessionMode
+     * ({@see PermissionMode::stricterOf()}): a preset can ask for less than
+     * the session that delegates to it allows, never more. This replaced a
+     * session-wide seal that locked the FIRST sub-agent's mode for the rest of
+     * the session and threw `LogicException` the moment a second preset
+     * declared a different one — so two presets with different modes could
+     * not both be delegated to, while nothing stopped the first from being
+     * wider than the session. Narrowing per sub-agent keeps what the seal was
+     * for (no delegation escalates the session) without that.
+     *
+     * @param PermissionMode|null $permissionMode The mode the agent asks for —
+     *        a preset's `permissionMode:`. Null uses PermissionMode::Default.
+     * @param PermissionMode|null $sessionMode The mode of the session that
+     *        delegates — the ceiling. Null when the caller has no session gate
+     *        to name; the requested mode then stands as asked.
      */
-    public function createSubAgent(string $agentName, string $task, ?PermissionMode $permissionMode = null): SubAgent
+    public function createSubAgent(string $agentName, string $task, ?PermissionMode $permissionMode = null, ?PermissionMode $sessionMode = null): SubAgent
     {
         $agent = $this->get($agentName);
         if ($agent === null) {
@@ -356,23 +349,9 @@ final class AgentManager
         }
 
         $mode = $permissionMode ?? PermissionMode::Default;
-
-        // Enforce permission mode cannot be changed mid-session.
-        // Plan spec says BypassPermissions/DontAsk can only be set at launch —
-        // once any sub-agent is created, re-entering either of those dangerous
-        // modes is sealed off for the rest of the session. The one explicit
-        // exception the plan carves out: Plan mode is allowed to exit into
-        // Auto/AcceptEdits/Default once a plan is approved and sub-agents are
-        // already live. Throwing LogicException makes the contract explicit.
-        if ($this->sessionPermissionMode !== null && $this->sessionPermissionMode !== $mode) {
-            $isPlanExit = $this->sessionPermissionMode === PermissionMode::Plan
-                && in_array($mode, self::PLAN_EXIT_MODES, true);
-
-            if (!$isPlanExit) {
-                throw new \LogicException('Permission mode cannot be changed mid-session');
-            }
+        if ($sessionMode !== null) {
+            $mode = $mode->stricterOf($sessionMode);
         }
-        $this->sessionPermissionMode = $mode;
 
         $gate = $this->createPermissionGate($mode);
 
@@ -420,10 +399,9 @@ final class AgentManager
      * PENDING row under its placeholder id; the member's `started` beat, which
      * names the same parent call, replaces it with the real run.
      *
-     * Projection bypasses the {@see createSubAgent()} permission-mode seal on
-     * purpose: the seal guards LAUNCHES — a mirror launches nothing, it
-     * reports a run the session's own engine child already governed. The row
-     * carries no PermissionGate for the same reason.
+     * Projection builds no {@see createSubAgent()} permission gate on purpose:
+     * a mirror launches nothing, it reports a run the session's own engine
+     * child already governed, so the row carries no PermissionGate.
      */
     public function projectRemoteSubAgent(SubAgentActivity $activity): void
     {

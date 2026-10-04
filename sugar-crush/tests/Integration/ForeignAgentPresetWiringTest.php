@@ -461,6 +461,11 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // own property. Neither touches a preset's field.
                 'Cli/Serve.php',
                 'Server/ServerConfig.php',
+                // Roadmap 4.1-2: the gate was decided. TaskTool hands the mode
+                // to AgentManager::createSubAgent(), which narrows it to the
+                // session's (stricter-of, never wider), and fromPreset()
+                // already collapses a foreign preset's to Default.
+                'Tools/BuiltIn/TaskTool.php',
             ],
             $readers,
             'a new reader of Agent::$permissionMode appeared (directly or via the permission_mode '

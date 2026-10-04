@@ -74,29 +74,32 @@ final class AgentManagerPermissionGateTest extends TestCase
     }
 
     /**
-     * Test 4a: Mode is locked after first createSubAgent() call.
+     * Test 4a (roadmap 4.1-2): each sub-agent gets its OWN mode — the
+     * session-wide seal that locked the first sub-agent's mode and threw on a
+     * second preset's is gone — narrowed to the session's ceiling, never
+     * widened past it.
      */
-    public function testCreateSubAgentLocksModeAfterFirstCall(): void
+    public function testEachSubAgentGetsItsOwnModeNarrowedToTheSessions(): void
     {
-        $factory = function (PermissionMode $mode): PermissionGate {
-            return new PermissionGate($mode);
-        };
+        $factory = static fn (PermissionMode $mode): PermissionGate => new PermissionGate($mode);
 
         $agentManager = new AgentManager(
             provider: $this->provider,
             skillRegistry: $this->skillRegistry,
             permissionGateFactory: $factory,
         );
+        $this->createAgent($agentManager, 'lock-test-agent', 'Lock test');
 
-        $agent = $this->createAgent($agentManager, 'lock-test-agent', 'Lock test');
+        $first = $agentManager->createSubAgent('lock-test-agent', 'Task 1');
+        $second = $agentManager->createSubAgent('lock-test-agent', 'Task 2', PermissionMode::Plan);
+        $this->assertSame(PermissionMode::Default, $first->permissionGate?->mode());
+        $this->assertSame(PermissionMode::Plan, $second->permissionGate?->mode(), 'a second preset\'s mode no longer throws');
 
-        // First call with Default mode succeeds
-        $agentManager->createSubAgent('lock-test-agent', 'Task 1');
+        $narrowed = $agentManager->createSubAgent('lock-test-agent', 'Task 3', PermissionMode::Plan, PermissionMode::Default);
+        $this->assertSame(PermissionMode::Plan, $narrowed->permissionGate?->mode(), 'a stricter preset mode stands');
 
-        // Second call with a DIFFERENT mode on the SAME instance throws LogicException
-        $this->expectException(\LogicException::class);
-        $this->expectExceptionMessage('Permission mode cannot be changed mid-session');
-        $agentManager->createSubAgent('lock-test-agent', 'Task 2', PermissionMode::Plan);
+        $capped = $agentManager->createSubAgent('lock-test-agent', 'Task 4', PermissionMode::BypassPermissions, PermissionMode::Default);
+        $this->assertSame(PermissionMode::Default, $capped->permissionGate?->mode(), 'a wider preset mode is held to the session\'s');
     }
 
     /**
