@@ -73,6 +73,7 @@ sugar-crush/tests/SwallowingCatchCensusTest.php	4.709	2
 sugar-crush/tests/Chat/UndoRedoDiffCommandsTest.php	4.670	10
 sugar-crush/tests/ChatTest.php	4.663	254
 sugar-crush/tests/Workflows/WorkflowLivePaneTest.php	4.417	11
+sugar-crush/tests/Runtime/DroppedStreamContinueTest.php	4.400	7
 sugar-crush/tests/Support/AssertionSwallowingCatchTest.php	4.327	6
 sugar-crush/tests/Chat/ExecuteAgentsTimeoutTest.php	4.287	2
 sugar-crush/tests/Tools/InteractivePromptContainmentTest.php	4.247	13

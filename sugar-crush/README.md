@@ -1306,7 +1306,10 @@ three times, and reads as one answer: the cut reply goes back as the start of
 the model's own message where the provider allows that (`sglang`, and Claude on
 `vertex` or `bedrock`), and with a request to continue elsewhere. Only a reply
 still cut off after that carries the notice that it stopped at the output
-limit. While the turn runs, the status
+limit. A stream that drops after the reply has started showing is continued the
+same way ("Continue where you left off") rather than restarted, so what you have
+already read stays and the rest is appended; one that drops before anything
+showed is simply retried. While the turn runs, the status
 bar names the step it is on, adds that step's context figure once the request
 is over budget, and moves the spend readout as each step is billed. On such a
 turn the first `Esc` stops it after the current step's tools finish, with its

@@ -40,7 +40,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  *
  *   - {@see testARetriedTurnDoesNotReRunToolCallsThatAlreadySucceeded()} is why
  *     the retry is NOT where the plan put it.
- *   - {@see testAStreamThatFailsAfterEmittingToAConsumerIsNotRetried()} and
+ *   - {@see testAStreamThatFailsAfterEmittingToAConsumerIsContinuedNotRestarted()} and
  *     {@see testASinklessStreamRetryDoesNotDuplicateTheReply()} are the two
  *     halves of the streaming policy; either one alone would let the other's
  *     bug through.
@@ -262,18 +262,20 @@ final class ProviderRetryWiringTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * The emit-then-fail-then-retry case, with a sink attached: NOT retried.
+     * The emit-then-fail case, with a sink attached: CONTINUED, never
+     * restarted (roadmap 2.7-3).
      *
-     * `$onToken` paints straight into the transcript and there is no un-emit, so
-     * restarting the stream would show the user the reply twice. The docblock on
-     * {@see Runtime::runStreaming()} says a mid-stream failure is not retried
-     * when a sink is attached; this is that clause asserted rather than stated.
+     * `$onToken` paints straight into the transcript and there is no un-emit,
+     * so restarting the stream would show the user the reply twice. The
+     * dropped attempt's text is kept instead and the next attempt is asked
+     * for the rest of it; the user sees each byte once and the conversation
+     * carries one reply.
      */
-    public function testAStreamThatFailsAfterEmittingToAConsumerIsNotRetried(): void
+    public function testAStreamThatFailsAfterEmittingToAConsumerIsContinuedNotRestarted(): void
     {
         $provider = new ScriptedProvider([
             ScriptedAttempt::chunksThenThrow(['Hel', 'lo'], self::transient()),
-            ScriptedAttempt::chunks(['Hello world']),
+            ScriptedAttempt::chunks([' world']),
         ]);
 
         $seen = [];
@@ -281,15 +283,12 @@ final class ProviderRetryWiringTest extends TestCase
             $seen[] = $delta;
         };
 
-        try {
-            iterator_to_array(self::runtime($provider)->run(self::app($provider), null, null, $sink));
-            $this->fail('a mid-stream failure after visible text must propagate');
-        } catch (ServerException) {
-            // expected
-        }
+        $messages = iterator_to_array(self::runtime($provider)->run(self::app($provider), null, null, $sink), false);
 
-        $this->assertSame(1, $provider->attempts(), 'no retry once bytes have been emitted');
-        $this->assertSame(['Hel', 'lo'], $seen, 'and the user saw the partial reply exactly once');
+        $this->assertSame(2, $provider->attempts(), 'one dropped attempt, one continuation');
+        $this->assertSame(['Hel', 'lo', ' world'], $seen, 'the user saw every byte exactly once');
+        $this->assertInstanceOf(AssistantMessage::class, $messages[0]);
+        $this->assertSame('Hello world', $messages[0]->content(), 'and the conversation carries one joined reply');
     }
 
     /**
@@ -305,11 +304,11 @@ final class ProviderRetryWiringTest extends TestCase
      * tests, and with real backoff it took the suite from 2m26s to over 10m —
      * many tests stream error chunks and none of them counted attempts.
      *
-     * Without the guard the user reads the reply twice, which is exactly the
-     * corruption {@see testAStreamThatFailsAfterEmittingToAConsumerIsNotRetried()}
-     * exists to prevent on the other channel.
+     * Restarting would make the user read the reply twice, which is exactly
+     * the corruption {@see testAStreamThatFailsAfterEmittingToAConsumerIsContinuedNotRestarted()}
+     * exists to prevent on the other channel — so this one is continued too.
      */
-    public function testAStreamThatEmitsThenReportsATransientErrorChunkIsNotRetried(): void
+    public function testAStreamThatEmitsThenReportsATransientErrorChunkIsContinuedNotRestarted(): void
     {
         $provider = new ScriptedProvider([
             ScriptedAttempt::responses([
@@ -322,7 +321,7 @@ final class ProviderRetryWiringTest extends TestCase
                     errorTransient: true,
                 ),
             ]),
-            ScriptedAttempt::chunks(['Hello world']),
+            ScriptedAttempt::chunks([' world']),
         ]);
 
         $seen = [];
@@ -330,19 +329,11 @@ final class ProviderRetryWiringTest extends TestCase
             $seen[] = $delta;
         };
 
-        // Audit 15a A1: the error chunk now surfaces as a throw - the same
-        // terminal outcome the throw channel's twin above has - instead of
-        // the partial 'Hello' passing for a finished reply.
-        try {
-            iterator_to_array(self::runtime($provider)->run(self::app($provider), null, null, $sink));
-            $this->fail('a mid-stream error chunk after visible text must surface');
-        } catch (ProviderResponseException $e) {
-            $this->assertSame('overloaded', $e->getMessage());
-            $this->assertFalse(TransientFailure::isTransient($e), 'the emitted bytes forbid a retry at ANY layer');
-        }
+        $messages = iterator_to_array(self::runtime($provider)->run(self::app($provider), null, null, $sink), false);
 
-        $this->assertSame(1, $provider->attempts(), 'no retry once bytes have been emitted, whichever channel failed');
-        $this->assertSame(['Hel', 'lo'], $seen, 'and the user saw the partial reply exactly once');
+        $this->assertSame(2, $provider->attempts(), 'continued, whichever channel failed');
+        $this->assertSame(['Hel', 'lo', ' world'], $seen, 'and the user saw every byte exactly once');
+        $this->assertSame('Hello world', $messages[0]->content());
     }
 
     /**

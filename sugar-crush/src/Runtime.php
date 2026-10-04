@@ -1404,8 +1404,11 @@ final class Runtime
      * `$buffer` below is what becomes the {@see AssistantMessage} the agentic
      * loop feeds back to the model - the transcript would carry it twice too.
      *
-     * So the retry is gated on `$emitted`, which is set at the
-     * `$onToken($response->content)` call.
+     * So a RESTART is gated on `$emitted`, which is set at the
+     * `$onToken($response->content)` call. Past that point the reply is
+     * CONTINUED instead (roadmap 2.7-3, Zed/OpenClaw): the dropped attempt's
+     * text is kept and the next attempt asks for the rest of it, through
+     * {@see \SugarCraft\Crush\Providers\ReplyContinuation}.
      *
      * WHAT THIS SAID: that this is "the ONE point where a byte leaves this
      * method".
@@ -1453,9 +1456,17 @@ final class Runtime
      *
      *   - With a token sink attached (every interactive turn - {@see
      *     \SugarCraft\Crush\Backend\EngineBackend::runCompleteInChild()}
-     *     always passes one), only a failure BEFORE the first non-empty delta
-     *     is retried. A mid-stream failure after visible text is NOT retried;
-     *     it propagates exactly as it did before this retry existed.
+     *     always passes one), a failure BEFORE the first non-empty delta is
+     *     retried from scratch. A transient failure after visible text is
+     *     CONTINUED (2.7-3): the partial reply goes back to the provider — as
+     *     a prefill where it takes one ({@see
+     *     \SugarCraft\Crush\Providers\AcceptsAssistantPrefill}), else with a
+     *     "Continue where you left off" user row — and the answer is joined
+     *     onto it, so the screen and the conversation both read one reply.
+     *     The dropped attempts are kept in `$carried`, their usage with them:
+     *     their text is part of the reply. A drop after a streamed tool call,
+     *     or with no text to continue from, still propagates as it always
+     *     did; so does a non-transient failure, or one on the last attempt.
      *   - With no sink (`$onToken === null`), nothing outside this method has
      *     observed anything - `$buffer`, `$toolCalls`, `$reasoning` and
      *     `$usages` are all local, and the tool calls are not dispatched until
@@ -1474,8 +1485,8 @@ final class Runtime
      * theoretical one.
      *
      * On exhaustion the last throw propagates. An attempt that ended holding
-     * an error chunk - not transient, emitted-then-failed, or the final
-     * attempt - throws {@see ProviderResponseException} with the provider's
+     * an error chunk - not transient, emitted-then-failed with nothing it
+     * could be continued from, or the final attempt - throws {@see ProviderResponseException} with the provider's
      * own error text AFTER the loop (audit 15a A1). It used to be yielded
      * onward as an ordinary assistant message, which for Custom/Vertex meant
      * a blank (or silently truncated) reply and an error message nobody read.
@@ -1491,6 +1502,56 @@ final class Runtime
         /** @var list<?Usage> $usages */
         $usages = [];
         $errorChunk = null;
+
+        // Roadmap 2.7-3: a stream that drops AFTER its text reached the screen
+        // is continued, not restarted and not surfaced. $carried is the reply
+        // so far across the dropped attempts; the next attempt asks for the
+        // rest of it ({@see \SugarCraft\Crush\Providers\ReplyContinuation}:
+        // a prefill where the provider takes one, else Zed's "Continue where
+        // you left off" row) and is joined onto it.
+        $baseRequest = $request;
+        $carried = null;
+        $carriedPrefill = false;
+        $prefillRejected = false;
+        // The continuation request for $carried, in the mode it was asked in.
+        $resumeRequest = function () use (&$carried, &$carriedPrefill, $baseRequest): CompleteRequest {
+            return $baseRequest->withMessages([
+                ...$baseRequest->messages,
+                ...\SugarCraft\Crush\Providers\ReplyContinuation::rows($carried, $carriedPrefill, \SugarCraft\Crush\Providers\ReplyContinuation::RESUME_PROMPT),
+            ]);
+        };
+        // Folds the dropped attempt into $carried and arms the continuation;
+        // false when this attempt cannot be continued (it streamed a tool
+        // call, or no text to continue from), and the failure then surfaces
+        // as it always did.
+        $resume = function (string $buffer, array $toolCalls, ?string $reasoning, array $usages) use (&$carried, &$carriedPrefill, &$prefillRejected, &$request, $resumeRequest, $baseRequest): bool {
+            if ($toolCalls !== []) {
+                return false;
+            }
+            $partial = new AssistantMessage($buffer, null, $reasoning, Usage::sum($usages));
+            $joined = $carried === null ? $partial : \SugarCraft\Crush\Providers\ReplyContinuation::merge($carried, $partial, $carriedPrefill);
+            if (!\SugarCraft\Crush\Providers\ReplyContinuation::continuable($joined)) {
+                return false;
+            }
+            $carried = $joined;
+            $carriedPrefill = !$prefillRejected
+                && \SugarCraft\Crush\Providers\ReplyContinuation::prefills($this->provider, $baseRequest->model);
+            $request = $resumeRequest();
+
+            return true;
+        };
+        // A provider that refuses the prefill itself is asked for the same
+        // continuation again with the user row.
+        $refusedPrefill = function (\Throwable|CompleteResponse $failure) use (&$carried, &$carriedPrefill, &$prefillRejected, &$request, $resumeRequest): bool {
+            if ($carried === null || !$carriedPrefill || !\SugarCraft\Crush\Providers\ReplyContinuation::rejectsPrefill($failure)) {
+                return false;
+            }
+            $carriedPrefill = false;
+            $prefillRejected = true;
+            $request = $resumeRequest();
+
+            return true;
+        };
 
         for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
             $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
@@ -1596,7 +1657,13 @@ final class Runtime
             }
 
             if ($thrown !== null) {
-                if ($lastAttempt || $emitted || !TransientFailure::isTransient($thrown)) {
+                if (!$lastAttempt && $refusedPrefill($thrown)) {
+                    continue;
+                }
+                if ($lastAttempt
+                    || !TransientFailure::isTransient($thrown)
+                    || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages))
+                ) {
                     throw $thrown;
                 }
                 TransientFailure::backoff($attempt);
@@ -1604,10 +1671,14 @@ final class Runtime
                 continue;
             }
 
+            if ($errorChunk !== null && !$lastAttempt && $refusedPrefill($errorChunk)) {
+                continue;
+            }
+
             if ($errorChunk === null
                 || $lastAttempt
-                || $emitted
                 || !TransientFailure::responseIsTransient($errorChunk)
+                || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages))
             ) {
                 break;
             }
@@ -1642,7 +1713,11 @@ final class Runtime
         // and before a call runs, so the history, the ToolStarted/ToolFinished
         // events and every ToolResultMessage all carry the same id.
         $toolCalls = ($this->toolCallIds ??= \SugarCraft\Crush\Support\ToolCallIdAllocator::new())->assign($toolCalls);
-        yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped);
+        $assistant = new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped);
+        // 2.7-3: what the dropped attempts already said, then the rest. The
+        // dropped attempts' usage is kept, not reset like a restart's: their
+        // text is part of the reply, so what they billed is part of its cost.
+        yield $carried === null ? $assistant : \SugarCraft\Crush\Providers\ReplyContinuation::merge($carried, $assistant, $carriedPrefill);
 
         if ($toolCalls !== []) {
             foreach ($this->executeToolCalls($toolCalls, $app, $onEvent, $onPermissionRequest, self::toolWaitHeartbeat($request, $onProgress)) as $msg) {

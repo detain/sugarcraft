@@ -273,31 +273,31 @@ final class ProviderErrorSurfacingTest extends TestCase
     }
 
     /**
-     * Once the partial text has reached the screen a retry would duplicate
-     * it, so the cut is surfaced as the failure it is rather than standing as
-     * the whole answer.
+     * Once the partial text has reached the screen a restart would duplicate
+     * it, so the cut is CONTINUED (roadmap 2.7-3): SGLang is asked for the
+     * rest of the same message (`continue_final_message`, the partial reply
+     * as the last row), and the reply is the two halves joined — painted once.
      */
-    public function testACutStreamAfterEmittedTextSurfacesInsteadOfPassingAsTheAnswer(): void
+    public function testACutStreamAfterEmittedTextIsContinuedFromWhereItStopped(): void
     {
         $mock = null;
-        $client = self::mockClient([self::cutStream('The fix is to chan'), self::okStream('recovered')], $mock);
+        $client = self::mockClient([self::cutStream('The fix is to chan'), self::okStream('ge the config.')], $mock);
         $provider = new SglangProvider('http://provider.invalid', 'm', null, $client);
 
         $tokens = '';
-        try {
-            $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete(
-                [Message::user('hi')],
-                static function (string $token) use (&$tokens): void {
-                    $tokens .= $token;
-                },
-            );
-            $this->fail('a cut stream must not come back as a reply; got content ' . var_export($reply->content, true));
-        } catch (ProviderStreamException $e) {
-            $this->assertSame('SGLANG request failed: ' . ProviderStreamException::PREMATURE_END_MESSAGE, $e->getMessage());
-        }
+        $reply = EngineBackend::new($provider, 'm')->withoutHooks()->complete(
+            [Message::user('hi')],
+            static function (string $token) use (&$tokens): void {
+                $tokens .= $token;
+            },
+        );
 
-        $this->assertSame('The fix is to chan', $tokens);
-        $this->assertSame(1, $mock->count(), 'emitted text is not retried');
+        $this->assertSame('The fix is to change the config.', $reply->content);
+        $this->assertSame($reply->content, $tokens, 'every byte painted once');
+        $this->assertSame(0, $mock->count(), 'one cut attempt, one continuation');
+        $body = json_decode((string) $mock->getLastRequest()?->getBody(), true);
+        $this->assertTrue($body['continue_final_message'] ?? null);
+        $this->assertSame(['role' => 'assistant', 'content' => 'The fix is to chan'], $body['messages'][array_key_last($body['messages'])]);
     }
 
     private function awaitRejection(PromiseInterface $promise): \Throwable
