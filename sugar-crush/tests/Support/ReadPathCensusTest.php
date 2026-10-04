@@ -495,6 +495,13 @@ final class ReadPathCensusTest extends TestCase
         'Runtime.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
         ],
+        'Server/Auth/TokenStore.php|file_get_contents' => [
+            'SELF_LOCATED — the owner-token file this store minted, in the `serve` state dir '
+                . 'PrivateRetainedDir::verified() created 0700 and checked is ours; lstat refuses a link',
+        ],
+        'Server/Http/StaticFiles.php|file_get_contents' => [
+            'CONTAINED — a static asset, read only for a path ContainedPath::within() keeps under the web root',
+        ],
         'Session/PromptHistory.php|file' => [
             'SELF_LOCATED — ~/.sugar-crush/prompt_history.jsonl, the path Bootstrap::promptHistory() names',
         ],
@@ -595,6 +602,9 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — sweep() lists a retained store\'s own owner-only directory (and its one level of '
                 . 'session sub-directories) after re-verifying it; no content is read, and only a regular '
                 . 'file older than the retention window is unlinked, typed by lstat() so no link is followed',
+        ],
+        'Support/ForkedChild.php|scandir' => [
+            'PROCESS_DERIVED — closeInheritedServerFds() lists /proc/self/fd, this process\'s own descriptor table',
         ],
         'Support/ProcessContainment.php|scandir' => [
             'PROCESS_DERIVED — closeOnExec() lists /proc/self/fd, this process\'s own descriptor table',

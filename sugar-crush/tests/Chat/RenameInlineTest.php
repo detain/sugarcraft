@@ -393,7 +393,7 @@ final class RenameInlineTest extends TestCase
         $async = $cmd();
         self::assertInstanceOf(AsyncCmd::class, $async);
         $resolved = null;
-        $async->promise->then(static function ($msg) use (&$resolved): void {
+        $async->promise->then(static function (mixed $msg) use (&$resolved): void {
             $resolved = $msg;
         });
 

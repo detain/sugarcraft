@@ -172,6 +172,14 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'createAskHook' =>
             'A fully-qualified interface name against the imported short name. Same class, two '
             . 'spellings, decided by whether the file already imports it.',
+        'engine' =>
+            'The in-turn pruning and step-summary suites (2.2-1, 2.4-1) each root their engine in '
+            . 'a temp directory of their own; the prefix is the one token that differs, and like '
+            . '`isRaw` it must not be shared, or two suites running at once would share a root.',
+        'entry' =>
+            'The ledger suite varies an entry\'s token count (a parameter defaulting to 500) and '
+            . 'the projector suite never does (a literal 100). A narrower copy, as with '
+            . '`reviewerAgent` below, not a drifted one.',
         'executor' =>
             'The fake executor hands each dispatch back to its own test class, so the '
             . 'constructor\'s parameter type names that class - MultiTaskStageTest in one '
