@@ -99,7 +99,9 @@ final class BootstrapHookFileTest extends TestCase
         $hooks = $this->chainOf(Bootstrap::backend($this->project));
 
         $this->assertSame(['protect-files', 'confirm-rm'], $this->namesOn($hooks, 'PreToolUse'));
-        $this->assertSame(['audit'], $this->namesOn($hooks, 'PostToolUse'));
+        // The post-edit lint (step 3.E) is registered by Bootstrap::hooks()
+        // itself on every launch, file or no file.
+        $this->assertSame(['audit', 'post-edit-lint'], $this->namesOn($hooks, 'PostToolUse'));
     }
 
     /**

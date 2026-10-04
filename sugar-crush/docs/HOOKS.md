@@ -807,7 +807,7 @@ it runs only once the rest of the chain has permitted that output — see
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
-Five more exist and are **not** registered by default:
+Six more exist and are **not** registered by default:
 
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
@@ -834,6 +834,9 @@ Five more exist and are **not** registered by default:
   name, `subagent-grant`, is reserved like the gate's
   (`HookRegistry::isReserved()`): no other hook may register under it, and a
   disable naming it is ignored.
+- `PostEditLintHook` — the post-edit lint, registered by `Bootstrap::hooks()`
+  on every launch, after the three above and ahead of the hook files, because
+  it reads the user's `lintCommands`. See [Post-edit lint](#post-edit-lint).
 
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
 source as **heuristics, not security boundaries**. Neither can see through
@@ -859,6 +862,62 @@ denied like their unquoted spellings. Before audit F-P1 the first three passed
 the whole built-in chain under `bypass-permissions`, then the default mode on
 every path (it still is for `-p` and background sessions; the TUI now starts in
 `default`).
+
+### Post-edit lint
+
+After every `Write` or `Edit`, `PostEditLintHook` lints the file the call
+changed and appends what the linter found to that call's result, so the model
+reads it on the very result it looks at next. The format is Aider's: the
+command that ran, its output, then the flagged lines marked `█` among
+`│`-marked context, with `⋮...` where lines were skipped.
+
+```text
+# Fix any errors below, if possible.
+
+## Running: flake8 --select=E9,F63,F7,F82 'app/main.py'
+
+app/main.py:3:10: E999 SyntaxError: invalid syntax
+
+## See relevant line below marked with █.
+
+app/main.py:
+1│import sys
+2│
+3█def main(:
+4│    return 0
+```
+
+PHP files are checked with `php -l` (the interpreter running sugar-crush) out
+of the box. Add, replace or switch off linters by file extension with
+`lintCommands` in your own `~/.sugar-crush/config.json`:
+
+```json
+{"lintCommands": {"php": "vendor/bin/phpstan analyse --no-progress --error-format=raw", "py": "flake8 --select=E9,F63,F7,F82", "js": false}}
+```
+
+- The file goes last on the command line, shell-quoted, or wherever the command
+  writes `{file}`, relative to the project root; the command runs in the
+  project root.
+- Only a file the edit could reach is linted: the path is resolved through the
+  same workspace jail `Edit` uses. The chain also runs after an edit the tool
+  refused, and a linter quotes the lines it flags, so a refused edit outside
+  the workspace must not get those lines read.
+- `false`, `null` or `""` switches an extension off, the built-in `php` entry
+  included. A value of any other shape is ignored, not refused.
+- **User tier only.** A lint command is shell, so no project settings file can
+  name one, trusted or not.
+- A clean lint adds nothing, so the result stays byte-identical. A linter that
+  exits non-zero produces the report above. One that cannot start (exit 126 or
+  127) or runs past its 30-second budget produces a one-line note saying the
+  file was not checked.
+- **It never refuses.** The edit has already happened, and withholding its
+  output would hide what the model needs to fix the error. Every outcome is an
+  allow with a note.
+- It counts against the chain deadline like a script hook (it implements
+  `BoundedHookInterface`), and it runs through the same bounded spawn as
+  `Bash`, so a hung linter is stopped rather than freezing the turn.
+- The note is capped at 10,000 bytes like any other hook note, with the
+  linter's own output cut first so the marked lines survive.
 
 ### What the audit log records
 

@@ -240,6 +240,7 @@ sugar-crush/tests/Commands/CommandLoaderRefusalReportingTest.php	0.917	7
 sugar-crush/tests/Renderer/StatusLineSegmentTest.php	0.909	24
 sugar-crush/tests/SuiteSkipRosterTest.php	0.904	25
 sugar-crush/tests/Workflows/MultiTaskStageTest.php	0.900	14
+sugar-crush/tests/Hooks/BuiltIn/PostEditLintHookTest.php	0.900	15
 sugar-crush/tests/Cli/PermissionWarningDrainTest.php	0.886	6
 sugar-crush/tests/Backend/EngineBackendSpendCapTest.php	0.864	11
 sugar-crush/tests/Workflows/WorkflowToolsHandoffTest.php	0.861	11
@@ -737,6 +738,7 @@ sugar-crush/tests/Chat/ChatHookInputEncodingTest.php	0.010	5
 sugar-crush/tests/Messages/HistorySanitizerRepeatedIdsTest.php	0.010	5
 sugar-crush/tests/Agents/Live/SubAgentActivityBufferTest.php	0.010	6
 sugar-crush/tests/Agents/Live/ToolSummaryTest.php	0.010	16
+sugar-crush/tests/Lint/LintReportTest.php	0.010	6
 sugar-crush/tests/Permissions/SafetyClassifierTest.php	0.009	26
 sugar-crush/tests/Providers/StreamPrematureEndTest.php	0.009	15
 sugar-crush/tests/LSP/LspClientTest.php	0.009	20

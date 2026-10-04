@@ -5386,6 +5386,19 @@ final class Bootstrap
         $hooks = new HookManager(new HookRegistry());
         $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
 
+        // Post-edit lint (step 3.E): `php -l` by default, plus the user's
+        // `lintCommands` map. Read through readUserConfig(), whose project
+        // tier is filtered to PROJECT_TIER_KEYS — a lint command is shell, so
+        // only the user's own files may name one. Registered AHEAD of the
+        // hook files so a file entry cannot take its event+name (the file
+        // loader refuses a taken key), and it never refuses a call:
+        // its report is a note on the edit's result.
+        $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\PostEditLintHook(
+            \SugarCraft\Crush\Lint\LintRunner::new()->withCommands(
+                self::readUserConfig()[\SugarCraft\Crush\Lint\LintRunner::SETTINGS_KEY] ?? null,
+            ),
+        ));
+
         foreach (self::hookFiles($root) as $path) {
             try {
                 $hooks->loadEntries(self::hookFileEntries($path), $path);

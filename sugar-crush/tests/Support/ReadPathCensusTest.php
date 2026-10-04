@@ -401,6 +401,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'the verb reads one document, translates it through the shared McpForeignTranslate '
                 . 'table, and PRINTS (the never-write law); nothing read here is ever executed',
         ],
+        'Lint/LintRunner.php|file_get_contents' => [
+            'PATH_JAIL — the file a Write/Edit call named, resolved through PathJail against the hook\'s '
+                . 'project root exactly as Edit resolves it, so a refused edit cannot lint (and quote) a file '
+                . 'outside the workspace (step 3.E)',
+        ],
         'MCP/McpClient.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Cli/Bootstrap.php — `$root/.mcp.json`, bounded against the root '
                 . 'that named it before this class is constructed. Still a constructor argument, so an '
