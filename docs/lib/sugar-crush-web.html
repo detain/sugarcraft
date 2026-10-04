@@ -51,7 +51,7 @@
 
     <p class="lede" style="margin-top: 28px;">The browser face of <a href="sugar-crush.html">SugarCrush</a>'s WebSocket server mode: <strong>a Vite + Vue 3 + TypeScript + Pinia app, built once and committed as <code>dist/</code>, plus a one-class PHP shim that tells <code>sugarcrush serve</code> where the bundle lives</strong>. PHP users get the UI from <code>composer require</code> alone and never need Node. First-party — inspired by the opencode web UI and the OpenClaw Control UI.</p>
 
-    <p><strong>Status: scaffold.</strong> This release carries the build pipeline, the PHP shim and the app shell. The protocol client, the multi-session dashboard, approvals and the settings form land with the <code>sugarcrush.v1</code> server protocol.</p>
+    <p><strong>Status: MVP.</strong> One session at a time over the <code>sugarcrush.v1</code> protocol: a sessions sidebar, a virtualised transcript with tool cards and diffs, permission cards, a composer that queues, steers or interrupts, and a status bar, with reconnect-and-resume. The multi-pane dashboard, the settings form and the agent and background panels come next.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-crush-web:@dev</code></pre>
