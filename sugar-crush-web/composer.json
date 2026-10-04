@@ -1,0 +1,65 @@
+{
+    "name": "sugarcraft/sugar-crush-web",
+    "description": "Browser UI for sugar-crush's WebSocket server mode, shipped as a pre-built Vite + Vue 3 bundle with a one-class PHP shim that locates it. `sugarcrush serve` serves it on the same port, so PHP users need no Node.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "sugarcrush",
+        "crush",
+        "web-ui",
+        "vue",
+        "vite",
+        "ai",
+        "websocket"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-crush-web",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-crush-web/issues",
+        "source": "https://github.com/sugarcraft/sugar-crush-web",
+        "docs": "https://sugarcraft.github.io/lib/sugar-crush-web.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\CrushWeb\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\CrushWeb\\Tests\\": "tests/"
+        }
+    },
+    "archive": {
+        "exclude": [
+            "/node_modules",
+            "/src-web",
+            "/public",
+            "/e2e",
+            "/package.json",
+            "/package-lock.json",
+            "/.nvmrc",
+            "/index.html",
+            "/env.d.ts",
+            "/vite.config.ts",
+            "/tsconfig.json",
+            "/tsconfig.app.json",
+            "/tsconfig.node.json",
+            "/eslint.config.js"
+        ]
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

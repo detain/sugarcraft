@@ -1,0 +1,79 @@
+name: web
+
+# Node CI for sugar-crush-web, the Vite + Vue 3 browser UI. The PHP shim and
+# its AssetsTest run in ci.yml like every other lib (scripts/affected-libs.php
+# discovers sugar-crush-web through composer.json + phpunit.xml); this
+# workflow owns the TypeScript side and the committed bundle.
+#
+# THE LOAD-BEARING STEP is the dist/ diff. `dist/` is committed so PHP users
+# get the UI from `composer require` without Node, which makes it a generated
+# artifact in the tree, like docs/lib/*.html: a source edit without a rebuild,
+# or a hand-edit to the bundle, must go red here rather than ship.
+#
+# Path-scoped on purpose: nothing outside sugar-crush-web/ feeds the bundle
+# yet, so it is not in affected-libs.php's FORCE_ALL_FILES. When the protocol
+# schema lands (sugar-crush/docs/protocol/**), add that path and a
+# `npm run gen:protocol` + diff step beside the dist/ check.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'sugar-crush-web/**'
+      - '.github/workflows/web.yml'
+  pull_request:
+    paths:
+      - 'sugar-crush-web/**'
+      - '.github/workflows/web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 'sugar-crush-web · lint, typecheck, test, dist parity'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sugar-crush-web
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: sugar-crush-web/.nvmrc
+          cache: npm
+          cache-dependency-path: sugar-crush-web/package-lock.json
+
+      - name: Install (lockfile only)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Both halves matter: `git diff` catches a changed or deleted committed
+      # file, and the porcelain check catches a NEW emitted file (a renamed
+      # content-hashed chunk) that was never committed.
+      - name: Committed dist/ matches the source
+        run: |
+          if ! git diff --exit-code -- dist/ || [ -n "$(git status --porcelain -- dist/)" ]; then
+            git status --short -- dist/
+            echo "::error::sugar-crush-web/dist/ is stale. Run 'npm ci && npm run build' in sugar-crush-web/ and commit dist/ with the source change."
+            exit 1
+          fi
+          echo "OK: dist/ is byte-identical to a clean build of src-web/"
