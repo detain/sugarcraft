@@ -460,6 +460,20 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // flag and ServerConfig's launch mode; ServerConfig reads its
                 // own property. Neither touches a preset's field.
                 'Cli/Serve.php',
+                // O-3b: the same — SessionHost's own per-session mode, the
+                // protocol's `permission_mode_refused` error tag, and the
+                // server/session snapshots reading ServerConfig or the host.
+                'Host/SessionHost.php',
+                'Protocol/ErrorCode.php',
+                // O-3b `agents.list`: an Agent reader, display only — it
+                // reports the mode fromPreset() already gated (a foreign
+                // preset's is Default) and drives no permission decision.
+                'Protocol/Methods/AgentsMethods.php',
+                'Protocol/Methods/PermissionMethods.php',
+                'Protocol/Methods/ServerMethods.php',
+                'Protocol/Methods/SessionMethods.php',
+                'Protocol/ServerContext.php',
+                'Protocol/SessionFeed.php',
                 'Server/ServerConfig.php',
                 // Roadmap 4.1-2: the gate was decided. TaskTool hands the mode
                 // to AgentManager::createSubAgent(), which narrows it to the

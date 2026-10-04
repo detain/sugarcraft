@@ -451,6 +451,11 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
+        // Not a message: the protocol schema's `$id` URN
+        // (`urn:sugarcraft:sugarcrush:protocol:v1`, roadmap O-3c) spells the
+        // prefix's bytes without its space. Counted so the roster stays a
+        // census of the literal; nothing here reaches stderr.
+        'src/Protocol/Schema/ProtocolSchema.php' => 1,
         'src/Providers/SglangProvider.php' => 1,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 7,
         // 3 until audit 15a A9 - the same coerceValue() site as channel 3.

@@ -285,6 +285,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // half is now a second occurrence beside the `refuseCommandShell()` one.
         'Host/Commands/PermissionsCommand.php|.sugar-crush/config.json' => self::USER,
         'Host/Commands/PermissionsCommand.php|.sugar-crush/settings.json' => self::USER,
+        // The protocol's refusal of `permission.respond remember:"user"`
+        // (roadmap O-3b) names where to add the rule by hand — a sentence
+        // to the client, not a path this file opens; rooted at `~`, so
+        // user-tier like the `/permissions` sentence above.
+        'Protocol/Methods/PermissionMethods.php|.sugar-crush/settings.json' => self::USER,
         // The two sentences `/rules` prints when there is nothing to list: where
         // a pack goes, and the older directory that holds packs too. Neither is a
         // path this file reads or builds — same shape as the
@@ -393,7 +398,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY-ONE occurrences — one per entry
+     * APPEARS IN. On this tree that is FIFTY-TWO occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY-ONE distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and

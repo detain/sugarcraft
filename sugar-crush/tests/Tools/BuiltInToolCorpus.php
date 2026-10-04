@@ -6,6 +6,9 @@ namespace SugarCraft\Crush\Tests\Tools;
 
 use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\MCP\McpTool;
+use SugarCraft\Crush\Memory\DreamMemoryView;
+use SugarCraft\Crush\Memory\MemoryStore;
+use SugarCraft\Crush\Memory\MemoryWriter;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\McpToolBridge;
@@ -128,6 +131,11 @@ final class BuiltInToolCorpus
     public const DYNAMIC_TOOL_CLASSES = [
         McpToolBridge::class => \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::class
             . '::testAModelToolCallReachesTheMcpServerAndItsAnswerReachesTheModel',
+        // The dream pass's read-only `Memory` (roadmap 5.4-3): built by
+        // `Memory\DreamPass` for its own restricted turn, never by
+        // `Bootstrap::tools()`, so no launch may carry it.
+        DreamMemoryView::class => \SugarCraft\Crush\Tests\Memory\DreamPassTest::class
+            . '::testTheTurnRunsOnTheReadOnlyToolsAndTheAnswerIsAppliedTaggedAndRecorded',
     ];
 
     /**
@@ -944,6 +952,10 @@ final class BuiltInToolCorpus
                 } else {
                     $built = match ($class) {
                         SkillTool::class => new SkillTool(new SkillRegistry()),
+                        // A writer whose home store cannot be opened: the
+                        // view's reads answer the error an unopenable store
+                        // must, and nothing touches a real memory directory.
+                        DreamMemoryView::class => new DreamMemoryView(MemoryWriter::new(static fn (): ?MemoryStore => null, '')),
                         // A bridge over a client with NO config file and therefore
                         // no servers: every consumer of this corpus asks about
                         // name/description/schema shape, which come from the

@@ -262,8 +262,13 @@ final class ToolSchemaEncodingTest extends TestCase
     /** @return iterable<string, array{Tool}> */
     public static function builtInToolProvider(): iterable
     {
+        // Keyed by wire name, falling back to the class when two tools share
+        // one (the dream pass's read-only `Memory` view beside `MemoryTool`).
+        $seen = [];
         foreach (self::builtInTools() as $tool) {
-            yield $tool->name() => [$tool];
+            $key = isset($seen[$tool->name()]) ? $tool::class : $tool->name();
+            $seen[$tool->name()] = true;
+            yield $key => [$tool];
         }
     }
 
