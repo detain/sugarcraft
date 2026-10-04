@@ -96,7 +96,7 @@ final class BuiltInToolCorpus
      * without `Bootstrap::tools()` naming it", with the bridge as the only live
      * instance. P8.13's `TaskTool` moved in for exactly that reason — a literal
      * would have been a task tool with no session `AgentManager` behind it — and
-     * E675 closed the gap from the other side: `Bootstrap::chat()` now hoists the
+     * the manager-hoist fix closed the gap from the other side: `Bootstrap::chat()` now hoists the
      * one manager and feeds a BOUND `TaskTool` at every launch that has agents.
      * The tool lives in `src/Tools/BuiltIn/` and the feed passes through
      * `tools()`, so it is a wired tool in the wired directory: exempting it
@@ -164,7 +164,7 @@ final class BuiltInToolCorpus
      * IT IS NO LONGER LATENT, and that sentence used to say it was: MEASURED on
      * this tree, `src/` holds THIRTEEN concrete `Tool` implementors, TWELVE in
      * `src/Tools/BuiltIn/` and ONE in `src/Tools/` — {@see McpToolBridge},
-     * the adapter that makes a project's MCP tools dispatchable. (E675 moved
+     * the adapter that makes a project's MCP tools dispatchable. (The manager-hoist fix moved
      * `TaskTool`, the thirteenth, from `src/Tools/` into the wired directory
      * when the launch feed bound it; before that move it was the second
      * resident here.) When the widening landed there
@@ -187,7 +187,7 @@ final class BuiltInToolCorpus
      * reasoned: with the file at `src/Tools/LspTool.php` that first assertion
      * failed `actual size 11 matches expected size 10`. The widening did catch a
      * second resident — `TaskTool` (P8.13), exempted for the shape a tool must
-     * be BOUND, not merely built, before a real run can dispatch it — and E675
+     * be BOUND, not merely built, before a real run can dispatch it — and the manager-hoist fix
      * has since resolved it the way LspTool was resolved: the binding moved into
      * `Bootstrap::chat()`'s feed and the class moved into the wired directory,
      * so the exemption row is gone and only the bridge remains as the case the

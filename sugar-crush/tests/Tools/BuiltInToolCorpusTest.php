@@ -788,8 +788,10 @@ final class BuiltInToolCorpusTest extends TestCase
      * the digit was asserted, never the claim the digit supported. It said such
      * a listing would be "several times this whole block's budget". MEASURED on
      * this tree, on PHP 8.3.6: at fully-qualified width it OVERRUNS the cap but
-     * does not come to several times it, and at BARE SHORT-NAME width the same
-     * listing then FIT inside it. So the WIDTH the claim was made at was
+     * did not then come to several times it, and at BARE SHORT-NAME width the
+     * same listing then FIT inside it. (By roadmap W5 the tree had grown until
+     * the fully-qualified listing passed three times the cap; the bound below
+     * now asserts that.) So the WIDTH the claim was made at was
      * load-bearing and the sentence never stated it. The tree has since grown
      * until the short-name listing overruns the cap too (roadmap W4), so both
      * widths now support "it does not fit" and the bound below says so.
@@ -840,13 +842,15 @@ final class BuiltInToolCorpusTest extends TestCase
             . 'design note has outlived its reason and the note is what needs rewriting',
         );
 
-        $this->assertLessThan(
+        // The tree outgrew the old "over it, but not several times over it"
+        // correction (roadmap W5): the note now says the listing overruns the
+        // cap more than three times over. A tree only grows past this, so —
+        // like the short-name half below — the bound cannot flap back.
+        $this->assertGreaterThan(
             RepoMapBlock::MAX_SECTION_BYTES * 3,
             $fullyQualifiedListing,
-            'the design note corrects an earlier "several times the budget" to "over it, but not '
-            . 'several times over it". That correction is unpinned prose unless this holds, and it '
-            . 'is the reason the note names a WIDTH: if the listing really has grown to several '
-            . 'times the cap, the corrected sentence is now the stale one',
+            'the design note says the fully-qualified listing overruns MAX_SECTION_BYTES more than '
+            . 'three times over; if it no longer does, that sentence is what needs rewriting',
         );
 
         // The short-name half: the note used to argue the short-name listing
@@ -897,10 +901,10 @@ final class BuiltInToolCorpusTest extends TestCase
         // the cap and could not fit left the FULL SUITE green, so the bounds
         // above pin the arithmetic while nothing pinned the reading of it.
         $this->assertStringContainsString(
-            'does not come to several times it',
+            'it now overruns the cap more than three times over',
             $prose,
-            'the correction to ARGUMENT 1 ("over the cap, but not several times over it") has left '
-            . 'RepoMapBlock, and the upper bound asserted above now pins nothing anyone can read',
+            'the W5 restatement of ARGUMENT 1 ("more than three times over the cap") has left '
+            . 'RepoMapBlock, and the lower bound asserted above now pins nothing anyone can read',
         );
         $this->assertStringContainsString(
             'the short-name listing now overruns the cap too',

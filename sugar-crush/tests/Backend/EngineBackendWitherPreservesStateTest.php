@@ -84,6 +84,8 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 ['hookManager', 'hooksDisabled'],
             ],
             'withRoot' => [static fn(EngineBackend $b): EngineBackend => $b->withRoot('/other'), ['root']],
+            // N-P3b: `/model <provider> <model>` pins the engine's wire model.
+            'withModel' => [static fn(EngineBackend $b): EngineBackend => $b->withModel('other-model'), ['model']],
             'withMemoryStore' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withMemoryStore(null),
                 ['memoryStore'],

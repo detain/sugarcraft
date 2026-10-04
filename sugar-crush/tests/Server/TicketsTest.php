@@ -171,12 +171,14 @@ final class TicketsTest extends TestCase
         \mkdir($dir, 0o755);
         \chmod($dir, 0o755);
 
+        $caught = null;
         try {
             TokenStore::new($dir)->token();
-            self::fail('a group/world-readable state directory was accepted');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('server state', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a group/world-readable state directory was accepted');
+        self::assertStringContainsString('server state', $caught->getMessage());
 
         $link = $this->stateDir();
         \chmod($dir, 0o700);

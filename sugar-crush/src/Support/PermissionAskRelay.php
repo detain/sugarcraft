@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Support;
 
 use SugarCraft\Crush\Backend\ChildChannel;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Permissions\ApprovalVerdict;
 use SugarCraft\Crush\Permissions\PermissionReply;
@@ -53,8 +54,8 @@ final class PermissionAskRelay
 
     public const ASK_REPLY = 'ask_reply';
 
-    /** Same ceiling as the turn socket's frames ({@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES}). */
-    public const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+    /** Same ceiling as the turn socket's frames, derived rather than copied. */
+    public const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;
 
     public const PARENT_GONE = 'the turn ended before the sub-agent\'s question was answered';
 

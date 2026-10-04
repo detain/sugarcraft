@@ -453,7 +453,15 @@ final class ForeignAgentPresetWiringTest extends TestCase
         sort($readers);
 
         $this->assertSame(
-            ['Agents/Agent.php'],
+            [
+                'Agents/Agent.php',
+                // O-3a: NOT Agent readers — the needle also matches another
+                // class's own `$permissionMode`. `serve` reads its ParsedArgs
+                // flag and ServerConfig's launch mode; ServerConfig reads its
+                // own property. Neither touches a preset's field.
+                'Cli/Serve.php',
+                'Server/ServerConfig.php',
+            ],
             $readers,
             'a new reader of Agent::$permissionMode appeared (directly or via the permission_mode '
                 . 'array key); an imported .claude/agents preset can set it on the preset, '

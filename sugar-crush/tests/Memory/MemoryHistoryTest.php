@@ -35,7 +35,7 @@ final class MemoryHistoryTest extends TestCase
     {
         $this->restoreHomeSandbox();
         if ($this->sandbox !== '' && is_dir($this->sandbox)) {
-            exec('rm -rf ' . escapeshellarg($this->sandbox));
+            exec('rm -rf ' . escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 
@@ -175,7 +175,7 @@ final class MemoryHistoryTest extends TestCase
 
     private function fullSha(string $short): string
     {
-        exec('git -C ' . escapeshellarg($this->dir) . ' rev-parse ' . escapeshellarg($short), $out);
+        exec('git -C ' . escapeshellarg($this->dir) . ' rev-parse ' . escapeshellarg($short) . ' 2>&1', $out);
 
         return trim($out[0] ?? '');
     }

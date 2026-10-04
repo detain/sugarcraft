@@ -11368,21 +11368,6 @@ final class Chat implements Model
     }
 
     /**
-     * `/notices` — every warning this launch raised, whole on the transcript.
-     *
-     * E653 Shape A capped what the transcript could carry (a ≤2-row grant
-     * aggregate; a 24-slot notice shelf whose overflow rows arrive clipped) and
-     * sent the whole sentences only to stderr — a scrollback the app cannot
-     * re-read. This is the other half: the same stores, un-capped, one line per
-     * fact. {@see NoticesCommand} owns the why of reading the stores rather
-     * than keeping one; this handler is the permissions-shaped transcript write
-     * that rides on top of it — a message worth scrolling back to, not an
-     * overlay, because the question "what did I ignore at launch?" gets asked
-     * mid-session, above whatever turn prompted it.
-     *
-     * @return array{0: self, 1: ?\Closure}
-     */
-    /**
      * `/context` (and `/tokens`): where the next request's context window
      * goes — the system prompt per layer, the tool schemas, the history, the
      * largest messages and the cache-hit share (roadmap 5.6). Read-only and
@@ -11433,6 +11418,21 @@ final class Chat implements Model
         ];
     }
 
+    /**
+     * `/notices` — every warning this launch raised, whole on the transcript.
+     *
+     * E653 Shape A capped what the transcript could carry (a ≤2-row grant
+     * aggregate; a 24-slot notice shelf whose overflow rows arrive clipped) and
+     * sent the whole sentences only to stderr — a scrollback the app cannot
+     * re-read. This is the other half: the same stores, un-capped, one line per
+     * fact. {@see NoticesCommand} owns the why of reading the stores rather
+     * than keeping one; this handler is the permissions-shaped transcript write
+     * that rides on top of it — a message worth scrolling back to, not an
+     * overlay, because the question "what did I ignore at launch?" gets asked
+     * mid-session, above whatever turn prompted it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
     private function handleNoticesCommand(string $inputText): array
     {
         return [

@@ -428,6 +428,7 @@ final class MemoryPromptWiringTest extends TestCase
             'withRoot' => fn(EngineBackend $b): EngineBackend => $b->withRoot($this->dir),
             'withWorktreeRoot' => fn(EngineBackend $b): EngineBackend => $b->withWorktreeRoot($this->dir),
             'withMaxSteps' => fn(EngineBackend $b): EngineBackend => $b->withMaxSteps(2),
+            'withModel' => fn(EngineBackend $b): EngineBackend => $b->withModel('memory-model'),
             'withCompactorConfig' => fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(
                 new \SugarCraft\Crush\Context\CompactorConfig(skillBudgetPerSkill: 7),
             ),

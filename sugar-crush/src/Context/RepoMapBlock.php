@@ -113,7 +113,9 @@ use SugarCraft\Crush\Support\ContainedPath;
  *     the figure was a fourth copy of a census this file has restated and been
  *     wrong about three times, and "several times" was not arithmetic anyone
  *     had run — MEASURED on PHP 8.3.6, a fully-qualified listing OVERRUNS
- *     {@see MAX_SECTION_BYTES} but does not come to several times it. At
+ *     {@see MAX_SECTION_BYTES} but did not then come to several times it;
+ *     the tree has since grown, and it now overruns the cap more than three
+ *     times over (roadmap W5), so "several times" became true by growth. At
  *     BARE SHORT-NAME width the same listing used to FIT inside the cap, which
  *     made the width load-bearing; the tree has since grown past that, and
  *     the short-name listing now overruns the cap too, so the verdict no

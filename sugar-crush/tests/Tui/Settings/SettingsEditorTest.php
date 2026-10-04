@@ -182,7 +182,11 @@ final class SettingsEditorTest extends TestCase
         self::assertContains('trustedProjectSettings', $keys);
         self::assertContains('trustedProjectHooks', $keys);
         $categories = array_unique(array_map(static fn (SettingDefinition $d): string => $d->category->value, $editor->rows()));
-        self::assertSame([SettingCategory::Permissions->value], array_values($categories));
+        // O-3a's `server.trustedProxies` matches too: the search spans categories.
+        self::assertEqualsCanonicalizing(
+            [SettingCategory::Permissions->value, SettingCategory::Server->value],
+            array_values($categories),
+        );
 
         // Letters type while searching; arrows still move.
         $moved = $editor->update(new KeyMsg(KeyType::Down));
