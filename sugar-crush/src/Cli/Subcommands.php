@@ -18,7 +18,9 @@ use SugarCraft\Crush\Util\Exporter;
  * bash|zsh|fish` (crush_code.md Phase 4 item 6; the session verbs past
  * `list`/`delete` are Appendix P §3.4; `serve` is Appendix O §4.7, its body in
  * {@see Serve} — the one verb that keeps running rather than answering, and
- * still constructs no `Program`).
+ * still constructs no `Program`; `attach` is Appendix O §4.9, its body in
+ * {@see Attach} — the one verb that DOES run the TUI, over a running server's
+ * session, and only once it has connected).
  *
  * EVERY ONE ANSWERS WITHOUT A SESSION. `bin/sugarcrush` dispatches these in the
  * same pre-flight place it dispatches `--help` and `--version`, before
@@ -90,6 +92,7 @@ final class Subcommands
             'models'     => self::models($args),
             'session'    => self::session($args),
             'serve'      => Serve::run($args),
+            'attach'     => Attach::run($args),
             'mcp'        => self::mcp($args),
             'completion' => self::completion($args),
             // Unreachable: ArgvParser only ever stores a ParsedArgs::SUBCOMMANDS
@@ -1461,6 +1464,7 @@ final class Subcommands
      */
     private const SUBCOMMAND_DESCRIPTIONS = [
         'run' => 'Run a single prompt and exit (alias for --prompt)',
+        'attach' => 'Run the TUI on a session of a running server',
         'completion' => 'Emit a shell completion script',
         'doctor' => 'Report on this installation and exit',
         'mcp' => 'Inspect the project MCP configuration',

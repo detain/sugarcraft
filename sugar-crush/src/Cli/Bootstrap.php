@@ -3819,6 +3819,14 @@ final class Bootstrap
         string $provider = 'sugarcrush',
         string $model = 'unknown',
     ): array {
+        // Roadmap O-8a: `sugarcrush attach` opened the session on a running
+        // server, and the server holds it — its transcript is what goes on
+        // screen, and no row is created or swept in the local store.
+        $attached = \SugarCraft\Crush\Host\RemoteSessionHost::forLaunch();
+        if ($attached !== null && $attached->sessionId() !== null) {
+            return ['id' => (string) $attached->sessionId(), 'name' => $attached->sessionName(), 'history' => $attached->history(), 'picker' => false];
+        }
+
         if (self::$sessionLaunchMode === 'continue') {
             // The newest session WITH a conversation, not the newest row: a
             // launch quit without typing is newer than the work the user wants

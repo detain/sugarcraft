@@ -38,6 +38,7 @@ sugar-crush/tests/MCP/ClaudeCodeMcpClientDeadlineTest.php	8.356	12
 sugar-crush/tests/Tools/BuiltInToolCorpusTest.php	8.322	52
 sugar-crush/tests/RuntimeTest.php	8.114	152
 sugar-crush/tests/Config/ReadmeSuiteFigureDriftTest.php	7.923	4
+sugar-crush/tests/Backend/RemoteBackendTest.php	7.800	13
 sugar-crush/tests/LSP/LspConnectionForkSafetyTest.php	7.772	13
 sugar-crush/tests/Integration/McpToolWiringTest.php	7.457	32
 sugar-crush/tests/Agents/WorktreeManagerTest.php	7.453	44

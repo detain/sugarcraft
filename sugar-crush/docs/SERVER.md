@@ -1,7 +1,8 @@
 # Server mode (`sugarcrush serve`)
 
 `sugarcrush serve` runs an HTTP + WebSocket server that a browser (the
-[`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) UI) or a
+[`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) UI), a
+terminal ([`sugarcrush attach`](#attaching-a-terminal-sugarcrush-attach)) or a
 script drives sugar-crush through. It runs in the foreground until `Ctrl+C` or
 `SIGTERM` — or in the background with `--detach` — on the same ReactPHP loop
 the engine's forked turns use, and serves one project root — the current
@@ -594,6 +595,61 @@ permissions or the server's own binding, holds a secret, or is owned by a live
 command (`theme` is `/theme`'s, `provider` is `/model`'s) — and only to your
 config or a trusted project's local file, through the same writer and refusals
 as the TUI editor.
+
+## Attaching a terminal (`sugarcrush attach`)
+
+```sh
+sugarcrush attach                      # a new session on the running server
+sugarcrush attach 3fa9                 # an existing one: id, name or unique id prefix
+sugarcrush attach --url http://127.0.0.1:7420 my-session
+```
+
+`attach` runs the usual full-screen TUI as one more client of a running
+server, over the same `sugarcrush.v1` WebSocket the web UI uses. It finds the
+server through the discovery record `serve` keeps in its state directory (the
+one `serve status` reads; `--url` names another), authenticates as a bearer
+client with the owner token (`SUGARCRUSH_SERVER_TOKEN`, else the state
+directory's `token` file — read, never created), says `server.hello`, and
+follows one session: `session.create` without an argument, else the session
+whose id or name is the argument, or whose id starts with it (resolved with
+`session.list` on the server). It subscribes from a snapshot, so the
+transcript on screen is the server's.
+
+What runs where:
+
+- **Turns run on the server.** Enter is `session.send`; the reply streams back
+  from the session's events (`assistant.delta`, `reasoning.delta`), tool rows
+  from `tool.started` / `tool.finished`, the status bar's step and bill from
+  `turn.step` / `usage.updated`. Tools run in the server's root under the
+  session's permission mode, not this terminal's.
+- **Its questions come up here.** A `permission.requested` for the turn opens
+  the usual approval modal; the answer is `permission.respond`, and an answer
+  given first by another client (a browser on the same session) takes the
+  modal down as `permission.resolved` arrives.
+- **Esc Esc** is a hard `session.cancel` of that turn (or takes the prompt out
+  of the queue while it still waits there); a soft cancel is a soft one. A
+  steer typed mid-turn is sent as the next prompt.
+- **Nothing is saved locally.** The server holds the session's single-writer
+  lock and writes its transcript; the attached window neither takes the lock
+  nor writes the session store, and makes no local title call (the server
+  titles its own sessions; a one-shot completion sent through the attachment
+  is refused).
+- **Quitting detaches.** A turn still running goes on, its events in the
+  session's log for whoever subscribes next.
+
+The other way round: a plain `sugarcrush --resume <id>` (or `-c`) whose session
+the server holds opens it read-only, as for any other holder, and the notice
+names the server and the `sugarcrush attach <id>` that would drive it instead.
+
+`attach` exits `1` when it ran and could not attach — no server running, no
+token, the upgrade refused, no such session — saying why on stderr, and `2` for
+a usage error (an extra operand, a flag other than `--url`, a `--url` that is
+not an `http(s)://` or `ws(s)://` address, `--output-format json`).
+
+What an attached window does NOT yet route to the server: slash commands
+(`/compact` included) run locally on the window's own copy of the transcript,
+and a turn another client starts on the same session shows up only when the
+window next attaches.
 
 ## Security model
 

@@ -51,7 +51,9 @@ Usage:
   sugarcrush --output-format json  Output machine-readable JSON (one-shot)
 
 Subcommands (none of them opens the TUI or needs a provider, an API key or a
-terminal; each answers and exits except serve, which runs until stopped):
+terminal; each answers and exits except serve, which runs until stopped — and
+attach, which is the exception to both: it runs the TUI on a running server's
+session):
   doctor                 Check this installation and report every problem it
                          finds: PHP version, the extensions the session store
                          and serve need, the config file, the permission
@@ -142,6 +144,19 @@ terminal; each answers and exits except serve, which runs until stopped):
   serve token [--rotate] Print the owner token bearer clients send.
       --rotate           Replace it; a running server keeps the old one until
                          it restarts.
+  attach [<session>] [--url <url>]
+                         Run the TUI on a session of a running sugarcrush
+                         serve: the server runs every turn and its tools, and
+                         this terminal shows them and answers the permission
+                         questions they raise. <session> is an id, a name or a
+                         unique id prefix of one of the server's sessions;
+                         without it a new one is created. The server is the
+                         one serve status reports, its token taken from
+                         SUGARCRUSH_SERVER_TOKEN or the state directory's
+                         token file. Quitting detaches; a running turn goes
+                         on. Exits 1 if no server answers.
+      --url <url>        Attach to the server at <url> (the address serve
+                         prints) instead.
   completion bash|zsh|fish
                          Write a shell completion script to stdout, e.g.
                          eval "$(sugarcrush completion bash)".

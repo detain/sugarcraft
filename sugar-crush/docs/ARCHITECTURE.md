@@ -15,7 +15,7 @@ subsystem that is documented and does nothing, a stderr line inside a frame.
 bin/sugarcrush                argv → pre-flight → dispatch
       │
       ├─ ArgvParser / Help / NonInteractive / Subcommands
-      │      --help --version, six subcommands, -p one-shot
+      │      --help --version, seven subcommands, -p one-shot
       │
       └─ Cli\Bootstrap              ALL wiring lives here
              │
@@ -43,14 +43,17 @@ which is the whole of the next warning.
 
 The order in it is deliberate, and its size is whatever `wc -l bin/sugarcrush`
 says today — this sentence used to carry a line count and quotes none on
-purpose (E686: the figure rotted within rounds). `--help`, `--version` and the six
+purpose (E686: the figure rotted within rounds). `--help`, `--version` and the seven
 subcommands (`doctor`, `models`, `session list|delete`, `mcp list`,
-`serve`, `completion bash|zsh|fish`) are answered **before** `Program`, `Bootstrap::app()`
-or `NonInteractive` is reached, because every one of them is a question about
+`serve`, `attach`, `completion bash|zsh|fish`) are answered **before** `Program`, `Bootstrap::app()`
+or `NonInteractive` is reached, because every one of them but `attach` is a question about
 the *install* rather than a turn of conversation: they must answer on a machine
 with no provider, no API key and no TTY. `serve` is the one that does not exit:
 it runs the WebSocket server ([SERVER.md](SERVER.md)) on the same ReactPHP loop
-the engine's forked turns use, and still never constructs `Program`.
+the engine's forked turns use, and still never constructs `Program`. `attach`
+is the one that does: it connects to a running server first, and only then
+builds the usual `Bootstrap::app()` and `Program` over that server's session,
+its turns sent there by `Backend\RemoteBackend`.
 
 `doctor` is the sharpest case — it diagnoses an install that may be broken, so it
 must not require the thing it is diagnosing. Each of its ten probes catches its

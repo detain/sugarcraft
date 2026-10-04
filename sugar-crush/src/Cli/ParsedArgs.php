@@ -52,7 +52,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['completion', 'doctor', 'mcp', 'models', 'serve', 'session'];
+    public const SUBCOMMANDS = ['attach', 'completion', 'doctor', 'mcp', 'models', 'serve', 'session'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -70,6 +70,11 @@ final readonly class ParsedArgs
      * @var array<string, array<string, bool>>
      */
     public const SUBCOMMAND_FLAGS = [
+        // `attach` (roadmap O-8a): the server to attach to, when it is not
+        // the one this user's `serve` state directory records.
+        'attach' => [
+            '--url' => true,
+        ],
         // `serve` (Appendix O §4.7): every flag scoped, none global — a
         // `--port` before the verb is an unknown option, not a server setting.
         // `--allowed-origin` takes a comma-separated list; a repeat keeps the

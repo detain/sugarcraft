@@ -1884,7 +1884,12 @@ final class Chat implements Model
 
         $this->sessionLock?->release();
 
-        if ($id === null || !$this->sessionStore instanceof EnhancedSessionStore) {
+        // Roadmap O-8a: a session this launch is ATTACHED to is the server's
+        // (`sugarcrush attach`). The server holds its lock and writes its
+        // transcript; this window drives it over the wire, so it is neither
+        // locked here nor read-only.
+        if ($id === null || !$this->sessionStore instanceof EnhancedSessionStore
+            || \SugarCraft\Crush\Host\RemoteSessionHost::isAttachedTo($id)) {
             return $this->mutate(['sessionLock' => null, 'readOnlySession' => false]);
         }
 
@@ -1894,14 +1899,19 @@ final class Chat implements Model
             return $this->mutate(['sessionLock' => $lock, 'readOnlySession' => false]);
         }
 
+        // When the holder is the running `sugarcrush serve`, the notice says
+        // how to drive the session through it instead of reading it here.
+        $holder = $transcripts->lockHolder($id);
+        $attachOffer = \SugarCraft\Crush\Cli\Attach::lockHolderOffer($id, $holder);
+
         return $this->mutate([
             'sessionLock' => null,
             'readOnlySession' => true,
             'history' => [...$this->history, Message::notice(sprintf(
                 self::READ_ONLY_SESSION_NOTICE,
                 $this->currentSessionName ?? $id,
-                self::lockHolderClause($transcripts->lockHolder($id)),
-            ))],
+                self::lockHolderClause($holder),
+            ) . ($attachOffer === null ? '' : ' ' . $attachOffer))],
         ]);
     }
 

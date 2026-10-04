@@ -717,7 +717,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/and the (six)\s+subcommands \(([^)]*)\)/s', $arch, $m),
+            preg_match('/and the (seven)\s+subcommands \(([^)]*)\)/s', $arch, $m),
             'the pre-flight paragraph no longer spells its subcommand word-count and list together',
         );
         preg_match_all('/`([^`]+)`/', $m[2], $listed);
@@ -3917,11 +3917,11 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E686 tranche-9 (AZ): the commands surface — /mcp's three sub-commands
-     * against the command's own match, the six help-listed subcommands
+     * against the command's own match, the seven help-listed subcommands
      * against ParsedArgs::SUBCOMMANDS (the second-class-in-file ParsedArgs is
      * touched through ArgvParser, per the lane-be autoload law), the server
      * halves the page enumerates, `serve` named as not an MCP server (O-3a
-     * replaced the old no-`serve` negative), and `run` as the seventh word
+     * replaced the old no-`serve` negative), and `run` as the eighth word
      * argv treats specially (with the line-number anchor the page
      * carried until this tranche deleted).
      */
@@ -3929,7 +3929,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $mcp = self::markdownProse($raw);
-        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7];
+        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
 
         self::assertSame(
             1,
@@ -3950,13 +3950,13 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(class_exists(ArgvParser::class), 'ArgvParser vanished — ParsedArgs has no loader without it');
         $commands = constant('SugarCraft\Crush\Cli\ParsedArgs::SUBCOMMANDS');
         sort($commands);
-        self::assertCount($wordNumbers['six'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
+        self::assertCount($wordNumbers['seven'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
 
         $helpSource = self::sourceOf('Cli/Help.php');
         self::assertSame(
             1,
-            preg_match('/lists exactly six under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
-            'the exactly-six sentence reworded — the help block below must keep carrying six rows',
+            preg_match('/lists exactly seven under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
+            'the exactly-seven sentence reworded — the help block below must keep carrying six rows',
         );
         $block = (string) preg_replace('/^.*Subcommands \(/s', '', $helpSource);
         $block = explode("\n\n", $block)[0];
@@ -3987,19 +3987,19 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/`run` is a seventh \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
-            'the run-is-a-seventh sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
+            preg_match('/`run` is an eighth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
+            'the run-is-an-eighth sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
         );
         self::assertSame(0, preg_match('/ArgvParser` line \d+/', $mcp), 'a bare line-number anchor came back into the page — E686 law: symbols by name, never by line');
         self::assertStringContainsString("\$arg === 'run' && !\$promptRequested", self::sourceOf('Cli/ArgvParser.php'), 'the bare-run arm the sentence cites is no longer shaped this way');
-        self::assertFalse(in_array('run', $commands, true), 'run joined the subcommand roster — the six-vs-seven split the page draws collapses');
+        self::assertFalse(in_array('run', $commands, true), 'run joined the subcommand roster — the seven-vs-eight split the page draws collapses');
         self::assertSame(
             1,
             preg_match('/sugarcrush run "<prompt>".*Alias for -p/s', $helpSource),
             'the Usage block stopped labelling run as an alias for -p',
         );
         self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
-        self::assertCount($wordNumbers['seven'], array_merge($commands, ['run']), 'the six-plus-run-is-a-seventh arithmetic broke against the live roster');
+        self::assertCount($wordNumbers['eight'], array_merge($commands, ['run']), 'the seven-plus-run-is-an-eighth arithmetic broke against the live roster');
 
         // E695 in-step: the auth section's new attachment truth, bound to the
         // code that makes it true — the page may only claim what the request

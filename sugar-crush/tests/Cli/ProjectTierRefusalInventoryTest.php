@@ -330,9 +330,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Cli/Subcommands.php|.config/fish' => self::USER,
         // O-3a: `serve`'s state directory (the owner token today), rooted at
         // HomeDirectory::owned() and overridable only by the user's own
-        // SUGARCRUSH_SERVER_DIR — Serve builds it, Help names it. A cloned
+        // SUGARCRUSH_SERVER_DIR — Serve builds it, Help names it, Attach (O-8a)
+        // reads its record and token from it. A cloned
         // repository cannot place it, and it is created 0700 and refused when
         // loose or linked.
+        'Cli/Attach.php|.sugar-crush/server' => self::USER,
         'Cli/Help.php|.sugar-crush/server' => self::USER,
         'Cli/Serve.php|.sugar-crush/server' => self::USER,
         // Audit C2a: where the interactive TUI points `error_log` (written, never
@@ -398,7 +400,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY-TWO occurrences — one per entry
+     * APPEARS IN. On this tree that is FIFTY-THREE occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY-ONE distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and

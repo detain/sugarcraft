@@ -256,6 +256,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'config, created by this process under umask 077 and opened `c` only for the '
                 . 'timed LOCK_EX; no byte of it is read',
         ],
+        'Cli/Attach.php|file_get_contents' => [
+            'SELF_LOCATED — token(): the owner-token file in the `serve` state dir '
+                . 'StateDir::existing() verified 0700 and ours; lstat refuses anything but a '
+                . 'regular file, and it is read, never minted (roadmap O-8a)',
+        ],
         'Cli/Serve.php|file_get_contents' => [
             'SELF_LOCATED — storedToken(): the owner-token file in the `serve` state dir '
                 . 'StateDir::existing() verified 0700 and ours; lstat refuses anything but a '

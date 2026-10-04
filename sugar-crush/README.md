@@ -533,13 +533,15 @@ sugarcrush serve                     # WebSocket + HTTP server for the web UI, u
                                      #   [--detach] [--parent-pid PID]
 sugarcrush serve status|stop|logs|url|token
                                      # the running server: stop [--force], logs [-f], token [--rotate]
+sugarcrush attach [<session>]        # the TUI on a session of the running server — turns run there
+                                     #   [--url URL]
 sugarcrush completion bash|zsh|fish  # a shell completion script on stdout
 ```
 
 Every one of these is dispatched in the same pre-flight place `--help` and
 `--version` are, **before** `Program` is constructed: they answer on a machine
-with no provider, no API key and no TTY, and none of them enters the
-alt-screen. `serve` is the one that keeps running: it binds `127.0.0.1:7420`,
+with no provider, no API key and no TTY, and none of them but `attach` enters
+the alt-screen. `serve` is the one that keeps running: it binds `127.0.0.1:7420`,
 prints a one-time sign-in URL, and answers until `Ctrl+C` or `SIGTERM`. Every
 client must authenticate — loopback is not trusted on its own — and a
 non-loopback `--host`, the bypass permission modes and running as root are each
@@ -549,7 +551,12 @@ The flags belong to `serve` (before it they are unknown options). `serve
 --detach` runs it in the background instead, printing the URL and pid once the
 port is bound; `serve status`, `stop`, `logs`, `url` (a fresh sign-in link) and
 `token` manage whichever server holds the state directory's lock, and
-`--parent-pid` stops it when the process that started it exits. Its
+`--parent-pid` stops it when the process that started it exits. `attach` is
+the one verb that opens the TUI, and only once it has connected: it follows a
+session of that server (an id, name or unique prefix; a new one without) and
+runs the usual screen over it — the server runs the turns and their tools,
+this terminal streams them and answers their permission questions, and
+quitting leaves a running turn running. Its
 transport, auth flow, background mode and security model are in
 [docs/SERVER.md](docs/SERVER.md). `doctor` is the sharpest case — it is a health check for an install
 that may be broken, so it must not require the thing it is diagnosing. A

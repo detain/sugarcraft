@@ -52,12 +52,12 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
- * `src/` and `bin/` is EIGHTEEN" — is CORRECT, and this file asserts that it
+ * `src/` and `bin/` is NINETEEN" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — eighteen sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — nineteen sites. The channel that census describes.
  *     (O-3a: `Serve::stderr()`, `serve`'s one funnel for its startup lines,
  *     request log and stop notice. E710: `Subcommands::mcpImportLine()` joined it — the import verb's
  *     notes and post-read failures, one funnel site, stderr-only by design.
@@ -284,6 +284,10 @@ final class StderrEmitterCensusTest extends TestCase
      */
     private const DIRECT_SITES = [
         'bin/sugarcrush' => 2,
+        // O-8a: `attach`'s fail(), the one line saying why it could not reach
+        // a server. Stderr alone: it is written before any TUI or session
+        // exists, and the verb then exits 1.
+        'src/Cli/Attach.php' => 1,
         'src/Cli/Bootstrap.php' => 2,
         // +1 in wave 11 (audit 15b-15 residual): noticeAttachment(), the
         // headless twin of the TUI's UI-only attachment notices - a `-p`
