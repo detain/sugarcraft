@@ -226,21 +226,6 @@ Columns:
 - **Hotspot regions**: listed only where another group in the same wave also touches that file.
 - **Order**: the integration cherry-pick order for the wave.
 
-### W4 (order: a, b, c, d, e, f, g, h, i, j)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 1.A-2, 1.C-3 (D6; creates `TurnInbox` + composite) | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Chat.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, new `src/Backend/{TurnInbox,CompositeTurnInbox,SocketSteerInbox,QueueMode}.php` | EB: `runTurn` `step-top`/`build`, `completeAsync` (pre-fork memo). RT: `executeToolCalls`, `executeSequentially`. Chat: `submit` busy branch, `enqueuePrompt`, `releaseQueuedPrompts`. **R-KEYBIND** | README "Keys" | — | L |
-| b | O-2e | `src/Chat.php`, `src/Compactor.php`, new `src/Host/CompactionService.php` | Chat: compaction regions (`handleCompactCommand`…`withoutParkedSubmission`, `withCompactionOutcome`…`contextTruncatedMessage`) | ARCHITECTURE compaction | — | M–L |
-| c | P-B2 (+ per-step stats via `onStep`) | `src/Chat.php`, `src/Renderer.php`, `src/Message.php`, `src/Tools/BuiltIn/TaskTool.php`, new `src/Agents/Live/{AgentLiveState,AgentLiveRegistry}.php`, `src/Tui/AgentActivityLine.php` | Chat: `applyBackendToolEvent` arm, `pumpLiveToolEvents` arm, `route` ToolEventPump arm, `subscriptions` (registry via `WorkspaceContext`; no CS). RN: `renderHistory`, `renderPendingToolCall`, `renderToolResults`, `renderView`, zones. TT: `run` | README "What you see while a turn runs"; TROUBLESHOOTING (pcntl) | — | M |
-| d | 3.A-2 | `src/Chat.php`, `src/Session/EnhancedSessionStore.php`, new `builtin-commands/NNNN-{undo,redo,diff}.php`, `src/Workspace/CheckpointDiff.php` | Chat: `handleRewindCommand`, new handlers next to it. ESS: `restoreCheckpoint` soft-delete. **R-SCHEMA** | COMMANDS (generated) | — | M |
-| e | 0.8b (policy surfaces → always-Ask), 5.8 | `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Permissions/{PermissionGate,SafetyClassifier}.php`, `src/Chat.php`, `src/Attachments/FileMentions.php`, `src/Cli/NonInteractive.php`, `src/Messages/UserMessage.php`, `src/AttachmentType.php`, `src/Tools/BuiltIn/WebFetch.php`, `src/Context/EnvironmentBlock.php` (`runGit` → `Workspace/GitRunner`), new `src/Attachments/ContextMentions.php` | Chat: `userTurnMessage` | README "Attachments"; COMMANDS "@file"; PERMISSIONS "hooks that outrank the gate" | — | M |
-| f | 5.10, 5.13a | `src/Runtime.php`, `src/Context/Sections/MaximsSection.php`, `src/Providers/{SglangProvider,CustomProvider,ProviderFactory,OpenAIProvider}.php`, new `src/Providers/{ModelFamily,ModelMetadata}.php`, `src/Context/Sections/FamilyPrompt.php` | RT: `basePrompt`. SG: `modelFamily`. CU: `contextWindow`, `costPer1kTokens` | README "Providers"; ENVIRONMENT (metadata opt-out) | — | M |
-| g | N-P2 (D9; DH-KEYS: derive `LAYERED_KEYS`) | `src/Config/LayeredSettings.php`, `src/Cli/Bootstrap.php`, `src/Chat.php`, `composer.json` (`sugarcraft/sugar-diff`), new `src/Config/Settings/{SettingsWriter,SettingsTier}.php`, `src/Tui/Settings/{SettingsSavePreview,SettingsSavedMsg}.php` | BS: `selectedModelName`, `backendFor`, `selectedProviderLabel`. Chat: **CS** (`onSettingsWrite`) | SETTINGS :67-69/:91/:196/:517-525/:761; README :191/:219/:738; ENVIRONMENT :35 | sugar-diff (consumer) | M |
-| h | 5.3-1, 5.2 | `src/Memory/MemoryStore.php`, `src/Chat.php`, `src/Cli/Bootstrap.php`, new `src/Memory/{MemorySearchIndex,AutoMemoryConsolidator,ConsolidationOp,ConsolidationPlan,SecretRedactor}.php`, `src/MemoryConsolidatedMsg.php` | Chat: `memorySearch`, `route` AssistantMsg arm. BS: `chat` (summary backend pass) | MEMORY "/memory", layout, new "Auto-memory" | — | M–L |
-| i | 2.9, 4.3-1 | `src/Context/{CompactorConfig,ContextCompactor}.php`, `src/Chat.php`, `src/Sessions/BackgroundSession.php` | ContextCompactor: threshold methods only (b edits call sites). Chat: `pumpBackgroundSessions`, `dispatchTurn` (auto-dispatch) | README :1112-1115 tiers, :966-968 `/bg` | — | M |
-| j | 3.D-1 (JSON hook stdout), 3.E | `src/Hooks/{ScriptHook,HookResult}.php`, `src/Cli/Bootstrap.php`, new `src/Hooks/BuiltIn/PostEditLintHook.php`, `src/Lint/{LintRunner,LintReport}.php` | BS: `hooks`. **R-HOOKS** | HOOKS "exit-code contract", "built-in hooks" | — | M |
-
 ### W5 (order: a, b, c, d, e, f, g, h, i, j)
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
@@ -359,16 +344,13 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (124 steps)
+## 5. Step index (107 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
 **Wave-0 fixes**
-- 0.8b S · 1.C-2, DEF-MODE · W4-e
 
 **Foundations**
-- 1.A-2 M · 1.A-1, 1.B-2 · W4-a
-- 1.C-3 M · 1.C-1 · W4-a
 - 1.C-4b S · 1.C-1, RELAY · W5-g
 - 1.C-5 S–M · 1.C-2, RELAY · W5-g
 
@@ -383,22 +365,18 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 2.7-1b M · 2.7-1a, 2.4-1 · W6-a
 - 2.7-2 M · 2.7-1b · W6-a
 - 2.7-3 S · 2.7-2 · W6-a
-- 2.9 S · 2.1 · W4-i
 - 2.10 M · 2.9, 2.5, O-2g · W8-b
 - 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
 - 2.12 S–M · 1.B-3, O-2e · W5-c
 
 **Safety and self-management**
-- 3.A-2 M · 3.A-1, DH-CMDS · W4-d
 - 3.B-2 S–M · 2.2-2, 2.3 · W6-d
 - 3.B-3 M · 3.B-2, 1.C-1, 2.12 · W7-d
 - 3.B-4 L · 3.B-3 · W8-a
 - 3.B-5 S–M · 3.B-4 · W9-b
 - 3.C S–M · 1.A-2, O-2f · W7-h
-- 3.D-1 S–M · — · W4-j
 - 3.D-2 M · 3.D-1, 2.12 · W7-a
 - 3.D-3 S–M · 3.D-2 · W8-j
-- 3.E S–M · — · W4-j
 - 3.F M · — · W6-g
 - 3.G M · 3.A-1, 0.3 · W6-g
 - 3.H M · 3.D-2 · W8-i
@@ -408,7 +386,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Sub-agents**
 - 4.1-1 S–M · N-P0, N-P3b · W6-e
 - 4.1-2 M · 4.1-1, 4.2 · W6-e
-- 4.3-1 M · X-30 · W4-i
 - 4.3-2 M–L · 4.3-1, P-B1, 1.A-2 · W8-e
 - 4.3-3 M · 4.3-1 · W5-i
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
@@ -420,8 +397,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 4.10-2 M · 4.10-1, 4.2, RELAY · W8-f
 
 **Memory, codebase understanding, UX, integrations**
-- 5.2 M · 5.1-2 · W4-h
-- 5.3-1 M · 5.1-2 · W4-h
 - 5.3-2 M · 5.3-1, 1.A-2 · W6-f
 - 5.4-1 S · 5.1-2, O-2e · W6-c
 - 5.4-2 M · 5.1-2 · W5-f
@@ -432,14 +407,11 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.6 S · 2.1, DH-CMDS · W5-e
 - 5.7-1 M · 4.1-2, DEF-MODE, D8 · W9-j
 - 5.7-2 M · 5.7-1, 1.C-2 · W10-b
-- 5.8 S–M · 3.A-1 (GitRunner) · W4-e
 - 5.9-1 M · — · W10-h
 - 5.9-2 M · 5.9-1, O-2g · W10-h
-- 5.10 S–M · 1.A-1 · W4-f
 - 5.11-1 S · — · W5-h
 - 5.11-2 M · 1.C-2, N-P2 · W10-a
 - 5.12 M · 0.4 · W6-h
-- 5.13a M · N-P0 · W4-f
 - 5.13b M · 2.7-1a, N-P3b · W6-h
 - 5.14a S · 1.C-2 · W8-j
 - 5.14b S–M · O-2g · W8-j
@@ -450,8 +422,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.14l S–M · O-2g · W10-f
 
 **Settings**
-- DH-KEYS S–M · N-P2 (derived keys) · W4-g
-- N-P2 M · N-P0, N-P1, D9 · W4-g
 - N-P3b S–M · N-P2, N-P3a · W5-f
 - N-P3 M · N-P2, N-P3a · W6-j
 - N-P4a M · N-P3, 1.C-1 · W7-j
@@ -465,7 +435,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 
 **Sessions and agent view**
 - P-A4 S–M · P-A1, O-2d · W5-e
-- P-B2 M · P-B1, 1.C-4a · W4-c
 - P-B3 S–M · P-B2 · W5-g
 - P-C1 M · P-B1, RELAY, O-2f · W6-e
 - P-C2 M · P-C1 · W7-f
@@ -477,7 +446,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-2e M–L · O-2c, 1.B-3 · W4-b
 - O-2f M–L · O-2b, 1.C-2, 1.C-4a · W5-b
 - O-2g L · O-2f · W6-b
 - O-2h L · O-2g, DH-CMDS · W7-b
