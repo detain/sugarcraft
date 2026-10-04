@@ -1089,7 +1089,9 @@ final class CompactionService
             ? $probeHistory
             : self::withoutParkedSubmission($probeHistory, $parkedSubmission);
 
-        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback): PromiseInterface {
+        $journal = $this->journal;
+
+        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback, $journal): PromiseInterface {
             $steer = self::renderFocusForSummary($focus, $hookGuidance);
             if ($steer !== '') {
                 $prompt[] = Message::user($steer);
@@ -1109,16 +1111,27 @@ final class CompactionService
                 // routinely the largest single prompt this app sends; a readout
                 // that silently omitted it was under-reporting its own biggest
                 // call.
-                static function (Message $msg) use ($compactionId, $keys, $parkedSubmission, $sourceChars, $stateFallback): HistoryCompactedMsg {
+                static function (Message $msg) use ($compactionId, $keys, $parkedSubmission, $sourceChars, $stateFallback, $journal): HistoryCompactedMsg {
                     $rejection = self::summaryRejection($msg, $sourceChars);
                     if ($rejection !== null) {
                         // Billed all the same: the usage still rides along.
                         return new HistoryCompactedMsg($compactionId, [], $rejection, $msg->usage, $parkedSubmission);
                     }
 
+                    $summaries = self::parseCompactionReply($msg->content, $keys, $stateFallback);
+                    // Roadmap 5.4-1: every model-written summary is journalled
+                    // as it is produced — here, off update(), as the promise
+                    // settles. A journal that cannot be written never costs the
+                    // compaction anything.
+                    $journal?->append(
+                        $compactionId,
+                        $summaries,
+                        [$parkedSubmission === null ? self::TRIGGER_MANUAL : self::TRIGGER_AUTO],
+                    );
+
                     return new HistoryCompactedMsg(
                         $compactionId,
-                        self::parseCompactionReply($msg->content, $keys, $stateFallback),
+                        $summaries,
                         null,
                         $msg->usage,
                         $parkedSubmission,
@@ -1202,6 +1215,29 @@ final class CompactionService
         }
 
         return implode("\n\n", $parts);
+    }
+
+    /**
+     * Where model-written compaction summaries are journalled (roadmap 5.4-1),
+     * or null for nowhere. A sink, not session state: the service stays one
+     * per workspace, and every session's summaries go to the one journal of
+     * the workspace's project.
+     */
+    private ?\SugarCraft\Crush\Memory\CompactionJournal $journal = null;
+
+    /** A copy that journals every model-written summary to $journal. */
+    public function withJournal(?\SugarCraft\Crush\Memory\CompactionJournal $journal): self
+    {
+        $copy = clone $this;
+        $copy->journal = $journal;
+
+        return $copy;
+    }
+
+    /** The journal summaries are appended to, or null. */
+    public function journal(): ?\SugarCraft\Crush\Memory\CompactionJournal
+    {
+        return $this->journal;
     }
 
     /**

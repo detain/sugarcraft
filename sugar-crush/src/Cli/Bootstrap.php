@@ -1791,7 +1791,11 @@ final class Bootstrap
             ->withService(\SugarCraft\Crush\Host\TitleService::class, \SugarCraft\Crush\Host\TitleService::new())
             ->withService(\SugarCraft\Crush\Host\SpendLedger::class, \SugarCraft\Crush\Host\SpendLedger::new())
             ->withService(\SugarCraft\Crush\Host\ContextMeter::class, \SugarCraft\Crush\Host\ContextMeter::new())
-            ->withService(\SugarCraft\Crush\Host\CompactionService::class, \SugarCraft\Crush\Host\CompactionService::new())
+            // Roadmap 5.4-1: model-written summaries are journalled under the
+            // home memory directory, per project.
+            ->withService(\SugarCraft\Crush\Host\CompactionService::class, \SugarCraft\Crush\Host\CompactionService::new()->withJournal(
+                ($home = self::memoryStoreOrNull($root)) === null ? null : \SugarCraft\Crush\Memory\CompactionJournal::forStore($home),
+            ))
             ->withService(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry::class, \SugarCraft\Crush\Agents\Live\AgentLiveRegistry::new())
             // O-2f: the runner a server host listen()s on; without it every
             // Chat lineage falls back to a runner of its own (TurnRunner::of()).

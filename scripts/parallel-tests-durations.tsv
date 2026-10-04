@@ -287,6 +287,7 @@ sugar-crush/tests/Chat/CallbackAuthoredRefusalTest.php	0.602	8
 sugar-crush/tests/Workspace/ShadowRepoTest.php	0.600	6
 sugar-crush/tests/Backend/InTurnPruneTest.php	0.600	4
 sugar-crush/tests/Server/WsUpgradeTest.php	0.600	7
+sugar-crush/tests/Memory/CompactionJournalTest.php	0.600	8
 sugar-crush/tests/Tools/McpToolBridgeResultCapTest.php	0.587	4
 sugar-crush/tests/Tools/IgnoreRulesBacktrackingTest.php	0.564	112
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.555	10

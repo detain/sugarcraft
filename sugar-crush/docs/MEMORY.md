@@ -593,6 +593,7 @@ transcript notice the first time it happens.
 ├── memory/<scope>/    the memory store (project/<key>/ per project)
 ├── memory/.search-<key>.sqlite  the search cache (derived; safe to delete)
 ├── memory/.auto-memory-<key>.json  the auto-memory throttle
+├── memory/.compaction-journal-<key>.jsonl  every model-written compaction summary
 ├── memory/.git/       the memory history (`/memory log`, `/memory restore`)
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md
 ├── skills/*/SKILL.md  skills                   → SKILLS.md
@@ -604,6 +605,14 @@ transcript notice the first time it happens.
 
 `--config <file>` moves **only** `config.json`. Agents, skills, workflows,
 sessions and memory stay in `~/.sugar-crush`.
+
+The compaction journal is append-only JSON Lines, one line per compaction
+whose summary a model wrote (`/compact` or the automatic tier), tagged
+`["compaction", "manual"|"auto"]` and carrying the per-exchange records and
+the session-state block, secrets redacted. It lives in the home directory
+only — `<key>` is the project's, `shared` for a launch with no root — and
+nothing is written for a heuristic compaction. It is what a later pass reads
+to fold recurring facts into memory.
 
 ## See also
 
