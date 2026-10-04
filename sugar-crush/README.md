@@ -1189,6 +1189,20 @@ runs **steers** it: the agent reads it at its next step (calls of the current
 step that have not started are skipped so it does), while `Tab` queues the draft
 for after the turn instead.
 
+A `Task` call gets a **live line** under its row for the sub-agent it runs —
+`└ ⠋ Grep "LoginController" routes/ · 7 tools · 0:12 · 4.1K tok` — naming
+the call the agent is in right now (or its last finished call with `✓`/`✗`,
+`thinking…`, or the newest fragment of what it is writing), its tool count,
+elapsed time, tokens and spend. Parallel `Task` calls each get their own line.
+The spinner turns while the agent works; when it ends the glyph becomes `✓`
+(done), `✗` (failed, with the reason), `⏹` (cancelled) or `⏸` (stopped without
+a report), and the line stays under the settled row. A `Task` call still
+waiting for a free delegation slot says `◌ queued:` on its row instead of
+`running:`. The line never wraps: on a narrow terminal the spend goes first,
+then the tokens, then the tool count, and the item is shortened in the middle.
+Without `ext-pcntl` the turn runs in-process, so the lines appear filled in
+when it ends rather than live (see TROUBLESHOOTING).
+
 Beside the context readout, a **spend** readout appears once the provider has
 reported something to show — dollars, and the cap if one is set. It is a
 separate segment from the context figure on purpose: the context number is a

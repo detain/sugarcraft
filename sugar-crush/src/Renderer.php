@@ -1564,6 +1564,11 @@ final class Renderer
             // Row budget for a single picture: anything taller is clipped off
             // the frame's tail anyway, so encoding it would be pure waste.
             max(1, $chat->rows() - 2),
+            // Roadmap P-B2: the delegated runs' live state, for the line
+            // under each Task row. Read here, never advanced: its clock moves
+            // in update() (Chat's pump tick), so this frame stays a pure
+            // function of state.
+            $chat->agentLive(),
         );
         if ($chat->inFlight) {
             // E494 - the model's THINKING while the turn runs, painted above
@@ -3682,8 +3687,11 @@ final class Renderer
      *                                       {@see Chat::mosaic()}; null disables images
      * @param int                 $imageRows tallest cell box a single tool image may
      *                                       be encoded at, see {@see renderToolImage()}
+     * @param \SugarCraft\Crush\Agents\Live\AgentLiveRegistry|null $agents the delegated runs' live state
+     *                                       ({@see Chat::agentLive()}), for the line
+     *                                       under each Task row; null draws none
      */
-    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    private static function renderHistory(array $history, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null): string
     {
         // Roadmap 1.B-2: a row the model reads but the user does not - a
         // turn's step record ({@see Message::$userVisible}) - is not painted.
@@ -3741,12 +3749,12 @@ final class Renderer
             // (full ANSI + C0/DEL/lone-C1 strip) is correct — the Assistant path
             // stays raw because CandyShine emits legitimate, already-processed SGR.
             if ($msg->toolResults !== []) {
-                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows);
+                $blocks[] = self::renderToolResults($msg, $theme, $width, $expanded, $images, $mosaic, $imageRows, $agents);
 
                 continue;
             }
             if ($msg->pendingToolCallId !== null) {
-                $blocks[] = self::renderPendingToolCall($msg, $theme, $expanded);
+                $blocks[] = self::renderPendingToolCall($msg, $theme, $expanded, $width, $agents);
 
                 continue;
             }
@@ -4149,7 +4157,7 @@ final class Renderer
      *
      * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
+    private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null): string
     {
         $lines = [];
         // The thought that led to this call (parked on its placeholder by
@@ -4233,6 +4241,21 @@ final class Renderer
             $hasImage = $result->hasImage();
 
             $block = $row;
+            // Roadmap P-B2: a settled Task row keeps its run's line — how it
+            // ended, what it cost — directly under the head, where the live
+            // line stood while it ran. Timed by the row's own duration when
+            // it has one: the frames' clock is the parent's, and on the
+            // settled-queue path it reads the replay, not the run.
+            if ($agents !== null && $result->id !== null) {
+                $block .= self::agentLines(
+                    $agents->forCall($result->id),
+                    $theme,
+                    $width,
+                    $agents,
+                    $result->durationMs === null ? null : $result->durationMs / 1000,
+                    settled: true,
+                );
+            }
             // Expanded, a row says WHAT ran before what it printed: the head's
             // one-liner is bounded and, when the model sent a `description`,
             // never names the command at all.
@@ -4775,11 +4798,22 @@ final class Renderer
      * slow command doesn't look like nothing is happening. Replaced in
      * history with {@see renderToolResults()}'s finished marker once the
      * real result arrives (see Chat's ToolResultsMsg handling).
+     *
+     * A Task call's row also carries one live line per delegated run under
+     * it (roadmap P-B2, {@see \SugarCraft\Crush\Tui\AgentActivityLine}) from $agents. A Task member
+     * still waiting for a free delegation slot (step 0.16's cap) says so on
+     * the row itself — `queued:`, not `running:` — because nothing is running
+     * yet and a spinner would claim otherwise.
+     *
+     * @param int $width the pane's usable columns; the live lines are fitted to it
      */
-    private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = []): string
+    private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = [], int $width = 0, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents = null): string
     {
-        $spinner = Style::new()->foreground($theme->assistantLabel)->render('⠴');
-        $running = $spinner . ' ' . self::dim($theme)->render('running: ' . self::oneLine($msg->content));
+        $runs = $agents === null ? [] : $agents->forCall((string) $msg->pendingToolCallId);
+        $queued = $runs !== [] && array_filter($runs, static fn ($run): bool => !$run->isQueued()) === [];
+        $spinner = Style::new()->foreground($theme->assistantLabel)->render($queued ? '◌' : '⠴');
+        $running = $spinner . ' ' . self::dim($theme)->render(($queued ? 'queued: ' : 'running: ') . self::oneLine($msg->content));
+        $running .= self::agentLines($runs, $theme, $width, $agents);
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $running;
@@ -4788,6 +4822,42 @@ final class Renderer
         // Same key the finished row will compute (thoughtKey() reads the
         // text only), so a thought opened while the call runs stays open.
         return self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning)) . "\n\n" . $running;
+    }
+
+    /**
+     * The live lines of the runs under one Task row (roadmap P-B2), each on
+     * its own row after a newline, or '' when there are none to draw. Queued
+     * placeholders draw none — their row already says "queued".
+     *
+     * @param list<\SugarCraft\Crush\Agents\Live\AgentLiveState> $runs
+     * @param float|null $elapsedSeconds the settled row's own duration, which
+     *        outranks the frames' clock for a finished run
+     * @param bool $settled the row is a settled result: a run under it that
+     *        never reported its end (the turn was cancelled, or died) draws
+     *        nothing, since a frozen spinner would claim it is still running
+     */
+    private static function agentLines(array $runs, Theme $theme, int $width, ?\SugarCraft\Crush\Agents\Live\AgentLiveRegistry $agents, ?float $elapsedSeconds = null, bool $settled = false): string
+    {
+        if ($agents === null || $width <= 0) {
+            return '';
+        }
+
+        $lines = '';
+        foreach ($runs as $run) {
+            if ($run->isQueued() || ($settled && !$run->isFinished())) {
+                continue;
+            }
+            $lines .= "\n" . \SugarCraft\Crush\Tui\AgentActivityLine::render(
+                $run,
+                $width,
+                $theme,
+                $agents->spinnerFrame(),
+                $agents->now(),
+                $run->isFinished() && count($runs) === 1 ? $elapsedSeconds : null,
+            );
+        }
+
+        return $lines;
     }
 
     /**

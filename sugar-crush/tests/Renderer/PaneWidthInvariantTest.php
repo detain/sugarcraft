@@ -1424,6 +1424,49 @@ final class PaneWidthInvariantTest extends TestCase
         }
     }
 
+    /**
+     * Roadmap P-B2: a delegated run's line under its Task row — a running
+     * one with an over-long current call and every figure, and a failed one
+     * with an over-long reason — at every width. The line is laid out to the
+     * pane by `AgentActivityLine`, which drops figures and elides the item
+     * instead of handing the fitter a row to cut.
+     */
+    public function testALiveAgentLineUnderATaskRowFitsAtEveryWidth(): void
+    {
+        foreach ([20, 24, 30, 40, 60, 80, 120, 160] as $cols) {
+            $inbox = new \ArrayObject();
+            $registry = \SugarCraft\Crush\Agents\Live\AgentLiveRegistry::of($inbox, static fn (): float => 100.0);
+            $registry->apply(new \SugarCraft\Crush\Events\SubAgentActivity(
+                'progress', 'run_a', 'explore', '', 2, '',
+                parentCallId: 'tc_run',
+                items: [\SugarCraft\Crush\Agents\Live\ActivityItem::toolStarted('c1', 'Bash', str_repeat('make -j8 all ', 20))],
+                stats: ['tools' => 99, 'tokensIn' => 999_999, 'costUsd' => 1.5, 'startedAt' => 1.0],
+            ));
+            $registry->apply(new \SugarCraft\Crush\Events\SubAgentActivity(
+                'finished', 'run_b', 'review', '', 9, '',
+                parentCallId: 'tc_done',
+                outcome: 'failed',
+                error: str_repeat('boom ', 40),
+                resumeId: 'abcdef0123456789',
+            ));
+            $chat = new Chat(
+                history: [
+                    Message::user('go'),
+                    Message::assistant('done')->withToolResults([new ToolResult('Task', 'report', 'failed', 'tc_done')]),
+                    Message::toolRunning(new \SugarCraft\Crush\ToolCall('Task', ['agent' => 'explore'], 'tc_run')),
+                ],
+                rows: 40,
+                cols: $cols,
+                liveToolEvents: $inbox,
+            );
+
+            $frame = Renderer::render($chat);
+
+            self::assertSame(2, substr_count(self::plain($frame), '  └ '), "both lines are drawn at {$cols} columns");
+            self::assertRowsFit($frame, $cols);
+        }
+    }
+
     // =====================================================================
     // Helpers
     // =====================================================================

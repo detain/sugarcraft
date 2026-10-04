@@ -150,7 +150,7 @@ sugar-crush/tests/Backend/ForkChannelAskRoundTripTest.php	2.053	10
 sugar-crush/tests/Agents/AgentWorkerPoolInlineBudgetTest.php	2.007	5
 sugar-crush/tests/Cli/SessionRetentionWiringTest.php	1.965	16
 sugar-crush/tests/Tools/TaskToolEngineTest.php	1.955	15
-sugar-crush/tests/Renderer/PaneWidthInvariantTest.php	1.948	190
+sugar-crush/tests/Renderer/PaneWidthInvariantTest.php	1.948	191
 sugar-crush/tests/Chat/WorkflowControlMidRunTest.php	1.927	8
 sugar-crush/tests/Support/OneSidedHomeSandboxTest.php	1.923	5
 sugar-crush/tests/Sessions/BackgroundSupervisorTest.php	1.904	25
@@ -367,6 +367,7 @@ sugar-crush/tests/Support/SecretEnvScrubTest.php	0.181	20
 sugar-crush/tests/Chat/MemoryCommandTest.php	0.169	31
 sugar-crush/tests/Cli/BootstrapMcpTrustPinsTest.php	0.162	5
 sugar-crush/tests/Integration/PromptEndToEndTest.php	0.161	1
+sugar-crush/tests/Chat/AgentLiveLinesTest.php	0.160	9
 sugar-crush/tests/Tui/ShellMouseZoneTest.php	0.155	9
 sugar-crush/tests/Renderer/AbandonedPaletteIsNotCompositedTest.php	0.155	3
 sugar-crush/tests/App/DockDividerZoneTest.php	0.155	7
@@ -399,6 +400,7 @@ sugar-crush/tests/Backend/ForkChannelEofIsUnansweredTest.php	0.131	3
 sugar-crush/tests/Tools/BuiltIn/WriteTest.php	0.130	22
 sugar-crush/tests/RuntimeMalformedToolArgumentsTest.php	0.130	3
 sugar-crush/tests/Tui/Settings/SettingsEditorTest.php	0.130	11
+sugar-crush/tests/Tui/AgentActivityLineTest.php	0.130	31
 sugar-crush/tests/Commands/PermissionsCommandTest.php	0.129	33
 sugar-crush/tests/Context/SessionPromptMemoTest.php	0.127	10
 sugar-crush/tests/Providers/BedrockPromptCacheTest.php	0.126	30
@@ -519,6 +521,7 @@ sugar-crush/tests/Hooks/ProtectFilesHookTest.php	0.045	130
 sugar-crush/tests/ToolCallClickTest.php	0.045	16
 sugar-crush/tests/Hooks/HookConfigTest.php	0.045	60
 sugar-crush/tests/Hooks/ProtectFilesPolicySurfacesTest.php	0.045	15
+sugar-crush/tests/Agents/Live/AgentLiveRegistryTest.php	0.045	11
 sugar-crush/tests/Providers/OpenAIProviderTest.php	0.044	47
 sugar-crush/tests/Providers/CustomProviderSystemInPlaceTest.php	0.044	7
 sugar-crush/tests/ChatInputCursorTest.php	0.043	31

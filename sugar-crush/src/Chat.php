@@ -2268,6 +2268,11 @@ final class Chat implements Model
             return $this->applyBackendToolEvent($msg);
         }
         if ($msg instanceof ToolEventPumpMsg) {
+            // Roadmap P-B2: the live agent lines' clock moves on the pump's
+            // own tick (every 0.1 s while a turn runs), so the spinner turns
+            // and the elapsed figures count without view() reading a clock.
+            $this->agentLive()->advance();
+
             return $this->pumpLiveToolEvents();
         }
         if ($msg instanceof RuntimeNoticePumpMsg) {
@@ -4319,6 +4324,13 @@ final class Chat implements Model
             // the mirror's audience is the dashboard, and it reads the
             // manager, not the transcript.
             $this->agentManager?->projectRemoteSubAgent($event);
+            // Roadmap P-B2: and the live line under that Task row. On this
+            // path (the settled queue — a turn whose beats the live pump
+            // never got to, which is every turn without ext-pcntl) the beats
+            // arrive after the fact, so the line is filled from what the run
+            // really did and ends on its real outcome; nothing pretends it
+            // was live.
+            $this->agentLive()->apply($event);
 
             return [$this, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
         }
@@ -4328,6 +4340,29 @@ final class Chat implements Model
             : $this->replaceToolRunningPlaceholder($event);
 
         return [$next, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
+    }
+
+    /**
+     * The live state of every delegated run this session has heard about
+     * (roadmap P-B2, Appendix P §4.5) — what the line under each Task row is
+     * drawn from ({@see Renderer::renderView()}).
+     *
+     * A mutable service, like {@see $agentManager}: the event arms above and
+     * in {@see pumpLiveToolEvents()} fold frames into it, the pump's tick
+     * advances its clock, and `view()` only reads it. The workspace's own one
+     * when it registered one ({@see \SugarCraft\Crush\Host\WorkspaceContext::service()});
+     * otherwise the one keyed to this Chat lineage's live inbox, which every
+     * `mutate()` clone shares by identity — so no constructor slot is spent
+     * on it. Runs are found by their Task call id, so a run outliving its
+     * session (a `/new` keeps the inbox) is simply never looked up again.
+     */
+    public function agentLive(): \SugarCraft\Crush\Agents\Live\AgentLiveRegistry
+    {
+        $registered = $this->workspace?->service(\SugarCraft\Crush\Agents\Live\AgentLiveRegistry::class);
+
+        return $registered instanceof \SugarCraft\Crush\Agents\Live\AgentLiveRegistry
+            ? $registered
+            : \SugarCraft\Crush\Agents\Live\AgentLiveRegistry::of($this->liveToolEvents);
     }
 
     /**
@@ -4676,6 +4711,28 @@ final class Chat implements Model
             // entry per tick and re-arms itself via $more; the mirror update
             // costs the transcript nothing.
             $this->agentManager?->projectRemoteSubAgent($event);
+
+            // Roadmap P-B2: the live line under the Task row. Five parallel
+            // runs beat up to twenty times a second between them, and one
+            // entry per 0.1 s tick would fall behind that for good — so every
+            // beat queued right behind this one (same turn, nothing else in
+            // between, so no ordering is crossed) is folded in on this same
+            // tick (Appendix P §4.6).
+            $batch = [$event];
+            $queue = $this->liveToolEvents->getArrayCopy();
+            $taken = 0;
+            while (($peek = $queue[$taken] ?? null) !== null
+                && $peek[1] instanceof SubAgentActivity
+                && $peek[0] === $generation) {
+                $this->agentManager?->projectRemoteSubAgent($peek[1]);
+                $batch[] = $peek[1];
+                $taken++;
+            }
+            if ($taken > 0) {
+                $this->liveToolEvents->exchangeArray(array_slice($queue, $taken));
+                $more = count($this->liveToolEvents) > 0 ? Cmd::send(new ToolEventPumpMsg()) : null;
+            }
+            $this->agentLive()->applyBatch($batch);
 
             return [$this, $more];
         }

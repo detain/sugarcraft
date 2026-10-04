@@ -73,13 +73,18 @@ final class TaskToolProgressFramesTest extends TestCase
 
         $this->assertFalse($result->isError(), $result->content());
         $this->assertSame(
-            ['started', 'progress', 'progress', 'finished'],
+            ['started', 'progress', 'progress', 'progress', 'finished'],
             array_map(static fn (SubAgentActivity $f): string => $f->op, $frames),
-            'the tool boundaries beat out immediately; the run opens and closes exactly once',
+            'the tool boundaries and the report\'s prose beat out immediately; the run opens and closes exactly once',
         );
-        $this->assertSame([1, 2, 3, 4], array_map(static fn (SubAgentActivity $f): int => $f->seq, $frames));
+        $this->assertSame([1, 2, 3, 4, 5], array_map(static fn (SubAgentActivity $f): int => $f->seq, $frames));
 
-        [$started, $toolIn, $toolOut, $finished] = $frames;
+        [$started, $toolIn, $toolOut, $prose, $finished] = $frames;
+        $this->assertSame(
+            [['t' => 'text', 'delta' => 'the report']],
+            array_map(static fn (\SugarCraft\Crush\Agents\Live\ActivityItem $i): array => $i->toArray(), $prose->items),
+            'P-B2: the run\'s prose rides as a text item, for the parent\'s live line',
+        );
         $this->assertSame('coder', $started->name);
         $this->assertSame('Audit candy-core and report the findings', $started->task, 'started carries the prompt snippet');
         $this->assertSame('', $started->tail, 'nothing has been produced at the open beat');
@@ -387,6 +392,8 @@ final class TaskToolProgressFramesTest extends TestCase
             [
                 ['t' => 'tool_started', 'callId' => 'call_1', 'tool' => 'Grep', 'summary' => '"Login" src/'],
                 ['t' => 'tool_finished', 'callId' => 'call_1', 'tool' => 'Grep', 'ok' => true, 'ms' => $finished->items[1]->ms],
+                // P-B2: the report's prose, coalesced into the same frame.
+                ['t' => 'text', 'delta' => 'the report'],
             ],
             array_map(static fn (\SugarCraft\Crush\Agents\Live\ActivityItem $i): array => $i->toArray(), $finished->items),
         );

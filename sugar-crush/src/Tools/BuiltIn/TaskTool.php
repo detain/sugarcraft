@@ -899,6 +899,30 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                         $flushIfDue();
                     },
                     onHeartbeat: $onHeartbeat,
+                    // P-B2: the run's prose, as `text` items — the parent's
+                    // live line shows the newest fragment when the run is
+                    // writing rather than calling tools. Items only: the v1
+                    // tail stays the run's trail of what it did.
+                    onToken: static function (string $delta) use ($onProgress, $buffer, $flushIfDue): void {
+                        $onProgress();
+                        if ($delta !== '') {
+                            $buffer->add(ActivityItem::text($delta));
+                        }
+                        $flushIfDue();
+                    },
+                    // P-B2: per-step stats from the turn loop's own step
+                    // beat. Each step's start carries the loop's real step
+                    // ceiling, and it ticks the frame buffer before the
+                    // step's request goes out, so items waiting from the
+                    // last step leave now rather than after a long call.
+                    // The step count and token totals stay with the usage
+                    // observer, which bills each step as it lands.
+                    onStep: static function (\SugarCraft\Crush\Events\StepStarted|\SugarCraft\Crush\Events\UsageUpdated $event) use (&$stats, $flushIfDue): void {
+                        if ($event instanceof \SugarCraft\Crush\Events\StepStarted) {
+                            $stats['maxSteps'] = $event->maxSteps;
+                        }
+                        $flushIfDue();
+                    },
                 );
         } catch (TurnInterrupted $failure) {
             // A run that failed part-way still billed every step it completed
