@@ -156,10 +156,11 @@ final class CompactionHidesNotDeletesTest extends TestCase
         $this->assertNull($cmd, 'no summarizer: /compact answers synchronously');
         $this->assertHiddenNotDeleted($handed, $next->history, 6);
 
-        // The report counts what the model reads: 10 rows went in, 3 summaries
-        // and 4 preserved rows come out - not the whole list, which grew.
+        // The report counts what the model reads: 10 rows went in, the state
+        // block (roadmap 2.5), 3 summaries and 4 preserved rows come out - not
+        // the whole list, which grew.
         $report = $next->history[count($next->history) - 1]->content;
-        $this->assertStringContainsString('was 10 messages, now 7 messages', $report);
+        $this->assertStringContainsString('was 10 messages, now 8 messages', $report);
     }
 
     public function testTheModelSummaryLandingHidesTheCondensedRowsInsteadOfDeletingThem(): void
@@ -184,8 +185,9 @@ final class CompactionHidesNotDeletesTest extends TestCase
             Message::agentVisible($landed->history),
             static fn(Message $m): bool => str_starts_with($m->content, '[summary] '),
         ));
-        $this->assertCount(3, $summaries, 'the model reads its own summaries');
-        $this->assertStringContainsString('one', $summaries[0]->content);
+        $this->assertCount(4, $summaries, 'the model reads its own summaries, after the state block (roadmap 2.5)');
+        $this->assertStringStartsWith('[summary] Session state (compacted):', $summaries[0]->content);
+        $this->assertStringContainsString('one', $summaries[1]->content);
     }
 
     public function testTheAutomaticTierHidesTheCondensedRowsAndReportsWhatTheModelReads(): void
@@ -206,7 +208,7 @@ final class CompactionHidesNotDeletesTest extends TestCase
 
         $this->assertHiddenNotDeleted($handed, array_slice($next->history, 0, -2), 6);
         $this->assertStringContainsString(
-            '26 messages -> 23 messages',
+            '26 messages -> 24 messages',
             $next->history[count($next->history) - 2]->content,
             'the tier report counts what the model reads, so it still counts down',
         );

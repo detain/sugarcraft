@@ -178,15 +178,16 @@ final class BootstrapContextWindowTest extends TestCase
         $this->assertSame(85_000, $at->contextTokens());
         [$compacted] = $at->update(new KeyMsg(KeyType::Enter, ''));
         // Roadmap 1.B-3: the six condensed rows stay in the transcript, hidden
-        // from the model, followed by the boundary row compaction leaves.
+        // from the model, followed by the boundary row compaction leaves; the
+        // state block (roadmap 2.5) leads what the model reads instead.
         $this->assertCount(
-            32,
+            33,
             $compacted->history,
-            '6 condensed (hidden) + 3 summaries + the boundary + 20 preserved + the notice + the user turn',
+            '6 condensed (hidden) + the state block + 3 summaries + the boundary + 20 preserved + the notice + the user turn',
         );
-        $this->assertSame(Role::System, $compacted->history[30]->role, 'the notice, BEFORE the user turn');
-        $this->assertSame(Role::User, $compacted->history[31]->role);
-        $this->assertSame('hello', $compacted->history[31]->content);
+        $this->assertSame(Role::System, $compacted->history[31]->role, 'the notice, BEFORE the user turn');
+        $this->assertSame(Role::User, $compacted->history[32]->role);
+        $this->assertSame('hello', $compacted->history[32]->content);
     }
 
     /**
@@ -208,13 +209,13 @@ final class BootstrapContextWindowTest extends TestCase
         $this->assertNull($cmd, 'nothing was scheduled');
         $this->assertFalse($next->inFlight);
         $this->assertCount(
-            33,
+            34,
             $next->history,
-            '6 condensed (hidden, roadmap 1.B-3) + 3 summaries + the boundary + 20 preserved + notice + user turn + refusal',
+            '6 condensed (hidden, roadmap 1.B-3) + the state block (roadmap 2.5) + 3 summaries + the boundary + 20 preserved + notice + user turn + refusal',
         );
-        $this->assertSame(Role::User, $next->history[31]->role);
-        $this->assertSame('hello', $next->history[31]->content);
-        $this->assertSame(Role::Assistant, $next->history[32]->role);
+        $this->assertSame(Role::User, $next->history[32]->role);
+        $this->assertSame('hello', $next->history[32]->content);
+        $this->assertSame(Role::Assistant, $next->history[33]->role);
     }
 
     /**

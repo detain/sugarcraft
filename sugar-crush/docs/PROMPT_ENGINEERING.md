@@ -423,6 +423,20 @@ How each user-facing surface reaches the model, and where it does not reach:
   `SkillMatcher::listForPrompt()` metadata listing (slot 10) so no skill is in the prompt twice;
   path-scoped skills additionally surface a first-touch nudge through `SkillPathNudge`, which
   rides into tool output under the reminder tag, not into the system prompt.
+- **Compaction summaries.** A compaction reaches the model as history rows, never as a system
+  prompt layer. The summariser is a separate, tool-less request: `CompactionService::COMPACT_SUMMARY_PROMPT`
+  asks for one six-facet record per condensed exchange, then one state block between
+  `<session-state>` tags with the headings `StateSummaryTemplate::MODEL_HEADINGS` lists (Goal,
+  Constraints, Progress with Done / In progress / Blocked, Key decisions, Current work, Next step,
+  Pending tasks, Errors and fixes). `/compact <focus>` and a permitting PreCompact hook's note go
+  out as one more message after the exchanges, escaped like every carried text. The reply is
+  thrown away whole when it is not smaller than what it summarises or the provider cut it at its
+  length limit. A usable block is audited: a missing or empty heading is filled from the heuristic
+  block, and the three derived headings — files read, files modified (from the tool rows, via
+  `FilesTouched`) and the user's latest request, verbatim — are never the model's to write. Every
+  compaction, model-written or heuristic, leads its rows with that block (`[summary] Session state
+  (compacted):`, at most 16,000 characters, ending in an instruction to continue with the next step),
+  merged with the previous compaction's block rather than stacked beside it.
 - **Hook context.** Hook stdout collected as `additionalContext` never enters the system prompt;
   it is appended to the relevant message through the `Runtime::annotate()` seam (the PostToolUse
   consumer is the live one), leaving the result byte-identical when the context is empty. Because

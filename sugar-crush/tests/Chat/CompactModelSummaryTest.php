@@ -15,6 +15,7 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Crush\HistoryCompactedMsg;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
@@ -516,7 +517,10 @@ final class CompactModelSummaryTest extends TestCase
             'the instruction must not state a character count the code enforces separately',
         );
 
-        $chat = $this->chat($this->summarizer($this->record(1, ['asked' => str_repeat('z', $max * 3)])));
+        // Sixteen pairs, so the condensed source outweighs the oversized reply:
+        // a reply NOT smaller than its source is rejected whole (roadmap 2.5),
+        // which is a different guard from the line bound this test pins.
+        $chat = $this->chat($this->summarizer($this->record(1, ['asked' => str_repeat('z', $max * 3)])), '/compact', 16);
         [$pending, $cmd] = $this->submit($chat);
         [$done] = $pending->update($this->resolve($cmd));
 
@@ -555,7 +559,7 @@ final class CompactModelSummaryTest extends TestCase
 
         $this->assertSame(
             ['asked: FIRST | did: none | files: none | decided: none | corrected: none | error: none'],
-            array_values($msg->summaries),
+            array_values($this->exchangeRecords($msg->summaries)),
         );
 
         [$done] = $pending->update($msg);
@@ -609,7 +613,7 @@ final class CompactModelSummaryTest extends TestCase
         $this->assertSame(
             ['asked: none | did: none | files: none | decided: none | corrected: none'
                 . ' | error: TypeError: x() is undefined'],
-            array_values($msg->summaries),
+            array_values($this->exchangeRecords($msg->summaries)),
             'every facet is present, in the order the prompt lists them',
         );
 
@@ -636,7 +640,7 @@ final class CompactModelSummaryTest extends TestCase
         $this->assertSame(
             ['asked: none | did: only the second record has a facet | files: none | decided: none'
                 . ' | corrected: none | error: none'],
-            array_values($msg->summaries),
+            array_values($this->exchangeRecords($msg->summaries)),
             'exactly the one record that named a facet, and it is the second exchange that got it',
         );
 
@@ -664,7 +668,7 @@ final class CompactModelSummaryTest extends TestCase
         [$pending, $cmd] = $this->submit($chat);
         $msg = $this->resolve($cmd);
 
-        $this->assertSame([], $msg->summaries, 'a number with text after it opens no record');
+        $this->assertSame([], $this->exchangeRecords($msg->summaries), 'a number with text after it opens no record');
 
         [$done] = $pending->update($msg);
         $this->assertStringContainsString(
@@ -696,10 +700,10 @@ final class CompactModelSummaryTest extends TestCase
 
         $this->assertCount(
             1,
-            $msg->summaries,
+            $this->exchangeRecords($msg->summaries),
             'the bolded opener cost two records their summaries - both exchanges fall back - and gained none',
         );
-        $survivor = array_values($msg->summaries);
+        $survivor = array_values($this->exchangeRecords($msg->summaries));
         $this->assertStringStartsWith(
             'asked: what the THIRD exchange asked',
             $survivor[0],
@@ -761,7 +765,7 @@ final class CompactModelSummaryTest extends TestCase
         [$pending, $cmd] = $this->submit($chat);
         $msg = $this->resolve($cmd);
 
-        $this->assertCount(1, $msg->summaries, 'only the record with content in it mapped');
+        $this->assertCount(1, $this->exchangeRecords($msg->summaries), 'only the record with content in it mapped');
 
         [$done] = $pending->update($msg);
         $text = implode("\n", array_map(static fn(Message $m): string => $m->content, $done->history));
@@ -796,7 +800,7 @@ final class CompactModelSummaryTest extends TestCase
         [$pending, $cmd] = $this->submit($chat);
         $msg = $this->resolve($cmd);
 
-        $kept = array_values($msg->summaries);
+        $kept = array_values($this->exchangeRecords($msg->summaries));
         $this->assertCount(1, $kept, 'the record itself is still usable');
         $this->assertStringNotContainsString(
             'volunteered',
@@ -924,7 +928,7 @@ final class CompactModelSummaryTest extends TestCase
         $this->assertSame(
             ['asked: what the user wanted; the same field answered twice'
                 . ' | did: none | files: none | decided: none | corrected: none | error: none'],
-            array_values($msg->summaries),
+            array_values($this->exchangeRecords($msg->summaries)),
             'both answers survive, merged, and the record is still mapped at all',
         );
 
@@ -960,10 +964,11 @@ final class CompactModelSummaryTest extends TestCase
             . 'will read whatever the model wrote instead as recorded content',
         );
         $this->assertSame(
-            2,
+            3,
             substr_count($prompt, '"' . $none . '"'),
-            'the marker is taught twice - for one facet and for a whole empty exchange - and a rewording '
-            . 'that fixes only one of the two leaves the other teaching a word nothing enforces',
+            'the marker is taught three times - for one facet, for a whole empty exchange, and for an empty '
+            . 'state-block heading (roadmap 2.5, which StateSummaryTemplate reads as empty too) - and a rewording '
+            . 'that fixes only one of them leaves the others teaching a word nothing enforces',
         );
     }
 
@@ -1646,5 +1651,20 @@ final class CompactModelSummaryTest extends TestCase
             'the forged closer must survive as escaped text, not as a dropped row');
         $this->assertSame(1, substr_count($block, '&lt;prior-summary>'),
             'the forged opener must survive as escaped text too');
+    }
+
+    /**
+     * The per-exchange records of a summary map — everything but the state
+     * block {@see StateSummaryTemplate::SUMMARY_KEY} carries (roadmap 2.5), which
+     * these tests of the record parse are not about.
+     *
+     * @param array<string, string> $summaries
+     * @return array<string, string>
+     */
+    private function exchangeRecords(array $summaries): array
+    {
+        unset($summaries[StateSummaryTemplate::SUMMARY_KEY]);
+
+        return $summaries;
     }
 }

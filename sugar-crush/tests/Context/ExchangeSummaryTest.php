@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Crush\Context\ContextCompactor;
 
 /**
@@ -73,7 +74,7 @@ final class ExchangeSummaryTest extends TestCase
         $compactor = $this->compactor(2);
 
         $offered = array_column($compactor->exchangesToSummarize($history), 'user');
-        $compacted = implode("\n", array_column($compactor->compact($history), 'content'));
+        $compacted = implode("\n", array_column($this->withoutStateRow($compactor->compact($history)), 'content'));
 
         foreach ($offered as $user) {
             $this->assertStringNotContainsString(
@@ -398,12 +399,12 @@ final class ExchangeSummaryTest extends TestCase
         $shared = ContextCompactor::exchangeKey('run the test suite', 'All 42 tests passed.');
         $other = ContextCompactor::exchangeKey('add a route', 'Created config/routes entry.');
 
-        $compacted = $this->compactor(2)
+        $compacted = $this->withoutStateRow($this->compactor(2)
             ->withExchangeSummaries([
                 $shared => 'First paraphrase of the test run.',
                 $other => 'Explained routing.',
             ])
-            ->compact($history);
+            ->compact($history));
 
         $this->assertSame([
             ['role' => 'assistant', 'content' => '[summary] First paraphrase of the test run.'],
@@ -424,7 +425,7 @@ final class ExchangeSummaryTest extends TestCase
      */
     public function testCollapsedDuplicatesEachStillGetTheirOwnHeuristicLine(): void
     {
-        $compacted = $this->compactor(2)->compact($this->e23History());
+        $compacted = $this->withoutStateRow($this->compactor(2)->compact($this->e23History()));
 
         $this->assertSame([
             ['role' => 'assistant', 'content' => '[summary] run the test suite → All 42 tests passed.'],
@@ -457,9 +458,9 @@ final class ExchangeSummaryTest extends TestCase
         ];
         $shared = ContextCompactor::exchangeKey('run the test suite', 'All 42 tests passed.');
 
-        $withSummaries = $this->compactor(2)
+        $withSummaries = $this->withoutStateRow($this->compactor(2)
             ->withExchangeSummaries([$shared => 'First paraphrase of the test run.'])
-            ->compact($adjacent);
+            ->compact($adjacent));
         $this->assertSame([
             ['role' => 'assistant', 'content' => '[2x] [summary] First paraphrase of the test run.'],
             ['role' => 'user', 'content' => 'tail one'],
@@ -468,7 +469,7 @@ final class ExchangeSummaryTest extends TestCase
             ['role' => 'assistant', 'content' => 't2'],
         ], $withSummaries, 'one line, but it SAYS 2x — stage 3 counting is its documented purpose');
 
-        $heuristic = $this->compactor(2)->compact($adjacent);
+        $heuristic = $this->withoutStateRow($this->compactor(2)->compact($adjacent));
         $this->assertSame([
             ['role' => 'assistant', 'content' => '[2x] [summary] run the test suite → All 42 tests passed.'],
             ['role' => 'user', 'content' => 'tail one'],
@@ -509,12 +510,12 @@ final class ExchangeSummaryTest extends TestCase
             'the rider does not enter the key — the pairs still collapse',
         );
 
-        $compacted = $compactor
+        $compacted = $this->withoutStateRow($compactor
             ->withExchangeSummaries([
                 $offered[0]['key'] => 'Ran tests.',
                 $offered[1]['key'] => 'Routing done.',
             ])
-            ->compact($history);
+            ->compact($history));
 
         $this->assertSame([
             ['role' => 'assistant', 'content' => '[summary] Ran tests.'],
@@ -570,12 +571,12 @@ final class ExchangeSummaryTest extends TestCase
             'and it does not enter the key — the pairs still collapse',
         );
 
-        $compacted = $compactor
+        $compacted = $this->withoutStateRow($compactor
             ->withExchangeSummaries([
                 $offered[0]['key'] => 'Ran tests.',
                 $offered[1]['key'] => 'Routing done.',
             ])
-            ->compact($history);
+            ->compact($history));
 
         $this->assertSame([
             ['role' => 'assistant', 'content' => '[summary] Ran tests.'],
@@ -627,9 +628,9 @@ final class ExchangeSummaryTest extends TestCase
         $this->assertSame($offered[0]['key'], $offered[2]['key'], 'tool payloads are not in the key');
         $this->assertSame('All 42 tests passed.', $offered[0]['assistant'], 'and not in the model\'s input either');
 
-        $compacted = $compactor
+        $compacted = $this->withoutStateRow($compactor
             ->withExchangeSummaries([$offered[0]['key'] => 'Ran something.'])
-            ->compact($history);
+            ->compact($history));
 
         $this->assertSame([
             ['role' => 'assistant', 'content' => '[summary] Ran something.'],
@@ -665,5 +666,22 @@ final class ExchangeSummaryTest extends TestCase
         $this->assertSame($history, $compactor->compact($history));
         $this->assertSame(0, $compactor->savingsPercentage());
         $this->assertSame([], $compactor->compact([]));
+    }
+
+    /**
+     * $compacted with the state block that leads every compaction (roadmap 2.5)
+     * taken off — asserted to be there first, so a test pinning the rest of the
+     * output byte for byte still proves the block was written.
+     *
+     * @param array<array{role:string,content:string}> $compacted
+     * @return array<array{role:string,content:string}>
+     */
+    private function withoutStateRow(array $compacted): array
+    {
+        $this->assertNotSame([], $compacted);
+        $this->assertSame('assistant', $compacted[0]['role']);
+        $this->assertTrue(StateSummaryTemplate::isStateRow($compacted[0]['content']), 'a compaction leads with its state block');
+
+        return array_slice($compacted, 1);
     }
 }

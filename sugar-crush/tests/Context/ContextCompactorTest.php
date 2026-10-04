@@ -16,6 +16,7 @@ use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\ReportsContextWindow;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
@@ -173,7 +174,8 @@ final class ContextCompactorTest extends TestCase
         // With 30 messages (15 pairs) and recentPreserveCount=10:
         // → first 5 pairs summarized into 5 summary messages
         // → last 10 pairs preserved verbatim (20 messages)
-        // → Total: 25 messages
+        // → plus the state block that leads every compaction (roadmap 2.5)
+        // → Total: 26 messages
         $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 10));
         $messages = [];
         for ($i = 0; $i < 15; $i++) {
@@ -182,13 +184,14 @@ final class ContextCompactorTest extends TestCase
         }
         $result = $compactor->compact($messages);
         // Last 10 pairs (20 messages) should be preserved verbatim
-        $this->assertCount(25, $result);
+        $this->assertCount(26, $result);
         // The last 20 messages should be the last 10 preserved pairs
         $lastTwenty = array_slice($result, -20);
         $expected = array_slice($messages, 10, 20); // Messages 10-29 (last 10 pairs)
         $this->assertSame($expected, $lastTwenty);
-        // First 5 should be summaries with [summary] prefix
-        for ($i = 0; $i < 5; $i++) {
+        $this->assertStringStartsWith('[summary] ' . StateSummaryTemplate::HEADER, $result[0]['content']);
+        // The next 5 should be summaries with [summary] prefix
+        for ($i = 1; $i <= 5; $i++) {
             $this->assertStringStartsWith('[summary]', $result[$i]['content']);
         }
     }
@@ -198,7 +201,8 @@ final class ContextCompactorTest extends TestCase
         // With 6 messages (3 pairs) and recentPreserveCount=1:
         // → first 2 pairs summarized into 2 summary messages
         // → last 1 pair preserved (2 messages)
-        // → Total: 4 messages
+        // → plus the leading state block (roadmap 2.5)
+        // → Total: 5 messages
         $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 1));
         $messages = [
             $this->msg('user', 'first question'),
@@ -209,14 +213,15 @@ final class ContextCompactorTest extends TestCase
             $this->msg('assistant', 'third answer'),
         ];
         $result = $compactor->compact($messages);
-        // 2 older pairs summarized → 2 summaries, last 1 pair preserved → 2 messages
-        $this->assertCount(4, $result);
-        // First 2 should be summaries
-        $this->assertStringStartsWith('[summary]', $result[0]['content']);
+        // 2 older pairs summarized → state + 2 summaries, last 1 pair preserved → 2 messages
+        $this->assertCount(5, $result);
+        $this->assertStringStartsWith('[summary] ' . StateSummaryTemplate::HEADER, $result[0]['content']);
+        // Then the 2 summaries
         $this->assertStringStartsWith('[summary]', $result[1]['content']);
+        $this->assertStringStartsWith('[summary]', $result[2]['content']);
         // Last 2 should be the preserved pair
-        $this->assertSame('third question', $result[2]['content']);
-        $this->assertSame('third answer', $result[3]['content']);
+        $this->assertSame('third question', $result[3]['content']);
+        $this->assertSame('third answer', $result[4]['content']);
     }
 
     public function testCompactAddsSummaryPrefixToSummarizedMessages(): void
@@ -312,9 +317,11 @@ final class ContextCompactorTest extends TestCase
     {
         $compactor = new ContextCompactor($this->cfg(recentPreserveCount: 2));
         $messages = [];
+        // Long enough that condensing eight exchanges frees more than the state
+        // block that leads every compaction (roadmap 2.5) costs.
         for ($i = 0; $i < 10; $i++) {
-            $messages[] = $this->msg('user', "question number {$i}");
-            $messages[] = $this->msg('assistant', "answer number {$i}");
+            $messages[] = $this->msg('user', "question number {$i} " . str_repeat('context ', 40));
+            $messages[] = $this->msg('assistant', "answer number {$i} " . str_repeat('detail ', 40));
         }
         $compactor->compact($messages);
         $savings = $compactor->savingsPercentage();
@@ -1079,9 +1086,10 @@ final class ContextCompactorTest extends TestCase
             ['role' => 'system', 'content' => '[summary] _Request cancelled._'],
             ['role' => 'user', 'content' => 'tail question'],
             ['role' => 'assistant', 'content' => 'tail answer'],
-        ], $compactor->compact($messages), 'both reminder shapes are gone and both genuine rows are not');
+        ], $this->withoutStateRow($compactor->compact($messages)), 'both reminder shapes are gone and both genuine rows are not');
 
-        $text = implode("\n", array_column($compactor->compact($messages), 'content'));
+        $this->assertStringNotContainsString('Heads up', $compactor->compact($messages)[0]['content'], 'nor does the state block carry it');
+        $text = implode("\n", array_column($this->withoutStateRow($compactor->compact($messages)), 'content'));
         // The known-positive control beside the assertion of absence: the marker
         // fires three times in the same output, so the zeros below are the decline
         // and not a summariser that never ran.
@@ -1127,7 +1135,7 @@ final class ContextCompactorTest extends TestCase
             ['role' => 'system', 'content' => '[summary] ' . $quoted],
             ['role' => 'user', 'content' => 'tail question'],
             ['role' => 'assistant', 'content' => 'tail answer'],
-        ], $compactor->compact($messages), 'the quote is under the clip and rides out byte-exact');
+        ], $this->withoutStateRow($compactor->compact($messages)), 'the quote is under the clip and rides out byte-exact');
     }
 
     /**
@@ -1651,7 +1659,8 @@ final class ContextCompactorTest extends TestCase
         // to touch. Read off the rows the model reads: since roadmap 1.B-3 the
         // six condensed originals stay in the transcript ahead of them, hidden
         // from it.
-        $preserved = array_slice(Message::agentVisible($next->history), 3, 20);
+        // Past the leading state block (roadmap 2.5) and the three summaries.
+        $preserved = array_slice(Message::agentVisible($next->history), 4, 20);
         $this->assertSame(
             array_slice($history, 6, 20),
             $preserved,
@@ -1702,7 +1711,7 @@ final class ContextCompactorTest extends TestCase
             $next->history,
             static fn(Message $m): bool => str_starts_with($m->content, '[summary]'),
         ));
-        $this->assertCount(2, $summaries, 'fixture: the dispatched history really carries the between-exchanges rewrite');
+        $this->assertCount(3, $summaries, 'fixture: the dispatched history really carries the between-exchanges rewrite (state block + two summaries)');
 
         $compactionHits = array_values(array_filter(
             $next->history,
@@ -1727,9 +1736,9 @@ final class ContextCompactorTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            '24 messages -> 22 messages',
+            '24 messages -> 23 messages',
             $compaction->content,
-            'the rewrite reports its OWN counts: 24 in, the two oldest exchanges condensed to two summary lines, 22 out',
+            'the rewrite reports its OWN counts: 24 in, the two oldest exchanges condensed to a state block and two summary lines, 23 out',
         );
         $this->assertMatchesRegularExpression(
             '/~[1-9]\d*% of the estimated token count freed/',
@@ -1936,50 +1945,56 @@ final class ContextCompactorTest extends TestCase
         $dispatched = $backend->historyAt(0);
         $this->assertIsArray($dispatched, 'the turn actually reached the provider');
 
-        // The compacted wire rode the dispatch: stage 2 condensed the two oldest
+        // The compacted wire rode the dispatch: it leads with the state block every
+        // compaction writes (roadmap 2.5), then stage 2 condensed the two oldest
         // exchanges into [summary] lines, and the re-derived list puts them where
         // THE WIRE has them, not where $this->history has q0/a0 (the mutant's
         // dispatched [0]/[1] — zero summaries anywhere).
+        $this->assertStringStartsWith(
+            '[summary] Session state (compacted):',
+            $dispatched[0]->content,
+            'dispatched entry 0 is the state block from the compacted wire',
+        );
         $this->assertSame(
             '[summary] q0 → a0',
-            $dispatched[0]->content,
-            'dispatched entry 0 is the FIRST exchange summary from the compacted wire',
+            $dispatched[1]->content,
+            'dispatched entry 1 is the FIRST exchange summary from the compacted wire',
         );
         $this->assertSame(
             '[summary] q1 → a1',
-            $dispatched[1]->content,
-            'and entry 1 the second — the mutant lands q0 and a0 here and carries zero summaries',
+            $dispatched[2]->content,
+            'and entry 2 the second — the mutant lands q0 and a0 here and carries zero summaries',
         );
-        $this->assertSame(2, count(array_filter(
+        $this->assertSame(3, count(array_filter(
             $dispatched,
             static fn(Message $m): bool => str_starts_with($m->content, '[summary]'),
-        )), 'exactly the two summaries the 24-to-22 compaction wrote, no more, no fewer');
+        )), 'exactly the state block and the two summaries the 24-to-23 compaction wrote, no more, no fewer');
 
-        // Alignment below the summaries: entry i of the 22-entry wire is entry i of
+        // Alignment below the summaries: entry i of the 23-entry wire is entry i of
         // the re-derived list, so the preserved exchanges are THE SAME OBJECTS at
-        // the shifted indices. The mutant's off-by-two splice hands dispatched[2]
-        // the q1 object and dispatched[19] the a9.
-        $this->assertSame($history[4], $dispatched[2], 'the first preserved exchange is the original q2 object, at the compacted wire’s index — not q1');
-        $this->assertSame($history[21], $dispatched[19], 'and the last tiny exchange the original a10 object at wire index 19 — not a9');
+        // the shifted indices. The mutant's off-by-two splice hands dispatched[3]
+        // the q1 object and dispatched[20] the a9.
+        $this->assertSame($history[4], $dispatched[3], 'the first preserved exchange is the original q2 object, at the compacted wire’s index — not q1');
+        $this->assertSame($history[21], $dispatched[20], 'and the last tiny exchange the original a10 object at wire index 20 — not a9');
 
         // The giant itself: truncated in place (role and position intact) and the
-        // TAILMARK retaining its value. The mutant overwrites [21] with a10 and
+        // TAILMARK retaining its value. The mutant overwrites [22] with a10 and
         // drops the real tail and the real giant entirely.
         $this->assertStringContainsString(
             'characters truncated to fit the context window',
-            $dispatched[20]->content,
-            'the giant sits at wire index 20 and really was truncated there',
+            $dispatched[21]->content,
+            'the giant sits at wire index 21 and really was truncated there',
         );
-        $this->assertSame(Role::User, $dispatched[20]->role, 'the truncated giant keeps the user role — the copy inherits it from the aligned original, here the giant itself');
-        $this->assertNotSame($history[22], $dispatched[20], 'the truncated giant is a copy — the splice never mutates the original');
-        $this->assertSame($history[23], $dispatched[21], 'the TAILMARK survives as the very same object at the last base position — the mutant lands a10 here');
-        $this->assertSame('tail', $dispatched[21]->content, 'and keeps its value — under the mutant this message is absent from the wire entirely');
+        $this->assertSame(Role::User, $dispatched[21]->role, 'the truncated giant keeps the user role — the copy inherits it from the aligned original, here the giant itself');
+        $this->assertNotSame($history[22], $dispatched[21], 'the truncated giant is a copy — the splice never mutates the original');
+        $this->assertSame($history[23], $dispatched[22], 'the TAILMARK survives as the very same object at the last base position — the mutant lands a10 here');
+        $this->assertSame('tail', $dispatched[22]->content, 'and keeps its value — under the mutant this message is absent from the wire entirely');
 
         // The turn’s own messages ride behind the aligned history. The truncation
         // notice submit() commits ahead of the user’s line is a UI-only row
         // (audit 15b-03): it is in the transcript, and the user’s line is what
-        // follows the 22-entry aligned history on the wire.
-        $this->assertSame('go', $dispatched[22]->content, 'the user prompt rides at index 22, immediately after the 22-entry aligned history — index 2 lower than the un-aligned 24-message history would put it');
+        // follows the 23-entry aligned history on the wire.
+        $this->assertSame('go', $dispatched[23]->content, 'the user prompt rides at index 23, immediately after the 23-entry aligned history — index 1 lower than the un-aligned 24-message history would put it');
         foreach ($dispatched as $row) {
             $this->assertStringStartsNotWith('1 message reached the 95% blocking tier on its own', $row->content, 'the rescue notice is not a turn, so no wire row carries it');
         }
@@ -2687,6 +2702,23 @@ final class ContextCompactorTest extends TestCase
             0.2,
             'the fixtures discriminate: unbounded, B really is ~10x A, so the bounded result above is the bound biting',
         );
+    }
+
+    /**
+     * $compacted with the state block that leads every compaction (roadmap 2.5)
+     * taken off — asserted to be there first, so a test pinning the rest of the
+     * output byte for byte still proves the block was written.
+     *
+     * @param array<array{role:string,content:string}> $compacted
+     * @return array<array{role:string,content:string}>
+     */
+    private function withoutStateRow(array $compacted): array
+    {
+        $this->assertNotSame([], $compacted);
+        $this->assertSame('assistant', $compacted[0]['role']);
+        $this->assertTrue(StateSummaryTemplate::isStateRow($compacted[0]['content']), 'a compaction leads with its state block');
+
+        return array_slice($compacted, 1);
     }
 }
 

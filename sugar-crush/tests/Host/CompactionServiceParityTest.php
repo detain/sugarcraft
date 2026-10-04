@@ -13,6 +13,7 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\ReportsContextWindow;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\HistoryCompactedMsg;
@@ -284,7 +285,10 @@ final class CompactionServiceParityTest extends TestCase
         self::assertInstanceOf(HistoryCompactedMsg::class, $msg);
         self::assertSame($request['id'], $msg->compactionId);
         self::assertSame('parked', $msg->parkedSubmission);
-        self::assertCount(1, $msg->summaries);
+        // The record, plus the audited state block (roadmap 2.5) — the reply
+        // carried none, so it is the heuristic block built from the probe.
+        self::assertCount(2, $msg->summaries);
+        self::assertStringStartsWith(StateSummaryTemplate::HEADER, $msg->summaries[StateSummaryTemplate::SUMMARY_KEY]);
         self::assertSame(
             'asked: rename the route | did: renamed it | files: routes.php | decided: none | corrected: none | error: none',
             array_values($msg->summaries)[0],

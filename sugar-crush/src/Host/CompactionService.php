@@ -8,6 +8,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
@@ -235,7 +236,14 @@ final class CompactionService
             $compactor,
             $inputText === '' ? $baseHistory : [...$baseHistory, Message::user($inputText)->withUiOnly()],
         );
-        $compactor = $summaries === [] ? $attemptCompactor : $attemptCompactor->withExchangeSummaries($summaries);
+        // The state block (roadmap 2.5): a model route's audited block rides in
+        // $summaries already; every other route gets the heuristic one, built
+        // from the whole history so its files and errors come from the tool
+        // rows the compactor itself never sees.
+        if (!isset($summaries[StateSummaryTemplate::SUMMARY_KEY])) {
+            $summaries[StateSummaryTemplate::SUMMARY_KEY] = self::heuristicState($baseHistory)->render();
+        }
+        $compactor = $attemptCompactor->withExchangeSummaries($summaries);
         $compactedWire = $compactor->compact($wireHistory);
         $savingsPercentage = $compactor->savingsPercentage();
 
@@ -639,9 +647,27 @@ final class CompactionService
           what not to send, what to keep secret, a permission boundary), carry its exact wording
           VERBATIM into the facet that records it - quoted, never paraphrased - so it still binds
           after the conversation resumes on this summary.
-        - No preamble, no blank lines, no markdown, no commentary. Nothing but the numbered records.
+        - No preamble, no blank lines, no markdown, no commentary. Nothing but the numbered records,
+          then the state block below.
         - This summary will be the ONLY context available when the conversation resumes. Losing
           detail is expected; inventing it is not.
+
+        After the last record, write ONE state block for the whole conversation: a line
+        <session-state>, then these headings in this order, each on its own line with its content
+        under it, then a line </session-state>:
+          ## Goal
+          ## Constraints
+          ## Progress (three sub-lists: ### Done, ### In progress, ### Blocked)
+          ## Key decisions
+          ## Current work
+          ## Next step
+          ## Pending tasks (with their ids where the conversation gave any)
+          ## Errors and fixes (each error string verbatim, then what fixed it)
+        Write "none" under a heading with nothing to record. Carry security-relevant constraints into
+        Constraints verbatim, as above. Do not list files and do not restate the user's latest
+        request: both are filled in mechanically. Where the prior summary carries an earlier
+        "Session state (compacted):" block, merge it: carry forward what still holds and update what
+        changed.
         PROMPT;
 
     /**
@@ -1037,7 +1063,18 @@ final class CompactionService
         }
         $keys = array_map(static fn (array $e): string => $e['key'], $exchanges);
 
-        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $compactionId, $keys, $parkedSubmission, $cancellation, $focus): PromiseInterface {
+        // What the reply must come in under (roadmap 2.5): the text the model
+        // was asked to condense. And the block the reply's state block is
+        // audited against — built now, from the probe's own rows, because the
+        // files and the latest request are read off the transcript, never off
+        // the model.
+        $sourceChars = array_sum(array_map(
+            static fn (Message $m): int => mb_strlen($m->content),
+            \array_slice($prompt, 1),
+        ));
+        $stateFallback = self::heuristicState($probeHistory);
+
+        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback): PromiseInterface {
             $steer = self::renderFocusForSummary($focus, $hookGuidance);
             if ($steer !== '') {
                 $prompt[] = Message::user($steer);
@@ -1049,13 +1086,21 @@ final class CompactionService
                 // routinely the largest single prompt this app sends; a readout
                 // that silently omitted it was under-reporting its own biggest
                 // call.
-                static fn (Message $msg): HistoryCompactedMsg => new HistoryCompactedMsg(
-                    $compactionId,
-                    self::parseExchangeSummaries($msg->content, $keys),
-                    null,
-                    $msg->usage,
-                    $parkedSubmission,
-                ),
+                static function (Message $msg) use ($compactionId, $keys, $parkedSubmission, $sourceChars, $stateFallback): HistoryCompactedMsg {
+                    $rejection = self::summaryRejection($msg, $sourceChars);
+                    if ($rejection !== null) {
+                        // Billed all the same: the usage still rides along.
+                        return new HistoryCompactedMsg($compactionId, [], $rejection, $msg->usage, $parkedSubmission);
+                    }
+
+                    return new HistoryCompactedMsg(
+                        $compactionId,
+                        self::parseCompactionReply($msg->content, $keys, $stateFallback),
+                        null,
+                        $msg->usage,
+                        $parkedSubmission,
+                    );
+                },
                 // Reported, not swallowed: unlike the session-title call this
                 // rides beside, a failure here changes what the compaction
                 // PRESERVES, and the user is about to lose the originals. No
@@ -1077,6 +1122,75 @@ final class CompactionService
         };
 
         return ['id' => $compactionId, 'count' => count($exchanges), 'promise' => $promise];
+    }
+
+    /**
+     * Why a summarization reply is thrown away whole (roadmap 2.5), or null
+     * when it may be used: a reply the provider cut short at its length limit
+     * ends mid-record and mid-block, and a reply NOT SMALLER than the text it
+     * was asked to condense is not a compaction at all. Either way the landing
+     * compacts on the heuristic and says why, through the ordinary
+     * {@see modelSummaryFallbackPrefix()} error route.
+     */
+    public static function summaryRejection(Message $reply, int $sourceChars): ?string
+    {
+        if ($reply->lengthStopped) {
+            return 'the summary was cut short by the length limit';
+        }
+
+        $replyChars = mb_strlen($reply->content);
+        if ($sourceChars > 0 && $replyChars >= $sourceChars) {
+            return "the summary ({$replyChars} chars) was not smaller than what it summarised ({$sourceChars} chars)";
+        }
+
+        return null;
+    }
+
+    /**
+     * The landing's summary map for a usable reply: the per-exchange records
+     * ({@see parseExchangeSummaries()}) plus the state block under
+     * {@see StateSummaryTemplate::SUMMARY_KEY} — the model's block, audited
+     * against $fallback (each missing or empty heading filled from it, the
+     * derived headings always taken from it), or $fallback alone when the reply
+     * carried no block. The block is cut out of the reply before the records are
+     * parsed, where its lines would otherwise read as facet continuations. A
+     * reply with neither a record nor a block maps to nothing, exactly as before.
+     *
+     * @param list<string> $keys
+     * @return array<string, string>
+     */
+    public static function parseCompactionReply(string $reply, array $keys, StateSummaryTemplate $fallback): array
+    {
+        [$block, $records] = StateSummaryTemplate::extractFromReply($reply);
+        $summaries = self::parseExchangeSummaries($records, $keys);
+        if ($block === null && $summaries === []) {
+            // Nothing usable at all: an empty map is what tells the landing to
+            // say so ({@see modelSummaryFallbackPrefix()}); the heuristic block
+            // is added there like on every other heuristic route.
+            return [];
+        }
+
+        $state = $block === null ? $fallback : StateSummaryTemplate::parse($block)->filledFrom($fallback);
+
+        return [...$summaries, StateSummaryTemplate::SUMMARY_KEY => $state->render()];
+    }
+
+    /**
+     * The heuristic state block for $history (roadmap 2.5): the sections
+     * {@see StateSummaryTemplate::fromHistory()} reads off its rows, merged with
+     * the newest state row an earlier compaction left in it.
+     *
+     * @param list<Message> $history
+     */
+    public static function heuristicState(array $history): StateSummaryTemplate
+    {
+        $heuristic = StateSummaryTemplate::fromHistory($history);
+        $previous = StateSummaryTemplate::latestIn(array_map(
+            static fn (Message $m): string => $m->content,
+            Message::agentVisible($history),
+        ));
+
+        return $previous === null ? $heuristic : $heuristic->mergedWith($previous);
     }
 
     /**

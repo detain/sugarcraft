@@ -1417,6 +1417,16 @@ final class ContextCompactor
       * {@see isRegeneratedReminderRow()} for why the decline sits here and not in the
       * clip, which the other riders still get).
      *
+     * THE STATE BLOCK LEADS (roadmap 2.5): the first row is always a
+     * {@see Compaction\StateSummaryTemplate} block — the one a caller supplied
+     * under {@see Compaction\StateSummaryTemplate::SUMMARY_KEY} (model-written
+     * and audited, or built from the full history by
+     * {@see \SugarCraft\Crush\Host\CompactionService}), else the heuristic block
+     * from these pairs merged with the previous compaction's state row, so the
+     * headings the model reads are the same with or without a provider. That
+     * previous state row is consumed by the merge rather than carried on as a
+     * second, 120-character-clipped copy.
+     *
      * @param array<array{user:string,assistant:?string,standalone?:bool,role?:string,interleaved?:list<array{role:string,content:string}>}> $pairs
      * @return array<array{role:string,content:string}>
      */
@@ -1425,6 +1435,8 @@ final class ContextCompactor
         if ($pairs === []) {
             return [];
         }
+
+        $previousState = null;
 
         // Generate summaries - one per pair
         $summaries = [];
@@ -1435,6 +1447,11 @@ final class ContextCompactor
                 $role = $pair['role'] ?? 'assistant';
                 if (self::isRegeneratedReminderRow((string) $role, (string) $content)) {
                     continue; // E38 — see isRegeneratedReminderRow()
+                }
+                $state = Compaction\StateSummaryTemplate::fromRow((string) $content);
+                if ($state !== null) {
+                    $previousState = $state; // merged into the new block below
+                    continue;
                 }
                 // Truncate long standalone messages
                 $summary = mb_strlen($content) > 120
@@ -1478,7 +1495,16 @@ final class ContextCompactor
             }
         }
 
-        return $summaries;
+        $supplied = $this->exchangeSummaries[Compaction\StateSummaryTemplate::SUMMARY_KEY] ?? null;
+        if (!is_string($supplied) || $supplied === '') {
+            $heuristic = Compaction\StateSummaryTemplate::fromPairs($pairs);
+            $supplied = ($previousState === null ? $heuristic : $heuristic->mergedWith($previousState))->render();
+        }
+
+        return [
+            ['role' => 'assistant', 'content' => Compaction\StateSummaryTemplate::ROW_PREFIX . $supplied],
+            ...$summaries,
+        ];
     }
 
     /**

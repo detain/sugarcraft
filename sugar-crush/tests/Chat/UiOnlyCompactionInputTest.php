@@ -213,10 +213,13 @@ final class UiOnlyCompactionInputTest extends TestCase
             $visible,
             static fn(Message $m): bool => str_starts_with($m->content, '[summary] '),
         ));
-        $this->assertCount(3, $summaries);
-        $this->assertStringContainsString('topic one', $summaries[0]->content);
-        $this->assertStringContainsString('topic two', $summaries[1]->content);
-        $this->assertStringContainsString('topic three', $summaries[2]->content);
+        // The state block every compaction leads with (roadmap 2.5), then the
+        // three records.
+        $this->assertCount(4, $summaries);
+        $this->assertStringStartsWith('[summary] Session state (compacted):', $summaries[0]->content);
+        $this->assertStringContainsString('topic one', $summaries[1]->content);
+        $this->assertStringContainsString('topic two', $summaries[2]->content);
+        $this->assertStringContainsString('topic three', $summaries[3]->content);
         $this->assertStringNotContainsString('[exchanged information]', self::joined($visible));
 
         $this->assertUiRowsSurviveInOrder($landed->history);

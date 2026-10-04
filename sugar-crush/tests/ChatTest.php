@@ -2344,28 +2344,31 @@ final class ChatTest extends TestCase
         $this->assertNull($cmd);
         $this->assertFalse($next->inFlight);
 
-        // The 6 condensed rows (kept, hidden from the model) + 3 summaries +
-        // the compaction boundary + the 10 preserved pairs (20 messages) + the
-        // notice for the rewrite + the user turn + the refusal. The notice is
-        // the part that arrived after the reviewer's B3: refusing the turn does
-        // not mean leaving history alone, and this path used to adopt the
-        // rewrite in silence while the DISPATCHING path announced it.
-        $this->assertCount(33, $next->history);
-        $this->assertSame(Role::System, $next->history[30]->role);
-        $this->assertSame('hello', $next->history[31]->content);
-        $this->assertSame(Role::Assistant, $next->history[32]->role);
+        // The 6 condensed rows (kept, hidden from the model) + the state block
+        // (roadmap 2.5) + 3 summaries + the compaction boundary + the 10
+        // preserved pairs (20 messages) + the notice for the rewrite + the user
+        // turn + the refusal. The notice is the part that arrived after the
+        // reviewer's B3: refusing the turn does not mean leaving history alone,
+        // and this path used to adopt the rewrite in silence while the
+        // DISPATCHING path announced it.
+        $this->assertCount(34, $next->history);
+        $this->assertSame(Role::System, $next->history[31]->role);
+        $this->assertSame('hello', $next->history[32]->content);
+        $this->assertSame(Role::Assistant, $next->history[33]->role);
 
         // Compaction ran before the refusal — only reachable via the tier
         // under test, never via the idle prompt — and the notice reports the
         // real before/after counts (of what the model reads) rather than a
         // literal.
-        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[0]->content));
+        // Row 0 of what the model reads is the state block; row 1 the first
+        // exchange's summary.
+        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[1]->content));
         $this->assertSame(50_003, mb_strlen($chat->history[0]->content), 'fixture: originals are large');
         $this->assertSame($chat->history[0]->content, $next->history[0]->content, 'the condensed original is still in the transcript');
         $this->assertTrue($next->history[0]->uiOnly, 'hidden from the model, not deleted');
         $this->assertStringContainsString(
-            count($chat->history) . ' messages -> 23 messages',
-            $next->history[30]->content,
+            count($chat->history) . ' messages -> 24 messages',
+            $next->history[31]->content,
         );
     }
 
@@ -2403,8 +2406,9 @@ final class ChatTest extends TestCase
         $this->assertSame(Role::User, $next->history[count($next->history) - 2]->role);
         $this->assertSame(Role::Assistant, $next->history[count($next->history) - 1]->role);
 
-        // And the rewrite really happened underneath it.
-        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[0]->content));
+        // And the rewrite really happened underneath it (row 0 of what the
+        // model reads is the state block, row 1 the first summary).
+        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[1]->content));
         $this->assertGreaterThan(50_000, mb_strlen($history[0]->content));
     }
 
@@ -2449,10 +2453,11 @@ final class ChatTest extends TestCase
 
         $this->assertInstanceOf(\Closure::class, $cmd, 'fixture: the turn must still go out');
         $visible = Message::agentVisible($next->history);
-        $this->assertLessThan(500, mb_strlen($visible[0]->content), 'fixture: compaction must have run');
+        $this->assertLessThan(500, mb_strlen($visible[1]->content), 'fixture: compaction must have run');
 
-        // 3 summaries + 20 preserved: the rich turn is the last preserved one.
-        $kept = $visible[22];
+        // The state block + 3 summaries + 20 preserved: the rich turn is the
+        // last preserved one.
+        $kept = $visible[23];
         $this->assertSame('done', $kept->content);
         $this->assertSame(1_234_567_890, $kept->createdAt, 'the original timestamp, not a fresh time()');
         $this->assertCount(1, $kept->toolCalls);
@@ -2549,7 +2554,7 @@ final class ChatTest extends TestCase
      * Fixture is 3 enormous exchanges followed by 10 trivial ones — 90,286
      * estimated tokens, over the 85,000 background tier of the EchoBackend's
      * 100,000-token fallback window. Compaction summarizes the 3 (the 10
-     * preserved pairs are the trivial ones) and lands at ~337, well under the
+     * preserved pairs are the trivial ones) and lands well under 1,000, far under the
      * 95,000 blocking tier, so this is the path where the tier acts and the
      * user's prompt still reaches the backend.
      */
@@ -2563,19 +2568,20 @@ final class ChatTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $cmd);
         $this->assertTrue($next->inFlight);
 
-        // 6 condensed rows (kept, hidden from the model) + 3 summaries + the
-        // compaction boundary + 20 preserved + the notice + the user turn. No
-        // reminder rides along: the compacted history is ~337 estimated
-        // tokens, nowhere near the 70,000-token reminder tier.
-        $this->assertCount(32, $next->history);
-        $this->assertSame(Role::System, $next->history[30]->role);
-        $this->assertSame(Role::User, $next->history[31]->role);
-        $this->assertSame('hello', $next->history[31]->content);
+        // 6 condensed rows (kept, hidden from the model) + the state block
+        // (roadmap 2.5) + 3 summaries + the compaction boundary + 20 preserved
+        // + the notice + the user turn. No reminder rides along: the compacted
+        // history is well under 1,000 estimated tokens, nowhere near the
+        // 70,000-token reminder tier.
+        $this->assertCount(33, $next->history);
+        $this->assertSame(Role::System, $next->history[31]->role);
+        $this->assertSame(Role::User, $next->history[32]->role);
+        $this->assertSame('hello', $next->history[32]->content);
 
         // The notice's figures are the real before/after counts of what the
         // model reads, read back from the fixture and the result rather than
         // written as literals.
-        $notice = $next->history[30]->content;
+        $notice = $next->history[31]->content;
         $this->assertStringContainsString(
             count($history) . ' messages -> '
                 . count(Message::agentVisible(array_slice($next->history, 0, -2))) . ' messages',
@@ -2583,8 +2589,9 @@ final class ChatTest extends TestCase
         );
 
         // History really was rewritten for the model: the enormous first
-        // exchange is a one-line summary now - and still in the transcript.
-        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[0]->content));
+        // exchange is a one-line summary now (after the state block) - and
+        // still in the transcript.
+        $this->assertLessThan(500, mb_strlen(Message::agentVisible($next->history)[1]->content));
         $this->assertSame($history[0]->content, $next->history[0]->content);
     }
 
