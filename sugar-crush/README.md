@@ -258,13 +258,13 @@ cannot tell whether the sentence is about them.)
 > migrate *to*: `settings.json` is never written.
 
 <!-- settings:layered:begin -->
-Only these twenty-five keys are layered — `provider`, `models`, `titleModel`,
+Only these twenty-six keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `contextWindow`, `secretEnvAllowlist`, `allowedTools`,
 `disabledTools`, `instructions`, `disabledRules`, `disabledSkills`,
 `enabledSkills`, `includeGitInstructions`, `attribution`, `theme`, `statusLine`,
-`layout`.
+`layout`, `lintCommands`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -301,10 +301,12 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, nineteen keys are **never** taken from a project file:
+Even for a trusted project, twenty keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
-no tool call and no permission gate anywhere in the path;
+no tool call and no permission gate anywhere in the path; `lintCommands`, for
+the same reason — each value is a lint command the post-edit hook runs after an
+edit;
 `provider`, because it decides which host every prompt in the session is sent
 to; `instructions`, because it decides which files become authoritative
 system-prompt text; `disabledRules`, because its value is a list of names

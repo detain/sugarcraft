@@ -246,6 +246,14 @@ final class LayeredSettings
      *  - `statusLine` {@see \SugarCraft\Crush\Config\StatusLineCommand::fromSettings()},
      *                 installed by `Bootstrap::chat()` and painted by
      *                 {@see \SugarCraft\Crush\Renderer::renderStatusBar()}.
+     *  - `lintCommands`
+     *                 `Bootstrap::hooks()`, into the post-edit lint hook's
+     *                 runner (step 3.E): file extension => lint command, or
+     *                 `false` to turn a built-in default off. USER-TIER ONLY
+     *                 for `statusLine`'s reason below — every value is a
+     *                 shell command the hook RUNS after an edit, so a
+     *                 project-tier one would be code execution on
+     *                 clone-and-launch.
      *  - `layout`   {@see \SugarCraft\Layout\Dock\DockLayout::fromArray()},
      *                 loaded by {@see \SugarCraft\Crush\Cli\Bootstrap::app()}
      *                 onto {@see \SugarCraft\Crush\App\App::$dock} and saved
@@ -341,10 +349,12 @@ final class LayeredSettings
      *                 ships into every turn. `disabledSkills`, which a project
      *                 MAY set, only ever removes one.
      *
-     * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
+     * `statusLine` WAS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
-     * Every other key on this list names a preference, a model, a glob or a
-     * tool name — a value some later reader interprets. This one names a shell
+     * `lintCommands` (step 3.E) is the second, and is user-tier only for the
+     * same reason: each of its values is a command the post-edit lint hook
+     * runs. Every other key on this list names a preference, a model, a glob
+     * or a tool name — a value some later reader interprets. This one names a shell
      * command that {@see \SugarCraft\Crush\Config\StatusLineCommand::run()}
      * executes on a timer, with no tool call and no permission gate anywhere
      * in the path. The argument `provider` and `instructions` make below
@@ -488,6 +498,7 @@ final class LayeredSettings
         'theme',
         'statusLine',
         'layout',
+        'lintCommands',
         // settings:layered-keys:end
     ];
 
@@ -732,15 +743,15 @@ final class LayeredSettings
      * `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
      * `extraBody`, `thinkingBudget`, `promptCache`, `maxToolSteps`,
      * `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `instructions`,
-     * `disabledRules`, `enabledSkills`, `attribution`, `statusLine` and
-     * `layout`, in {@see LAYERED_KEYS} order — named rather than numbered
+     * `disabledRules`, `enabledSkills`, `attribution`, `statusLine`, `layout`
+     * and `lintCommands`, in {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key
      * joined the list. `allowedTools`'s argument is on {@see PROJECT_TIER_KEYS},
      * next to the sibling key that IS allowed, since that is where the two have
      * to be compared; `statusLine`'s is on {@see LAYERED_KEYS}, because what
-     * makes it user-tier is not a comparison with anything on this list — it is
-     * the only key whose value is a COMMAND. `disabledRules`'s is on
+     * makes it user-tier is not a comparison with anything on this list — its
+     * value is a COMMAND (as is `lintCommands`', below it on that list). `disabledRules`'s is on
      * {@see LAYERED_KEYS} too, against its lookalike `disabledSkills`, and the
      * short form of it is that the value holds pack NAMES whose referents are the
      * operator's own prompt text, so the "file contents become prompt text"

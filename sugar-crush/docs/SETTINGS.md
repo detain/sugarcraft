@@ -178,14 +178,14 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `titleModel` | `Bootstrap::titleBackend()` | **no** |
 | `summaryModel` | `Bootstrap::summaryBackend()` | **no** |
 | `maxOutputTokens` | `EngineBackend::complete()` | **no** |
-| `modelPrices` | `ProviderFactory::createOpenAI()`, `createVertex()`, `createBedrock()` → `userTierModelPrices()` | **no** |
+| `modelPrices` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createBedrock()`, `createCustom()` → `userTierModelPrices()` | **no** |
 | `extraBody` | `ProviderFactory::createCustom()` → `CustomProvider` | **no** |
 | `thinkingBudget` | `ProviderFactory::createVertex()` → `VertexProvider` | **no** |
 | `promptCache` | `ProviderFactory::createVertex()`, `createBedrock()` → `promptCacheEnabled()` | **no** |
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
 | `maxToolSteps` | `Bootstrap::backend()` → `resolvedMaxToolSteps()` | **no** |
-| `contextWindow` | `ProviderFactory::createOpenAI()` → `OpenAIProvider::contextWindow()` | **no** |
+| `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createCustom()` → each provider's `contextWindow()` | **no** |
 | `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
 | `allowedTools` | `Bootstrap::tools()` → `filterToolSet()` | **no** |
 | `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | yes |
@@ -198,10 +198,11 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `theme` | `Bootstrap::chat()` | yes |
 | `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
 | `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
+| `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-five, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twenty-six, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -343,7 +344,8 @@ once, when the provider is built. A provider's own block in
 because it is the narrower statement. All four are user-tier only, for the
 same money reason as `maxOutputTokens`.
 
-- **`contextWindow`** sizes the `openai` provider's context window, the number
+- **`contextWindow`** sizes the context window of the `openai`, `anthropic`
+  and `custom` providers, the number
   every context tier (the 70% reminder, 85% auto-compaction and 95% refusal) is
   a percentage of (audit A13). Give a token count for whatever model the
   provider runs (`"contextWindow": 400000`), or an object to size models one
@@ -838,6 +840,7 @@ project-settable.
 | `theme` | Interface | enum | `dark` | P U C | — | live | cosmetic |
 | `statusLine` | Interface | object | unset | U C | — | restart | exec |
 | `layout` | Interface | JSON | unset | U C | — | live | cosmetic |
+| `lintCommands` | Hooks & MCP | object | `{}` | U C | — | restart | exec |
 | `claudeMcpBinary` | Hooks & MCP | path | unset | C | — | next launch | exec |
 | `claudeMcpArgs` | Hooks & MCP | list | unset | C | — | next launch | exec |
 | `claudeMcpEnv` | Hooks & MCP | object | unset | C | — | next launch | security |
@@ -977,13 +980,13 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only seven of the twenty-five layered keys have an
+  They do not cover it: only seven of the twenty-six layered keys have an
   env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`). `maxOutputTokens`,
   `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`, `contextWindow`,
   `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `instructions`,
   `disabledRules`, `disabledSkills`, `enabledSkills`, `includeGitInstructions`,
-  `attribution`, `theme`, `statusLine` and `layout` have none.
+  `attribution`, `theme`, `statusLine`, `layout` and `lintCommands` have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.

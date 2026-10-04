@@ -33,7 +33,7 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withLabel('Context window')
                 ->withHelp('Token window override: a count for the provider\'s model, or {"<model>": tokens}.')
                 ->withReaderSymbol(ProviderFactory::class . '::createOpenAI')
-                ->withReadBy('`ProviderFactory::createOpenAI()` → `OpenAIProvider::contextWindow()`'),
+                ->withReadBy('`ProviderFactory::createOpenAI()`, `createAnthropic()`, `createCustom()` → each provider\'s `contextWindow()`'),
         ];
     }
 }

@@ -29,6 +29,20 @@ final class HooksMcpSettings implements SettingDefinitionSet
     public static function definitions(): array
     {
         return [
+            // Step 3.E: extension => lint command (or false to turn a default
+            // off) for the post-edit lint hook. User-tier only: every value is
+            // a shell command the hook runs after an edit, so a project-tier
+            // one would be code execution on clone-and-launch (`statusLine`'s
+            // argument).
+            SettingDefinition::new('lintCommands', SettingType::Map, [])
+                ->withCategory(SettingCategory::HooksMcp)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                ->withUi(UiEditability::Complex)
+                ->withLabel('Lint commands')
+                ->withHelp('Post-edit lint command per file extension ({"php": "…", "js": false}); `php -l` is built in.')
+                ->withReaderSymbol(Bootstrap::class . '::hooks')
+                ->withReadBy('`Bootstrap::hooks()` → `LintRunner::withCommands()`'),
             SettingDefinition::new('claudeMcpBinary', SettingType::Path)
                 ->withCategory(SettingCategory::HooksMcp)
                 ->withRiskClass(RiskClass::Exec)

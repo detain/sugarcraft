@@ -89,7 +89,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLabel('Model prices')
                 ->withHelp('USD per 1M tokens per model ({"input": …, "output": …}), for the spend total and cap.')
                 ->withReaderSymbol(ProviderFactory::class . '::userTierModelPrices')
-                ->withReadBy('`ProviderFactory::createOpenAI()`, `createVertex()`, `createBedrock()` → `userTierModelPrices()`'),
+                ->withReadBy('`ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createBedrock()`, `createCustom()` → `userTierModelPrices()`'),
             SettingDefinition::new('extraBody', SettingType::Map)
                 ->withCategory(SettingCategory::ModelProvider)
                 ->withRiskClass(RiskClass::Egress)
