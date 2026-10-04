@@ -232,21 +232,6 @@ Columns:
 |---|---|---|---|---|---|---|
 | d | O-5a (scaffold; no protocol types) | new `sugar-crush-web/**` skeleton, root `composer.json`, `PROJECT_NAMES.md`, `docs/MATCHUPS.md`, root `README.md` lib table, `docs/index.html`, `docs/_data/sugar-crush-web.*`, `docs/lib/` (generated), `codecov.yml`, `scripts/bootstrap-org-repos.sh`, `.github/workflows/web.yml`, `media/icons/sugar-crush-web.png` | — | root README lib table only | root force-all; sugar-crush-web | M |
 
-### W6 (order: a, b, c, d, e, f, g, h, i, j)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 2.7-1b, 2.7-2, 2.7-3 | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Providers/{CompleteRequest,SglangProvider,VertexProvider,BedrockProvider,ProviderStreamException}.php` | EB: `runTurn` `after-step` + run wrapper. RT: `runStreaming`. SG: request params (not `formatMessages`) | README "What you see" (notice wording) | — | L |
-| b | O-2g | `src/Chat.php`, new `src/Host/{TurnController,SessionHost,SessionHub,SubmitOptions,TurnTicket,SessionSnapshot}.php` | Chat: `submit`…`releaseQueuedPrompts`, `userTurnMessage`, `dispatchTurn`, custom-command expansion, turn hooks, `subscriptions` | README "Architecture"; ARCHITECTURE | — | L |
-| c | 2.4-2, 5.4-1, 2.3 | `src/Host/CompactionService.php`, `src/Backend/EngineBackend.php`, `src/Cli/{Bootstrap,Help}.php`, new `src/Backend/SummarisesWithCache.php`, `src/Memory/CompactionJournal.php`, `src/Context/Pruning/Strategies/*` (4 new) | CompactionService: `buildSummarizationRequest`, `scheduleParkedCompaction`, `compactNow`, `applyModelCompaction`. EB: new `summariseAsync`. BS: `summaryBackend`, `toollessBackend`. `Help` env-var wording only | README :1129-1143; ENVIRONMENT `SUGARCRUSH_SUMMARY_MODEL` | — | M–L |
-| d | 2.2-2, 3.B-2, 5.6 remainder (pruned rows in the `/context` breakdown) | `src/Backend/EngineBackend.php`, `src/Context/ContextBreakdown.php`, `src/Commands/ContextCommand.php`, `src/Host/{TurnRunner,TranscriptStore}.php`, `src/Session/EnhancedSessionStore.php`, `src/Runtime.php`, new `src/Context/Pruning/RefTag.php`, `builtin-commands/NNNN-{sweep,pruning}.php`, `src/Config/Settings/Definitions/Context.php` | EB: `toTypedMessages`, `encodeEvent`/`decodeEvent`, `runCompleteInChild`, `settleFromResultFrame`. RT: `buildMessages`. **TR, R-SCHEMA** | ARCHITECTURE frame table; COMMANDS/SETTINGS (generated); PROMPT_ENGINEERING ref tags | — | L |
-| e | 4.1-1 (+ N-P3b remainder: rebind the provider's model so `withModel()` also moves `contextWindow()`/prices), 4.1-2, P-C1 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/App/App.php`, `src/Agents/{AgentPreset,Agent,AgentPresetRegistry,AgentManager,SuspendedDelegations}.php`, `src/Permissions/PermissionMode.php`, `src/Host/TranscriptProjector.php`, new `src/Agents/Live/{SubAgentTranscriptLog,AgentTranscriptTail}.php`, `src/Config/Settings/Definitions/Subagents.php` | TT: `schema`, `setup`. EB: `runTurn` `build`, `withReasoningEffort`, `resolveHookManager`. RT: `run`. BS: `agentManager`. **R-STATE** (subagents dir) | AGENTS_AUTHORING intro, provenance; PERMISSIONS (sub-agent mode); ARCHITECTURE "Sessions and state" | — | L |
-| f | 5.3-2, 5.5-5 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Context/{MemoryBlock,RepoMapBlock}.php`, new `src/Memory/{HybridMemoryRanker,EmbeddingCache}.php`, `src/Context/{MemoryRecallBlock,SymbolMapBlock}.php`, `src/Config/Settings/Definitions/Memory.php` | RT: `systemPromptSections` (fragment, repo-map slot), `repoMapSnapshot`. EB: `completeAsync` (pre-fork snapshot) | MEMORY "Recall"; PROMPT_ENGINEERING slots | — | M |
-| g | 3.F, 3.G | `src/Cli/Bootstrap.php`, `src/LSP/LspClient.php`, `src/Tools/BuiltIn/{LspTool,Read}.php`, `src/Chat.php`, new `src/LSP/LspLauncher.php`, `src/Hooks/BuiltIn/{PostEditDiagnosticsHook,AutoCommitHook}.php`, `src/Workspace/{AutoCommitter,CommitMessageWriter}.php`, `src/Config/Settings/Definitions/{Lsp,Git}.php` | BS: `lspTool`, `tools` callers, `lspClient`, `hooks`. Chat: `route` AssistantMsg arm, `/undo` handler. **R-HOOKS** | README Capabilities Tools (`Lsp` paragraph); ARCHITECTURE "Tools"; HOOKS built-ins | — | L |
-| h | 5.12, 5.13b | `src/Tools/BuiltIn/Bash.php`, `src/Tools/Concerns/CapturesProcessOutput.php`, `src/Providers/ProviderFactory.php`, new `src/Tools/Sandbox/Bubblewrap.php`, `src/Providers/FallbackProvider.php`, `src/Config/Settings/Definitions/Tools.php` | — | PERMISSIONS new "Sandbox"; README "Providers"; ARCHITECTURE provider prose | — | M |
-| i | O-4a | `src/Sessions/BackgroundSupervisor.php`, `src/Cli/{Serve,Subcommands,Help,ParsedArgs}.php`, new `src/Support/{Daemonize,PrivateDir}.php`, `src/Server/{StateDir,DiscoveryFile,ParentPidWatchdog}.php`, `docs/examples/sugarcrush.service` | **R-CLI** | README "Subcommands"; ENVIRONMENT server vars; SERVER.md | — | M |
-| j | N-P3 | `src/Chat.php`, `src/Host/CompactionService.php`, `src/Cli/Bootstrap.php`, `src/Config/StatusLineCommand.php`, `composer.json` (`sugarcraft/sugar-toast`) | Chat: **CS**, `withBackend`, `mouseMode`, `programOptions`. CompactionService: config setter only. BS: `mergedConfig` | SETTINGS "When a change takes effect"; README "Settings files" | sugar-toast (consumer) | M |
-
 ### W7 (order: b, c, a, d, e, f, g, h, i, j)
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
@@ -335,7 +320,7 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (91 steps)
+## 5. Step index (69 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -344,33 +329,22 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Foundations**
 
 **Context engine**
-- 2.2-2 M · 2.2-1, 1.B-2 · W6-d
-- 2.3 S–M · 2.2-1 · W6-c
-- 2.4-2 M · 2.4-1, O-2e · W6-c
 - 2.6 M · 1.A-2, 2.5 · W9-a
-- 2.7-1b M · 2.7-1a, 2.4-1 · W6-a
-- 2.7-2 M · 2.7-1b · W6-a
-- 2.7-3 S · 2.7-2 · W6-a
 - 2.10 M · 2.9, 2.5, O-2g · W8-b
 - 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
 
 **Safety and self-management**
-- 3.B-2 S–M · 2.2-2, 2.3 · W6-d
 - 3.B-3 M · 3.B-2, 1.C-1, 2.12 · W7-d
 - 3.B-4 L · 3.B-3 · W8-a
 - 3.B-5 S–M · 3.B-4 · W9-b
 - 3.C S–M · 1.A-2, O-2f · W7-h
 - 3.D-2 M · 3.D-1, 2.12 · W7-a
 - 3.D-3 S–M · 3.D-2 · W8-j
-- 3.F M · — · W6-g
-- 3.G M · 3.A-1, 0.3 · W6-g
 - 3.H M · 3.D-2 · W8-i
 - 3.I-2 S–M · 3.I-1, 1.B-2 · W7-g
 - 3.I-3 M · 3.I-1, DH-TOOLS · W10-a
 
 **Sub-agents**
-- 4.1-1 S–M · N-P0, N-P3b · W6-e
-- 4.1-2 M · 4.1-1, 4.2 · W6-e
 - 4.3-2 M–L · 4.3-1, P-B1, 1.A-2 · W8-e
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
 - 4.5 M · RELAY · W10-c
@@ -381,18 +355,12 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 4.10-2 M · 4.10-1, 4.2, RELAY · W8-f
 
 **Memory, codebase understanding, UX, integrations**
-- 5.3-2 M · 5.3-1, 1.A-2 · W6-f
-- 5.4-1 S · 5.1-2, O-2e · W6-c
 - 5.4-3 M · 5.4-1, 5.4-2, 5.2 · W7-i
-- 5.5-5 S · 5.5-4, 1.A-2 · W6-f
-- 5.6 remainder (pruned items in the `/context` breakdown) S · 3.B-2 · W6-d
 - 5.7-1 M · 4.1-2, DEF-MODE, D8 · W9-j
 - 5.7-2 M · 5.7-1, 1.C-2 · W10-b
 - 5.9-1 M · — · W10-h
 - 5.9-2 M · 5.9-1, O-2g · W10-h
 - 5.11-2 (incl. security findings force Ask in `auto`) M · 1.C-2, N-P2 · W10-a
-- 5.12 M · 0.4 · W6-h
-- 5.13b M · 2.7-1a, N-P3b · W6-h
 - 5.14a S · 1.C-2 · W8-j
 - 5.14b S–M · O-2g · W8-j
 - 5.14c M · 2.5, P-A1 · W10-e
@@ -401,8 +369,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.14l S–M · O-2g · W10-f
 
 **Settings**
-- N-P3b remainder (provider-level model rebind behind `EngineBackend::withModel()`) S · 4.1-1 · W6-e
-- N-P3 M · N-P2, N-P3a · W6-j
 - N-P4a M · N-P3, 1.C-1 · W7-j
 - N-P4b M · N-P3, 2.1, 2.9 · W9-h
 - N-P4c M · N-P3, 0.4, 2.8 · W9-i
@@ -413,7 +379,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-C1 M · P-B1, RELAY, O-2f · W6-e
 - P-C2 M · P-C1 · W7-f
 - P-D1 M · P-B1, 1.C-3 · W7-e
 - P-D2 M · P-D1, P-C2 · W8-h
@@ -423,11 +388,9 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-2g L · O-2f · W6-b
 - O-2h L · O-2g, DH-CMDS · W7-b
 - O-3b L · O-3a, O-2g · W7-c
 - O-3c S–M · O-3b · W7-c
-- O-4a M · O-3a · W6-i
 - O-4b S–M · O-4a, O-3b, 4.3-3 · W8-g
 - O-5a M · — · W5-d
 - O-5b L · O-5a, O-3c · W8-c
