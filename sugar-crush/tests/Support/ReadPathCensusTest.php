@@ -250,6 +250,10 @@ final class ReadPathCensusTest extends TestCase
                 . 'config, created by this process under umask 077 and opened `c` only for the '
                 . 'timed LOCK_EX; no byte of it is read',
         ],
+        'Host/TurnController.php|file_get_contents' => [
+            'SELF_LOCATED — a forked child\'s result file (roadmap O-2g takePayload()), named by '
+                . 'Support\\ToolIpcFiles::reserve() in this process before the fork, read once and discarded',
+        ],
         'Commands/CommandLoader.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the commands directory is anchored to its tree and each `*.md` confined to it',
         ],

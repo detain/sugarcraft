@@ -5605,41 +5605,32 @@ final class Chat implements Model
      */
     private function turnHookContext(string $event, string $prompt, bool $atStartup): HookContext
     {
-        return new HookContext(
-            // Null on a fresh session until autosave assigns one, so a SessionStart
-            // hook legitimately sees '' — it is the first thing in the session.
-            sessionId: $this->currentSessionId ?? '',
-            // Not a mislabel: this slot is the only thing a hook's matcher is
-            // tested against (HookRegistry::findMatches()), and for a
-            // turn-lifecycle event the thing being matched IS the event name.
-            toolName: $event,
-            toolArgs: [],
-            // JSON_INVALID_UTF8_SUBSTITUTE rather than a bare encode(): the draft is
-            // untrusted bytes from the input box, and ONE invalid sequence makes
-            // json_encode() return false — which the `?: '{}'` fallback below would
-            // then hand a hook as a context with no prompt in it at all, silently.
-            // Substituted instead, the offending bytes become U+FFFD and the prompt
-            // still decodes.
-            //
-            // Slashes and non-ASCII unescaped too (the F-H3 encoding HOOKS.md
-            // documents for CRUSH_TOOL_INPUT), so a hook grepping the prompt
-            // for a path or a non-ASCII word matches what was typed. The
-            // `?: '{}'` arm is unreachable: a map of strings with invalid
-            // UTF-8 substituted always encodes.
-            toolInput: json_encode(
-                $atStartup
-                    ? ['prompt' => $prompt, 'source' => 'startup']
-                    : ['prompt' => $prompt],
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
-            ) ?: '{}',
-            toolOutput: '',
-            // Same reasoning as gateToolCall(): Backend's whole contract is
-            // complete(history), so no model/provider identity reaches Chat.
-            // Empty rather than guessed at.
-            model: '',
-            provider: '',
-            projectRoot: $this->projectRoot(),
+        return $this->turnController()->turnHookContext(
+            $event,
+            $prompt,
+            $atStartup,
+            $this->currentSessionId,
+            $this->projectRoot(),
         );
+    }
+
+    /**
+     * The workspace's {@see \SugarCraft\Crush\Host\TurnController} (roadmap
+     * O-2g): what a submitted line becomes, queueing and steering, command-file
+     * expansion, the turn hooks and the dispatch's bookkeeping are its logic
+     * over this session's state. Read through
+     * {@see \SugarCraft\Crush\Host\WorkspaceContext::service()} so the
+     * extraction adds no constructor state; a Chat with no workspace, or one
+     * that registered none, gets a fresh one — it is stateless, so the two
+     * cannot admit a submission differently.
+     */
+    private function turnController(): \SugarCraft\Crush\Host\TurnController
+    {
+        $service = $this->workspace?->service(\SugarCraft\Crush\Host\TurnController::class);
+
+        return $service instanceof \SugarCraft\Crush\Host\TurnController
+            ? $service
+            : \SugarCraft\Crush\Host\TurnController::new();
     }
 
     /**
@@ -5652,19 +5643,7 @@ final class Chat implements Model
      */
     private function turnHookRefusalReason(\SugarCraft\Crush\Hooks\HookResult $result): ?string
     {
-        if ($result->permitsExecution()) {
-            return null;
-        }
-
-        if ($result->isAsk()) {
-            return DenialKind::Unanswered->reason('a turn hook asked for a decision this path cannot present');
-        }
-
-        // Never an empty reason on the wire: a hook that denies silently still owes
-        // the user a sentence explaining what just stopped their prompt.
-        return DenialKind::Hook->reason($result->message !== ''
-            ? $result->message
-            : 'the hook blocked this prompt without giving a reason');
+        return $this->turnController()->turnHookRefusalReason($result);
     }
 
     /**
@@ -5765,6 +5744,8 @@ final class Chat implements Model
             return [[], null];
         }
 
+        $turns = $this->turnController();
+
         // Each event is named ONCE, here: docs/HOOKS.md's events table cites this
         // method as the dispatch site of both, and its drift guard counts the
         // references.
@@ -5777,31 +5758,35 @@ final class Chat implements Model
         // run, so a script hook fires exactly once per submission, and matched on
         // the text so a verdict can only ever judge the prompt it was given.
         $resolved = $this->resolvedTurnHooks;
+        // SessionStart rides the first prompt into an EMPTY history — the
+        // once-per-empty-history gate documented above.
+        $firesSessionStart = count($this->history) === 0;
         if ($resolved !== null && $resolved['text'] === $text) {
             $promptResult = $resolved['prompt'];
+            // On the re-entry the child already decided whether SessionStart
+            // fired: it read the history at the moment the prompt was submitted,
+            // which is the moment the gate is defined against, so a notice that
+            // landed in history during the wait cannot un-fire it.
+            $sessionResult = $resolved['session'];
         } else {
             $resolved = null;
+            $promptContext = $this->turnHookContext($promptEvent->value, $text, false);
+            $sessionContext = $firesSessionStart ? $this->turnHookContext($sessionEvent->value, $text, true) : null;
 
             // OUT-OF-PROCESS HOOKS GO TO A FORKED CHILD; IN-PROCESS ONES STAY
             // HERE. The question is asked before anything runs so a chain with a
             // ScriptHook in it never starts on the TUI's own thread. The contexts
             // are built HERE and handed down, so this method stays the one
             // dispatch site docs/HOOKS.md's events table names for both.
-            $forkEvents = count($this->history) === 0
-                ? [$promptEvent, $sessionEvent]
-                : [$promptEvent];
-            if ($this->turnHooksMustFork($forkEvents)) {
-                return [[], $this->pendTurnHooks(
-                    $text,
-                    $this->turnHookContext($promptEvent->value, $text, false),
-                    count($this->history) === 0
-                        ? $this->turnHookContext($sessionEvent->value, $text, true)
-                        : null,
-                )];
+            if ($this->turnHooksMustFork($firesSessionStart ? [$promptEvent, $sessionEvent] : [$promptEvent])) {
+                return [[], $this->pendTurnHooks($text, $promptContext, $sessionContext)];
             }
 
-            $promptResult = $this->hooks->userPromptSubmit(
-                $this->turnHookContext($promptEvent->value, $text, false),
+            // Gate-first, the order the forked child runs too.
+            [$promptResult, $sessionResult] = \SugarCraft\Crush\Host\TurnController::runTurnHooks(
+                $this->hooks,
+                $promptContext,
+                $sessionContext,
             );
         }
 
@@ -5813,47 +5798,14 @@ final class Chat implements Model
             // which case {@see resumeTurnHooks()} keeps theirs (losing typed text
             // is the worse error) and the notice quotes the prompt instead of
             // claiming it is still in the box.
-            $where = ($resolved['boxOccupied'] ?? false)
-                ? ' Your prompt (“' . self::quoteDraftForNotice($text) . '”) was not sent;'
-                    . ' the box keeps the draft you typed while the hook ran.'
-                : ' Your prompt was not sent and is still in the box.';
-
             return [[], [$this->mutate([
-                'history' => [...$this->history, Message::notice($blocked . $where)],
+                'history' => [...$this->history, Message::notice(
+                    $turns->turnHookBlockedNotice($blocked, $text, $resolved['boxOccupied'] ?? false),
+                )],
             ]), null]];
         }
 
-        $notes = [];
-
-        // On the re-entry the child already decided whether SessionStart fired:
-        // it read `count($this->history) === 0` at the moment the prompt was
-        // submitted, which is the moment the gate is defined against, so a
-        // notice that landed in history during the wait cannot un-fire it.
-        $sessionResult = null;
-        if ($resolved !== null) {
-            $sessionResult = $resolved['session'];
-        } elseif (count($this->history) === 0) {
-            $sessionResult = $this->hooks->sessionStart(
-                $this->turnHookContext($sessionEvent->value, $text, true),
-            );
-        }
-
-        if ($sessionResult !== null) {
-            $sessionBlocked = $this->turnHookRefusalReason($sessionResult);
-
-            if ($sessionBlocked !== null) {
-                $notes[] = Message::notice($sessionBlocked
-                    . ' The hook\'s context note was discarded and the session continues.');
-            } elseif ($sessionResult->additionalContext !== '') {
-                $notes[] = Message::system($sessionResult->additionalContext);
-            }
-        }
-
-        if ($promptResult->additionalContext !== '') {
-            $notes[] = Message::system($promptResult->additionalContext);
-        }
-
-        return [$notes, null];
+        return [$turns->turnHookNotes($promptResult, $sessionResult), null];
     }
 
     /**
@@ -5866,22 +5818,7 @@ final class Chat implements Model
      */
     private function turnHooksMustFork(array $events): bool
     {
-        if ($this->hooks === null
-            || !\function_exists('pcntl_fork')
-            || !\function_exists('pcntl_waitpid')
-        ) {
-            return false;
-        }
-
-        foreach ($events as $event) {
-            // The matcher subject for a turn-lifecycle event is the event name —
-            // see turnHookContext()'s `toolName` slot.
-            if ($this->hooks->runsOutOfProcess($event, $event->value)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->turnController()->turnHooksMustFork($this->hooks, $events);
     }
 
     /**
@@ -5934,9 +5871,10 @@ final class Chat implements Model
 
     /**
      * Poll interval for a forked turn-hook child — the same 50 ms
-     * {@see waitForToolChildrenAsync()} polls tool children at.
+     * {@see waitForToolChildrenAsync()} polls tool children at; the poll
+     * itself is {@see \SugarCraft\Crush\Host\TurnController::forkPayload()}'s.
      */
-    private const TURN_HOOK_POLL_SECONDS = 0.05;
+    private const TURN_HOOK_POLL_SECONDS = \SugarCraft\Crush\Host\TurnController::FORK_POLL_SECONDS;
 
     /**
      * The Cmd that runs a turn's hook chain in a forked child and resolves with a
@@ -5981,24 +5919,13 @@ final class Chat implements Model
         string $text,
         CancellationToken $cancellation,
     ): \Closure {
-        $run = static function () use ($hooks, $promptContext, $sessionContext): array {
-            $prompt = $hooks->userPromptSubmit($promptContext);
-            $session = ($sessionContext !== null && $prompt->permitsExecution())
-                ? $hooks->sessionStart($sessionContext)
-                : null;
-
-            return [$prompt, $session];
-        };
+        $run = static fn (): array => \SugarCraft\Crush\Host\TurnController::runTurnHooks($hooks, $promptContext, $sessionContext);
 
         return self::forkedPayloadCmd(
             static function () use ($run): string {
                 [$prompt, $session] = $run();
-                $json = json_encode([
-                    'prompt' => self::turnHookResultToArray($prompt),
-                    'session' => $session === null ? null : self::turnHookResultToArray($session),
-                ], JSON_INVALID_UTF8_SUBSTITUTE);
 
-                return $json === false ? '' : $json;
+                return \SugarCraft\Crush\Host\TurnController::turnHookPayload($prompt, $session);
             },
             static function (string $file) use ($generation, $text): Msg {
                 [$prompt, $session] = self::collectTurnHookResults($file);
@@ -6046,78 +5973,14 @@ final class Chat implements Model
         \Closure $inline,
         CancellationToken $cancellation,
     ): \Closure {
-        return Cmd::promise(static function () use ($childWork, $collect, $inline, $cancellation): PromiseInterface {
-            $deferred = new Deferred();
-
-            if ($cancellation->isCancelled()) {
-                $deferred->resolve(null);
-
-                return $deferred->promise();
-            }
-
-            $file = \SugarCraft\Crush\Support\ToolIpcFiles::reserve(
-                \SugarCraft\Crush\Support\ToolIpcFiles::CHAT_PREFIX,
-                'json',
-            );
-            $pid = pcntl_fork();
-
-            if ($pid === -1) {
-                \SugarCraft\Crush\Support\ToolIpcFiles::discard($file);
-                $deferred->resolve($inline());
-
-                return $deferred->promise();
-            }
-
-            if ($pid === 0) {
-                \SugarCraft\Crush\Support\ToolIpcFiles::write($file, $childWork());
-                \SugarCraft\Crush\Support\ForkedChild::exitNow(0);
-            }
-
-            $loop = Loop::get();
-            $settled = false;
-            $timer = null;
-            $timer = $loop->addPeriodicTimer(
-                self::TURN_HOOK_POLL_SECONDS,
-                static function () use ($pid, $file, $collect, $cancellation, $loop, &$settled, &$timer, $deferred): void {
-                    if ($settled) {
-                        return;
-                    }
-
-                    if ($cancellation->isCancelled()) {
-                        $settled = true;
-                        $loop->cancelTimer($timer);
-                        // Audit R3: the tree kill and the bounded reap run on
-                        // the loop (each pass its own tick), so Escape no
-                        // longer freezes the frame for the ~110 ms walk. The
-                        // command still resolves only after both.
-                        \SugarCraft\Crush\Support\ProcessContainment::killTreeAsync($pid, $loop)
-                            ->then(static fn(): PromiseInterface => \SugarCraft\Crush\Support\ProcessContainment::reapAsync(
-                                [$pid],
-                                self::REAP_BUDGET_SECONDS,
-                                self::REAP_POLL_MICROSECONDS / 1_000_000,
-                                $loop,
-                            ))
-                            ->then(static function () use ($file, $deferred): void {
-                                \SugarCraft\Crush\Support\ToolIpcFiles::discard($file);
-                                $deferred->resolve(null);
-                            });
-
-                        return;
-                    }
-
-                    $status = 0;
-                    if (pcntl_waitpid($pid, $status, WNOHANG) !== $pid) {
-                        return;
-                    }
-
-                    $settled = true;
-                    $loop->cancelTimer($timer);
-                    $deferred->resolve($collect($file));
-                },
-            );
-
-            return $deferred->promise();
-        });
+        return Cmd::promise(static fn (): PromiseInterface => \SugarCraft\Crush\Host\TurnController::forkPayload(
+            $childWork,
+            $collect,
+            $inline,
+            $cancellation,
+            self::REAP_BUDGET_SECONDS,
+            self::REAP_POLL_MICROSECONDS / 1_000_000,
+        ));
     }
 
     /**
@@ -6125,12 +5988,7 @@ final class Chat implements Model
      */
     private static function turnHookResultToArray(\SugarCraft\Crush\Hooks\HookResult $result): array
     {
-        return [
-            'action' => $result->action,
-            'message' => $result->message,
-            'modifiedInput' => $result->modifiedInput,
-            'additionalContext' => $result->additionalContext,
-        ];
+        return \SugarCraft\Crush\Host\TurnController::turnHookResultToArray($result);
     }
 
     /**
@@ -6141,31 +5999,12 @@ final class Chat implements Model
      */
     private static function collectTurnHookResults(string $file): array
     {
-        $data = self::takeIpcPayload($file);
-
-        $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
-        $prompt = \is_array($decoded) ? self::turnHookResultFromArray($decoded['prompt'] ?? null) : null;
-        if ($prompt === null) {
-            return [\SugarCraft\Crush\Hooks\HookResult::deny(
-                'the prompt hooks ended without reporting a verdict',
-            ), null];
-        }
-
-        return [$prompt, self::turnHookResultFromArray($decoded['session'] ?? null)];
+        return \SugarCraft\Crush\Host\TurnController::turnHookResultsFromPayload(self::takeIpcPayload($file));
     }
 
     private static function turnHookResultFromArray(mixed $row): ?\SugarCraft\Crush\Hooks\HookResult
     {
-        if (!\is_array($row) || !\is_string($row['action'] ?? null)) {
-            return null;
-        }
-
-        return new \SugarCraft\Crush\Hooks\HookResult(
-            $row['action'],
-            \is_string($row['message'] ?? null) ? $row['message'] : '',
-            \is_string($row['modifiedInput'] ?? null) ? $row['modifiedInput'] : null,
-            \is_string($row['additionalContext'] ?? null) ? $row['additionalContext'] : '',
-        );
+        return \SugarCraft\Crush\Host\TurnController::turnHookResultFromArray($row);
     }
 
     /**
@@ -6244,21 +6083,12 @@ final class Chat implements Model
      */
     private function customCommandMustFork(string $text): bool
     {
-        if (($this->resolvedCustomCommand['text'] ?? null) === $text
-            || !\function_exists('pcntl_fork')
-            || !\function_exists('pcntl_waitpid')
-        ) {
-            return false;
-        }
-
-        $command = $this->resolveCustomCommand($text);
-        if ($command === null) {
-            return false;
-        }
-        [$spec] = $command;
-
-        return $spec->hasShellSubstitution()
-            && !($spec->tier === 'project' && !$this->projectCommandsTrusted);
+        return $this->turnController()->customCommandMustFork(
+            $text,
+            $this->customCommands,
+            $this->resolvedCustomCommand['text'] ?? null,
+            $this->projectCommandsTrusted,
+        );
     }
 
     /**
@@ -6327,12 +6157,8 @@ final class Chat implements Model
         return self::forkedPayloadCmd(
             static function () use ($run): string {
                 [$expanded, $gated] = $run();
-                $json = json_encode([
-                    'expanded' => $expanded === null ? null : base64_encode($expanded),
-                    'gated' => $gated,
-                ], JSON_INVALID_UTF8_SUBSTITUTE);
 
-                return $json === false ? '' : $json;
+                return \SugarCraft\Crush\Host\TurnController::customCommandPayload($expanded, $gated);
             },
             static function (string $file) use ($generation, $text): Msg {
                 [$expanded, $gated] = self::collectCustomCommandExpansion($file);
@@ -6357,19 +6183,7 @@ final class Chat implements Model
      */
     private static function collectCustomCommandExpansion(string $file): array
     {
-        $data = self::takeIpcPayload($file);
-        $decoded = ($data !== false && $data !== '') ? json_decode($data, true) : null;
-        if (!\is_array($decoded) || !\is_string($decoded['expanded'] ?? null)) {
-            return [null, []];
-        }
-
-        $expanded = base64_decode($decoded['expanded'], true);
-        $gated = array_values(array_filter(
-            \is_array($decoded['gated'] ?? null) ? $decoded['gated'] : [],
-            'is_string',
-        ));
-
-        return [$expanded === false ? null : $expanded, $gated];
+        return \SugarCraft\Crush\Host\TurnController::customCommandExpansionFromPayload(self::takeIpcPayload($file));
     }
 
     /**
@@ -6424,13 +6238,9 @@ final class Chat implements Model
 
         if ($msg->expanded === null) {
             $after = $resumed->mutate([
-                'history' => [...$this->history, Message::notice(sprintf(
-                    '%s was not sent: expanding it ended without a result. %s',
-                    self::quoteDraftForNotice($msg->text),
-                    $boxOccupied
-                        ? 'The box keeps the draft you typed while it ran.'
-                        : 'It is still in the box.',
-                ))],
+                'history' => [...$this->history, Message::notice(
+                    $this->turnController()->expansionFailedNotice($msg->text, $boxOccupied),
+                )],
             ]);
             $cmd = null;
         } else {
@@ -9295,34 +9105,31 @@ final class Chat implements Model
         // without ever reaching this method. A TYPED `/settings` is refused here
         // like every other slash command.
         if ($this->inFlight) {
-            if ($text === '/exit' || $text === '/quit') {
-                return [$this, Cmd::quit()];
-            }
-
-            if ($this->isWorkflowControlDuringWorkflowTurn($text)) {
-                return $this->handleWorkflowCommand($text);
-            }
-
-            if (str_starts_with($text, '/') || self::isBareMcpAuthCommand($text)) {
-                return $this->refuseInFlightCommand($text);
-            }
-
-            // A `!cmd` (roadmap 5.14g) is the user's own shell command, not a
-            // message for the running turn: steering it in would hand the
-            // agent the text `!git status` to interpret. It waits its turn and
-            // runs when this one settles, through the branch below.
-            if (\SugarCraft\Crush\Commands\BangShell::commandOf($text) !== null) {
-                return $this->enqueuePrompt($text);
-            }
-
-            // Roadmap 1.C-3 (decision D6): Enter mid-turn STEERS the running
-            // turn — the agent reads the message at its next step boundary —
-            // and Tab queues it for after the turn ({@see queueOwnsTab()}).
-            // The `queueMode` setting that could make another mode Enter's
-            // default is N-P4g's; until then the mode is fixed.
-            return QueueMode::onEnter() === QueueMode::Steer
-                ? $this->steerPrompt($text)
-                : $this->enqueuePrompt($text);
+            // The classification is {@see \SugarCraft\Crush\Host\TurnController::midTurnRoute()}'s,
+            // shared with a headless host: bare `/exit`/`/quit` quit, `/workflow
+            // pause|status` controls a running workflow, every other command is
+            // refused, a `!cmd` (roadmap 5.14g) waits its turn — steering it in
+            // would hand the agent the text `!git status` to interpret — and
+            // anything else is delivered as Enter delivers it. Roadmap 1.C-3
+            // (decision D6): Enter mid-turn STEERS the running turn — the agent
+            // reads the message at its next step boundary — and Tab queues it
+            // for after the turn ({@see queueOwnsTab()}). The `queueMode`
+            // setting that could make another mode Enter's default is N-P4g's;
+            // until then the mode is fixed ({@see QueueMode::onEnter()}).
+            return match ($this->turnController()->midTurnRoute(
+                $text,
+                // Only consulted past the `/exit` arm, so it is read lazily.
+                $text !== '/exit' && $text !== '/quit' && $this->isWorkflowControlDuringWorkflowTurn($text),
+                \SugarCraft\Crush\Host\SubmitOptions::new(),
+            )) {
+                \SugarCraft\Crush\Host\TurnController::ROUTE_QUIT => [$this, Cmd::quit()],
+                \SugarCraft\Crush\Host\TurnController::ROUTE_WORKFLOW_CONTROL => $this->handleWorkflowCommand($text),
+                \SugarCraft\Crush\Host\TurnController::ROUTE_REFUSE_COMMAND => $this->refuseInFlightCommand($text),
+                \SugarCraft\Crush\Host\TurnController::ROUTE_STEER => $this->steerPrompt($text),
+                // An interrupt is a host's delivery; Enter never asks for one,
+                // and a queued follow-up is what this arm always did otherwise.
+                default => $this->enqueuePrompt($text),
+            };
         }
 
         // A READ-ONLY SESSION (audit SES-3(b)) refuses here, ahead of the
@@ -9354,20 +9161,17 @@ final class Chat implements Model
                 // which reads a kept draft as "refused, retry later". ↑
                 // recalls it.
                 return [$this->mutate([
-                    'history' => [...$this->history, Message::notice(sprintf(
-                        'Did not run `%s`: %s.',
-                        self::quoteDraftForNotice($bang),
-                        $refused,
-                    ))],
+                    'history' => [...$this->history, Message::notice(
+                        $this->turnController()->bangRefusedNotice($bang, $refused),
+                    )],
                     'inputBuf' => '',
                 ]), null];
             }
 
             return [$this->mutate([
-                'history' => [...$this->history, Message::notice(sprintf(
-                    'Running `%s` — its output joins the conversation when it finishes.',
-                    self::quoteDraftForNotice($bang),
-                ))],
+                'history' => [...$this->history, Message::notice(
+                    $this->turnController()->bangRunningNotice($bang),
+                )],
                 'inputBuf' => '',
             ]), \SugarCraft\Crush\Commands\BangShell::cmd($bang, $root)];
         }
@@ -9536,119 +9340,56 @@ final class Chat implements Model
                 return $parked;
             }
 
-            // One instance for both calls: savingsPercentage() reads the state
-            // compact() just left on it.
+            // The synchronous heuristic route, as
+            // {@see \SugarCraft\Crush\Host\TurnController::inlineTier()} runs
+            // it for a headless host too: the rewrite adopted only when it bought
+            // something (announcing "saved 0%" every turn would be noise), the
+            // state block (roadmap 2.5) built from the WHOLE history as the
+            // `/compact` and parked routes build it, the blocking tier tested
+            // against the COMPACTED wire — "blocked until space is freed" only
+            // means anything once the automatic way of freeing it was tried —
+            // and, before refusing, the INTRA-exchange rescue (prompt_plan.md
+            // P4.S4, backlog §12.2 E18) for one exchange larger than the window.
             //
-            // The state block (roadmap 2.5) built from the WHOLE history, as
-            // the `/compact` and parked routes build it
-            // ({@see \SugarCraft\Crush\Host\CompactionService::compactedHistory()}):
-            // the compactor's own fallback only sees the exchanges stage 0 has
-            // stripped of their tool rows, so it wrote "Files read/modified: none".
-            $attemptCompactor = $this->attemptCompactor($this->history)->withExchangeSummaries([
-                \SugarCraft\Crush\Context\Compaction\StateSummaryTemplate::SUMMARY_KEY
-                    => \SugarCraft\Crush\Host\CompactionService::heuristicState($this->history)->render(),
-            ]);
-            $compactedWire = $attemptCompactor->compact($wireHistory);
-            $savedPercentage = $attemptCompactor->savingsPercentage();
+            // THE BREAKER'S MEASUREMENT ($tier['refilled']) is the tier's own —
+            // the same estimate function over the compaction's output against the
+            // same window, read whether or not the rewrite was adopted — and it is
+            // WRITTEN AFTER the outcome is known, on the two exits below.
+            $tier = $this->turnController()->inlineTier(
+                $this->compactionService(),
+                $this->compactor,
+                $this->history,
+                $wireHistory,
+                $tokenLimit,
+                $tokenCount,
+                $this->estimateTokenCount(...),
+            );
+            $baseHistory = $tier['history'];
+            $tokenCount = $tier['tokenCount'];
+            $compactionNotice = $tier['compactionNotice'];
+            $truncationNotice = $tier['truncationNotice'];
 
-            // Adopt the compacted history only when it actually bought
-            // something. A history of at most recentPreserveCount exchanges is
-            // returned untouched no matter how large it is, and announcing
-            // "saved 0%" on every turn from there on would be noise reporting
-            // work that did not happen.
-            //
-            // The adoption decision is made HERE, before the blocking tier is
-            // consulted, so that BOTH outcomes go on to report the same thing.
-            // It used to sit after: the turn-still-goes-out path suppressed its
-            // notice at 0% to avoid noise while the turn-refused path adopted
-            // the rewrite unconditionally and said nothing about it at all -
-            // the asymmetry ran the wrong way round, leaving the destructive
-            // outcome as the silent one.
-            if ($savedPercentage > 0) {
-                $compactedHistory = $this->messagesFromWire($compactedWire, $this->history);
-                $baseHistory = $compactedHistory;
-                $tokenCount = $this->estimateTokenCount($compactedHistory);
-                // Agent-visible counts: the rewrite hides rows, it does not
-                // remove them (roadmap 1.B-3).
-                $compactionNotice = $this->contextCompactedMessage(
-                    count(Message::agentVisible($this->history)),
-                    count(Message::agentVisible($compactedHistory)),
-                    $savedPercentage,
-                    $tokenCount,
-                    $tokenLimit,
-                );
+            if ($tier['outcome'] === 'blocked') {
+                return $this->withCompactionOutcome($tier['refilled'], turnSent: false)
+                    ->foregroundBlockedResponse(
+                        $text,
+                        $baseHistory,
+                        $tokenCount,
+                        $tokenLimit,
+                        $compactionNotice,
+                    );
             }
 
-            // THE BREAKER'S MEASUREMENT on this route, taken BEFORE the outcome is
-            // known and WRITTEN AFTER it is (see the three exits below): the pair is
-            // the tier's own — the same estimate function over the compaction's
-            // output against the same window — which is what makes "refilled to the
-            // limit" a fact about this rewrite rather than an opinion about the next
-            // prompt. Read off $compactedWire whether or not the rewrite was adopted,
-            // because a compaction that freed nothing has by definition left the
-            // context where it found it, and the run counts results and not
-            // announcements.
-            $refilled = $this->compactor->shouldCompact($compactedWire, $tokenLimit);
-
-            // Still tested against the COMPACTED wire even when the result was
-            // not adopted: "blocked until space is freed" only means anything
-            // once the automatic way of freeing it has been tried, and a
-            // compaction that freed nothing is exactly the answer "there was
-            // none to free".
-            if ($this->compactor->shouldCompactForeground($compactedWire, $tokenLimit)) {
-                // The blocking tier fired. Before refusing, try the INTRA-exchange
-                // rescue (prompt_plan.md P4.S4, backlog §12.2 E18): if a single
-                // exchange is itself larger than the window, whole-exchange
-                // compaction can never free enough — it preserves that exchange
-                // verbatim as one of the recent ten — so the refusal would repeat
-                // forever with a LARGER estimate each time (a refusal appends an
-                // echo and a notice). Truncating that one oversized exchange is
-                // the honest exit: the estimate falls because genuinely fewer
-                // characters go out. When nothing is individually oversized this
-                // returns null and the between-exchanges refusal stands unchanged.
-                // The rescue splices truncated contents onto the Message list
-                // that is INDEX-ALIGNED with $compactedWire, and when compaction
-                // was adopted $baseHistory IS exactly that — messagesFromWire()
-                // built it entry-for-entry from this very wire. When compaction
-                // freed NOTHING, $baseHistory is still $this->history, which
-                // produced $wireHistory and NOT $compactedWire: compact()'s
-                // no-op path returns removeToolResults($wireHistory), which can
-                // DROP wire entries and shift every index after them. Re-derive
-                // the aligned list the same way the adoption above derives its —
-                // messagesFromWire() aligns from the END, so entries after any
-                // removal point map back to their originals and only entries
-                // before a (hypothetical) removal are rebuilt (review cycle 4,
-                // finding 2b).
-                $rescueBase = $savedPercentage > 0
-                    ? $baseHistory
-                    : $this->messagesFromWire($compactedWire, $this->history);
-
-                $rescued = $this->intraExchangeTruncation($compactedWire, $rescueBase, $tokenLimit);
-                if ($rescued !== null) {
-                    $baseHistory = $rescued['history'];
-                    $tokenCount = $this->estimateTokenCount($baseHistory);
-                    $truncationNotice = $rescued['notice'];
-                    // THE RESCUE EXEMPTION (ruling P8.S5-R6): $turnCarrier stays
-                    // `$this`, so the run is neither extended nor broken by this
-                    // attempt — the reason is argued once, on
-                    // {@see withCompactionOutcome()}.
-                } else {
-                    return $this->withCompactionOutcome($refilled, turnSent: false)
-                        ->foregroundBlockedResponse(
-                            $text,
-                            $baseHistory,
-                            $tokenCount,
-                            $tokenLimit,
-                            $compactionNotice,
-                        );
-                }
-            } else {
+            if ($tier['outcome'] === 'sent') {
                 // The rewrite went out WITH the turn. Under the tier that breaks the
                 // run; over it the run holds, because the prompt reached the model —
                 // the no-path-forward case is the blocking refusal above, and only
                 // that case (ruling P8.S5-R6).
-                $turnCarrier = $this->withCompactionOutcome($refilled, turnSent: true);
+                $turnCarrier = $this->withCompactionOutcome($tier['refilled'], turnSent: true);
             }
+            // 'rescued': THE RESCUE EXEMPTION (ruling P8.S5-R6) — $turnCarrier
+            // stays `$this`, so the run is neither extended nor broken by this
+            // attempt; the reason is argued once, on {@see withCompactionOutcome()}.
         }
 
         $newTurnMessages = [];
@@ -9755,32 +9496,13 @@ final class Chat implements Model
      */
     private function userTurnMessage(string $text, bool $resolveMentions = true): array
     {
-        $message = Message::user($text);
-        if (!$resolveMentions || !str_contains($text, '@')) {
-            return [$message, []];
-        }
-
-        $resolved = FileMentions::resolve($text, $this->projectRoot());
-        $store = $this->sessionStore;
-        $gate = $this->permissionGate();
-        $context = \SugarCraft\Crush\Attachments\ContextMentions::new($this->projectRoot())
-            ->withSessionStore(static fn () => $store)
-            ->withUrlPolicy(static fn (string $url): ?string => $gate?->ruleDecision(
-                new \SugarCraft\Crush\ToolCall('WebFetch', ['url' => $url]),
-            ) === \SugarCraft\Crush\Permissions\PermissionDecision::Deny
-                ? 'a permission rule denies WebFetch for it.'
-                : null)
-            ->resolve($text);
-        foreach ([...$resolved['attachments'], ...$context['attachments']] as $attachment) {
-            $message = $attachment->type === AttachmentType::Image
-                ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
-                : $message->attachFile($attachment->path, $attachment->data);
-        }
-
-        return [$message, array_map(
-            static fn (string $notice): Message => Message::notice($notice),
-            [...$resolved['notices'], ...$context['notices']],
-        )];
+        return $this->turnController()->userTurnMessage(
+            $text,
+            $resolveMentions,
+            $this->projectRoot(),
+            $this->sessionStore,
+            $this->permissionGate(),
+        );
     }
 
     /**
@@ -9794,7 +9516,7 @@ final class Chat implements Model
      * text is what eventually goes out, and until it does it is on
      * {@see $queuedPrompts}.
      */
-    private const IN_FLIGHT_QUOTE_MAX_CHARS = 60;
+    private const IN_FLIGHT_QUOTE_MAX_CHARS = \SugarCraft\Crush\Host\TurnController::IN_FLIGHT_QUOTE_MAX_CHARS;
 
     /**
      * One bounded, control-byte-free excerpt of untrusted draft text, for a
@@ -9807,12 +9529,7 @@ final class Chat implements Model
      */
     private static function quoteDraftForNotice(string $text): string
     {
-        $clean = self::sanitizeSummaryLine($text);
-        if (mb_strlen($clean, 'UTF-8') > self::IN_FLIGHT_QUOTE_MAX_CHARS) {
-            $clean = mb_substr($clean, 0, self::IN_FLIGHT_QUOTE_MAX_CHARS - 1, 'UTF-8') . '…';
-        }
-
-        return $clean;
+        return \SugarCraft\Crush\Host\TurnController::quoteDraft($text);
     }
 
     /**
@@ -9848,11 +9565,9 @@ final class Chat implements Model
         return [$this->mutate([
             'queuedPrompts' => $queue,
             'inputBuf' => '',
-            'history' => [...$this->history, Message::notice(sprintf(
-                'Queued (%d waiting) — sent as soon as this turn finishes: %s',
-                count($queue),
-                self::quoteDraftForNotice($text),
-            ))],
+            'history' => [...$this->history, Message::notice(
+                $this->turnController()->queuedNotice(count($queue), $text),
+            )],
         ]), null];
     }
 
@@ -9889,10 +9604,9 @@ final class Chat implements Model
         return [$this->mutate([
             'queuedPrompts' => $queue,
             'inputBuf' => '',
-            'history' => [...$this->history, Message::notice(sprintf(
-                'Steering — the agent reads this at its next step (sent as the next prompt if the turn ends first): %s',
-                self::quoteDraftForNotice($text),
-            ))],
+            'history' => [...$this->history, Message::notice(
+                $this->turnController()->steeringNotice($text),
+            )],
         ]), null];
     }
 
@@ -9947,36 +9661,7 @@ final class Chat implements Model
      */
     private static function withoutDeliveredSteers(array $queue, array $history): array
     {
-        $delivered = [];
-        for ($i = count($history) - 1; $i >= 0; $i--) {
-            $row = $history[$i];
-            if ($row->role !== Role::User) {
-                continue;
-            }
-            if ($row->userVisible && !$row->uiOnly) {
-                break;
-            }
-            if (!$row->userVisible) {
-                $delivered[$row->content] = ($delivered[$row->content] ?? 0) + 1;
-            }
-        }
-
-        if ($delivered === []) {
-            return $queue;
-        }
-
-        $kept = [];
-        foreach ($queue as $text) {
-            $row = Backend\SocketSteerInbox::content($text);
-            if (($delivered[$row] ?? 0) > 0) {
-                $delivered[$row]--;
-
-                continue;
-            }
-            $kept[] = $text;
-        }
-
-        return $kept;
+        return \SugarCraft\Crush\Host\TurnController::withoutDeliveredSteers($queue, $history);
     }
 
     /**
@@ -9987,13 +9672,9 @@ final class Chat implements Model
     private function refuseEmptyCustomCommand(string $text): array
     {
         return [$this->mutate([
-            'history' => [...$this->history, Message::notice(sprintf(
-                '%s is a command file whose template expanded to nothing — most often a body that is only '
-                . '$ARGUMENTS or $1, invoked with no arguments. Nothing was sent: an empty prompt costs a '
-                . 'turn and tells the model nothing. Pass arguments, or give the file a body that stands '
-                . 'on its own.',
-                self::quoteDraftForNotice($text),
-            ))],
+            'history' => [...$this->history, Message::notice(
+                $this->turnController()->emptyCustomCommandNotice($text),
+            )],
         ]), null];
     }
 
@@ -10040,12 +9721,9 @@ final class Chat implements Model
     private function refuseInFlightCommand(string $text): array
     {
         return [$this->mutate([
-            'history' => [...$this->history, Message::notice(sprintf(
-                '%s is a command, and commands do not run while a turn is in flight — it would rewrite '
-                . 'history this turn is about to append to. Your draft is still in the box: press Enter '
-                . 'again once the turn finishes, or Esc Esc to cancel the turn now.',
-                self::quoteDraftForNotice($text),
-            ))],
+            'history' => [...$this->history, Message::notice(
+                $this->turnController()->inFlightCommandNotice($text),
+            )],
         ]), null];
     }
 
@@ -10079,9 +9757,7 @@ final class Chat implements Model
      * The row {@see refuseReadOnly()} adds for input a read-only session will
      * not run: `%s` the quoted draft, `%s` the session's name or id.
      */
-    public const READ_ONLY_REFUSAL = '"%s" was not sent: session %s is open in another sugarcrush, so this '
-        . 'window is read-only. Type /branch to fork it into a session of your own, and this draft comes back '
-        . 'in the box there.';
+    public const READ_ONLY_REFUSAL = \SugarCraft\Crush\Host\TurnController::READ_ONLY_REFUSAL;
 
     /**
      * The built-in commands a READ-ONLY session still runs: the ones that only
@@ -10135,9 +9811,8 @@ final class Chat implements Model
     private function refuseReadOnly(string $text): array
     {
         return [$this->mutate([
-            'history' => [...$this->history, Message::notice(sprintf(
-                self::READ_ONLY_REFUSAL,
-                self::quoteDraftForNotice($text),
+            'history' => [...$this->history, Message::notice($this->turnController()->readOnlyNotice(
+                $text,
                 $this->currentSessionName ?? (string) $this->currentSessionId,
             ))],
             'inputBuf' => '',
@@ -10263,12 +9938,9 @@ final class Chat implements Model
             }
 
             return [$this->mutate([
-                'history' => [...$this->history, Message::notice(sprintf(
-                    '%s was not run: commands do not run while a turn is in flight — it would rewrite '
-                    . 'history this turn is about to append to. Your draft was not touched. Run it again '
-                    . 'once the turn finishes, or Esc Esc to cancel the turn now.',
-                    self::quoteDraftForNotice($text),
-                ))],
+                'history' => [...$this->history, Message::notice(
+                    $this->turnController()->runCommandInFlightNotice($text),
+                )],
             ]), null];
         }
 
@@ -10376,11 +10048,9 @@ final class Chat implements Model
             // notice the user cannot see is how the original bug felt.
             'palette' => null,
             'sessionPicker' => null,
-            'history' => [...$this->history, Message::notice(sprintf(
-                '"%s" does not run while a turn is in flight — it would change state this turn is about '
-                . 'to write. Wait for the turn to finish, or Esc Esc to cancel it now.',
-                self::quoteDraftForNotice($what),
-            ))],
+            'history' => [...$this->history, Message::notice(
+                $this->turnController()->inFlightActionNotice($what),
+            )],
         ]), null];
     }
 
@@ -10648,14 +10318,7 @@ final class Chat implements Model
         // turn reached by another route (a parked compaction resuming) must
         // not write checkpoints into a session another TUI owns either.
         if ($this->readOnlySession) {
-            $prompt = '';
-            foreach ($newTurnMessages as $message) {
-                if ($message instanceof Message && $message->role === Role::User) {
-                    $prompt = $message->content;
-                }
-            }
-
-            return $this->refuseReadOnly($prompt);
+            return $this->refuseReadOnly($this->turnController()->turnPrompt($newTurnMessages) ?? '');
         }
 
         // Reminder-tier check (R21's ContextCompactor::shouldSendReminder(),
@@ -10747,89 +10410,34 @@ final class Chat implements Model
             'promptEstimateAtDispatch' => $this->rawTokenProxy($baseHistory),
         ]);
 
-        // Auto-save checkpoint before processing prompt
-        $workspaceCapture = null;
-        if ($this->sessionStore !== null && $this->currentSessionId !== null && method_exists($this->sessionStore, 'saveCheckpoint')) {
-            $chatState = [
-                // The state BEFORE the prompt (audit SES-1; see the docblock), so
-                // the restored transcript and the restored draft never hold the
-                // same line twice.
-                'messages' => self::withoutContextReminders($preTurnHistory),
-                // Marks this shape for {@see handleRewindCommand()}: a checkpoint
-                // WITHOUT the key predates SES-1 and still ends on the prompt its
-                // draft re-seeds, which the restore drops there instead.
-                self::CHECKPOINT_PRE_TURN_KEY => true,
-                // THE DRAFT IS THE CALLER'S, NOT $next's — $next above already
-                // blanked inputBuf (submit consumed the prompt), so snapshotting
-                // $next->inputBuf stored '' on every turn and `/rewind`'s draft
-                // restore had nothing to restore (E681). On submit()'s route the
-                // caller passes its pre-clear buffer: exactly the prompt this turn
-                // sent, which is what rewind re-seeds the box with.
-                'inputBuf' => $preTurnDraft,
-                // The cursor travels WITH the draft (E4): `inputCursorOffset()`'s
-                // flat codepoint form is exactly the shape the checkpoint state
-                // map needs — see its docblock — and without this key a restored
-                // draft always reseeds with the caret at the end, because
-                // mutate()'s two-write-routes rule rebuilds the `input` widget
-                // from a bare `inputBuf` and the rebuild lands at end-of-text.
-                // Null is the restore's end-of-text fallback: it re-applies an int only.
-                'inputCursor' => $preTurnCursor,
-                'inFlight' => false,
-                'agentContext' => [
-                    'currentSessionId' => $this->currentSessionId,
-                ],
-            ];
-            try {
-                $checkpointIndex = $this->sessionStore->saveCheckpoint($this->currentSessionId, $chatState);
+        $turns = $this->turnController();
 
-                // THE FILES, TOO (item 3.A-1): the same checkpoint gets a git
-                // snapshot of the workspace, pinned under
-                // refs/sugar-crush/checkpoints/<session>/<n> and recorded in
-                // this row by EnhancedSessionStore::captureWorkspace(). NOT
-                // here: `git stash create` on a large repository would stall
-                // update(). It runs at the head of the turn's own Cmd below,
-                // after the frame is painted and before the turn can fork and
-                // write a file. Only for a Chat given an explicit project root
-                // — every launch passes one — never the getcwd() fallback a
-                // bare embedder's Chat reads, so a library user's process
-                // directory is not snapshotted behind its back.
-                $store = $this->sessionStore;
-                $sessionId = $this->currentSessionId;
-                $root = $this->projectRoot;
-                if ($store instanceof EnhancedSessionStore && $root !== null && $root !== '') {
-                    $workspaceCapture = static function () use ($store, $sessionId, $checkpointIndex, $root): void {
-                        try {
-                            $store->captureWorkspace($sessionId, $checkpointIndex, $root);
-                        } catch (\Throwable) {
-                            // A snapshot never costs the turn; the row simply has none.
-                        }
-                    };
-                }
-            } catch (\Throwable) {
-                // Ignore checkpoint save errors - don't block the prompt
-            }
-        }
+        // Auto-save checkpoint before processing prompt: THE STATE BEFORE THE
+        // PROMPT (audit SES-1; see the docblock), so the restored transcript and
+        // the restored draft never hold the same line twice. The draft is the
+        // CALLER'S, not $next's — $next above already blanked inputBuf (E681).
+        // The files come too (item 3.A-1), but not here: the capture is run at
+        // the head of the turn's own Cmd below, after the frame is painted and
+        // before the turn can fork and write a file — and only for a Chat given
+        // an explicit project root, never the getcwd() fallback.
+        $workspaceCapture = $turns->saveCheckpoint(
+            $this->sessionStore,
+            $this->currentSessionId,
+            $this->projectRoot,
+            $turns->checkpointState($preTurnHistory, $preTurnDraft, $preTurnCursor, $this->currentSessionId),
+        );
 
         // The row's turn count and last-prompt preview, which the session
         // picker shows instead of the system prompt every session shares
         // (Appendix P §3.1, audit B3). The prompt is the user row this turn
         // added, so the parked-compaction route records the prompt it sent,
         // not whatever the box holds now.
-        if ($this->sessionStore !== null && $this->currentSessionId !== null) {
-            $turnPrompt = null;
-            foreach ($newTurnMessages as $message) {
-                if ($message instanceof Message && $message->role === Role::User) {
-                    $turnPrompt = $message->content;
-                }
-            }
-            if ($turnPrompt !== null) {
-                try {
-                    $this->sessionStore->recordTurn($this->currentSessionId, $turnPrompt);
-                } catch (\Throwable) {
-                    // Picker bookkeeping only; never blocks the prompt.
-                }
-            }
-        }
+        $turns->recordTurn($this->sessionStore, $this->currentSessionId, $newTurnMessages);
+
+        // The prompt's row, announced to the session's durable event log
+        // (Appendix O §6.5 `message.created`) BEFORE the dispatch below writes
+        // `turn.started`, whose `messageId` names this same row.
+        $turns->recordMessagesCreated($next->transcripts(), $this->currentSessionId, $newTurnMessages);
 
         $completion = $this->scheduleBackendCompletion($next, $cancellation, $generation);
         if ($workspaceCapture !== null) {
@@ -10895,9 +10503,9 @@ final class Chat implements Model
         }
         [$spec, $arguments] = $command;
 
-        return $spec->expandTemplate(
+        return $this->turnController()->expandCustomCommand(
+            $spec,
             $arguments,
-            (new CommandParser())->parse('/c ' . $arguments)?->args ?? [],
             $this->commandDirective($spec, $onGateEvaluated),
         );
     }
@@ -10912,52 +10520,7 @@ final class Chat implements Model
      */
     private function resolveCustomCommand(string $text): ?array
     {
-        if ($this->customCommands === []) {
-            return null;
-        }
-
-        // `/s` so a bare "/name" with a trailing newline still parses, and `\S+`
-        // so the name stops at the first whitespace of any kind.
-        if (preg_match('/^\/(\S+)(?:\s+(.*))?$/s', $text, $matches) !== 1) {
-            return null;
-        }
-
-        $name = $matches[1];
-        $arguments = trim($matches[2] ?? '');
-
-        $spec = $this->customCommands[$name] ?? null;
-
-        // THE COLON INVOCATION FORM, `/name:arg`, which
-        // {@see CommandParser::parse()} accepts and this method did not:
-        // `parse()` terminates the name at the first `:` and treats the rest as
-        // arguments, so `/compact:x` reached the BUILT-IN `/compact` while a
-        // project `compact.md` sat unread — i.e. every built-in was still
-        // reachable, un-overridden, through its colon spelling, which falsifies
-        // the precedence claim in {@see submit()}. Tried only after the whole
-        // `\S+` name misses, because `:` is not legal in a command file's name
-        // ({@see CommandSpec::NAME_PATTERN}) and so an exact hit can never be
-        // the colon form.
-        //
-        // The colon's tail is PREPENDED to the arguments rather than replacing
-        // them, matching `parse()`: it reads `/compact:x y` as name `compact`
-        // with `x y`, and the two paths must not disagree about what the
-        // arguments were.
-        if ($spec === null) {
-            $colon = strpos($name, ':');
-            if ($colon !== false) {
-                $candidate = $this->customCommands[substr($name, 0, $colon)] ?? null;
-                if ($candidate !== null) {
-                    $spec = $candidate;
-                    $arguments = trim(substr($name, $colon + 1) . ' ' . $arguments);
-                }
-            }
-        }
-
-        if ($spec === null) {
-            return null;
-        }
-
-        return [$spec, $arguments];
+        return $this->turnController()->resolveCustomCommand($text, $this->customCommands);
     }
 
     /**
@@ -10979,20 +10542,13 @@ final class Chat implements Model
      */
     private function commandDirective(CommandSpec $spec, ?\Closure $onGateEvaluated = null): \Closure
     {
-        $root = $this->projectRoot();
-
-        return function (string $kind, string $payload, float $secondsRemaining) use ($spec, $root, $onGateEvaluated): string {
-            if ($kind === 'include') {
-                return $spec->includeFile($payload, $root);
-            }
-
-            $refusal = $this->refuseCommandShell($spec, $payload, $onGateEvaluated);
-            if ($refusal !== null) {
-                return $refusal;
-            }
-
-            return $spec->runShellSubstitution($payload, $root, $secondsRemaining);
-        };
+        return $this->turnController()->commandDirective(
+            $spec,
+            $this->projectRoot(),
+            $this->projectCommandsTrusted,
+            $this->permissionGate(),
+            $onGateEvaluated,
+        );
     }
 
     /**
@@ -11030,55 +10586,13 @@ final class Chat implements Model
      */
     private function refuseCommandShell(CommandSpec $spec, string $command, ?\Closure $onGateEvaluated = null): ?string
     {
-        if ($spec->tier === 'project' && !$this->projectCommandsTrusted) {
-            return sprintf(
-                '[!`%s` was not run: /%s came from this project\'s .sugar-crush/commands, which arrives '
-                . 'with the repository, and a command file from a checkout may only run a shell if you have '
-                . 'listed this project under "trustedProjectCommands" in ~/.sugar-crush/config.json — the '
-                . 'rest of the command file was sent.]',
-                CommandSpec::abbreviateForm($command),
-                $spec->name,
-            );
-        }
-
-        // NO GATE IS NOT A REFUSAL. `permissionGate()` answers null for every
-        // embedder and most tests — a Chat built without a hook chain and
-        // without an EngineBackend — and refusing there would mean a session
-        // with NO permission configuration was STRICTER than one running the
-        // shipped default mode, which answers `Ask` and proceeds. Check 1 is
-        // what carries the authorisation in that case, and it has already run:
-        // the file is either the operator's own or a checkout they named.
-        $gate = $this->permissionGate();
-        if ($gate === null) {
-            return null;
-        }
-
-        // `\SugarCraft\Crush\ToolCall`, the TUI-side half of the two ToolCall
-        // pairs crush_feat.md §1 D flags — NOT `Tools\ToolCall`, which is the
-        // engine-side pair and which PermissionGate does not accept. Named
-        // fully rather than imported so the choice is visible at the call site.
-        // RECORDED when asked to be (audit 15b-20): an expansion forked off the
-        // update path evaluates against the CHILD's copy of the gate, whose
-        // Auto-mode circuit-breaker counters die with it, so the child reports
-        // every command it put to the gate and {@see resumeCustomCommand()}
-        // replays them, in order, against the session's own.
-        if ($onGateEvaluated !== null) {
-            $onGateEvaluated($command);
-        }
-
-        // No project root: a Bash verdict never reads one — rules read it
-        // for path subjects only, accept-edits and the classifier for
-        // Edit/Write only (audit F-J3-rem(b), pinned by ChatBashGateRootTest).
-        if ($gate->evaluate(new \SugarCraft\Crush\ToolCall('Bash', ['command' => $command]))
-            === \SugarCraft\Crush\Permissions\PermissionDecision::Deny) {
-            return sprintf(
-                '[!`%s` was not run: this session\'s permission mode (%s) denies it]',
-                CommandSpec::abbreviateForm($command),
-                $gate->mode()->value,
-            );
-        }
-
-        return null;
+        return $this->turnController()->refuseCommandShell(
+            $spec,
+            $command,
+            $this->projectCommandsTrusted,
+            $this->permissionGate(),
+            $onGateEvaluated,
+        );
     }
 
     /**

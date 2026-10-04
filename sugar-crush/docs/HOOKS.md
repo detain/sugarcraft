@@ -165,9 +165,9 @@ already run:
 | `PostToolUse` | after a tool ran, in provider order | `Runtime::settle()`, `Chat::applyPostToolUse()` |
 | `Stop` | the agent is about to stop | — |
 | `SubagentStop` | a sub-agent is about to stop | — |
-| `SessionStart` | the first prompt submitted into an empty history | `Chat::dispatchTurnHooks()` |
+| `SessionStart` | the first prompt submitted into an empty history | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
 | `SessionEnd` | the session is ending | — |
-| `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()` |
+| `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
 | `PreCompact` | before a compaction condenses the history — the one that can skip it | `Chat::preCompactGate()` |
 | `PostCompact` | after a compaction was applied | `Chat::postCompactCmd()` |
 | `TeammateIdle` | a teammate went idle | — |
@@ -241,10 +241,13 @@ sequential interleave.
 
 ### The two turn events
 
-`Chat::dispatchTurnHooks()` is the only production dispatcher for both, reached
+In the TUI, `Chat::dispatchTurnHooks()` is the only production dispatcher for both, reached
 from `submit()` on every prompt, or from `scheduleParkedCompaction()` instead
 when the automatic 85% compaction tier parks the prompt behind a model-written
-summary. Each submission takes exactly one of the two, and a parked prompt is
+summary. A session driven without a screen (`Host\SessionHost`) fires the same
+two events from `SessionHost::fireTurnHooks()`, through the same
+`Host\TurnController` logic, so the order, the notes and the refusals below hold
+there too. Each submission takes exactly one of the two, and a parked prompt is
 judged when it is parked — so a block stops it before the summarization is paid
 for, and a note is written immediately ahead of the echoed prompt, where it rides
 the turn that goes out once the summary lands. Their verdicts behave differently

@@ -183,6 +183,40 @@ finish, step usage, a spend-cap stop — and the settle reports
 never logged. A failed write or a throwing listener drops the event, never the
 turn.
 
+**What a submitted line becomes is `Host\TurnController`'s.** Whether a line
+typed mid-turn is steered into the running turn, queued, or refused; what a
+`!cmd` and its refusal read; a command file's expansion (the `/name:arg`
+spelling, the project-tier shell refusal, the gate, the fork that takes a
+shell form off the thread); the two turn hooks (their context, gate-first
+order, notes and refusals, and the fork for a script hook); the prompt's
+mentions; the inline 85%/95% tier's synchronous heuristic; and the dispatch's
+bookkeeping — the `/rewind` checkpoint of the state before the prompt, the
+picker's turn count, and the durable `message.created` that names the prompt
+row ahead of `turn.started` — are its logic. `Chat::submit()`,
+`::dispatchTurn()`, `::dispatchTurnHooks()` and `::releaseQueuedPrompts()`
+keep the Msg plumbing (which `mutate()` a route commits, which `Cmd` it
+returns, when a parked submission re-enters `submit()`) and call it through
+`Host\WorkspaceContext::service()`; without a registered controller, a fresh
+one, since it is stateless.
+
+**`Host\SessionHost` drives a session without a screen.** It admits a
+submission through the same controller, runs the turn through the same
+`TurnRunner`, folds its events through the same `TranscriptProjector` and saves
+through the same `TranscriptStore`, so a server and the TUI cannot disagree
+about what a prompt becomes or what the event log says about it.
+`submit(string, SubmitOptions): TurnTicket` answers with the admission
+(`started`, `queued`, `steered`, `pending` behind forked hooks or an
+expansion, or `refused` with the sentence the TUI would write), `snapshot()`
+gives a client the rows, status, queue and the log seq to follow from,
+`cancel()` heals running tool rows exactly as Esc Esc does, and `pump()` folds
+the turn's live events on the host's own tick. What it does not do yet:
+slash commands and `!cmd` are refused (O-2h), and the 85% tier compacts with
+the heuristic only — the model-written route is the TUI's. `Host\SessionHub`
+owns the open hosts of one workspace: opening a session loads its transcript
+and takes the same `SessionLock` a TUI takes, so a session another process
+holds is refused, and only an idle host is ever evicted past the open-session
+cap.
+
 ### `App` hosts `Chat`
 
 > **⚠️ `App` WEARS TWO HATS — DO NOT "RETIRE" IT.** This warning is the reason

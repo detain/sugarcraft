@@ -122,6 +122,7 @@ sugar-crush/tests/Context/EnvironmentBlockTest.php	3.044	49
 sugar-crush/tests/Memory/MemoryStoreTest.php	2.959	67
 sugar-crush/tests/LSP/LspExchangeLockTest.php	2.936	15
 sugar-crush/tests/Tools/BuiltIn/AtomicEditWriteTest.php	2.885	21
+sugar-crush/tests/Host/SessionHostTest.php	2.800	10
 sugar-crush/tests/Chat/AutomaticCompactionModelSummaryTest.php	2.777	37
 sugar-crush/tests/Tui/TextSelectionCandyMouseTest.php	2.680	4
 sugar-crush/tests/Support/NonBlockingVocabularyTest.php	2.569	25
@@ -200,6 +201,7 @@ sugar-crush/tests/Sessions/BackgroundIpcCleanupTest.php	1.356	12
 sugar-crush/tests/Agents/TeamTest.php	1.317	28
 sugar-crush/tests/SessionTabClickTest.php	1.307	13
 sugar-crush/tests/Host/TurnRunnerEventLogTest.php	1.300	5
+sugar-crush/tests/Host/SessionHubTest.php	1.300	5
 sugar-crush/tests/Workflows/WorkflowResumeReportingTest.php	1.288	4
 sugar-crush/tests/Tools/OutputTruncationTest.php	1.283	24
 sugar-crush/tests/Integration/SystemPromptWiringTest.php	1.275	14
@@ -306,6 +308,7 @@ sugar-crush/tests/Chat/ChatPostToolUseBlockTest.php	0.478	7
 sugar-crush/tests/Backend/SessionAffinityWiringTest.php	0.478	6
 sugar-crush/tests/Chat/ChatCancelKeepsLoopLiveTest.php	0.464	2
 sugar-crush/tests/SuiteTempSandboxContractTest.php	0.463	5
+sugar-crush/tests/Host/TurnControllerTest.php	0.460	16
 sugar-crush/tests/Chat/BackgroundStopCommandTest.php	0.456	5
 sugar-crush/tests/Tools/TaskToolOutputFenceTest.php	0.450	6
 sugar-crush/tests/RepoMap/PhpSymbolExtractorTest.php	0.450	9
@@ -629,6 +632,9 @@ sugar-crush/tests/Commands/BuiltInCommandsTest.php	0.030	7
 sugar-crush/tests/Hooks/HookRegistryReservedNameTest.php	0.030	4
 sugar-crush/tests/Context/Pruning/Strategies/SupersededTurnContextStrategyTest.php	0.030	2
 sugar-crush/tests/Context/Compaction/StateSummaryTemplateTest.php	0.030	13
+sugar-crush/tests/Host/SubmitOptionsTest.php	0.030	3
+sugar-crush/tests/Host/TurnTicketTest.php	0.030	3
+sugar-crush/tests/Host/SessionSnapshotTest.php	0.030	2
 sugar-crush/tests/Tools/McpToolBridgeTest.php	0.029	54
 sugar-crush/tests/Skills/SkillFileReaderTest.php	0.029	14
 sugar-crush/tests/ThemeTest.php	0.029	8

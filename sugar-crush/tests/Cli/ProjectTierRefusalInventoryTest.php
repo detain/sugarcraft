@@ -309,6 +309,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // the spend accounting (roadmap O-2c). Never read or built here; rooted
         // at `~`, so user-tier like the `Chat.php` row above.
         'Host/SpendLedger.php|.sugar-crush/config.json' => self::USER,
+        // The command-file shell refusal's sentence, telling the operator where
+        // `trustedProjectCommands` is declared — moved out of `Chat` with the
+        // rest of the submit pipeline (roadmap O-2g). Never read or built here;
+        // rooted at `~`, so user-tier like the `Chat.php` row above.
+        'Host/TurnController.php|.sugar-crush/config.json' => self::USER,
         // The install path `sugarcrush completion fish` PRINTS, in a comment.
         // Rooted at `~`, so it is user-tier by the same rule as every entry
         // around it -- and it is never read: nothing in src/ opens it, the
@@ -381,7 +386,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FORTY-EIGHT occurrences — one per entry
+     * APPEARS IN. On this tree that is FORTY-NINE occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY-ONE distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and

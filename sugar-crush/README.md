@@ -1563,6 +1563,8 @@ bin/sugarcrush
 
 The chassis speaks the root `Message` value object; the engine speaks the typed `Messages\*` hierarchy; `EngineBackend` converts at the seam.
 
+Below `Chat`, the session logic a server needs lives in `src/Host/`: `Host\TurnController` decides what a submitted line becomes (steer, queue, refusal, command-file expansion, turn hooks, the dispatch's checkpoint and `message.created` event), and `Host\SessionHost` drives one session without a screen through that same controller and the same `TurnRunner`, with `Host\SessionHub` holding the open sessions and their locks. `Chat` delegates to the same services, so the TUI and a headless host cannot drift (see [ARCHITECTURE](docs/ARCHITECTURE.md)).
+
 ## Limitations
 
 Things that are genuinely not finished, stated plainly rather than left for you to discover:

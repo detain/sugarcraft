@@ -23,6 +23,7 @@ use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Host\EventLog;
 use SugarCraft\Crush\Host\SessionEvent;
 use SugarCraft\Crush\Host\TranscriptStore;
+use SugarCraft\Crush\Host\TurnController;
 use SugarCraft\Crush\Host\TurnRunner;
 use SugarCraft\Crush\Host\WorkspaceContext;
 use SugarCraft\Crush\Message;
@@ -89,12 +90,16 @@ final class TurnRunnerEventLogTest extends TestCase
         $done = self::apply($running, self::settled($settled));
         $done->flushTranscript();
 
-        $events = EventLog::new($this->store)->since('s');
+        // O-2g: the prompt's row is announced (`message.created`) ahead of the
+        // turn that answers it; the turn's own story follows from seq 2.
+        [$created, $events] = self::splitCreated(EventLog::new($this->store)->since('s'));
+        self::assertCount(1, $created);
+        self::assertSame(1, $created[0]['seq']);
         self::assertSame(
             [SessionEvent::TURN_STARTED, SessionEvent::TOOL_STARTED, SessionEvent::TOOL_FINISHED, SessionEvent::ASSISTANT_COMPLETED, SessionEvent::TURN_COMPLETED],
             array_column($events, 'type'),
         );
-        self::assertSame(range(1, 5), array_column($events, 'seq'));
+        self::assertSame(range(2, 6), array_column($events, 'seq'));
         $turnIds = array_unique(array_map(static fn (array $e): string => $e['payload']['turnId'], $events));
         self::assertCount(1, $turnIds, 'every event names the one turn');
         self::assertSame('end_turn', $events[4]['payload']['stopReason']);
@@ -104,6 +109,7 @@ final class TurnRunnerEventLogTest extends TestCase
             $saved[$row->content] = $row->id;
         }
         self::assertSame($saved['run ls'], $events[0]['payload']['messageId'], 'turn.started names the prompt row');
+        self::assertSame($saved['run ls'], $created[0]['payload']['messageId'], 'message.created named the same row first');
         self::assertSame($saved['a.txt'], $events[2]['payload']['messageId'], 'tool.finished names the saved tool row');
         self::assertSame($saved['there is one file'], $events[3]['payload']['messageId'], 'assistant.completed names the saved reply');
         self::assertSame('c1', $events[1]['payload']['toolCallId']);
@@ -154,7 +160,12 @@ final class TurnRunnerEventLogTest extends TestCase
         ($backend->deferred)()->resolve(Message::assistant('there it is'));
         self::apply($running, self::settled($settled));
 
-        $logged = array_column(EventLog::new($this->store)->since('s'), 'type');
+        // `message.created` is logged ahead of the turn but not yet broadcast:
+        // TurnController writes it straight to the EventLog until the runner
+        // grows a seam to announce it (O-2g handoff), so it is compared apart.
+        [$created, $turnEvents] = self::splitCreated(EventLog::new($this->store)->since('s'));
+        self::assertCount(1, $created);
+        $logged = array_column($turnEvents, 'type');
         self::assertSame([
             SessionEvent::TURN_STARTED,
             SessionEvent::PERMISSION_REQUESTED,
@@ -171,7 +182,7 @@ final class TurnRunnerEventLogTest extends TestCase
         self::assertSame('there ', $delta[0]->data['text']);
         $durable = array_values(array_filter($heard, static fn (SessionEvent $e): bool => $e->isDurable()));
         self::assertSame($logged, array_map(static fn (SessionEvent $e): string => $e->type, $durable));
-        self::assertSame(range(1, 7), array_map(static fn (SessionEvent $e): ?int => $e->seq, $durable), 'heard after the log numbered it');
+        self::assertSame(range(2, 8), array_map(static fn (SessionEvent $e): ?int => $e->seq, $durable), 'heard after the log numbered it');
         self::assertSame('once', $durable[2]->data['reply']);
     }
 
@@ -220,7 +231,7 @@ final class TurnRunnerEventLogTest extends TestCase
         self::assertSame(1, $calls, 'detached after its first throw');
         self::assertFalse($runner->hasListeners());
         self::assertSame('fine', $done->history[\count($done->history) - 1]->content);
-        self::assertCount(3, EventLog::new($this->store)->since('s'), 'the log is still written');
+        self::assertCount(3, self::splitCreated(EventLog::new($this->store)->since('s'))[1], 'the log is still written');
     }
 
     /** No store, or no session: nothing is logged and the turn runs as before. */
@@ -254,6 +265,21 @@ final class TurnRunnerEventLogTest extends TestCase
             liveToolEvents: new \ArrayObject(),
             streaming: true,
         );
+    }
+
+    /**
+     * The log split into the prompt rows' `message.created` events (written by
+     * {@see TurnController} at dispatch) and the turn's own story.
+     *
+     * @param list<array<string, mixed>> $events
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
+     */
+    private static function splitCreated(array $events): array
+    {
+        $created = array_values(array_filter($events, static fn (array $e): bool => $e['type'] === TurnController::MESSAGE_CREATED));
+        $rest = array_values(array_filter($events, static fn (array $e): bool => $e['type'] !== TurnController::MESSAGE_CREATED));
+
+        return [$created, $rest];
     }
 
     /**
