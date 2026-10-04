@@ -1442,6 +1442,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
             return \SugarCraft\Crush\Host\CompactionService::preCompactRefusal($verdict);
         };
+        // Its observe-only pair, once a step summary was applied (3.D-2):
+        // `compact_summary` is what the model now reads in place of the rows.
+        // Nothing it says is read back, and a chain that throws costs nothing.
+        $postCompact = function (string $trigger, string $summary) use ($compactionHooks): void {
+            $event = \SugarCraft\Crush\Hooks\HookEvent::PostCompact;
+            if (!$compactionHooks->hasHooksFor($event, $event->value)) {
+                return;
+            }
+            try {
+                $compactionHooks->postCompact(HookManager::eventContext(
+                    $event,
+                    ['trigger' => $trigger, 'compact_summary' => $summary],
+                    $this->sessionId ?? '',
+                    $this->root ?? '',
+                    $this->model,
+                    $this->provider->name(),
+                ));
+            } catch (\Throwable) {
+                // Observe-only: the summary already stands.
+            }
+        };
 
         $app = $this->sessionApp()
             // Roadmap 4.1-1: a sub-agent's preset effort, per request.
@@ -1788,7 +1809,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         $summaryTried = true;
                         // Not past the spend cap: a summary is a provider call,
                         // and the cap refuses the next one by definition.
-                        if ($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd) {
+                        // Roadmap 3.D-2: and not when a PreCompact hook refuses
+                        // compactions — asked before the summary is paid for;
+                        // the request then goes out as it stands.
+                        if (($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd)
+                            && $preCompact('auto', '') === null
+                        ) {
                             $block = \SugarCraft\Crush\Context\Compaction\StepSummarizer::summarise(
                                 $runtime,
                                 $app,
@@ -1802,6 +1828,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                                 $this->summaryModel,
                             );
                             $relieved = $block === null ? null : $contextLedger->withBlock($block);
+                            if ($block !== null) {
+                                $postCompact('auto', $block->summary);
+                            }
                         }
                     }
                     if ($relieved !== null) {
@@ -1875,7 +1904,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         $relieved = $relieved->apply($delta);
                     }
                     // Not past the spend cap: the summary is a provider call.
-                    if ($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd) {
+                    // Nor past a PreCompact refusal (3.D-2): the prune above
+                    // is overflow protection, the summary is a compaction.
+                    if (($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd)
+                        && $preCompact('auto', '') === null
+                    ) {
                         $block = \SugarCraft\Crush\Context\Compaction\StepSummarizer::summarise(
                             $runtime,
                             $app->withContextLedger($relieved),
@@ -1888,6 +1921,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         );
                         if ($block !== null) {
                             $relieved = $relieved->withBlock($block);
+                            $postCompact('auto', $block->summary);
                         }
                     }
                     if ($relieved === $contextLedger) {
