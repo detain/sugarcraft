@@ -506,14 +506,26 @@ or yield, and `runTurn()` rebuilds the step over a relieved
 model's view; the rows themselves are never rewritten. `Runtime::buildMessages()`
 projects every request through it (`Context\Pruning\ContextProjector`, then
 `HistorySanitizer`), so an App with an empty ledger sends exactly what it always
-did. The relief is `Context\Pruning\EmergencyPrune`, one batch of two
-strategies: the age rule (`Strategies\ToolOutputAgeStrategy` — the last two user
-turns and the newest 40k tokens of older tool output stay, `Task`, `Skill`,
-`Edit` and `Write` output is never touched, older output becomes a placeholder)
-and the superseded `<turn-context>` rows (`Strategies\SupersededTurnContextStrategy`
-— every one but the newest). It is made only when it frees at least 20k
-estimated tokens, because a prune rewrites bytes the provider has cached: the
-ledger changes rarely and in bulk, never a little each step.
+did. The relief is `Context\Pruning\EmergencyPrune`, one batch of six
+strategies. Four are path-keyed, matching calls by tool and canonical arguments
+(`Context\Pruning\CanonicalArguments` — the `description` argument, key order
+and `./` spellings never split a key): a call a newer identical call answered
+again, or a `Read` a newer whole-file `Read` of the file covers
+(`Strategies\DuplicateCallStrategy`); a `Read` older than a successful `Edit` or
+`Write` of the same file, outside the last two user turns
+(`Strategies\StaleReadStrategy`); the `content` argument of a `Write` a later
+write or whole-file read of the file supersedes
+(`Strategies\SupersededWriteInputStrategy`); and the arguments of a call that
+failed four or more user turns ago, all but its main one
+(`Strategies\ErroredInputStrategy`). Then the age rule
+(`Strategies\ToolOutputAgeStrategy` — the last two user turns and the newest 40k
+tokens of older tool output stay, `Task`, `Skill`, `Edit` and `Write` output is
+never touched, older output becomes a placeholder) and the superseded
+`<turn-context>` rows (`Strategies\SupersededTurnContextStrategy` — every one but
+the newest). A call two rules name is pruned once, by the first. It is made only
+when it frees at least 20k estimated tokens, because a prune rewrites bytes the
+provider has cached: the ledger changes rarely and in bulk, never a little each
+step.
 
 **A step still over budget is summarised.** When the prune is not enough —
 typically one long turn, whose output the age rule protects as the newest user
@@ -789,7 +801,10 @@ and its main argument — `file_path`, `path`, `command`, `pattern`, `url`,
 `[Read src/Tools/Bash.php — output pruned to save context; re-run the tool if you need it]`
 (`Context\Pruning\PrunedOutputPlaceholder`). The result keeps its call id and its
 error flag, so every call still has its answer, and the model re-runs the call
-if it needs the output again.
+if it needs the output again. A superseded write's `content`, and the arguments
+of a call that failed long ago, are pruned from the call instead
+(`Context\Pruning\PrunedInputPlaceholder`): the call keeps its id, its name,
+its keys and its main argument, and its result is sent as it was.
 
 ---
 

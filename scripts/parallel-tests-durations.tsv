@@ -518,6 +518,7 @@ sugar-crush/tests/Backend/ChildChannelTest.php	0.070	11
 sugar-crush/tests/Chat/MemoryAddDefaultScopeTest.php	0.070	5
 sugar-crush/tests/RepoMap/RepoMapRendererBudgetTest.php	0.070	9
 sugar-crush/tests/Host/CompactionServiceParityTest.php	0.070	7
+sugar-crush/tests/Context/Pruning/PathKeyedPruningTest.php	0.070	5
 sugar-crush/tests/Hooks/RuntimeHookInputEncodingTest.php	0.069	6
 sugar-crush/tests/Backend/PendingAskTest.php	0.069	13
 sugar-crush/tests/Providers/ProviderFactoryTest.php	0.067	100
@@ -542,6 +543,10 @@ sugar-crush/tests/Tools/Catalog/ToolDocDriftTest.php	0.060	5
 sugar-crush/tests/Chat/EnterWhileBusySteersTest.php	0.060	5
 sugar-crush/tests/Context/Pruning/Strategies/ToolOutputAgeStrategyTest.php	0.060	8
 sugar-crush/tests/Host/TranscriptProjectorParityTest.php	0.060	5
+sugar-crush/tests/Context/Pruning/Strategies/DuplicateCallStrategyTest.php	0.060	4
+sugar-crush/tests/Context/Pruning/Strategies/StaleReadStrategyTest.php	0.060	3
+sugar-crush/tests/Context/Pruning/Strategies/SupersededWriteInputStrategyTest.php	0.060	2
+sugar-crush/tests/Context/Pruning/Strategies/ErroredInputStrategyTest.php	0.060	2
 sugar-crush/tests/Permissions/PermissionGateTest.php	0.059	165
 sugar-crush/tests/SessionTest.php	0.059	18
 sugar-crush/tests/Context/ProjectMemoryWriterTest.php	0.058	10

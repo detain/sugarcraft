@@ -32,7 +32,10 @@ use SugarCraft\Crush\Tools\ToolCall;
  *     the last one, which is the state the model must read;
  *  3. a pruned tool result keeps its call id and error flag and has its
  *     content replaced by {@see PrunedOutputPlaceholder}, named from the call
- *     that asked for it.
+ *     that asked for it;
+ *  4. a call whose INPUT is pruned (roadmap 2.3: a superseded write's
+ *     content, a long-failed call's arguments) is rewritten on its assistant
+ *     row by {@see PrunedInputPlaceholder}, keeping its id, name and keys.
  *
  * Steps 1 and 2 remove rows only at step boundaries or rows that pair with
  * nothing, so every tool call that is sent keeps its result.
@@ -79,9 +82,11 @@ final class ContextProjector
             }
             if ($message instanceof ToolResultMessage) {
                 $entry = $ledger->prune($message->toolCallId());
-                if ($entry !== null) {
+                if ($entry !== null && !$entry->kind->rewritesInput()) {
                     $message = self::pruned($message, $entry, $calls[$message->toolCallId()] ?? null);
                 }
+            } elseif ($message instanceof AssistantMessage && ($message->toolCalls() ?? []) !== []) {
+                $message = self::withPrunedInputs($message, $ledger);
             }
             $projected[] = $message;
         }
@@ -134,11 +139,31 @@ final class ContextProjector
         return null;
     }
 
+    /**
+     * $message with the arguments of every call the ledger prunes the INPUT
+     * of rewritten ({@see PrunedInputPlaceholder}, roadmap 2.3) — same id,
+     * same name, same keys, so the call still pairs with its result. The row
+     * itself is returned when nothing it carries is pruned.
+     */
+    private static function withPrunedInputs(AssistantMessage $message, ContextLedger $ledger): AssistantMessage
+    {
+        $changed = false;
+        $calls = [];
+        foreach ($message->toolCalls() ?? [] as $call) {
+            $entry = $call instanceof ToolCall ? $ledger->prune($call->id()) : null;
+            if ($entry !== null && $entry->kind->rewritesInput()) {
+                $call = new ToolCall($call->id(), $call->name(), PrunedInputPlaceholder::apply($entry->kind, $call->arguments()), $call->argumentsError());
+                $changed = true;
+            }
+            $calls[] = $call;
+        }
+
+        return $changed ? $message->withToolCalls($calls) : $message;
+    }
+
     private static function pruned(ToolResultMessage $result, PruneEntry $entry, ?ToolCall $call): ToolResultMessage
     {
-        $content = match ($entry->kind) {
-            PruneKind::Output => PrunedOutputPlaceholder::for($call?->name() ?? 'tool', $call?->arguments() ?? []),
-        };
+        $content = PrunedOutputPlaceholder::for($call?->name() ?? 'tool', $call?->arguments() ?? []);
 
         // The image and the tool's own spend stay behind: neither is part of
         // the wire (toArray() omits them), and a placeholder carries neither.
