@@ -2918,6 +2918,9 @@ final class Bootstrap
             $root,
             null,
             $skills,
+            // Step 3.F: the launch's language servers, started once here
+            // and shared by every forked turn (LspConnection is fork-safe).
+            lsp: self::lspClient($root),
             rgAvailable: self::capabilityPresent('rg'),
             fdAvailable: self::capabilityPresent('fd'),
             // E675: the SAME manager the Chat runs on (accessor, not a fresh
@@ -3333,6 +3336,8 @@ final class Bootstrap
                 $root,
                 $loader,
                 $skills,
+                // Step 3.F: the same memoised servers as app()'s tool set.
+                lsp: self::lspClient($root),
                 rgAvailable: self::capabilityPresent('rg'),
                 fdAvailable: self::capabilityPresent('fd'),
                 rulesState: $rulesState,
@@ -3456,6 +3461,8 @@ final class Bootstrap
                 $root,
                 $loader,
                 $skills,
+                // Step 3.F: the same memoised servers as app()'s tool set.
+                lsp: self::lspClient($root),
                 rgAvailable: self::capabilityPresent('rg'),
                 fdAvailable: self::capabilityPresent('fd'),
                 rulesState: $rulesState,
@@ -5466,6 +5473,17 @@ final class Bootstrap
                 self::readUserConfig()[\SugarCraft\Crush\Lint\LintRunner::SETTINGS_KEY] ?? null,
             ),
         ));
+
+        // Post-edit diagnostics (step 3.F): only when the user configured a
+        // language server under `lsp` and one started — the same memoised
+        // servers the `Lsp` tool asks. Registered here, ahead of the hook
+        // files, for the lint hook's reasons: it needs configuration, and a
+        // file entry must not be able to take its event+name. Never a
+        // refusal; its report rides on the edit's result.
+        $lsp = $root === null ? null : self::lspClient($root);
+        if ($lsp !== null) {
+            $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\PostEditDiagnosticsHook($lsp));
+        }
 
         foreach (self::hookFiles($root) as $path) {
             try {
@@ -8098,48 +8116,113 @@ final class Bootstrap
     }
 
     /**
-     * The model-facing {@see LspTool}, wired to whatever language servers this
-     * launch has — which today is NONE, and that is deliberate.
+     * The launch's language servers, per process and per root — see
+     * {@see lspClient()}. A null entry is a root with none configured (or none
+     * that started), memoised so the config is read once.
      *
-     * AN INTENTIONAL DORMANT SEAM, in this repo's "wire it or document it, never
-     * delete it" sense. `src/LSP/` ships a finished {@see LspClient},
-     * {@see \SugarCraft\Crush\LSP\LspConnection} and
-     * {@see \SugarCraft\Crush\LSP\LspCache} with three test files, and before
-     * {@see LspTool} nothing outside `src/LSP/` referenced any of them. The tool
-     * is the reachability half. This method is the CONFIGURATION half, and it is
-     * empty for one measured reason: THERE IS NO SETTINGS KEY FOR LANGUAGE
-     * SERVERS. Measured on this tree — `grep -rin lsp` over `src/Cli/Bootstrap.php`
-     * and every settings reader in `src/` matched nothing but the additions in
-     * this commit, and `src/` has no `Settings` namespace at all
-     * ({@see \SugarCraft\Crush\Tui\Components\SettingsPane} is a TUI pane, not
-     * a loader). So there is nothing to read, and inventing a key here would be a
-     * config surface with no documentation, no validation and no user.
+     * @var array<int, array<string, ?LspClient>>
+     */
+    private static array $lspClients = [];
+
+    /** Whether {@see stopLspServers()} is already registered to run at exit. */
+    private static bool $lspShutdownRegistered = false;
+
+    /**
+     * The language servers the user configured under `lsp` (step 3.F), started
+     * once and shared by every tool, hook and forked turn of this launch — or
+     * null when none is configured or none would start.
      *
-     * WHAT HAS TO LAND NEXT, named rather than left implied: a settings block
-     * declaring, per language, a server command plus args; a launcher that
-     * `proc_open()`s it through {@see \SugarCraft\Crush\LSP\LspConnection::connect()}
-     * and calls `initialize()`; an `onNotification()` subscriber routing
-     * `textDocument/publishDiagnostics` into
-     * {@see LspClient::handlePublishDiagnostics()}, which NOTHING in `src/` does
-     * today — that is why {@see LspTool}'s empty `diagnostics` answer carries its
-     * own caveat rather than reading as "this file is clean"; a shutdown hook in
-     * the shape of {@see stopMcpServers()}; and — because STARTING A SERVER IS
-     * CODE EXECUTION,
-     * exactly as it is for `.mcp.json` — the same trust gate {@see mcpClient()}
-     * applies to a project-supplied config. That gate is the reason this is not
-     * a two-line change, and it is why the launcher is out of this bundle's scope
-     * rather than merely unfinished.
+     * USER TIER ONLY, like `.mcp.json`'s trust gate and for the same reason:
+     * starting a server is code execution. The key is not project-settable
+     * (`LspSettings`), so {@see readUserConfig()} never takes it from a
+     * project file, trusted or not.
      *
-     * MEANWHILE THE TOOL IS STILL REACHABLE AND STILL HONEST. With a null client
-     * every call returns an ERROR naming the language, never an empty success —
-     * see {@see LspTool} for why that distinction is the point, and
+     * Memoised per pid and root, the {@see mcpClient()} shape: a
+     * `pcntl_fork()`ed child inherits the parent's servers through the objects
+     * it was handed, and {@see \SugarCraft\Crush\LSP\LspConnection} is
+     * fork-safe, so nothing is started twice for a turn. A child that calls
+     * this itself (a background session after `chdir()`) starts its own, and
+     * {@see stopLspServers()} stops only those when it exits.
+     *
+     * Every server that could not start is reported once, on stderr and in
+     * the transcript; the others still run.
+     */
+    public static function lspClient(?string $root = null): ?LspClient
+    {
+        $root = self::requireRoot($root);
+        $pid = getmypid() ?: 0;
+        if (array_key_exists($root, self::$lspClients[$pid] ?? [])) {
+            return self::$lspClients[$pid][$root];
+        }
+
+        $launcher = \SugarCraft\Crush\LSP\LspLauncher::fromConfig(
+            self::readUserConfig()[\SugarCraft\Crush\LSP\LspLauncher::SETTINGS_KEY] ?? null,
+            $root,
+        );
+        $client = null;
+        if ($launcher->hasServers()) {
+            self::registerLspShutdown();
+            [$client, $launcher] = $launcher->launch();
+        }
+        self::$lspClients[$pid][$root] = $client;
+
+        foreach ($launcher->problems() as $problem) {
+            self::warnPermissionConfigInTranscript($problem);
+        }
+
+        return $client;
+    }
+
+    /**
+     * Stop the language servers THIS process started — the shutdown hook's
+     * callback, and the way a caller owning a process lifetime (a test, an
+     * embedder) hands them back early. This pid's bucket only, for the reason
+     * {@see stopMcpServers()} gives. Idempotent.
+     */
+    public static function stopLspServers(): void
+    {
+        $pid = getmypid() ?: 0;
+        $clients = self::$lspClients[$pid] ?? [];
+        unset(self::$lspClients[$pid]);
+
+        foreach ($clients as $client) {
+            $client?->disconnectAll();
+        }
+    }
+
+    /**
+     * Register {@see stopLspServers()} to run at exit, once per process image,
+     * BEFORE the first server starts — so nothing can acquire a server without
+     * the stop. Same coverage and the same gaps as {@see registerMcpShutdown()}.
+     */
+    private static function registerLspShutdown(): void
+    {
+        if (self::$lspShutdownRegistered) {
+            return;
+        }
+
+        self::$lspShutdownRegistered = true;
+
+        register_shutdown_function(static function (): void {
+            self::stopLspServers();
+        });
+    }
+
+    /**
+     * The model-facing {@see LspTool}, wired to the launch's language servers.
+     *
+     * {@see tools()} hands it {@see lspClient()}: the servers the user listed
+     * under `lsp`, started by {@see \SugarCraft\Crush\LSP\LspLauncher} and
+     * subscribed to `textDocument/publishDiagnostics`, so the tool's
+     * `diagnostics` operation re-checks a file and waits for the verdict. With
+     * no server configured — the default — the client is null and every call
+     * returns an ERROR naming the language, never an empty success; see
+     * {@see LspTool} for why that distinction is the point, and
      * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest::testTheWiredLspToolRefusesRatherThanAnsweringEmptyWithNoServerConfigured()}
-     * for the assertion that the LIVE wiring behaves that way rather than only
-     * the class in isolation.
+     * for the assertion that the LIVE wiring behaves that way.
      *
-     * $client is injectable so an embedder that HAS built servers can hand them
-     * over without waiting for the settings block; {@see tools()} threads its own
-     * parameter straight through.
+     * $client is injectable so an embedder that built its own servers can hand
+     * them over; {@see tools()} threads its own parameter straight through.
      */
     public static function lspTool(?string $root = null, ?LspClient $client = null): LspTool
     {
@@ -8160,10 +8243,10 @@ final class Bootstrap
      * exactly those twelve concrete `Tool` classes.
      *
      * TWELVE IS THE COUNT OF WIRED TOOLS, NOT OF USABLE ONES, and the two differ
-     * on every launch today: `LspTool` is reachable and answers every call with a
-     * "no language server configured" error, because nothing in `src/` reads a
-     * server command yet ({@see lspTool()}). A figure that said "twelve working
-     * tools" would be the wrong claim about this array.
+     * on a launch with no `lsp` setting: `LspTool` is reachable and answers every
+     * call with a "no language server configured" error until the user lists a
+     * server ({@see lspClient()}). A figure that said "twelve working tools"
+     * would be the wrong claim about this array.
      *
      * The array is longer than twelve only when the project ships a `.mcp.json` AND
      * the user has listed this root under `trustedProjectMcp` — both conditions,
@@ -8199,9 +8282,10 @@ final class Bootstrap
      *        pane all read ONE instance — two independently scanned
      *        registries would let a skill disabled on one still be invocable
      *        through the other. Defaults to a fresh scan of $root.
-     * @param LspClient|null $lsp Language servers for {@see LspTool}, threaded
-     *        through to {@see lspTool()}. Null — the shipped state, since nothing
-     *        in `src/` builds one — leaves the tool reachable but refusing.
+     * @param LspClient|null $lsp Language servers for {@see LspTool} and the
+     *        Read outline, threaded through the catalog. The launch's callers
+     *        pass {@see lspClient()}; null — no `lsp` setting — leaves the tool
+     *        reachable but refusing.
      * @param bool $rgAvailable Host has `rg`; threaded to {@see Grep} only.
      *        {@see \SugarCraft\Crush\Tools\Concerns\DetectsCapabilities} is the
      *        probe and the boot call sites below are the only readers of it, so

@@ -243,6 +243,7 @@ sugar-crush/tests/Agents/TaskListCasAndCycleTest.php	1.000	11
 sugar-crush/tests/Tools/TaskToolResumeFinishedRunTest.php	1.000	6
 sugar-crush/tests/Backend/PerStepUsageFrameTest.php	1.000	4
 sugar-crush/tests/Backend/SteerAtStepBoundaryTest.php	1.000	5
+sugar-crush/tests/LSP/LspLauncherTest.php	1.000	10
 sugar-crush/tests/Integration/MultiAgentRefactorTest.php	0.999	4
 sugar-crush/tests/Attachments/ContextMentionsTest.php	0.990	13
 sugar-crush/tests/SuiteChildStdinPrependResidualTest.php	0.975	1
@@ -268,6 +269,7 @@ sugar-crush/tests/Backend/ResultFrameTranscriptCodecTest.php	0.800	4
 sugar-crush/tests/Host/TranscriptStoreTest.php	0.800	12
 sugar-crush/tests/Chat/BangShellTest.php	0.800	9
 sugar-crush/tests/Context/SymbolMapBlockTest.php	0.800	8
+sugar-crush/tests/Hooks/BuiltIn/PostEditDiagnosticsHookTest.php	0.800	7
 sugar-crush/tests/StdinConstantReaderCensusTest.php	0.796	23
 sugar-crush/tests/Backend/EngineBackendLengthStopTest.php	0.795	34
 sugar-crush/tests/Integration/StreamingWiringTest.php	0.787	20
@@ -431,6 +433,7 @@ sugar-crush/tests/Memory/MemoryWriterTest.php	0.150	10
 sugar-crush/tests/Context/ModelFamilyPromptTest.php	0.150	32
 sugar-crush/tests/Chat/AutoMemoryConsolidationWiringTest.php	0.150	3
 sugar-crush/tests/Context/MemoryRecallBlockTest.php	0.150	13
+sugar-crush/tests/Tools/BuiltIn/ReadOutlineTest.php	0.150	5
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23

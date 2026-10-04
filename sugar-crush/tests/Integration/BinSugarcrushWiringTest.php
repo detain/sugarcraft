@@ -255,9 +255,9 @@ final class BinSugarcrushWiringTest extends TestCase
      *
      * This is the assertion that makes the whole design decision behind
      * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool} real on the wiring path
-     * rather than only in a unit test of the class. Nothing in `src/` builds an
-     * {@see \SugarCraft\Crush\LSP\LspClient} — there is no settings key for
-     * language servers ({@see Bootstrap::lspTool()}) — so the tool a real launch
+     * rather than only in a unit test of the class. With no `lsp` setting —
+     * the default, and this fixture's — {@see Bootstrap::lspClient()} builds no
+     * {@see \SugarCraft\Crush\LSP\LspClient}, so the tool a real launch
      * gets has NO servers, and the one thing it must never do is hand back a
      * successful empty result: to a model, "no references" is a fact about the
      * codebase it will then act on, and it would be a fabrication.

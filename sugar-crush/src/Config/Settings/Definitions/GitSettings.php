@@ -11,6 +11,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\LSP\LspLauncher;
 
 /**
  * The "Git & Automation" category's keys. One file per category so a step adding a
@@ -45,6 +46,19 @@ final class GitSettings implements SettingDefinitionSet
                 ->withHelp('{"commit": "…", "pr": "…"}: the trailer and PR line the git guidance asks for.')
                 ->withReaderSymbol(Bootstrap::class . '::tools')
                 ->withReadBy('`Bootstrap::tools()` → `Bash::withGitGuidance()`'),
+            // Step 3.F. Filed under "Git & Automation" with the other
+            // after-the-edit automation, since one category may not span two
+            // definition files. Exec and never project-settable: starting a
+            // language server is code execution, as `.mcp.json` is.
+            SettingDefinition::new(LspLauncher::SETTINGS_KEY, SettingType::Map)
+                ->withCategory(SettingCategory::Git)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                ->withUi(UiEditability::Complex)
+                ->withLabel('Language servers')
+                ->withHelp('{"php": {"command": "intelephense", "args": ["--stdio"]}}: servers for post-edit diagnostics, Read outlines and the Lsp tool.')
+                ->withReaderSymbol(Bootstrap::class . '::lspClient')
+                ->withReadBy('`Bootstrap::lspClient()` → `LspLauncher::fromConfig()`'),
         ];
     }
 }

@@ -2110,7 +2110,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
         $hooks = self::markdownProse($hooksRaw);
-        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
+        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9];
 
         $live = [];
         // The wildcard rides as its own literal on purpose: a single-quoted
@@ -2126,7 +2126,7 @@ final class DocFigureProseDriftTest extends TestCase
             ];
         }
         ksort($live);
-        self::assertCount(9, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
+        self::assertCount(10, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
 
         self::assertSame(
             1,
@@ -2142,7 +2142,8 @@ final class DocFigureProseDriftTest extends TestCase
         // Built-ins table: the three rows, their event cells, and whichever
         // matchers they spell out.
         $tableStart = strpos($hooksRaw, '## The built-in hooks');
-        $tableEnd = strpos($hooksRaw, 'Six more exist');
+        self::assertSame(1, preg_match('/^\w+ more exist and are \*\*not\*\* registered/m', $hooksRaw, $moreAt, PREG_OFFSET_CAPTURE), 'the not-registered sentence that closes the built-ins table is gone');
+        $tableEnd = $moreAt[0][1];
         self::assertIsInt($tableStart);
         self::assertIsInt($tableEnd);
         $table = substr($hooksRaw, $tableStart, $tableEnd - $tableStart);
@@ -2196,15 +2197,20 @@ final class DocFigureProseDriftTest extends TestCase
         // The two bullets = the roster minus the registered three, set-equal.
         self::assertSame(1, preg_match('/(\w+) more exist and are/', $hooks, $two), 'the not-registered sentence lost its spelled count');
         self::assertSame(count(array_diff(array_keys($live), $registered[1])), $words[strtolower($two[1])] ?? -1, 'the unregistered half of the roster no longer matches BuiltIn-minus-registered');
-        $bulletStart = strpos($hooksRaw, 'Six more exist');
-        self::assertIsInt($bulletStart);
+        $bulletStart = $moreAt[0][1];
         $bullets = substr($hooksRaw, $bulletStart);
         self::assertSame(1, preg_match('/`(\w+)` — registered by `Bootstrap::(\w+)\(\)` when a gate exists,\s*which is every CLI launch\. It is what makes the (\w+)-mode gate/', $bullets, $gateRow), 'the gate bullet no longer names its class, its Bootstrap seam, and the gate mode count together');
         self::assertSame(1, preg_match('/`(\w+)` — opt-in, constructed with a jail root/', $bullets, $jailRow), 'the opt-in bullet moved');
         self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — the repeat-call loop guard,\s*registered per turn by `EngineBackend::(\w+)\(\)`/', $bullets, $guardRow), 'the loop-guard bullet no longer names its pair and the EngineBackend seam that registers them');
         self::assertSame(1, preg_match('/`(\w+)` — the delegated run\'s own tool declaration, registered\s*by `EngineBackend::(\w+)\(\)`/', $bullets, $grantRow), 'the sub-agent grant bullet no longer names its class and the EngineBackend seam that registers it (step 4.2)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit lint, registered by `Bootstrap::(\w+)\(\)`\s*on every launch, after the three above and ahead of the hook files/', $bullets, $lintRow), 'the post-edit lint bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.E)');
-        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertSame(1, preg_match('/`(\w+)` — the post-edit diagnostics, registered by `Bootstrap::(\w+)\(\)`\s*when a language server is configured under `lsp` and started, right after the\s*post-edit lint and ahead of the hook files/', $bullets, $diagnosticsRow), 'the post-edit diagnostics bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.F)');
+        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1], $diagnosticsRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        $diagnosticsSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $diagnosticsRow[2], 6000);
+        $diagnosticsAt = strpos($diagnosticsSeam, 'Hooks\\BuiltIn\\' . $diagnosticsRow[1] . '(');
+        self::assertIsInt($diagnosticsAt, "Bootstrap::{$diagnosticsRow[2]}() no longer constructs {$diagnosticsRow[1]} — the bullet names the wrong seam");
+        self::assertGreaterThan((int) strpos($diagnosticsSeam, 'Hooks\\BuiltIn\\' . $lintRow[1] . '('), $diagnosticsAt, 'the post-edit diagnostics are no longer registered right after the lint, as the bullet says');
+        self::assertLessThan((int) strpos($diagnosticsSeam, 'loadEntries('), $diagnosticsAt, 'the post-edit diagnostics are no longer registered ahead of the hook files, as the bullet says');
         $lintSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $lintRow[2], 6000);
         $lintAt = strpos($lintSeam, 'Hooks\\BuiltIn\\' . $lintRow[1] . '(');
         self::assertIsInt($lintAt, "Bootstrap::{$lintRow[2]}() no longer constructs {$lintRow[1]} — the bullet names the wrong seam");
@@ -6108,7 +6114,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/only ([a-z]+(?:-[a-z]+)?) of the ([a-z]+(?:-[a-z]+)?) layered keys have an\s+env override \((.*?)\)\.\s*(.*?)\s+have none\./s', $settings, $envSplit),
+            preg_match('/only ([a-z]+(?:-[a-z]+)?) of the ([a-z]+(?:-[a-z]+)?) layered keys have an\s+env override \((.*?)\)\.\s*(.*?)\s+have\s+none\./s', $settings, $envSplit),
             'the See-also env-split sentence in docs/SETTINGS.md was reworded out from under this arm',
         );
 

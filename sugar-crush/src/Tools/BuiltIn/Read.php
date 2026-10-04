@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 use SugarCraft\Crush\Agents\PathJail as AgentPathJail;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
+use SugarCraft\Crush\LSP\LspClient;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Tools\CarriesSessionState;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
@@ -60,6 +61,15 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
     private const SCAN_CHUNK = 64 * 1024;
 
     /**
+     * The most rows an outline lists, and the bytes it may take — whichever
+     * binds first (step 3.F). The outline rides on a first page that already
+     * holds up to {@see PAGE_BYTES}, so it is a map of where to read next,
+     * never a second copy of the file.
+     */
+    private const OUTLINE_MAX_ROWS = 200;
+    private const OUTLINE_MAX_BYTES = 8 * 1024;
+
+    /**
      * $skillNudge turns a skill's `paths:` frontmatter into a live signal
      * (crush_feat.md section 7 E4): reading a file a skill scopes itself to
      * announces that skill once, the way Claude Code loads skills on first
@@ -73,6 +83,9 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         private array $sessionCache = [],
         private ?SkillPathNudge $skillNudge = null,
         private ?RulePathNudge $ruleNudge = null,
+        // Step 3.F: the launch's language servers, for the outline of a file
+        // too long for one page. Null outlines from the source text alone.
+        private ?LspClient $lsp = null,
     ) {}
 
     /**
@@ -137,7 +150,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge);
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, lsp: $context->lsp);
     }
 
     public function name(): string
@@ -180,8 +193,10 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             . ' bytes; pass `offset` (the first line to return) and `limit` (how many lines) to '
             . 'read another window. When more of the file remains, the result ends with '
             . '"[lines a-b of N — call Read with offset=b+1 to continue]", so a result without '
-            . 'that footer reached the end of the file. A single line longer than a page comes back '
-            . 'cut short and marked. Prefer this over `cat`/`head` through Bash: '
+            . 'that footer reached the end of the file. A file longer than one page, read without '
+            . '`offset` or `limit`, also gets an outline of its declarations and their line numbers '
+            . 'after the first page, so you can read the part you need by offset. A single line longer '
+            . 'than a page comes back cut short and marked. Prefer this over `cat`/`head` through Bash: '
             . implode('; ', $advantages) . '.';
     }
 
@@ -333,6 +348,20 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             $content = $this->readPage($path, $offset ?? 1, $limit ?? self::PAGE_LINES);
             restore_error_handler();
 
+            // A FILE TOO LONG FOR ONE PAGE, read with no window named, gets an
+            // outline of its declarations after the first page (step 3.F,
+            // Zed's `read_file` outline): the model sees where every class and
+            // function starts and can ask for that window by `offset`, instead
+            // of paging through the whole file to find it. Only then — a read
+            // that already has the whole file, or that named its window, has
+            // no use for a map.
+            if ($offset === null && $limit === null && preg_match('/\[lines? 1(?:-\d+)? of \d+ — call Read with offset=\d+ to continue\]$/', $content) === 1) {
+                $outline = $this->outline($path);
+                if ($outline !== '') {
+                    $content .= "\n\n" . $outline;
+                }
+            }
+
             // Prepended, unlike Grep and Glob, and that difference is the
             // point rather than drift: there is exactly ONE file here and
             // exactly one rule set governing it, so position alone says what
@@ -464,6 +493,42 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
                 isError: true,
             );
         }
+    }
+
+    /**
+     * The declarations in $path, one per line as `N: kind name` and indented by
+     * nesting, under a header saying what the list is — or '' when none is
+     * found. From the file's language server when one is configured
+     * ({@see LspClient::outline()}), else from the source text
+     * ({@see LspClient::regexOutline()}). Bounded by {@see OUTLINE_MAX_ROWS}
+     * and {@see OUTLINE_MAX_BYTES}; a cut outline says how many rows it left out.
+     */
+    private function outline(string $path): string
+    {
+        try {
+            $rows = $this->lsp !== null ? $this->lsp->outline($path) : LspClient::regexOutline($path);
+        } catch (\Throwable) {
+            return '';
+        }
+        if ($rows === []) {
+            return '';
+        }
+
+        $lines = [];
+        $bytes = 0;
+        foreach ($rows as $row) {
+            $line = str_repeat('  ', $row['depth']) . $row['line'] . ': ' . $row['kind'] . ' ' . $row['name'];
+            if (\count($lines) >= self::OUTLINE_MAX_ROWS || $bytes + \strlen($line) + 1 > self::OUTLINE_MAX_BYTES) {
+                break;
+            }
+            $lines[] = $line;
+            $bytes += \strlen($line) + 1;
+        }
+        $left = \count($rows) - \count($lines);
+
+        return '[outline of this file — ' . \count($rows) . ' declarations; call Read with offset=N to read from line N]'
+            . "\n" . implode("\n", $lines)
+            . ($left > 0 ? "\n… and {$left} more" : '');
     }
 
     /**

@@ -55,14 +55,57 @@ final class LspClient
      */
     private string $language = 'php';
 
+    /**
+     * File extension (lower case, no dot) → the language whose server owns it,
+     * so a caller holding only a path — the post-edit diagnostics hook, a Read
+     * outline, an `Lsp` call that names no language — reaches the right server
+     * (step 3.F). Filled by {@see mapExtensions()}; see {@see languageFor()} for
+     * the fallback when nothing was mapped.
+     *
+     * @var array<string, string>
+     */
+    private array $extensions = [];
+
+    /**
+     * The last `textDocument/didOpen` version sent per URI. A document is
+     * opened, asked about and closed again inside one call
+     * ({@see freshDiagnostics()}), so the server always reads it from the text
+     * we sent; the version still climbs per touch so a publish for an older
+     * touch can be told apart from the one being waited for.
+     *
+     * @var array<string, int>
+     */
+    private array $versions = [];
+
+    /**
+     * URIs open on their server right now — between a touch's `didOpen` and its
+     * `didClose`. A `publishDiagnostics` for a document that is NOT open is not
+     * recorded: after `didClose` most servers publish an empty list for the
+     * closed file, and taking that for a verdict would make every touched file
+     * read as clean on the next look.
+     *
+     * @var array<string, true>
+     */
+    private array $openDocuments = [];
+
+    /** How long {@see freshDiagnostics()} sleeps between two pumps of the server's output. */
+    private const DIAGNOSTICS_POLL_MICROS = 150_000;
+
+    /**
+     * $language is the key the injected connection is registered under. It
+     * defaults to `php` because that is what every caller before step 3.F
+     * meant; {@see LspLauncher} passes the configured server's own key.
+     */
     public function __construct(
         private readonly LspConnectionInterface $connection,
         private readonly LspCacheInterface $cache,
+        string $language = 'php',
     ) {
         // Default server is the injected one.
-        $this->language = 'php';
+        $this->language = $language;
         $this->connections[$this->language] = $connection;
         $this->caches[$this->language] = $cache;
+        $this->subscribe($connection);
     }
 
     // -------------------------------------------------------------------------
@@ -80,6 +123,91 @@ final class LspClient
     {
         $this->connections[$language] = $connection;
         $this->caches[$language] = $cache;
+        $this->subscribe($connection);
+    }
+
+    /**
+     * Route files ending in any of $extensions to $language's server.
+     *
+     * @param list<string> $extensions with or without the leading dot
+     */
+    public function mapExtensions(string $language, array $extensions): void
+    {
+        foreach ($extensions as $extension) {
+            $extension = strtolower(ltrim(trim($extension), '.'));
+            if ($extension !== '') {
+                $this->extensions[$extension] = $language;
+            }
+        }
+    }
+
+    /**
+     * The registered language whose server owns $path, or null when none does.
+     *
+     * The extension map first; with nothing mapped for the extension, a server
+     * registered under the extension's own name (`php` for `x.php`) — the shape
+     * a client built by hand, with no map, has always meant.
+     */
+    public function languageFor(string $path): ?string
+    {
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if ($extension === '') {
+            return null;
+        }
+
+        $language = $this->extensions[$extension] ?? $extension;
+
+        return isset($this->connections[$language]) ? $language : null;
+    }
+
+    /**
+     * Speak the shutdown protocol to every server and forget them. In a process
+     * that did not start a server this only closes its own copies of the pipes
+     * — {@see LspConnection::disconnect()} keeps the shared server running for
+     * the process that owns it.
+     */
+    public function disconnectAll(): void
+    {
+        foreach ($this->connections as $connection) {
+            try {
+                $connection->disconnect();
+            } catch (\Throwable) {
+                // One server that will not stop must not keep the rest running.
+            }
+        }
+    }
+
+    /**
+     * Subscribe to a server's notifications: `textDocument/publishDiagnostics`
+     * lands in {@see handlePublishDiagnostics()}, which is what makes
+     * {@see diagnostics()} and {@see freshDiagnostics()} mean anything. Before
+     * step 3.F nothing in `src/` subscribed, so the map stayed empty forever.
+     */
+    private function subscribe(LspConnectionInterface $connection): void
+    {
+        $connection->onNotification(function (string $method, ?array $params): void {
+            if ($method !== 'textDocument/publishDiagnostics' || !\is_string($params['uri'] ?? null)) {
+                return;
+            }
+
+            $uri = $params['uri'];
+
+            // A document this client touched and has closed again: what the
+            // server says about it now is the empty list most servers publish
+            // on `didClose`, not a verdict on the file (see $openDocuments).
+            if (isset($this->versions[$uri]) && !isset($this->openDocuments[$uri])) {
+                return;
+            }
+
+            // A publish stamped with an older version answers an earlier touch.
+            $version = \is_int($params['version'] ?? null) ? $params['version'] : null;
+            if ($version !== null && $version < ($this->versions[$uri] ?? 0)) {
+                return;
+            }
+
+            $diagnostics = \is_array($params['diagnostics'] ?? null) ? array_values($params['diagnostics']) : [];
+            $this->handlePublishDiagnostics($uri, $diagnostics);
+        });
     }
 
     /**
@@ -464,6 +592,252 @@ final class LspClient
         $this->diagnostics[$uri] = $diagnostics;
     }
 
+    /**
+     * Whether ANY diagnostics list — possibly an empty one — has been delivered
+     * for $uri. The difference between "the server said this file is clean"
+     * and "the server never said anything" is exactly this bit.
+     */
+    public function hasDiagnostics(string $uri): bool
+    {
+        return \array_key_exists($uri, $this->diagnostics);
+    }
+
+    /**
+     * Have $language's server re-check the file at $path as it is on disk now,
+     * and wait up to $waitSeconds for its verdict (step 3.F; opencode waits
+     * 5 s for a document's diagnostics, `DIAGNOSTICS_DOCUMENT_WAIT_TIMEOUT_MS`).
+     *
+     * THE DOCUMENT IS OPENED, ASKED ABOUT AND CLOSED IN ONE CALL. Keeping
+     * documents open would make the server read them from what we last sent
+     * rather than from disk, and every process sharing the server — turns and
+     * tool calls are forked — would need one view of which documents are open.
+     * Open-ask-close needs neither: the server sees exactly the bytes on disk.
+     *
+     * HOW THE VERDICT ARRIVES. A server that implements LSP 3.17 pull
+     * diagnostics answers `textDocument/diagnostic` with the list itself. One
+     * that does not answers it with an error — and reading that answer is
+     * still worth the round trip, because the connection dispatches every
+     * notification queued ahead of a response while it reads, which is the
+     * only way a pushed `publishDiagnostics` gets in. So the loop asks, then
+     * looks for a delivered list, then sleeps {@see DIAGNOSTICS_POLL_MICROS}.
+     *
+     * Null when the server cannot be asked at all: none registered for
+     * $language, not connected, a connection with no notification channel (an
+     * in-memory fake), or a file that cannot be read. Otherwise `delivered`
+     * says whether a list arrived before the deadline — false is "the server
+     * did not say", never "the file is clean".
+     *
+     * `sendNotification()`/`sendRequest()` are reached by name, because
+     * {@see LspConnectionInterface} does not declare them; the one real
+     * implementation, {@see LspConnection}, has both.
+     *
+     * @return array{delivered: bool, diagnostics: list<array<string, mixed>>}|null
+     */
+    public function freshDiagnostics(string $language, string $path, float $waitSeconds = 5.0): ?array
+    {
+        $connection = $this->connections[$language] ?? null;
+        if (!$this->canTouch($connection)) {
+            return null;
+        }
+        \assert($connection !== null);
+
+        $text = @file_get_contents($path);
+        if (!\is_string($text)) {
+            return null;
+        }
+
+        $this->pumpStderr();
+        $uri = self::uriFor($path);
+        $deadline = microtime(true) + max(0.0, $waitSeconds);
+        $this->open($connection, $language, $uri, $text);
+
+        try {
+            while (!$this->hasDiagnostics($uri)) {
+                /** @var LspResponse $pulled */
+                $pulled = $connection->sendRequest('textDocument/diagnostic', ['textDocument' => ['uri' => $uri]]);
+                if (!$pulled->isError && \is_array($pulled->result) && \is_array($pulled->result['items'] ?? null)) {
+                    $this->handlePublishDiagnostics($uri, array_values($pulled->result['items']));
+                    break;
+                }
+
+                $left = $deadline - microtime(true);
+                if ($this->hasDiagnostics($uri) || $left <= 0.0 || !$connection->isConnected()) {
+                    break;
+                }
+                usleep((int) min(self::DIAGNOSTICS_POLL_MICROS, $left * 1_000_000));
+            }
+        } finally {
+            $this->close($connection, $uri);
+        }
+
+        return [
+            'delivered' => $this->hasDiagnostics($uri),
+            'diagnostics' => $this->diagnostics[$uri] ?? [],
+        ];
+    }
+
+    /**
+     * The symbols declared in the file at $path as a flat, line-ordered outline
+     * (`line` 1-based, `depth` 0 for top level), for the Read tool's outline of
+     * a large file (step 3.F, Zed's `read_file` outline).
+     *
+     * From the file's language server when one is registered and connected —
+     * opened for the request and closed again, as {@see freshDiagnostics()}
+     * does — and otherwise from {@see declarationsIn()}'s one-line regex over
+     * the source, so a launch with no server still gets an outline of the
+     * declarations it can see.
+     *
+     * @return list<array{line: int, depth: int, kind: string, name: string}>
+     */
+    public function outline(string $path): array
+    {
+        $language = $this->languageFor($path);
+        $connection = $language === null ? null : $this->connections[$language];
+        if ($language === null || !$this->canTouch($connection)) {
+            return self::regexOutline($path);
+        }
+        \assert($connection !== null);
+
+        $text = @file_get_contents($path);
+        if (!\is_string($text)) {
+            return [];
+        }
+
+        $uri = self::uriFor($path);
+        $this->open($connection, $language, $uri, $text);
+        try {
+            $symbols = $connection->symbols($uri);
+        } finally {
+            $this->close($connection, $uri);
+        }
+
+        return $symbols !== [] ? self::outlineOf($symbols) : self::regexOutline($path);
+    }
+
+    /**
+     * {@see outline()} with no server to ask: the declarations
+     * {@see declarationsIn()} finds, as outline rows.
+     *
+     * @return list<array{line: int, depth: int, kind: string, name: string}>
+     */
+    public static function regexOutline(string $path): array
+    {
+        return self::outlineOf(self::declarationsIn($path));
+    }
+
+    /**
+     * Every declaration the one-line regex finds in the file at $path, as
+     * `SymbolInformation[]` — the degraded outline {@see outline()} falls back
+     * to. Empty for a file that cannot be read.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function declarationsIn(string $path): array
+    {
+        $lines = @file($path, FILE_IGNORE_NEW_LINES);
+
+        return \is_array($lines) ? self::grepDeclarations(self::uriFor($path), $lines) : [];
+    }
+
+    /**
+     * The `file://` URI for an absolute local path, percent-encoded per segment
+     * — the encoding {@see uriToPath()} decodes, so the two round-trip; see
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\LspTool} for why the encoding is
+     * not optional.
+     */
+    public static function uriFor(string $path): string
+    {
+        return 'file://' . implode('/', array_map('rawurlencode', explode('/', $path)));
+    }
+
+    /**
+     * LSP `SymbolKind` numbers → the words an outline prints. The kinds a
+     * source outline shows; anything else prints as `symbol`.
+     */
+    private const SYMBOL_KIND_WORDS = [
+        2 => 'module',
+        3 => 'namespace',
+        5 => 'class',
+        6 => 'method',
+        7 => 'property',
+        8 => 'field',
+        9 => 'constructor',
+        10 => 'enum',
+        11 => 'interface',
+        12 => 'function',
+        13 => 'variable',
+        14 => 'constant',
+        22 => 'case',
+        23 => 'struct',
+    ];
+
+    /**
+     * Flatten `DocumentSymbol[]` (nested through `children`) or
+     * `SymbolInformation[]` (flat, positioned by `location`) into outline rows,
+     * ordered by line.
+     *
+     * @param array<mixed> $symbols
+     * @return list<array{line: int, depth: int, kind: string, name: string}>
+     */
+    private static function outlineOf(array $symbols, int $depth = 0): array
+    {
+        $rows = [];
+        foreach ($symbols as $symbol) {
+            if (!\is_array($symbol) || !\is_string($symbol['name'] ?? null)) {
+                continue;
+            }
+            $range = $symbol['selectionRange'] ?? $symbol['range'] ?? $symbol['location']['range'] ?? null;
+            $line = \is_array($range) && \is_int($range['start']['line'] ?? null) ? $range['start']['line'] : 0;
+            $kind = \is_int($symbol['kind'] ?? null) ? $symbol['kind'] : 0;
+            $rows[] = [
+                'line' => $line + 1,
+                'depth' => $depth,
+                'kind' => self::SYMBOL_KIND_WORDS[$kind] ?? 'symbol',
+                'name' => $symbol['name'],
+            ];
+            if (\is_array($symbol['children'] ?? null) && $depth < 4) {
+                array_push($rows, ...self::outlineOf($symbol['children'], $depth + 1));
+            }
+        }
+
+        if ($depth === 0) {
+            usort($rows, static fn (array $a, array $b): int => $a['line'] <=> $b['line']);
+        }
+
+        return $rows;
+    }
+
+    /** Whether $connection is up and can be sent the notifications a touch needs. */
+    private function canTouch(?LspConnectionInterface $connection): bool
+    {
+        return $connection !== null
+            && $connection->isConnected()
+            && method_exists($connection, 'sendNotification')
+            && method_exists($connection, 'sendRequest');
+    }
+
+    /**
+     * `didOpen` $text as the next version of $uri, after dropping everything
+     * cached about it: whatever the server said before was about other bytes.
+     */
+    private function open(LspConnectionInterface $connection, string $language, string $uri, string $text): void
+    {
+        $this->clearFile($uri);
+        $version = ($this->versions[$uri] ?? 0) + 1;
+        $this->versions[$uri] = $version;
+        $this->openDocuments[$uri] = true;
+
+        $connection->sendNotification('textDocument/didOpen', [
+            'textDocument' => ['uri' => $uri, 'languageId' => $language, 'version' => $version, 'text' => $text],
+        ]);
+    }
+
+    private function close(LspConnectionInterface $connection, string $uri): void
+    {
+        unset($this->openDocuments[$uri]);
+        $connection->sendNotification('textDocument/didClose', ['textDocument' => ['uri' => $uri]]);
+    }
+
     // -------------------------------------------------------------------------
     // Cache management
     // -------------------------------------------------------------------------
@@ -583,7 +957,7 @@ final class LspClient
         }
 
         if ($method === 'symbols') {
-            return $this->grepDeclarations($uri, $lines);
+            return self::grepDeclarations($uri, $lines);
         }
 
         // From here on the request IS cursor-shaped, so a cursor off the end of
@@ -640,7 +1014,7 @@ final class LspClient
      * @param list<string> $lines
      * @return list<array<string, mixed>>
      */
-    private function grepDeclarations(string $uri, array $lines): array
+    private static function grepDeclarations(string $uri, array $lines): array
     {
         static $kinds = [
             'class' => 5,

@@ -783,9 +783,17 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 `McpToolBridge` per advertised MCP tool.
 
 Domain matters here: **fourteen is the count of *wired* tools, not of *usable*
-ones.** `LspTool` is reachable and answers every call with a "no language server
-configured" error, because nothing in `src/` reads a server command. A figure
-saying "fourteen working tools" would be the wrong claim.
+ones.** `LspTool` is reachable on every launch but answers every call with a "no
+language server configured" error until the user lists a server under the `lsp`
+setting. A figure saying "fourteen working tools" would be the wrong claim.
+
+Those servers are started once, at launch, by `LSP\LspLauncher` through
+`Bootstrap::lspClient()` (memoised per process and root, stopped at exit like
+the MCP servers), and shared by every forked turn — `LSP\LspConnection` is
+fork-safe. `LSP\LspClient` subscribes to their `publishDiagnostics`, so the
+same client answers `LspTool`, gives `Read` its outline of a file too long for
+one page, and drives the post-edit diagnostics hook
+([`HOOKS.md`](HOOKS.md#post-edit-diagnostics)).
 
 The directory is the list. `Tools\Catalog\ToolCatalog` globs
 `src/Tools/BuiltIn/`, and every concrete `Tool` there carries a `#[BuiltInTool]`
@@ -1137,9 +1145,9 @@ Four patterns worth recognising, because they explain otherwise-odd code:
 1. **Built but unwired.** Several subsystems were finished, tested and reachable
    from nothing. Each one that has been found is now either wired or documented
    as a seam — never deleted. Live examples of the seam form: `SkillDiscovery`,
-   `App::dispatchSkill()`, `LspTool`'s missing server config.
+   `App::dispatchSkill()`.
    (`ForeignMemoryImporter` was on this list until P7.S6 wired it behind
-   `/memory import`.)
+   `/memory import`, and `src/LSP/` until step 3.F gave it a launcher.)
 2. **Absence is a no-op; present-but-unusable is a refusal.** Applied to
    `config.json`, `hooks.yaml`, `.mcp.json`, `--config`, `--root`, and every
    `SUGARCRUSH_*` variable that carries policy.

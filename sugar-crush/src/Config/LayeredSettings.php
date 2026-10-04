@@ -497,6 +497,7 @@ final class LayeredSettings
         'subagentModel',
         'includeGitInstructions',
         'attribution',
+        'lsp',
         'theme',
         'statusLine',
         'layout',

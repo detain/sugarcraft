@@ -389,6 +389,17 @@ final class ReadPathCensusTest extends TestCase
         ],
         'LSP/LspClient.php|file' => [
             'CALLER_SUPPLIED — the URI came from the editor request this client is answering',
+            'CALLER_SUPPLIED — declarationsIn(): the regex outline of a path the Read tool already '
+                . 'resolved through its workspace jail (step 3.F)',
+        ],
+        // Step 3.F: the bytes a touch sends the language server in `didOpen` —
+        // freshDiagnostics() and outline(). Every caller resolved the path
+        // through a jail first: LspTool and Read their own, the post-edit
+        // diagnostics hook PathJail::resolve() against the project root.
+        'LSP/LspClient.php|file_get_contents' => [
+            'CALLER_SUPPLIED — freshDiagnostics(): a path LspTool or PostEditDiagnosticsHook already '
+                . 'resolved through the workspace jail',
+            'CALLER_SUPPLIED — outline(): a path the Read tool already resolved through its workspace jail',
         ],
         // Audit B7: the exchange lock's sidecar files. Every path is `<lock>.<suffix>`
         // where <lock> is the file the connecting process created; forks read the

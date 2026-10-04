@@ -843,7 +843,7 @@ it runs only once the rest of the chain has permitted that output — see
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
-Six more exist and are **not** registered by default:
+Seven more exist and are **not** registered by default:
 
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
@@ -873,6 +873,10 @@ Six more exist and are **not** registered by default:
 - `PostEditLintHook` — the post-edit lint, registered by `Bootstrap::hooks()`
   on every launch, after the three above and ahead of the hook files, because
   it reads the user's `lintCommands`. See [Post-edit lint](#post-edit-lint).
+- `PostEditDiagnosticsHook` — the post-edit diagnostics, registered by `Bootstrap::hooks()`
+  when a language server is configured under `lsp` and started, right after the
+  post-edit lint and ahead of the hook files. See
+  [Post-edit diagnostics](#post-edit-diagnostics).
 
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
 source as **heuristics, not security boundaries**. Neither can see through
@@ -955,6 +959,49 @@ of the box. Add, replace or switch off linters by file extension with
   `Bash`, so a hung linter is stopped rather than freezing the turn.
 - The note is capped at 10,000 bytes like any other hook note, with the
   linter's own output cut first so the marked lines survive.
+
+### Post-edit diagnostics
+
+When you list a language server under `lsp` in your own
+`~/.sugar-crush/config.json` (or `settings.json`), every `Write` or `Edit` to a
+file that server owns is followed by `PostEditDiagnosticsHook`: the server is
+asked to re-check the file as it now is on disk, and the **errors** it reports
+are appended to that call's result:
+
+```text
+LSP errors detected in this file, please fix:
+<diagnostics file="/abs/path/src/Order.php">
+ERROR [42:9] Undefined method 'totl'.
+… and 2 more
+</diagnostics>
+```
+
+```json
+{"lsp": {"php": {"command": "intelephense", "args": ["--stdio"]},
+         "typescript": {"command": "typescript-language-server", "args": ["--stdio"], "extensions": ["ts", "tsx"]}}}
+```
+
+- Each key is the LSP language identifier. Per server: `command` (required),
+  `args`, `extensions` (default: the key itself), `env`,
+  `initializationOptions`, `timeout` (seconds per request, default 10) and
+  `disabled`. A malformed entry or a server that will not start is reported at
+  launch and costs only that server.
+- The servers start once, at launch, in the process that builds the tools, and
+  every forked turn, tool call and sub-agent shares them. They are stopped at
+  exit.
+- Errors only (severity 1), at most 20 per file, positions 1-based. Warnings and
+  hints are left out.
+- It waits at most 5 seconds for the server's verdict, less when the chain has
+  less time left (`BoundedHookInterface`). A server that says nothing in time,
+  a file no server owns and a clean file all add nothing — silence is never
+  reported as "no errors".
+- Jailed like the post-edit lint: only a file the edit could reach is sent.
+- **User tier only.** Starting a server is code execution, so no project
+  settings file can name one.
+- **It never refuses**, for the post-edit lint's reason.
+
+The same servers answer the `Lsp` tool and give the `Read` tool its outline of
+a file too long for one page.
 
 ### What the audit log records
 

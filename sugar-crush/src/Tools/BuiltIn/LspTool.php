@@ -28,13 +28,13 @@ use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
  * {@see \SugarCraft\Crush\LSP\LspCache} were finished, tested (three files under
  * `tests/LSP/`) and unreachable from any run — the `Write` shape this repo has
  * now hit several times. This is the reachability half. The half that is
- * explicitly NOT here is a server-LAUNCHING subsystem: nothing in `src/` reads a
- * configured server command, so nothing in `src/` starts one. See
- * {@see \SugarCraft\Crush\Cli\Bootstrap::lspTool()} for that seam and for what
- * has to land before an LSP-backed answer is possible at all.
+ * explicitly NOT here is a server-LAUNCHING subsystem: that is
+ * {@see \SugarCraft\Crush\LSP\LspLauncher}, reached through
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::lspClient()}, which starts the
+ * servers the user lists under the `lsp` setting (step 3.F).
  *
- * SO THE SHIPPED DEFAULT ANSWERS NOTHING, AND SAYS SO. With no client injected
- * — which is every launch today — every call returns an ERROR result naming the
+ * SO AN UNCONFIGURED LAUNCH ANSWERS NOTHING, AND SAYS SO. With no client injected
+ * — every launch without an `lsp` setting — every call returns an ERROR result naming the
  * language that has no server. That distinction is the whole design decision
  * here, not a stylistic one: an empty SUCCESS result reads to a model as "this
  * symbol has no references", which is a confident lie about the codebase and the
@@ -68,12 +68,11 @@ final readonly class LspTool implements Tool, AcceptsWorktreeJail, BuildsFromCat
      * and they are in the message so an operation the model got wrong is
      * reported in a vocabulary it can look up.
      *
-     * `diagnostics` is the one entry that is NOT a request. It reads the map
-     * {@see LspClient::handlePublishDiagnostics()} fills from the server's own
-     * `textDocument/publishDiagnostics` NOTIFICATIONS, so its answer is only as
-     * current as the last notification something pumped in — and nothing pumps
-     * one today, which is why it is listed as server-push in
-     * {@see description()} rather than as a query.
+     * `diagnostics` is the one entry that is NOT a plain request. It has the
+     * server re-check the file as it is on disk and waits for the verdict the
+     * server pushes (`textDocument/publishDiagnostics`) or answers to a pull
+     * ({@see LspClient::freshDiagnostics()}); only when the server cannot be
+     * asked does it fall back to the last list pushed for the file.
      */
     private const OPERATIONS = [
         'definition' => 'textDocument/definition',
@@ -85,14 +84,18 @@ final readonly class LspTool implements Tool, AcceptsWorktreeJail, BuildsFromCat
     ];
 
     /**
-     * The language a request with no `language` argument is asked of.
+     * The language a request with no `language` argument is asked of when the
+     * client maps nothing to the file's extension ({@see LspClient::languageFor()}).
      *
      * `php` because {@see LspClient::__construct()} registers its injected
-     * connection under exactly that key — so a client built the ordinary way has
-     * a `php` server and nothing else, and a default of anything else would make
-     * the common case refuse itself.
+     * connection under exactly that key by default — so a client built the
+     * ordinary way has a `php` server and nothing else, and a default of
+     * anything else would make the common case refuse itself.
      */
     private const DEFAULT_LANGUAGE = 'php';
+
+    /** How long `diagnostics` waits for the server's verdict on a file. */
+    private const DIAGNOSTICS_WAIT_SECONDS = 5.0;
 
     /**
      * $client null is the SHIPPED state, not a test affordance: see the class
@@ -164,8 +167,9 @@ final readonly class LspTool implements Tool, AcceptsWorktreeJail, BuildsFromCat
         return 'Ask a language server about code: '
             . implode(', ', array_keys(self::OPERATIONS))
             . '. line and column are ZERO-INDEXED, per the LSP spec — Grep reports 1-based line '
-            . 'numbers, so subtract one when passing a Grep hit here. diagnostics is not a query: '
-            . 'it returns whatever the server last pushed for this file. If no language server is '
+            . 'numbers, so subtract one when passing a Grep hit here. diagnostics has the server '
+            . 're-check the file as it is on disk and waits up to '
+            . (int) self::DIAGNOSTICS_WAIT_SECONDS . ' seconds for its verdict. If no language server is '
             . 'configured for the language, this reports an error rather than an empty result — an '
             . 'empty answer from this tool means the server was asked and found nothing, never that '
             . 'nothing could be asked.';
@@ -201,8 +205,8 @@ final readonly class LspTool implements Tool, AcceptsWorktreeJail, BuildsFromCat
                 ],
                 'language' => [
                     'type' => 'string',
-                    'description' => 'Which registered language server to ask. Defaults to '
-                        . self::DEFAULT_LANGUAGE . '.',
+                    'description' => 'Which registered language server to ask. Defaults to the server '
+                        . 'configured for the file\'s extension, else ' . self::DEFAULT_LANGUAGE . '.',
                 ],
             ],
             'required' => ['operation', 'path'],
@@ -276,7 +280,7 @@ final readonly class LspTool implements Tool, AcceptsWorktreeJail, BuildsFromCat
 
         $language = \is_string($args['language'] ?? null) && $args['language'] !== ''
             ? $args['language']
-            : self::DEFAULT_LANGUAGE;
+            : ($this->client?->languageFor($path) ?? self::DEFAULT_LANGUAGE);
 
         // BEFORE the path is resolved, deliberately. Whether a server exists is a
         // fact about the configuration and not about the path, so a launch with
@@ -318,18 +322,26 @@ final readonly class LspTool implements Tool, AcceptsWorktreeJail, BuildsFromCat
         // returns a CLONE whose caches are the same objects, so it would work,
         // but naming the language per call keeps this tool from holding any
         // language state of its own between calls.
+        // `diagnostics` asks the server to re-check the file now (step 3.F).
+        // Null is a server that cannot be asked — a connection with no
+        // notification channel, or one that is down — and then the last list
+        // pushed for the file is all there is.
+        $fresh = $operation === 'diagnostics'
+            ? $this->client->freshDiagnostics($language, $path, self::DIAGNOSTICS_WAIT_SECONDS)
+            : null;
+
         $answer = match ($operation) {
             'definition' => $this->client->definitionsFor($language, $uri, $line, $column),
             'references' => $this->client->referencesFor($language, $uri, $line, $column),
             'hover' => $this->client->hoverFor($language, $uri, $line, $column),
             'symbols' => $this->client->symbolsFor($language, $uri),
             'codeActions' => $this->client->codeActionsFor($language, $uri, $line, $column),
-            // No per-language variant exists: diagnostics are keyed by URI
-            // alone. The language was still required to be configured above, so
-            // that an empty map cannot be read as "this file is clean" on a
-            // launch that has no server at all.
-            'diagnostics' => $this->client->diagnostics($uri),
+            // Keyed by URI alone. The language was still required to be
+            // configured above, so that an empty list cannot be read as "this
+            // file is clean" on a launch that has no server at all.
+            'diagnostics' => $fresh['diagnostics'] ?? $this->client->diagnostics($uri),
         };
+        $delivered = $fresh !== null ? $fresh['delivered'] : $this->client->hasDiagnostics($uri);
 
         // DO NOT SAY "from the language server" WITHOUT CHECKING. A registered
         // but DISCONNECTED server is not a refusal — {@see LspClient} answers
@@ -355,24 +367,24 @@ final readonly class LspTool implements Tool, AcceptsWorktreeJail, BuildsFromCat
             );
 
         if ($answer === null || $answer === []) {
-            // AN EMPTY `diagnostics` MAP IS THE ONE EMPTY ANSWER THAT IS NOT YET
-            // AN ANSWER, so it gets its own caveat rather than reading as "this
-            // file is clean". Every other operation above made a request; this
-            // one read a local map, and MEASURED on this tree nothing in `src/`
-            // fills it — `handlePublishDiagnostics()` has no `src/` call site and
-            // no `onNotification()` subscriber is registered anywhere outside
-            // `src/LSP/`. The missing-server guard hides that today, because with
-            // no server this line is unreachable; the moment the launcher in
-            // {@see \SugarCraft\Crush\Cli\Bootstrap::lspTool()} lands, an
-            // unnoted empty map would be a confident "no problems in this file"
-            // for every file in the repo. This stays a SUCCESS rather than
-            // becoming an error because an embedder that DOES pump notifications
-            // gets true empties here, and the note is the honest way to serve
-            // both. Wiring the subscription is what removes the note.
-            $unpumped = $operation === 'diagnostics'
-                ? "\nNOTE: nothing in this build subscribes to the server's publishDiagnostics "
-                  . 'notifications, so an empty map means none was ever delivered — NOT that this '
-                  . 'file has no problems.'
+            // AN EMPTY `diagnostics` LIST IS AN ANSWER ONLY WHEN ONE WAS
+            // DELIVERED. The server published (or answered a pull with) an empty
+            // list: the file is clean, and that is said plainly. Nothing arrived
+            // — the wait ran out, or the server could not be asked and never
+            // pushed anything for this file — and an unnoted "No diagnostics"
+            // would be a confident "no problems in this file" that nobody
+            // checked. Still a SUCCESS rather than an error, with the note
+            // carrying the difference.
+            $unpumped = $operation === 'diagnostics' && !$delivered
+                ? ($fresh !== null
+                    ? sprintf(
+                        "\nNOTE: the server delivered no diagnostics for this file within %d seconds — NOT "
+                        . 'that this file has no problems.',
+                        (int) self::DIAGNOSTICS_WAIT_SECONDS,
+                    )
+                    : "\nNOTE: the server could not be asked to re-check this file and has pushed no "
+                      . 'diagnostics for it, so an empty list means none was delivered — NOT that this '
+                      . 'file has no problems.')
                 : '';
 
             return new ToolResult(

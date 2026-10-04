@@ -1064,13 +1064,11 @@ final class LspToolTest extends TestCase
     }
 
     /**
-     * AN EMPTY `diagnostics` MAP CARRIES ITS OWN CAVEAT, because it is the one
-     * operation whose empty answer today means "nobody ever pushed anything"
-     * rather than "the server was asked and had nothing". Nothing in `src/` calls
-     * `LspClient::handlePublishDiagnostics()` or registers an `onNotification()`
-     * subscriber, so with a server configured — which is what the launcher named
-     * in `Bootstrap::lspTool()` will do — an unnoted empty map would read as "no
-     * problems in this file" for every file in the repo.
+     * AN EMPTY `diagnostics` MAP CARRIES ITS OWN CAVEAT when nothing was ever
+     * delivered for the file: the spy connection here has no notification
+     * channel, so the server cannot be asked to re-check it
+     * (`LspClient::freshDiagnostics()` returns null) and only what was pushed
+     * is known. An unnoted empty map would read as "no problems in this file".
      *
      * The pair is what makes it falsifiable: a PUSHED map must NOT carry the
      * caveat (that answer is real), and another operation's empty answer must not
@@ -1084,12 +1082,12 @@ final class LspToolTest extends TestCase
 
         $this->assertFalse($empty->isError());
         $this->assertStringContainsString('No diagnostics found', $empty->content());
-        $this->assertStringContainsString('nothing in this build subscribes', $empty->content());
+        $this->assertStringContainsString('none was delivered', $empty->content());
         $this->assertStringContainsString('NOT that this file has no problems', $empty->content());
 
         $otherOperation = $tool->execute(['operation' => 'references', 'path' => 'sub/Target.php']);
         $this->assertStringContainsString('No references found', $otherOperation->content());
-        $this->assertStringNotContainsString('nothing in this build subscribes', $otherOperation->content());
+        $this->assertStringNotContainsString('none was delivered', $otherOperation->content());
 
         $client = $this->clientFor();
         $client->handlePublishDiagnostics('file://' . $this->file, [['message' => 'unused variable $x']]);
@@ -1098,7 +1096,7 @@ final class LspToolTest extends TestCase
             'path' => 'sub/Target.php',
         ]);
         $this->assertStringContainsString('unused variable $x', $pushed->content());
-        $this->assertStringNotContainsString('nothing in this build subscribes', $pushed->content());
+        $this->assertStringNotContainsString('none was delivered', $pushed->content());
     }
 
     /**
