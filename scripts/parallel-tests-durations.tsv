@@ -516,6 +516,7 @@ sugar-crush/tests/Cli/BootstrapContextWindowTest.php	0.057	5
 sugar-crush/tests/Tui/TuiComponentTest.php	0.057	25
 sugar-crush/tests/Cli/ArgvParserTest.php	0.057	131
 sugar-crush/tests/Tools/BuiltIn/ReadPagingTest.php	0.057	13
+sugar-crush/tests/Chat/BackgroundResultAnnouncedTest.php	0.057	14
 sugar-crush/tests/Tui/StallDetectorTest.php	0.056	21
 sugar-crush/tests/Permissions/PermissionModeDescriptionTest.php	0.056	114
 sugar-crush/tests/MCP/HttpMcpServerStreamableHttpTest.php	0.054	30

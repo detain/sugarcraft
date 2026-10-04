@@ -19,6 +19,16 @@ use SugarCraft\Crush\Agents\AgentStatus;
  */
 final class BackgroundSession
 {
+    /**
+     * The most of a settled session's output {@see announcement()} quotes —
+     * the size `tools.spillAboveChars` keeps inline for a tool result, which is
+     * what a background result is to the agent that reads it.
+     */
+    public const ANNOUNCE_OUTPUT_MAX_CHARS = 16_000;
+
+    /** The tag prefix `/fork` marks a session's stored transcript copy with. */
+    private const FORK_TAG_PREFIX = 'session:';
+
     /** @var list<string> User-defined labels for organization */
     public readonly array $tags;
 
@@ -59,10 +69,19 @@ final class BackgroundSession
 
     /**
      * Update the session status.
+     *
+     * The first move into a settled status ({@see isSettled()}) stamps
+     * {@see $completedAt}, so the runtime {@see announcement()} reports is the
+     * session's own and not "until the next poll looked".
      */
     public function withStatus(BackgroundSessionStatus $status): self
     {
-        return $this->mutate($status, $this->output);
+        $next = $this->mutate($status, $this->output);
+        if ($next->completedAt === null && $next->isSettled()) {
+            $next->completedAt = new \DateTimeImmutable();
+        }
+
+        return $next;
     }
 
     /**
@@ -99,6 +118,13 @@ final class BackgroundSession
             output: $output,
         );
         $clone->lastHeartbeat = $this->lastHeartbeat;
+        // The mutable figures ride across too: a status change that dropped
+        // them would announce a finished session as having cost nothing, run
+        // for no time and failed for no reason.
+        $clone->tokensUsed = $this->tokensUsed;
+        $clone->costUsd = $this->costUsd;
+        $clone->completedAt = $this->completedAt;
+        $clone->error = $this->error;
 
         return $clone;
     }
@@ -160,6 +186,125 @@ final class BackgroundSession
         return $this->error !== null
             || $this->status === BackgroundSessionStatus::Failed
             || $this->status === BackgroundSessionStatus::Stopped;
+    }
+
+    /**
+     * Whether the session has reached a final status — it will not run again.
+     *
+     * Unlike {@see isActive()} this counts TimedOut as settled: a session past
+     * its deadline is over, whatever the poll does with it next.
+     */
+    public function isSettled(): bool
+    {
+        return match ($this->status) {
+            BackgroundSessionStatus::Completed,
+            BackgroundSessionStatus::Failed,
+            BackgroundSessionStatus::Stopped,
+            BackgroundSessionStatus::TimedOut => true,
+            default => false,
+        };
+    }
+
+    /**
+     * The `/fork` transcript copy this session continues, or null for a plain
+     * `/bg` session (which keeps no transcript of its own).
+     */
+    public function forkedSessionId(): ?string
+    {
+        foreach ($this->tags as $tag) {
+            if (is_string($tag) && str_starts_with($tag, self::FORK_TAG_PREFIX) && strlen($tag) > strlen(self::FORK_TAG_PREFIX)) {
+                return substr($tag, strlen(self::FORK_TAG_PREFIX));
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Seconds the session ran: created to settled, or to now while it runs.
+     */
+    public function runtimeSeconds(): int
+    {
+        $end = $this->completedAt?->getTimestamp() ?? time();
+
+        return max(0, $end - $this->createdAt->getTimestamp());
+    }
+
+    /**
+     * The agent-visible report of a settled session (roadmap 4.3-1): what it
+     * was asked, how it ended, what it answered, and the figures beside it.
+     *
+     * `Chat` sends this as a user-role turn, so the model that started the work
+     * reads its result instead of the user having to paste it. Hence the shape:
+     * a bracketed header naming the session and its outcome, the task, the
+     * answer verbatim (bounded by $maxOutputChars, with the clip announced so
+     * a cut answer never reads as a complete one), and one stats line.
+     *
+     * The stats line lists only what is known: tokens and cost appear once
+     * the daemon reports them, and the resume pointer only for a `/fork`
+     * session, whose stored transcript is the one thing there is to resume.
+     */
+    public function announcement(int $maxOutputChars = self::ANNOUNCE_OUTPUT_MAX_CHARS): string
+    {
+        $outcome = match ($this->status) {
+            BackgroundSessionStatus::Completed => 'completed',
+            BackgroundSessionStatus::Failed => 'failed',
+            BackgroundSessionStatus::Stopped => 'was stopped',
+            BackgroundSessionStatus::TimedOut => 'timed out',
+            default => 'is ' . $this->status->value,
+        };
+
+        $lines = [
+            sprintf("[Background session %s ('%s') %s]", $this->id, $this->name, $outcome),
+            'Task: ' . $this->task,
+        ];
+        if ($this->error !== null && $this->error !== '') {
+            $lines[] = 'Error: ' . $this->error;
+        }
+
+        $output = rtrim($this->output);
+        if ($output === '') {
+            $lines[] = 'Output: (none)';
+        } else {
+            $length = mb_strlen($output, 'UTF-8');
+            if ($length > $maxOutputChars) {
+                $output = mb_substr($output, 0, max(0, $maxOutputChars), 'UTF-8')
+                    . sprintf("\n[… %d more characters of output not shown]", $length - max(0, $maxOutputChars));
+            }
+            $lines[] = "Output:\n" . $output;
+        }
+
+        $stats = ['runtime ' . self::durationDisplay($this->runtimeSeconds())];
+        if ($this->tokensUsed > 0) {
+            $stats[] = $this->usageDisplay();
+        }
+        if ($this->costUsd > 0.0) {
+            $stats[] = sprintf('$%.4f', $this->costUsd);
+        }
+        $fork = $this->forkedSessionId();
+        if ($fork !== null) {
+            $stats[] = 'resume: sugarcrush --resume ' . $fork;
+        }
+        $lines[] = 'Stats: ' . implode(' · ', $stats);
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * "45s", "2m 30s", "1h 5m" — {@see elapsedDisplay()}'s units, without its
+     * trailing space on a whole minute or hour.
+     */
+    private static function durationDisplay(int $secs): string
+    {
+        if ($secs < 60) {
+            return "{$secs}s";
+        }
+        $mins = intdiv($secs, 60);
+        if ($mins < 60) {
+            return trim("{$mins}m " . ($secs % 60 > 0 ? ($secs % 60) . 's' : ''));
+        }
+
+        return trim(intdiv($mins, 60) . 'h ' . ($mins % 60 > 0 ? ($mins % 60) . 'm' : ''));
     }
 
     /**

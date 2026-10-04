@@ -1064,7 +1064,17 @@ for the template syntax and for what a command file is and is not allowed to do.
 
 `/bg` really does run the work: it dispatches onto a `BackgroundSupervisor`
 that `bin/sugarcrush` constructs per launch, and the result comes back into
-the transcript. `/fork` branches the current session.
+the transcript. When the session settles — completed, failed or timed out —
+its answer arrives as a user-role message the model reads: a
+`[Background session <id> ('<name>') completed]` header, the task, the output
+(up to 16,000 characters, the clip announced), and a stats line with the
+runtime, the tokens and cost once the daemon reports them, and for a `/fork`
+session the `sugarcrush --resume <id>` that reopens its transcript. If no turn
+is running it is sent at once as the next turn; otherwise it waits in the queue
+and goes out when the running turn finishes, exactly like a prompt typed
+mid-turn, and the half-typed draft in the box is kept either way. Sessions that
+settle together share one turn, and a session you ended with `/bg stop` starts
+none. `/fork` branches the current session.
 
 `/budget` reports what this launch has spent, as the **provider** counted it,
 and optionally caps it. `/budget 5` sets a $5 ceiling, `/budget off` clears one,

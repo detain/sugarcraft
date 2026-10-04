@@ -17863,6 +17863,29 @@ final class Chat implements Model
      * reported as finished - the previously-seen ids are therefore re-read
      * individually to catch that last transition.
      *
+     * THE RESULT COMES BACK (roadmap 4.3-1). A session that settles —
+     * completed, failed, stopped or timed out — is reported twice: the status
+     * notice every transition gets, and its
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSession::announcement()} as
+     * a USER-ROLE turn, so the model that started the work reads the answer and
+     * its stats rather than the user copying it across. Before this the daemon
+     * buffered the output, the supervisor restored it onto the session, and
+     * this poll dropped it on the floor behind a status-only notice.
+     *
+     * The announcement goes through the queue, not around it. It is appended to
+     * {@see $queuedPrompts} and, when no turn is running, drained at once by
+     * {@see releaseQueuedPrompts()} — i.e. through {@see submit()}, the door
+     * every queued prompt takes, so the spend cap, the context tiers and the
+     * UserPromptSubmit hooks judge it exactly as they judge a typed one, and the
+     * user's half-typed draft survives the auto-dispatch. While a turn IS
+     * running it waits for that turn to settle, like any prompt typed mid-turn
+     * (steering it into the running turn is the queue's job, not this poll's).
+     * Several sessions settling in one poll share ONE turn.
+     *
+     * A session `/bg stop` ended is NOT announced: the stop arm records its
+     * settled status first, so no transition reaches this loop, and the user
+     * who stopped it gets no surprise turn.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function pumpBackgroundSessions(): array
@@ -17889,17 +17912,22 @@ final class Chat implements Model
         }
 
         $notices = [];
+        $announcements = [];
         foreach ($statuses as $id => $status) {
             if (($this->backgroundStatuses[$id] ?? null) === $status) {
                 continue;
             }
-            $name = $supervisor->getSession($id)?->name ?? $id;
+            $session = $supervisor->getSession($id);
+            $name = $session?->name ?? $id;
             $notices[] = Message::notice(sprintf(
                 "Background session %s ('%s') is now %s.",
                 $id,
                 $name,
                 $status,
             ));
+            if ($session !== null && $session->isSettled()) {
+                $announcements[] = $session->announcement();
+            }
         }
 
         if ($notices === [] && $statuses === $this->backgroundStatuses) {
@@ -17908,10 +17936,25 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        return [$this->mutate([
+        if ($announcements !== [] && $this->inFlight) {
+            $notices[] = Message::notice(count($announcements) === 1
+                ? 'Its result goes to the agent as soon as this turn finishes.'
+                : sprintf('Their %d results go to the agent as soon as this turn finishes.', count($announcements)));
+        }
+
+        $polled = $this->mutate([
             'history' => [...$this->history, ...$notices],
             'backgroundStatuses' => $statuses,
-        ]), null];
+            'queuedPrompts' => $announcements === []
+                ? $this->queuedPrompts
+                : [...$this->queuedPrompts, implode("\n\n", $announcements)],
+        ]);
+
+        if ($announcements === [] || $polled->inFlight) {
+            return [$polled, null];
+        }
+
+        return self::releaseQueuedPrompts([$polled, null]);
     }
 
     /**

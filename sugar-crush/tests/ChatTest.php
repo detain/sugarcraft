@@ -5350,7 +5350,13 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString("Backgrounded as {$spawned->sessionId}", $this->lastAssistantContent($reported));
 
         $settled = $this->tickUntilTheBackgroundSessionSettles($reported, $supervisor, $spawned->sessionId);
-        $this->assertStringContainsString('is now completed', $settled->history[array_key_last($settled->history)]->content, 'the poll announced the settle');
+        $this->assertStringContainsString('is now completed', implode("\n", $this->historyContents($settled)), 'the poll announced the settle');
+        // Roadmap 4.3-1: the daemon's answer comes back as the next turn's prompt.
+        $last = $settled->history[array_key_last($settled->history)];
+        $this->assertSame(Role::User, $last->role);
+        $this->assertFalse($last->uiOnly, 'the result is agent-visible');
+        $this->assertStringContainsString('BGDONE', $last->content);
+        $this->assertTrue($settled->inFlight, 'an idle chat dispatched the result as a turn');
     }
 
     /**
