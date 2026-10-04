@@ -9,4 +9,5 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // dispatching alias with no row of its own.
 return BuiltInCommand::new(
     CommandSpec::new('bg', 'Run a task in a background session', 'Session', argumentHint: '<task>'),
-)->withHandler('handleBackgroundCommand')->withAliases('background');
+)->withHandler('handleBackgroundCommand')->withAliases('background')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\BackgroundCommand::class);

@@ -15,4 +15,5 @@ return BuiltInCommand::new(CommandSpec::new(
     paletteAction: PaletteAction::RenameSession,
     paletteLabel: 'Rename session…',
     argumentHint: '[<name>|--auto]',
-))->withHandler('handleRenameCommand');
+))->withHandler('handleRenameCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\RenameCommand::class);

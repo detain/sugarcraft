@@ -12,4 +12,5 @@ use SugarCraft\Crush\Commands\Specs\CommandArguments;
 // (item 3.A-2).
 return BuiltInCommand::new(
     CommandSpec::new('undo', 'Take back the last turn, or revert the last auto-commit', 'Session'),
-)->withHandler('handleUndoCommand', CommandArguments::None);
+)->withHandler('handleUndoCommand', CommandArguments::None)
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\UndoCommand::class);

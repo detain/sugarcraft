@@ -10,4 +10,5 @@ use SugarCraft\Crush\Commands\Specs\CommandArguments;
 // next prompt is sent and the redo stack is discarded.
 return BuiltInCommand::new(
     CommandSpec::new('redo', 'Step forward again over what /rewind or /undo took back', 'Session'),
-)->withHandler('handleRedoCommand', CommandArguments::None);
+)->withHandler('handleRedoCommand', CommandArguments::None)
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\RedoCommand::class);

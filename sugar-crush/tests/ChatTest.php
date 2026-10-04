@@ -5368,7 +5368,7 @@ final class ChatTest extends TestCase
 
     /**
      * `/bg` must run the daemon as a REAL roster agent, not as the synthesised
-     * stand-in `Chat::defaultBackgroundAgent()` returns.
+     * stand-in `Host\Commands\BackgroundCommand::defaultAgent()` returns.
      *
      * This pins a live behaviour change that crush_code.md Phase 1 item 1 made
      * as a side effect. `BackgroundSupervisor::spawnSession()` interpolates
@@ -5381,7 +5381,7 @@ final class ChatTest extends TestCase
      * reintroduce the bug with nothing failing.
      *
      * Fails if the wiring is reverted: with no AgentManager on the Chat,
-     * `scheduleBackgroundSpawn()` falls through both roster arms to the
+     * `BackgroundCommand::spawnThunk()` falls through both roster arms to the
      * stand-in and the spawned session's agent reports provider/model
      * "unknown", which the last two assertions reject by name.
      */

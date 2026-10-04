@@ -4394,7 +4394,9 @@ final class DocFigureProseDriftTest extends TestCase
         $addBody = self::bodyExcerpt(self::sourceOf('Memory/MemoryStore.php'), 'add');
         self::assertStringContainsString("type: '" . $addShape[1] . "'", $addBody, 'MemoryStore::add() no longer stamps the type the page quotes');
 
-        $chatAdd = self::bodyExcerpt(self::sourceOf('Chat.php'), 'memoryAdd');
+        // The `/memory` arms left Chat for Host\Commands\MemoryCommand (roadmap
+        // O-2h), where a headless session runs them too; read them there.
+        $chatAdd = self::bodyExcerpt(self::sourceOf('Host/Commands/MemoryCommand.php'), 'add');
         // 5.1-2: the chat command saves through MemoryWriter, whose save()
         // defaults are the add() shape the page states — type pattern, no tags.
         self::assertStringContainsString('->save($content, $scope)', $chatAdd, 'the chat command no longer calls MemoryWriter::save() in the two-argument no-tags shape the page states');
@@ -4416,7 +4418,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(
             1,
             preg_match("/\\\$scope = '(\\w+)';/", $chatAdd, $chatDefault),
-            'memoryAdd() no longer seeds its scope from one literal default',
+            'MemoryCommand::add() no longer seeds its scope from one literal default',
         );
         self::assertSame($default[1], $chatDefault[1], '/memory add no longer defaults to the scope the page names');
 
@@ -4499,10 +4501,11 @@ final class DocFigureProseDriftTest extends TestCase
 
     /**
      * E694 slice-A (AQ): MEMORY.md's store-ops sentences must keep reading the
-     * Chat arms they state. Every referent is derived LIVE from the Chat.php
-     * bodies — no hand-typed roster beside the prose (the gg2 MAJOR's failure
+     * `/memory` arms they state. Every referent is derived LIVE from the
+     * `Host/Commands/MemoryCommand.php` bodies (in Chat.php until roadmap
+     * O-2h) — no hand-typed roster beside the prose (the gg2 MAJOR's failure
      * mode): precedence is the forRoot-before-home-get order inside
-     * memoryLocate's span; delete/edit route THROUGH memoryLocate; list/search
+     * locate()'s span; delete/edit route THROUGH locate(); list/search
      * consult the repo resolver and group under the shared banner builder;
      * clear keeps EXACTLY ONE store-mutating call (the home one) behind a
      * refusal that carries no '--force'-shaped escape — the r76 ruling's
@@ -4527,13 +4530,14 @@ final class DocFigureProseDriftTest extends TestCase
             'the bulk-clear refusal sentence left its pinned shape',
         );
 
-        $chatText = self::sourceOf('Chat.php');
-        // memoryLocate routes through MemoryWriter::locate(), the router the
+        // The arms live in Host\Commands\MemoryCommand since roadmap O-2h.
+        $chatText = self::sourceOf('Host/Commands/MemoryCommand.php');
+        // locate() routes through MemoryWriter::locate(), the router the
         // Memory tool shares, so the repo-first walk is pinned there.
         self::assertStringContainsString(
-            'memoryWriter()->locate(',
-            self::bodyExcerpt($chatText, 'memoryLocate', 300),
-            'memoryLocate no longer resolves through MemoryWriter::locate() — the "resolves in the repo store first" clause lost its code home',
+            'writer($home, $root)->locate(',
+            self::bodyExcerpt($chatText, 'locate', 300),
+            'MemoryCommand::locate() no longer resolves through MemoryWriter::locate() — the "resolves in the repo store first" clause lost its code home',
         );
         $locate = self::bodyExcerpt(self::sourceOf('Memory/MemoryWriter.php'), 'locate', 600);
         $repoAt = strpos($locate, '$this->repository()');
@@ -4542,14 +4546,14 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertNotFalse($homeAt, 'MemoryWriter::locate() no longer reads the home store — the precedence sentence names a two-store walk');
         self::assertLessThan($homeAt, $repoAt, 'MemoryWriter::locate() flipped to home-first — the page and the fold law both say repo-first');
 
-        foreach (['memoryDelete', 'memoryEdit'] as $arm) {
+        foreach (['delete', 'edit'] as $arm) {
             self::assertStringContainsString(
-                'memoryLocate(',
+                'self::locate(',
                 self::bodyExcerpt($chatText, $arm),
-                sprintf('the page says the per-id commands claim the shared precedence, yet %s() stopped routing through memoryLocate', $arm),
+                sprintf('the page says the per-id commands claim the shared precedence, yet %s() stopped routing through locate()', $arm),
             );
         }
-        foreach (['memoryList', 'memorySearch'] as $arm) {
+        foreach (['list', 'search'] as $arm) {
             $body = self::bodyExcerpt($chatText, $arm);
             // The repo resolver directly, or through MemoryWriter::repository()
             // (the router the Memory tool shares; memorySearch moved there in 5.3-1).
@@ -4557,16 +4561,16 @@ final class DocFigureProseDriftTest extends TestCase
                 str_contains($body, 'forRoot') || str_contains($body, '->repository()'),
                 sprintf('the page says list and search read both stores, yet %s() stopped consulting the repo resolver', $arm),
             );
-            self::assertStringContainsString('memoryStoreBanner(', $body, sprintf('%s() no longer groups rows under the store banners the page names', $arm));
+            self::assertStringContainsString('storeBanner(', $body, sprintf('%s() no longer groups rows under the store banners the page names', $arm));
         }
 
-        $clear = self::bodyExcerpt($chatText, 'memoryClear');
-        self::assertStringContainsString('forRoot', $clear, 'memoryClear no longer probes the repo store — the refusal the page promises has no code home');
+        $clear = self::bodyExcerpt($chatText, 'clear');
+        self::assertStringContainsString('forRoot', $clear, 'MemoryCommand::clear() no longer probes the repo store — the refusal the page promises has no code home');
         self::assertStringContainsString('Not cleared', $clear, 'the refusal wording left the arm — the page still promises a loud, total refusal');
         self::assertSame(
             1,
             substr_count($clear, '->clear('),
-            'memoryClear grew a second clear() call site — the page promises bulk clear touches ONLY the home store',
+            'MemoryCommand::clear() grew a second clear() call site — the page promises bulk clear touches ONLY the home store',
         );
         self::assertStringNotContainsString('--force', $clear, 'a force-shaped escape hatch appeared — the r76 ruling records the project-clear refusal as unconditional');
     }
@@ -4806,7 +4810,7 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/sentinel at `([^`]+)<target>` in the project/u', $doc, $sentinel),
             'the sentinel-path sentence left its pinned shape',
         );
-        self::assertStringContainsString("'/" . $sentinel[1] . "'", self::sourceOf('Chat.php'), 'the sentinel path the page quotes no longer matches the literal at the Chat trigger site');
+        self::assertStringContainsString("'/" . $sentinel[1] . "'", self::sourceOf('Host/Commands/MemoryCommand.php'), 'the sentinel path the page quotes no longer matches the literal at the /memory import trigger site');
 
         preg_match_all('/`(MemoryImportCommandTest)::(\w+)`/u', $doc, $importCites, PREG_SET_ORDER);
         self::assertGreaterThanOrEqual(2, count($importCites), 'the import section lost its named-test cites');

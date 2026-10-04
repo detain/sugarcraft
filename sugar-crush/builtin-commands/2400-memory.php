@@ -7,4 +7,5 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 
 return BuiltInCommand::new(
     CommandSpec::new('memory', 'Add, list, search, edit, import, clear, or restore memory entries, and show their history', 'Memory'),
-)->withHandler('handleMemoryCommand');
+)->withHandler('handleMemoryCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\MemoryCommand::class);

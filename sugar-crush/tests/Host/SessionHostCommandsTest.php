@@ -13,6 +13,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Host\Commands\CommandEffectKind;
 use SugarCraft\Crush\Host\Commands\CommandResult;
 use SugarCraft\Crush\Host\SessionHost;
 use SugarCraft\Crush\Host\TurnTicket;
@@ -21,7 +22,11 @@ use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
+use SugarCraft\Crush\Workflows\WorkflowResult;
+use SugarCraft\Crush\Workflows\WorkflowStatus;
 
 /**
  * Roadmap O-2h: a headless {@see SessionHost} runs the built-in slash
@@ -45,7 +50,22 @@ final class SessionHostCommandsTest extends TestCase
 
     protected function tearDown(): void
     {
-        exec('rm -rf ' . escapeshellarg($this->dir));
+        self::remove($this->dir);
+    }
+
+    private static function remove(string $path): void
+    {
+        if (is_link($path) || is_file($path)) {
+            @unlink($path);
+
+            return;
+        }
+        foreach (scandir($path) ?: [] as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                self::remove($path . '/' . $entry);
+            }
+        }
+        @rmdir($path);
     }
 
     public function testABuiltInRunsHeadlessAndItsRowsAreSaved(): void
@@ -195,6 +215,107 @@ final class SessionHostCommandsTest extends TestCase
         self::assertFalse($host->isBusy());
     }
 
+    public function testAWorkflowRunHoldsTheSessionUntilItsReportLands(): void
+    {
+        $engine = new class () implements WorkflowEngineInterface {
+            public function run(string $workflowPath, array $context = [], ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): WorkflowResult
+            {
+                \Fiber::suspend();
+
+                return new WorkflowResult('wf-1', WorkflowStatus::Completed);
+            }
+
+            public function pause(string $workflowId): void
+            {
+            }
+
+            public function resume(string $workflowId, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null): WorkflowResult
+            {
+                return new WorkflowResult($workflowId, WorkflowStatus::Completed);
+            }
+
+            public function getStatus(string $workflowId): WorkflowStatus
+            {
+                return WorkflowStatus::Running;
+            }
+
+            public function listWorkflows(): array
+            {
+                return ['deploy'];
+            }
+        };
+        $host = SessionHost::new(
+            's',
+            WorkspaceContext::new(sessionStore: $this->store, backend: new EchoBackend(), workflowEngine: $engine),
+            customCommands: [],
+        );
+
+        self::assertSame(TurnTicket::HANDLED, $host->submit('/workflow run deploy')->admitted);
+        self::assertTrue($host->isBusy(), 'a workflow run is a turn');
+        self::assertSame(TurnTicket::QUEUED, $host->submit('after the run')->admitted);
+
+        // `/workflow status` may run inside the run it controls (audit WF-4) …
+        self::assertSame(TurnTicket::HANDLED, $host->submit('/workflow status wf-1')->admitted);
+        self::assertTrue($host->isBusy(), '… and leaves it holding the session');
+        // … every other command still waits.
+        self::assertTrue($host->runCommand('clear')->isRefused());
+
+        $this->drain($host, static fn (SessionHost $h): bool => str_contains(
+            implode("\n", array_map(static fn (Message $m): string => $m->content, $h->history())),
+            "Workflow 'deploy' completed",
+        ));
+
+        $contents = array_map(static fn (Message $m): string => $m->content, $host->history());
+        self::assertSame('/workflow run deploy', $contents[0]);
+        self::assertStringContainsString('status: **running**', $contents[2]);
+        self::assertStringContainsString("Workflow 'deploy' completed", implode("\n", $contents));
+    }
+
+    public function testBranchAndRenameRunHeadlessAgainstTheStore(): void
+    {
+        $host = $this->host();
+
+        $branch = $host->runCommand('branch');
+        self::assertStringStartsWith('Branch created: ', $branch->rows[1]->content);
+        self::assertNotNull($branch->effect(CommandEffectKind::SwitchSession));
+        self::assertSame('s', $host->sessionId(), 'a host keeps its session; the branch is the client\'s to open');
+
+        $renamed = $host->runCommand('rename', 'Release prep');
+        self::assertSame("Session renamed to 'Release prep'", $renamed->rows[1]->content);
+    }
+
+    public function testRewindRestoresTheCheckpointAndOffersItsDraftBack(): void
+    {
+        $host = $this->host();
+        self::assertSame(TurnTicket::STARTED, $host->submit('first prompt')->admitted);
+        self::assertFalse($host->isBusy(), 'the echo backend answered');
+
+        $result = $host->runCommand('rewind');
+
+        $restore = $result->effect(CommandEffectKind::RestoreCheckpoint);
+        self::assertNotNull($restore, (string) ($result->rows[1]->content ?? ''));
+        self::assertSame('first prompt', $restore->draft());
+        $contents = array_map(static fn (Message $m): string => $m->content, $host->history());
+        self::assertSame('/rewind', $contents[0], 'the turn is gone; the exchange that removed it stays');
+        self::assertStringContainsString('Rewound 2 messages', $contents[1]);
+    }
+
+    public function testMemoryRunsHeadlessThroughTheHomeStore(): void
+    {
+        mkdir($this->dir . '/memory', 0700);
+        $home = new MemoryStore($this->dir . '/memory');
+        $host = SessionHost::new(
+            's',
+            WorkspaceContext::new(root: $this->project(), sessionStore: $this->store, backend: new EchoBackend(), memoryStore: $home),
+            customCommands: [],
+        );
+
+        $host->runCommand('memory', 'add remember the deploy key rotation --scope user');
+        $list = $host->runCommand('memory', 'list user');
+
+        self::assertStringContainsString('remember the deploy key rotation', $list->rows[1]->content);
+    }
+
     // ── fixtures ───────────────────────────────────────────────────────
 
     /**
@@ -230,12 +351,18 @@ final class SessionHostCommandsTest extends TestCase
         return $root;
     }
 
-    /** Run the shared loop until $host lets go of the session, bounded. */
-    private function drain(SessionHost $host): void
+    /**
+     * Run the shared loop until $done says so — by default, until $host lets
+     * go of the session — bounded.
+     *
+     * @param (\Closure(SessionHost): bool)|null $done
+     */
+    private function drain(SessionHost $host, ?\Closure $done = null): void
     {
+        $done ??= static fn (SessionHost $h): bool => !$h->isBusy();
         $loop = Loop::get();
-        $poll = $loop->addPeriodicTimer(0.01, static function () use ($host, $loop): void {
-            if (!$host->isBusy()) {
+        $poll = $loop->addPeriodicTimer(0.01, static function () use ($host, $loop, $done): void {
+            if ($done($host)) {
                 $loop->stop();
             }
         });
@@ -244,7 +371,7 @@ final class SessionHostCommandsTest extends TestCase
         $loop->cancelTimer($poll);
         $loop->cancelTimer($guard);
 
-        self::assertFalse($host->isBusy(), 'the forked command settled');
+        self::assertTrue($done($host), 'the off-loop work settled');
     }
 
     /**

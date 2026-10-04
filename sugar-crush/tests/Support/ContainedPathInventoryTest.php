@@ -176,7 +176,6 @@ final class ContainedPathInventoryTest extends TestCase
         'Agents/ForeignAgentPresetRegistry.php' => 2,
         'Agents/WorktreeConfig.php' => 2,
         'Agents/WorktreeManager.php' => 2,
-        'Chat.php' => 1,
         'Cli/Bootstrap.php' => 1,
         'Commands/CommandLoader.php' => 2,
         'Commands/CommandSpec.php' => 1,
@@ -185,6 +184,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Context/ProjectMemoryWriter.php' => 1,
         'Context/RepoMapBlock.php' => 3,
         'Context/RuleLoader.php' => 3,
+        'Host/Commands/MemoryCommand.php' => 1,
         'MCP/GitCommandHandlers.php' => 2,
         'Memory/ForeignMemoryImporter.php' => 2,
         'Providers/ProviderFactory.php' => 2,
@@ -201,11 +201,12 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * `Chat.php` is the SIXTEENTH file, and like `Cli/Bootstrap.php` it arrived
-     * with the operation it gates — a WRITE rather than a read: the
-     * `/memory import` sentinel directory `.sugar-crush/memory` under the
-     * project root is chosen by the clone, so `Chat::writeImportSentinel()`
-     * anchors it before recording anything (and lands the file by temp-create
+     * `Host/Commands/MemoryCommand.php` is the SIXTEENTH file (the gate sat in
+     * `Chat.php` until roadmap O-2h moved `/memory` there), and like
+     * `Cli/Bootstrap.php` it arrived with the operation it gates — a WRITE
+     * rather than a read: the `/memory import` sentinel directory
+     * `.sugar-crush/memory` under the project root is chosen by the clone, so
+     * `MemoryCommand::writeImportSentinel()` anchors it before recording anything (and lands the file by temp-create
      * + rename, so the compare plus the rename together leave a planted
      * symlink neither a read target nor a write path). ONE compare, the
      * Bootstrap shape: the boundary is the project root and the guarded path

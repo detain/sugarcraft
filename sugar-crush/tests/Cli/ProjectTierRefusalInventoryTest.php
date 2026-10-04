@@ -196,7 +196,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     private const DOT_PATHS = [
         // Repository-chosen: the checkout under analysis says where these point.
         'Agents/ForeignAgentPresetRegistry.php|.opencode/agents' => self::REPOSITORY,
-        'Chat.php|.sugar-crush/workflows' => self::REPOSITORY,
+        'Host/Commands/WorkflowCommand.php|.sugar-crush/workflows' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/agents' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/hooks.yaml' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/workflows' => self::REPOSITORY,
@@ -229,18 +229,18 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // "these two" means the two settings files and nothing else.
         'Config/LayeredSettings.php|.sugar-crush/settings.json' => self::REPOSITORY,
         'Config/LayeredSettings.php|.sugar-crush/settings.local.json' => self::REPOSITORY,
-        // P7.S6: the sentinel directory of `/memory import`. `Chat::memoryImport()`
-        // records its re-import guard at `.sugar-crush/memory/.imported-<target>`
-        // under the PROJECT root, so the clone under analysis chooses where it
-        // points — repository-chosen on the same basis as `Chat.php`'s workflows
-        // row above. It is a named GAP like `.opencode/memory` directly below:
-        // the refusals surface in the Chat command's own response and nothing
+        // P7.S6: the sentinel directory of `/memory import`. `MemoryCommand::import()`
+        // (in `Chat` until roadmap O-2h) records its re-import guard at
+        // `.sugar-crush/memory/.imported-<target>` under the PROJECT root, so the
+        // clone under analysis chooses where it points — repository-chosen on the
+        // same basis as `WorkflowCommand.php`'s workflows row above. It is a named GAP like `.opencode/memory` directly below:
+        // the refusals surface in the command's own response and nothing
         // reaches `$projectTierRefusals` (DRAIN_EVIDENCE stays without an entry,
         // which is what keeps the derivation calling it a gap). The write is
         // gated AT THE CALL SITE — `ContainedPath::below` on the directory and
         // temp-create + rename for the file, so no write ever follows a planted
         // symlink — which is why no collector entry is owed here.
-        'Chat.php|.sugar-crush/memory' => self::REPOSITORY,
+        'Host/Commands/MemoryCommand.php|.sugar-crush/memory' => self::REPOSITORY,
         'Context/ProjectMemoryWriter.php|.sugar-crush/memory' => self::REPOSITORY,
         'Memory/ForeignMemoryImporter.php|.opencode/memory' => self::REPOSITORY,
         'Skills/ForeignSkillDiscovery.php|.opencode/skills' => self::REPOSITORY,

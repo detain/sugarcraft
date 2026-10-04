@@ -11963,544 +11963,71 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /workflow commands locally.
+     * Handle /workflow commands — {@see \SugarCraft\Crush\Host\Commands\WorkflowCommand}
+     * (roadmap O-2h). What stays here is the one rule about THIS window: a
+     * read-only window refuses `run` and `resume` before a run can set
+     * `workflowTurnInFlight`, because a run appends to the transcript of a
+     * session another TUI owns.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleWorkflowCommand(string $inputText): array
     {
-        // Check if workflow engine is configured
-        if ($this->workflowEngine === null) {
-            $response = "Workflow engine not configured. Set a WorkflowEngine to use /workflow commands.";
-            return $this->workflowResponse($inputText, $response);
-        }
-
-        $afterWorkflow = self::commandArgument($inputText);
-        if ($afterWorkflow === '') {
-            return $this->workflowHelpResponse($inputText);
-        }
-
-        $parts = preg_split('/\s+/', $afterWorkflow, 2);
-        $command = $parts[0];
-        $args = $parts[1] ?? '';
-
-        // Before workflowRun()/workflowResume() can set workflowTurnInFlight:
-        // a run appends to the transcript of a session another TUI owns.
-        if ($this->readOnlySession && \in_array($command, ['run', 'resume'], true)) {
+        [$command] = \SugarCraft\Crush\Host\Commands\WorkflowCommand::subcommand($inputText);
+        if ($this->workflowEngine !== null && $this->readOnlySession && \in_array($command, ['run', 'resume'], true)) {
             return $this->refuseReadOnly($inputText);
         }
 
-        return match ($command) {
-            'run' => $this->workflowRun($inputText, $args),
-            'pause' => $this->workflowPause($inputText, $args),
-            'resume' => $this->workflowResume($inputText, $args),
-            'status' => $this->workflowStatus($inputText, $args),
-            'list' => $this->workflowList($inputText),
-            default => $this->workflowHelpResponse($inputText, "Unknown command '{$command}'."),
-        };
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\WorkflowCommand(), $inputText);
     }
 
     /**
-     * Return a workflow command response, adding both user command and assistant response to history.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function workflowResponse(string $inputText, string $response): array
-    {
-        // `inFlight` is left as it is: every caller runs idle except
-        // `/workflow pause|status` mid-run (audit WF-4), and clearing it there
-        // would release the run's turn while its fiber keeps going.
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            'inputBuf' => '',
-        ]);
-        return [$next, null];
-    }
-
-    /**
-     * Show help text for /workflow command.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function workflowHelpResponse(string $inputText, ?string $error = null): array
-    {
-        $lines = [];
-        if ($error !== null) {
-            $lines[] = "**Error:** {$error}";
-            $lines[] = '';
-        }
-        $lines[] = '**Available /workflow commands:**';
-        $lines[] = '';
-        $lines[] = '`/workflow run <name> [key=val ...]` — Run a workflow by name with optional context';
-        $lines[] = '`/workflow pause <workflowId>` — Pause a running workflow';
-        $lines[] = '`/workflow resume <workflowId>` — Resume a paused workflow';
-        $lines[] = '`/workflow status <workflowId>` — Check workflow status';
-        $lines[] = '`/workflow list` — List available workflows';
-        $lines[] = '`/workflow` — Show this help text';
-        $lines[] = '';
-        $lines[] = "Note: pause/resume granularity is per-whole-stage only. A real interrupt "
-            . "(Ctrl-C/SIGTERM) captures whatever stages have genuinely finished so far, but if it "
-            . "lands while a 'parallel' stage is mid-flight, that stage's individual in-progress "
-            . "agent results are NOT captured — the stage is simply re-run from scratch on resume. "
-            . "There is no partial-credit resume for a parallel sub-stage.";
-
-        return $this->workflowResponse($inputText, implode("\n", $lines));
-    }
-
-    /**
-     * Handle /workflow run command.
-     *
-     * ## This used to freeze the whole TUI, and why the obvious fix was wrong
-     *
-     * `WorkflowEngine::run()` was called synchronously from inside `update()`,
-     * so no frame painted, no keystroke was read and no spinner turned until
-     * the last stage was over — for as long as the run took, up to
-     * `ProcessExecutor`'s 300s-per-worker ceiling.
-     *
-     * The fix recorded here for a long time was "the fork-plus-socket pattern
-     * {@see Backend\EngineBackend::completeAsync()} already uses". Measured,
-     * that pattern would have made the command asynchronous and made the
-     * feature it was blocking permanently unreachable: the split-pane
-     * compositor renders from `AgentManager::liveOutputs()`, which reads the
-     * manager's sub-agent map — an object graph in THIS process. Fork the
-     * workflow and every sub-agent it creates lives, and dies, in a child the
-     * renderer cannot see. The parent would repaint a blank pane promptly.
-     *
-     * ## What it does instead
-     *
-     * The run goes into a `\Fiber`, and the driver resumes it from a periodic
-     * timer on the same ReactPHP loop that repaints
-     * ({@see driveWorkflowFiber()}). A fiber suspends its whole call stack, so
-     * one suspension point deep inside the pool
-     * ({@see \SugarCraft\Crush\Agents\AgentWorkerPool::idle()}) yields the
-     * entire `Chat → WorkflowEngine → AgentManager → AgentWorkerPool` chain
-     * back to the loop, and everything stays in this process where the
-     * renderer can see it.
-     *
-     * Nothing runs before this method returns: the fiber is not started here,
-     * only handed to the timer. `update()` returns on the same tick the user
-     * pressed Enter, with the command echoed and `inFlight` set.
-     *
-     * WHAT IS NOT COVERED: the yield granularity is one poll of a parallel
-     * stage's worker pool. A stage type that blocks the PARENT rather than
-     * dispatching to workers still holds the fiber for its duration; it just
-     * no longer holds it for the whole workflow.
+     * `/workflow run <name> [key=val ...]` —
+     * {@see \SugarCraft\Crush\Host\Commands\WorkflowCommand::start()}: the run
+     * goes into a `\Fiber` stepped from a loop timer, so `update()` returns on
+     * the tick Enter was pressed and the renderer sees the run's sub-agents
+     * live between polls; it occupies the turn until its report lands.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function workflowRun(string $inputText, string $args): array
     {
-        $argParts = preg_split('/\s+/', $args);
-        $workflowName = $argParts[0] ?? '';
-
-        if ($workflowName === '') {
-            return $this->workflowHelpResponse($inputText, "Usage: /workflow run <name> [key=val ...]");
+        if ($this->workflowEngine === null) {
+            return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\WorkflowCommand(), $inputText);
         }
 
-        // Parse key=val context pairs
-        $context = [];
-        foreach (array_slice($argParts, 1) as $pair) {
-            if (str_contains($pair, '=')) {
-                [$k, $v] = explode('=', $pair, 2);
-                $context[trim($k)] = trim($v);
-            }
-        }
-
-        $engine = $this->workflowEngine;
-        // The run's Esc Esc: held as this turn's inFlightCancellation, so the
-        // double-Escape arm's existing cancel() reaches the engine, which
-        // kills the stage's agents and stops the run (see driveWorkflowFiber()).
-        $cancellation = new CancellationToken();
-
-        // Built here, started by the driver's FIRST timer tick. Everything
-        // inside runs off the main stack.
-        $fiber = new \Fiber(static function () use ($engine, $workflowName, $context, $cancellation): string {
-            try {
-                return self::describeWorkflowResult($workflowName, $engine->run($workflowName, $context, $cancellation));
-            } catch (\Throwable $e) {
-                // One catch, where there used to be three arms
-                // ({@see WorkflowNotFoundException}, {@see WorkflowLoadException},
-                // everything else) that produced the same string: inside a
-                // fiber the distinction matters LESS, not more, because an
-                // uncaught throw here surfaces on the driver's timer tick with
-                // no user-facing context at all.
-                return "**Error:** {$e->getMessage()}";
-            }
-        });
-
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)->withUiOnly()],
-            'inputBuf' => '',
-            // The workflow is a turn: it occupies the session, the spinner
-            // should run, and a second prompt must queue behind it rather than
-            // interleave with it. Cleared by update()'s AssistantMsg arm when
-            // driveWorkflowFiber() settles, on both the success and the error
-            // path -- both resolve, neither rejects.
-            'inFlight' => true,
-            'inFlightCancellation' => $cancellation,
-            'workflowTurnInFlight' => true,
-        ]);
-
-        return [$next, $next->driveWorkflowFiber($fiber, $cancellation)];
+        return $this->applyCommandResult(
+            \SugarCraft\Crush\Host\Commands\WorkflowCommand::start($this->workflowEngine, $inputText, $args),
+        );
     }
 
     /**
-     * How many stages of a finished run actually RAN.
-     *
-     * `count($result->stageResults)` is not that number: the whole-workflow
-     * pre-flight in WorkflowEngine reports a refusal it caught before
-     * dispatch as one synthetic Failed StageResult whose own engine comment
-     * says "Nothing ran", so a run that dispatched nothing used to print
-     * "Stages completed: 1" (tracker #85 / E8). The synthetic entry and a
-     * per-stage declaration refusal that fired before the stage's first agent
-     * share the same nothing-ran shape - Failed, no agents, no tokens - so
-     * the rule is derived from that shape rather than from the pre-flight's
-     * file of origin: a stage counts when it completed or when it ran agents.
-     * A dispatch that threw before recording any agent is the same nothing
-     * the pre-flight is; the honest line says 0.
-     */
-    private static function countDispatchedStages(WorkflowResult $result): int
-    {
-        return count(array_filter(
-            $result->stageResults,
-            static fn(StageResult $stage): bool => $stage->isSuccess() || $stage->agents !== [],
-        ));
-    }
-
-    /**
-     * Render a finished run as the assistant's reply.
-     *
-     * Static and split out of {@see workflowRun()} so the fiber body closes
-     * over nothing but its arguments: a fiber outlives the `Chat` that created
-     * it (that instance is replaced on the very next `update()`), and capturing
-     * `$this` would pin a stale model for the length of the run.
+     * Render a finished run as the assistant's reply —
+     * {@see \SugarCraft\Crush\Host\Commands\WorkflowCommand::describeWorkflowResult()}.
      */
     private static function describeWorkflowResult(string $workflowName, WorkflowResult $result, bool $resumed = false): string
     {
-        // The heading is chosen from the status, never assumed. AUDIT WF-2:
-        // `/workflow resume` printed "resumed and completed" for every result,
-        // so a resumed run that FAILED again, or was paused again, read as a
-        // success; and a run paused while live reported "completed".
-        $outcome = match (true) {
-            $result->status === WorkflowStatus::Paused => 'paused',
-            // Ahead of isFailure(), which counts Cancelled as a failure: a run
-            // the user stopped did not fail, and must not read as though it had.
-            $result->status === WorkflowStatus::Cancelled => 'cancelled',
-            $result->isFailure() => 'failed',
-            $result->isSuccess() => 'completed',
-            default => $result->status->value,
-        };
-        $response = "**Workflow '{$workflowName}' " . ($resumed ? "resumed and {$outcome}" : $outcome) . "**\n\n";
-        $response .= "ID: `{$result->workflowId}`\n";
-        $response .= "Status: {$result->status->value}\n";
-        $response .= "Stages completed: " . self::countDispatchedStages($result) . "\n";
-        $response .= "Total tokens: {$result->totalTokens}\n";
-        $response .= "Total cost: \${$result->totalCost}";
-        // Since WF-1(b) a stage's agent may be re-run after a failed or
-        // timed-out attempt; the pool folds every attempt into ONE result, so
-        // without this line a stage that took three tries to pass (and paid
-        // for all three) read exactly like one that passed first time.
-        foreach ($result->stageResults as $stage) {
-            $attempts = max([1, ...array_map(static fn(\SugarCraft\Crush\Agents\AgentResult $agent): int => $agent->attempts, $stage->agents)]);
-            if ($attempts > 1) {
-                $response .= "\nStage '{$stage->stageName}': {$attempts} attempts";
-            }
-        }
-        // The failing stage's message, or the reason never reaches the
-        // user at all: a failed run used to print the word "completed" in
-        // bold with `Status: failed` under it and nothing else, so a stage
-        // refused for declaring a tool this session's mode denies looked
-        // like a workflow that had simply not worked. The engine puts the
-        // reason on the stage; this is the only place that can show it.
-        $failure = $result->firstFailure();
-        if ($failure !== null && ($failure->error ?? '') !== '') {
-            $response .= "\n\nStage '{$failure->stageName}': {$failure->error}";
-        }
-
-        if ($result->status === WorkflowStatus::Paused) {
-            $response .= "\n\nContinue it with `/workflow resume {$result->workflowId}`.";
-        }
-
-        if ($result->status === WorkflowStatus::Cancelled) {
-            $response .= "\n\nCancelled with Esc Esc: the stage in flight had its agents stopped, and no later "
-                . 'stage ran. The totals above include what the stopped stage had already spent.';
-        }
-
-        return $response;
+        return \SugarCraft\Crush\Host\Commands\WorkflowCommand::describeWorkflowResult($workflowName, $result, $resumed);
     }
 
     /**
      * Step a workflow fiber from the event loop until it terminates, then
-     * deliver its report as the assistant's reply.
-     *
-     * ## The invariant this exists to hold
-     *
-     * BETWEEN two resumes the loop is free. That is the entire point: candy-core's
-     * `Program` repaints from its own periodic timer on this same loop, so a
-     * frame lands in every gap, and `Renderer::renderView()` reads
-     * `AgentManager::liveOutputs()` at that moment — the sub-agents the
-     * suspended fiber has running, in this process, with the partial text
-     * `AgentWorkerPool::pumpProgress()` mirrored onto them on its last poll.
-     *
-     * `start()` therefore happens on the first TICK, never inline: doing it
-     * here would run the workflow up to its first suspension point inside
-     * `update()`, which is the freeze this change is about, only shorter.
-     *
-     * ## Failure and cancellation
-     *
-     * The promise RESOLVES on a throwing fiber rather than rejecting. A
-     * rejection dispatches candy-core's `ExceptionMsg`, which this model does
-     * not handle, so a workflow that died would have cleared nothing and left
-     * `inFlight` latched on forever with no message to explain it. An error
-     * notice through the ordinary AssistantMsg arm both tells the user and
-     * releases the turn.
-     *
-     * The timer is cancelled on every exit, including the throwing one; a live
-     * periodic timer holding a terminated fiber would resume it and raise
-     * `FiberError` on the next tick.
-     *
-     * ## Double-Escape stops the run
-     *
-     * $cancellation is the run's token, held as the turn's
-     * `inFlightCancellation`, so the double-Escape arm's `cancel()` reaches
-     * the engine. `WorkflowEngine` registered on it
-     * ({@see CancellationToken::onCancel()}), so the cancel calls
-     * `AgentWorkerPool::cancelAll()` on the stage's live pool THERE AND THEN —
-     * the fiber is suspended in that pool's idle poll and could not look at a
-     * flag itself — killing the stage's forked agents (asynchronously, with a
-     * grace, on the loop), and the stage loop then stops with a Cancelled
-     * result instead of starting the next stage. An engine that ignores the
-     * token just finishes.
-     *
-     * THE PARTIAL REPORT STILL LANDS, marked cancelled
-     * ({@see describeWorkflowResult()}): the stages that ran really ran and
-     * cost money, and dropping the report would leave no record of them. It
-     * arrives as a {@see CancelledWorkflowReportMsg}, NOT an AssistantMsg,
-     * because the cancel already released the turn — by the time the run
-     * winds down the user may have started another, and an AssistantMsg would
-     * settle that one on this run's behalf. This used to be a known
-     * limitation: Esc Esc released the turn and the workflow ran on to the
-     * end, forked workers and all.
-     *
-     * WHAT THAT LIMITATION USED TO IMPLY, and no longer does: because the
-     * released turn accepts input again, a user could type a SECOND
-     * `/workflow run` while the first was still stepping, and get it. Measured
-     * — two runs live at once, exiting in an order unrelated to the order they
-     * started, each popping the other's SIGINT/SIGTERM frame off
-     * `WorkflowEngine`'s LIFO handler stack, and both collapsing onto one
-     * `$resultsByName` slot when they shared a name (so `/workflow pause` on
-     * run A's own printed id persisted run B). `WorkflowEngine` now REFUSES a
-     * run that would interleave with a live one and says so; see
-     * `WorkflowEngine::$liveRunOwners`. Nesting — a stage re-entering `run()`
-     * on the same call stack — is unaffected and still works. The refusal
-     * still matters after a cancel: the run winds down over the kill's grace,
-     * and a `/workflow run` typed in that window is refused rather than
-     * interleaved.
+     * deliver its report as the reply —
+     * {@see \SugarCraft\Crush\Host\Commands\WorkflowCommand::drive()} steps it
+     * (the loop is free between two resumes, which is when a frame paints the
+     * live sub-agents), {@see settleCommandRun()} lands it: an AssistantMsg
+     * that releases the turn, or a {@see CancelledWorkflowReportMsg} once Esc
+     * Esc ($cancellation) already released it. Resolves, never rejects.
      */
     private function driveWorkflowFiber(\Fiber $fiber, ?CancellationToken $cancellation = null): \Closure
     {
-        return Cmd::promise(static function () use ($fiber, $cancellation): PromiseInterface {
-            $deferred = new Deferred();
-            $loop = Loop::get();
-            $timer = null;
-
-            $settle = static function (string $text) use ($deferred, $cancellation): void {
-                // The engine's report, not a model reply to this conversation:
-                // UI-only like the `/workflow run` echo it answers.
-                $report = Message::assistant($text)->withUiOnly();
-
-                // A run Esc Esc cancelled has no turn left to settle: the
-                // cancel released it, and another may be running by now. Its
-                // report is still shown, as its own Msg.
-                $deferred->resolve($cancellation?->isCancelled()
-                    ? new CancelledWorkflowReportMsg($report)
-                    : new AssistantMsg($report));
-            };
-
-            $timer = $loop->addPeriodicTimer(
+        return self::settleCommandRun(
+            static fn (): PromiseInterface => \SugarCraft\Crush\Host\Commands\WorkflowCommand::drive(
+                $fiber,
                 self::WORKFLOW_STEP_INTERVAL_SECONDS,
-                static function () use ($fiber, $loop, &$timer, $settle): void {
-                    try {
-                        $fiber->isStarted() ? $fiber->resume() : $fiber->start();
-                    } catch (\Throwable $e) {
-                        $loop->cancelTimer($timer);
-                        $settle("**Error:** {$e->getMessage()}");
-
-                        return;
-                    }
-
-                    if (!$fiber->isTerminated()) {
-                        return;
-                    }
-
-                    $loop->cancelTimer($timer);
-                    $settle((string) $fiber->getReturn());
-                },
-            );
-
-            return $deferred->promise();
-        });
-    }
-
-    /**
-     * Handle /workflow pause command.
-     *
-     * A LIVE run is reachable here: its fiber is suspended between agent polls
-     * whenever this runs. The turn the run occupies refuses slash commands
-     * ({@see refuseInFlightCommand()}) except this one and `/workflow status`
-     * ({@see isWorkflowControlDuringWorkflowTurn()}, audit WF-4), so the user
-     * pauses it mid-run by typing it — the turn stays in flight. The engine
-     * then stops the run before its next stage, and the run's own report, when
-     * {@see driveWorkflowFiber()} delivers it, says `paused` (AUDIT WF-2).
-     *
-     * Pause (cooperative here, or via WorkflowEngine's real SIGINT/SIGTERM
-     * handling on a genuine interrupt) captures whatever whole stages have
-     * actually completed so far. Resume granularity stays per-whole-stage
-     * only: if a 'parallel' stage is mid-flight when the pause happens, its
-     * individual in-progress agent results are not captured and that stage
-     * is re-run from scratch on resume — there is no partial-credit resume
-     * for a parallel sub-stage. See WorkflowEngine's class docblock.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function workflowPause(string $inputText, string $args): array
-    {
-        $workflowId = trim($args);
-
-        if ($workflowId === '') {
-            return $this->workflowHelpResponse($inputText, "Usage: /workflow pause <workflowId>");
-        }
-
-        try {
-            // Asked BEFORE pausing, because the two cases mean different things
-            // to the user: a finished run is paused at once, while a LIVE one
-            // (its fiber suspended between agent polls) finishes the stage in
-            // flight and stops before the next — its report lands later, as
-            // `paused`, through the run's own fiber.
-            try {
-                $live = $this->workflowEngine->getStatus($workflowId) === WorkflowStatus::Running;
-            } catch (\Throwable) {
-                $live = false;
-            }
-
-            $this->workflowEngine->pause($workflowId);
-            $response = $live
-                ? "Pause requested for workflow `{$workflowId}`: the stage in flight finishes, then the run "
-                    . "stops before the next one. `/workflow resume {$workflowId}` continues it."
-                : "Workflow `{$workflowId}` has been paused.";
-        } catch (WorkflowNotRunningException $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
-
-        return $this->workflowResponse($inputText, $response);
-    }
-
-    /**
-     * Handle /workflow resume command.
-     *
-     * Driven exactly like {@see workflowRun()}: the resume goes into a `\Fiber`
-     * stepped by {@see driveWorkflowFiber()}, `inFlight` is set, and the report
-     * arrives as the reply when it settles. AUDIT WF-2: it used to run
-     * synchronously inside `update()`, so a resumed run froze the TUI for its
-     * whole length and — since nothing else could run while it did — could
-     * never be paused. It also printed "resumed and completed" whatever the
-     * result was; the heading now comes from {@see describeWorkflowResult()}.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function workflowResume(string $inputText, string $args): array
-    {
-        $workflowId = trim($args);
-
-        if ($workflowId === '') {
-            return $this->workflowHelpResponse($inputText, "Usage: /workflow resume <workflowId>");
-        }
-
-        $engine = $this->workflowEngine;
-        // Esc Esc stops a resumed run exactly as a fresh one; see workflowRun().
-        $cancellation = new CancellationToken();
-
-        // Static for the reason workflowRun()'s fiber is: it outlives this Chat.
-        $fiber = new \Fiber(static function () use ($engine, $workflowId, $cancellation): string {
-            try {
-                return self::describeWorkflowResult($workflowId, $engine->resume($workflowId, $cancellation), resumed: true);
-            } catch (\Throwable $e) {
-                // WorkflowNotRunningException (nothing paused under that id),
-                // WorkflowNotFoundException (the definition is gone) and the
-                // engine's interleaving refusal all read the same to the user.
-                return "**Error:** {$e->getMessage()}";
-            }
-        });
-
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)->withUiOnly()],
-            'inputBuf' => '',
-            // A resumed run is a turn exactly as a fresh one is; see workflowRun().
-            'inFlight' => true,
-            'inFlightCancellation' => $cancellation,
-            'workflowTurnInFlight' => true,
-        ]);
-
-        return [$next, $next->driveWorkflowFiber($fiber, $cancellation)];
-    }
-
-    /**
-     * Handle /workflow status command.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function workflowStatus(string $inputText, string $args): array
-    {
-        $workflowId = trim($args);
-
-        if ($workflowId === '') {
-            return $this->workflowHelpResponse($inputText, "Usage: /workflow status <workflowId>");
-        }
-
-        try {
-            $status = $this->workflowEngine->getStatus($workflowId);
-            $response = "Workflow `{$workflowId}` status: **{$status->value}**";
-        } catch (WorkflowNotRunningException $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
-
-        return $this->workflowResponse($inputText, $response);
-    }
-
-    /**
-     * Handle /workflow list command.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function workflowList(string $inputText): array
-    {
-        $workflows = $this->workflowEngine->listWorkflows();
-
-        if ($workflows === []) {
-            // BOTH tiers named, because Bootstrap::workflowEngine() searches
-            // both: naming only the home one sends a user who checked a
-            // workflow into their repo off to fix the wrong directory. The
-            // project tier's `.yaml`-only rule is named for the same reason —
-            // otherwise a user who committed `deploy.php` is pointed at the
-            // right directory and the wrong extension (see
-            // WorkflowRegistry::__construct() for why that tier refuses PHP).
-            $response = "No workflows found. They are read from `.sugar-crush/workflows/*.yaml` "
-                . "(project, YAML only — skipped entirely if that directory resolves outside the "
-                . "checkout, which the launch reports on stderr) or "
-                . "`~/.sugar-crush/workflows/*.{yaml,php}`.";
-        } else {
-            $lines = ['**Available workflows:**'];
-            foreach ($workflows as $i => $name) {
-                $lines[] = ($i + 1) . ". `{$name}`";
-            }
-            $response = implode("\n", $lines);
-        }
-
-        return $this->workflowResponse($inputText, $response);
+            ),
+            $cancellation ?? new CancellationToken(),
+        );
     }
 
     /**
@@ -14377,360 +13904,49 @@ final class Chat implements Model
     }
 
     /**
-     * Handle /branch command — fork the current session.
+     * Handle /branch — fork the current session and move onto the copy:
+     * {@see \SugarCraft\Crush\Host\Commands\BranchCommand} decides, and {@see applyCommandResult()}
+     * moves this window (and, out of a read-only window, hands back the draft
+     * it refused). `update()` then moves the session lock onto the branch
+     * (audit SES-3(b)).
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleBranchCommand(string $inputText): array
     {
-        if ($this->sessionStore === null) {
-            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /branch and /rename commands.');
-        }
-
-        // /branch takes no arguments
-        $afterBranch = self::commandArgument($inputText);
-
-        if ($this->currentSessionId === null) {
-            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
-        }
-
-        if ($afterBranch !== '') {
-            return $this->sessionResponse($inputText, 'Usage: /branch (takes no arguments)');
-        }
-
-        // forkSession() copies the STORED transcript: write any debounced
-        // change first, or the branch starts behind the screen (audit R2).
-        $this->transcriptWriter->flush();
-
-        try {
-            $newSessionId = $this->sessionStore->forkSession($this->currentSessionId);
-            $response = "Branch created: {$newSessionId}";
-            if ($this->readOnlySession) {
-                // update() moves the lock onto the branch (audit SES-3(b)), so
-                // from the next keystroke this window writes again — to the
-                // fork, never to the session the other window has.
-                $response .= ' — this window now writes to the branch; the original stays with the other sugarcrush.';
-            }
-        } catch (\InvalidArgumentException $e) {
-            $response = "Error: {$e->getMessage()}";
-        } catch (\Throwable $e) {
-            $response = "Error: {$e->getMessage()}";
-        }
-
-        // Return Chat with same state but currentSessionId updated to the new branch
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            // Out of a read-only window, the draft it refused comes back: this
-            // window can send it now ({@see refuseReadOnly()}).
-            'inputBuf' => isset($newSessionId) ? ($this->readOnlyDraft ?? '') : '',
-            'readOnlyDraft' => isset($newSessionId) ? null : $this->readOnlyDraft,
-            'inFlight' => false,
-            'currentSessionId' => $newSessionId ?? $this->currentSessionId,
-        ]);
-
-        return [$next, null];
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\BranchCommand(), $inputText);
     }
 
     /**
-     * Handle /bg (alias /background) — dispatch a task onto
-     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor} and hand the
-     * prompt straight back (crush_feat.md section 5 E3).
-     *
-     * Claude Code's `/background` with no argument backgrounds the LIVE
-     * conversation; that has no counterpart here, because `spawnSession()`
-     * hands the child a task string, not a transcript, so an argument-less
-     * `/bg` is answered with usage rather than silently backgrounding
-     * something else.
-     *
-     * `/bg stop <id>` stops a running session (audit BG-1) through
-     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::stopSession()}.
-     * It shares its first word with ordinary prose, so the parsing rule is
-     * deliberately narrow: the argument must be exactly `stop` followed by ONE
-     * token, and that token must be a session id this supervisor knows or one
-     * shaped like the ids it mints (`sess_YYYYmmddHHMMSS_<8 hex>`). Anything
-     * else — "/bg stop the dev server and rebuild" — is a task, as it always
-     * was. A bare `/bg stop` answers usage plus the active ids rather than
-     * backgrounding the word "stop".
+     * Handle /bg (alias /background) — {@see \SugarCraft\Crush\Host\Commands\BackgroundCommand}: dispatch
+     * a task onto the {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor}
+     * off-turn and hand the prompt straight back, or `/bg stop <id>`. The
+     * answer lands later as a {@see BackgroundSessionSpawnedMsg} or
+     * {@see BackgroundSessionStoppedMsg}.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleBackgroundCommand(string $inputText): array
     {
-        if ($this->backgroundSupervisor === null) {
-            return $this->sessionResponse($inputText, 'Background sessions not configured. Set a BackgroundSupervisor to use /bg and /fork.');
-        }
-
-        $task = self::commandArgument($inputText);
-        if ($task === '') {
-            return $this->sessionResponse($inputText, 'Usage: /bg <task>');
-        }
-
-        if (strcasecmp($task, 'stop') === 0) {
-            return $this->sessionResponse($inputText, $this->backgroundStopUsage());
-        }
-
-        $stopTarget = $this->backgroundStopTarget($task);
-        if ($stopTarget !== null) {
-            return $this->backgroundDispatch($inputText, $this->scheduleBackgroundStop($stopTarget));
-        }
-
-        $name = self::backgroundSessionName($task);
-
-        return $this->backgroundDispatch(
-            $inputText,
-            $this->scheduleBackgroundSpawn('/bg', $name, $task, null),
-        );
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\BackgroundCommand(), $inputText);
     }
 
-    /**
-     * The session id `/bg stop <id>` names, or null when $argument is a task.
-     * See {@see handleBackgroundCommand()} for the rule and why it is narrow.
-     */
-    private function backgroundStopTarget(string $argument): ?string
-    {
-        if (preg_match('/^stop\s+(\S+)$/i', $argument, $m) !== 1) {
-            return null;
-        }
-
-        $id = $m[1];
-        if ($this->backgroundSupervisor?->getSession($id) !== null
-            || preg_match(\SugarCraft\Crush\Sessions\BackgroundSupervisor::SESSION_ID_PATTERN, $id) === 1
-        ) {
-            return $id;
-        }
-
-        return null;
-    }
-
-    /** Usage for a bare `/bg stop`, listing what there is to stop. */
-    private function backgroundStopUsage(): string
-    {
-        $active = [];
-        foreach ($this->backgroundSupervisor?->getActiveSessions() ?? [] as $id => $session) {
-            $active[] = "{$id} ('{$session->name}')";
-        }
-
-        return 'Usage: /bg stop <session-id>' . "\n"
-            . ($active === []
-                ? 'No active background sessions.'
-                : 'Active background sessions: ' . implode(', ', $active));
-    }
-
-    /**
-     * The Cmd that stops $sessionId off-turn: `stopSession()` may wait
-     * several seconds on its signal rungs, which must not freeze `update()`.
-     * Resolves, never rejects, for the reason {@see scheduleBackgroundSpawn()}
-     * gives.
-     */
-    private function scheduleBackgroundStop(string $sessionId): \Closure
-    {
-        $supervisor = $this->backgroundSupervisor;
-
-        return Cmd::promise(static function () use ($supervisor, $sessionId): PromiseInterface {
-            $name = $supervisor?->getSession($sessionId)?->name;
-            try {
-                $outcome = $supervisor === null
-                    ? \SugarCraft\Crush\Sessions\BackgroundStopOutcome::CouldNotStop
-                    : $supervisor->stopSession($sessionId);
-
-                return \React\Promise\resolve(new BackgroundSessionStoppedMsg($sessionId, $outcome, $name));
-            } catch (\Throwable $e) {
-                return \React\Promise\resolve(new BackgroundSessionStoppedMsg(
-                    $sessionId,
-                    \SugarCraft\Crush\Sessions\BackgroundStopOutcome::CouldNotStop,
-                    $name,
-                    $e->getMessage(),
-                ));
-            }
-        });
-    }
-
-    /** The transcript line for a settled `/bg stop`. */
+    /** The transcript line for a settled `/bg stop` — {@see \SugarCraft\Crush\Host\Commands\BackgroundCommand::stopNotice()}. */
     private static function backgroundStopNotice(BackgroundSessionStoppedMsg $msg): string
     {
-        $label = $msg->name === null ? $msg->sessionId : "{$msg->sessionId} ('{$msg->name}')";
-
-        return match ($msg->outcome) {
-            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::UnknownSession
-                => "No background session {$msg->sessionId} in this run — /bg stop lists the active ones.",
-            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::AlreadyFinished
-                => "Background session {$label} had already finished; nothing to stop.",
-            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::StoppedViaIpc
-                => "Stopped background session {$label}.",
-            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::StoppedViaSignal
-                => "Stopped background session {$label} (its control socket was gone, so the daemon was signalled).",
-            \SugarCraft\Crush\Sessions\BackgroundStopOutcome::CouldNotStop
-                => "Could not stop background session {$label}"
-                    . ($msg->error !== null ? ": {$msg->error}" : ' — its daemon could not be reached or safely signalled.'),
-        };
+        return \SugarCraft\Crush\Host\Commands\BackgroundCommand::stopNotice($msg);
     }
 
     /**
-     * Handle /fork — clone this conversation and run $prompt against the
-     * clone in a background session.
-     *
-     * The transcript copy is {@see EnhancedSessionStore::forkSession()},
-     * which copies the transcript, checkpoints, blobs and meta in one
-     * transaction around {@see SessionStore::forkSession()}'s row copy — the
-     * same call `/branch` makes — but `currentSessionId` deliberately stays put:
-     * `/branch` MOVES the user onto the new branch, whereas `/fork` leaves
-     * them where they are and sends the copy away to work (Claude Code's
-     * split between the two). The forked id is handed to the background
-     * daemon, which loads the forked copy as the conversation's history and
-     * saves its reply back into that copy (X-30), so the background session
-     * continues the transcript rather than starting from the bare prompt.
-     *
-     * The copy is recorded as a {@see \SugarCraft\Crush\Session\SessionKind::Background}
-     * session, not a branch: the session picker lists background rows (the
-     * `⧗ bg` badge), so a `/fork` copy shows there as the background work it
-     * is, while a `/branch` copy stays a `⑂` branch row.
+     * Handle /fork — clone this conversation and run the prompt against the
+     * clone in a background session: {@see \SugarCraft\Crush\Host\Commands\ForkCommand}. `/branch` moves
+     * this window onto its copy; `/fork` leaves it where it is.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleForkCommand(string $inputText): array
     {
-        if ($this->backgroundSupervisor === null) {
-            return $this->sessionResponse($inputText, 'Background sessions not configured. Set a BackgroundSupervisor to use /bg and /fork.');
-        }
-
-        $prompt = self::commandArgument($inputText);
-        if ($prompt === '') {
-            return $this->sessionResponse($inputText, 'Usage: /fork <prompt>');
-        }
-
-        if ($this->sessionStore === null) {
-            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /fork.');
-        }
-
-        if ($this->currentSessionId === null) {
-            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
-        }
-
-        // Same reason as /branch: the fork copies what is stored (audit R2).
-        $this->transcriptWriter->flush();
-
-        try {
-            $forkedSessionId = $this->sessionStore->forkSession(
-                $this->currentSessionId,
-                \SugarCraft\Crush\Session\SessionKind::Background,
-            );
-        } catch (\Throwable $e) {
-            return $this->sessionResponse($inputText, "Error: {$e->getMessage()}");
-        }
-
-        $name = self::backgroundSessionName($prompt);
-
-        return $this->backgroundDispatch(
-            $inputText,
-            $this->scheduleBackgroundSpawn('/fork', $name, $prompt, $forkedSessionId),
-        );
-    }
-
-    /**
-     * Common tail of `/bg` and `/fork`: record the command, free the prompt,
-     * and let $cmd report the outcome later.
-     *
-     * No assistant line is written here on purpose - the only honest thing to
-     * say at this point is "asked to spawn", and the real answer (session id,
-     * or the reason there isn't one) arrives as a
-     * {@see BackgroundSessionSpawnedMsg}.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function backgroundDispatch(string $inputText, \Closure $cmd): array
-    {
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)->withUiOnly()],
-            'inputBuf' => '',
-            'inFlight' => false,
-        ]);
-
-        return [$next, $cmd];
-    }
-
-    /**
-     * Build the Cmd that actually spawns the background session.
-     *
-     * `spawnSession()` proc_opens a daemon and then blocks on a socket
-     * accept (up to 5s) waiting for it to connect. Running that inside
-     * `update()` would stall the event loop - no repaint, no keystrokes -
-     * for the whole handshake, which is precisely the thing `/bg` exists to
-     * avoid, so it runs off-turn like every other side effect on this class
-     * ({@see scheduleTitleGeneration()}).
-     *
-     * A failed spawn resolves rather than rejects: a rejection would surface
-     * as candy-core's generic `ExceptionMsg` and lose the command context the
-     * transcript line needs.
-     *
-     * @param string      $command         '/bg' or '/fork', echoed back in the transcript line.
-     * @param string|null $forkedSessionId Transcript clone this session continues (the daemon loads it as history and saves the reply into it); null for a plain /bg.
-     */
-    private function scheduleBackgroundSpawn(string $command, string $name, string $task, ?string $forkedSessionId): \Closure
-    {
-        $supervisor = $this->backgroundSupervisor;
-        // A registered "default" agent first, then whatever IS registered,
-        // then a synthesised stand-in.
-        //
-        // The middle arm is what a real launch takes now. Until crush_code.md
-        // Phase 1 item 1, Bootstrap::chat() passed no AgentManager, so every
-        // `/bg` and `/fork` fell through to defaultBackgroundAgent() — and
-        // BackgroundSupervisor::spawnSession() feeds $agent->provider and
-        // $agent->model straight into the daemon's command line, so those
-        // daemons were launched with the literal strings "unknown"/"unknown".
-        // Registering the roster fixed that as a side effect: the session's
-        // real provider/model now reach the child. That is a live behaviour
-        // change, so it is pinned by
-        // ChatTest::testBackgroundSpawnRunsTheDaemonAsARosterAgentNotTheUnknownStandIn()
-        // rather than left to be silently undone by unwiring the manager.
-        //
-        // The stand-in stays for embedders that construct a Chat with no
-        // manager: refusing to background anything without one would leave
-        // this command as unreachable as the supervisor it drives.
-        $agent = $this->agentManager?->get('default')
-            ?? ($this->agentManager?->all()[0] ?? null)
-            ?? self::defaultBackgroundAgent();
-        // The session is spawned into the SAME tree this run is rooted at:
-        // a `--root <lib>` run that backgrounded work into the enclosing
-        // monorepo would have the child acting outside the parent's jail.
-        $workingDirectory = $this->projectRoot() ?: '.';
-        $tags = $forkedSessionId === null ? null : ['fork', 'session:' . $forkedSessionId];
-
-        return Cmd::promise(static function () use ($supervisor, $command, $name, $task, $agent, $workingDirectory, $tags, $forkedSessionId): PromiseInterface {
-            try {
-                $session = $supervisor->spawnSession(
-                    name: $name,
-                    agent: $agent,
-                    task: $task,
-                    workingDirectory: $workingDirectory,
-                    tags: $tags,
-                    forkedSessionId: $forkedSessionId,
-                );
-
-                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, $session->id));
-            } catch (\Throwable $e) {
-                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, null, $e->getMessage()));
-            }
-        });
-    }
-
-    /**
-     * The stand-in agent a background session runs as when no AgentManager
-     * is wired. Named "default" so a later, real registration replaces it
-     * transparently.
-     */
-    private static function defaultBackgroundAgent(): \SugarCraft\Crush\Agents\Agent
-    {
-        return new \SugarCraft\Crush\Agents\Agent(
-            name: 'default',
-            description: 'Background session agent',
-            prompt: '',
-            model: 'unknown',
-            provider: 'unknown',
-            tools: [],
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-        );
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\ForkCommand(), $inputText);
     }
 
     /**
@@ -14756,64 +13972,17 @@ final class Chat implements Model
     }
 
     /**
-     * A one-line, control-character-free session name derived from the task.
-     *
-     * Reuses {@see sanitizeSessionTitle()} because a task string is typed by
-     * the user and can carry pasted ESC sequences or newlines, and the name
-     * ends up in a status list rendered one row per session.
-     */
-    private static function backgroundSessionName(string $task): string
-    {
-        $name = self::sanitizeSessionTitle($task);
-
-        return $name === '' ? 'Background task' : $name;
-    }
-
-    /**
-     * Handle /rename — name the current session (roadmap P-A4).
-     *
-     *   /rename <title>  — the user's title; recorded as {@see \SugarCraft\Crush\Session\TitleSource::User},
-     *                      so no generated title ever replaces it
-     *   /rename          — opens the inline title editor, prefilled
-     *   /rename --auto   — drops the current title and asks the title model
-     *                      for a new one ({@see regenerateSessionTitle()})
+     * Handle /rename — name the current session (roadmap P-A4):
+     * {@see \SugarCraft\Crush\Host\Commands\RenameCommand}. `/rename <title>` is the user's title,
+     * `/rename --auto` asks the title model, and a bare `/rename` opens the
+     * inline title editor ({@see openTitleEditor()}).
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleRenameCommand(string $inputText): array
     {
-        if ($this->sessionStore === null) {
-            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /branch and /rename commands.');
-        }
-
-        if ($this->currentSessionId === null) {
-            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
-        }
-
-        $argument = trim(self::commandArgument($inputText));
-
-        if ($argument === '') {
-            return [$this->mutate(['inputBuf' => ''])->openTitleEditor(), null];
-        }
-
-        if ($argument === self::RENAME_AUTO_FLAG) {
-            [$next, $cmd, $response] = $this->regenerateSessionTitle();
-
-            return [$next->sessionResponse($inputText, $response)[0], $cmd];
-        }
-
-        try {
-            [$next, $response] = $this->applyUserSessionTitle($argument);
-        } catch (\Throwable $e) {
-            $response = "Error: {$e->getMessage()}";
-            $next = $this;
-        }
-
-        return $next->sessionResponse($inputText, $response);
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\RenameCommand(), $inputText);
     }
-
-    /** The `/rename` argument that asks for a generated title. */
-    private const RENAME_AUTO_FLAG = '--auto';
 
     /** Longest title the inline editor accepts — the session picker's own cap. */
     private const TITLE_EDITOR_MAX = 120;
@@ -14826,75 +13995,63 @@ final class Chat implements Model
     public const TAB_DOUBLE_CLICK_SECONDS = 0.4;
 
     /**
-     * Name the current session as the USER: sanitised like every other title,
-     * written as {@see \SugarCraft\Crush\Session\TitleSource::User}, and latched in memory
-     * with that source so a generated title in flight can never displace it.
-     * A title that sanitises to nothing is refused rather than stored: a blank
-     * is the "back to automatic" request, which {@see regenerateSessionTitle()}
-     * answers.
+     * Name the current session as the USER —
+     * {@see \SugarCraft\Crush\Host\Commands\RenameCommand::userTitle()} writes it as
+     * {@see \SugarCraft\Crush\Session\TitleSource::User}, and it is latched
+     * here with that source so a generated title in flight can never displace
+     * it. A title that sanitises to nothing is refused rather than stored.
      *
      * @return array{0: self, 1: string} the next model and the line to report
      */
     private function applyUserSessionTitle(string $raw): array
     {
-        \assert($this->sessionStore !== null && $this->currentSessionId !== null);
-        $title = self::sanitizeSessionTitle($raw);
-        if ($title === '') {
-            return [$this, 'A session name needs at least one printable character.'];
-        }
+        [$response, $effects] = \SugarCraft\Crush\Host\Commands\RenameCommand::userTitle($this->commandContext(), $raw);
 
-        $this->sessionStore->renameSession($this->currentSessionId, $title, \SugarCraft\Crush\Session\TitleSource::User);
-
-        return [
-            $this->mutate([
-                'currentSessionName' => $title,
-                'currentSessionTitleSource' => \SugarCraft\Crush\Session\TitleSource::User,
-            ]),
-            "Session renamed to '{$title}'",
-        ];
+        return [$this->withTitleEffects($effects), $response];
     }
 
     /**
      * Drop the current title and ask the title model for a new one — the
-     * answer to `/rename --auto` and to a blank inline rename (roadmap P-A4,
-     * carried from W2-f: a blank rename resets the name so the auto-titler
-     * can name the session again).
-     *
-     * The store row is made unnamed first ({@see SessionStore::clearSessionName()}),
-     * because the titler's write is conditional on exactly that: it never
-     * overwrites a name, and a user's name least of all. The in-memory name
-     * and its source are cleared with it, so the {@see SessionTitledMsg} arm
-     * latches whatever comes back — unless the user names the session again
-     * while the request is in flight, which both halves still honour.
-     *
-     * With no title model there is nothing to regenerate with, and the name
-     * is left alone rather than cleared into a state nothing will ever fill.
-     * A session with no user turn yet is cleared and left to its first reply,
-     * which titles it the ordinary way.
+     * answer to `/rename --auto` and to a blank inline rename:
+     * {@see \SugarCraft\Crush\Host\Commands\RenameCommand::regenerate()}. The in-memory name is cleared
+     * with the store's, so the {@see SessionTitledMsg} arm latches whatever
+     * comes back — unless the user names the session again meanwhile.
      *
      * @return array{0: self, 1: ?\Closure, 2: string} the next model, the title Cmd, the line to report
      */
     private function regenerateSessionTitle(): array
     {
-        \assert($this->sessionStore !== null && $this->currentSessionId !== null);
-        if ($this->titleBackend === null) {
-            return [$this, null, 'No title model is configured, so the session name is unchanged.'];
+        [$response, $effects] = \SugarCraft\Crush\Host\Commands\RenameCommand::regenerate($this->commandContext());
+        $cmd = null;
+        foreach ($effects as $effect) {
+            if ($effect->kind === \SugarCraft\Crush\Host\Commands\CommandEffectKind::Async) {
+                $cmd = Cmd::promise($effect->run());
+            }
         }
 
-        $this->sessionStore->clearSessionName($this->currentSessionId);
-        $next = $this->mutate(['currentSessionName' => null, 'currentSessionTitleSource' => null]);
+        return [$this->withTitleEffects($effects), $cmd, $response];
+    }
 
-        $call = $this->titleService()->regenerateCall(
-            $this->titleBackend,
-            $this->sessionStore,
-            $this->currentSessionId,
-            $this->history,
-        );
-        if ($call === null) {
-            return [$next, null, 'Session name cleared; the first reply will name it.'];
+    /**
+     * This model with a rename's effects latched — the name and who chose it —
+     * and nothing else: the title editor and the picker answer with their own
+     * rows.
+     *
+     * @param list<\SugarCraft\Crush\Host\Commands\CommandEffect> $effects
+     */
+    private function withTitleEffects(array $effects): self
+    {
+        $next = $this;
+        foreach ($effects as $effect) {
+            if ($effect->kind === \SugarCraft\Crush\Host\Commands\CommandEffectKind::RenameSession) {
+                $next = $next->mutate([
+                    'currentSessionName' => $effect->title(),
+                    'currentSessionTitleSource' => $effect->titleSource(),
+                ]);
+            }
         }
 
-        return [$next, Cmd::promise($call), 'Asking the title model for a new session name…'];
+        return $next;
     }
 
     /**
@@ -14971,138 +14128,27 @@ final class Chat implements Model
     }
 
     /**
-     * The scope words `/rewind` takes (item 3.A-2), Cline's and Claude Code's
-     * three choices: the conversation (the default, what `/rewind` always
-     * did), the project's files, or both.
-     */
-    private const REWIND_SCOPES = ['--chat' => 'chat', '--files' => 'files', '--both' => 'both'];
-
-    private const REWIND_USAGE = 'Usage: /rewind [n] [--chat|--files|--both] - step back n checkpoints, n a positive whole number (default 1). --chat (the default) restores the conversation, --files the project\'s files, --both both.';
-
-    private const DIFF_USAGE = 'Usage: /diff [n] - show what changed in the files since checkpoint n, n a positive whole number (default 1: the one taken before your last prompt).';
-
-    /**
-     * Handle /rewind command — restore an earlier checkpoint: the
-     * conversation, the project's files (item 3.A-2), or both.
-     *
-     * `[n]` counts checkpoints back, `1` when omitted. The scope word may come
-     * before or after it, once. Anything else is answered with usage and
-     * rewinds NOTHING. The old `(int)` cast clamped to 1, so `/rewind last`,
-     * `/rewind help`, `/rewind -2` and `/rewind:all` each performed a one-step
-     * rewind — a destructive command run on input that asked for something
-     * else (audit 15b-22).
-     *
-     * A CONVERSATION REWIND CAN BE UNDONE: the rows it steps over go onto the
-     * redo stack instead of being deleted ({@see EnhancedSessionStore::restoreCheckpoint()}),
-     * and {@see handleRedoCommand()} walks back up it until the next prompt
-     * is sent. `--files` alone touches no row: it puts files back and leaves
-     * the conversation where it is.
+     * Handle /rewind — restore an earlier checkpoint: the conversation, the
+     * project's files (item 3.A-2), or both — {@see \SugarCraft\Crush\Host\Commands\RewindCommand}. A
+     * restore puts the checkpoint's draft and caret back in the box
+     * ({@see applyCommandResult()}) and abandons an outstanding `/compact`.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleRewindCommand(string $inputText): array
     {
-        $refusal = $this->checkpointCommandRefusal($inputText);
-        if ($refusal !== null) {
-            return $refusal;
-        }
-
-        $stepsBack = null;
-        $scope = null;
-        $argument = self::commandArgument($inputText);
-        foreach ($argument === '' ? [] : (preg_split('/\s+/', $argument, -1, PREG_SPLIT_NO_EMPTY) ?: []) as $word) {
-            if ($scope === null && isset(self::REWIND_SCOPES[$word])) {
-                $scope = self::REWIND_SCOPES[$word];
-                continue;
-            }
-            if ($stepsBack === null && ctype_digit($word) && (int) $word >= 1) {
-                $stepsBack = (int) $word;
-                continue;
-            }
-
-            return $this->sessionResponse($inputText, self::REWIND_USAGE);
-        }
-
-        return match ($scope ?? 'chat') {
-            'files' => $this->rewindFiles($inputText, $stepsBack ?? 1),
-            'both' => $this->rewindConversation($inputText, $stepsBack ?? 1, true),
-            default => $this->rewindConversation($inputText, $stepsBack ?? 1, false),
-        };
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\RewindCommand(), $inputText);
     }
 
     /**
-     * `/undo` — take back the last turn.
-     *
-     * WHEN THIS SESSION HAS AUTO-COMMITTED (step 3.G), it reverts the last
-     * commit, Aider's way: `git checkout HEAD~1 -- <files>` then
-     * `git reset --soft HEAD~1`, and the model is told the change was undone
-     * so it does not simply make it again. Aider's refusals apply — the commit
-     * is not this session's, it is a merge (or the root), a file it changed has
-     * uncommitted changes now, a file it changed did not exist before it, or it
-     * is already on a remote — and each is answered with why, changing nothing.
-     * The conversation stays where it is, as in Aider.
-     *
-     * OTHERWISE (item 3.A-2): the conversation returns to the checkpoint taken
-     * before the last prompt, the prompt goes back into the box, and the files
-     * go back to how that turn found them (opencode's `/undo`) — the same as
-     * `/rewind 1 --both`, and undone in turn by `/redo`.
+     * `/undo` — take back the last turn: revert this session's last
+     * auto-commit (step 3.G), or else `/rewind 1 --both` — {@see \SugarCraft\Crush\Host\Commands\UndoCommand}.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleUndoCommand(): array
     {
-        $committer = $this->currentSessionId === null || $this->projectRoot === null
-            ? null
-            : \SugarCraft\Crush\Workspace\AutoCommitter::new($this->projectRoot)->withSessionId($this->currentSessionId);
-        if ($committer !== null && $committer->hasCommits()) {
-            return $this->undoAutoCommit($committer);
-        }
-
-        $refusal = $this->checkpointCommandRefusal('/undo');
-
-        return $refusal ?? $this->rewindConversation('/undo', 1, true);
-    }
-
-    /**
-     * The auto-commit half of {@see handleUndoCommand()}: revert the last
-     * commit or say which refusal stopped it. On success one row the MODEL
-     * sees (Aider's `send_undo_reply` wording) rides after the command's
-     * reply, so the next turn knows its change is gone.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function undoAutoCommit(\SugarCraft\Crush\Workspace\AutoCommitter $committer): array
-    {
-        try {
-            $outcome = $committer->undo();
-        } catch (\Throwable $e) {
-            return $this->sessionResponse('/undo', "Error during undo: {$e->getMessage()}");
-        }
-
-        $short = $outcome['sha'] === null ? '' : substr($outcome['sha'], 0, 7);
-        if (!$outcome['ok']) {
-            $hint = $outcome['refusal'] === \SugarCraft\Crush\Workspace\AutoCommitter::REFUSED_NOT_OURS
-                ? ' `/rewind --both` still restores the conversation and files to the last checkpoint.'
-                : '';
-
-            return $this->sessionResponse('/undo', 'Nothing was undone: ' . $outcome['reason'] . '.' . $hint);
-        }
-
-        $files = implode(', ', $outcome['files']);
-        if ($outcome['kind'] === 'snapshot') {
-            [$next] = $this->sessionResponse('/undo', "Un-committed {$short} ({$outcome['subject']}): your changes to {$files} are back to uncommitted, as they were.");
-
-            return [$next, null];
-        }
-
-        [$next] = $this->sessionResponse('/undo', "Reverted {$short} ({$outcome['subject']}): {$files} went back to the previous commit.");
-
-        return [$next->mutate(['history' => [...$next->history, Message::system(
-            "The user ran /undo: the commit {$short} \"{$outcome['subject']}\" was reverted with "
-            . '`git checkout HEAD~1 -- <files>` and `git reset --soft HEAD~1`, so the change to '
-            . "{$files} is gone. Wait for further instructions before attempting that change again; "
-            . 'ask if it is unclear why it was reverted.',
-        )]]), null];
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\UndoCommand(), '/undo');
     }
 
     /**
@@ -15197,1225 +14243,50 @@ final class Chat implements Model
 
     /**
      * `/redo` (item 3.A-2) — step forward one checkpoint over what `/rewind`
-     * or `/undo` set aside, back to where the first of them started. The
-     * conversation always moves.
-     *
-     * THE FILES MOVE ONLY WHEN THEY ARE WHERE THE CONVERSATION IS: they must
-     * match the snapshot of the checkpoint being left, which is true after
-     * `/undo` or `/rewind --both` and false after a conversation-only rewind
-     * (the files never went back) or once they have been edited since. Moving
-     * them in any other case would overwrite work the redo knows nothing
-     * about, so they are left alone and the reply says why.
+     * or `/undo` set aside — {@see \SugarCraft\Crush\Host\Commands\RedoCommand}. The files move only when
+     * they are where the conversation is.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleRedoCommand(): array
     {
-        $inputText = '/redo';
-        $refusal = $this->checkpointCommandRefusal($inputText);
-        if ($refusal !== null) {
-            return $refusal;
-        }
-        /** @var \SugarCraft\Crush\Session\EnhancedSessionStore $store */
-        $store = $this->sessionStore;
-        $sessionId = (string) $this->currentSessionId;
-
-        try {
-            $stack = $store->redoStack($sessionId);
-            if (\count($stack) < 2) {
-                return $this->sessionResponse($inputText, 'Nothing to redo: /redo steps forward over what /rewind or /undo set aside, until the next prompt is sent.');
-            }
-            [$from, $to] = [$stack[0], $stack[1]];
-            $checkpointer = $store->workspaceCheckpointer($this->projectRoot());
-
-            $moveFiles = false;
-            $filesNote = '';
-            if (\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($from['workspace'])) {
-                $drift = $checkpointer->changes($from['workspace']);
-                if (\is_string($drift)) {
-                    $filesNote = ' The files were left as they are: ' . $drift . '.';
-                } elseif ($drift !== []) {
-                    $filesNote = ' The files were left as they are: they do not match the checkpoint the conversation was at, so moving them would overwrite changes.';
-                } elseif (!\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($to['workspace'])) {
-                    $filesNote = ' The files were left as they are: ' . self::noSnapshotReason($to['workspace']) . '.';
-                } else {
-                    $ahead = $checkpointer->changes($to['workspace']);
-                    if (\is_string($ahead)) {
-                        $filesNote = ' The files were left as they are: ' . $ahead . '.';
-                    } else {
-                        $moveFiles = $ahead !== [];
-                    }
-                }
-            }
-
-            $step = $store->redoCheckpoint($sessionId);
-            if ($step === null) {
-                return $this->sessionResponse($inputText, 'Nothing to redo: /redo steps forward over what /rewind or /undo set aside, until the next prompt is sent.');
-            }
-            if ($moveFiles && \is_array($to['workspace'])) {
-                $filesNote = ' ' . self::fileRestoreReport($checkpointer->restore($to['workspace']));
-            }
-
-            [$messages, $inputBuf, $inputCursor] = self::checkpointChatState($step['state']);
-            $restored = max(0, self::agentVisibleCount($messages) - self::agentVisibleCount($this->history));
-            $response = $step['tip']
-                ? "Redid {$restored} messages: back where you were before the rewind." . $filesNote
-                : "Redid {$restored} messages, to checkpoint {$step['index']}." . $filesNote . ' /redo again to go further.';
-
-            return [$this->withRestoredCheckpoint($messages, $inputBuf, $inputCursor, $inputText, $response), null];
-        } catch (\Throwable $e) {
-            return $this->sessionResponse($inputText, "Error during redo: {$e->getMessage()}");
-        }
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\RedoCommand(), '/redo');
     }
 
     /**
-     * `/diff [n]` (item 3.A-2) — what changed in the files since checkpoint
-     * n: the changed paths and the patch, checkpoint on the left. Counted
-     * like `/rewind --files`, so `/diff` shows exactly what `/rewind --files`
-     * would undo. Read-only, and the rows are UI-only: a patch on screen is
-     * not sent to the model.
+     * `/diff [n]` (item 3.A-2) — what changed in the files since checkpoint n
+     * — {@see \SugarCraft\Crush\Host\Commands\DiffCommand}. Read-only; the rows are UI-only.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleDiffCommand(string $inputText): array
     {
-        $refusal = $this->checkpointCommandRefusal($inputText);
-        if ($refusal !== null) {
-            return $refusal;
-        }
-
-        $argument = self::commandArgument($inputText);
-        if ($argument !== '' && (!ctype_digit($argument) || (int) $argument < 1)) {
-            return $this->sessionResponse($inputText, self::DIFF_USAGE);
-        }
-        $stepsBack = $argument === '' ? 1 : (int) $argument;
-
-        /** @var \SugarCraft\Crush\Session\EnhancedSessionStore $store */
-        $store = $this->sessionStore;
-        try {
-            $positions = $this->fileCheckpointPositions($store, (string) $this->currentSessionId, $stepsBack);
-            if ($positions === []) {
-                return $this->sessionResponse($inputText, 'No checkpoints available to diff against.');
-            }
-            $target = $positions[min($stepsBack, \count($positions)) - 1];
-            if (!\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($target['workspace'])) {
-                return $this->sessionResponse($inputText, "Checkpoint {$target['index']} has no file snapshot: " . self::noSnapshotReason($target['workspace']) . '.');
-            }
-
-            $diff = \SugarCraft\Crush\Workspace\CheckpointDiff::of(
-                $store->workspaceCheckpointer($this->projectRoot()),
-                $target['workspace'],
-            );
-            if (\is_string($diff)) {
-                return $this->sessionResponse($inputText, "No diff against checkpoint {$target['index']}: {$diff}.");
-            }
-            if ($diff->isEmpty()) {
-                return $this->sessionResponse($inputText, "The files match checkpoint {$target['index']}: nothing has changed since.");
-            }
-
-            $files = \count($diff->changes);
-            $response = sprintf(
-                "%d %s changed since checkpoint %d (`/rewind %d --files` puts %s back):\n\n%s\n\n%s",
-                $files,
-                $files === 1 ? 'file' : 'files',
-                $target['index'],
-                $stepsBack,
-                $files === 1 ? 'it' : 'them',
-                self::fenced(implode("\n", $diff->summaryLines()), ''),
-                self::fenced($diff->patch, 'diff'),
-            );
-            if ($diff->omittedLines > 0) {
-                $response .= "\n\n{$diff->omittedLines} more lines of the patch are not shown.";
-            }
-
-            return $this->sessionResponse($inputText, $response);
-        } catch (\Throwable $e) {
-            return $this->sessionResponse($inputText, "Error during diff: {$e->getMessage()}");
-        }
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\DiffCommand(), $inputText);
     }
 
     /**
-     * Why a checkpoint command cannot run here, or null when it can: no
-     * store, a store without checkpoints, or no session.
-     *
-     * @return array{0:Chat,1:?\Closure}|null
-     */
-    private function checkpointCommandRefusal(string $inputText): ?array
-    {
-        if ($this->sessionStore === null) {
-            return $this->sessionResponse($inputText, 'Session store not configured.');
-        }
-
-        if (!$this->sessionStore instanceof \SugarCraft\Crush\Session\EnhancedSessionStore) {
-            return $this->sessionResponse($inputText, 'Session store does not support checkpoints. Use an EnhancedSessionStore.');
-        }
-
-        if ($this->currentSessionId === null) {
-            return $this->sessionResponse($inputText, 'No active session. Start a new conversation first.');
-        }
-
-        return null;
-    }
-
-    /**
-     * Rewind the conversation $stepsBack checkpoints — and, with $withFiles,
-     * the files to that checkpoint's snapshot.
-     *
-     * WITH FILES, NOTHING MOVES UNLESS BOTH CAN: a snapshot whose restore
-     * would be refused (HEAD has moved since — restoring would silently undo
-     * those commits, Cline's rule — or the repository is gone) refuses the
-     * whole command before the conversation is touched. A checkpoint that
-     * simply has no snapshot (taken in the home directory, a failed capture)
-     * still rewinds the conversation and says why the files stayed.
-     *
-     * WITHOUT, THE FILE RESTORE IS OFFERED ONLY WHEN IT WOULD CHANGE
-     * SOMETHING (Zed): the reply names how many files differ and the command
-     * that puts them back, and says nothing about files that already match.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function rewindConversation(string $inputText, int $stepsBack, bool $withFiles): array
-    {
-        /** @var \SugarCraft\Crush\Session\EnhancedSessionStore $store */
-        $store = $this->sessionStore;
-        $sessionId = (string) $this->currentSessionId;
-
-        try {
-            $checkpoints = $store->listCheckpoints($sessionId, $stepsBack);
-            if ($checkpoints === []) {
-                return $this->sessionResponse($inputText, 'No checkpoints available to rewind to.');
-            }
-            $targetIndex = (int) $checkpoints[min($stepsBack, \count($checkpoints)) - 1]['index'];
-            $workspace = self::checkpointWorkspace($checkpoints[min($stepsBack, \count($checkpoints)) - 1]['state_data']);
-            $checkpointer = $store->workspaceCheckpointer($this->projectRoot());
-            $captured = \SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($workspace);
-
-            $restoreFiles = false;
-            $filesNote = '';
-            if ($withFiles) {
-                if (!$captured) {
-                    $filesNote = ' The files were left as they are: ' . self::noSnapshotReason($workspace) . '.';
-                } else {
-                    $changes = $checkpointer->changes($workspace);
-                    if (\is_string($changes)) {
-                        return $this->sessionResponse(
-                            $inputText,
-                            "Nothing was rewound: the files cannot be restored to checkpoint {$targetIndex} — {$changes}. `/rewind {$stepsBack} --chat` rewinds the conversation alone.",
-                        );
-                    }
-                    $restoreFiles = $changes !== [];
-                    if (!$restoreFiles) {
-                        $filesNote = ' The files already match that checkpoint.';
-                    }
-                }
-            }
-
-            $state = $store->restoreCheckpoint($sessionId, $targetIndex, $this->redoTipState(), $this->projectRoot);
-            if ($state === null) {
-                return $this->sessionResponse($inputText, "Checkpoint {$targetIndex} not found.");
-            }
-
-            if ($restoreFiles && \is_array($workspace)) {
-                $filesNote = ' ' . self::fileRestoreReport($checkpointer->restore($workspace));
-            } elseif (!$withFiles && $captured && \is_array($workspace)) {
-                $changes = $checkpointer->changes($workspace);
-                if (\is_array($changes) && $changes !== []) {
-                    $filesNote = \count($changes) === 1
-                        ? ' Your files were left as they are; 1 file differs from that checkpoint — `/rewind --files` puts it back too.'
-                        : ' Your files were left as they are; ' . \count($changes) . ' files differ from that checkpoint — `/rewind --files` puts them back too.';
-                }
-            }
-
-            [$messages, $inputBuf, $inputCursor] = self::checkpointChatState($state);
-            // Counted AFTER the legacy trim, so "Rewound N" is the rows the
-            // restore really took away: the prompt, its reply and everything
-            // the turn added in between.
-            $rewoundCount = \count($this->history) - \count($messages);
-            $response = "Rewound {$rewoundCount} messages to checkpoint {$targetIndex}." . $filesNote
-                . ' /redo steps forward again until you send another prompt.';
-
-            return [$this->withRestoredCheckpoint($messages, $inputBuf, $inputCursor, $inputText, $response), null];
-        } catch (\Throwable $e) {
-            return $this->sessionResponse($inputText, "Error during rewind: {$e->getMessage()}");
-        }
-    }
-
-    /**
-     * `/rewind [n] --files` — put the files back to checkpoint n's snapshot
-     * and leave the conversation, and every checkpoint row, as it is.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function rewindFiles(string $inputText, int $stepsBack): array
-    {
-        /** @var \SugarCraft\Crush\Session\EnhancedSessionStore $store */
-        $store = $this->sessionStore;
-
-        try {
-            $positions = $this->fileCheckpointPositions($store, (string) $this->currentSessionId, $stepsBack);
-            if ($positions === []) {
-                return $this->sessionResponse($inputText, 'No checkpoints available to rewind to.');
-            }
-            $target = $positions[min($stepsBack, \count($positions)) - 1];
-            if (!\SugarCraft\Crush\Workspace\WorkspaceCheckpointer::isCaptured($target['workspace'])) {
-                return $this->sessionResponse(
-                    $inputText,
-                    "Nothing was restored: checkpoint {$target['index']} has no file snapshot — " . self::noSnapshotReason($target['workspace']) . '.',
-                );
-            }
-
-            $result = $store->workspaceCheckpointer($this->projectRoot())->restore($target['workspace']);
-            $response = match ($result['status']) {
-                'restored' => "Restored the files to checkpoint {$target['index']}: {$result['written']} rewritten, {$result['deleted']} deleted. The conversation was left as it is.",
-                'unchanged' => "The files already match checkpoint {$target['index']}; nothing was restored.",
-                default => "Nothing was restored: {$result['reason']}.",
-            };
-
-            return $this->sessionResponse($inputText, $response);
-        } catch (\Throwable $e) {
-            return $this->sessionResponse($inputText, "Error during rewind: {$e->getMessage()}");
-        }
-    }
-
-    /**
-     * The checkpoints `/rewind --files` and `/diff` count back through,
-     * newest first, at most $limit of them: the checkpoint the conversation
-     * is rewound to, when it is (the redo stack's lowest row), then the live
-     * ones. So right after `/rewind`, `/rewind --files` is "the files of the
-     * checkpoint you just rewound to" — what the rewind's reply offers.
-     *
-     * @return list<array{index: int, workspace: array<string, mixed>|null}>
-     */
-    private function fileCheckpointPositions(\SugarCraft\Crush\Session\EnhancedSessionStore $store, string $sessionId, int $limit): array
-    {
-        $positions = [];
-        $stack = $store->redoStack($sessionId);
-        if (\count($stack) >= 2) {
-            $positions[] = ['index' => $stack[0]['index'], 'workspace' => $stack[0]['workspace']];
-        }
-        if (\count($positions) < $limit) {
-            foreach ($store->listCheckpoints($sessionId, $limit - \count($positions)) as $checkpoint) {
-                $positions[] = [
-                    'index' => (int) $checkpoint['index'],
-                    'workspace' => self::checkpointWorkspace($checkpoint['state_data']),
-                ];
-            }
-        }
-
-        return $positions;
-    }
-
-    /**
-     * The state `/redo` returns to last: the conversation as it stands now,
-     * stored in the pre-turn shape a checkpoint has, with an empty draft (the
-     * box holds the command that is rewinding).
-     *
-     * @return array<string, mixed>
-     */
-    private function redoTipState(): array
-    {
-        return [
-            'messages' => self::withoutContextReminders($this->history),
-            self::CHECKPOINT_PRE_TURN_KEY => true,
-            'inputBuf' => '',
-            'inputCursor' => null,
-            'inFlight' => false,
-            'agentContext' => [
-                'currentSessionId' => $this->currentSessionId,
-            ],
-        ];
-    }
-
-    /**
-     * The workspace outcome a decoded checkpoint state carries, if any.
+     * The workspace outcome a decoded checkpoint state carries, if any —
+     * {@see \SugarCraft\Crush\Host\Commands\Checkpoints::checkpointWorkspace()}.
      *
      * @param mixed $state
      * @return array<string, mixed>|null
      */
     private static function checkpointWorkspace(mixed $state): ?array
     {
-        if (!\is_array($state)) {
-            return null;
-        }
-        $key = \SugarCraft\Crush\Session\EnhancedSessionStore::CHECKPOINT_WORKSPACE_KEY;
-        $workspace = $state[$key] ?? $state['state_data'][$key] ?? null;
-
-        return \is_array($workspace) ? $workspace : null;
+        return \SugarCraft\Crush\Host\Commands\Checkpoints::checkpointWorkspace($state);
     }
 
     /**
-     * @param array<string, mixed>|null $workspace
-     */
-    private static function noSnapshotReason(?array $workspace): string
-    {
-        $reason = \is_string($workspace['reason'] ?? null) ? $workspace['reason'] : null;
-
-        return $reason === null
-            ? 'no snapshot was taken for that checkpoint'
-            : 'no snapshot was taken for that checkpoint (' . $reason . ')';
-    }
-
-    /**
-     * @param array{status: string, written: int, deleted: int, reason: string} $result
-     */
-    private static function fileRestoreReport(array $result): string
-    {
-        return match ($result['status']) {
-            'restored' => "Restored the files: {$result['written']} rewritten, {$result['deleted']} deleted.",
-            'unchanged' => 'The files already match that checkpoint.',
-            default => "The files could not be restored: {$result['reason']}.",
-        };
-    }
-
-    /**
-     * The messages, draft and caret a checkpoint state restores.
-     *
-     * @param array<string, mixed> $state
-     * @return array{0: list<Message>, 1: string, 2: ?int}
-     */
-    private static function checkpointChatState(array $state): array
-    {
-        $messages = $state['state_data']['messages'] ?? $state['messages'] ?? [];
-        // Convert raw arrays to Message objects before passing to Chat
-        // constructor, healing any placeholder whose tool call died with
-        // the checkpointing process (crush_feat.md §1 E7).
-        $messages = array_map(
-            static fn(array $msg): Message => self::reviveCheckpointMessage($msg),
-            \is_array($messages) ? array_values($messages) : [],
-        );
-        $inputBuf = $state['state_data']['inputBuf'] ?? $state['inputBuf'] ?? '';
-        $inputBuf = \is_string($inputBuf) ? $inputBuf : '';
-        // E4: the caret offset the checkpoint captured, in the same flat
-        // codepoint form {@see inputCursorOffset()} produces. Absent (null)
-        // for hand-saved or pre-E4 checkpoints — the mutate then reseeds at
-        // end-of-text exactly as it always did.
-        $inputCursor = $state['state_data']['inputCursor'] ?? $state['inputCursor'] ?? null;
-
-        // AN OLDER CHECKPOINT STILL ENDS ON THE PROMPT ITS DRAFT RE-SEEDS (audit
-        // SES-1): before the save side learned to store the pre-turn
-        // transcript, every auto-save serialised the history WITH the user's
-        // line, so restoring one as-is leaves the prompt in the transcript and
-        // in the box at once — Enter sends it twice. Sessions saved before the
-        // fix still hold those, so the line is dropped here too. Only when the
-        // checkpoint lacks the pre-turn marker: in a current one a trailing
-        // user row equal to the draft is a real earlier turn (the same prompt
-        // sent twice), not this one.
-        $preTurnShape = ($state['state_data'][self::CHECKPOINT_PRE_TURN_KEY] ?? $state[self::CHECKPOINT_PRE_TURN_KEY] ?? false) === true;
-        if (!$preTurnShape) {
-            $messages = self::withoutLegacyTrailingPrompt($messages, $inputBuf);
-        }
-
-        return [$messages, $inputBuf, \is_int($inputCursor) ? $inputCursor : null];
-    }
-
-    /**
-     * This Chat with a checkpoint's conversation and draft restored, and the
-     * command and its reply appended as UI-only rows.
-     *
-     * @param list<Message> $messages
-     */
-    private function withRestoredCheckpoint(array $messages, string $inputBuf, ?int $inputCursor, string $inputText, string $response): self
-    {
-        $next = $this->mutate([
-            'history' => [...$messages, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            // E681: the draft the checkpoint captured goes back into the box —
-            // a checkpoint restore is one of mutate()'s replace-the-whole-draft
-            // routes (see the two-write-routes comment in mutate()). Before the
-            // save-side fix this field was always '' AND was ignored here, so
-            // rewinds silently dropped the in-flight text; a checkpoint with no
-            // draft (hand-saved or legacy) still restores to ''.
-            'inputBuf' => $inputBuf,
-            'inFlight' => false,
-            // An outstanding `/compact` summarization is ABANDONED, for the
-            // same reason `/clear` abandons one: the transcript it was
-            // fetched for is no longer on screen. This one is the sharper
-            // case of the two — measured, a summary landing after a rewind
-            // compacted the transcript the user had just RECOVERED, and
-            // since the summaries were keyed to the discarded content none
-            // of them applied, so five restored exchanges came back as
-            // `[exchanged information]` placeholders. See
-            // {@see applyModelCompaction()}.
-            'pendingCompactionId' => null,
-        ]);
-
-        // AFTER the mutate on purpose: naming `inputBuf` alone is the
-        // replace-the-whole-draft route and its widget rebuild parks the
-        // caret at the end, so the captured offset has to be re-applied to
-        // the rebuilt draft, not smuggled through it. `withInputCursor()`
-        // clamps through `seekInput()` — a stale offset from a draft that
-        // has since been shortened lands at the end rather than corrupting
-        // the widget or the restore.
-        return $inputCursor !== null ? $next->withInputCursor($inputCursor) : $next;
-    }
-
-    /**
-     * @param list<Message> $messages
-     */
-    private static function agentVisibleCount(array $messages): int
-    {
-        return \count(array_filter($messages, static fn (Message $message): bool => !$message->uiOnly));
-    }
-
-    /**
-     * $text in a Markdown code fence one backtick longer than the longest
-     * run inside it, so a patch that itself contains a fence cannot close
-     * this one early.
-     */
-    private static function fenced(string $text, string $info): string
-    {
-        $longest = 0;
-        if (preg_match_all('/`+/', $text, $runs) > 0) {
-            foreach ($runs[0] as $run) {
-                $longest = max($longest, \strlen($run));
-            }
-        }
-        $fence = str_repeat('`', max(3, $longest + 1));
-
-        return $fence . $info . "\n" . $text . "\n" . $fence;
-    }
-
-    /**
-     * A pre-SES-1 checkpoint's $messages with the prompt it was taken for cut
-     * off the end — see the call in {@see handleRewindCommand()}.
-     *
-     * That save serialised the dispatched history, whose tail on
-     * {@see submit()}'s route was `[...notes, user prompt, 70% reminder?]`, so
-     * the prompt is the last user row and only system rows can follow it. It
-     * is dropped together with those followers (the reminder is regenerated by
-     * the next dispatch) only when its content is exactly the restored draft
-     * — trimmed, the way submit() trims it — so a checkpoint that does not end
-     * on its own prompt (hand-saved, empty draft, a custom command whose
-     * expansion differs from what was typed) is restored untouched. Hook notes
-     * ahead of the line stay: nothing in an old checkpoint tells one apart
-     * from any other system row.
-     *
-     * @param list<Message> $messages
-     * @return list<Message>
-     */
-    private static function withoutLegacyTrailingPrompt(array $messages, string $draft): array
-    {
-        $prompt = trim($draft);
-        if ($prompt === '') {
-            return $messages;
-        }
-
-        $messages = array_values($messages);
-        for ($i = count($messages) - 1; $i >= 0; $i--) {
-            $message = $messages[$i];
-            if ($message->role === Role::System) {
-                continue;
-            }
-
-            return $message->role === Role::User && $message->content === $prompt
-                ? array_slice($messages, 0, $i)
-                : $messages;
-        }
-
-        return $messages;
-    }
-
-    /**
-     * Handle /memory commands locally.
+     * Handle /memory commands — {@see \SugarCraft\Crush\Host\Commands\MemoryCommand} (roadmap O-2h):
+     * list, add, search, delete, edit, clear, import, log and restore over the
+     * session's home store and project root, through the router the `Memory`
+     * tool shares.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleMemoryCommand(string $inputText): array
     {
-        if ($this->memoryStore === null) {
-            return $this->memoryResponse($inputText, 'Memory store not configured. Set a MemoryStore to use /memory commands.');
-        }
-
-        $afterMemory = self::commandArgument($inputText);
-        if ($afterMemory === '') {
-            return $this->memoryHelpResponse($inputText);
-        }
-
-        $parts = preg_split('/\s+/', $afterMemory, 2);
-        $command = $parts[0];
-        $args = $parts[1] ?? '';
-
-        // Roadmap 5.4-2: the HOME memory directory is a git repository (null
-        // for a repository store - see MemoryHistory). A change a `/memory`
-        // command makes is its own commit, and whatever changed since the
-        // last one (the Memory tool, auto-memory, a hand edit) is committed
-        // first under its own subject, so `/memory log` never credits a
-        // command with a change it did not make.
-        $history = \SugarCraft\Crush\Memory\MemoryHistory::forStore($this->memoryStore);
-        $mutates = \in_array($command, ['add', 'delete', 'clear', 'edit', 'import'], true);
-        $warnings = [];
-        if ($mutates) {
-            $warnings[] = \SugarCraft\Crush\Commands\MemoryHistoryCommand::record(
-                $history,
-                \SugarCraft\Crush\Commands\MemoryHistoryCommand::OUTSIDE_SUBJECT,
-            );
-        }
-
-        [$next, $cmd] = match ($command) {
-            'list' => $this->memoryList($inputText, $args),
-            'add' => $this->memoryAdd($inputText, $args),
-            'search' => $this->memorySearch($inputText, $args),
-            'delete' => $this->memoryDelete($inputText, $args),
-            'clear' => $this->memoryClear($inputText, $args),
-            'edit' => $this->memoryEdit($inputText, $args),
-            'import' => $this->memoryImport($inputText, $args),
-            'log' => $this->memoryResponse($inputText, \SugarCraft\Crush\Commands\MemoryHistoryCommand::log($history, $args)),
-            'restore' => $this->memoryResponse($inputText, \SugarCraft\Crush\Commands\MemoryHistoryCommand::restore($history, $args)),
-            default => $this->memoryHelpResponse($inputText, "Unknown command '{$command}'."),
-        };
-
-        if ($mutates) {
-            $warnings[] = \SugarCraft\Crush\Commands\MemoryHistoryCommand::record($history, "memory: /memory {$command}");
-        }
-
-        $warnings = array_values(array_filter($warnings, static fn(?string $w): bool => $w !== null));
-        if ($warnings !== []) {
-            $next = $next->mutate(['history' => [
-                ...$next->history,
-                ...array_map(static fn(string $w): Message => Message::assistant($w)->withUiOnly(), $warnings),
-            ]]);
-        }
-
-        return [$next, $cmd];
-    }
-
-    /**
-     * Return a memory command response, adding both user command and assistant response to history.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memoryResponse(string $inputText, string $response): array
-    {
-        $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
-            'inputBuf' => '',
-            'inFlight' => false,
-        ]);
-        return [$next, null];
-    }
-
-    /**
-     * Show help text for /memory command.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memoryHelpResponse(string $inputText, ?string $error = null): array
-    {
-        $lines = [];
-        if ($error !== null) {
-            $lines[] = "**Error:** {$error}";
-            $lines[] = '';
-        }
-        $lines[] = '**Available /memory commands:**';
-        $lines[] = '';
-        $lines[] = '`/memory list [scope]` — List all memories for a scope (default: project)';
-        $lines[] = '`/memory add <content> [--scope <scope>]` — Add a new memory entry (default: project)';
-        $lines[] = '`/memory search <query>` — Search memories by content';
-        $lines[] = '`/memory delete <id>` — Delete a memory by ID';
-        $lines[] = '`/memory edit <id> <new_content>` — Edit an existing memory';
-        $lines[] = '`/memory clear --scope <scope> --confirm` — Clear all memories for a scope';
-        $lines[] = '`/memory import claude|opencode` — Import foreign memory files (one-shot per tool)';
-        $lines[] = '`/memory log [count]` — List the memory history, newest first (default '
-            . \SugarCraft\Crush\Memory\MemoryHistory::DEFAULT_LOG_ENTRIES . ')';
-        $lines[] = '`/memory restore <commit>` — Put memory back as it stood at a commit `/memory log` lists';
-        $lines[] = '`/memory` — Show this help text';
-        $lines[] = '';
-        $lines[] = 'Scopes: `project` (default), `user`, `agent`. Project and user notes reach the prompt '
-            . '(user notes first, at most ' . \SugarCraft\Crush\Context\MemoryBlock::USER_MAX_ENTRIES . '); '
-            . 'agent-scope notes are listable but never reach the prompt.';
-        $lines[] = 'History: every change to the home memory directory is a git commit (when `git` is on PATH); '
-            . 'a restore is a new commit, so it can be undone the same way.';
-
-        return $this->memoryResponse($inputText, implode("\n", $lines));
-    }
-
-    /**
-     * Handle /memory add <content> [--scope <scope>].
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memoryAdd(string $inputText, string $args): array
-    {
-        if ($args === '') {
-            return $this->memoryHelpResponse($inputText, 'Usage: /memory add <content> [--scope <scope>]');
-        }
-
-        // Parse --scope flag if present (can be before or after content).
-        // Defaults to `project` (roadmap 0.6): a note typed without a scope
-        // is almost always about the repository in front of the user, and
-        // the old `user` default sent it to the one scope the prompt did not
-        // read at the time.
-        $scope = 'project';
-        $content = $args;
-
-        if (preg_match('/^--scope\s+(user|project|agent)\s+(.*)$/s', $args, $m)) {
-            $scope = $m[1];
-            $content = trim($m[2]);
-        } elseif (preg_match('/^(.*?)\s+--scope\s+(user|project|agent)\s*$/s', $args, $m)) {
-            $content = trim($m[1]);
-            $scope = $m[2];
-        }
-
-        if ($content === '') {
-            return $this->memoryHelpResponse($inputText, 'Usage: /memory add <content> [--scope <scope>]');
-        }
-
-        try {
-            // Routed through MemoryWriter (roadmap 5.1-2), the same router the
-            // `Memory` tool uses, so a note typed here and a note the model
-            // saves land in the same place. E25 piece 2: a project note goes to
-            // the repo-local `.sugar-crush/memory/` whenever the tree can host
-            // one, and degrades to the home store otherwise — a headless
-            // `--root ''`, a read-only checkout, or a `.sugar-crush` planted as a
-            // symlink out of the tree should cost the user their note, not their
-            // command. The reply SAYS when the note fell back (15d-05 residual).
-            $saved = \SugarCraft\Crush\Memory\MemoryWriter::new($this->memoryStore, $this->projectRoot())
-                ->save($content, $scope);
-            $response = "Memory created with ID: `{$saved->id}` (scope: {$scope})";
-            if ($saved->fellBackToHome) {
-                $response .= "\n\nSaved in the home store, not this repository: its `.sugar-crush/memory/` "
-                    . 'could not be created or written, or it resolves outside the repository, so the note '
-                    . 'is kept on this machine only and is not part of the checkout.';
-            }
-            // 0.6: say so when a note lands where the model will never read it.
-            if ($scope === 'agent') {
-                $response .= "\n\nAgent-scope notes are listable but never reach the prompt; "
-                    . 'use `--scope project` or `--scope user` for a note the model should see.';
-            }
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
-
-        return $this->memoryResponse($inputText, $response);
-    }
-
-    /**
-     * Handle `/memory import claude|opencode` — the runtime trigger point of
-     * {@see ForeignMemoryImporter}, wired P7.S6 per the importer's own docblock
-     * contract (the sentinel lives HERE, at the caller, because only the caller
-     * knows whether a re-import was intentional).
-     *
-     * Two guards run before a single foreign byte reaches the store: a
-     * determinable project root (the sentinel must live inside the project),
-     * and an absent `.imported-{target}` sentinel (imports are not idempotent
-     * — `MemoryStore::add()` mints a fresh UUID per entry, so the one-shot
-     * guard IS the de-duplication).
-     *
-     * There is deliberately NO entry cap here. Imports land in the `agent`
-     * scope (`MemoryScope::Local`, which the store persists under the string
-     * 'agent'), and `MemoryBlock` folds only the project and user scopes into
-     * the prompt — its own docblock lists the agent scope under "WHAT IS
-     * DELIBERATELY NOT HERE" and `capture()` reads exactly
-     * `list(MemoryScope::Project)` and `list(MemoryScope::User)`. No
-     * number of imported entries can therefore crowd the prompt's memory
-     * index, and agent scope is the point, not an oversight: the provenance-
-     * badge attack story in {@see ForeignMemoryImporter}'s class docblock
-     * (:106-124) is why another tool's memory bodies do not get direct
-     * prompt access — they stay listable and searchable until the user
-     * promotes what they actually want.
-     *
-     * Refusals the importer records ({@see ForeignMemoryImporter::refusedDirectories()})
-     * surface in the response text — the command answers, it does not warn
-     * through the transcript seams.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memoryImport(string $inputText, string $args): array
-    {
-        $target = strtolower(trim($args));
-        if ($target === '') {
-            return $this->memoryHelpResponse($inputText, 'Usage: /memory import claude|opencode');
-        }
-        if ($target !== 'claude' && $target !== 'opencode') {
-            return $this->memoryHelpResponse(
-                $inputText,
-                "Unknown import target '{$target}'. Use `claude` or `opencode`."
-            );
-        }
-
-        // Defense-in-depth, not a behaviorally reachable branch: projectRoot()
-        // falls back to getcwd(), so '' is observable only when neither an
-        // explicit root nor a working directory exists. The guard is still
-        // answered rather than letting the sentinel path dangle at a bare
-        // '/.sugar-crush/...'.
-        $projectRoot = $this->projectRoot();
-        if ($projectRoot === '') {
-            return $this->memoryResponse(
-                $inputText,
-                '**Nothing imported:** no project root could be determined, so this command has no'
-                . " project to read `{$target}` memory against or record the"
-                . " `.imported-{$target}` sentinel in."
-            );
-        }
-
-        // Under the REPOSITORY root, not the launch directory (15d-05/15d-13
-        // residual): every other `.sugar-crush/*` lookup walks up to the repo
-        // root, so a sentinel written beside a subdirectory launch was a second
-        // `.sugar-crush/` the next launch from the top never saw, and the same
-        // project re-imported from there.
-        $sentinel = \SugarCraft\Crush\Support\ProjectRoot::resolve($projectRoot) . '/.sugar-crush/memory/.imported-' . $target;
-        if (file_exists($sentinel)) {
-            return $this->memoryResponse(
-                $inputText,
-                "Already imported (sentinel `{$sentinel}`; delete it to re-import)."
-            );
-        }
-
-        try {
-            $importer = new ForeignMemoryImporter($this->memoryStore);
-            $imported = $target === 'claude'
-                ? $importer->importClaudeCode($projectRoot)
-                : $importer->importOpencode($projectRoot);
-            $refused = $importer->refusedDirectories();
-
-            $lines = [];
-            if ($imported > 0) {
-                $sentinelNote = $this->writeImportSentinel($sentinel, $target, $imported);
-                $lines[] = "**Imported {$imported}** `{$target}` memories into the `agent` scope."
-                    . $sentinelNote;
-            } else {
-                $lines[] = $refused === []
-                    ? 'Nothing imported — no readable `'.$target.'` memory files were found for'
-                        . ' this project.'
-                    : 'Nothing imported — no readable `'.$target.'` memory files were found, and'
-                        . ' every candidate directory was refused.';
-            }
-            if ($refused !== []) {
-                $lines[] = '';
-                $lines[] = '**Directories not read:**';
-                foreach ($refused as $path => $why) {
-                    $lines[] = "- `{$path}`: {$why}";
-                }
-            }
-
-            return $this->memoryResponse($inputText, implode("\n", $lines));
-        } catch (\Throwable $e) {
-            return $this->memoryResponse(
-                $inputText,
-                '**Import failed** — entries the importer had already written stay in the `agent`'
-                . ' scope and no sentinel was written, so re-running may duplicate them. Run'
-                . " `/memory list agent` before re-running. Error: {$e->getMessage()}"
-            );
-        }
-    }
-
-    /**
-     * Write the re-import sentinel, creating its directories defensively; a
-     * foreign tree that imported but could not record its sentinel would be
-     * silently re-importable, so the response says so when that happens
-     * rather than pretending the guard exists.
-     *
-     * The sentinel's DIRECTORY is under project control like everything else
-     * this command reads, so both write hazards of a repository-chosen path
-     * are closed HERE rather than named as a gap to fix later. Containment is
-     * judged BEFORE the recursive create: a committed `.sugar-crush ->
-     * <outside>` symlink would otherwise have its outside target mkdir'd by
-     * this call and only refused afterwards. Then again after the create —
-     * the only way a symlink appears at the checked path between check and
-     * write is a race, and the re-check plus temp-create-and-rename turns
-     * even that into a refusal or a replaced directory entry rather than a
-     * write THROUGH a planted symlink — the same atomic-rename answer this
-     * repo's GIF writer ships for the same CWE-59 shape, and what makes a
-     * pre-planted `.imported-<target>` symlink a refusal the user can see
-     * (via the exists-check in the caller) rather than an arbitrary-file
-     * truncation performed by this launch.
-     */
-    private function writeImportSentinel(string $sentinel, string $target, int $imported): string
-    {
-        $dir = dirname($sentinel);
-        // First of the two containment gates the docblock above describes
-        // (pre-check here, post-mkdir re-check below): this one is reachable
-        // through /memory import whenever a planted out-of-tree `.sugar-crush`
-        // symlink points the sentinel directory outside the project, while it
-        // also re-derives the caller's non-empty-root precondition as defense
-        // in depth; only the re-check below has no reachable path absent a
-        // race.
-        if (!$this->importSentinelDirIsContained($dir)) {
-            return ' **Warning:** the sentinel directory does not resolve inside this project, so no'
-                . ' sentinel was written and re-running the import WILL duplicate these entries.';
-        }
-        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
-            return ' **Warning:** the sentinel directory could not be created, so re-running the import'
-                . ' WILL duplicate these entries.';
-        }
-        // The post-create re-check: defensive against a symlink appearing at
-        // the checked path between the gates above and this moment.
-        if (!$this->importSentinelDirIsContained($dir)) {
-            return ' **Warning:** the sentinel directory resolved outside this project after directory'
-                . ' creation, so no sentinel was written and re-running the import WILL duplicate'
-                . ' these entries.';
-        }
-
-        $tmp = $dir . '/sentinel-tmp-' . bin2hex(random_bytes(6));
-        $written = @file_put_contents(
-            $tmp,
-            "{$imported} {$target} memories imported by /memory import at " . date('c') . "\n"
-        );
-        if ($written === false || !@rename($tmp, $sentinel)) {
-            @unlink($tmp);
-
-            return ' **Warning:** the sentinel could not be written, so re-running the import WILL'
-                . ' duplicate these entries.';
-        }
-
-        return " Sentinel: `{$sentinel}` (delete it to re-import).";
-    }
-
-    /**
-     * Whether the sentinel directory resolves inside this project, judging the
-     * deepest EXISTING ancestor when the directory itself does not exist yet.
-     *
-     * WHY NOT ASK {@see ContainedPath::below()} ABOUT THE LEAF DIRECTLY: its
-     * containment verdict is `realpath()`-based, so a not-yet-existing path —
-     * the normal state of a fresh project's `.sugar-crush/memory` — answers
-     * false, which would refuse every legitimate first sentinel. The climb is
-     * sound because a component that does not exist cannot be a symlink at
-     * check time (a broken one still stops the climb via `is_link()`, and
-     * `below()` then refuses it on the unresolvable realpath), and a probe
-     * that lands exactly on the project root is containment's floor, not a
-     * violation — `below()` is strict-below by design, so that case is
-     * answered by equality rather than handed to a predicate built to say no
-     * to it. The post-write moment is covered by re-calling this method after
-     * the mkdir, not by anything in here.
-     */
-    private function importSentinelDirIsContained(string $dir): bool
-    {
-        // The same root the sentinel path was built under (memoryImport()).
-        $root = \SugarCraft\Crush\Support\ProjectRoot::resolve($this->projectRoot());
-        $probe = $dir;
-        while ($probe !== '/' && !file_exists($probe) && !is_link($probe)) {
-            $probe = dirname($probe);
-        }
-
-        return $probe === $root || ContainedPath::below($probe, $root);
-    }
-
-    /**
-     * Handle /memory list [scope].
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memoryList(string $inputText, string $args): array
-    {
-        // `project`, the same default `/memory add` takes (0.6), so a bare
-        // `/memory add` followed by a bare `/memory list` shows the note.
-        $scope = 'project';
-        if ($args !== '') {
-            $trimmed = trim($args);
-            // Handle --scope <scope> syntax
-            if (str_starts_with($trimmed, '--scope ')) {
-                $scopeCandidate = trim(substr($trimmed, 8));
-                if (in_array($scopeCandidate, ['user', 'project', 'agent'], true)) {
-                    $scope = $scopeCandidate;
-                }
-            } elseif (in_array($trimmed, ['user', 'project', 'agent'], true)) {
-                $scope = $trimmed;
-            }
-        }
-
-        try {
-            // E694 slice-A: project notes can live in EITHER store since E25p2,
-            // so the listing reads both, grouped and store-named — an id does
-            // not say which tree holds the file. The repo store is consulted
-            // only for the scope that can host repo notes, and when it has
-            // nothing to show the pre-grouping home-only bytes come back
-            // verbatim (the same degradation memoryLocate promises per id).
-            $repoStore = $scope === 'project' ? $this->memoryWriter()->repository() : null;
-            $repoEntries = $repoStore?->list($scope) ?? [];
-            $entries = $this->memoryStore->list($scope);
-            if ($repoEntries === []) {
-                if ($entries === []) {
-                    $response = "No memories found for scope `{$scope}`.";
-                } else {
-                    $lines = ["**Memories ({$scope}):**", ''];
-                    foreach ($entries as $entry) {
-                        $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: false)];
-                    }
-                    $response = implode("\n", $lines);
-                }
-            } else {
-                $lines = ["**Memories ({$scope}):**", '', $this->memoryStoreBanner(isRepo: true)];
-                foreach ($repoEntries as $entry) {
-                    $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: false)];
-                }
-                if ($entries !== []) {
-                    $lines = [...$lines, '', $this->memoryStoreBanner(isRepo: false)];
-                    foreach ($entries as $entry) {
-                        $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: false)];
-                    }
-                }
-                $response = implode("\n", $lines);
-            }
-            // The notes of this scope the stores could not read — the user's
-            // only view of them outside the prompt (audit 15d-04 follow-up).
-            $response .= $this->memoryUnreadableSection([
-                ...($repoStore?->skipped($scope) ?? []),
-                ...$this->memoryStore->skipped($scope),
-            ]);
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
-
-        return $this->memoryResponse($inputText, $response);
-    }
-
-    /**
-     * The unreadable-notes section a `/memory` answer ends with, or '' when
-     * every note read — so a clean store's answer is byte-identical to before.
-     *
-     * @param array<string, string> $unreadable path => reason
-     */
-    private function memoryUnreadableSection(array $unreadable): string
-    {
-        $rows = UnreadableNotes::rows($unreadable);
-
-        return $rows === [] ? '' : "\n\n" . implode("\n", $rows);
-    }
-
-    /**
-     * Handle /memory search <query>.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memorySearch(string $inputText, string $query): array
-    {
-        if ($query === '') {
-            return $this->memoryHelpResponse($inputText, 'Usage: /memory search <query>');
-        }
-
-        try {
-            // E694 slice-A: repo notes are searchable too. Same byte-stability
-            // rule as memoryList() — the grouped banners join the answer only
-            // when the repo store actually contributes a hit. Both stores come
-            // from MemoryWriter, the router the Memory tool's `recall` uses,
-            // so the command and the tool search the same notes; each store
-            // answers best match first (MemoryStore::search(), BM25, 5.3-1).
-            $repoStore = $this->memoryWriter()->repository();
-            $repoEntries = $repoStore?->search($query) ?? [];
-            $entries = $this->memoryStore->search($query);
-            $total = count($repoEntries) + count($entries);
-            if ($total === 0) {
-                $response = "No memories found matching `{$query}`.";
-            } elseif ($repoEntries === []) {
-                $lines = ["**Search results for `{$query}` ({$this->pluralize($total, 'match')}):**", ''];
-                foreach ($entries as $entry) {
-                    $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: true)];
-                }
-                $response = implode("\n", $lines);
-            } else {
-                $lines = ["**Search results for `{$query}` ({$this->pluralize($total, 'match')}):**", '', $this->memoryStoreBanner(isRepo: true)];
-                foreach ($repoEntries as $entry) {
-                    $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: true)];
-                }
-                if ($entries !== []) {
-                    $lines = [...$lines, '', $this->memoryStoreBanner(isRepo: false)];
-                    foreach ($entries as $entry) {
-                        $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: true)];
-                    }
-                }
-                $response = implode("\n", $lines);
-            }
-            // search() reads every scope, so a note that could not be read is
-            // a note that could not be searched — say so (audit 15d-04).
-            $response .= $this->memoryUnreadableSection([
-                ...($repoStore?->skipped() ?? []),
-                ...$this->memoryStore->skipped(),
-            ]);
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
-
-        return $this->memoryResponse($inputText, $response);
-    }
-
-    /**
-     * Resolve a memory id against BOTH stores in the order the fold uses.
-     *
-     * E25 piece 2 moved `--scope project` writes into the repo-local store,
-     * which made the per-id commands self-contradictory: the surface could
-     * answer "Memory created with ID: X" and then "Memory `X` not found.".
-     * Resolution order is {@see \SugarCraft\Crush\Context\MemoryBlock::capture()}'s
-     * fold law restated for ops — the repo copy claims shared ids, so the
-     * entry the prompt SHOWS is the entry the command removes; a home-first
-     * lookup would delete an invisible twin and leave the shown note standing.
-     * The OWNING store rides back with the entry so delete()/update() mutate
-     * the file the operator saw. No repo store resolvable (absent dir,
-     * `''`-root, read-only tree, symlink escape — every {@see ProjectMemoryWriter::forRoot()}
-     * refusal) degrades to the home-only behaviour that predates E25p2.
-     *
-     * @return array{0: ?\SugarCraft\Crush\Memory\MemoryEntry, 1: MemoryStore} the resolved
-     *         pair: [0] the located entry, or NULL when the id lives in neither store;
-     *         [1] the OWNING store — the one whose delete()/update() mutates the file
-     *         behind the entry the operator saw. No-owner sentinel: when [0] is null the
-     *         tuple is always [null, $this->memoryStore] — the HOME store rides back as a
-     *         placeholder so the shape stays a pair, and callers MUST branch on element 0
-     *         before touching the returned store (mutating the sentinel would aim at the
-     *         wrong tree).
-     */
-    private function memoryLocate(string $id): array
-    {
-        return $this->memoryWriter()->locate($id) ?? [null, $this->memoryStore];
-    }
-
-    /**
-     * The router `/memory` shares with the `Memory` tool and auto-memory
-     * ({@see \SugarCraft\Crush\Memory\MemoryWriter}), over this Chat's home
-     * store and project root — so a command, the tool and the consolidator
-     * agree on which store an id names and which repository store exists.
-     */
-    private function memoryWriter(): \SugarCraft\Crush\Memory\MemoryWriter
-    {
-        $home = $this->memoryStore;
-
-        return \SugarCraft\Crush\Memory\MemoryWriter::new(static fn (): ?MemoryStore => $home, $this->projectRoot());
-    }
-
-    /**
-     * The two display lines one entry claims in a list/search answer — the
-     * exact row shape both commands shipped before store grouping. Search has
-     * always named the scope inside the row; list never has, so $withScope is
-     * the only dial the grouping needed.
-     *
-     * @return list<string>
-     */
-    private function memoryEntryRows(\SugarCraft\Crush\Memory\MemoryEntry $entry, bool $withScope): array
-    {
-        $tags = empty($entry->tags()) ? '' : ' [' . implode(', ', $entry->tags()) . ']';
-        $preview = mb_strlen($entry->content()) > 80
-            ? mb_substr($entry->content(), 0, 80) . '…'
-            : $entry->content();
-        $scope = $withScope ? ' (scope: ' . $entry->scope() . ')' : '';
-
-        return [
-            '- **[' . $entry->type() . ']** `' . $entry->id() . '`' . $scope . $tags,
-            '  ' . $preview,
-        ];
-    }
-
-    /**
-     * Section header naming the store the rows beneath it live in (E694
-     * slice-A) — an id does not say which tree holds its file, so the group
-     * says it. The repo banner spells the path through
-     * {@see ProjectMemoryWriter::RELATIVE_DIRECTORY}: the dot-path literal
-     * stays in exactly one source file, which is what the containment
-     * inventories enumerate.
-     */
-    private function memoryStoreBanner(bool $isRepo): string
-    {
-        return $isRepo
-            ? '*In this repository (`' . ProjectMemoryWriter::RELATIVE_DIRECTORY . '`):*'
-            : '*In your home store:*';
-    }
-
-    /**
-     * Handle /memory delete <id>.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memoryDelete(string $inputText, string $args): array
-    {
-        $id = trim($args);
-        if ($id === '') {
-            return $this->memoryHelpResponse($inputText, 'Usage: /memory delete <id>');
-        }
-
-        try {
-            [$entry, $store] = $this->memoryLocate($id);
-            if ($entry === null) {
-                $response = "Memory `{$id}` not found.";
-            } else {
-                $store->delete($id);
-                $response = "Memory `{$id}` deleted.";
-            }
-        } catch (\InvalidArgumentException $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
-
-        return $this->memoryResponse($inputText, $response);
-    }
-
-    /**
-     * Handle /memory clear --scope <scope> --confirm.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memoryClear(string $inputText, string $args): array
-    {
-        // Parse --scope and --confirm flags
-        if (!preg_match('/--scope\s+(user|project|agent)\s+--confirm/s', $args, $m)) {
-            return $this->memoryHelpResponse($inputText, 'Usage: /memory clear --scope <scope> --confirm');
-        }
-
-        $scope = $m[1];
-
-        // E694 ruling (round-76): bulk clear NEVER touches the repo store.
-        // When the tree holds repo-local project notes, a `--scope project`
-        // clear would wipe only the home half of "project memory" — exactly
-        // the silent partial wipe of possibly-committed files the ruling
-        // forbids. The refusal is unconditional (no escape flag exists);
-        // per-id delete is the door. With the repo store empty there is
-        // nothing to half-wipe and the pre-E25p2 home clear stands.
-        if ($scope === 'project') {
-            $repoNotes = ProjectMemoryWriter::forRoot($this->projectRoot())?->store()->list('project') ?? [];
-            if ($repoNotes !== []) {
-                return $this->memoryResponse(
-                    $inputText,
-                    '**Not cleared:** bulk clear never reaches the repository — this tree '
-                    . 'holds project-scope notes under `' . ProjectMemoryWriter::RELATIVE_DIRECTORY
-                    . '` that only the per-id commands touch. Clearing the home half alone '
-                    . 'would silently leave "project memory" half-wiped, so nothing moved. '
-                    . 'Remove repo notes by id with `/memory delete <id>` (list them with '
-                    . '`/memory list project`).'
-                );
-            }
-        }
-
-        try {
-            $this->memoryStore->clear($scope);
-            $response = "All memories cleared for scope `{$scope}`.";
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
-
-        return $this->memoryResponse($inputText, $response);
-    }
-
-    /**
-     * Handle /memory edit <id> <new_content>.
-     *
-     * @return array{0:Chat,1:?\Closure}
-     */
-    private function memoryEdit(string $inputText, string $args): array
-    {
-        // Parse: <id> <new_content> — split on first whitespace, id is first token, rest is content
-        $firstSpace = strpos($args, ' ');
-        if ($firstSpace === false) {
-            return $this->memoryHelpResponse($inputText, 'Usage: /memory edit <id> <new_content>');
-        }
-
-        $id = trim(substr($args, 0, $firstSpace));
-        $newContent = trim(substr($args, $firstSpace + 1));
-
-        if ($id === '' || $newContent === '') {
-            return $this->memoryHelpResponse($inputText, 'Usage: /memory edit <id> <new_content>');
-        }
-
-        try {
-            [$entry, $store] = $this->memoryLocate($id);
-            if ($entry === null) {
-                $response = "Memory `{$id}` not found.";
-            } else {
-                $store->update($id, $entry->withContent($newContent));
-                $response = "Memory `{$id}` updated.";
-            }
-        } catch (\InvalidArgumentException $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
-        }
-
-        return $this->memoryResponse($inputText, $response);
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\MemoryCommand(), $inputText);
     }
 
     /**
@@ -16438,21 +14309,6 @@ final class Chat implements Model
         $lines[] = '`/session` — Show this help text';
 
         return $this->sessionResponse($inputText, implode("\n", $lines));
-    }
-
-    /**
-     * Helper to pluralize a word based on count.
-     */
-    private function pluralize(int $count, string $word): string
-    {
-        if ($count === 1) {
-            return "1 {$word}";
-        }
-        // Handle words ending in ch, x, s, o → add 'es'
-        if (preg_match('/[chxso]$/', $word)) {
-            return "{$count} {$word}es";
-        }
-        return "{$count} {$word}s";
     }
 
     private function withInputBuf(string $buf): self

@@ -97,6 +97,7 @@ sugar-crush/tests/Support/FixtureLifetimeCensusTest.php	3.827	3
 sugar-crush/tests/Backend/TaskSpendPropagationTest.php	3.813	12
 sugar-crush/tests/Backend/EngineBackendTeardownKillsToolTreeTest.php	3.775	2
 sugar-crush/tests/MCP/ClaudeCodeMcpClientForkSafetyTest.php	3.718	3
+sugar-crush/tests/Host/SessionHostCommandsTest.php	3.700	14
 sugar-crush/tests/Chat/RewindFilesTest.php	3.690	11
 sugar-crush/tests/Cli/BootstrapToolAndPermissionSettingsTest.php	3.689	57
 sugar-crush/tests/Backend/EngineBackendFrameCorruptionTest.php	3.654	7
@@ -134,7 +135,6 @@ sugar-crush/tests/Tools/CapturedProcessDeadlineTest.php	2.539	5
 sugar-crush/tests/Backend/ProviderErrorSurfacingTest.php	2.506	10
 sugar-crush/tests/Session/TranscriptSchemaV2MigrationTest.php	2.500	10
 sugar-crush/tests/Chat/ChildSessionCreatedOnFinishTest.php	2.500	5
-sugar-crush/tests/Host/SessionHostCommandsTest.php	2.500	10
 sugar-crush/tests/Context/GlobDialectDifferentialTest.php	2.497	13
 sugar-crush/tests/Workflows/WorkflowAgentResultsTest.php	2.494	13
 sugar-crush/tests/Config/Settings/SettingsWriterCensusTest.php	2.430	4

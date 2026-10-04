@@ -7,4 +7,5 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 
 return BuiltInCommand::new(
     CommandSpec::new('workflow', 'Run, pause, resume, or inspect a workflow', 'Workflow'),
-)->withHandler('handleWorkflowCommand');
+)->withHandler('handleWorkflowCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\WorkflowCommand::class);

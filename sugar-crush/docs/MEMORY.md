@@ -450,7 +450,7 @@ tagged `source:<skill-source>` — the same `SkillSource` vocabulary that badges
 imported skills and agent presets. It is **read-only by design**: the foreign
 tree is harness-managed, so there is no export direction.
 
-**`Chat::memoryImport()` constructs it behind `/memory import claude|opencode`**
+**`Host\Commands\MemoryCommand::import()` constructs it behind `/memory import claude|opencode`**
 (wired in P7.S6). The importer writes every entry with `MemoryScope::Local`, which
 `MemoryStore::normalizeScope()` lands in the `agent` directory — so imported
 entries reach `/memory list agent` and `/memory search`, and, per the

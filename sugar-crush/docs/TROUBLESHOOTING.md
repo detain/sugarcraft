@@ -264,7 +264,7 @@ the **next** `Runtime`, not the next step.
 `~/.sugar-crush/memory` could not be created or is not writable — deliberately
 not a launch failure.
 
-`/memory import claude|opencode` is wired (`Chat::memoryImport()`): it writes
+`/memory import claude|opencode` is wired (`Host\Commands\MemoryCommand::import()`): it writes
 the foreign tree into the `agent` scope — which the prompt never folds: only
 `project`-scope entries reach the `<project-memory>` block (see above) — and
 then records a

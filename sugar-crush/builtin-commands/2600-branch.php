@@ -12,4 +12,5 @@ return BuiltInCommand::new(CommandSpec::new(
     'Session',
     paletteAction: PaletteAction::BranchSession,
     paletteLabel: 'Branch session',
-))->withHandler('handleBranchCommand');
+))->withHandler('handleBranchCommand')
+    ->withHostCommand(\SugarCraft\Crush\Host\Commands\BranchCommand::class);
