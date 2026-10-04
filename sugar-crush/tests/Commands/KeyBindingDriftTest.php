@@ -255,7 +255,7 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 95 declared rows — and THAT is the domain
+     * Zero false positives across all 97 declared rows — and THAT is the domain
      * of the zero. It says nothing about prose not yet written; it says those 92
      * rows are clean under this pattern.
      *
@@ -1413,6 +1413,33 @@ final class KeyBindingDriftTest extends TestCase
                 );
             },
             'permission.deny' => fn(array $k) => $this->assertPermissionAnsweredBy($k[0]),
+            // The note is typed after the key, and Enter sends it with the
+            // refusal (the modal's own footer names those keys).
+            'permission.note' => function (array $k): void {
+                [$writing] = $this->blockedOnPermission()->update($k[0]);
+                $this->assertSame(PermissionPromptStage::WritingNote, $writing->permissionStage());
+                foreach (str_split('too risky') as $char) {
+                    [$writing] = $writing->update(new KeyMsg(KeyType::Char, $char));
+                }
+                $this->assertNotNull($writing->pendingPermission(), 'letters type the note');
+                [$answered] = $writing->update(new KeyMsg(KeyType::Enter));
+                $this->assertNull($answered->pendingPermission(), 'Enter refuses with it');
+                $this->assertStringContainsString('too risky', implode("\n", array_map(static fn (Message $m): string => $m->content, $answered->history)));
+            },
+            'permission.stop' => function (array $k): void {
+                $token = new \SugarCraft\Crush\Backend\CancellationToken();
+                [$blocked] = (new Chat(history: [Message::user('clean up')], backend: new EchoBackend(), inFlightCancellation: $token))
+                    ->withSize(100, 30)
+                    ->update(new PermissionRequestMsg(
+                        Message::assistant(''),
+                        new ToolCall('Bash', ['description' => 'Delete build/'], 'call_1'),
+                        'Run rm -rf build/?',
+                    ));
+                $this->assertNotNull($blocked->pendingPermission(), 'fixture: the prompt must be up');
+                [$answered] = $blocked->update($k[0]);
+                $this->assertNull($answered->pendingPermission(), 'the call is refused');
+                $this->assertTrue($token->isSoftCancelled(), 'and the turn asked to stop');
+            },
             // The recovery, and the reason Enter is a declared row rather than
             // an undocumented key: a disarmed prompt ignores every answer
             // letter, so without this one binding it could not be answered from

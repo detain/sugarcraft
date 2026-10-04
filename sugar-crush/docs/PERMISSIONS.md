@@ -466,7 +466,12 @@ situations, not two:
   the child waits (its idle ceiling paused). The answer reaches `Runtime` as
   an `ApprovalVerdict` rather than a bit:
   - `n`/`Esc` is `Permission denied:`, and a reply's note — when one is
-    given — reaches the model after the question as `the user said: …`;
+    given — reaches the model after the question as `the user said: …`. `r`
+    is the way to give one: type why (it goes into the draft box, and the
+    modal shows it) and `Enter` refuses with it; `Esc` goes back to the
+    question. `x` refuses **and stops** the turn: the soft cancel is sent
+    ahead of the refusal, so the turn ends at the step boundary after the
+    refused call instead of the model trying something else;
   - a question the turn ends underneath (the child or its stream gone) is
     `Permission required:`, because nobody answered it;
   - `a` + `y` remembers a **pattern** for the rest of the session

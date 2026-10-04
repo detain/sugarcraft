@@ -529,6 +529,18 @@ final class Renderer
         ['y', 'allow once'],
         ['a', 'allow calls like this one (this session) — asks first'],
         ['n / Esc', 'reject'],
+        ['r', 'reject with a note the agent reads'],
+        ['x', 'reject and stop the turn'],
+    ];
+
+    /**
+     * The rejection note's own keys, shown while `r` has the user typing it
+     * ({@see \SugarCraft\Crush\Permissions\PermissionPromptStage::WritingNote}).
+     * The note itself is typed into the draft box and painted above these.
+     */
+    private const PERMISSION_NOTE_OPTIONS = [
+        ['Enter', 'reject with this note'],
+        ['Esc', 'back to the question (text kept)'],
     ];
 
     /**
@@ -5645,6 +5657,16 @@ final class Renderer
             );
         }
 
+        // The note being typed, in the modal itself: the draft box it is typed
+        // into sits under the overlay.
+        if ($stage === PermissionPromptStage::WritingNote) {
+            $note = trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($chat->inputBuf)));
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
+                self::wrapPermissionText('Why are you refusing? ' . ($note === '' ? '(type a note)' : $note), $inner),
+            );
+        }
+
         if ($stage === PermissionPromptStage::Disarmed) {
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->systemLabel)->bold()->render(
@@ -5656,6 +5678,7 @@ final class Renderer
             PermissionPromptStage::ConfirmingAlways => self::PERMISSION_CONFIRM_OPTIONS,
             PermissionPromptStage::Disarmed => self::PERMISSION_DISARMED_OPTIONS,
             PermissionPromptStage::Armed => self::PERMISSION_OPTIONS,
+            PermissionPromptStage::WritingNote => self::PERMISSION_NOTE_OPTIONS,
         };
 
         $lines[] = '';

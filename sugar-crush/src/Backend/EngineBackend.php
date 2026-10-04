@@ -2619,9 +2619,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // down to the child as `ask_reply`; a cancellation writes nothing (it
         // only ever happens as the turn settles). Either way the receiver is
         // told, and the idle clock restarts once nothing is left open.
-        $settleAsk = function (\SugarCraft\Crush\Events\PermissionResolved $resolution) use (&$pendingAsks, $sendToChild, $resetTimeout, $onEvent, $interactive): void {
+        // `$softCancelSent` is shared with the cancel poll below: a reply given
+        // as "reject and stop" raises the soft cancel first, and its frame has
+        // to reach the child AHEAD of the reply, or the child could reach its
+        // step boundary before the next poll tick sends it.
+        $softCancelSent = false;
+        $settleAsk = function (\SugarCraft\Crush\Events\PermissionResolved $resolution) use (&$pendingAsks, $sendToChild, $resetTimeout, $onEvent, $interactive, $cancellation, &$softCancelSent): void {
             unset($pendingAsks[$resolution->askId]);
             if (!$resolution->cancelled) {
+                if (!$softCancelSent && $cancellation?->isSoftCancelled() === true && !$cancellation->isCancelled()) {
+                    $softCancelSent = true;
+                    $sendToChild(['kind' => ChildChannel::CANCEL_SOFT]);
+                }
                 $sendToChild([
                     'kind' => ChildChannel::ASK_REPLY,
                     'askId' => $resolution->askId,
@@ -2683,7 +2692,6 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // 1.C-3: on the same tick, each message the user steered into the
         // running turn goes down as a `steer` frame; the child reads it at
         // its next step boundary.
-        $softCancelSent = false;
         $cancelTimer = $cancellation === null ? null : $loop->addPeriodicTimer(0.1, function () use ($cancellation, $teardown, $sendToChild, &$softCancelSent): void {
             if ($cancellation->isCancelled()) {
                 $teardown('Request cancelled');

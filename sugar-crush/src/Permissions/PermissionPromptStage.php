@@ -51,4 +51,15 @@ enum PermissionPromptStage: string
      * {@see Armed}; any other key cancels back to {@see Disarmed}.
      */
     case ConfirmingAlways = 'confirming-always';
+
+    /**
+     * `r` was pressed at an armed prompt: the user is typing a note for the
+     * refusal (roadmap 1.C-3 / R-KEYBIND, "type a rejection note").
+     *
+     * The note is typed into the draft box, so every key but Enter and Escape
+     * edits it; Enter refuses the call with the note as the feedback the
+     * model reads, and Escape goes back to {@see Armed} leaving the text in
+     * the box.
+     */
+    case WritingNote = 'writing-note';
 }

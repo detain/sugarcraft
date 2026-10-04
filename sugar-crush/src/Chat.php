@@ -3875,6 +3875,24 @@ final class Chat implements Model
         $rune = strtolower($msg->rune ?? '');
         $isChar = $msg->type === KeyType::Char;
 
+        // ── the rejection note, which only `r` at an armed prompt opens ──
+        //
+        // The note is typed into the draft box — the one text editor this
+        // model has — so here every key edits it, and only Enter (refuse with
+        // it) and Escape (back to the question, text kept) do anything else.
+        if ($this->permissionStage === PermissionPromptStage::WritingNote) {
+            if ($msg->type === KeyType::Escape) {
+                return [$this->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
+            }
+            if ($msg->type === KeyType::Enter && !$msg->alt && !$msg->shift && !$msg->ctrl) {
+                $note = trim($this->inputBuf);
+
+                return $this->withInputBuf('')->answerPermission(PermissionReply::Reject, $note);
+            }
+
+            return $this->delegateToInput($msg);
+        }
+
         // ── the confirm, which only `a` at an armed prompt can raise ──
         //
         // Checked first because in this stage the letters mean something else
@@ -3930,6 +3948,24 @@ final class Chat implements Model
             return [$this->mutate(['permissionStage' => PermissionPromptStage::ConfirmingAlways]), null];
         }
 
+        // `r` opens the rejection note: the refusal then carries the user's
+        // words, which the model reads beside the refused call.
+        if ($isChar && $rune === 'r') {
+            return [$this->mutate(['permissionStage' => PermissionPromptStage::WritingNote]), null];
+        }
+
+        // `x` refuses AND stops: on an engine turn the soft cancel is raised
+        // first, so the turn ends at the step boundary after this call instead
+        // of the model trying something else; a turn that cannot stop softly
+        // (Chat's own path, where a refusal already ends the turn) just refuses.
+        // `x`, not `s`: a letter that answers on the first keystroke should be
+        // one prose rarely opens with (see the residual below).
+        if ($isChar && $rune === 'x') {
+            $this->inFlightCancellation?->cancelSoft();
+
+            return $this->answerPermission(PermissionReply::Reject, 'The user refused this call and stopped the turn.');
+        }
+
         $reply = match (true) {
             $isChar && $rune === 'n' => PermissionReply::Reject,
             $isChar && $rune === 'y' => PermissionReply::Once,
@@ -3957,7 +3993,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 91 live rows across 10 contexts — 95 in all, four of them
+     * declares 93 live rows across 10 contexts — 97 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *

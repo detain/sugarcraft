@@ -615,6 +615,10 @@ final class KeyBindingRegistry
             // call on Chat's own path, which is a call like itself.
             KeyBinding::new('permission.always', 'a', 'Ask to allow calls like this one for the session', $c),
             KeyBinding::new('permission.deny', 'n', 'Refuse the call (or Esc)', $c),
+            // R-KEYBIND (1.C-3 wave): refuse with words the model reads, and
+            // refuse-and-stop (the turn ends at the step boundary).
+            KeyBinding::new('permission.note', 'r', 'Refuse with a note the agent reads', $c),
+            KeyBinding::new('permission.stop', 'x', 'Refuse the call and stop the turn', $c),
             KeyBinding::new('permission.rearm', 'Enter', 'Make the answer keys live again', $c),
         ];
     }
