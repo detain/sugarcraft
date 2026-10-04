@@ -230,16 +230,7 @@ Columns:
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 2.2-1, 2.4-1 | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/App/App.php`, `src/Context/ContextCompactor.php`, new `src/Context/Pruning/**`, `src/Context/Compaction/StepSummarizer.php` | EB: `runTurn` `step-top`, `summariseStoppedTurn`. RT: `buildMessages`. ContextCompactor: `removeToolResults`, `stagePairs` | ARCHITECTURE "Runtime" + "Tools"; PROMPT_ENGINEERING placeholder; README :1129-1143 | — | L |
-| b | O-2f (exposes `TurnRunner` + `TranscriptProjector`) | `src/Chat.php`, `src/{ToolEventPumpMsg,BackendToolEventsMsg}.php`, new `src/Host/{TurnRunner,TranscriptProjector,SessionEvent}.php` | Chat: `applyBackendToolEvent`…`toolResultMessage`, `scheduleBackendCompletion`, `drainToolEventInbox`. **TR** | ARCHITECTURE "Chat" | — | M–L |
-| c | 2.12, 2.5 | `src/Host/CompactionService.php`, `src/Hooks/{HookEvent,HookManager,HookDispatcher,HookRegistry}.php`, `src/Backend/EngineBackend.php`, `src/HistoryCompactedMsg.php`, `src/Context/ContextCompactor.php`, `builtin-commands/2000-compact.php`, new `src/Context/Compaction/{StateSummaryTemplate,FilesTouched}.php` | EB: `resolveHookManager`. ContextCompactor: `summarizeExchanges`. **R-HOOKS** | HOOKS event table ("twelve"); PROMPT_ENGINEERING summary prompt | — | M |
 | d | O-5a (scaffold; no protocol types) | new `sugar-crush-web/**` skeleton, root `composer.json`, `PROJECT_NAMES.md`, `docs/MATCHUPS.md`, root `README.md` lib table, `docs/index.html`, `docs/_data/sugar-crush-web.*`, `docs/lib/` (generated), `codecov.yml`, `scripts/bootstrap-org-repos.sh`, `.github/workflows/web.yml`, `media/icons/sugar-crush-web.png` | — | root README lib table only | root force-all; sugar-crush-web | M |
-| e | 5.6, P-A4 | `src/Runtime.php`, `src/Chat.php`, `src/Renderer.php`, `src/Host/TitleService.php`, `src/Palette/PaletteAction.php`, new `builtin-commands/NNNN-context.php`, `src/Context/ContextBreakdown.php`, `src/Commands/ContextCommand.php` | RT: new `promptSectionSizes`. Chat: **CS** (inline title + `TitleSource` latch), `handleRenameCommand`, `runRootPaletteAction`, `selectSessionTab`. RN: tab strip, `renderInput` | README slash roster (generated); COMMANDS (generated; `/rename`, `/sessions` hints row-scoped) | — | M |
-| f | N-P3b, 5.4-2 | `src/Chat.php`, `src/Backend/EngineBackend.php`, `src/Palette/PaletteState.php`, `src/Memory/MemoryHistory.php` (new), `tools/check-child-lifetimes.php` roster | Chat: `handleModelCommand`, `selectPaletteProvider`, `handleMemoryCommand`, `memoryHelpResponse`. EB: ctor + withers (`withModel`, also used by 4.1-1) | README "Choosing a backend"; MEMORY "/memory" | — | M |
-| g | 1.C-5, 1.C-4b (`cancel_tool`), P-B3 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Chat.php`, `src/Renderer.php`, `src/Tui/Components/AgentDashboardPane.php`, `src/App/App.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, new `src/Tui/AgentStrip.php` | RT: `executeConcurrently` `poll`. EB: `runCompleteInChild`. TT: `setup`. Chat: `route` key arms, `handlePointer` agent arm (strip focus state lives on `App`). RN: `renderView` strip, `renderAgentView`. **R-KEYBIND** | PERMISSIONS (parallel-child caveat); README "Keys" | — | L |
-| h | 5.11-1, 5.5-2, 5.5-4 | `src/Permissions/PermissionGate.php`, `src/MCP/McpTool.php`, `src/Tools/McpToolBridge.php`, `src/Cli/Bootstrap.php`, `src/Tools/BuiltIn/Doctor.php`, new `src/RepoMap/CtagsSymbolExtractor.php`, `src/Tools/BuiltIn/RepoMapTool.php` | BS: capability-probe sites | PERMISSIONS "What auto classifies"; README MCP bullet :1311, "Dependency-free shell-out"; MCP.md | — | M |
-| i | 4.3-3, 5.14g | `src/Sessions/BackgroundSupervisor.php`, `src/Chat.php`, `src/Cli/Bootstrap.php` | Chat: `init`, `submit` (`!` branch). BS: `chat` wiring. **R-STATE** | ARCHITECTURE "Sessions and state" (bg row); README Limitations, "Using the TUI" (`!cmd`); PERMISSIONS (`!cmd` note) | — | M |
-| j | O-3a (+ `suggest: sugarcraft/sugar-crush-web`) | `composer.json` (sugar-crush), `src/Support/ForkedChild.php`, `src/Backend/EngineBackend.php`, `src/Cli/{ParsedArgs,Subcommands,Help,NonInteractive}.php`, new `src/Cli/Serve.php`, `src/Server/**`, `src/Config/Settings/Definitions/Server.php` | EB: `completeAsync` child branch (fd close). **R-CLI** | README "Subcommands"; ENVIRONMENT `SUGARCRUSH_SERVER_*`; new docs/SERVER.md; ARCHITECTURE "Dependencies" | — | L |
 
 ### W6 (order: a, b, c, d, e, f, g, h, i, j)
 
@@ -248,8 +239,8 @@ Columns:
 | a | 2.7-1b, 2.7-2, 2.7-3 | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Providers/{CompleteRequest,SglangProvider,VertexProvider,BedrockProvider,ProviderStreamException}.php` | EB: `runTurn` `after-step` + run wrapper. RT: `runStreaming`. SG: request params (not `formatMessages`) | README "What you see" (notice wording) | — | L |
 | b | O-2g | `src/Chat.php`, new `src/Host/{TurnController,SessionHost,SessionHub,SubmitOptions,TurnTicket,SessionSnapshot}.php` | Chat: `submit`…`releaseQueuedPrompts`, `userTurnMessage`, `dispatchTurn`, custom-command expansion, turn hooks, `subscriptions` | README "Architecture"; ARCHITECTURE | — | L |
 | c | 2.4-2, 5.4-1, 2.3 | `src/Host/CompactionService.php`, `src/Backend/EngineBackend.php`, `src/Cli/{Bootstrap,Help}.php`, new `src/Backend/SummarisesWithCache.php`, `src/Memory/CompactionJournal.php`, `src/Context/Pruning/Strategies/*` (4 new) | CompactionService: `buildSummarizationRequest`, `scheduleParkedCompaction`, `compactNow`, `applyModelCompaction`. EB: new `summariseAsync`. BS: `summaryBackend`, `toollessBackend`. `Help` env-var wording only | README :1129-1143; ENVIRONMENT `SUGARCRUSH_SUMMARY_MODEL` | — | M–L |
-| d | 2.2-2, 3.B-2 | `src/Backend/EngineBackend.php`, `src/Host/{TurnRunner,TranscriptStore}.php`, `src/Session/EnhancedSessionStore.php`, `src/Runtime.php`, new `src/Context/Pruning/RefTag.php`, `builtin-commands/NNNN-{sweep,pruning}.php`, `src/Config/Settings/Definitions/Context.php` | EB: `toTypedMessages`, `encodeEvent`/`decodeEvent`, `runCompleteInChild`, `settleFromResultFrame`. RT: `buildMessages`. **TR, R-SCHEMA** | ARCHITECTURE frame table; COMMANDS/SETTINGS (generated); PROMPT_ENGINEERING ref tags | — | L |
-| e | 4.1-1, 4.1-2, P-C1 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/App/App.php`, `src/Agents/{AgentPreset,Agent,AgentPresetRegistry,AgentManager,SuspendedDelegations}.php`, `src/Permissions/PermissionMode.php`, `src/Host/TranscriptProjector.php`, new `src/Agents/Live/{SubAgentTranscriptLog,AgentTranscriptTail}.php`, `src/Config/Settings/Definitions/Subagents.php` | TT: `schema`, `setup`. EB: `runTurn` `build`, `withReasoningEffort`, `resolveHookManager`. RT: `run`. BS: `agentManager`. **R-STATE** (subagents dir) | AGENTS_AUTHORING intro, provenance; PERMISSIONS (sub-agent mode); ARCHITECTURE "Sessions and state" | — | L |
+| d | 2.2-2, 3.B-2, 5.6 remainder (pruned rows in the `/context` breakdown) | `src/Backend/EngineBackend.php`, `src/Context/ContextBreakdown.php`, `src/Commands/ContextCommand.php`, `src/Host/{TurnRunner,TranscriptStore}.php`, `src/Session/EnhancedSessionStore.php`, `src/Runtime.php`, new `src/Context/Pruning/RefTag.php`, `builtin-commands/NNNN-{sweep,pruning}.php`, `src/Config/Settings/Definitions/Context.php` | EB: `toTypedMessages`, `encodeEvent`/`decodeEvent`, `runCompleteInChild`, `settleFromResultFrame`. RT: `buildMessages`. **TR, R-SCHEMA** | ARCHITECTURE frame table; COMMANDS/SETTINGS (generated); PROMPT_ENGINEERING ref tags | — | L |
+| e | 4.1-1 (+ N-P3b remainder: rebind the provider's model so `withModel()` also moves `contextWindow()`/prices), 4.1-2, P-C1 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/App/App.php`, `src/Agents/{AgentPreset,Agent,AgentPresetRegistry,AgentManager,SuspendedDelegations}.php`, `src/Permissions/PermissionMode.php`, `src/Host/TranscriptProjector.php`, new `src/Agents/Live/{SubAgentTranscriptLog,AgentTranscriptTail}.php`, `src/Config/Settings/Definitions/Subagents.php` | TT: `schema`, `setup`. EB: `runTurn` `build`, `withReasoningEffort`, `resolveHookManager`. RT: `run`. BS: `agentManager`. **R-STATE** (subagents dir) | AGENTS_AUTHORING intro, provenance; PERMISSIONS (sub-agent mode); ARCHITECTURE "Sessions and state" | — | L |
 | f | 5.3-2, 5.5-5 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Context/{MemoryBlock,RepoMapBlock}.php`, new `src/Memory/{HybridMemoryRanker,EmbeddingCache}.php`, `src/Context/{MemoryRecallBlock,SymbolMapBlock}.php`, `src/Config/Settings/Definitions/Memory.php` | RT: `systemPromptSections` (fragment, repo-map slot), `repoMapSnapshot`. EB: `completeAsync` (pre-fork snapshot) | MEMORY "Recall"; PROMPT_ENGINEERING slots | — | M |
 | g | 3.F, 3.G | `src/Cli/Bootstrap.php`, `src/LSP/LspClient.php`, `src/Tools/BuiltIn/{LspTool,Read}.php`, `src/Chat.php`, new `src/LSP/LspLauncher.php`, `src/Hooks/BuiltIn/{PostEditDiagnosticsHook,AutoCommitHook}.php`, `src/Workspace/{AutoCommitter,CommitMessageWriter}.php`, `src/Config/Settings/Definitions/{Lsp,Git}.php` | BS: `lspTool`, `tools` callers, `lspClient`, `hooks`. Chat: `route` AssistantMsg arm, `/undo` handler. **R-HOOKS** | README Capabilities Tools (`Lsp` paragraph); ARCHITECTURE "Tools"; HOOKS built-ins | — | L |
 | h | 5.12, 5.13b | `src/Tools/BuiltIn/Bash.php`, `src/Tools/Concerns/CapturesProcessOutput.php`, `src/Providers/ProviderFactory.php`, new `src/Tools/Sandbox/Bubblewrap.php`, `src/Providers/FallbackProvider.php`, `src/Config/Settings/Definitions/Tools.php` | — | PERMISSIONS new "Sandbox"; README "Providers"; ARCHITECTURE provider prose | — | M |
@@ -305,7 +296,7 @@ Columns:
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 3.I-3, 5.11-2 | `src/Permissions/PermissionGate.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/ApplyPatch.php`, `src/Tools/Edit/PatchParser.php`, `src/Permissions/{ExecReviewer,ReviewVerdict}.php`, `src/Config/Settings/Definitions/Permissions.php` | BS: `permissionGate` | PERMISSIONS write-capable list, "What auto classifies", circuit breaker; HOOKS protect-files path table | — | L |
+| a | 3.I-3, 5.11-2 (incl. security findings force Ask in `auto`) | `src/Permissions/PermissionGate.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/ApplyPatch.php`, `src/Tools/Edit/PatchParser.php`, `src/Permissions/{ExecReviewer,ReviewVerdict}.php`, `src/Config/Settings/Definitions/Permissions.php` | BS: `permissionGate` | PERMISSIONS write-capable list, "What auto classifies", circuit breaker; HOOKS protect-files path table | — | L |
 | b | 5.7-2 | new `src/Tools/BuiltIn/{PlanExitTool,AskUserTool}.php`, `src/Cli/NonInteractive.php` | — | PERMISSIONS "`Ask` needs somewhere to ask" | — | M |
 | c | 4.5 | `src/Runtime.php`, `src/Tools/BuiltIn/TaskTool.php` (new `withBoard` method), new `src/Agents/Board/**`, `src/Tools/BuiltIn/{BoardReadTool,BoardPostTool}.php`, `src/Hooks/BuiltIn/BoardNoticeHook.php`, `src/Tools/SharesBoard.php`, `src/Cli/Bootstrap.php` | RT: `executeConcurrently` `ledger`. TT: class (new method only). BS: `hooks` (BoardNoticeHook). **R-STATE** (board dir), **R-HOOKS** | ARCHITECTURE "Sessions and state" | — | M |
 | d | P-E3 | `src/Chat.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Commands/KeyBindingRegistry.php` | Chat: `route` Ctrl+X b arm. TT: `execute`. **R-KEYBIND** | README "Keys" | — | M |
@@ -344,30 +335,24 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (107 steps)
+## 5. Step index (91 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
 **Wave-0 fixes**
 
 **Foundations**
-- 1.C-4b S · 1.C-1, RELAY · W5-g
-- 1.C-5 S–M · 1.C-2, RELAY · W5-g
 
 **Context engine**
-- 2.2-1 M · 2.1, 0.2 · W5-a
 - 2.2-2 M · 2.2-1, 1.B-2 · W6-d
 - 2.3 S–M · 2.2-1 · W6-c
-- 2.4-1 M · 2.2-1 · W5-a
 - 2.4-2 M · 2.4-1, O-2e · W6-c
-- 2.5 S–M · 1.B-3, O-2e · W5-c
 - 2.6 M · 1.A-2, 2.5 · W9-a
 - 2.7-1b M · 2.7-1a, 2.4-1 · W6-a
 - 2.7-2 M · 2.7-1b · W6-a
 - 2.7-3 S · 2.7-2 · W6-a
 - 2.10 M · 2.9, 2.5, O-2g · W8-b
 - 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
-- 2.12 S–M · 1.B-3, O-2e · W5-c
 
 **Safety and self-management**
 - 3.B-2 S–M · 2.2-2, 2.3 · W6-d
@@ -387,7 +372,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 4.1-1 S–M · N-P0, N-P3b · W6-e
 - 4.1-2 M · 4.1-1, 4.2 · W6-e
 - 4.3-2 M–L · 4.3-1, P-B1, 1.A-2 · W8-e
-- 4.3-3 M · 4.3-1 · W5-i
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
 - 4.5 M · RELAY · W10-c
 - 4.6-2 M–L · 4.6-1, 4.3-2, P-D1 · W9-g
@@ -399,30 +383,25 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Memory, codebase understanding, UX, integrations**
 - 5.3-2 M · 5.3-1, 1.A-2 · W6-f
 - 5.4-1 S · 5.1-2, O-2e · W6-c
-- 5.4-2 M · 5.1-2 · W5-f
 - 5.4-3 M · 5.4-1, 5.4-2, 5.2 · W7-i
-- 5.5-2 S–M · 5.5-1 · W5-h
-- 5.5-4 S · 5.5-3, DH-TOOLS · W5-h
 - 5.5-5 S · 5.5-4, 1.A-2 · W6-f
-- 5.6 S · 2.1, DH-CMDS · W5-e
+- 5.6 remainder (pruned items in the `/context` breakdown) S · 3.B-2 · W6-d
 - 5.7-1 M · 4.1-2, DEF-MODE, D8 · W9-j
 - 5.7-2 M · 5.7-1, 1.C-2 · W10-b
 - 5.9-1 M · — · W10-h
 - 5.9-2 M · 5.9-1, O-2g · W10-h
-- 5.11-1 S · — · W5-h
-- 5.11-2 M · 1.C-2, N-P2 · W10-a
+- 5.11-2 (incl. security findings force Ask in `auto`) M · 1.C-2, N-P2 · W10-a
 - 5.12 M · 0.4 · W6-h
 - 5.13b M · 2.7-1a, N-P3b · W6-h
 - 5.14a S · 1.C-2 · W8-j
 - 5.14b S–M · O-2g · W8-j
 - 5.14c M · 2.5, P-A1 · W10-e
 - 5.14d S · 0.8 · W10-e
-- 5.14g S–M · — · W5-i
 - 5.14i M · 1.A-2 · W10-f
 - 5.14l S–M · O-2g · W10-f
 
 **Settings**
-- N-P3b S–M · N-P2, N-P3a · W5-f
+- N-P3b remainder (provider-level model rebind behind `EngineBackend::withModel()`) S · 4.1-1 · W6-e
 - N-P3 M · N-P2, N-P3a · W6-j
 - N-P4a M · N-P3, 1.C-1 · W7-j
 - N-P4b M · N-P3, 2.1, 2.9 · W9-h
@@ -434,8 +413,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-A4 S–M · P-A1, O-2d · W5-e
-- P-B3 S–M · P-B2 · W5-g
 - P-C1 M · P-B1, RELAY, O-2f · W6-e
 - P-C2 M · P-C1 · W7-f
 - P-D1 M · P-B1, 1.C-3 · W7-e
@@ -446,10 +423,8 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-2f M–L · O-2b, 1.C-2, 1.C-4a · W5-b
 - O-2g L · O-2f · W6-b
 - O-2h L · O-2g, DH-CMDS · W7-b
-- O-3a L · O-0, P-A3 · W5-j
 - O-3b L · O-3a, O-2g · W7-c
 - O-3c S–M · O-3b · W7-c
 - O-4a M · O-3a · W6-i
@@ -491,9 +466,7 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 | 1.B "give Message `uiOnly`" | Done (`Message::$uiOnly`, `agentVisible()`). |
 | 3.C "dormant `TaskList`" | `TaskList` is the team queue; only `SessionMeta::$tasks` fits a todo. |
 | 3.D JSON hook stdout as wholly new | Exit-code equivalents and `refusedBy` exist (3.D is PARTIAL). |
-| 4.3 "wire `reconnect()`" | Wiring alone is a no-op: it reads in-memory sessions and the IPC dir is per-process random (4.3-3). |
 | 5.1 "index ≤200 lines/25 KB" as new | `MemoryStore` already builds that index; only injection is missing. |
-| 5.6 status bar `ctx % · tokens · cache % · $` | Done; only `/context` and the system-prompt + tools basis (2.1) remain. |
 | 5.7 "command guard", "Shift+Tab toggle" | The guard exists (`evaluatePlan`). Shift+Tab is `shell.pane-prev` (D8). |
 | 5.11 "escalate after 3 denials" | Exists (`STRIKE_THRESHOLD`). |
 | 5.14 `$skill` as wholly new | A session-scoped equivalent exists (Ctrl+S picker). |

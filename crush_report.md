@@ -122,38 +122,18 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 - Every new tool, command, env var or key binding needs its doc edit (drift tests).
 - Each new test file goes into `scripts/parallel-tests-durations.tsv` during the waves. `suite-figure.json` is refreshed once, in the Final pass.
 
-## 1.x — three foundations (most later items depend on them)
-
-**1.C — The parent↔child frame channel.** Turn the socketpair into a two-way protocol.
-
-Frames from parent to child:
-- `permission_reply{id,allow,always,feedback}`
-- `cancel_tool{callId}`
-- `mailbox{…}`
-
-Frames from child to parent: `permission_request{id,toolCall,ask}`.
-
-How the pieces connect:
-- Queue modes: the `queueMode` setting (`steer | followup | interrupt`) and a binding for `interrupt` (nanobot, Cline, Zed).
-- Parallel grandchildren relay asks through the turn child, or return "needs-ask" and re-run sequentially (Goose).
-- An alternative is OpenHands' *resumable stop*: end the turn with pending calls and execute them first on the next dispatch. It is cleaner with respect to the watchdog, but needs 1.B.
-
-**M–L; the highest-leverage item in the whole report.** *(10 reports.)* The same channel later carries server-mode approvals (Part V).
-
 ## 2.x — context engine (agent-aware context management)
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 2.2 | **Deterministic tool-output pruning first.** Replace the no-op `removeToolResults` with a projector rule. Older tool results go to a placeholder that keeps tool + main arg (`[r17 Read src/X.php — output pruned; re-run if needed]`). Protect the newest 40k tokens and the last 2 turns; only fire if ≥20k is freed (opencode/Kilo); head-4096/tail-1024 for >8192 (dsh); soft-trim at 30%, hard-clear at 50% (OpenClaw). Never prune Task/Skill results. Batch rewrites (≥64 KB reclaimable) to protect the cache (Cline) | M | OC Kilo DCP Cline Claw dsh |
+| 2.2 | **Carry the in-turn prune ledger across turns** (2.2-2): the deterministic pruning (placeholders keeping tool + main arg, protected recent window, Task/Skill never pruned) runs inside a turn; its ledger is discarded at turn end, so the next turn re-prunes from the full history and the cache-stable rewrite it bought is lost | M | OC Kilo DCP Cline Claw dsh |
 | 2.3 | **Path-keyed dedup and stale-read pruning**: newest Read of a path wins; Reads older than an Edit/Write of the same path are pruned; superseded Write `content` arguments are elided; inputs of failed calls older than N turns are blanked (DCP + Cline) | S–M | DCP Cline |
-| 2.4 | **Summarise at step level, reusing the cache.** Same system prompt + tools + history, plus a final user instruction "do not call tools" (CC, dsh, nanobot). Default to the main model; keep `SUGARCRUSH_SUMMARY_MODEL` as an option. Snap cuts to tool-pair boundaries (OpenHands) and keep the unsent tail verbatim (nanobot) | M | CC dsh nano OH Zed |
-| 2.5 | **State-oriented summary template** layered on the existing six-facet records (which are good for security-constraint fidelity). Add a holistic block — Goal / Constraints / Progress (Done / In-progress / Blocked) / Key decisions / Current work / Next step / Pending tasks with ids / Files read & modified (derived mechanically from tool rows) / Errors+fixes verbatim / Latest unresolved user request verbatim. Merge with the previous summary. Cap ~16k chars. Audit required headings and fall back if missing (OpenClaw safeguard). Reject summaries not smaller than their source or cut short by the length limit. After compaction, re-append the latest user prompt verbatim plus "continue if you have next steps" | S–M | CC OC Kilo OH Goose Claw dsh Cline |
+| 2.4 | **Summarise reusing the cache everywhere** (2.4-2): the in-turn step summary already sends the same system prompt + tools + history with a final "do not call tools" instruction; `/compact` and the 85% tier should do the same, defaulting to the main model with `SUGARCRUSH_SUMMARY_MODEL` (and a `summaryModel` key) as the option | M | CC dsh nano OH Zed |
 | 2.6 | **Post-compaction re-injection**: the 5 most recently edited/read files (≤5k tokens each) or Cline's "Required Files" (≤8 files/100k chars), invoked skill bodies, fresh git snapshot, todo list, plan | M | CC Cline |
 | 2.7 | **Context-overflow and length-stop recovery**: on a provider failure classified as `ContextOverflow`, prune maximally and retry once (twice in goose). On `finish_reason=length` without tool calls, continue with prefill (`continue_final_message` on SGLang) up to 3× (Aider/nanobot/Cline). Retry dropped streams with "Continue where you left off" (Zed/OpenClaw) | M | 9 reports |
 | 2.9 | **Absolute thresholds** on by default (DCP's 50k/100k "smart zone"; on a 1M window, 70% is far past the point where quality holds) with their settings keys and a thrash-breaker that cannot refuse every prompt under a cap; an absolute term in the step-level `ContextBudget` | S | DCP |
 | 2.10 | Ahead-of-need **background summarisation** at 70% so the 85% submit never blocks; splice in if the history fingerprint still matches | M | Aider |
 | 2.11 | **Memory flush before compaction**: one silent tool-enabled turn that writes durable notes to memory, once per compaction cycle | S–M | Claw |
-| 2.12 | Wire the dormant `PreCompact` hook (deny blocks) and add `PostCompact`; `/compact <focus>` must actually steer the summary | S | CC OC DCP Cline |
 
 ## 3.x — safety net and agent self-management
 
@@ -173,7 +153,7 @@ How the pieces connect:
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 4.1 | Honour preset `model`/`effort`/`permissionMode` (new `EngineBackend::withModel`, per-sub-agent `PermissionGate`); per-call `model` arg; `subagentModel` default; **fail loudly** on unsupported preset fields (dsh) | S–M | 9 reports |
-| 4.3 | **Background Task** (`background:true` / preset `background`): returns `{agent_id}` at once ("DO NOT sleep or poll"). Runs via `BackgroundSupervisor` or `AgentWorkerPool`. On settle, a user-role announce row (`[Subagent '<label>' completed] … status from the runtime outcome (ok/error/timeout), stats line: runtime, tokens, cost, resume id`) is appended, and a turn is auto-dispatched if idle or injected via steer if busy. An "Active subagents" block appears in each turn context. Make `BackgroundSupervisor::reconnect` useful (persist a per-uid session index; today it reads only in-memory sessions) and give it a caller | M–L | Claw nano dsh Goose Kilo OC |
+| 4.3 | **Background Task** (`background:true` / preset `background`): returns `{agent_id}` at once ("DO NOT sleep or poll"). Runs via `BackgroundSupervisor` or `AgentWorkerPool`. On settle, a user-role announce row (`[Subagent '<label>' completed] … status from the runtime outcome (ok/error/timeout), stats line: runtime, tokens, cost, resume id`) is appended, and a turn is auto-dispatched if idle or injected via steer if busy. An "Active subagents" block appears in each turn context. | M–L | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
 | 4.6 | **Teams**: construct `TeamManager` (`AgentManager::setTeamManager`), `team_*` tools on `TaskList` (claim/complete/dependencies); make `GroupInputCmd`/`CancelAgentCmd`/`ResumeAgentCmd`/`StopAllAgentsCmd` real | L | CC Cline dsh |
@@ -187,15 +167,15 @@ How the pieces connect:
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 5.3 | **Memory search**: the dormant `embeddings` beside the FTS5 BM25 index (0.7 vector / 0.3 keyword, 30-day half-life, MMR); a relevance-ranked snapshot keyed on the latest user message; a mandatory "search memory before answering about prior work" prompt fragment | M | Claw |
-| 5.4 | **Dream pass**: compaction summaries appended to a tagged journal; a periodic restricted-tool pass edits memory/skills; memory dir git-versioned with `/memory log` and `/memory restore` | M–L | nano |
-| 5.5 | **Symbol-level repo map** over the PHP symbol extractor, tag cache, symbol graph, PageRank and budgeted renderer (`src/RepoMap/`): universal-ctags for other languages. Ship as a `RepoMap` tool first; optionally add a byte-stable PerSession block beside the existing `RepoMapBlock` | L | Aider |
-| 5.6 | `/context` / `/tokens` breakdown per prompt section, tool schemas, history, largest messages, cache-hit ratio, pruned items (the status bar already shows ctx %, cache % and spend) | S | 8 reports |
+| 5.4 | **Dream pass**: compaction summaries appended to a tagged journal; a periodic restricted-tool pass edits memory/skills | M–L | nano |
+| 5.5 | **Symbol-level repo map in the prompt**: a byte-stable PerSession block beside the existing `RepoMapBlock`, over the `RepoMap` tool's extractor, graph and ranking — which first needs per-(from,to) edge aggregation or a cached rank to be turn-cheap | L | Aider |
+| 5.6 | Pruned items in the `/context` breakdown, once the 3.B ledger records them | S | 8 reports |
 | 5.7 | **Plan mode** made real: plan-mode prompt section, plans-dir write exception (the command guard exists), `PlanExit` + `ask_user` tools over the 1.C channel, `Alt+M` toggle (Shift+Tab is pane-prev), superseding "agent changed" reminder | M | OC Kilo Cline dsh |
 | 5.9 | **ACP mode** (`sugarcrush acp`): stdio JSON-RPC so Zed, JetBrains and Neovim can host sugar-crush; reuse `McpMessage` framing | L | Zed |
-| 5.11 | LLM exec reviewer / smart-approve for `auto` mode (title backend, JSON verdict, untrusted transcript; the 3-strike breaker exists); MCP `readOnlyHint`; security findings force Ask even in auto | M | Goose Claw dsh OH |
+| 5.11 | LLM exec reviewer / smart-approve for `auto` mode (title backend, JSON verdict, untrusted transcript; the 3-strike breaker exists); security findings force Ask even in auto | M | Goose Claw dsh OH |
 | 5.12 | Optional bubblewrap sandbox for Bash on Linux | M–L | Zed |
 | 5.13 | `FallbackProvider` with `fallbackModels` | M | Aider nano |
-| 5.14 | Small UX: bell/OSC 9 notifications on turn end or approval wait; `/btw` side question; `/handoff` (new session seeded with a summary); `/newrule`; `!cmd`; watch-files `AI!` comments; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
+| 5.14 | Small UX: bell/OSC 9 notifications on turn end or approval wait; `/btw` side question; `/handoff` (new session seeded with a summary); `/newrule`; watch-files `AI!` comments; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
 | 5.15 | Settings pane, configurable behaviours, server mode, web UI, session management, live agent lines and agent view | — | **Part V** |
 
 ---
@@ -310,7 +290,7 @@ Keep sugar-crush's richer `<env>` and repo map; only move the volatile parts out
 ## V.1 Settings pane and configurability (Appendix N)
 
 **What exists today:**
-- **A settings view with a save door.** `/settings` (alias `/config`), the palette, the menu, or Enter on the sidebar open a full-band view of every key: its value, where it came from, and when a change applies. Field editing, reset, a tier switch, the save preview and `SettingsWriter` exist, but no key reaches them yet, so the view still edits nothing.
+- **A settings view with a save door.** `/settings` (alias `/config`), the palette, the menu, or Enter on the sidebar open a full-band view of every key: its value, where it came from, and when a change applies. Field editing, reset, a tier switch, the save preview, the trust-grant confirm and `SettingsWriter` are bound to keys, and `/model <provider> <model>` saves through the same writer.
 - **The current key set:** about 26 config keys, 25 `SUGARCRUSH_*` environment variables and 10 CLI flags. The report has the full inventory table: type, default, allowed tiers, env override, whether a change applies live / next turn / after restart, and how easy each is to edit in a UI.
 - **Next-turn reload is mostly free.** The forked child re-reads the settings files each turn (`EngineBackend.php`), so making a key take effect on the next turn usually needs no new plumbing. Today only `parallelToolCalls`, `parallelToolDeadlineSeconds` and `maxOutputTokens` are re-applied that way. `docs/SETTINGS.md` names only the first two.
 
@@ -333,7 +313,6 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
   - **Optional additions:** `sugar-diff` for the save preview and `sugar-toast` for feedback. The report advises against `sugar-dash`, because it would pull `candy-pty` into the runtime.
 - **The `SettingsWriter`'s remaining tier and UI:**
   - "Session" stays in memory.
-  - Trust grants (`grantTrust()` / `revokeTrust()` exist) need a confirm dialog naming what each grant enables.
 
   Edits made mid-turn apply from the next turn. Store keys **flat with dots** (`"compaction.autoPercent"`), because `LayeredSettings::merge` only merges one level deep.
 
@@ -345,35 +324,23 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 ## V.2 Server mode (Appendix O, §0–§6, §8)
 
 **Decisions:**
-1. **Transport: ReactPHP-native WebSockets, not Workerman.**
-   - **Libraries:** `react/http`, `react/socket` and `ratchet/rfc6455`.
-   - **Why not Workerman:** **no sugarcraft library uses Workerman or any WebSocket code today.** Workerman exists on this host only outside the tree, under `/home/my/vendor`. It brings its own event loop, a master/worker fork model, global `$argv` parsing and nine signal handlers. All of those collide with sugar-crush's ReactPHP loop and its `pcntl_fork` turn children.
-2. **Protocol: one WebSocket per client, multiplexed across sessions, carrying JSON-RPC 2.0.**
+1. **Protocol: one WebSocket per client, multiplexed across sessions, carrying JSON-RPC 2.0.**
    - It reuses `sugar-mcp`'s `McpMessage` codec, with subprotocol `sugarcrush.v1`.
    - Server→client traffic is `event` notifications. Each session has a durable event log with a monotonic `seq` in a `session_events` table in `session.db`. Streaming deltas are ephemeral; full values are durable.
    - Reconnect sends `resume: {sessionId: lastSeq}`.
    - Approvals are events: any client may answer, the first answer wins, and pending asks are re-sent on reconnect.
    - The method and event catalogue (§6) covers sessions, prompting, steering, cancel, tools, diffs, sub-agents, usage, compaction, settings get/set, slash commands, memory, todos and background agents. It also includes a version handshake and backpressure rules (watermarks, 1013 close).
-3. **The keystone is the same parent↔child frame channel as roadmap Wave 1.C.** Frames: `ask`, `ask_reply`, `steer`, `steer_ack`, `cancel_soft`, `usage` and `step` already cross it; `cancel_tool` is still to come.
-   - Building it first fixes TUI approvals **and** gives the server approvals for free.
-   - The 120 s watchdog pauses while an ask is pending.
-   - **Phase 1 is worth shipping even if the server never lands.**
-4. **Headless core.** `Chat.php` (over 19,000 lines) and candy-core `Program::run` own the event loop and the terminal. A strangler-pattern extraction therefore moves non-UI logic into `src/Host/`, which already holds `TranscriptStore`, `EventLog`, `SpendLedger`, `ContextMeter`, `TitleService` and `CompactionService`; still to come are `SessionHub`, `SessionHost`, `TurnController` and `TurnRunner`. Both `Chat` and the server become clients of it.
+2. **Headless core.** `Chat.php` (over 19,000 lines) and candy-core `Program::run` own the event loop and the terminal. A strangler-pattern extraction therefore moves non-UI logic into `src/Host/`, which already holds `TranscriptStore`, `EventLog`, `SpendLedger`, `ContextMeter`, `TitleService` and `CompactionService`; still to come are `SessionHub`, `SessionHost`, `TurnController` and `TurnRunner`. Both `Chat` and the server become clients of it.
    - `Bootstrap` holds more than 25 static, root-sensitive caches. So one server process handles **one project root**.
    - Multi-root support comes later, with one workspace-host child process per root.
-5. **Background mode:**
+3. **Background mode:**
    - **Commands:** `sugarcrush serve [--detach]`, `serve status|stop|logs|url|token`.
    - **Daemon plumbing:** reuses `BackgroundSupervisor`'s double-fork, `setsid` and 0600 IPC idioms (moved into `Support\Daemonize`), with a pidfile plus a process-start-time check.
    - **Reconnect:** `BackgroundSupervisor::reconnect` gets its first caller at boot.
-6. **Security defaults:**
-   - binds `127.0.0.1` only;
-   - a **mandatory token even on loopback**, exchanged for an HttpOnly, SameSite=Strict cookie;
-   - single-use WebSocket tickets;
-   - strict `Origin` and `Host` checks, against cross-site WebSocket hijacking and DNS rebinding;
-   - server sessions default to `default` (ask) mode, and `bypass-permissions` is refused over the wire unless `--allow-bypass` is given;
-   - TLS through a reverse proxy in v1;
-   - the server refuses to start without pcntl/posix, because the blocking fallback would stall every session.
-7. **Later phases:**
+4. **Security defaults still to wire:**
+   - server sessions default to `default` (ask) mode, and `bypass-permissions` is refused over the wire unless `--allow-bypass` is given (`ServerConfig::admitsPermissionMode()` exists; the O-3b dispatcher must call it for `session.create`/`setMode`);
+   - TLS through a reverse proxy in v1.
+5. **Later phases:**
    - `sugarcrush attach` lets the TUI act as a client.
    - `sugarcrush acp` is an Agent Client Protocol stdio adapter (about 8 methods) so Zed and JetBrains can host sugar-crush.
 
@@ -411,18 +378,9 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 
 ## V.4 Sessions, live agent lines, agent view and direct chat (Appendix P)
 
-**Sessions: listing and renaming already exist, but are thin.**
-- **LIVE today:** `/sessions`, Ctrl+R, `/rename <name>`, auto-titles, the tab strip, `--resume`, `-c`, and `sugarcrush session list|show|rename|delete|pin|unpin|archive|unarchive`.
-- **Design:**
-  - `/rename` with no argument opens inline edit; `--auto` regenerates the title;
-  - Chat honours the stored `TitleSource`, so a title the user set always beats an auto-title in the UI as well as in the store.
-
 **Live agent activity lines.**
 - **What exists:** an `AgentLiveRegistry` in the parent draws one width-safe line per agent under its Task row (`└ ⠋ Grep "LoginController" · 7 tools · 0:12 · 4.1k tok`), with a set drop order on narrow terminals and the outcome glyphs ✓/✗/⏹/⏸.
-- **Design (still to build):**
-  - a one-row agent strip above the input (Alt+↓);
-  - per-instance dashboard rows;
-  - the Task row as an `agent:<id>` click zone.
+- **Design (still to build):** the Task row as an `agent:<id>` click zone, and `agent:` zones on the dashboard's run rows (the strip above the input and the per-instance dashboard rows exist).
 
   This is how opencode and Claude Code show running agents.
 
@@ -445,11 +403,8 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 ## V.5 How the new features fit the Part III roadmap
 
 These features are scheduled in Appendix R together with Part III:
-- The sessions work (P-A4) runs W5.
-- The rest of the two-way fork channel, 1.C (= server Phase O-1), runs W5.
-- The live-line strip and dashboard rows (P-B3) run W5.
-- Live apply (N-P3b, N-P3) runs W5–W6.
-- The host extraction O-2f–O-2h runs W5–W7, then the protocol (W7), web MVP (W8) and multi-session web (W9).
+- Live apply (N-P3, and the provider-level model rebind left from N-P3b) runs W6.
+- The host extraction O-2g–O-2h runs W6–W7, then the protocol (W7), web MVP (W8) and multi-session web (W9).
 - The agent view and direct chat (P-C, P-D, P-E) run W6–W10.
 
 ---
@@ -9465,16 +9420,7 @@ Columns:
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 2.2-1, 2.4-1 | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/App/App.php`, `src/Context/ContextCompactor.php`, new `src/Context/Pruning/**`, `src/Context/Compaction/StepSummarizer.php` | EB: `runTurn` `step-top`, `summariseStoppedTurn`. RT: `buildMessages`. ContextCompactor: `removeToolResults`, `stagePairs` | ARCHITECTURE "Runtime" + "Tools"; PROMPT_ENGINEERING placeholder; README :1129-1143 | — | L |
-| b | O-2f (exposes `TurnRunner` + `TranscriptProjector`) | `src/Chat.php`, `src/{ToolEventPumpMsg,BackendToolEventsMsg}.php`, new `src/Host/{TurnRunner,TranscriptProjector,SessionEvent}.php` | Chat: `applyBackendToolEvent`…`toolResultMessage`, `scheduleBackendCompletion`, `drainToolEventInbox`. **TR** | ARCHITECTURE "Chat" | — | M–L |
-| c | 2.12, 2.5 | `src/Host/CompactionService.php`, `src/Hooks/{HookEvent,HookManager,HookDispatcher,HookRegistry}.php`, `src/Backend/EngineBackend.php`, `src/HistoryCompactedMsg.php`, `src/Context/ContextCompactor.php`, `builtin-commands/2000-compact.php`, new `src/Context/Compaction/{StateSummaryTemplate,FilesTouched}.php` | EB: `resolveHookManager`. ContextCompactor: `summarizeExchanges`. **R-HOOKS** | HOOKS event table ("twelve"); PROMPT_ENGINEERING summary prompt | — | M |
 | d | O-5a (scaffold; no protocol types) | new `sugar-crush-web/**` skeleton, root `composer.json`, `PROJECT_NAMES.md`, `docs/MATCHUPS.md`, root `README.md` lib table, `docs/index.html`, `docs/_data/sugar-crush-web.*`, `docs/lib/` (generated), `codecov.yml`, `scripts/bootstrap-org-repos.sh`, `.github/workflows/web.yml`, `media/icons/sugar-crush-web.png` | — | root README lib table only | root force-all; sugar-crush-web | M |
-| e | 5.6, P-A4 | `src/Runtime.php`, `src/Chat.php`, `src/Renderer.php`, `src/Host/TitleService.php`, `src/Palette/PaletteAction.php`, new `builtin-commands/NNNN-context.php`, `src/Context/ContextBreakdown.php`, `src/Commands/ContextCommand.php` | RT: new `promptSectionSizes`. Chat: **CS** (inline title + `TitleSource` latch), `handleRenameCommand`, `runRootPaletteAction`, `selectSessionTab`. RN: tab strip, `renderInput` | README slash roster (generated); COMMANDS (generated; `/rename`, `/sessions` hints row-scoped) | — | M |
-| f | N-P3b, 5.4-2 | `src/Chat.php`, `src/Backend/EngineBackend.php`, `src/Palette/PaletteState.php`, `src/Memory/MemoryHistory.php` (new), `tools/check-child-lifetimes.php` roster | Chat: `handleModelCommand`, `selectPaletteProvider`, `handleMemoryCommand`, `memoryHelpResponse`. EB: ctor + withers (`withModel`, also used by 4.1-1) | README "Choosing a backend"; MEMORY "/memory" | — | M |
-| g | 1.C-5, 1.C-4b (`cancel_tool`), P-B3 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Chat.php`, `src/Renderer.php`, `src/Tui/Components/AgentDashboardPane.php`, `src/App/App.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, new `src/Tui/AgentStrip.php` | RT: `executeConcurrently` `poll`. EB: `runCompleteInChild`. TT: `setup`. Chat: `route` key arms, `handlePointer` agent arm (strip focus state lives on `App`). RN: `renderView` strip, `renderAgentView`. **R-KEYBIND** | PERMISSIONS (parallel-child caveat); README "Keys" | — | L |
-| h | 5.11-1, 5.5-2, 5.5-4 | `src/Permissions/PermissionGate.php`, `src/MCP/McpTool.php`, `src/Tools/McpToolBridge.php`, `src/Cli/Bootstrap.php`, `src/Tools/BuiltIn/Doctor.php`, new `src/RepoMap/CtagsSymbolExtractor.php`, `src/Tools/BuiltIn/RepoMapTool.php` | BS: capability-probe sites | PERMISSIONS "What auto classifies"; README MCP bullet :1311, "Dependency-free shell-out"; MCP.md | — | M |
-| i | 4.3-3, 5.14g | `src/Sessions/BackgroundSupervisor.php`, `src/Chat.php`, `src/Cli/Bootstrap.php` | Chat: `init`, `submit` (`!` branch). BS: `chat` wiring. **R-STATE** | ARCHITECTURE "Sessions and state" (bg row); README Limitations, "Using the TUI" (`!cmd`); PERMISSIONS (`!cmd` note) | — | M |
-| j | O-3a (+ `suggest: sugarcraft/sugar-crush-web`) | `composer.json` (sugar-crush), `src/Support/ForkedChild.php`, `src/Backend/EngineBackend.php`, `src/Cli/{ParsedArgs,Subcommands,Help,NonInteractive}.php`, new `src/Cli/Serve.php`, `src/Server/**`, `src/Config/Settings/Definitions/Server.php` | EB: `completeAsync` child branch (fd close). **R-CLI** | README "Subcommands"; ENVIRONMENT `SUGARCRUSH_SERVER_*`; new docs/SERVER.md; ARCHITECTURE "Dependencies" | — | L |
 
 #### W6 (order: a, b, c, d, e, f, g, h, i, j)
 
@@ -9483,8 +9429,8 @@ Columns:
 | a | 2.7-1b, 2.7-2, 2.7-3 | `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Providers/{CompleteRequest,SglangProvider,VertexProvider,BedrockProvider,ProviderStreamException}.php` | EB: `runTurn` `after-step` + run wrapper. RT: `runStreaming`. SG: request params (not `formatMessages`) | README "What you see" (notice wording) | — | L |
 | b | O-2g | `src/Chat.php`, new `src/Host/{TurnController,SessionHost,SessionHub,SubmitOptions,TurnTicket,SessionSnapshot}.php` | Chat: `submit`…`releaseQueuedPrompts`, `userTurnMessage`, `dispatchTurn`, custom-command expansion, turn hooks, `subscriptions` | README "Architecture"; ARCHITECTURE | — | L |
 | c | 2.4-2, 5.4-1, 2.3 | `src/Host/CompactionService.php`, `src/Backend/EngineBackend.php`, `src/Cli/{Bootstrap,Help}.php`, new `src/Backend/SummarisesWithCache.php`, `src/Memory/CompactionJournal.php`, `src/Context/Pruning/Strategies/*` (4 new) | CompactionService: `buildSummarizationRequest`, `scheduleParkedCompaction`, `compactNow`, `applyModelCompaction`. EB: new `summariseAsync`. BS: `summaryBackend`, `toollessBackend`. `Help` env-var wording only | README :1129-1143; ENVIRONMENT `SUGARCRUSH_SUMMARY_MODEL` | — | M–L |
-| d | 2.2-2, 3.B-2 | `src/Backend/EngineBackend.php`, `src/Host/{TurnRunner,TranscriptStore}.php`, `src/Session/EnhancedSessionStore.php`, `src/Runtime.php`, new `src/Context/Pruning/RefTag.php`, `builtin-commands/NNNN-{sweep,pruning}.php`, `src/Config/Settings/Definitions/Context.php` | EB: `toTypedMessages`, `encodeEvent`/`decodeEvent`, `runCompleteInChild`, `settleFromResultFrame`. RT: `buildMessages`. **TR, R-SCHEMA** | ARCHITECTURE frame table; COMMANDS/SETTINGS (generated); PROMPT_ENGINEERING ref tags | — | L |
-| e | 4.1-1, 4.1-2, P-C1 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/App/App.php`, `src/Agents/{AgentPreset,Agent,AgentPresetRegistry,AgentManager,SuspendedDelegations}.php`, `src/Permissions/PermissionMode.php`, `src/Host/TranscriptProjector.php`, new `src/Agents/Live/{SubAgentTranscriptLog,AgentTranscriptTail}.php`, `src/Config/Settings/Definitions/Subagents.php` | TT: `schema`, `setup`. EB: `runTurn` `build`, `withReasoningEffort`, `resolveHookManager`. RT: `run`. BS: `agentManager`. **R-STATE** (subagents dir) | AGENTS_AUTHORING intro, provenance; PERMISSIONS (sub-agent mode); ARCHITECTURE "Sessions and state" | — | L |
+| d | 2.2-2, 3.B-2, 5.6 remainder (pruned rows in the `/context` breakdown) | `src/Backend/EngineBackend.php`, `src/Context/ContextBreakdown.php`, `src/Commands/ContextCommand.php`, `src/Host/{TurnRunner,TranscriptStore}.php`, `src/Session/EnhancedSessionStore.php`, `src/Runtime.php`, new `src/Context/Pruning/RefTag.php`, `builtin-commands/NNNN-{sweep,pruning}.php`, `src/Config/Settings/Definitions/Context.php` | EB: `toTypedMessages`, `encodeEvent`/`decodeEvent`, `runCompleteInChild`, `settleFromResultFrame`. RT: `buildMessages`. **TR, R-SCHEMA** | ARCHITECTURE frame table; COMMANDS/SETTINGS (generated); PROMPT_ENGINEERING ref tags | — | L |
+| e | 4.1-1 (+ N-P3b remainder: rebind the provider's model so `withModel()` also moves `contextWindow()`/prices), 4.1-2, P-C1 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/App/App.php`, `src/Agents/{AgentPreset,Agent,AgentPresetRegistry,AgentManager,SuspendedDelegations}.php`, `src/Permissions/PermissionMode.php`, `src/Host/TranscriptProjector.php`, new `src/Agents/Live/{SubAgentTranscriptLog,AgentTranscriptTail}.php`, `src/Config/Settings/Definitions/Subagents.php` | TT: `schema`, `setup`. EB: `runTurn` `build`, `withReasoningEffort`, `resolveHookManager`. RT: `run`. BS: `agentManager`. **R-STATE** (subagents dir) | AGENTS_AUTHORING intro, provenance; PERMISSIONS (sub-agent mode); ARCHITECTURE "Sessions and state" | — | L |
 | f | 5.3-2, 5.5-5 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Context/{MemoryBlock,RepoMapBlock}.php`, new `src/Memory/{HybridMemoryRanker,EmbeddingCache}.php`, `src/Context/{MemoryRecallBlock,SymbolMapBlock}.php`, `src/Config/Settings/Definitions/Memory.php` | RT: `systemPromptSections` (fragment, repo-map slot), `repoMapSnapshot`. EB: `completeAsync` (pre-fork snapshot) | MEMORY "Recall"; PROMPT_ENGINEERING slots | — | M |
 | g | 3.F, 3.G | `src/Cli/Bootstrap.php`, `src/LSP/LspClient.php`, `src/Tools/BuiltIn/{LspTool,Read}.php`, `src/Chat.php`, new `src/LSP/LspLauncher.php`, `src/Hooks/BuiltIn/{PostEditDiagnosticsHook,AutoCommitHook}.php`, `src/Workspace/{AutoCommitter,CommitMessageWriter}.php`, `src/Config/Settings/Definitions/{Lsp,Git}.php` | BS: `lspTool`, `tools` callers, `lspClient`, `hooks`. Chat: `route` AssistantMsg arm, `/undo` handler. **R-HOOKS** | README Capabilities Tools (`Lsp` paragraph); ARCHITECTURE "Tools"; HOOKS built-ins | — | L |
 | h | 5.12, 5.13b | `src/Tools/BuiltIn/Bash.php`, `src/Tools/Concerns/CapturesProcessOutput.php`, `src/Providers/ProviderFactory.php`, new `src/Tools/Sandbox/Bubblewrap.php`, `src/Providers/FallbackProvider.php`, `src/Config/Settings/Definitions/Tools.php` | — | PERMISSIONS new "Sandbox"; README "Providers"; ARCHITECTURE provider prose | — | M |
@@ -9540,7 +9486,7 @@ Columns:
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 3.I-3, 5.11-2 | `src/Permissions/PermissionGate.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/ApplyPatch.php`, `src/Tools/Edit/PatchParser.php`, `src/Permissions/{ExecReviewer,ReviewVerdict}.php`, `src/Config/Settings/Definitions/Permissions.php` | BS: `permissionGate` | PERMISSIONS write-capable list, "What auto classifies", circuit breaker; HOOKS protect-files path table | — | L |
+| a | 3.I-3, 5.11-2 (incl. security findings force Ask in `auto`) | `src/Permissions/PermissionGate.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/ApplyPatch.php`, `src/Tools/Edit/PatchParser.php`, `src/Permissions/{ExecReviewer,ReviewVerdict}.php`, `src/Config/Settings/Definitions/Permissions.php` | BS: `permissionGate` | PERMISSIONS write-capable list, "What auto classifies", circuit breaker; HOOKS protect-files path table | — | L |
 | b | 5.7-2 | new `src/Tools/BuiltIn/{PlanExitTool,AskUserTool}.php`, `src/Cli/NonInteractive.php` | — | PERMISSIONS "`Ask` needs somewhere to ask" | — | M |
 | c | 4.5 | `src/Runtime.php`, `src/Tools/BuiltIn/TaskTool.php` (new `withBoard` method), new `src/Agents/Board/**`, `src/Tools/BuiltIn/{BoardReadTool,BoardPostTool}.php`, `src/Hooks/BuiltIn/BoardNoticeHook.php`, `src/Tools/SharesBoard.php`, `src/Cli/Bootstrap.php` | RT: `executeConcurrently` `ledger`. TT: class (new method only). BS: `hooks` (BoardNoticeHook). **R-STATE** (board dir), **R-HOOKS** | ARCHITECTURE "Sessions and state" | — | M |
 | d | P-E3 | `src/Chat.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Commands/KeyBindingRegistry.php` | Chat: `route` Ctrl+X b arm. TT: `execute`. **R-KEYBIND** | README "Keys" | — | M |
@@ -9579,30 +9525,24 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-### 5. Step index (107 steps)
+### 5. Step index (91 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
 **Wave-0 fixes**
 
 **Foundations**
-- 1.C-4b S · 1.C-1, RELAY · W5-g
-- 1.C-5 S–M · 1.C-2, RELAY · W5-g
 
 **Context engine**
-- 2.2-1 M · 2.1, 0.2 · W5-a
 - 2.2-2 M · 2.2-1, 1.B-2 · W6-d
 - 2.3 S–M · 2.2-1 · W6-c
-- 2.4-1 M · 2.2-1 · W5-a
 - 2.4-2 M · 2.4-1, O-2e · W6-c
-- 2.5 S–M · 1.B-3, O-2e · W5-c
 - 2.6 M · 1.A-2, 2.5 · W9-a
 - 2.7-1b M · 2.7-1a, 2.4-1 · W6-a
 - 2.7-2 M · 2.7-1b · W6-a
 - 2.7-3 S · 2.7-2 · W6-a
 - 2.10 M · 2.9, 2.5, O-2g · W8-b
 - 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
-- 2.12 S–M · 1.B-3, O-2e · W5-c
 
 **Safety and self-management**
 - 3.B-2 S–M · 2.2-2, 2.3 · W6-d
@@ -9622,7 +9562,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 4.1-1 S–M · N-P0, N-P3b · W6-e
 - 4.1-2 M · 4.1-1, 4.2 · W6-e
 - 4.3-2 M–L · 4.3-1, P-B1, 1.A-2 · W8-e
-- 4.3-3 M · 4.3-1 · W5-i
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
 - 4.5 M · RELAY · W10-c
 - 4.6-2 M–L · 4.6-1, 4.3-2, P-D1 · W9-g
@@ -9634,30 +9573,25 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Memory, codebase understanding, UX, integrations**
 - 5.3-2 M · 5.3-1, 1.A-2 · W6-f
 - 5.4-1 S · 5.1-2, O-2e · W6-c
-- 5.4-2 M · 5.1-2 · W5-f
 - 5.4-3 M · 5.4-1, 5.4-2, 5.2 · W7-i
-- 5.5-2 S–M · 5.5-1 · W5-h
-- 5.5-4 S · 5.5-3, DH-TOOLS · W5-h
 - 5.5-5 S · 5.5-4, 1.A-2 · W6-f
-- 5.6 S · 2.1, DH-CMDS · W5-e
+- 5.6 remainder (pruned items in the `/context` breakdown) S · 3.B-2 · W6-d
 - 5.7-1 M · 4.1-2, DEF-MODE, D8 · W9-j
 - 5.7-2 M · 5.7-1, 1.C-2 · W10-b
 - 5.9-1 M · — · W10-h
 - 5.9-2 M · 5.9-1, O-2g · W10-h
-- 5.11-1 S · — · W5-h
-- 5.11-2 M · 1.C-2, N-P2 · W10-a
+- 5.11-2 (incl. security findings force Ask in `auto`) M · 1.C-2, N-P2 · W10-a
 - 5.12 M · 0.4 · W6-h
 - 5.13b M · 2.7-1a, N-P3b · W6-h
 - 5.14a S · 1.C-2 · W8-j
 - 5.14b S–M · O-2g · W8-j
 - 5.14c M · 2.5, P-A1 · W10-e
 - 5.14d S · 0.8 · W10-e
-- 5.14g S–M · — · W5-i
 - 5.14i M · 1.A-2 · W10-f
 - 5.14l S–M · O-2g · W10-f
 
 **Settings**
-- N-P3b S–M · N-P2, N-P3a · W5-f
+- N-P3b remainder (provider-level model rebind behind `EngineBackend::withModel()`) S · 4.1-1 · W6-e
 - N-P3 M · N-P2, N-P3a · W6-j
 - N-P4a M · N-P3, 1.C-1 · W7-j
 - N-P4b M · N-P3, 2.1, 2.9 · W9-h
@@ -9669,8 +9603,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-A4 S–M · P-A1, O-2d · W5-e
-- P-B3 S–M · P-B2 · W5-g
 - P-C1 M · P-B1, RELAY, O-2f · W6-e
 - P-C2 M · P-C1 · W7-f
 - P-D1 M · P-B1, 1.C-3 · W7-e
@@ -9681,10 +9613,8 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-2f M–L · O-2b, 1.C-2, 1.C-4a · W5-b
 - O-2g L · O-2f · W6-b
 - O-2h L · O-2g, DH-CMDS · W7-b
-- O-3a L · O-0, P-A3 · W5-j
 - O-3b L · O-3a, O-2g · W7-c
 - O-3c S–M · O-3b · W7-c
 - O-4a M · O-3a · W6-i
@@ -9726,9 +9656,7 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 | 1.B "give Message `uiOnly`" | Done (`Message::$uiOnly`, `agentVisible()`). |
 | 3.C "dormant `TaskList`" | `TaskList` is the team queue; only `SessionMeta::$tasks` fits a todo. |
 | 3.D JSON hook stdout as wholly new | Exit-code equivalents and `refusedBy` exist (3.D is PARTIAL). |
-| 4.3 "wire `reconnect()`" | Wiring alone is a no-op: it reads in-memory sessions and the IPC dir is per-process random (4.3-3). |
 | 5.1 "index ≤200 lines/25 KB" as new | `MemoryStore` already builds that index; only injection is missing. |
-| 5.6 status bar `ctx % · tokens · cache % · $` | Done; only `/context` and the system-prompt + tools basis (2.1) remain. |
 | 5.7 "command guard", "Shift+Tab toggle" | The guard exists (`evaluatePlan`). Shift+Tab is `shell.pane-prev` (D8). |
 | 5.11 "escalate after 3 denials" | Exists (`STRIKE_THRESHOLD`). |
 | 5.14 `$skill` as wholly new | A session-scoped equivalent exists (Ctrl+S picker). |
