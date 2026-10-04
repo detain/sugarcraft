@@ -487,7 +487,7 @@ executing `PermissionRule::matchesToolName('Doctor', 'doctor')` — `false`.
 
 ### `Ask` needs somewhere to ask
 
-`Ask` is only meaningful where somewhere to ask exists. There are now three
+`Ask` is only meaningful where somewhere to ask exists. There are now four
 situations, not two:
 
 - **`Chat`** shows a modal and settles the paused call — on its own tool path
@@ -527,6 +527,22 @@ situations, not two:
     the rest of the turn. Only a member whose channel could not be opened is
     still refused, with a reason the model reads (`approval from a parallel
     sub-agent is not yet supported; run it alone or allow it by rule`).
+- **`sugarcrush serve`** puts the question to every client following the
+  session (`docs/SERVER.md`, *Permissions over the wire*). An engine turn
+  started by `session.send` runs through the same `completeInteractive()`
+  channel the TUI uses; the session's host keeps the open question's handle,
+  and the question goes out as the durable `permission.requested` event. Any
+  client may answer with `permission.respond` — **the first valid answer
+  wins**, and a later one is refused `already_resolved` with the winner. A
+  client that reconnects is handed every question still open, whatever its
+  cursor. `always` is remembered for that session exactly as `a` + `y` is in
+  the TUI (`remember: "project"` is refused — permission rules are user-tier
+  only), and a reject sent with `cascade: true` rejects the session's other
+  open questions and stops the turn at its next step. With
+  `server.askTimeoutSeconds` set, a question nobody answers in time is
+  refused; unset (the default), it waits. Server sessions start in `default`,
+  and a client may not move one to `bypass-permissions` or `dont-ask` unless
+  the server was started with `--allow-bypass`.
 - **The console paths** attach `HeadlessPermissionPrompt` as `Runtime`'s
   approver. At a terminal it asks on **stderr** and reads the answer from
   stdin, granting only on a literal `y`/`yes`. With no terminal it does not

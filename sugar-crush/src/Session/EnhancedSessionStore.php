@@ -2009,17 +2009,23 @@ final class EnhancedSessionStore
      * before they are returned, so no read cursor stays open across a later
      * INSERT (the WAL note on this store).
      *
+     * $throughSeq bounds the page from above (roadmap O-3b, Appendix O §6.8):
+     * a subscriber replays exactly the events up to the seq it was told when
+     * it subscribed, and hears everything after it live — so an event logged
+     * while the replay is paging is delivered once, live, never twice.
+     *
      * @return list<array{seq: int, ts: int, type: string, payload: array<string, mixed>}>
      */
-    public function sessionEvents(string $sessionId, int $afterSeq = 0, int $limit = 200): array
+    public function sessionEvents(string $sessionId, int $afterSeq = 0, int $limit = 200, ?int $throughSeq = null): array
     {
         $stmt = $this->pdo->prepare('
             SELECT seq, ts, type, payload FROM session_events
-            WHERE session_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?
+            WHERE session_id = ? AND seq > ? AND seq <= ? ORDER BY seq ASC LIMIT ?
         ');
         $stmt->bindValue(1, $sessionId);
         $stmt->bindValue(2, $afterSeq, PDO::PARAM_INT);
-        $stmt->bindValue(3, max(1, $limit), PDO::PARAM_INT);
+        $stmt->bindValue(3, $throughSeq ?? PHP_INT_MAX, PDO::PARAM_INT);
+        $stmt->bindValue(4, max(1, $limit), PDO::PARAM_INT);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $stmt->closeCursor();

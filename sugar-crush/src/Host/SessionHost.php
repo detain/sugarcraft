@@ -8,7 +8,9 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\InteractiveTurn;
+use SugarCraft\Crush\Backend\PendingAsk;
 use SugarCraft\Crush\BackendToolEventsMsg;
 use SugarCraft\Crush\BangShellResultMsg;
 use SugarCraft\Crush\Chat;
@@ -20,6 +22,8 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommands;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
+use SugarCraft\Crush\Events\PermissionAsked;
+use SugarCraft\Crush\Events\PermissionResolved;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookEvent;
@@ -30,6 +34,10 @@ use SugarCraft\Crush\Host\Commands\CommandEffectKind;
 use SugarCraft\Crush\Host\Commands\CommandResult;
 use SugarCraft\Crush\Host\Commands\CommandText;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Permissions\PermissionReply;
+use SugarCraft\Crush\Permissions\SafetyClassifier;
 use SugarCraft\Crush\Permissions\SessionPermissionMemo;
 use SugarCraft\Crush\Session\SessionLock;
 use SugarCraft\Crush\ToolCall;
@@ -74,6 +82,16 @@ use SugarCraft\Crush\Util\TokenTracker;
  * server calls it on its own tick) and whatever is left folds when the turn
  * settles. A queued prompt goes out as soon as the turn before it settles.
  *
+ * QUESTIONS ARE ANSWERED HERE, NOT IN A MODAL (roadmap O-3b, Appendix O §5.3,
+ * §6.7). A turn's {@see PermissionAsked} carries the {@see PendingAsk} the
+ * child is blocked on; this host keeps it, by `askId`, until it is settled,
+ * so any client — the first to answer — can reach the child through
+ * {@see answer()}, and a client that reconnects is handed the questions still
+ * open ({@see pendingAsks()}). An `always` becomes this session's grant for
+ * every later turn, as the TUI's does, and a session may run in a permission
+ * mode of its own ({@see setPermissionMode()}) without touching the
+ * workspace's gate.
+ *
  * MUTABLE ON PURPOSE, like {@see TurnRunner}: a host is the live state of one
  * session (its rows, its queue, its turn in flight), not a value, and
  * {@see SessionHub} owns one per open session.
@@ -112,6 +130,26 @@ final class SessionHost
     /** @var array<string, CommandSpec> */
     private readonly array $customCommands;
 
+    /** @var array<string, PendingAsk> the turn's open questions, by askId */
+    private array $pendingAsks = [];
+
+    /**
+     * How recent questions were settled, by askId — what a late second
+     * answer is told it lost to. Bounded: only the newest are kept.
+     *
+     * @var array<string, PermissionResolved>
+     */
+    private array $resolutions = [];
+
+    /** The session's "always" answers, handed to every later turn's gate. */
+    private SessionPermissionMemo $grants;
+
+    /** The mode this session's turns run in; null is the workspace gate's. */
+    private ?PermissionMode $permissionMode = null;
+
+    /** How many settled questions {@see resolution()} remembers. */
+    private const RESOLUTIONS_KEPT = 64;
+
     /**
      * @param list<Message> $history
      * @param array<string, CommandSpec>|null $customCommands
@@ -127,6 +165,7 @@ final class SessionHost
     ) {
         $this->history = array_values($history);
         $this->inbox = new \ArrayObject();
+        $this->grants = SessionPermissionMemo::new();
         $this->spend = new TokenTracker();
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
         $root = $this->root();
@@ -263,6 +302,134 @@ final class SessionHost
         });
     }
 
+    /** The session's durable event log, or null when its store keeps none. */
+    public function events(): ?EventLog
+    {
+        return $this->transcripts->events();
+    }
+
+    /**
+     * Record $event for this session through the path a turn's own events
+     * take — logged first when durable, then heard by every listener — for
+     * the facts only a driver knows (a prompt queued, the session's status).
+     * Returns the event as heard, or null when a durable write failed.
+     */
+    public function announce(SessionEvent $event): ?SessionEvent
+    {
+        return $this->runner()->announce($event, $this->transcripts, $this->sessionId);
+    }
+
+    /**
+     * The permission mode this session's turns run in: the one set by
+     * {@see setPermissionMode()}, else the workspace gate's, else null when
+     * the backend has no gate at all.
+     */
+    public function permissionMode(): ?PermissionMode
+    {
+        if ($this->permissionMode !== null) {
+            return $this->permissionMode;
+        }
+        $backend = $this->workspace->backend;
+
+        return $backend instanceof EngineBackend ? $backend->permissionGate()?->mode() : $this->workspace->permissionGate?->mode();
+    }
+
+    /**
+     * Run this session's NEXT turns in $mode (null: the workspace gate's).
+     * The turn in flight keeps the gate it was forked with. Whether a client
+     * may choose $mode is the caller's question (`ServerConfig::admitsPermissionMode()`).
+     */
+    public function setPermissionMode(?PermissionMode $mode): void
+    {
+        $this->permissionMode = $mode;
+    }
+
+    /** The session's remembered "always" answers. */
+    public function grants(): SessionPermissionMemo
+    {
+        return $this->grants;
+    }
+
+    /**
+     * The questions the running turn is blocked on, oldest first.
+     *
+     * @return list<PendingAsk>
+     */
+    public function pendingAsks(): array
+    {
+        return array_values($this->pendingAsks);
+    }
+
+    /**
+     * Answer the open question $askId, first answer wins (Appendix O §6.7).
+     * An `always` the question offers is remembered as this session's grant
+     * for every later turn. Returns how the question was settled, or null
+     * when no open question has that id — it was answered already (see
+     * {@see resolution()}), cancelled with its turn, or never asked here.
+     */
+    public function answer(string $askId, PermissionReply $reply, ?string $note = null): ?PermissionResolved
+    {
+        $ask = $this->pendingAsks[$askId] ?? null;
+        if ($ask === null) {
+            return null;
+        }
+        unset($this->pendingAsks[$askId]);
+
+        $remember = $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled();
+        if (!$ask->reply($reply, $note)) {
+            return null;
+        }
+        if ($remember) {
+            $this->grants = $this->grants->withGrant($ask->tool, $ask->arguments);
+        }
+        $resolution = $ask->resolution();
+        if ($resolution !== null) {
+            $this->remember($resolution);
+        }
+
+        return $resolution;
+    }
+
+    /** How the question $askId was settled, when it was settled recently here. */
+    public function resolution(string $askId): ?PermissionResolved
+    {
+        return $this->resolutions[$askId] ?? null;
+    }
+
+    /**
+     * Ask the running turn to stop at its next step boundary, letting the tool
+     * in flight finish (`cancel_soft`, Appendix O §5.1). The turn settles on
+     * its own; nothing is healed here.
+     *
+     * @return bool whether a turn was asked
+     */
+    public function cancelSoft(): bool
+    {
+        if ($this->turn === null || $this->turn->isCancelled()) {
+            return false;
+        }
+        $this->turn->cancelSoft();
+
+        return true;
+    }
+
+    /**
+     * Drop the queued prompt at $index (0 is the next to go out).
+     *
+     * @return string|null the prompt dropped, or null when there was none there
+     */
+    public function removeQueued(int $index): ?string
+    {
+        if (!isset($this->queue[$index])) {
+            return null;
+        }
+        $removed = $this->queue[$index];
+        unset($this->queue[$index]);
+        $this->queue = array_values($this->queue);
+
+        return $removed;
+    }
+
     /**
      * Submit $text to the session (see the class docblock for the order it is
      * judged in) and say how it was admitted.
@@ -303,6 +470,7 @@ final class SessionHost
         $this->workflowTurn = false;
         $this->generation++;
         $this->inbox->exchangeArray([]);
+        $this->settleOpenAsks('the turn was cancelled');
         $this->history = array_map(static function (Message $message): Message {
             if ($message->pendingToolCallId === null) {
                 return $message;
@@ -610,6 +778,7 @@ final class SessionHost
                 return TurnTicket::refused($refusal->content);
             }
             $baseHistory = $tier['history'];
+            $this->announceCompaction($tier, $tokenCount);
             foreach ([$tier['compactionNotice'], $tier['truncationNotice']] as $report) {
                 if ($report instanceof Message) {
                     $reports[] = $report;
@@ -1038,7 +1207,7 @@ final class SessionHost
                 $this->spentUsd(),
                 $this->compactor->config(),
                 $this->sessionId,
-                SessionPermissionMemo::new(),
+                $this->grants,
             ),
             history: $this->history,
             inbox: $this->inbox,
@@ -1091,7 +1260,9 @@ final class SessionHost
             }
 
             $this->calibration = $this->meter()->calibrationFrom($this->estimateAtDispatch, $reply->usage) ?? $this->calibration;
+            $this->foldLeftoverAnswers($generation);
             $this->inbox->exchangeArray([]);
+            $this->settleOpenAsks('the turn ended');
             $this->history[] = $reply;
             $this->turn = null;
             $this->save();
@@ -1141,7 +1312,91 @@ final class SessionHost
             return;
         }
 
+        if ($event instanceof PermissionAsked) {
+            $this->pendingAsks[$event->ask->askId] = $event->ask;
+        } elseif ($event instanceof PermissionResolved) {
+            unset($this->pendingAsks[$event->askId]);
+            $this->remember($event);
+        }
+
         $runner->recordEvent($turn, $event);
+    }
+
+    /**
+     * The settlements a turn reported after its last fold — a question its
+     * end cancelled — logged without the turn, which has already closed: the
+     * runner's turn state is gone by the time the reply lands, so they are
+     * announced directly, never left for a client to wait on.
+     */
+    private function foldLeftoverAnswers(int $generation): void
+    {
+        foreach ($this->inbox->getArrayCopy() as [$entryGeneration, $event]) {
+            if ($entryGeneration !== $generation || !$event instanceof PermissionResolved) {
+                continue;
+            }
+            unset($this->pendingAsks[$event->askId]);
+            $this->announceResolution($event);
+        }
+    }
+
+    /**
+     * Settle every question still open as cancelled — its turn is gone — and
+     * say so in the log, so no client keeps a card up for a child that will
+     * never read the answer.
+     */
+    private function settleOpenAsks(string $reason): void
+    {
+        $open = $this->pendingAsks;
+        $this->pendingAsks = [];
+        foreach ($open as $ask) {
+            $ask->cancel($reason);
+            $this->announceResolution($ask->resolution() ?? PermissionResolved::cancelled($ask->askId, $reason));
+        }
+    }
+
+    /**
+     * `compaction.completed` for the automatic tier's rewrite, when it made
+     * one (Appendix O §6.5): which route ran and what it bought, so a client
+     * can say why the transcript just got shorter.
+     *
+     * @param array<string, mixed> $tier {@see TurnController::inlineTier()}'s answer
+     */
+    private function announceCompaction(array $tier, int $before): void
+    {
+        $kind = match (true) {
+            $tier['compactionNotice'] instanceof Message => 'heuristic',
+            $tier['truncationNotice'] instanceof Message => 'truncate',
+            default => null,
+        };
+        if ($kind === null) {
+            return;
+        }
+        $after = (int) ($tier['tokenCount'] ?? $before);
+        $this->runner()->announce(SessionEvent::new(SessionEvent::COMPACTION_COMPLETED, [
+            'kind' => $kind,
+            'before' => $before,
+            'after' => $after,
+            'savedPct' => $before > 0 ? round(100 * max(0, $before - $after) / $before, 1) : 0.0,
+        ], $this->sessionId), $this->transcripts, $this->sessionId);
+    }
+
+    private function announceResolution(PermissionResolved $resolution): void
+    {
+        $this->remember($resolution);
+        $runner = $this->runner();
+        $event = $runner->projector()->backendEvent($resolution, $this->sessionId, null);
+        if ($event !== null) {
+            $runner->announce($event, $this->transcripts, $this->sessionId);
+        }
+    }
+
+    private function remember(PermissionResolved $resolution): void
+    {
+        unset($this->resolutions[$resolution->askId]);
+        $this->resolutions[$resolution->askId] = $resolution;
+        if (\count($this->resolutions) > self::RESOLUTIONS_KEPT) {
+            array_shift($this->resolutions);
+        }
     }
 
     // ── collaborators ──────────────────────────────────────────────────
@@ -1161,9 +1416,28 @@ final class SessionHost
         return $this->meter()->estimate($history, $this->calibration);
     }
 
+    /**
+     * The workspace's backend, judged by this session's own permission mode
+     * when it has one: a gate in that mode over the same rules, so a client
+     * choosing `accept-edits` for one session changes nothing for another.
+     */
     private function backend(): Backend
     {
-        return $this->workspace->backend ?? throw new \LogicException('This session has no backend.');
+        $backend = $this->workspace->backend ?? throw new \LogicException('This session has no backend.');
+        if ($this->permissionMode === null || !$backend instanceof EngineBackend) {
+            return $backend;
+        }
+        $gate = $backend->permissionGate();
+        if ($gate !== null && $gate->mode() === $this->permissionMode) {
+            return $backend;
+        }
+
+        return $backend->withPermissionGate(new PermissionGate(
+            $this->permissionMode,
+            $gate?->rules() ?? [],
+            new SafetyClassifier(),
+            'session',
+        ));
     }
 
     private function root(): string

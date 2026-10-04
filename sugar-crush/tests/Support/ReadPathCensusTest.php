@@ -506,6 +506,10 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — a scope index this store wrote',
             'SELF_LOCATED — an entry this store wrote',
         ],
+        'Protocol/Methods/FilesMethods.php|file_get_contents' => [
+            'PATH_JAIL — `files.read` (roadmap O-3b): a path a server client named, resolved through '
+                . 'PathJail::resolve() against the served project root before it is read, size-capped',
+        ],
         'Providers/ModelMetadata.php|file_get_contents' => [
             'OWNED_HOME — readCache(): `~/.sugar-crush/cache/model_prices_and_context_window.json` under '
                 . 'HomeDirectory::owned() on the production path, new(); cachedAt() is the test and embedder '

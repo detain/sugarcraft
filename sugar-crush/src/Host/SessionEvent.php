@@ -52,6 +52,11 @@ final class SessionEvent
     public const SUBAGENT_FINISHED = 'subagent.finished';
     public const USAGE_UPDATED = 'usage.updated';
     public const SPEND_CAP_BREACHED = 'spend_cap.breached';
+    public const SESSION_STATUS = 'session.status';
+    public const TURN_QUEUED = 'turn.queued';
+    public const TURN_DEQUEUED = 'turn.dequeued';
+    public const TURN_STEERED = 'turn.steered';
+    public const COMPACTION_COMPLETED = 'compaction.completed';
 
     /**
      * The types Appendix O §6.5 marks durable (D) among those this package
@@ -70,6 +75,11 @@ final class SessionEvent
         self::SUBAGENT_FINISHED,
         self::USAGE_UPDATED,
         self::SPEND_CAP_BREACHED,
+        self::SESSION_STATUS,
+        self::TURN_QUEUED,
+        self::TURN_DEQUEUED,
+        self::TURN_STEERED,
+        self::COMPACTION_COMPLETED,
     ];
 
     /** `turn.completed`'s `stopReason` values (Appendix O §6.5). */

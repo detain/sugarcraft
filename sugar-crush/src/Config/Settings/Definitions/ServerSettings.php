@@ -23,9 +23,9 @@ use SugarCraft\Crush\Server\ServerConfig;
  * bypass modes. A non-loopback `server.host` still needs `--allow-remote` on
  * the command line each launch.
  *
- * Only the keys `serve` reads today are here; the session caps
- * (`server.maxConcurrentTurns`, `server.maxOpenSessions`, …) join when the
- * protocol that enforces them does.
+ * The session caps and the answer timeout are the `sugarcrush.v1` protocol's
+ * (roadmap O-3b): how many sessions a server keeps open, how many turns run at
+ * once, and how long a permission question waits.
  */
 final class ServerSettings implements SettingDefinitionSet
 {
@@ -77,6 +77,30 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withUi(UiEditability::List)
                 ->withLabel('Server trusted proxies')
                 ->withHelp('IPs or CIDRs whose X-Forwarded-For / X-Forwarded-Proto the server believes.')
+                ->withReaderSymbol(ServerConfig::class . '::resolve')
+                ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            SettingDefinition::new('server.maxOpenSessions', SettingType::Int, ServerConfig::DEFAULT_MAX_OPEN_SESSIONS)
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withRange(1, null)
+                ->withLabel('Server open sessions')
+                ->withHelp('Sessions a server keeps open at once; past it the least recently used idle one is released.')
+                ->withReaderSymbol(ServerConfig::class . '::resolve')
+                ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            SettingDefinition::new('server.maxConcurrentTurns', SettingType::Int, ServerConfig::DEFAULT_MAX_CONCURRENT_TURNS)
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withRange(1, null)
+                ->withLabel('Server concurrent turns')
+                ->withHelp('Turns a server runs at once across its sessions; one more is refused busy (retryable).')
+                ->withReaderSymbol(ServerConfig::class . '::resolve')
+                ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            SettingDefinition::new('server.askTimeoutSeconds', SettingType::Float, ServerConfig::DEFAULT_ASK_TIMEOUT_SECONDS)
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withRange(0, null)
+                ->withLabel('Server permission-question timeout')
+                ->withHelp('Seconds a permission question waits for a client before it is refused; 0 waits forever.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.allowBypass', SettingType::Bool, false)

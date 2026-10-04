@@ -52,6 +52,15 @@ final class ServerConfig
     /** Hosts a bind may name without `--allow-remote`. */
     public const LOOPBACK_HOSTS = ['127.0.0.1', '::1', 'localhost'];
 
+    /** Appendix O §4.4: sessions open at once (`server.maxOpenSessions`). */
+    public const DEFAULT_MAX_OPEN_SESSIONS = 32;
+
+    /** Appendix O §4.4: turns in flight at once (`server.maxConcurrentTurns`). */
+    public const DEFAULT_MAX_CONCURRENT_TURNS = 4;
+
+    /** Appendix O §6.7: 0 waits for a permission answer forever (`server.askTimeoutSeconds`). */
+    public const DEFAULT_ASK_TIMEOUT_SECONDS = 0.0;
+
     /**
      * @param list<string> $allowedOrigins normalised `scheme://host[:port]`
      * @param list<string> $allowedHosts   lower-cased `host` or `host:port`
@@ -71,6 +80,9 @@ final class ServerConfig
         public readonly PermissionMode $permissionMode,
         public readonly string $stateDir,
         public readonly ?string $root,
+        public readonly int $maxOpenSessions = self::DEFAULT_MAX_OPEN_SESSIONS,
+        public readonly int $maxConcurrentTurns = self::DEFAULT_MAX_CONCURRENT_TURNS,
+        public readonly float $askTimeoutSeconds = self::DEFAULT_ASK_TIMEOUT_SECONDS,
     ) {
     }
 
@@ -148,6 +160,16 @@ final class ServerConfig
         $webRoot = $flags['--web-root'] ?? (isset($env['SUGARCRUSH_SERVER_WEB_ROOT']) && $env['SUGARCRUSH_SERVER_WEB_ROOT'] !== '' ? $env['SUGARCRUSH_SERVER_WEB_ROOT'] : null);
         if (\is_string($webRoot)) {
             $config = $config->withWebRoot($webRoot);
+        }
+
+        if (isset($userConfig['server.maxOpenSessions'])) {
+            $config = $config->withMaxOpenSessions(self::countValue('server.maxOpenSessions', $userConfig['server.maxOpenSessions'], 1));
+        }
+        if (isset($userConfig['server.maxConcurrentTurns'])) {
+            $config = $config->withMaxConcurrentTurns(self::countValue('server.maxConcurrentTurns', $userConfig['server.maxConcurrentTurns'], 1));
+        }
+        if (isset($userConfig['server.askTimeoutSeconds'])) {
+            $config = $config->withAskTimeoutSeconds(self::secondsValue('server.askTimeoutSeconds', $userConfig['server.askTimeoutSeconds']));
         }
 
         $allowBypassKey = $userConfig['server.allowBypass'] ?? false;
@@ -289,6 +311,34 @@ final class ServerConfig
         return $this->mutate(root: $root);
     }
 
+    public function withMaxOpenSessions(int $maxOpenSessions): self
+    {
+        if ($maxOpenSessions < 1) {
+            throw new ServerConfigException(\sprintf('server.maxOpenSessions must be at least 1; got %d', $maxOpenSessions));
+        }
+
+        return $this->mutate(maxOpenSessions: $maxOpenSessions);
+    }
+
+    public function withMaxConcurrentTurns(int $maxConcurrentTurns): self
+    {
+        if ($maxConcurrentTurns < 1) {
+            throw new ServerConfigException(\sprintf('server.maxConcurrentTurns must be at least 1; got %d', $maxConcurrentTurns));
+        }
+
+        return $this->mutate(maxConcurrentTurns: $maxConcurrentTurns);
+    }
+
+    /** 0 (the default) waits for a permission answer forever. */
+    public function withAskTimeoutSeconds(float $seconds): self
+    {
+        if ($seconds < 0) {
+            throw new ServerConfigException('server.askTimeoutSeconds must not be negative');
+        }
+
+        return $this->mutate(askTimeoutSeconds: $seconds);
+    }
+
     /** Whether the bind address is this machine only. */
     public function isLoopback(): bool
     {
@@ -393,6 +443,24 @@ final class ServerConfig
         }
 
         throw new ServerConfigException(\sprintf('server port "%s" is not a number', \is_scalar($value) ? (string) $value : \get_debug_type($value)));
+    }
+
+    private static function countValue(string $key, mixed $value, int $min): int
+    {
+        if (!\is_int($value) || $value < $min) {
+            throw new ServerConfigException(\sprintf('%s in the user config must be a whole number of at least %d', $key, $min));
+        }
+
+        return $value;
+    }
+
+    private static function secondsValue(string $key, mixed $value): float
+    {
+        if ((!\is_int($value) && !\is_float($value)) || $value < 0) {
+            throw new ServerConfigException(\sprintf('%s in the user config must be a number of seconds, 0 or more', $key));
+        }
+
+        return (float) $value;
     }
 
     /**

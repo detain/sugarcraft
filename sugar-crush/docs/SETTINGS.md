@@ -874,6 +874,9 @@ project-settable.
 | `server.allowedOrigins` | Server | list | `[]` | C | `SUGARCRUSH_SERVER_ALLOWED_ORIGINS` | restart | security |
 | `server.allowedHosts` | Server | list | `[]` | C | — | restart | security |
 | `server.trustedProxies` | Server | list | `[]` | C | — | restart | security |
+| `server.maxOpenSessions` | Server | int | `32` | C | — | restart | security |
+| `server.maxConcurrentTurns` | Server | int | `4` | C | — | restart | security |
+| `server.askTimeoutSeconds` | Server | number | `0` | C | — | restart | security |
 | `server.allowBypass` | Server | bool | `false` | C | — | restart | security |
 <!-- settings:end -->
 
@@ -937,7 +940,7 @@ Saved is not applied: see the next section for when each key takes effect.
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `embeddingModel` |
-| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.allowBypass` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.allowBypass` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,

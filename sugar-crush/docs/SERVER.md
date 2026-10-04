@@ -7,11 +7,10 @@ script drives sugar-crush through. It runs in the foreground until `Ctrl+C` or
 the engine's forked turns use, and serves one project root — the current
 directory or `--root`.
 
-This page covers the **transport**: binding, authentication, the WebSocket
-endpoint and the security model. The `sugarcrush.v1` method and event roster
-(sessions, turns, permission answers) lands with the protocol; until then a
-WebSocket request is answered with a well-formed JSON-RPC
-`-32601` / `data.kind: "not_implemented"` error (see [WebSocket](#websocket)).
+This page covers the **transport** — binding, authentication, the WebSocket
+endpoint and the security model — and the **`sugarcrush.v1` protocol** spoken
+over it: sessions, turns, events, permission answers
+([The `sugarcrush.v1` protocol](#the-sugarcrushv1-protocol)).
 [Background mode](#background-mode) and the verbs that manage a running server
 (`serve status|stop|logs|url|token`) are below.
 
@@ -270,16 +269,302 @@ Pings are answered with pongs; a client close is echoed. `permessage-deflate`
 is off: it costs latency and CPU, and compressing secrets beside
 attacker-influenced text is a known oracle.
 
-Messages are JSON-RPC 2.0. Until the `sugarcrush.v1` methods land, every request
-is answered
+Messages are JSON-RPC 2.0 — [the `sugarcrush.v1` protocol](#the-sugarcrushv1-protocol)
+below.
+
+## The `sugarcrush.v1` protocol
+
+Every message is a JSON-RPC 2.0 object. A client sends **requests** (with an
+`id`, answered) and **notifications** (without one, never answered); the
+server answers and sends **events** — notifications whose method is `event`.
+The server never sends a request of its own: a permission question is an
+event, and the answer is a request any client may make.
 
 ```json
-{"jsonrpc":"2.0","id":"c1","error":{"code":-32601,"message":"method not found: …","data":{"kind":"not_implemented"}}}
+{"jsonrpc":"2.0","id":"c1-42","method":"session.send","params":{"sessionId":"a1b2…","text":"run the tests"}}
+{"jsonrpc":"2.0","id":"c1-42","result":{"admitted":"started","turnId":"t_9f…","messageId":"…"}}
+{"jsonrpc":"2.0","method":"event","params":{"sessionId":"a1b2…","seq":812,"type":"tool.started","ts":1790000000123,"turnId":"t_9f…","durable":true,"data":{…}}}
 ```
 
-text that is not JSON gets `-32700` (`parse_error`), a non-object or a missing
-`"jsonrpc":"2.0"` gets `-32600` (`invalid_request`), and a notification (no
-`id`) gets no answer.
+### Handshake
+
+The first request on a socket must be `server.hello`:
+
+```json
+{"jsonrpc":"2.0","id":"h","method":"server.hello","params":{
+  "minProtocol":1,"maxProtocol":1,
+  "client":{"name":"my-tool","version":"0.1.0"},
+  "caps":[],
+  "resume":{"<sessionId>":<lastSeq>}}}
+```
+
+Its answer names the protocol (`1`), the server (`version`, `connectionId`,
+`root`, `pid`), the `features` — every method and event type this server
+supports, generated from the code that serves them — the `limits` below, the
+`principal` and its `scopes`, the `defaults` (the permission mode new sessions
+start in), and, for each session in `resume`, how that subscription was
+resumed. Anything other than `server.hello` before it is answered `-32002`
+(`not_initialized`) and the socket is closed with `4002`; a message over
+64 KiB before it closes the socket with `1009`. A client must ignore event
+types and fields it does not know: within protocol `1` changes are additive
+only.
+
+| Limit (`limits` key) | Value |
+|---|---|
+| `maxClientFrameBytes` | 1 MiB |
+| `maxServerFrameBytes` | 4 MiB — a larger answer is refused `too_large`; a tool output past 256 KiB arrives truncated, and `tool.output` reads the rest |
+| `maxInflight` | 64 |
+| `tickIntervalMs` | 15000 — a `server.tick` event this often |
+| `softBufferedBytes` / `maxBufferedBytes` | 1 MiB / 16 MiB (see [Backpressure](#backpressure)) |
+| `maxSubscribersPerSession` | 50 |
+
+A client may send 50 requests a second, with bursts of 200; past that it is
+answered `-32011` (`rate_limited`, `retryAfterMs`).
+
+### Errors
+
+An error's `data.kind` is the machine-readable reason; branch on it, never on
+the message. Nothing a client sent is echoed back except the request `id`,
+which is returned exactly as sent (string or integer).
+
+| Code | Meaning |
+|---|---|
+| `-32700` | parse error |
+| `-32600` | invalid request (also `unsupported_protocol`) |
+| `-32601` | method not found |
+| `-32602` | invalid params |
+| `-32002` | not initialized — `server.hello` first |
+| `-32003` | forbidden (scope, or a write the server does not allow remotely) |
+| `-32004` | not found (`session_not_found`, `ask_not_found`, …) |
+| `-32009` | conflict (`already_resolved`, `session_locked`, `refused`, …) |
+| `-32010` | busy, retryable (`too_many_turns`, `turn_running`, `draining`, …) |
+| `-32011` | rate limited, retryable |
+| `-32020` | permission mode refused |
+| `-32030` | unsupported in server (`ui_only`, `todo_unavailable`, …) |
+| `-32099` | internal — the cause is in the server's log, never in the answer |
+
+Every method that changes something takes an optional `idempotencyKey` (up to
+64 characters): a retry with the same key gets the original answer instead of
+doing the thing twice — a prompt resent after a dropped connection is not a
+second turn. Answers are kept five minutes, at most 1,000.
+
+### Methods
+
+Scope `read` is enough for everything that only looks; the owner holds all four
+scopes (`read`, `write`, `approve`, `admin`). "Idempotent" marks the methods
+that accept an `idempotencyKey`.
+
+| Method | Scope | Idempotent | What it does |
+|---|---|---|---|
+| `agents.list` | read |  | The agents a turn can delegate to. |
+| `agents.subtree` | read |  | The sub-agents a session's turns have delegated to, with their latest activity. |
+| `bg.list` | read |  | The background sessions this server supervises. |
+| `bg.output` | read |  | A background session's output from an offset. |
+| `bg.stop` | write | yes | Stop a background session. |
+| `client.viewing` | read |  | Say which sessions this client shows, and which is in front. |
+| `command.exec` | write | yes | Run a slash command in a session (command files; built-ins once they run headless). |
+| `command.list` | read |  | The slash commands a session knows, and where each runs. |
+| `files.changed` | read |  | The workspace's changed and untracked files. |
+| `files.diff` | read |  | The workspace's uncommitted changes to tracked files, as a unified diff. |
+| `files.read` | read |  | A file under the project root, read-only and size-capped. |
+| `memory.add` | write | yes | Add a note. |
+| `memory.delete` | write | yes | Delete a note. |
+| `memory.edit` | write | yes | Replace a note's text. |
+| `memory.list` | read |  | The notes of one memory scope. |
+| `memory.search` | read |  | Notes matching a query, best first, across every scope. |
+| `permission.pending` | read |  | The questions still open, for one session or all open sessions. |
+| `permission.respond` | approve | yes | Answer an open permission question; the first answer wins. |
+| `permission.rules` | read |  | The effective permission mode and rules, read-only. |
+| `server.health` | read |  | Liveness and load. |
+| `server.hello` | read |  | The handshake: protocol version, features, limits; optionally resume subscriptions. |
+| `server.info` | read |  | What this server offers: providers, agents, commands, tools, permission modes. |
+| `server.shutdown` | admin | yes | Stop the server. |
+| `session.cancel` | write | yes | Cancel the running turn (hard, or soft at the next step boundary). |
+| `session.close` | write | yes | Release a session (refused while a turn runs unless force). |
+| `session.create` | write | yes | Create a session and open it. |
+| `session.delete` | write | yes | Delete a session and its history. |
+| `session.dequeue` | write | yes | Remove a queued prompt. |
+| `session.export` | read |  | A session's transcript as markdown, json or text. |
+| `session.fork` | write | yes | Branch a session into a new one carrying its transcript. |
+| `session.get` | read |  | A session's snapshot: rows, status, queue, open questions, usage. |
+| `session.list` | read |  | The workspace's sessions, newest activity first, paged. |
+| `session.queue` | read |  | The prompts queued behind the running turn. |
+| `session.rename` | write | yes | Rename a session. |
+| `session.send` | write | yes | Send a prompt: start a turn, or queue / steer / interrupt the running one. |
+| `session.setMode` | write | yes | The permission mode the session's next turns run in. |
+| `session.subscribe` | read |  | Follow a session's events from a cursor (replay) or from a snapshot. |
+| `session.unsubscribe` | read |  | Stop following a session. |
+| `settings.get` | read |  | Effective values and where each came from, or one tier's file; secrets masked. |
+| `settings.schema` | read |  | Every setting: type, default, help, and whether a client may write it. |
+| `settings.set` | admin | yes | Write an allowlisted setting to the user tier or a trusted project. |
+| `todo.get` | read |  | A session's todo list (reserved; answers todo_unavailable until sessions keep one). |
+| `tool.output` | read |  | A finished tool call's full output, from an offset. |
+
+A session is opened on first use and holds the same lock a terminal session
+takes, so a session open in a `sugarcrush` TUI is refused `session_locked`
+rather than written by two processes. `server.maxOpenSessions` (32) bounds the
+sessions open at once — the least recently used idle one is released past it,
+never one with a turn running.
+
+### Events
+
+**Durable** events of a session are written to its event log before they are
+sent, carry a `seq` that is gap-free and increasing per session, and are what a
+reconnecting client replays. **Live** events (deltas, ticks) carry no `seq`, and
+a client never advances its cursor on one: every live stream is bracketed by
+durable events, so a dropped delta is repaired by the durable
+`assistant.completed`. A delta's `data.offset` is its byte offset into the part
+(`data.partId`), so a gap is visible. Server-scope events carry
+`sessionId: null` and no `seq`: there is no server log, so a client that missed
+one re-reads what it describes (`session.list`).
+
+| Type | Scope | Kind | What it says |
+|---|---|---|---|
+| `assistant.completed` | session | durable | The reply, complete; repairs any delta a client dropped. |
+| `assistant.delta` | session | live | Streamed reply text. |
+| `assistant.narration` | session | live | The tail of the reply so far, at most every 2 s, for narration subscriptions. |
+| `compaction.completed` | session | durable | The history was compacted before a turn. |
+| `message.created` | session | durable | A transcript row was added: the prompt, a notice, a summary. |
+| `permission.requested` | session | durable | A tool call is waiting for an answer (permission.respond). |
+| `permission.resolved` | session | durable | A question was answered or cancelled. |
+| `reasoning.delta` | session | live | Streamed reasoning text. |
+| `server.overflow` | server | live | This client fell behind; ephemeral events were dropped — resubscribe. |
+| `server.shutdown` | server | live | The server is stopping. |
+| `server.tick` | server | live | Liveness, every tickIntervalMs. |
+| `session.created` | server | live | A session was created. |
+| `session.deleted` | server | live | A session was deleted. |
+| `session.status` | session | durable | The session became idle, busy or waiting_permission. |
+| `session.updated` | server | live | A session was renamed or its mode changed. |
+| `spend_cap.breached` | session | durable | The session spend cap stopped the turn. |
+| `subagent.finished` | session | durable | A delegated sub-agent finished. |
+| `subagent.progress` | session | live | A delegated sub-agent made progress. |
+| `subagent.started` | session | durable | A delegated sub-agent started. |
+| `tool.finished` | session | durable | A tool call finished (content capped; tool.output has the rest). |
+| `tool.started` | session | durable | A tool call started. |
+| `turn.completed` | session | durable | A turn ended, with its stopReason. |
+| `turn.dequeued` | session | durable | A queued prompt left the queue (sent or removed). |
+| `turn.queued` | session | durable | A prompt was queued behind the running turn. |
+| `turn.started` | session | durable | A turn began. |
+| `turn.steered` | session | durable | A steering message was handed to the running turn. |
+| `turn.step` | session | live | The running turn reached a step boundary. |
+| `usage.updated` | session | durable | Token and cost usage changed. |
+
+### Sending, queueing, steering, cancelling
+
+`session.send` answers how the prompt was **admitted**; the prompt's own row
+arrives as the durable `message.created`. While a turn runs, `delivery`
+decides what a new prompt does:
+
+- `queue` (the default) waits behind the turn — `admitted: "queued"` with a
+  `queueId`, and a `turn.queued` event; `session.queue` lists the queue and
+  `session.dequeue` takes an entry out (`turn.dequeued`);
+- `steer` hands the text to the running turn at its next step —
+  `admitted: "steered"` with a `steerId`, and a `turn.steered` event. It is
+  also held in the queue, so it is never lost: if the turn ends before reading
+  it, it goes out as the next turn; if the turn read it, it leaves the queue;
+- `interrupt` cancels the running turn and sends the prompt now.
+
+Idle, a prompt starts a turn (`admitted: "started"`, with its `turnId`), or is
+parked behind a hook or command file that runs in a child
+(`admitted: "pending"`). A prompt the session refuses — the spend cap, a
+built-in slash command, an empty command expansion — is `-32009` `refused`
+with the reason. `server.maxConcurrentTurns` (4) caps the turns running at
+once across sessions: one more is refused `busy` (`too_many_turns`), which is
+retryable.
+
+`session.cancel` stops the running turn: `mode: "hard"` (the default) at once,
+the way Esc Esc does; `mode: "soft"` at the next step boundary, letting the
+tool in flight finish. `clearQueue: true` also drops the queue.
+`session.status` follows the session: `idle`, `busy`, `waiting_permission`.
+
+Built-in slash commands still run in the terminal UI only: `command.list` lists
+them with `runsIn: "client"`, and `command.exec` refuses them `-32030`
+(`ui_only`). A project's or your own command files (`.sugar-crush/commands/`)
+run on the server exactly as typing `/name args` would.
+
+### Permissions over the wire
+
+A question a turn's gate or hook asks is a durable `permission.requested`
+event: every client following the session sees it. Any client holding the
+`approve` scope may answer with `permission.respond {sessionId, askId, reply:
+"once"|"always"|"reject", note?, cascade?, remember?}`. **The first valid
+answer wins**; a later one is refused `-32009` `already_resolved`, with the
+winning answer in `data.resolved`. The answer reaches exactly the call that was
+asked about — the `askId` is a hash of the call's id, tool and arguments.
+
+- `always` is remembered for the session, for every later turn, and also
+  answers the session's other open questions about the same tool (listed in
+  the answer's `cascaded`); a question only a hook asked is put every time.
+- `reject` with `cascade: true` rejects every other open question of the
+  session and stops the turn at its next step.
+- `remember: "project"` is refused — permission rules are user-tier only —
+  and `remember: "user"` is not offered over the wire; add a rule to
+  `~/.sugar-crush/settings.json` instead.
+- A question still open when its turn ends — cancelled, failed, or settled —
+  is resolved `cancelled`.
+- `server.askTimeoutSeconds` refuses a question nobody answered in time. It is
+  unset by default: a question waits for as long as the turn does.
+
+A client that reconnects is handed every question still open
+(`pendingAsks` in its subscribe or resume answer), whatever its cursor, and
+`permission.pending` lists them for one session or all. See
+[`PERMISSIONS.md`](PERMISSIONS.md#ask-needs-somewhere-to-ask).
+
+Sessions start in the server's permission mode (`default` unless the server was
+started with another); `session.create` and `session.setMode` may choose any
+mode except `bypass-permissions` and `dont-ask`, which are refused `-32020`
+unless the server runs with `--allow-bypass`.
+
+### Following a session: subscribe, replay, resync
+
+`session.subscribe {sessionId, afterSeq?, mode?}` follows a session:
+
+- with `afterSeq` the log can still serve, the answer is
+  `{fromSeq, throughSeq, pendingAsks}`, then every durable event after
+  `afterSeq` is sent in order (200 per loop turn), then the live stream;
+- with no `afterSeq`, or one the log can no longer serve (older than the
+  oldest event kept — 20,000 per session — or ahead of the log), the answer is
+  `{reset: true, snapshot, throughSeq, pendingAsks}`: the transcript rows,
+  status, permission mode, queue, open questions and sub-agents, and the live
+  stream follows from `throughSeq`.
+
+The subscription is registered **before** the catch-up is read, so an event
+logged meanwhile is delivered once, after the catch-up, never twice and never
+missed. A client's cursor is the highest gap-free `seq` it holds; reconnecting,
+it passes `resume: {sessionId: cursor}` to `server.hello` (or subscribes again)
+and gets exactly what it missed. Across a server restart the `seq`s continue —
+the log is in the session database — and the new `connectionId` in `hello`
+tells the client to resubscribe. `mode: "narration"` sends no deltas, only an
+`assistant.narration` tail at most every 2 s plus every durable event — for
+tiles and background panes.
+
+### Backpressure
+
+Each connection has an outbox; a turn never waits on a client. The socket is
+handed only what it will take, and the rest waits in the outbox:
+
+- past **1 MiB** waiting, queued deltas of one part are merged (lossless), and
+  the client's subscriptions to every session but the one `client.viewing`
+  names as in front drop to narration;
+- past **16 MiB**, every waiting live event is dropped for one
+  `server.overflow` event (`{dropped, action: "resubscribe"}`). Durable events
+  are never dropped: if the outbox is still past 16 MiB ten seconds later, the
+  socket is closed with **`1013`** and the client resubscribes from its
+  cursor.
+
+### Settings over the wire
+
+`settings.schema` describes every setting from the same schema the TUI editor
+and [`SETTINGS.md`](SETTINGS.md) are built from, with `sensitive` and
+`writableRemotely` flags. `settings.get` answers the effective values and where
+each came from (or one tier's file with `scope: "user"|"project"`); a secret
+travels as `"********"`. `settings.set` (scope `admin`) writes only keys whose
+risk class is cosmetic, tuning or narrowing — never anything that runs a
+command, pulls files into prompts, spends money, grants trust, changes
+permissions or the server's own binding, holds a secret, or is owned by a live
+command (`theme` is `/theme`'s, `provider` is `/model`'s) — and only to your
+config or a trusted project's local file, through the same writer and refusals
+as the TUI editor.
 
 ## Security model
 
@@ -306,8 +591,8 @@ text that is not JSON gets `-32700` (`parse_error`), a non-object or a missing
 - **Permission modes.** Server sessions start in `default` (they ask), as the
   TUI does — not in the `bypass-permissions` that `-p` and background sessions
   keep, because a server has a client to answer an ask. `bypass-permissions`
-  and `dont-ask` are refused — at startup and, with the protocol, over the wire
-  — unless `--allow-bypass` / `server.allowBypass`.
+  and `dont-ask` are refused — at startup and over the wire (`-32020`) —
+  unless `--allow-bypass` / `server.allowBypass`.
 - **Process hardening.** Refuses root without `--allow-root`; runs under
   `umask 077`; the request body is capped at 64 KiB and 32 requests may be in
   flight at once; JSON is decoded with a depth limit of 64.

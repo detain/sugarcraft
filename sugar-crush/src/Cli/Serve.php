@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Cli;
 
 use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Socket\ConnectionInterface;
+use SugarCraft\Crush\Host\SessionHub;
+use SugarCraft\Crush\Protocol\Dispatcher;
+use SugarCraft\Crush\Protocol\ServerContext;
 use SugarCraft\Crush\Server\Auth\AuthContext;
 use SugarCraft\Crush\Server\Auth\LoginCodes;
 use SugarCraft\Crush\Server\Auth\TokenStore;
@@ -50,11 +54,18 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * stdout. `--detach` prints the same once the background server has bound its
  * port, then returns: the URL it prints is one that answers.
  *
+ * WHAT IT SERVES: the `sugarcrush.v1` protocol (roadmap O-3b) over the
+ * served root's workspace — the same {@see Bootstrap::workspace()} bundle a
+ * TUI session is built on, its sessions driven through a
+ * {@see \SugarCraft\Crush\Host\SessionHub} and answered by the
+ * {@see Dispatcher} ({@see protocol()}).
+ *
  * WHILE IT RUNS it holds `server.lock`, keeps `server.json` (the discovery
  * record `status`/`stop`/`attach` read) and answers `serve url` on a 0600
  * control socket in the 0700 state directory ({@see StateDir}). SIGTERM or
- * SIGINT drains it: stop accepting, close every WebSocket with 1001, remove
- * the record and the socket, release the lock.
+ * SIGINT drains it: tell every client (`server.shutdown`), stop accepting,
+ * close every WebSocket with 1001, release every session, remove the record
+ * and the socket, release the lock.
  */
 final class Serve
 {
@@ -327,7 +338,23 @@ final class Serve
             self::stderr('[' . \date('H:i:s') . '] ' . $line);
         };
         $loop = Loop::get();
-        $server = Server::new($config, AuthContext::new($tokens), $static, null, $loop, $log);
+
+        // The protocol's sessions are built HERE, in the process that serves
+        // them — after a --detach fork, never before it: the workspace holds
+        // the session database and the forked turns' notice inbox, neither of
+        // which may be shared with the process that returns to the shell.
+        try {
+            $protocol = self::protocol($config, $loop);
+        } catch (\Throwable $e) {
+            $state->releaseLock();
+            $reason = 'cannot open the workspace: ' . $e->getMessage();
+            self::stderr('sugarcrush serve: ' . $reason);
+            $report(['ok' => false, 'reason' => $reason]);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $server = Server::new($config, AuthContext::new($tokens), $static, $protocol, $loop, $log);
 
         try {
             $server->start();
@@ -343,6 +370,8 @@ final class Serve
             $record->write($state);
         } catch (\RuntimeException $e) {
             $server->stop();
+            $protocol->stop();
+            $protocol->context()->hub()->closeAll();
             $state->releaseLock();
             self::stderr('sugarcrush serve: ' . $e->getMessage());
             $report(['ok' => false, 'reason' => $e->getMessage()]);
@@ -378,7 +407,7 @@ final class Serve
 
         $stopping = false;
         $handlers = [];
-        $stop = static function (string $reason) use (&$stopping, &$handlers, $server, $state, $record, $control, $watchdog, $rotation, $loop): void {
+        $stop = static function (string $reason) use (&$stopping, &$handlers, $server, $protocol, $state, $record, $control, $watchdog, $rotation, $loop): void {
             if ($stopping) {
                 return;
             }
@@ -390,7 +419,9 @@ final class Serve
             }
             $control?->close();
             @\unlink($state->controlSocketPath());
+            $protocol->stop($reason);
             $server->stop();
+            $protocol->context()->hub()->closeAll();
             $record->removeFrom($state);
             $state->releaseLock();
             foreach ($handlers as $signal => $handler) {
@@ -410,10 +441,30 @@ final class Serve
         $watchdog?->arm($loop, static function (int $pid) use ($stop): void {
             $stop(\sprintf('parent process %d is gone', $pid));
         });
+        $protocol->context()->onShutdown(static function (?float $drainSeconds) use ($stop, $loop): void {
+            // Next tick: the client's answer goes out before the sockets close.
+            $loop->futureTick(static fn () => $stop('server.shutdown was requested'));
+        });
+        $protocol->start();
 
         Loop::run();
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The `sugarcrush.v1` protocol over this server's workspace: the launch's
+     * workspace for the served root ({@see Bootstrap::workspace()}, the same
+     * bundle a TUI session is built on), a {@see SessionHub} capped at
+     * `server.maxOpenSessions`, and the {@see Dispatcher} the WebSocket
+     * transport hands its messages to.
+     */
+    private static function protocol(ServerConfig $config, LoopInterface $loop): Dispatcher
+    {
+        $workspace = Bootstrap::workspace($config->root);
+        $hub = SessionHub::new($workspace, $config->maxOpenSessions);
+
+        return Dispatcher::new(ServerContext::new($hub, $config, Help::versionString(), $loop));
     }
 
     /**

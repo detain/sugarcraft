@@ -24,7 +24,13 @@ use React\Stream\WritableStreamInterface;
  * - text only — a binary message closes 1003 (`sugarcrush.v1` is JSON);
  * - ping answered with pong, a client close echoed and the stream ended;
  * - a throwing handler closes 1011 rather than tearing down the server;
- * - exactly one {@see MessageHandler::onClose()} however the socket ends.
+ * - exactly one {@see MessageHandler::onClose()} however the socket ends;
+ * - BACKPRESSURE made visible (roadmap O-3b, Appendix O §6.9): when the
+ *   socket's write buffer is full the stream react/http pipes into it is
+ *   paused, a write reports it, and {@see isCongested()} stays true until
+ *   the socket drains and {@see onDrain()}'s listeners run. The bytes already
+ *   handed over are never lost; the per-connection {@see Outbox} uses this to
+ *   stop handing over more.
  *
  * `permessage-deflate` stays off (Appendix O §6.1): latency, CPU, and the
  * compression-oracle risk of secrets beside attacker-influenced text.
@@ -37,6 +43,12 @@ final class Connection
 
     /** The close code sent or received; 1006 until there is one. */
     private int $closeCode = Frame::CLOSE_ABNORMAL;
+
+    /** Whether the last write found the socket's buffer full. */
+    private bool $congested = false;
+
+    /** @var list<\Closure(): void> */
+    private array $drainListeners = [];
 
     /**
      * @param \Closure(self): void|null $onGone the server's bookkeeping, after the handler's onClose
@@ -58,7 +70,11 @@ final class Connection
             null,
             $maxMessageBytes,
             $maxMessageBytes,
-            fn (string $bytes) => $this->toClient->write($bytes),
+            function (string $bytes): void {
+                if (!$this->toClient->write($bytes)) {
+                    $this->congested = true;
+                }
+            },
         );
 
         $fromClient->on('data', function (string $data): void {
@@ -68,6 +84,28 @@ final class Connection
         });
         $fromClient->on('close', fn () => $this->gone());
         $toClient->on('close', fn () => $this->gone());
+        $toClient->on('drain', function (): void {
+            $this->congested = false;
+            foreach ($this->drainListeners as $listener) {
+                $listener();
+            }
+        });
+    }
+
+    /** Whether the socket's write buffer was full at the last write and has not drained since. */
+    public function isCongested(): bool
+    {
+        return $this->congested;
+    }
+
+    /**
+     * Run $listener each time a congested socket drains.
+     *
+     * @param \Closure(): void $listener
+     */
+    public function onDrain(\Closure $listener): void
+    {
+        $this->drainListeners[] = $listener;
     }
 
     public function id(): string
@@ -154,6 +192,7 @@ final class Connection
         if (!$first) {
             return;
         }
+        $this->drainListeners = [];
 
         try {
             $this->handler->onClose($this, $this->closeCode);

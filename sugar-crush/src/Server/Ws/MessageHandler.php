@@ -7,8 +7,9 @@ namespace SugarCraft\Crush\Server\Ws;
 /**
  * What the WebSocket transport hands its traffic to. The transport (O-3a)
  * owns framing, limits, control frames and authentication; the handler owns
- * what a message MEANS — the `sugarcrush.v1` JSON-RPC dispatcher (O-3b)
- * implements this, and until it lands {@see ProtocolPendingHandler} does.
+ * what a message MEANS — the `sugarcrush.v1` JSON-RPC dispatcher
+ * ({@see \SugarCraft\Crush\Protocol\Dispatcher}, O-3b) implements this, and a
+ * server built without one runs {@see ProtocolPendingHandler}.
  */
 interface MessageHandler
 {

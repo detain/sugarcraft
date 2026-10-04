@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Server\Ws;
 
 /**
- * The handler the transport runs with until the `sugarcrush.v1` dispatcher
- * (O-3b) replaces it: well-formed JSON-RPC 2.0 framing, no methods.
+ * The handler a {@see \SugarCraft\Crush\Server\Server} built without the
+ * `sugarcrush.v1` dispatcher runs with (an embedder, a transport test):
+ * well-formed JSON-RPC 2.0 framing, no methods. `sugarcrush serve` always
+ * hands the server the {@see \SugarCraft\Crush\Protocol\Dispatcher}.
  *
  * It answers so that a client written against the transport sees the protocol
  * it will eventually get rather than silence: a request (any message with an

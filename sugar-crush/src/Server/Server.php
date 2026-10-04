@@ -41,10 +41,10 @@ use function React\Promise\resolve;
  *     and the static UI;
  *  5. {@see Router} — `/ws`, `/api/*`, the UI.
  *
- * WHAT THIS DOES NOT DO YET (O-3a is the transport): sessions, turns and the
- * `sugarcrush.v1` methods arrive with the protocol (O-3b); until then the
- * WebSocket handler is {@see ProtocolPendingHandler}. Daemon mode, the state
- * file and `serve status|stop` are O-4a.
+ * WHAT A MESSAGE MEANS is the handler's: `sugarcrush serve` hands this the
+ * `sugarcrush.v1` {@see \SugarCraft\Crush\Protocol\Dispatcher} (O-3b) over the
+ * workspace's sessions; a server built without one answers through
+ * {@see ProtocolPendingHandler}, which speaks JSON-RPC and offers no methods.
  *
  * Process-wide, the server's sockets are registered with
  * {@see \SugarCraft\Crush\Support\ForkedChild} by the {@see Listener}, so every
