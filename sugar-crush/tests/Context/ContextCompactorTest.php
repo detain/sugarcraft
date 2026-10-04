@@ -18,6 +18,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Crush\Context\ContextCompactor;
+use SugarCraft\Crush\Host\CompactionService;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\ToolCall;
@@ -2220,6 +2221,47 @@ final class ContextCompactorTest extends TestCase
     // so the quoted count, its noun, and the bytes all have to agree.
 
     /**
+     * The notice names the blocking tier that actually fired (W4-i handoff):
+     * the configured percentage, or an absolute cap (roadmap 2.9) when that is
+     * lower — it used to say "95%" whatever the compactor was configured with.
+     */
+    public function testTheTruncationNoticeNamesTheBlockingTierThatActuallyFired(): void
+    {
+        $this->assertSame('the 95% blocking tier', CompactionService::blockingTierLabel(CompactorConfig::new(), 100_000));
+        $this->assertSame(
+            'the 90% blocking tier',
+            CompactionService::blockingTierLabel(CompactorConfig::new()->withForegroundBlockingThreshold(90), 100_000),
+        );
+        $this->assertSame(
+            'the 80000-token blocking cap',
+            CompactionService::blockingTierLabel(CompactorConfig::new()->withForegroundBlockingTokens(80_000), 100_000),
+        );
+        $this->assertSame(
+            'the 95% blocking tier',
+            CompactionService::blockingTierLabel(CompactorConfig::new()->withForegroundBlockingTokens(200_000), 100_000),
+            'a cap above the percentage is not the tier that fires',
+        );
+
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(
+            history: [
+                Message::user(str_repeat('x', 800_000)),
+                Message::assistant(str_repeat('y', 2_000)),
+            ],
+            backend: $backend,
+            compactorConfig: CompactorConfig::new()->withForegroundBlockingTokens(80_000),
+        );
+        $chat = $this->withDraft($chat, 'go');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'fixture: this history must reach the rescue');
+        $this->assertStringStartsWith(
+            '1 message reached the 80000-token blocking cap on its own, so it was truncated',
+            $this->truncationNotice($next)->content,
+        );
+    }
+
+    /**
      * The rescue notice for the classic E18 shape - one oversized user message,
      * the assistant half small enough to survive - in full, singular agreement
      * throughout, Role::System, riding immediately before the user's line.
@@ -2358,7 +2400,7 @@ final class ContextCompactorTest extends TestCase
         $hits = array_values(array_filter(
             $chat->history,
             static fn (Message $m): bool => $m->role === Role::System
-                && str_contains($m->content, 'reached the 95% blocking tier'),
+                && preg_match('/^\d+ messages? reached the .+ blocking (tier|cap) on (its|their) own/', $m->content) === 1,
         ));
         $this->assertCount(1, $hits, 'the rescue writes exactly one truncation notice into history');
 

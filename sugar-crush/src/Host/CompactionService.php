@@ -2005,6 +2005,7 @@ final class CompactionService
                 $truncatedMessages,
                 $estimate($history),
                 $tokenLimit,
+                $compactor->config(),
             ),
         ];
     }
@@ -2110,21 +2111,50 @@ final class CompactionService
      * It says plainly that content was dropped and that the drop is marked inline,
      * so the user is never left believing the whole oversized exchange reached the
      * model.
+     *
+     * The tier is NAMED FROM $config ({@see blockingTierLabel()}): the configured
+     * percentage, or the absolute cap when that is what fired — it used to say
+     * "95%" whatever the compactor was configured with. No $config means the
+     * defaults, which read exactly as before.
      */
-    public static function contextTruncatedMessage(int $truncatedMessages, int $tokenCount, int $tokenLimit): Message
-    {
+    public static function contextTruncatedMessage(
+        int $truncatedMessages,
+        int $tokenCount,
+        int $tokenLimit,
+        ?CompactorConfig $config = null,
+    ): Message {
         $singular = $truncatedMessages === 1;
         $unit = $singular ? 'message' : 'messages';
         $own = $singular ? 'its' : 'their';
         $subject = $singular ? 'it was' : 'they were';
         $where = $singular ? 'that message' : 'those messages';
+        $tier = self::blockingTierLabel($config ?? CompactorConfig::new(), $tokenLimit);
 
         return Message::notice(
-            "{$truncatedMessages} {$unit} reached the 95% blocking tier on {$own} own, so {$subject} "
+            "{$truncatedMessages} {$unit} reached {$tier} on {$own} own, so {$subject} "
             . "truncated to fit the context window rather than the turn being refused: "
             . "~{$tokenCount} estimated tokens now, against a {$tokenLimit}-token context "
             . "window. The dropped text is marked inline in {$where}."
         );
+    }
+
+    /**
+     * The blocking tier that actually fires on a $tokenLimit-token window under
+     * $config, named the way a notice can state it: "the 95% blocking tier"
+     * (the configured percentage), or "the 120000-token blocking cap" when an
+     * absolute cap (roadmap 2.9, {@see CompactorConfig::withForegroundBlockingTokens()})
+     * is lower than that percentage of the window — the same
+     * `min(percent, cap)` rule {@see CompactorConfig::foregroundBlockingTokenThreshold()}
+     * applies, so the sentence names the threshold that was really crossed.
+     */
+    public static function blockingTierLabel(CompactorConfig $config, int $tokenLimit): string
+    {
+        $percent = $config->foregroundBlockingThreshold;
+        $cap = $config->foregroundBlockingTokens;
+
+        return $cap !== null && $cap < (int) ($tokenLimit * $percent / 100)
+            ? "the {$cap}-token blocking cap"
+            : "the {$percent}% blocking tier";
     }
 
     /**

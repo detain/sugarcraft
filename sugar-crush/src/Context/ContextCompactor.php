@@ -152,6 +152,16 @@ final class ContextCompactor
     }
 
     /**
+     * The config this compactor's tiers are measured against — read by a
+     * notice that has to name the tier that actually fired (a percentage, or an
+     * absolute cap when that is lower, roadmap 2.9) rather than assume 95%.
+     */
+    public function config(): CompactorConfig
+    {
+        return $this->config;
+    }
+
+    /**
      * Determine whether compaction should run based on current token usage.
      *
      * Returns true when context usage reaches or exceeds the background
