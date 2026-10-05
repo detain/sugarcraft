@@ -208,7 +208,7 @@ final class ApplySettingsTest extends TestCase
         self::assertStringContainsString('restart', (string) $writer->refusal(SettingsTier::Session, 'instructions', ['AGENTS.md']));
         self::assertStringContainsString('config.json', (string) $writer->refusal(SettingsTier::Session, 'permissionMode', 'plan'));
         self::assertNotNull($writer->refusal(SettingsTier::Session, 'trustedProjectHooks', ['/x']), 'trust never goes through a save');
-        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'embeddingModel', 'theme', 'statusLine', 'queueMode', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
+        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'globMaxMatches', 'webFetchMaxBytes', 'webFetchTimeoutSeconds', 'bashInteractiveIdleSeconds', 'chatToolTimeoutSeconds', 'embeddingModel', 'subagentMaxTurns', 'subagentMaxDepth', 'subagentMaxActive', 'theme', 'statusLine', 'queueMode', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
 
         $writer->write(SettingsTier::Session, ['maxOutputTokens' => 100]);
         self::assertSame(['maxOutputTokens' => 100], $writer->current(SettingsTier::Session));

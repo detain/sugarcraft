@@ -253,7 +253,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these forty-eight, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these seventy-four, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -669,7 +669,7 @@ keeping fresh was in fact unpinned on this page and in
 because "there is a generator" is exactly the claim a reader stops checking.)
 In a project you have listed
 under `trustedProjectSettings` (an untrusted project's `disabledTools` never
-reaches the merge at all, and all eighteen tools survive):
+reaches the merge at all, and all nineteen tools survive):
 
 ```json
 { "disabledTools": ["[!B]*"] }
@@ -680,7 +680,7 @@ exactly `Bash` and removing everything else — the same tool set
 `allowedTools: ["Bash"]` produces, and the same degradation to opaque shell
 text. (This line said "eight characters" until the count was re-derived:
 `[!B]*` is five, `"[!B]*"` seven, `["[!B]*"]` nine, and nothing here is eight.
-The point the figure was making — that the value names none of the seventeen tools it
+The point the figure was making — that the value names none of the eighteen tools it
 removes — is what survives, so the sentence stays and the number is corrected.
 This line once continued
 "`src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
@@ -713,7 +713,7 @@ corrected; a page that re-derives a number and then contradicts itself further
 down is worse than one that never re-derived it.)
 
 **Two things narrow this, and both are measured.** An *untrusted* project's
-`disabledTools` never reaches the merge — all eighteen tools survive — so this
+`disabledTools` never reaches the merge — all nineteen tools survive — so this
 needs a `trustedProjectSettings` grant you made yourself. And the layers merge
 **key by key, not as a union**: if *you* name any `disabledTools` at all, yours
 replaces the project's entirely. Measured: your `["Read"]` against a trusted
@@ -732,10 +732,10 @@ project's tool removals are reported at launch, naming the file, the tools it
 took and the tools it left:
 
 ```
-sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 17 of the
-18 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
+sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 18 of the
+19 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
 WebSearch, doctor, Skill, Lsp, Memory, RepoMap, Prune, Todo, Compress, Workflow,
-Recall — leaving: Bash.
+Recall, Team — leaving: Bash.
 ```
 
 That is the stderr form, byte for byte. The `sugarcrush: ` prefix and the
@@ -961,6 +961,19 @@ project-settable.
 | `bashSandbox` | Tools | enum | `off` | U C | — | restart | security |
 | `testCommand` | Tools | string | unset | U C | — | restart | exec |
 | `autoTest` | Tools | bool | `false` | U C | — | restart | exec |
+| `toolOutputCapBytes` | Tools | int | `65536` | U C | — | next turn | spend |
+| `mcpResultCapBytes` | Tools | int | `65536` | U C | — | next turn | spend |
+| `readMaxBytes` | Tools | int | `1048576` | U C | — | next turn | spend |
+| `readPageLines` | Tools | int | `2000` | U C | — | next turn | spend |
+| `readPageBytes` | Tools | int | `51200` | U C | — | next turn | spend |
+| `globMaxMatches` | Tools | int | `1000` | P U C | — | next turn | tuning |
+| `webFetchMaxBytes` | Tools | int | `2097152` | P U C | — | next turn | tuning |
+| `webFetchTimeoutSeconds` | Tools | int | `30` | P U C | — | next turn | tuning |
+| `webSearchMaxResults` | Tools | int | `10` | P U C | — | restart | tuning |
+| `webSearchTimeoutSeconds` | Tools | int | `30` | P U C | — | restart | tuning |
+| `webSearchEndpoint` | Tools | URL | unset: no default; WebSearch refuses every call until one is set | U C | `SUGARCRUSH_SEARCH_ENDPOINT` | restart | egress |
+| `bashInteractiveIdleSeconds` | Tools | number | `8` | P U C | — | next turn | tuning |
+| `chatToolTimeoutSeconds` | Tools | int | `30` | P U C | — | next turn | tuning |
 | `memory.promptMaxEntries` | Memory & Rules | int | `40` | C | — | next turn | prompt |
 | `memory.promptMaxBytes` | Memory & Rules | int | `4096` | C | — | next turn | prompt |
 | `memory.entryMaxBytes` | Memory & Rules | int | `512` | C | — | next turn | prompt |
@@ -1082,9 +1095,9 @@ Saved is not applied: see the next section for when each key takes effect.
 <!-- settings:apply:begin -->
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
-| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout` |
-| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
-| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `symbolMap.enabled`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
+| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints` |
+| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `chatToolTimeoutSeconds`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `symbolMap.enabled`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
@@ -1093,7 +1106,9 @@ Saved is not applied: see the next section for when each key takes effect.
 `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
 `bashInteractiveIdleSeconds`, `chatToolTimeoutSeconds`, `embeddingModel`,
 `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `theme`,
-`statusLine`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
+`statusLine`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`,
+`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
+`maxCheckpoints`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the
@@ -1210,10 +1225,11 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only eight of the forty-eight layered keys have an
+  They do not cover it: only eleven of the seventy-four layered keys have an
   env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
-  `parallelToolCalls`, `parallelToolDeadlineSeconds`, `connectTimeoutSeconds`).
-  `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`,
+  `parallelToolCalls`, `parallelToolDeadlineSeconds`, `webSearchEndpoint`,
+  `mouse`, `mouseClicks`, `connectTimeoutSeconds`). `maxOutputTokens`,
+  `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`,
   `compaction.reminderPercent`, `compaction.autoPercent`,
   `compaction.blockPercent`, `compaction.keepRecent`,
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
@@ -1228,7 +1244,9 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxTurns`,
   `subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,
   `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `theme`,
-  `statusLine`, `layout`, `notify`, `lintCommands`, `providerRetryAttempts` and
+  `statusLine`, `layout`, `notify`, `queueMode`, `scrollWheelLines`,
+  `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
+  `maxCheckpoints`, `lintCommands`, `providerRetryAttempts` and
   `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
