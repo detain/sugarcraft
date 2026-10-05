@@ -7341,7 +7341,8 @@ final class Bootstrap
      * Records the same {@see $projectTierRefusals} entries the inline version
      * did, keyed by the same path, so calling it twice is idempotent.
      *
-     * {@see self::MCP_DISABLE_ENV} short-circuits this whole gate to
+     * {@see self::MCP_DISABLE_ENV} (or the `mcp.enabled: false` setting,
+     * {@see mcpDisabled()}) short-circuits this whole gate to
      * {@see self::MCP_ABSENT} before any stat or trust read — the decision
      * stays the one discovery path, it just answers the environment first.
      *
@@ -7377,7 +7378,7 @@ final class Bootstrap
         // any of them learning a new status to special-case — which is also
         // why NO notice is recorded here: an operator who disabled MCP does
         // not want to be told to trust it on every launch.
-        if (self::mcpDisabledByEnvironment()) {
+        if (self::mcpDisabled()) {
             return $decision + ['status' => self::MCP_ABSENT];
         }
 
@@ -7456,6 +7457,29 @@ final class Bootstrap
         $value = getenv(self::MCP_DISABLE_ENV);
 
         return $value !== false && \in_array(strtolower($value), ['1', 'true', 'yes'], true);
+    }
+
+    /** The settings key {@see mcpDisabled()} reads (roadmap N-P4g). */
+    public const MCP_ENABLED_SETTING = 'mcp.enabled';
+
+    /**
+     * Whether project MCP is off for this launch: {@see MCP_DISABLE_ENV}, OR
+     * the operator's `mcp.enabled: false` setting.
+     *
+     * EITHER ONE TURNS IT OFF; neither turns it back on. The variable's
+     * vocabulary only ever says "off" (see {@see mcpDisabledByEnvironment()}),
+     * so "the environment wins" reduces to this: a launcher that exports the
+     * variable silences MCP whatever the settings say, and a user who switched
+     * it off in their settings is not overruled by an environment that merely
+     * lacks the variable. User tier only — a checkout's own settings file
+     * cannot decide whether its `.mcp.json` runs; the trust list decides that.
+     * Read through {@see \SugarCraft\Crush\Config\Settings\UiSettings};
+     * the client is built once per process, so a change applies at restart.
+     */
+    public static function mcpDisabled(): bool
+    {
+        return self::mcpDisabledByEnvironment()
+            || !\SugarCraft\Crush\Config\Settings\UiSettings::bool(self::MCP_ENABLED_SETTING);
     }
 
     /**

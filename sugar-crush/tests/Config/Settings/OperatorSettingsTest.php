@@ -214,6 +214,33 @@ final class OperatorSettingsTest extends TestCase
         self::assertNull($definition->default);
     }
 
+    // ── the MCP switch ──────────────────────────────────────────────────
+
+    public function testMcpEnabledFalseAnswersAbsentLikeTheVariable(): void
+    {
+        $was = getenv(Bootstrap::MCP_DISABLE_ENV);
+        putenv(Bootstrap::MCP_DISABLE_ENV);
+        $root = $this->home . '/project';
+        mkdir($root);
+        file_put_contents($root . '/.mcp.json', '{"mcpServers": {}}');
+        try {
+            self::assertFalse(Bootstrap::mcpDisabled(), 'on by default');
+            self::assertSame(Bootstrap::MCP_UNTRUSTED, Bootstrap::mcpConfigDecision($root)['status']);
+
+            $this->writeConfig([Bootstrap::MCP_ENABLED_SETTING => false]);
+            self::assertTrue(Bootstrap::mcpDisabled());
+            self::assertSame(Bootstrap::MCP_ABSENT, Bootstrap::mcpConfigDecision($root)['status'], 'off answers what a config-less checkout answers');
+
+            $this->writeConfig([Bootstrap::MCP_ENABLED_SETTING => true]);
+            putenv(Bootstrap::MCP_DISABLE_ENV . '=1');
+            self::assertTrue(Bootstrap::mcpDisabled(), 'the variable turns it off whatever the setting says');
+            putenv(Bootstrap::MCP_DISABLE_ENV . '=0');
+            self::assertFalse(Bootstrap::mcpDisabled(), 'and has no word that turns it back on');
+        } finally {
+            putenv($was === false ? Bootstrap::MCP_DISABLE_ENV : Bootstrap::MCP_DISABLE_ENV . '=' . $was);
+        }
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────
 
     private function forcePush(int $n): ToolCall

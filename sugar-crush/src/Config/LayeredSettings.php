@@ -570,6 +570,7 @@ final class LayeredSettings
         'maxCheckpoints',
         'lintCommands',
         'disabledMcpServers',
+        'mcp.enabled',
         'connectTimeoutSeconds',
         'providerRetryAttempts',
         'providerRetryBaseBackoffMs',

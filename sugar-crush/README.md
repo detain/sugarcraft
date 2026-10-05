@@ -976,11 +976,12 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these one hundred keys are layered — `provider`, `models`, `titleModel`,
-`summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
-`promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
-`maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`,
-`compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
+Only these one hundred and one keys are layered — `provider`, `models`,
+`titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`,
+`thinkingBudget`, `promptCache`, `parallelToolCalls`,
+`parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
+`compaction.reminderPercent`, `compaction.autoPercent`,
+`compaction.blockPercent`, `compaction.keepRecent`,
 `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
@@ -1005,7 +1006,8 @@ Only these one hundred keys are layered — `provider`, `models`, `titleModel`,
 `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
 `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
 `sessionRetentionDays`, `maxCheckpoints`, `lintCommands`, `disabledMcpServers`,
-`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`.
+`mcp.enabled`, `connectTimeoutSeconds`, `providerRetryAttempts`,
+`providerRetryBaseBackoffMs`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1042,13 +1044,15 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, forty-nine keys are **never** taken from a project file:
+Even for a trusted project, fifty keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
 the same reason — each value is a lint command the post-edit hook runs after an
 edit; `lsp`, for the same reason again — each entry is a language server this app
-starts at launch; `autoCommit`, because a commit runs the repository's own git
+starts at launch; `mcp.enabled`, because whether a checkout's
+`.mcp.json` servers start is the trust list's decision, and the checkout's own
+settings file must not be a second door to it; `autoCommit`, because a commit runs the repository's own git
 hooks and writes into the operator's history, and a checkout must not be able to
 switch that on; `maxCheckpoints`, because it decides how much of the
 operator's own session history `/rewind` can still return to, and a checkout
