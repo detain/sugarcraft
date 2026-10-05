@@ -792,15 +792,18 @@ final class Chat implements Model
          */
         private readonly array $permissionGrants = [],
         /**
-         * Tool-call ids whose output the user has explicitly expanded, keyed
-         * by id ({@see ToolResult::$id}), value always true - a collapsed
-         * call is simply absent rather than stored as false, so the map stays
-         * the size of what the user actually opened rather than growing one
-         * entry per tool call for the life of the session.
+         * Tool-call ids whose output the user has toggled AWAY from the
+         * default, keyed by id ({@see ToolResult::$id}): `true` for a call
+         * opened while calls start collapsed, `false` for one closed while
+         * `expandToolOutput` (roadmap N-P4g) starts them open. A call at its
+         * default is simply absent ({@see recordExpansion()}), so the map
+         * stays the size of what the user actually changed rather than
+         * growing one entry per tool call for the life of the session.
          *
          * {@see Renderer::renderToolResults()} hides a successful call's body
-         * unless its id is in here (crush_feat.md §1 E5's "hide-on-success by
-         * default"); Ctrl+O toggles it (see {@see toggleToolOutput()}).
+         * unless {@see isToolOutputExpanded()} says otherwise (crush_feat.md
+         * §1 E5's "hide-on-success by default"); Ctrl+O toggles it (see
+         * {@see toggleToolOutput()}).
          *
          * @var array<string, bool>
          */
@@ -2462,7 +2465,8 @@ final class Chat implements Model
             // journal cursor are already written (in this process, as the
             // turn settled). Accounted first — the pass ran on the user's
             // key — then one display-only notice when a note was saved,
-            // changed or removed; a pass that changed nothing says nothing.
+            // changed or removed, or a skill draft was proposed (`/skills`
+            // reviews it); a pass that did neither says nothing.
             $this->accountUsage($msg->usage);
             $notice = \SugarCraft\Crush\Memory\DreamPass::notice($msg);
             if ($notice === null) {
@@ -4615,8 +4619,8 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 109 live rows across 11 contexts — 113 in all, four of them
-     * dormant and therefore unlisted) and clipping it with no way to reach the
+     * declares 132 rows across 12 contexts, every one of them live, so all
+     * are listed) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
      * Everything else is swallowed rather than falling through, for the reason
@@ -8737,6 +8741,10 @@ final class Chat implements Model
      *    `memory.projectNoteMaxBytes` (roadmap N-P4d) is read by
      *    {@see \SugarCraft\Crush\Context\ProjectMemoryWriter::maxContentBytes()}
      *    as each note is written.
+     *  - LIVE, Chat state: `maxCostUsd` (roadmap N-P4g) re-resolves the spend
+     *    cap through {@see \SugarCraft\Crush\Cli\Bootstrap::maxCostUsd()}
+     *    into {@see $maxCostUsd}, the field `/budget` sets; a value that is
+     *    not a ceiling keeps the old cap and the toast says so.
      *  - LIVE, Chat state: the `compaction.*` keys (roadmap N-P4b) rebuild
      *    {@see $compactorConfig} through {@see withCompactorSettings()}, so
      *    the next prompt is judged by the new tiers, idle offer, summary mode
@@ -8777,7 +8785,7 @@ final class Chat implements Model
 
         $chat = $this;
         $cmds = [];
-        $now = $held = $nextTurn = $restart = [];
+        $now = $held = $nextTurn = $restart = $refused = [];
         $engine = false;
         $compactor = false;
         $config = null;
@@ -8826,6 +8834,18 @@ final class Chat implements Model
                     $restart[] = $key;
                     continue;
                 }
+            } elseif ($key === 'maxCostUsd') {
+                // Roadmap N-P4g: the persistent spend ceiling, re-resolved the
+                // way the launch resolves it (`$SUGARCRUSH_MAX_COST` still
+                // wins) and carried in the field `/budget` sets. A value that
+                // is not a ceiling keeps the cap the session has — never an
+                // uncapped session nobody chose — and the toast says so.
+                try {
+                    $chat = $chat->mutate(['maxCostUsd' => \SugarCraft\Crush\Cli\Bootstrap::maxCostUsd()]);
+                } catch (\SugarCraft\Crush\Cli\PermissionConfigException) {
+                    $refused[] = $key;
+                    continue;
+                }
             } elseif ($key === 'mouse') {
                 $cmds[] = self::mouseMode() === MouseMode::Off ? Cmd::disableMouse() : Cmd::enableMouseCellMotion();
             } elseif ($key === 'statusLine') {
@@ -8855,9 +8875,17 @@ final class Chat implements Model
             ]);
         }
 
+        $summary = self::settingsSavedSummary(\count($changed), $savedTo, \count($now), \count($held), \count($nextTurn), $restart);
+        if ($refused !== []) {
+            $summary .= ' · ' . implode(', ', $refused) . ' is not a spend ceiling, so the cap stays as it was';
+        }
         [$chat, $toastCmd] = $chat->withSettingsToast(
-            self::settingsSavedSummary(\count($changed), $savedTo, \count($now), \count($held), \count($nextTurn), $restart),
-            $restart === [] ? \SugarCraft\Toast\ToastType::Success : \SugarCraft\Toast\ToastType::Info,
+            $summary,
+            match (true) {
+                $refused !== [] => \SugarCraft\Toast\ToastType::Warning,
+                $restart === [] => \SugarCraft\Toast\ToastType::Success,
+                default => \SugarCraft\Toast\ToastType::Info,
+            },
         );
         $cmds[] = $toastCmd;
 
@@ -9422,9 +9450,9 @@ final class Chat implements Model
     }
 
     /**
-     * Flip one tool call's collapsed/expanded state. Collapsing REMOVES the
-     * key rather than storing false - see the constructor's `$expanded`
-     * docblock for why the map only ever holds what the user opened.
+     * Flip one tool call's collapsed/expanded state. Returning a call to its
+     * default REMOVES the key - see the constructor's `$expanded` docblock
+     * for why the map only ever holds what the user changed.
      *
      * @return self A new Chat with $id's expansion state flipped
      */
@@ -18612,7 +18640,7 @@ final class Chat implements Model
      */
     private function thrashBreakerRefusal(): array
     {
-        $notice = $this->compactionService()->thrashBreakerNotice();
+        $notice = $this->compactionService()->thrashBreakerNotice($this->compactor->config()->refillLimit);
 
         return [$this->mutate([
             // The draft is KEPT by NOT writing the input box, exactly as the cap

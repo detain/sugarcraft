@@ -591,7 +591,8 @@ knowing before you rely on it:
   you typed for one session cannot silently refuse turns in a later one whose
   spend you never looked at. A cap meant to outlive the launch is the
   `maxCostUsd` setting, in your own `settings.json` or `config.json` (or the
-  settings view, from the next launch): every launch starts with it, `/budget`
+  settings view, whose save also applies it to the running session — unless
+  `$SUGARCRUSH_MAX_COST` is set, which still wins): every launch starts with it, `/budget`
   can still raise, lower or clear it for the session at hand, and a project file
   can never set it — a checkout may neither cap your turns nor lift your cap.
 
@@ -1091,7 +1092,9 @@ axis counted in calls instead of tokens, and a ceiling a checkout can raise is
 still a bill a clone can run up on the operator's credential; `maxCostUsd`,
 because it is the spend ceiling itself — a checkout must be able neither to lift
 the operator's cap nor to impose one that refuses their turns;
-`compaction.refillLimit`, because it is how many automatic compactions that
+`promptSuggestionHistory`, because every message it adds is sent to the
+operator's title model after every turn — input tokens on their credential, the
+same money axis; `compaction.refillLimit`, because it is how many automatic compactions that
 bought nothing the thrash breaker lets a session pay for in a row — the same
 argument counted in summarisation calls; `toolOutputCapBytes`,
 `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,

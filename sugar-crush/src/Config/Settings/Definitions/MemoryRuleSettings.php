@@ -88,7 +88,7 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withLabel('Project note: max bytes')
                 ->withHelp('Largest one project memory note may be when it is written to the repository\'s .sugar-crush/memory/.')
                 ->withReaderSymbol(ProjectMemoryWriter::class . '::maxContentBytes')
-                ->withReadBy('`ProjectMemoryWriter::write()` → `maxContentBytes()`, per note'),
+                ->withReadBy('`ProjectMemoryWriter::write()` and the Memory tool\'s `save` → `maxContentBytes()`, per note'),
             $cap(MemoryBlock::SETTING_MAX_ENTRIES, MemoryBlock::MAX_ENTRIES, 'Memory index: notes', 'Most notes the prompt\'s memory index lists, newest first; user notes count inside it.'),
             $cap(MemoryBlock::SETTING_MAX_BYTES, MemoryBlock::MAX_BYTES, 'Memory index: bytes', 'Byte budget for the memory index\'s note lines; the user-note budget is lowered to fit inside it.'),
             $cap(MemoryBlock::SETTING_MAX_ENTRY_BYTES, MemoryBlock::MAX_ENTRY_BYTES, 'Memory index: bytes per note', 'Longest one note\'s index line may be before it is shown truncated; lowered to the user-note budget if over it.'),

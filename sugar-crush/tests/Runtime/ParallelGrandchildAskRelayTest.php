@@ -91,6 +91,22 @@ final class ParallelGrandchildAskRelayTest extends TestCase
         $this->assertSame('task_b: reject the user said: use the other file [forked]', $results[1]->content());
     }
 
+    /**
+     * Roadmap 5.7-2: a `once` that carries words (an AskUser choice, a server
+     * client's typed answer) is the answer, so the relay keeps the frame's
+     * feedback — as labelled at the source, not labelled again.
+     */
+    public function testAOnceReplyKeepsTheUsersWordsAcrossTheRelay(): void
+    {
+        $settled = ApprovalVerdict::fromReply(\SugarCraft\Crush\Permissions\PermissionReply::Once, 'option 2');
+        $relayed = PermissionAskRelay::verdictFromReply(['reply' => 'once', 'feedback' => $settled->feedback]);
+
+        self::assertTrue($relayed->permits());
+        self::assertSame($settled->feedback, $relayed->feedback);
+        self::assertSame('the user said: option 2', $relayed->feedback);
+        self::assertSame('', PermissionAskRelay::verdictFromReply(['reply' => 'once'])->feedback);
+    }
+
     public function testAnUnansweredQuestionStaysUnansweredInTheMember(): void
     {
         $approver = static fn (): ApprovalVerdict => ApprovalVerdict::unanswered('the turn ended');

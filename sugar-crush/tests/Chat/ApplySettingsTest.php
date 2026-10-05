@@ -117,6 +117,29 @@ final class ApplySettingsTest extends TestCase
         self::assertSame('dracula', $chat->theme()->name);
     }
 
+    public function testMaxCostUsdMovesTheRunningCapAndAnUnusableValueKeepsIt(): void
+    {
+        $env = getenv('SUGARCRUSH_MAX_COST');
+        putenv('SUGARCRUSH_MAX_COST');
+        try {
+            $this->writeConfig(['maxCostUsd' => 2.5]);
+            [$chat] = (new Chat(backend: new EchoBackend(), maxCostUsd: 9.0))->applySettings(['maxCostUsd'], '/x/config.json');
+            self::assertSame(2.5, $chat->maxCostUsd(), 'the saved ceiling is the session\'s cap at once');
+            self::assertStringContainsString('1 applies now', self::toastText($chat));
+
+            $this->writeConfig(['maxCostUsd' => 0]);
+            [$kept] = $chat->applySettings(['maxCostUsd']);
+            self::assertSame(2.5, $kept->maxCostUsd(), 'a value that is not a ceiling never uncaps the session');
+            self::assertStringContainsString('maxCostUsd is not a spend ceiling', self::toastText($kept));
+
+            $this->writeConfig([]);
+            [$cleared] = $kept->applySettings(['maxCostUsd']);
+            self::assertNull($cleared->maxCostUsd(), 'a reset is no cap, as a launch without the key has');
+        } finally {
+            putenv($env === false ? 'SUGARCRUSH_MAX_COST' : 'SUGARCRUSH_MAX_COST=' . $env);
+        }
+    }
+
     public function testStatusLineIsReinstalledByTheReturnedCmdNotByUpdate(): void
     {
         $this->writeConfig(['statusLine' => ['type' => 'command', 'command' => 'echo hi']]);
@@ -193,6 +216,7 @@ final class ApplySettingsTest extends TestCase
         $handled = [...$handled, ...\SugarCraft\Crush\Context\CompactorConfig::SETTINGS];
         // N-P4d: read as each project note is written.
         $handled[] = \SugarCraft\Crush\Context\ProjectMemoryWriter::SETTING_MAX_CONTENT_BYTES;
+        $handled[] = \SugarCraft\Crush\Cli\Bootstrap::MAX_COST_SETTING;
         $ownDoors = array_keys(SettingsWriter::LIVE_COMMAND_KEYS);
         foreach (SettingsSchema::all() as $definition) {
             if ($definition->applyMode !== ApplyMode::Live || \in_array($definition->ui, [UiEditability::ReadOnly, UiEditability::Hidden], true)) {
@@ -213,7 +237,7 @@ final class ApplySettingsTest extends TestCase
         self::assertStringContainsString('restart', (string) $writer->refusal(SettingsTier::Session, 'instructions', ['AGENTS.md']));
         self::assertStringContainsString('config.json', (string) $writer->refusal(SettingsTier::Session, 'permissionMode', 'plan'));
         self::assertNotNull($writer->refusal(SettingsTier::Session, 'trustedProjectHooks', ['/x']), 'trust never goes through a save');
-        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'compaction.reminderPercent', 'compaction.autoPercent', 'compaction.blockPercent', 'compaction.keepRecent', 'compaction.summaryUserChars', 'compaction.summaryAssistantChars', 'compaction.toolOutputChars', 'compaction.reminderTokens', 'compaction.autoTokens', 'compaction.blockTokens', 'compaction.modelTokenCaps', 'compaction.idleOfferSeconds', 'compaction.mode', 'compaction.refillLimit', 'contextPruning.minContextTokens', 'contextPruning.maxContextTokens', 'contextPruning.nudgeFrequency', 'contextPruning.iterationNudgeThreshold', 'repoMap.enabled', 'repoMap.maxBytes', 'env.gitDiffAfterWrites', 'env.diffMaxBytes', 'permissions.autoStrikeLimit', 'permissions.autoTotalLimit', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'toolSpillWindowPercent', 'toolInstructionCapBytes', 'toolSpillCaptureBytes', 'toolSpillMinCapBytes', 'globMaxMatches', 'webFetchMaxBytes', 'webFetchTimeoutSeconds', 'bashInteractiveIdleSeconds', 'bashTimeoutSeconds', 'bashMaxTimeoutSeconds', 'chatToolTimeoutSeconds', 'skills.pathNudges', 'embeddingModel', 'subagentMaxTurns', 'subagentMaxDepth', 'subagentMaxActive', 'theme', 'statusLine', 'queueMode', 'terminalBackground', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'sessions.autoTitle', 'promptSuggestions', 'promptSuggestionHistory', 'expandToolOutput', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
+        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'maxCostUsd', 'compaction.reminderPercent', 'compaction.autoPercent', 'compaction.blockPercent', 'compaction.keepRecent', 'compaction.summaryUserChars', 'compaction.summaryAssistantChars', 'compaction.toolOutputChars', 'compaction.reminderTokens', 'compaction.autoTokens', 'compaction.blockTokens', 'compaction.modelTokenCaps', 'compaction.idleOfferSeconds', 'compaction.mode', 'compaction.refillLimit', 'contextPruning.minContextTokens', 'contextPruning.maxContextTokens', 'contextPruning.nudgeFrequency', 'contextPruning.iterationNudgeThreshold', 'repoMap.enabled', 'repoMap.maxBytes', 'env.gitDiffAfterWrites', 'env.diffMaxBytes', 'permissions.autoStrikeLimit', 'permissions.autoTotalLimit', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'toolSpillWindowPercent', 'toolInstructionCapBytes', 'toolSpillCaptureBytes', 'toolSpillMinCapBytes', 'globMaxMatches', 'webFetchMaxBytes', 'webFetchTimeoutSeconds', 'bashInteractiveIdleSeconds', 'bashTimeoutSeconds', 'bashMaxTimeoutSeconds', 'chatToolTimeoutSeconds', 'skills.pathNudges', 'embeddingModel', 'subagentMaxTurns', 'subagentMaxDepth', 'subagentMaxActive', 'theme', 'statusLine', 'queueMode', 'terminalBackground', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'sessions.autoTitle', 'promptSuggestions', 'promptSuggestionHistory', 'expandToolOutput', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
 
         $writer->write(SettingsTier::Session, ['maxOutputTokens' => 100]);
         self::assertSame(['maxOutputTokens' => 100], $writer->current(SettingsTier::Session));

@@ -60,7 +60,7 @@ final class Definitions
                 'tool' => Schema::string(),
                 'arguments' => Schema::map(Schema::any()),
                 'reason' => Schema::string(),
-                'source' => Schema::string()->describe('`gate`, or `hook:<names>`'),
+                'source' => Schema::string()->describe('`gate`, `hook:<names>`, or `tool:<name>` for a question the call puts itself (`AskUser`, `PlanExit`)'),
                 'mode' => Schema::string(),
                 'options' => Schema::arrayOf(Schema::enum(['once', 'always', 'reject'])),
                 'alwaysScope' => Schema::map(Schema::string()),

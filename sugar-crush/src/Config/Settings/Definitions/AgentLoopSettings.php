@@ -72,14 +72,16 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::AgentLoop)
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
-                ->withApplyMode(ApplyMode::Restart)
+                // Live: Chat::applySettings() re-resolves the cap a save names,
+                // into the same field `/budget` sets.
+                ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('SUGARCRUSH_MAX_COST')
                 ->withValidators(SpendCapValidator::new())
                 ->withLabel('Spend cap (USD)')
                 ->withHelp('Refuse new turns once the provider-reported spend of a launch reaches this many US dollars; unset is no cap. /budget changes it for the running launch only.')
                 ->withDefaultText('unset (no cap)')
                 ->withReaderSymbol(Bootstrap::class . '::maxCostUsd')
-                ->withReadBy('`Bootstrap::workspace()` → `maxCostUsd()` → `persistedMaxCostUsd()`'),
+                ->withReadBy('`Bootstrap::workspace()`, `Chat::applySettings()` → `maxCostUsd()` → `persistedMaxCostUsd()`'),
         ];
     }
 }

@@ -12,7 +12,7 @@ namespace SugarCraft\Crush\Agents\Live;
  * Only {@see Steer}, {@see Interrupt} and {@see Note} are read into the run's
  * conversation by {@see AgentInbox::drain()}; a {@see Followup} waits in the
  * mailbox for the run that continues the conversation once this one ends (a
- * cold resume), and a {@see Control} message is a verb for the harness, never
+ * cold resume), which reads it through {@see AgentInbox::takeFollowups()}, and a {@see Control} message is a verb for the harness, never
  * text for the model ({@see AgentInbox::takeControls()}).
  */
 enum MessageMode: string

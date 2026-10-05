@@ -22,8 +22,11 @@ final readonly class TeamConfig
         public int $maxTeammates = 5,
 
         /**
-         * Default timeout in seconds for teammate task execution.
-         * Teammates exceeding this limit are marked TimedOut.
+         * How long, in seconds, a teammate may hold a claimed task before
+         * the claim reads as overdue ({@see TeamManager::overdueSeconds()}).
+         * Nothing is failed or stopped automatically: the Team tool's `list`
+         * marks the claim overdue, and the lead may `release` it. `0` never
+         * marks one.
          */
         public int $defaultTimeoutSeconds = 600,
 
@@ -34,9 +37,9 @@ final readonly class TeamConfig
         public bool $allowPeerMessaging = true,
 
         /**
-         * When true, unassigned tasks are automatically distributed to
-         * available teammates. When false, tasks sit in the inbox until
-         * a teammate explicitly claims them.
+         * When true, an idle teammate is handed the next unblocked task on
+         * the board. When false, tasks stay pending on the board until a
+         * teammate claims one by name.
          */
         public bool $autoAssignTasks = true,
 

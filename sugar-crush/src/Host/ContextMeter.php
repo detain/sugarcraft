@@ -171,13 +171,21 @@ final class ContextMeter
 
     /**
      * Whether the idle-compaction prompt is due: idle longer than
-     * {@see IdleCompactionPolicy::IDLE_SECONDS} AND the estimate past the
-     * whole window. The policy owns both numbers; the caller supplies the
-     * limit because the backend is what it can see.
+     * $idleSeconds AND the estimate past the whole window. The caller supplies
+     * the limit because the backend is what it can see, and the idle bound
+     * because the session's settings are.
+     *
+     * @param int $idleSeconds the session's `compaction.idleOfferSeconds`
+     *        ({@see \SugarCraft\Crush\Context\CompactorConfig::$idleOfferSeconds}),
+     *        else {@see IdleCompactionPolicy::IDLE_SECONDS}; `0` never offers
      */
-    public function shouldPromptIdleCompaction(int $tokenCount, ?\DateTimeImmutable $lastActivityAt, int $tokenLimit): bool
-    {
-        return IdleCompactionPolicy::shouldPrompt($tokenCount, $lastActivityAt, $tokenLimit);
+    public function shouldPromptIdleCompaction(
+        int $tokenCount,
+        ?\DateTimeImmutable $lastActivityAt,
+        int $tokenLimit,
+        int $idleSeconds = IdleCompactionPolicy::IDLE_SECONDS,
+    ): bool {
+        return IdleCompactionPolicy::shouldPrompt($tokenCount, $lastActivityAt, $tokenLimit, idleSeconds: $idleSeconds);
     }
 
     /**

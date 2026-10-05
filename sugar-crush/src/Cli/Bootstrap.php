@@ -2268,14 +2268,17 @@ final class Bootstrap
         // inherit` (or none) and the built-in definitions. An agent that names
         // its own model keeps it, and a Task call's `model` argument still
         // wins over both (TaskTool::chooseModel()).
-        $subagentModel = self::readUserConfig()['subagentModel'] ?? null;
+        $userConfig = self::readUserConfig();
+        $subagentModel = $userConfig['subagentModel'] ?? null;
         $subagentModel = is_string($subagentModel) && trim($subagentModel) !== '' ? trim($subagentModel) : null;
 
         foreach (self::agentRoster($root, self::selectedProviderName() ?? 'echo', $model) as $agent) {
             if ($subagentModel !== null && $agent->inheritsModel) {
                 $agent = $agent->withModel($subagentModel);
             }
-            $manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)));
+            // `env.*` (roadmap N-P4d) shape a sub-agent's block as they shape
+            // the main session's (Runtime::environmentSnapshot()).
+            $manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)->withSettings($userConfig)));
         }
 
         // Step P-C1: a finished delegation becomes a `subagent` child session
@@ -5817,14 +5820,17 @@ final class Bootstrap
      * terminal, and this method also runs on the non-interactive and
      * background-session paths where there is nobody to ask.
      *
-     * The gate is also what has to stand between a `SessionStart` hook and
+     * The gate is also what has to stand between a lifecycle hook and
      * execution. {@see \SugarCraft\Crush\Hooks\HookConfig::parse()} accepts
-     * every {@see \SugarCraft\Crush\Hooks\HookEvent} case, so such an entry
-     * registers today and is inert only because nothing constructs
-     * {@see \SugarCraft\Crush\Hooks\HookDispatcher}. Wire session-lifecycle
-     * dispatch up and the payload moves from first-tool-call to launch with no
-     * other change — so "the gate refused to load it" is the property that has
-     * to hold, not "nothing dispatches it yet".
+     * every {@see \SugarCraft\Crush\Hooks\HookEvent} case, and those events
+     * are live: `SessionStart` runs through {@see \SugarCraft\Crush\Hooks\HookManager}
+     * at launch, and {@see hooks()} installs the
+     * {@see \SugarCraft\Crush\Hooks\HookDispatcher} that
+     * {@see \SugarCraft\Crush\Hooks\HookManager::dispatcher()} builds for the
+     * team events (`TaskCreated`, `TaskCompleted`, `TeammateIdle`). So a hook
+     * file's payload runs at launch or on a team event, with no tool call in
+     * the path — "the gate refused to load it" is the property that has to
+     * hold.
      *
      * PATH SHAPE COPIED FROM {@see agentPresets()} — the project's
      * `.sugar-crush/<thing>` beside the user's, resolved off
@@ -9818,8 +9824,9 @@ final class Bootstrap
      * the persistent spend ceiling, or null when no settings file sets one.
      *
      * USER TIER ONLY, so a checkout can neither impose a cap that refuses the
-     * operator's turns nor be the reason one is missing. Read once, when the
-     * workspace is built; `/budget` still changes the running launch's cap and
+     * operator's turns nor be the reason one is missing. Read when the
+     * workspace is built, and again by {@see Chat::applySettings()} when a
+     * save names the key; `/budget` still changes the running launch's cap and
      * never writes it back.
      *
      * HELD TO THE VARIABLE'S STANDARD, not to the "a bad hand edit costs that

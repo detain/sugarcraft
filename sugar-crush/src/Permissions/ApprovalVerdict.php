@@ -59,6 +59,17 @@ final readonly class ApprovalVerdict
         return new self(PermissionReply::Once);
     }
 
+    /**
+     * Permit this one call, keeping feedback a relay carried home — already
+     * labelled by the verdict it was read from ({@see userNote()}), so it is
+     * not labelled twice. A parallel member's question answered with words
+     * (an `AskUser` choice, a server client's `once` + text) keeps the answer.
+     */
+    public static function onceRelayed(string $feedback): self
+    {
+        return new self(PermissionReply::Once, trim($feedback));
+    }
+
     /** Permit this call and, where the asker allows it, the same question again. */
     public static function always(): self
     {

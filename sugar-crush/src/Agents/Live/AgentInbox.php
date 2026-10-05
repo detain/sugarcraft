@@ -49,16 +49,18 @@ final class AgentInbox
     private const AGENT_ID_PATTERN = '/^[A-Za-z0-9._-]{1,128}$/';
 
     /**
-     * The verbs every surface may send (roadmap P-D3 acts on them) — the web
-     * protocol's `agent.control` enum is derived from this list.
+     * The verbs the run itself acts on while it works (roadmap P-D3). The web
+     * protocol's `agents.control` enum is this list plus
+     * {@see BACKGROUND_VERB}
+     * ({@see \SugarCraft\Crush\Protocol\Methods\AgentsMethods::CONTROL_VERBS}).
      */
     public const CONTROL_VERBS = ['cancel', 'pause', 'resume'];
 
     /**
-     * Promote the running run to a background session (roadmap P-E3,
-     * `Ctrl+X b` in the Agent View). {@see control()} sends it like the
-     * others, but it is kept out of {@see CONTROL_VERBS}: that list is the
-     * web protocol's wire enum, and the web client does not offer it yet.
+     * Promote the running run to a background session (roadmap P-E3):
+     * `Ctrl+X b` in the Agent View, and `agents.control` from a server
+     * client. {@see control()} sends it like the others; it is kept out of
+     * {@see CONTROL_VERBS} because the harness, not the run, acts on it.
      */
     public const BACKGROUND_VERB = 'background';
 

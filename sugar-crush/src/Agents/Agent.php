@@ -860,7 +860,7 @@ final readonly class Agent
      * left the reader to assume no attachment point was there. One is.
      * `/usr/bin/grep -rn 'withEnvironment(' src/ bin/` finds exactly TWO
      * production attachment points - `Bootstrap.php`
-     * (`$manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)))`,
+     * (`$manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)->withSettings($userConfig)))`,
      * inside `Bootstrap::agentManager()`'s roster loop) and `App::dispatchSkill()`
      * treated above; every other hit is this file's own, the setter's
      * declaration and this doc-block's quotations of the two.

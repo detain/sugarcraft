@@ -5802,8 +5802,9 @@ final class Runtime
      * Determine whether to prompt the user about idle-session compaction.
      *
      * Returns true when:
-     *   - The session has been idle for more than
-     *     {@see IdleCompactionPolicy::IDLE_SECONDS}, AND
+     *   - The session has been idle for more than `compaction.idleOfferSeconds`
+     *     (`$app->compactorConfig`, else {@see IdleCompactionPolicy::IDLE_SECONDS};
+     *     `0` never offers), AND
      *   - The estimated token count is past the WHOLE context window this
      *     runtime's provider reports
      *
@@ -5830,6 +5831,7 @@ final class Runtime
             $tokenCount,
             $app->lastActivityAt,
             ContextWindow::resolve($this->provider->contextWindow()),
+            idleSeconds: $app->compactorConfig?->idleOfferSeconds ?? IdleCompactionPolicy::IDLE_SECONDS,
         );
     }
 }

@@ -172,6 +172,23 @@ final class ForeignAgentPresetWiringTest extends TestCase
     }
 
     /**
+     * Roadmap N-P4d: a registered agent's environment block carries the
+     * `env.*` settings, as the main session's does.
+     */
+    public function testTheLaunchRosterEnvironmentBlocksApplyTheEnvSettings(): void
+    {
+        @mkdir($this->home . '/.sugar-crush', 0700, true);
+        file_put_contents($this->home . '/.sugar-crush/config.json', json_encode([
+            \SugarCraft\Crush\Context\EnvironmentBlock::SETTING_GIT_DIFF_AFTER_WRITES => false,
+        ]));
+
+        $coder = Bootstrap::agentManager($this->repo)->get('coder');
+
+        $this->assertNotNull($coder?->environment);
+        $this->assertFalse($coder->environment->diffsAfterWrites(), 'env.gitDiffAfterWrites reaches a sub-agent\'s block');
+    }
+
+    /**
      * PRECEDENCE, HALF ONE: a native preset outranks a foreign one of the same name.
      *
      * The decision, stated on {@see Bootstrap::agentRoster()}: foreign imports go in

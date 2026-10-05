@@ -271,7 +271,7 @@
                 },
                 "source": {
                     "type": "string",
-                    "description": "`gate`, or `hook:<names>`"
+                    "description": "`gate`, `hook:<names>`, or `tool:<name>` for a question the call puts itself (`AskUser`, `PlanExit`)"
                 },
                 "mode": {
                     "type": "string"
@@ -3898,7 +3898,7 @@
                     },
                     "source": {
                         "type": "string",
-                        "description": "`gate`, or `hook:<names>`"
+                        "description": "`gate`, `hook:<names>`, or `tool:<name>` for a question the call puts itself (`AskUser`, `PlanExit`)"
                     },
                     "mode": {
                         "type": "string"

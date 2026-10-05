@@ -174,8 +174,11 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog
     private function save(array $args): string
     {
         $content = $this->requireString($args, 'content');
-        if (\strlen($content) > ProjectMemoryWriter::MAX_CONTENT_BYTES) {
-            throw new \InvalidArgumentException('content exceeds ' . ProjectMemoryWriter::MAX_CONTENT_BYTES . ' bytes');
+        // `memory.projectNoteMaxBytes` (roadmap N-P4d), not the constant: a
+        // raised ceiling would otherwise still be refused here at the default.
+        $maxBytes = ProjectMemoryWriter::maxContentBytes();
+        if (\strlen($content) > $maxBytes) {
+            throw new \InvalidArgumentException('content exceeds ' . $maxBytes . ' bytes');
         }
 
         $scope = (string) ($args['scope'] ?? 'project');

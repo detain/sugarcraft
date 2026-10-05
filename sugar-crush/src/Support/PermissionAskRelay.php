@@ -224,7 +224,8 @@ final class PermissionAskRelay
 
         // An answer this build cannot read is not consent.
         return match (is_string($raw) ? PermissionReply::tryFrom($raw) : null) {
-            PermissionReply::Once => ApprovalVerdict::once(),
+            // The frame's feedback is the settled verdict's, already labelled.
+            PermissionReply::Once => ApprovalVerdict::onceRelayed($feedback),
             PermissionReply::Always => ApprovalVerdict::always(),
             default => ApprovalVerdict::reject($feedback),
         };

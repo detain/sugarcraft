@@ -239,6 +239,50 @@ final class SessionHostTest extends TestCase
         self::assertSame(TurnTicket::REFUSED, $ticket->admitted);
     }
 
+    /**
+     * Roadmap N-P4b on server sessions: `compaction.mode: off` skips the
+     * automatic tier but still refuses a prompt the window cannot take, and
+     * the thrash breaker counts to the session's `compaction.refillLimit`.
+     */
+    public function testCompactionModeOffRefusesWhatTheWindowCannotTakeWithoutCompacting(): void
+    {
+        $backend = self::scripted();
+        $history = [Message::user(str_repeat('word ', 100_000)), Message::assistant('ok')];
+        $host = SessionHost::new(
+            's',
+            WorkspaceContext::new(sessionStore: $this->store, backend: $backend),
+            history: $history,
+            compactorConfig: \SugarCraft\Crush\Context\CompactorConfig::new()->withMode('off'),
+            customCommands: [],
+        );
+
+        $ticket = $host->submit('next');
+
+        self::assertSame(TurnTicket::REFUSED, $ticket->admitted);
+        self::assertStringStartsWith(\SugarCraft\Crush\Host\CompactionService::BLOCKED_TURN_PREFIX, (string) $ticket->reason);
+        self::assertSame([], $backend->sent, 'nothing was sent');
+        self::assertSame(self::texts($history), self::texts($host->history()), 'and nothing was compacted');
+    }
+
+    public function testTheThrashBreakerCountsToTheSessionsRefillLimit(): void
+    {
+        $backend = self::scripted();
+        $host = SessionHost::new(
+            's',
+            WorkspaceContext::new(sessionStore: $this->store, backend: $backend),
+            history: [Message::user(str_repeat('word ', 90_000)), Message::assistant('ok')],
+            compactorConfig: \SugarCraft\Crush\Context\CompactorConfig::new()->withRefillLimit(5),
+            customCommands: [],
+        );
+        (new \ReflectionProperty(SessionHost::class, 'consecutiveRefills'))->setValue($host, 5);
+
+        $ticket = $host->submit('next');
+
+        self::assertSame(TurnTicket::REFUSED, $ticket->admitted);
+        self::assertStringContainsString('has run 5 times in a row', (string) $ticket->reason);
+        self::assertSame([], $backend->sent);
+    }
+
     public function testTheSnapshotIsWhatAnAttachingClientNeeds(): void
     {
         $backend = self::scripted();

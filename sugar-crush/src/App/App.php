@@ -1947,8 +1947,10 @@ final class App implements Model
         //     `Model:` line, and a skill may declare its own `model:` in
         //     frontmatter — one shared session-wide instance would stamp the
         //     session's model onto a fork running a different one.
+        //   - Under the `env.*` settings (roadmap N-P4d), as the main
+        //     session's block is.
         $agent = $agent->withEnvironment(
-            EnvironmentBlock::capture($this->root ?? (getcwd() ?: ''), $agent->model),
+            EnvironmentBlock::capture($this->root ?? (getcwd() ?: ''), $agent->model)->withSettings(),
         );
 
         $subAgent = new SubAgent(

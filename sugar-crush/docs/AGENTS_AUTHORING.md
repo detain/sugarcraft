@@ -328,7 +328,9 @@ only.
 The user can also **control** a running delegation from the Agent View
 (`Ctrl+X c`/`p`/`s`) or the agent dashboard (`c`/`r`/`s`): each sends a
 `control` line (`cancel`, `pause`, `resume`) the run reads while it works and
-the model never sees. A cancel stops the run at its next tool or step, as a
+the model never sees. A fourth control line, `background` (`Ctrl+X b` in the
+Agent View, or a server client's `agents.control`), promotes the run to a
+background session; the harness acts on it, not the run. A cancel stops the run at its next tool or step, as a
 failure that stays resumable; a pause holds it at its next step boundary,
 feeding the parent's watchdog a heartbeat, for ten minutes at most — the
 parent's `Task` call is waiting on it — and then it goes on by itself. A

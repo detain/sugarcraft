@@ -349,6 +349,11 @@ final class CompactionServiceParityTest extends TestCase
         [$broken] = (new \ReflectionMethod(Chat::class, 'thrashBreakerRefusal'))->invoke($chat);
         self::assertSame($service->thrashBreakerNotice(), $broken->history[count($broken->history) - 1]->content);
         self::assertStringContainsString((string) IdleCompactionPolicy::REFILL_LIMIT . ' times in a row', $service->thrashBreakerNotice());
+        // Roadmap N-P4b: the notice counts the session's `compaction.refillLimit`.
+        $limited = new Chat(history: $history, compactorConfig: \SugarCraft\Crush\Context\CompactorConfig::new()->withRefillLimit(5));
+        [$brokenAtFive] = (new \ReflectionMethod(Chat::class, 'thrashBreakerRefusal'))->invoke($limited);
+        self::assertSame($service->thrashBreakerNotice(5), $brokenAtFive->history[count($brokenAtFive->history) - 1]->content);
+        self::assertStringContainsString('5 times in a row', $service->thrashBreakerNotice(5));
 
         $outcome = new \ReflectionMethod(Chat::class, 'withCompactionOutcome');
         $run = new \ReflectionProperty(Chat::class, 'consecutiveRefillCompactions');

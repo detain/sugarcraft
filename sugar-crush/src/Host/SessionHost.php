@@ -762,10 +762,21 @@ final class SessionHost
         $baseHistory = $this->history;
         $reports = [];
         $refilled = null;
-        if ($this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
+        // `compaction.mode` (roadmap N-P4b) as Chat::submit() reads it: `off`
+        // skips the automatic tier, yet a prompt the window cannot take is
+        // still refused with the blocking tier's refusal. `heuristic` and
+        // `llm` need no arm here — a server session's tier always writes the
+        // heuristic lines.
+        $config = $this->compactor->config();
+        if (!$config->autoCompacts() && $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit)) {
+            $rows = $this->compaction()->foregroundBlockedRows('', $this->history, $tokenCount, $tokenLimit);
+
+            return TurnTicket::refused(array_pop($rows)->content);
+        }
+        if ($config->autoCompacts() && $this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
             $compaction = $this->compaction();
-            if (IdleCompactionPolicy::thrashTripped($this->consecutiveRefills)) {
-                return TurnTicket::refused($compaction->thrashBreakerNotice());
+            if (IdleCompactionPolicy::thrashTripped($this->consecutiveRefills, $config->refillLimit)) {
+                return TurnTicket::refused($compaction->thrashBreakerNotice($config->refillLimit));
             }
 
             $tier = $turns->inlineTier(

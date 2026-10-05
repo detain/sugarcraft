@@ -16,6 +16,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  */
 final class MemoryToolTest extends TestCase
 {
+    use \SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+
     private string $dir;
 
     private MemoryStore $store;
@@ -135,6 +137,29 @@ final class MemoryToolTest extends TestCase
             ['action' => 'recall'],
         ] as $args) {
             self::assertTrue($this->call($args)->isError(), json_encode($args) ?: '');
+        }
+    }
+
+    /**
+     * Roadmap N-P4d: `memory.projectNoteMaxBytes` is the tool's ceiling too —
+     * a raised one is not refused at the default before the writer runs.
+     */
+    public function testTheNoteCeilingIsTheSettingNotTheConstant(): void
+    {
+        $this->useHomeSandbox($this->dir . '/sandbox-home');
+        try {
+            mkdir($this->dir . '/sandbox-home/.sugar-crush', 0o700, true);
+            file_put_contents(
+                $this->dir . '/sandbox-home/.sugar-crush/config.json',
+                json_encode([\SugarCraft\Crush\Context\ProjectMemoryWriter::SETTING_MAX_CONTENT_BYTES => 12_000]),
+            );
+
+            self::assertFalse($this->call(['action' => 'save', 'content' => str_repeat('x', 9_000)])->isError(), 'raised past the default');
+            $refused = $this->call(['action' => 'save', 'content' => str_repeat('x', 12_001)]);
+            self::assertTrue($refused->isError());
+            self::assertStringContainsString('12000 bytes', $refused->content());
+        } finally {
+            $this->restoreHomeSandbox();
         }
     }
 

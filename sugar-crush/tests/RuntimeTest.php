@@ -1985,6 +1985,24 @@ final class RuntimeTest extends TestCase
         $this->assertFalse($result);
     }
 
+    /** Roadmap N-P4b: the idle bound is the session's `compaction.idleOfferSeconds`. */
+    public function testShouldPromptIdleCompactionUsesTheIdleOfferSetting(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test');
+        $app = App::new($provider, 'test-model')->withLastActivity(new DateTimeImmutable('30 minutes ago'));
+        $config = \SugarCraft\Crush\Context\CompactorConfig::new();
+
+        $this->assertTrue($this->runtime->shouldPromptIdleCompaction($app->withCompactorConfig($config->withIdleOfferSeconds(600)), 150000));
+        $this->assertFalse(
+            $this->runtime->shouldPromptIdleCompaction($app->withCompactorConfig($config->withIdleOfferSeconds(0))->withLastActivity(new DateTimeImmutable('2 hours ago')), 150000),
+            '0 never offers',
+        );
+        $meter = \SugarCraft\Crush\Host\ContextMeter::new();
+        $this->assertTrue($meter->shouldPromptIdleCompaction(150000, new DateTimeImmutable('30 minutes ago'), 100000, 600));
+        $this->assertFalse($meter->shouldPromptIdleCompaction(150000, new DateTimeImmutable('30 minutes ago'), 100000));
+    }
+
     public function testShouldPromptIdleCompactionReturnsTrueWhenIdleAndLarge(): void
     {
         // App with idle time > 1 hour and token count > 100K

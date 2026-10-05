@@ -2425,11 +2425,13 @@ final class CompactionService
 
     /**
      * The refusal the thrash breaker appends ({@see Chat::thrashBreakerRefusal()}
-     * says when and why): {@see IdleCompactionPolicy::REFILL_LIMIT} compactions in
-     * a row came straight back over the tier with the turn unsent. It names no
-     * percentage and no `/compact`, for the reasons given there.
+     * says when and why): `$times` compactions in a row — the session's
+     * `compaction.refillLimit` ({@see CompactorConfig::$refillLimit}), else
+     * {@see IdleCompactionPolicy::REFILL_LIMIT} — came straight back over the
+     * tier with the turn unsent. It names no percentage and no `/compact`, for
+     * the reasons given there.
      */
-    public function thrashBreakerNotice(): string
+    public function thrashBreakerNotice(int $times = IdleCompactionPolicy::REFILL_LIMIT): string
     {
         return sprintf(
             'Context compaction has run %d times in a row and the transcript came straight back over the '
@@ -2437,7 +2439,7 @@ final class CompactionService
             . 'The recent exchanges the rewrite keeps in full are what will not fit — trim the largest of '
             . 'them (tool output is usually the bulk), or start over with /rewind or /clear. '
             . '/model with a larger context window also resolves this.',
-            IdleCompactionPolicy::REFILL_LIMIT,
+            max(1, $times),
         );
     }
 
