@@ -976,7 +976,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these one hundred and eight keys are layered — `provider`, `models`,
+Only these one hundred and nine keys are layered — `provider`, `models`,
 `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`,
 `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1009,7 +1009,7 @@ Only these one hundred and eight keys are layered — `provider`, `models`,
 `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `lintCommands`,
 `disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
 `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
-`debug.commands`, `debug.rules`.
+`debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1046,7 +1046,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, fifty-four keys are **never** taken from a project file:
+Even for a trusted project, fifty-five keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1139,9 +1139,9 @@ skills, where a checkout could make any skill it ships standing,
 authoritative prompt text (the `disabledSkills` a project *may* set only ever
 removes one); `watchFiles`, because it turns an `AI!` comment saved into the
 repository's files into a prompt the agent acts on, and a checkout must not be
-able to make its own text your next instruction; `debug.skills`, `debug.commands` and `debug.rules`,
-because they are the operator's own diagnostic switches — each puts the paths
-a loader refused on stderr, and a checkout has no business deciding what is
+able to make its own text your next instruction; `debug.skills`, `debug.commands`, `debug.rules` and
+`debug.stream`, because they are the operator's own diagnostic switches — each
+puts what a loader refused (or a failing token observer) on stderr, and a checkout has no business deciding what is
 printed under the operator's screen; and
 `allowedTools`, for a reason worth spelling
 out because on capability alone it looks harmless. A whitelist is an intersection — it

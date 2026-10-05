@@ -261,23 +261,25 @@ final class OperatorSettingsTest extends TestCase
 
     public function testEveryLoaderReadsItsFlagThroughTheSetting(): void
     {
-        $vars = [SkillLoader::DEBUG_SKIPS_ENV, CommandLoader::DEBUG_REFUSALS_ENV, RuleLoader::DEBUG_RULES_REFUSALS_ENV];
+        $vars = [SkillLoader::DEBUG_SKIPS_ENV, CommandLoader::DEBUG_REFUSALS_ENV, RuleLoader::DEBUG_RULES_REFUSALS_ENV, \SugarCraft\Crush\Chat::DEBUG_STREAM_ENV];
         $was = array_map(static fn (string $v): string|false => getenv($v), $vars);
         foreach ($vars as $v) {
             putenv($v);
         }
         try {
-            $this->writeConfig([DebugFlags::SKILLS => true, DebugFlags::COMMANDS => true, DebugFlags::RULES => true]);
+            $this->writeConfig([DebugFlags::SKILLS => true, DebugFlags::COMMANDS => true, DebugFlags::RULES => true, DebugFlags::STREAM => true]);
             foreach ([
                 [SkillLoader::class, 'debugSkipsRequested'],
                 [CommandLoader::class, 'debugRefusalsRequested'],
                 [RuleLoader::class, 'debugRefusalsRequested'],
+                [\SugarCraft\Crush\Chat::class, 'debugStreamRequested'],
             ] as [$class, $method]) {
                 self::assertTrue((new \ReflectionMethod($class, $method))->invoke(null), "{$class} follows its debug.* setting");
                 self::assertSame($class . '::' . $method, SettingsSchema::byKey(match ($class) {
                     SkillLoader::class => DebugFlags::SKILLS,
                     CommandLoader::class => DebugFlags::COMMANDS,
-                    default => DebugFlags::RULES,
+                    RuleLoader::class => DebugFlags::RULES,
+                    default => DebugFlags::STREAM,
                 })?->readerSymbol);
             }
         } finally {

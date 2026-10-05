@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Config\Settings\Definitions;
 
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\Settings\ApplyMode;
 use SugarCraft\Crush\Config\Settings\DebugFlags;
@@ -155,6 +156,16 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withHelp('Put each refused rules directory or file on stderr.')
                 ->withReaderSymbol(RuleLoader::class . '::debugRefusalsRequested')
                 ->withReadBy('`RuleLoader::report()` → `debugRefusalsRequested()` → `DebugFlags::requested()`'),
+            SettingDefinition::new(DebugFlags::STREAM, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Advanced)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnvVar(Chat::DEBUG_STREAM_ENV)
+                ->withLabel('Debug: token observers')
+                ->withHelp('Put the "onToken observer threw, detaching it" line on stderr when an embedder\'s streaming sink fails mid-turn.')
+                ->withReaderSymbol(Chat::class . '::debugStreamRequested')
+                ->withReadBy('`Chat` (a throwing `onToken` sink) → `debugStreamRequested()` → `DebugFlags::requested()`'),
         ];
     }
 }

@@ -581,6 +581,7 @@ final class LayeredSettings
         'debug.skills',
         'debug.commands',
         'debug.rules',
+        'debug.stream',
         // settings:layered-keys:end
     ];
 

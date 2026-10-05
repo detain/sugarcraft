@@ -415,9 +415,12 @@ final class Chat implements Model
      */
     private static function debugStreamRequested(): bool
     {
-        $value = getenv(self::DEBUG_STREAM_ENV);
-
-        return $value !== false && $value !== '' && $value !== '0';
+        // The variable decides when it says anything; unset or empty leaves
+        // it to the `debug.stream` setting (roadmap N-P4g).
+        return \SugarCraft\Crush\Config\Settings\DebugFlags::requested(
+            getenv(self::DEBUG_STREAM_ENV),
+            \SugarCraft\Crush\Config\Settings\DebugFlags::STREAM,
+        );
     }
 
     /**
