@@ -1400,9 +1400,10 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 ->completeTranscript(
                     $messages,
                     // SubAgentActivity is deliberately NOT in this signature:
-                    // the grant filter strips every DelegatesToEngine tool from
-                    // the sub-agent's list, delegation is one level deep, and a
-                    // nested emitter therefore never exists on this channel.
+                    // a nested Task (roadmap 4.7-3) keeps the delegating run's
+                    // emitter (EngineBackend::turnTools() leaves a pre-bound
+                    // emitter in place below depth 0), so its frames go
+                    // straight to the parent and never reach this channel.
                     // SpendCapBreached IS: the run's own cap check emits it, and
                     // a narrower type here made that emit a TypeError that
                     // surfaced as an unexplained "failed" (audit B4).

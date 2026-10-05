@@ -1474,7 +1474,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // Roadmap 4.1-1: a sub-agent's preset effort, per request.
             ->withReasoningEffort($this->reasoningEffort)
             ->withTools(self::gatedLedgerTools(
-                $this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd, $contextLedger, $app),
+                $this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd, $contextLedger, $app, \SugarCraft\Crush\Tools\BuiltIn\Compress::isTriggered(array_values($messages))),
                 $preCompact,
                 $messages,
             ))
@@ -2078,7 +2078,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         $this->model,
                         $this->provider->name(),
                     );
-                    $verdict = $subagent !== null ? $turnHooks->subagentStop($stopContext) : $turnHooks->stop($stopContext);
+                    // The chain sends the parent nothing while a hook works,
+                    // so a Stop hook that waits (3.H's test run) beats
+                    // through the turn's idle ceiling instead of racing it.
+                    $verdict = $subagent !== null
+                        ? $turnHooks->subagentStop($stopContext)
+                        : $turnHooks->stop($stopContext, self::throttledHeartbeat($onHeartbeat, $onReasoning));
 
                     // `"continue": false`: the turn ends, as it was about to,
                     // and the reply says why.
@@ -2648,17 +2653,47 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The turn's "still alive" beat for work that waits in the turn's own
+     * process ({@see turnTools()}' delegated runs, the `Stop` chain's hooks):
+     * the bare batch beat (`$onHeartbeat`), else an EMPTY reasoning delta —
+     * the "alive, nothing to show" frame E456 established, so neither channel
+     * paints anything. At most one beat a second, and bound to the current pid
+     * (a forked tool child must not write onto its parent's socket). Null when
+     * the turn has neither channel.
+     *
+     * @return (\Closure(): void)|null
+     */
+    private static function throttledHeartbeat(?callable $onHeartbeat, ?callable $onReasoning): ?\Closure
+    {
+        if ($onHeartbeat === null && $onReasoning === null) {
+            return null;
+        }
+        $pid = getmypid();
+        $lastBeat = 0.0;
+
+        return static function () use ($pid, $onHeartbeat, $onReasoning, &$lastBeat): void {
+            if (getmypid() !== $pid) {
+                return;
+            }
+            $now = microtime(true);
+            if ($now - $lastBeat < 1.0) {
+                return;
+            }
+            $lastBeat = $now;
+            $onHeartbeat !== null ? $onHeartbeat() : $onReasoning('');
+        };
+    }
+
+    /**
      * This turn's tool list, with every {@see DelegatesToEngine} tool bound to
      * THIS engine — see that interface for why the binding has to happen here,
      * per turn, rather than at construction.
      *
-     * The heartbeat prefers the bare batch beat (`$onHeartbeat`) and falls back
-     * to an EMPTY reasoning delta, which is the same "alive, nothing to show"
-     * frame E456 established, so neither channel paints anything. Rate-limited
-     * to one beat a second because a delegated run reports every provider
-     * chunk, and bound to the current pid because a forked tool child must not
-     * write onto a socket its parent is also writing to (the parent beats for
-     * its forked group itself — {@see Runtime}'s concurrent wait loop).
+     * The heartbeat is {@see throttledHeartbeat()}: rate-limited to one beat a
+     * second because a delegated run reports every provider chunk, and bound
+     * to the current pid because a forked tool child must not write onto a
+     * socket its parent is also writing to (the parent beats for its forked
+     * group itself — {@see Runtime}'s concurrent wait loop).
      *
      * The sub-agent emitter gets the same pid binding for the same socket-
      * corruption reason, but NO rate limit: TaskTool throttles its own beats
@@ -2682,32 +2717,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * pid like the heartbeat: a write from any other process would land in a
      * copy of the turn and vanish. Offered only where a host keeps the
      * session's ledger ({@see $contextLedger}) and its mode lets the model
-     * prune ({@see \SugarCraft\Crush\Context\Pruning\PruningMode::allowsModelPruning()});
-     * anywhere else — a delegated run, `-p`, a session in `manual` or `off` —
-     * the tool is left out of the turn, so its schema is never sent.
+     * prune ({@see \SugarCraft\Crush\Context\Pruning\PruningMode::allowsModelPruning()}),
+     * or — `Compress` alone — on a `/compress` turn ($compressTriggered) in a
+     * `manual` session; anywhere else — a delegated run, `-p`, a session in
+     * `off`, `Prune` in `manual` — the tool is left out of the turn, so its
+     * schema is never sent.
      *
      * @param \Closure(): float $spentSoFarUsd
      *
      * @return list<Tool>
      */
-    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat, ?callable $onEvent, ?\Closure $spentSoFarUsd = null, ?\SugarCraft\Crush\Context\Pruning\ContextLedger &$turnLedger = null, ?App &$turnApp = null): array
+    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat, ?callable $onEvent, ?\Closure $spentSoFarUsd = null, ?\SugarCraft\Crush\Context\Pruning\ContextLedger &$turnLedger = null, ?App &$turnApp = null, bool $compressTriggered = false): array
     {
-        $heartbeat = null;
-        if ($onHeartbeat !== null || $onReasoning !== null) {
-            $pid = getmypid();
-            $lastBeat = 0.0;
-            $heartbeat = static function () use ($pid, $onHeartbeat, $onReasoning, &$lastBeat): void {
-                if (getmypid() !== $pid) {
-                    return;
-                }
-                $now = microtime(true);
-                if ($now - $lastBeat < 1.0) {
-                    return;
-                }
-                $lastBeat = $now;
-                $onHeartbeat !== null ? $onHeartbeat() : $onReasoning('');
-            };
-        }
+        $heartbeat = self::throttledHeartbeat($onHeartbeat, $onReasoning);
 
         $subAgentEmitter = null;
         if ($onEvent !== null) {
@@ -2722,7 +2744,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
         $ledgerRead = null;
         $ledgerApply = null;
-        if ($this->contextLedger !== null && $this->contextLedger->effectiveMode()->allowsModelPruning()) {
+        // A `/compress` turn binds `Compress` in `manual` too: the person
+        // asked for that one compaction, which is what `manual` leaves them.
+        // `Prune` stays the `auto` mode's alone.
+        $pruningMode = $this->contextLedger?->effectiveMode();
+        $modelPrunes = $pruningMode?->allowsModelPruning() ?? false;
+        $explicitCompress = $compressTriggered && $pruningMode === \SugarCraft\Crush\Context\Pruning\PruningMode::Manual;
+        if ($this->contextLedger !== null && ($modelPrunes || $explicitCompress)) {
             $sessionLedger = $this->contextLedger;
             $ledgerPid = getmypid();
             $ledgerRead = static function () use (&$turnLedger, &$turnApp, $sessionLedger): array {
@@ -2743,7 +2771,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $tools = [];
         foreach ($this->tools as $tool) {
             if ($tool instanceof \SugarCraft\Crush\Tools\MutatesContextLedger) {
-                if ($ledgerRead !== null && $ledgerApply !== null) {
+                if ($ledgerRead !== null && $ledgerApply !== null && ($modelPrunes || $tool instanceof \SugarCraft\Crush\Tools\BuiltIn\Compress)) {
                     $tools[] = $tool->withLedger($ledgerRead, $ledgerApply);
                 }
 
@@ -2907,7 +2935,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * @param ?array<string, mixed> $config the already-read user config;
      *                                      null reads it
      */
-    private static function turnIdleTimeoutSeconds(?array $config = null): int
+    public static function turnIdleTimeoutSeconds(?array $config = null): int
     {
         $config ??= self::userConfig();
         $raw = $config[self::TURN_IDLE_TIMEOUT_CONFIG_KEY] ?? null;

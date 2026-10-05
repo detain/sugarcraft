@@ -2723,6 +2723,20 @@ final class App implements Model
             return $selected === null ? [$this, null] : $this->consumeShellCmd($selected);
         }
 
+        // A click on a run's row in the full-pane agent dashboard
+        // (`agent:<runId>`, AgentDashboardPane::zones()) opens that run's
+        // Agent View — Enter on a selected row, by mouse. Refused under a
+        // modal, as a side row is.
+        $agentRows = \SugarCraft\Crush\Tui\Components\AgentDashboardPane::ZONE_PREFIX;
+        if (str_starts_with($zoneId, $agentRows) && strlen($zoneId) > strlen($agentRows)) {
+            $chat = $this->chat;
+            if ($chat !== null && ($chat->keyHelp() !== null || $chat->pendingPermission() !== null)) {
+                return [$this, null];
+            }
+
+            return [$this->openAgentView(substr($zoneId, strlen($agentRows))), null];
+        }
+
         // A completed click on a docked side pane's ROW expands or collapses
         // it: a Tools row toggles the transcript's own expansion entry for
         // that call (one state, so the row opens in both places), an Agents

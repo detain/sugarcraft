@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use React\Promise\PromiseInterface;
+use SugarCraft\Crush\Cli\Attach;
+use SugarCraft\Crush\Host\RemoteSessionHost;
 use SugarCraft\Crush\Server\DiscoveryFile;
 use SugarCraft\Crush\Server\StateDir;
+use SugarCraft\Crush\Server\Workspace\Gateway;
 use SugarCraft\Crush\Support\Daemonize;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
@@ -144,6 +149,64 @@ final class ServeStatusStopTest extends TestCase
         self::assertFileDoesNotExist($this->stateDir . '/server.json');
         $logs = $this->bin(['serve', 'logs']);
         self::assertSame(1, $logs['status'], 'a foreground server writes no server.log');
+    }
+
+    public function testTheServeGatewayAnswersWorkspaceMethods(): void
+    {
+        $process = $this->spawn(['serve', '--port', '0', '--no-web'], $pipes);
+        $this->foreground[] = $process;
+        $record = $this->waitForRecord();
+        $token = \trim((string) \file_get_contents($this->stateDir . '/token'));
+
+        $host = $this->await(Attach::connect((string) Attach::websocketUrl($record->url), $token));
+        self::assertInstanceOf(RemoteSessionHost::class, $host);
+        $hello = $this->await($host->hello());
+        foreach (Gateway::METHODS as $method) {
+            self::assertContains($method, $hello['features']['methods'], 'server.hello advertises the gateway\'s own ' . $method);
+        }
+
+        // Only the gateway answers workspace.list with the served root as
+        // primary; the bare dispatcher refuses it (no_gateway).
+        $list = $this->await($host->call('workspace.list'));
+        self::assertCount(1, $list['items']);
+        self::assertTrue($list['items'][0]['primary']);
+        self::assertSame(\realpath((string) $record->root), $list['items'][0]['root']);
+        self::assertSame($record->pid, $list['items'][0]['pid']);
+        $host->close();
+
+        $stop = $this->bin(['serve', 'stop']);
+        self::assertSame(0, $stop['status'], $stop['stderr']);
+        self::assertSame(0, $this->waitForExit($process));
+    }
+
+    private function await(PromiseInterface $promise): mixed
+    {
+        $done = false;
+        $value = null;
+        $error = null;
+        $promise->then(
+            static function (mixed $result) use (&$done, &$value): void {
+                $done = true;
+                $value = $result;
+            },
+            static function (\Throwable $e) use (&$done, &$error): void {
+                $done = true;
+                $error = $e;
+            },
+        );
+        $loop = Loop::get();
+        $deadline = \microtime(true) + self::RUN_SECONDS;
+        while (!$done && \microtime(true) < $deadline) {
+            $tick = $loop->addTimer(0.02, static fn () => $loop->stop());
+            $loop->run();
+            $loop->cancelTimer($tick);
+        }
+        if ($error !== null) {
+            throw $error;
+        }
+        self::assertTrue($done, 'the server did not answer in time');
+
+        return $value;
     }
 
     public function testStopForceAndAStaleRecord(): void

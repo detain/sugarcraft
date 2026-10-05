@@ -45,6 +45,13 @@ final class MethodSchemas
         $page = static fn (Schema $item): Schema => Schema::object(['items' => Schema::arrayOf($item), 'nextCursor' => Schema::string()->nullable()], ['items', 'nextCursor']);
         $summary = Schema::ref(D::SESSION_SUMMARY);
         $memoryScope = Schema::enum(['user', 'project', 'agent']);
+        $root = Schema::string(4096)->describe('Another project root: the serve gateway routes the call to that root\'s workspace host (roadmap O-7).');
+        $workspace = Schema::object([
+            'root' => Schema::string(),
+            'primary' => Schema::boolean(),
+            'running' => Schema::boolean(),
+            'pid' => Schema::integer()->nullable(),
+        ], ['root', 'primary', 'running']);
 
         $schemas = [
             'server.hello' => [
@@ -113,11 +120,11 @@ final class MethodSchemas
             ],
 
             'session.list' => [
-                Schema::object(['limit' => Schema::integer(1, 200), 'cursor' => Schema::ref(D::SESSION_ID), 'query' => Schema::string(256)]),
+                Schema::object(['limit' => Schema::integer(1, 200), 'cursor' => Schema::ref(D::SESSION_ID), 'query' => Schema::string(256), 'root' => $root]),
                 $page($summary),
             ],
             'session.create' => [
-                Schema::object(['name' => Schema::string(256), 'permissionMode' => Schema::ref(D::PERMISSION_MODE)]),
+                Schema::object(['name' => Schema::string(256), 'permissionMode' => Schema::ref(D::PERMISSION_MODE), 'root' => $root]),
                 $summary,
             ],
             'session.get' => [$sessionOnly, Schema::ref(D::SNAPSHOT)],
@@ -287,6 +294,13 @@ final class MethodSchemas
             'bg.stop' => [
                 Schema::object(['bgId' => Schema::string(128)], ['bgId']),
                 Schema::object(['bgId' => Schema::string(), 'outcome' => Schema::string()], ['bgId', 'outcome']),
+            ],
+
+            'workspace.list' => [$empty, $items($workspace)],
+            'workspace.open' => [Schema::object(['root' => Schema::string(4096)], ['root']), $workspace],
+            'workspace.close' => [
+                Schema::object(['root' => Schema::string(4096), 'force' => Schema::boolean()], ['root']),
+                Schema::object(['closed' => Schema::boolean()], ['closed']),
             ],
 
             'files.diff' => [

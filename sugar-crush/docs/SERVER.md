@@ -419,6 +419,9 @@ it and the two tables below are generated from the code
 | `settings.set` | admin | yes | `key` | Write an allowlisted setting to the user tier or a trusted project. |
 | `todo.get` | read |  | `sessionId` | A session's todo list, as its Todo tool last wrote it. |
 | `tool.output` | read |  | `sessionId`, `toolCallId` | A finished tool call's full output, from an offset. |
+| `workspace.close` | write | yes | `root` | Stop a workspace host; refused while one of its turns runs, unless force. |
+| `workspace.list` | read |  | — | The project roots this server serves: its own, and each running workspace host. |
+| `workspace.open` | write | yes | `root` | Start the workspace host for another project root, or find it running. |
 <!-- protocol:methods:end -->
 
 A session is opened on first use and holds the same lock a terminal session
@@ -672,10 +675,6 @@ must send the token first, and from then on the socket carries the same
 closes — the gateway let go, or died — and is otherwise reaped with the usual
 TERM-then-KILL ladder over its group, its turns with it. Its output goes to
 `<state dir>/workspaces/workspace-<hash>.log`.
-
-`sugarcrush serve` does not put the gateway in front of its listener yet: a
-running server answers for its own root only, and `workspace.*` is not among
-its methods.
 
 ## Attaching a terminal (`sugarcrush attach`)
 

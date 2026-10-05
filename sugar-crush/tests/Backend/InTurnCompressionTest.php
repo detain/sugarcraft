@@ -77,6 +77,21 @@ final class InTurnCompressionTest extends TestCase
         $this->assertSame(1, \count($changes[0]->delta->blocks ?? []), 'and shows it to the host live');
     }
 
+    public function testAManualSessionIsOfferedCompressOnlyOnTheCompressTurn(): void
+    {
+        $manual = ContextLedger::new()->withDefaultMode(PruningMode::Manual);
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'nothing closed yet')], contextWindow: 1_000_000);
+        $this->engine($provider)->withContextLedger($manual)->complete(self::history(Compress::triggerPrompt('')));
+
+        $offered = self::offered($provider->requests[0]);
+        $this->assertContains('Compress', $offered, 'the /compress turn offers it in manual');
+        $this->assertNotContains('Prune', $offered, 'manual never offers the model Prune');
+
+        $plain = new ScriptedProvider([new CompleteResponse(content: 'hi')], contextWindow: 1_000_000);
+        $this->engine($plain)->withContextLedger($manual)->complete(self::history('just a question'));
+        $this->assertNotContains('Compress', self::offered($plain->requests[0]));
+    }
+
     public function testOnAnyOtherTurnTheToolIsNotOffered(): void
     {
         $provider = new ScriptedProvider([new CompleteResponse(content: 'hi')], contextWindow: 1_000_000);

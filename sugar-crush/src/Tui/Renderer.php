@@ -770,8 +770,10 @@ final class Renderer
      * contain that frame: leaving the registry populated would leave the
      * previous chat frame's boxes hit-testable underneath a dashboard that
      * never drew them, so a click on an agent row would fire whatever chat
-     * action last occupied that cell. No zones is the honest state — the
-     * dashboard is keyboard-driven (Alt+1..9, Space, Enter, q).
+     * action last occupied that cell. The dashboard's own zones replace them:
+     * each run's row is an `agent:<runId>` zone in the chrome registry
+     * ({@see AgentDashboardPane::zones()}), beside the keyboard (Alt+1..9,
+     * Space, Enter, q).
      */
     private static function renderAgentDashboard(
         App $a,
@@ -806,7 +808,18 @@ final class Renderer
 
         // The dashboard drops the hosted chat's zones (above) but keeps the
         // bar's: this frame DOES paint the menu titles, so a click on one has
-        // to work here too. No dropdown — this path never overlays one.
+        // to work here too. No dropdown — this path never overlays one. Each
+        // run's row is an `agent:<runId>` zone in the same chrome registry
+        // (the settings view's technique), and a click opens its Agent View.
+        $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        $zoneRows = [];
+        foreach (AgentDashboardPane::zones($a, $cols, $paneRows) as [$row, $from, $to, $id]) {
+            $to = min($to, $cols);
+            if ($to > $from && $row < $paneRows) {
+                $zoneRows[$bandTop + $row] = self::scratchRow($cols, [[$from, $to, \SugarCraft\Mouse\Mark::zone($id, str_repeat(' ', $to - $from))]]);
+            }
+        }
+
         self::scanChrome(
             $a,
             $cols,
@@ -814,6 +827,7 @@ final class Renderer
             self::lineCount($joined) - self::lineCount($frame),
             self::lineCount($frame),
             false,
+            $zoneRows,
         );
 
         return new View($frame);

@@ -209,7 +209,7 @@ carried onto the `Agent` row and read by nothing after that:
 | `effort` | Live: sent with every request of the run as its reasoning effort. |
 | `permissionMode` | Live, narrow-only: when stricter than the session's mode, a second gate judges every call ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). |
 | `memory` | **Inert.** Carried; no memory tier is selected by it. |
-| `background` | **Inert.** `false` is what happens anyway. |
+| `background` | Live: runs the delegation as a background session; the call's own `background` wins (see [What you can actually do with a preset today](#what-you-can-actually-do-with-a-preset-today)). |
 | `isolation` | **Inert.** `none` is what happens anyway; see [Teams and worktrees](#teams-and-worktrees). |
 | `color` | **Inert.** Carried; no surface renders it. |
 

@@ -176,7 +176,7 @@ final class FrontmatterKeyAuditTest extends TestCase
 
     public function testAgentPresetRegistryRecordsWhatALoadedPresetIgnores(): void
     {
-        file_put_contents($this->dir . '/rev.md', "---\ndescription: R\nbackground: true\ncolour: red\n---\nbody\n");
+        file_put_contents($this->dir . '/rev.md', "---\ndescription: R\ncolor: red\ncolour: red\n---\nbody\n");
         file_put_contents($this->dir . '/clean.md', "---\ndescription: C\nmodel: inherit\n---\nbody\n");
 
         $registry = new AgentPresetRegistry([$this->dir]);
@@ -185,7 +185,7 @@ final class FrontmatterKeyAuditTest extends TestCase
         self::assertArrayHasKey('rev', $presets, 'an ignored key never refuses the preset');
         self::assertSame(
             ['rev' => [
-                '`background: true` is not acted on',
+                '`color` is not acted on',
                 '`colour` is not an agent preset field (did you mean `color`?)',
             ]],
             $registry->ignoredFrontmatter(),

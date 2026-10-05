@@ -124,6 +124,21 @@ final class SidePaneRowClickTest extends TestCase
         $this->assertFalse($app->isAgentExpanded('run-1'), 'a second click collapses it');
     }
 
+    public function testClickingARunsRowInTheAgentDashboardOpensItsAgentView(): void
+    {
+        $app = $this->app()->withPane(\SugarCraft\Crush\Tui\Pane::Agents);
+        $this->assertNull($app->agentViewTarget);
+        $lines = explode("\n", $this->frame($app));
+        $zone = TuiRenderer::chromeScanner()->get(\SugarCraft\Crush\Tui\Components\AgentDashboardPane::ZONE_PREFIX . 'run-1');
+        $this->assertInstanceOf(Zone::class, $zone);
+        $this->assertStringContainsString('reviewer', $lines[$zone->startRow - 1] ?? '', 'the zone sits on the run\'s own row');
+
+        $app = $this->click($app, \SugarCraft\Crush\Tui\Components\AgentDashboardPane::ZONE_PREFIX . 'run-1');
+
+        $this->assertSame('run-1', $app->agentViewTarget, 'the click opens that run, as Enter on its row does');
+        $this->assertSame(\SugarCraft\Crush\Tui\Pane::Chat, $app->pane);
+    }
+
     public function testARowClickIsRefusedWhileThePermissionPromptOrKeyHelpCoversTheScreen(): void
     {
         $app = $this->app();

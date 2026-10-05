@@ -197,6 +197,10 @@
                 "data": {
                     "type": "object",
                     "additionalProperties": {}
+                },
+                "root": {
+                    "type": "string",
+                    "description": "Set by the serve gateway on an event relayed from another project root's workspace host (roadmap O-7)."
                 }
             },
             "required": [
@@ -498,6 +502,10 @@
                         "null"
                     ],
                     "minimum": 0
+                },
+                "root": {
+                    "type": "string",
+                    "description": "Set by the serve gateway on a session another project root's workspace host answered for (roadmap O-7)."
                 }
             },
             "required": [
@@ -2009,6 +2017,11 @@
                     "permissionMode": {
                         "$ref": "#/$defs/PermissionMode"
                     },
+                    "root": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7)."
+                    },
                     "idempotencyKey": {
                         "type": "string",
                         "maxLength": 64,
@@ -2198,6 +2211,11 @@
                     "query": {
                         "type": "string",
                         "maxLength": 256
+                    },
+                    "root": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7)."
                     }
                 }
             },
@@ -2682,6 +2700,133 @@
                     "total",
                     "isError",
                     "more"
+                ]
+            }
+        },
+        "workspace.close": {
+            "description": "Stop a workspace host; refused while one of its turns runs, unless force.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "root": {
+                        "type": "string",
+                        "maxLength": 4096
+                    },
+                    "force": {
+                        "type": "boolean"
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "root"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "closed": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "closed"
+                ]
+            }
+        },
+        "workspace.list": {
+            "description": "The project roots this server serves: its own, and each running workspace host.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object"
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "root": {
+                                    "type": "string"
+                                },
+                                "primary": {
+                                    "type": "boolean"
+                                },
+                                "running": {
+                                    "type": "boolean"
+                                },
+                                "pid": {
+                                    "type": [
+                                        "integer",
+                                        "null"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "root",
+                                "primary",
+                                "running"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            }
+        },
+        "workspace.open": {
+            "description": "Start the workspace host for another project root, or find it running.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "root": {
+                        "type": "string",
+                        "maxLength": 4096
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "root"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "root": {
+                        "type": "string"
+                    },
+                    "primary": {
+                        "type": "boolean"
+                    },
+                    "running": {
+                        "type": "boolean"
+                    },
+                    "pid": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "root",
+                    "primary",
+                    "running"
                 ]
             }
         }

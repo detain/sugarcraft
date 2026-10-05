@@ -23,6 +23,7 @@ use SugarCraft\Crush\Server\Server;
 use SugarCraft\Crush\Server\ServerConfig;
 use SugarCraft\Crush\Server\ServerConfigException;
 use SugarCraft\Crush\Server\StateDir;
+use SugarCraft\Crush\Server\Workspace\Gateway;
 use SugarCraft\Crush\Support\Daemonize;
 use SugarCraft\Crush\Support\HomeDirectory;
 
@@ -368,7 +369,11 @@ final class Serve
             return NonInteractive::EXIT_FAILURE;
         }
 
-        $server = Server::new($config, AuthContext::new($tokens), $static, $protocol, $loop, $log);
+        // The gateway (roadmap O-7) answers `workspace.*` and routes a request
+        // naming another project root to that root's workspace host; every
+        // other request reaches $protocol untouched.
+        $gateway = Gateway::new($protocol, $config, Help::versionString(), $loop);
+        $server = Server::new($config, AuthContext::new($tokens), $static, $gateway, $loop, $log);
 
         try {
             $server->start();
@@ -384,6 +389,7 @@ final class Serve
             $record->write($state);
         } catch (\RuntimeException $e) {
             $server->stop();
+            $gateway->stop($e->getMessage());
             $protocol->stop();
             $protocol->context()->hub()->closeAll();
             $state->releaseLock();
@@ -421,7 +427,7 @@ final class Serve
 
         $stopping = false;
         $handlers = [];
-        $finish = static function (string $reason) use (&$stopping, &$handlers, $server, $protocol, $state, $record, $control, $watchdog, $rotation, $loop): void {
+        $finish = static function (string $reason) use (&$stopping, &$handlers, $server, $protocol, $gateway, $state, $record, $control, $watchdog, $rotation, $loop): void {
             if ($stopping) {
                 return;
             }
@@ -435,6 +441,7 @@ final class Serve
             @\unlink($state->controlSocketPath());
             $protocol->stop($reason);
             $server->stop();
+            $gateway->stop($reason);
             $protocol->context()->hub()->closeAll();
             $record->removeFrom($state);
             $state->releaseLock();
@@ -480,6 +487,7 @@ final class Serve
             $loop->futureTick(static fn () => $stop('server.shutdown was requested', $drainSeconds));
         });
         $protocol->start();
+        $gateway->start();
 
         Loop::run();
 

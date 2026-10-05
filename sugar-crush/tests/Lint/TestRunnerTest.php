@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Lint;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Lint\TestReport;
 use SugarCraft\Crush\Lint\TestRunner;
 
@@ -126,21 +125,23 @@ final class TestRunnerTest extends TestCase
         self::assertGreaterThan(0, $beats);
     }
 
-    public function testTheBoundSitsInsideTheTurnIdleCeiling(): void
+    public function testOnlyABeatlessRunIsKeptInsideTheTurnIdleCeiling(): void
     {
-        $runner = TestRunner::new();
-        $default = (float) EngineBackend::COMPLETE_TIMEOUT_SECONDS - TestRunner::IDLE_MARGIN_SECONDS;
+        $runner = TestRunner::new()->withCommand('sleep 1.5');
+        self::assertNull($runner->idleCeilingSeconds());
 
-        self::assertSame($default, $runner->withinTurnIdleCeiling(null)->timeoutSeconds(), 'unset: the engine\'s default ceiling');
-        self::assertSame(290.0, $runner->withinTurnIdleCeiling(300)->timeoutSeconds());
-        self::assertSame(290.0, $runner->withinTurnIdleCeiling('300')->timeoutSeconds(), 'a numeric string reads as the engine reads it');
-        self::assertSame($default, $runner->withinTurnIdleCeiling(EngineBackend::MIN_TURN_IDLE_TIMEOUT_SECONDS - 1)->timeoutSeconds(), 'below the engine\'s floor the engine uses its default, so this does too');
-        self::assertSame($default, $runner->withinTurnIdleCeiling('soon')->timeoutSeconds());
-        self::assertSame(
-            TestRunner::DEFAULT_TIMEOUT_SECONDS,
-            $runner->withinTurnIdleCeiling(100000)->timeoutSeconds(),
-            'a ceiling above the run\'s own bound never widens it',
-        );
+        $inside = $runner->withinTurnIdleCeiling((int) TestRunner::IDLE_MARGIN_SECONDS + 1);
+        self::assertSame(TestRunner::DEFAULT_TIMEOUT_SECONDS, $inside->timeoutSeconds(), 'the nominal bound is unchanged');
+        self::assertSame((int) TestRunner::IDLE_MARGIN_SECONDS + 1, $inside->withCommand('true')->withTimeout(30.0)->idleCeilingSeconds(), 'every copy keeps the ceiling');
+
+        $beatless = $inside->run($this->root);
+        self::assertNotNull($beatless);
+        self::assertTrue($beatless->timedOut, 'no beat: cut a margin inside the ceiling');
+        self::assertSame(1.0, $beatless->timeoutSeconds);
+
+        $beating = $inside->run($this->root, null, static function (): void {});
+        self::assertNotNull($beating);
+        self::assertFalse($beating->timedOut, 'a beating run keeps its whole bound');
     }
 
     public function testLongOutputKeepsItsTailWhereTheVerdictIs(): void

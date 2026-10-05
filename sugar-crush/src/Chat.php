@@ -12049,7 +12049,7 @@ final class Chat implements Model
     }
 
     /**
-     * `/init [focus]` (roadmap 5.14e) — the one command that STARTS A TURN.
+     * `/init [focus]` (roadmap 5.14e) — a command that STARTS A TURN.
      * It is a canned prompt, so it re-enters {@see submit()} with that prompt
      * as the draft — the releaseQueuedPrompts() technique — and the spend cap,
      * the compaction tiers and the UserPromptSubmit hook judge it exactly as

@@ -149,7 +149,7 @@ It is the largest file in the package — well past ten thousand lines; run
 `wc -l src/Chat.php` rather than trusting a figure here, because the one this
 sentence used to carry ("10,381 lines, measured on this checkout") was stale by
 the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
-palette, session tabs, the permission prompt, and the dispatch arms for 37
+palette, session tabs, the permission prompt, and the dispatch arms for 40
 built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to
@@ -930,8 +930,8 @@ completion can legitimately run for tens of minutes.
 | `~/.sugar-crush/memory/` | `Memory\MemoryStore` | markdown + frontmatter, per scope |
 | `~/.sugar-crush/memory/.compaction-journal-<key>.jsonl` | `Memory\CompactionJournal` | every model-written compaction summary, one JSON line each, per project (`shared` without a root) |
 | `~/.sugar-crush/teams/` | `Agents\TeamManager` | team state |
-| `~/.sugar-crush/subagents/` | `Agents\Live\SubAgentTranscriptLog` | one JSONL transcript per delegated run, `<session>/<agent>.jsonl` |
-| `~/.sugar-crush/mailboxes/` | `Agents\Live\AgentInbox` | messages to a running delegated run, `<session>/<agent>/inbox.jsonl`, read at its step boundaries; a message from the user carries the launch key's HMAC |
+| `~/.sugar-crush/subagents/` | `Agents\Live\SubAgentTranscriptLog` | one JSONL transcript per delegated run, `<session>/<agent>.jsonl`; a session's directory goes once the store no longer has the session (`AgentManager::pruneSessionArtifacts()`, on every launch that prunes) |
+| `~/.sugar-crush/mailboxes/` | `Agents\Live\AgentInbox` | messages to a running delegated run, `<session>/<agent>/inbox.jsonl`, read at its step boundaries; a message from the user carries the launch key's HMAC; swept with its session, as `subagents/` is |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
 | `<tmp>/sugar_crush_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
 

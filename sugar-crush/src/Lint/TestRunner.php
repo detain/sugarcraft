@@ -26,13 +26,14 @@ use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
  * for by `DescriptorInheritanceGuardTest` and `tools/check-child-lifetimes.php`
  * without a spawn site of its own.
  *
- * THE BOUND IS THE TURN'S IDLE CEILING, NOT A PREFERENCE. The run happens in
- * the turn's own process (the forked turn child on the TUI path, inside the
- * `Stop` chain), and that process sends the TUI nothing while it waits — so a
- * run longer than `turnIdleTimeoutSeconds` would get the WHOLE TURN killed as
- * hung instead of reporting a slow suite. {@see withinTurnIdleCeiling()} keeps
- * the run {@see IDLE_MARGIN_SECONDS} inside that ceiling; raising the ceiling
- * raises the bound.
+ * THE TURN'S IDLE CEILING. The run happens in the turn's own process (the
+ * forked turn child on the TUI path, inside the `Stop` chain), whose parent
+ * kills a turn that stays silent for `turnIdleTimeoutSeconds`. A caller that
+ * can beat passes `$onWait` to {@see run()} (the `Stop` chain's
+ * {@see \SugarCraft\Crush\Hooks\HookContext::$heartbeat}), and the run gets
+ * its whole bound. A run with no beat is cut to {@see IDLE_MARGIN_SECONDS}
+ * inside the ceiling {@see withinTurnIdleCeiling()} names, so a slow suite is
+ * reported as slow instead of getting the whole turn killed as hung.
  *
  * Immutable: every `with*()` returns a copy.
  */
@@ -46,13 +47,13 @@ final class TestRunner
     /** The settings key that turns the after-the-turn run on. */
     public const AUTO_TEST_SETTINGS_KEY = 'autoTest';
 
-    /** One run's wall clock before the idle ceiling narrows it. */
+    /** One run's wall clock. */
     public const DEFAULT_TIMEOUT_SECONDS = 600.0;
 
     /**
-     * Seconds kept between the run's bound and the turn's idle ceiling: the
-     * ladder that stops a run past its bound, and the reflection that follows,
-     * must both land before the watchdog fires.
+     * Seconds kept between a beatless run's bound and the turn's idle ceiling:
+     * the ladder that stops a run past its bound, and the reflection that
+     * follows, must both land before the watchdog fires.
      */
     public const IDLE_MARGIN_SECONDS = 10.0;
 
@@ -67,6 +68,7 @@ final class TestRunner
     private function __construct(
         private readonly ?string $command,
         private readonly float $timeoutSeconds,
+        private readonly ?int $idleCeilingSeconds = null,
     ) {}
 
     /** A runner with no command: {@see run()} answers null until one is set. */
@@ -84,35 +86,31 @@ final class TestRunner
     {
         $command = is_string($setting) && trim($setting) !== '' ? trim($setting) : null;
 
-        return new self($command, $this->timeoutSeconds);
+        return new self($command, $this->timeoutSeconds, $this->idleCeilingSeconds);
     }
 
     /** The same runner with each run bounded at $seconds (floored at 10 ms). */
     public function withTimeout(float $seconds): self
     {
-        return new self($this->command, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS);
+        return new self($this->command, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS, $this->idleCeilingSeconds);
     }
 
     /**
-     * The same runner bounded {@see IDLE_MARGIN_SECONDS} inside the turn's idle
-     * ceiling — $setting is the raw `turnIdleTimeoutSeconds` value, read the
-     * way {@see EngineBackend} reads it: a number at or above
-     * {@see EngineBackend::MIN_TURN_IDLE_TIMEOUT_SECONDS} is the ceiling,
-     * anything else is {@see EngineBackend::COMPLETE_TIMEOUT_SECONDS}. Only ever
-     * narrows: a ceiling above the current bound leaves it alone.
+     * The same runner knowing the turn's idle ceiling — $ceilingSeconds as
+     * {@see EngineBackend::turnIdleTimeoutSeconds()} resolves the setting, so
+     * the key is read one way only. It narrows only a run with no beat
+     * ({@see run()}'s `$onWait`): such a run ends {@see IDLE_MARGIN_SECONDS}
+     * inside the ceiling. A run that beats keeps {@see timeoutSeconds()}.
      */
-    public function withinTurnIdleCeiling(mixed $setting): self
+    public function withinTurnIdleCeiling(int $ceilingSeconds): self
     {
-        if (is_string($setting) && is_numeric($setting)) {
-            $setting += 0;
-        }
+        return new self($this->command, $this->timeoutSeconds, max(1, $ceilingSeconds));
+    }
 
-        $ceiling = (is_int($setting) || (is_float($setting) && is_finite($setting)))
-            && $setting >= EngineBackend::MIN_TURN_IDLE_TIMEOUT_SECONDS
-                ? (float) $setting
-                : (float) EngineBackend::COMPLETE_TIMEOUT_SECONDS;
-
-        return $this->withTimeout(min($this->timeoutSeconds, $ceiling - self::IDLE_MARGIN_SECONDS));
+    /** The idle ceiling a beatless run is kept inside, or null when none was named. */
+    public function idleCeilingSeconds(): ?int
+    {
+        return $this->idleCeilingSeconds;
     }
 
     public function command(): ?string
@@ -145,6 +143,9 @@ final class TestRunner
         }
 
         $bound = $timeoutSeconds === null ? $this->timeoutSeconds : max(0.01, min($this->timeoutSeconds, $timeoutSeconds));
+        if ($onWait === null && $this->idleCeilingSeconds !== null) {
+            $bound = max(0.01, min($bound, $this->idleCeilingSeconds - self::IDLE_MARGIN_SECONDS));
+        }
 
         $run = $this->runCaptured(
             "exec 2>&1\n" . $this->command,

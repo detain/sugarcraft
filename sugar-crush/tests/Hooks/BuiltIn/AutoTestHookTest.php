@@ -168,6 +168,32 @@ final class AutoTestHookTest extends TestCase
         self::assertStringContainsString('did not finish within 0.3 seconds', $verdict->stopReason);
     }
 
+    public function testTheStopChainsHeartbeatLetsTheRunOutlastTheIdleCeiling(): void
+    {
+        // A beatless run is cut IDLE_MARGIN_SECONDS inside the ceiling: a
+        // ceiling of margin + 0.3 s leaves it 0.3 s, too short for the suite.
+        $runner = TestRunner::new()->withCommand('sleep 1; touch ran')->withinTurnIdleCeiling((int) TestRunner::IDLE_MARGIN_SECONDS + 1);
+        $edits = AutoTestEditHook::new();
+        $hook = new AutoTestHook($runner, $edits);
+
+        $this->edit($edits);
+        $beatless = $hook->execute($this->stopContext());
+        self::assertTrue($beatless->haltsTurn(), 'no beat: the run must end inside the ceiling');
+        self::assertFileDoesNotExist($this->root . '/ran');
+
+        $beats = 0;
+        $manager = new HookManager(new \SugarCraft\Crush\Hooks\HookRegistry());
+        $manager->register($hook);
+        $this->edit($edits);
+        $verdict = $manager->stop($this->stopContext(), static function () use (&$beats): void {
+            $beats++;
+        });
+
+        self::assertTrue($verdict->permitsExecution(), 'with the turn\'s beat the run gets its whole bound');
+        self::assertFileExists($this->root . '/ran');
+        self::assertGreaterThan(0, $beats, 'HookManager::stop() hands the beat to the test run');
+    }
+
     public function testTheChainMayShortenTheBoundAndTheCopySharesTheLedger(): void
     {
         $edits = AutoTestEditHook::new();
@@ -224,7 +250,8 @@ final class AutoTestHookTest extends TestCase
             if ($stop instanceof AutoTestHook) {
                 self::assertSame($edit, $stop->edits(), 'the two halves share one ledger');
                 self::assertSame('composer test', $stop->runner()->command());
-                self::assertLessThan((float) \SugarCraft\Crush\Backend\EngineBackend::COMPLETE_TIMEOUT_SECONDS, $stop->timeoutSeconds(), 'bounded inside the idle ceiling');
+                self::assertSame(TestRunner::DEFAULT_TIMEOUT_SECONDS, $stop->timeoutSeconds(), 'a run that beats keeps its whole bound');
+                self::assertSame(\SugarCraft\Crush\Backend\EngineBackend::COMPLETE_TIMEOUT_SECONDS, $stop->runner()->idleCeilingSeconds(), 'the ceiling a beatless run is kept inside, resolved as the engine resolves it');
             }
         }
     }

@@ -70,37 +70,43 @@ final class CompressCommandsTest extends TestCase
         $this->assertFalse($after->inFlight);
         $this->assertStringStartsWith('Context pruning is `off` for this session', $after->history[array_key_last($after->history)]->content);
 
+    }
+
+    public function testCompressRunsInAManualSessionToo(): void
+    {
         [$manual] = $this->type(new Chat(history: self::history()), '/pruning manual');
-        [$refused] = $this->type($manual, '/compress');
-        $this->assertStringStartsWith('Context pruning is `manual`', $refused->history[array_key_last($refused->history)]->content);
+        [$next, $cmd] = $this->type($manual, '/compress');
+
+        $this->assertNotNull($cmd, '`manual` leaves compaction to the person, and /compress is the person asking');
+        $this->assertTrue($next->inFlight);
     }
 
     public function testDecompressAndRecompressFlipASectionOfTheSessionsLedger(): void
     {
         $chat = new Chat(history: self::history());
         [$empty] = $this->type($chat, '/decompress');
-        $this->assertStringStartsWith('No compressed sections in this session', self::last($empty));
+        $this->assertStringStartsWith('No compressed sections in this session', self::lastText($empty));
 
         self::runnerOf($chat)->saveLedger(null, null, self::compressed());
 
         [$listed] = $this->type($chat, '/recompress');
-        $this->assertStringContainsString("Compressed sections:\nb1 · Reading a.php · r1…r2 · −1.5K +12 · active", self::last($listed));
+        $this->assertStringContainsString("Compressed sections:\nb1 · Reading a.php · r1…r2 · −1.5K +12 · active", self::lastText($listed));
 
         [$open] = $this->type($chat, '/decompress b1');
-        $this->assertStringStartsWith('Decompressed b1 (Reading a.php): r1…r2 are sent in full again', self::last($open));
+        $this->assertStringStartsWith('Decompressed b1 (Reading a.php): r1…r2 are sent in full again', self::lastText($open));
         $this->assertTrue(self::ledgerOf($open)->block(1)?->deactivatedByUser);
 
         [$again] = $this->type($open, '/decompress b1');
-        $this->assertSame('b1 is already decompressed; /recompress b1 restores it.', self::last($again));
+        $this->assertSame('b1 is already decompressed; /recompress b1 restores it.', self::lastText($again));
 
         [$closed] = $this->type($open, '/recompress b1');
-        $this->assertStringStartsWith('Recompressed b1 (Reading a.php)', self::last($closed));
+        $this->assertStringStartsWith('Recompressed b1 (Reading a.php)', self::lastText($closed));
         $this->assertTrue(self::ledgerOf($closed)->block(1)?->active);
 
         [$missing] = $this->type($closed, '/decompress b9');
-        $this->assertSame('No compressed section b9 in this session.', self::last($missing));
+        $this->assertSame('No compressed section b9 in this session.', self::lastText($missing));
         [$usage] = $this->type($closed, '/decompress banana');
-        $this->assertStringStartsWith('Usage: /decompress bN', self::last($usage));
+        $this->assertStringStartsWith('Usage: /decompress bN', self::lastText($usage));
     }
 
     public function testASectionInsideAnotherIsRefused(): void
@@ -111,7 +117,7 @@ final class CompressCommandsTest extends TestCase
 
         [$refused] = $this->type($chat, '/decompress b1');
 
-        $this->assertSame('b1 is inside b2. Restore b2 first: /decompress b2.', self::last($refused));
+        $this->assertSame('b1 is inside b2. Restore b2 first: /decompress b2.', self::lastText($refused));
     }
 
     public function testTheTranscriptMarksTheSectionAndTheStatusBarCountsWhatIsTakenOut(): void
@@ -165,7 +171,7 @@ final class CompressCommandsTest extends TestCase
         return (new \ReflectionMethod($chat, 'sessionContextLedger'))->invoke($chat);
     }
 
-    private static function last(Chat $chat): string
+    private static function lastText(Chat $chat): string
     {
         return $chat->history[array_key_last($chat->history)]->content;
     }

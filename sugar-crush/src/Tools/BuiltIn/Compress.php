@@ -193,15 +193,16 @@ final readonly class Compress implements Tool, BuildsFromCatalog, MutatesContext
 
     /**
      * Why `/compress` cannot run in a session in $mode, or null when it can:
-     * the tool needs the `auto` mode — `off` tags no row with a ref, and
-     * `manual` offers the model no context tool on its own turns.
+     * `off` tags no row with a ref to compress by. `manual` runs it — the
+     * model gets no context tool on its own turns there, but a `/compress`
+     * turn is the person asking for one
+     * ({@see \SugarCraft\Crush\Backend\EngineBackend::turnTools()}).
      */
     public static function refusalFor(\SugarCraft\Crush\Context\Pruning\PruningMode $mode): ?string
     {
         return match ($mode) {
-            \SugarCraft\Crush\Context\Pruning\PruningMode::Auto => null,
+            \SugarCraft\Crush\Context\Pruning\PruningMode::Auto, \SugarCraft\Crush\Context\Pruning\PruningMode::Manual => null,
             \SugarCraft\Crush\Context\Pruning\PruningMode::Off => 'Context pruning is `off` for this session, so no row carries a ref to compress by. /pruning auto turns it back on.',
-            \SugarCraft\Crush\Context\Pruning\PruningMode::Manual => 'Context pruning is `manual` for this session, which offers the model no context tool. Run /pruning auto, then /compress.',
         };
     }
 

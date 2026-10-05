@@ -935,6 +935,12 @@ Ten more exist and are **not** registered by default:
   when `autoTest` is on and `testCommand` is set, after the auto-commit and ahead of the
   hook files. See [Auto-test](#auto-test).
 
+One more is turn-scoped and lives outside `src/Hooks/BuiltIn/`:
+`Context\Pruning\CompressPreviewHook`, which `EngineBackend::runTurn()`
+registers on a `/compact --self` turn's own copy of the chain, ASKs before the
+model's `Compress` call is applied, showing you its summary (30 lines, then
+"… (N more lines)").
+
 `ConfirmRemoveHook` and `BashEscapeDenyHook` are both documented in their own
 source as **heuristics, not security boundaries**. Neither can see through
 shell indirection: `x=rf; rm -$x`, aliases, `$(echo rm) -rf`, a variable set

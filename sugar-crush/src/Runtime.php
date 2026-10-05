@@ -469,10 +469,11 @@ final class Runtime
      *    prompt while listing them would spend a judgement that class cannot
      *    make. "Did the working tree move" and "may this call be denied
      *    without asking" are different questions, and the answers differ.
-     *    The no-ask tools — `Memory`, `Prune`, `Todo` — diverge too, for the
-     *    opposite reason: they move no file, so they are read-only here, but
-     *    the gate classes them no-ask rather than read, because each writes
-     *    harness-owned state (memory notes, the context ledger, the todo list).
+     *    The no-ask tools — `Memory`, `Prune`, `Todo`, `Compress` — diverge
+     *    too, for the opposite reason: they move no file, so they are
+     *    read-only here, but the gate classes them no-ask rather than read,
+     *    because each writes harness-owned state (memory notes, the context
+     *    ledger, the todo list).
      *
      *    NEITHER THE NAMES NOR THE DIVERGENCE ARE ASSERTED HERE ANY MORE, and
      *    that is the second correction to this bullet. It first stated the

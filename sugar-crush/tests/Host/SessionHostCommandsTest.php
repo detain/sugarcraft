@@ -172,6 +172,32 @@ final class SessionHostCommandsTest extends TestCase
         self::assertNotSame([], $host->history());
     }
 
+    public function testASideQuestionRunsMidTurnInsteadOfQueueing(): void
+    {
+        $host = $this->host(backend: new class () implements \SugarCraft\Crush\Backend {
+            public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                return Message::assistant('unused');
+            }
+
+            public function completeAsync(array $history, ?callable $onToken = null, ?\SugarCraft\Crush\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): \React\Promise\PromiseInterface
+            {
+                return (new \React\Promise\Deferred())->promise();
+            }
+        });
+        $host->submit('start a turn');
+
+        // No title model here, so /btw answers with why it cannot ask — the
+        // point is that it ANSWERS mid-turn, as the TUI's /btw does, rather
+        // than waiting in the queue behind the turn.
+        $ticket = $host->submit('/btw what did we decide?');
+
+        self::assertSame(TurnTicket::HANDLED, $ticket->admitted);
+        self::assertTrue($host->isBusy(), 'the running turn keeps the session');
+        $rows = $host->history();
+        self::assertStringContainsString('/btw needs a title model', $rows[\count($rows) - 1]->content);
+    }
+
     public function testTheLedgerCommandsKeepTheSessionsLedger(): void
     {
         $host = $this->host();

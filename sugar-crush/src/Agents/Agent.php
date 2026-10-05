@@ -26,14 +26,15 @@ final readonly class Agent
      * WHAT CARRYING THEM DOES AND DOES NOT BUY, said plainly because the
      * field names imply more than is true today:
      *
-     *  - Three of them now change what a delegated run does (roadmap 4.1):
+     *  - Four of them now change what a delegated run does (roadmap 4.1, 4.3-2):
      *    {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} runs the
      *    sub-agent on `$model` (unless it {@see $inheritsModel}), sends
      *    `$effort` as the request's reasoning effort, and hands
      *    `$permissionMode` to {@see AgentManager::createSubAgent()}, whose
      *    gate — the stricter of it and the session's mode — judges every call
-     *    as a second gate, never instead of the session's. `memory`,
-     *    `background`, `isolation` and `color` are still read by nothing.
+     *    as a second gate, never instead of the session's; `$background` makes
+     *    the delegation a background session unless the call says otherwise.
+     *    `memory`, `isolation` and `color` are still read by nothing.
      *  - What they buy is that the value has somewhere to put them. Before
      *    this, a consumer that wanted a registered agent's `maxTurns` had to
      *    go back to the registry and re-read the preset, which is only

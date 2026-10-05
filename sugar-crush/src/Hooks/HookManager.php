@@ -425,10 +425,18 @@ final class HookManager
      * FAIL-CLOSED ON A THROW, as {@see postToolUse()} is: a hook that throws
      * is reported as a refusal naming it rather than escaping into the turn
      * loop, whose step budget and continuation cap bound what it can cost.
+     *
+     * $beat, when given, is the turn's throttled "still alive" beat, handed
+     * to the chain as {@see HookContext::$heartbeat}: the chain runs in the
+     * turn's own process, which sends its parent nothing while a hook works,
+     * so a long hook ({@see BuiltIn\AutoTestHook}'s test run) beats through
+     * it instead of being cut short to fit inside the turn's idle ceiling.
+     *
+     * @param (\Closure(): void)|null $beat
      */
-    public function stop(HookContext $context): HookResult
+    public function stop(HookContext $context, ?\Closure $beat = null): HookResult
     {
-        return $this->registry->executeHooks(HookEvent::Stop->value, $context, failClosedOnThrow: true);
+        return $this->registry->executeHooks(HookEvent::Stop->value, $beat !== null ? $context->withHeartbeat($beat) : $context, failClosedOnThrow: true);
     }
 
     /**

@@ -266,6 +266,36 @@ final class SessionRetentionWiringTest extends TestCase
     /**
      * @param array<string, string|null> $sessions id => name
      */
+    /**
+     * Roadmap P-D1: a pruning launch also sweeps the sub-agent logs and
+     * mailboxes whose session the store no longer has — on every launch
+     * that builds the store, not only the TUI's own App::init() sweep — and
+     * the read-only accessor never does.
+     */
+    public function testAPruningLaunchSweepsTheArtifactsOfAGoneSession(): void
+    {
+        $this->seedStore(['kept' => null]);
+        $home = $this->tmpHome . '/.sugar-crush';
+        $old = time() - 7200;
+        foreach (['subagents', 'mailboxes'] as $dir) {
+            foreach (['kept', 'gone'] as $session) {
+                mkdir("{$home}/{$dir}/{$session}", 0700, true);
+                file_put_contents("{$home}/{$dir}/{$session}/run.jsonl", '{}');
+                touch("{$home}/{$dir}/{$session}/run.jsonl", $old);
+                touch("{$home}/{$dir}/{$session}", $old);
+            }
+        }
+
+        Bootstrap::sessionStore(prune: false);
+        $this->assertDirectoryExists("{$home}/subagents/gone", 'the read-only accessor deletes nothing');
+
+        Bootstrap::sessionStore();
+        foreach (['subagents', 'mailboxes'] as $dir) {
+            $this->assertDirectoryDoesNotExist("{$home}/{$dir}/gone", "{$dir} of a session the store no longer has");
+            $this->assertDirectoryExists("{$home}/{$dir}/kept", "{$dir} of a live session");
+        }
+    }
+
     private function seedStore(array $sessions): void
     {
         $store = new EnhancedSessionStore($this->tmpHome . '/.sugar-crush/session.db');

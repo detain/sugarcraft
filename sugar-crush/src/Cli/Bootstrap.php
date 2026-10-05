@@ -1302,8 +1302,9 @@ final class Bootstrap
             // and outlived are re-adopted here, at boot — the caller
             // BackgroundSupervisor::reconnect() never had. Each is folded in
             // as ADOPTED_STATUS, a status nothing reports, so the first
-            // background poll announces what it really is: "now running", or
-            // the result of one that finished while no TUI was open.
+            // background poll announces what it really is: "re-adopted" (and
+            // running), or the result of one that finished while no TUI was
+            // open.
             backgroundStatuses: array_fill_keys(
                 array_keys($workspace->backgroundSupervisor?->reconnect($root) ?? []),
                 BackgroundSupervisor::ADOPTED_STATUS,
@@ -5549,12 +5550,12 @@ final class Bootstrap
         // it ends and hands a failure back to the model (≤3 times). Both keys
         // are user tier only — the command is shell run with no tool call in
         // the path. The edit half notes Write/Edit on PostToolUse; the Stop
-        // half runs the tests, bounded inside the turn's idle ceiling because
-        // it runs in the turn's process. Ahead of the hook files, for the
-        // lint hook's reason.
+        // half runs the tests in the turn's process, beating through the
+        // turn's idle ceiling (a run with no beat is kept inside it). Ahead of
+        // the hook files, for the lint hook's reason.
         $testRunner = \SugarCraft\Crush\Lint\TestRunner::new()
             ->withCommand($userConfig[\SugarCraft\Crush\Lint\TestRunner::SETTINGS_KEY] ?? null)
-            ->withinTurnIdleCeiling($userConfig['turnIdleTimeoutSeconds'] ?? null);
+            ->withinTurnIdleCeiling(EngineBackend::turnIdleTimeoutSeconds($userConfig));
         if ($root !== null && ($userConfig[\SugarCraft\Crush\Lint\TestRunner::AUTO_TEST_SETTINGS_KEY] ?? false) === true && $testRunner->command() !== null) {
             $testEdits = \SugarCraft\Crush\Hooks\BuiltIn\AutoTestEditHook::new();
             $hooks->register($testEdits);
@@ -9092,6 +9093,22 @@ final class Bootstrap
                 }
             } catch (\Throwable) {
                 // Best effort — see the docblock above.
+            }
+        }
+
+        // Sub-agent transcript logs and mailboxes outlive nothing: those of a
+        // session the store no longer has (retention above, `/sessions`
+        // delete) go with it (roadmap P-D1). Here, so every pruning launch —
+        // the TUI, `serve`, a workspace host — sweeps, not only the TUI's own
+        // App::init() Cmd. Only beside THIS store's session.db, so a store
+        // never judges another directory's sessions gone. Best effort, as above.
+        if ($prune) {
+            try {
+                \SugarCraft\Crush\Agents\AgentManager::pruneSessionArtifacts(
+                    static fn (string $sessionId): bool => $store->getSession($sessionId) !== null,
+                    self::configDir(),
+                );
+            } catch (\Throwable) {
             }
         }
 

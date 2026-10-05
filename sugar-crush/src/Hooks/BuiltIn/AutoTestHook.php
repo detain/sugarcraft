@@ -47,8 +47,10 @@ use SugarCraft\Crush\Lint\TestRunner;
  * not each delegated run.
  *
  * BOUNDED, so the chain's shared deadline counts it
- * ({@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()}), and the bound
- * itself sits inside the turn's idle ceiling ({@see TestRunner::withinTurnIdleCeiling()}).
+ * ({@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()}). The run beats
+ * through the turn's idle ceiling with the context's
+ * {@see HookContext::$heartbeat} ({@see \SugarCraft\Crush\Hooks\HookManager::stop()});
+ * a run with no beat is kept inside it ({@see TestRunner::withinTurnIdleCeiling()}).
  *
  * Registered by {@see \SugarCraft\Crush\Cli\Bootstrap::hooks()} with its
  * {@see AutoTestEditHook}, only when `autoTest` is on and `testCommand` is set.
@@ -113,7 +115,7 @@ final readonly class AutoTestHook implements BoundedHookInterface
             return HookResult::allow();
         }
 
-        $report = $this->runner->run($context->projectRoot);
+        $report = $this->runner->run($context->projectRoot, null, $context->heartbeat);
         if ($report === null || $report->passed()) {
             $this->edits->resetReflections();
 
@@ -124,7 +126,7 @@ final readonly class AutoTestHook implements BoundedHookInterface
             $this->edits->resetReflections();
             $reason = $report->timedOut
                 ? sprintf(
-                    'the test command `%s` did not finish within %s seconds and was stopped (the bound sits inside `turnIdleTimeoutSeconds`)',
+                    'the test command `%s` did not finish within %s seconds and was stopped',
                     $report->command,
                     rtrim(rtrim(number_format($report->timeoutSeconds, 3, '.', ''), '0'), '.'),
                 )

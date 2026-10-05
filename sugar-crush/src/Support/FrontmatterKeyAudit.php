@@ -74,10 +74,10 @@ final class FrontmatterKeyAudit
      * exactly what happens.
      *
      * - agent preset: `Task` honours `model`, `effort` and (narrow-only)
-     *   `permissionMode` since roadmap 4.1
+     *   `permissionMode` since roadmap 4.1, and `background` since 4.3-2
      *   ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}); `memory`,
-     *   `background`, `isolation` and `color` are carried onto the roster row
-     *   and read by nothing.
+     *   `isolation` and `color` are carried onto the roster row and read by
+     *   nothing.
      * - skill: no tool-scoping code reads `allowed-tools`/`disallowed-tools`;
      *   `model` is read only by `App::dispatchSkill()`, which has no
      *   production caller; `effort` is read by nothing; `context: fork` has no
@@ -90,7 +90,6 @@ final class FrontmatterKeyAudit
     public const INERT = [
         self::AGENT => [
             'memory' => [],
-            'background' => ['false'],
             'isolation' => ['none'],
             'color' => [],
         ],

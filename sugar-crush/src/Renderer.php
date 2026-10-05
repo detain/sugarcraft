@@ -968,7 +968,7 @@ final class Renderer
     }
 
     /**
-     * The read-only Agent View the shell has open for the frame being
+     * The Agent View the shell has open for the frame being
      * composited (roadmap P-C2), as {@see \SugarCraft\Crush\App\App::agentViewFrame()}
      * built it, or null for the parent transcript.
      *
@@ -977,7 +977,7 @@ final class Renderer
      * signal above does: set around one paint by the shell compositor and
      * reset on the way out, so a standalone Chat render never sees one.
      *
-     * @var array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<Message>, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null
+     * @var array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<Message>, composer: ?string, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null
      */
     private static ?array $agentView = null;
 
@@ -985,7 +985,7 @@ final class Renderer
      * Declare the Agent View for the frame being composited — see
      * {@see self::$agentView}.
      *
-     * @param array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<Message>, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null $view
+     * @param array{id: string, name: string, state: ?\SugarCraft\Crush\Agents\Live\AgentLiveState, rows: list<Message>, composer: ?string, attach: ?\SugarCraft\Crush\Tui\AgentOutputState, siblings: list<string>, transcript: bool}|null $view
      */
     public static function setAgentView(?array $view): void
     {

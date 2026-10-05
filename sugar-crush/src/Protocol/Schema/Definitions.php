@@ -52,6 +52,7 @@ final class Definitions
                 'status' => Schema::enum(['closed', 'idle', 'busy', 'waiting_permission']),
                 'permissionMode' => Schema::ref(self::PERMISSION_MODE)->nullable(),
                 'spentUsd' => Schema::number(0)->nullable(),
+                'root' => Schema::string()->describe('Set by the serve gateway on a session another project root\'s workspace host answered for (roadmap O-7).'),
             ], ['id', 'open', 'status']),
             self::PENDING_ASK => Schema::object([
                 'askId' => Schema::string(16),
@@ -120,6 +121,7 @@ final class Definitions
                 'turnId' => Schema::string(),
                 'durable' => Schema::boolean(),
                 'data' => Schema::map(Schema::any()),
+                'root' => Schema::string()->describe('Set by the serve gateway on an event relayed from another project root\'s workspace host (roadmap O-7).'),
             ], ['sessionId', 'type', 'ts', 'durable', 'data']),
             self::ERROR => Schema::object([
                 'code' => Schema::integer(),

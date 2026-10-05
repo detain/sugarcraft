@@ -72,6 +72,15 @@ final class AgentDashboardPane
     public const MAX_JUMP_SLOTS = 9;
 
     /**
+     * Click-zone prefix of a run's row: `agent:<runId>`, the strip's own
+     * ({@see \SugarCraft\Crush\Tui\AgentStrip::ZONE_PREFIX}) — the dashboard
+     * frame never paints the strip, so the two never share a frame, and a
+     * click on either opens that run's Agent View
+     * ({@see \SugarCraft\Crush\App\App::openAgentView()}).
+     */
+    public const ZONE_PREFIX = \SugarCraft\Crush\Tui\AgentStrip::ZONE_PREFIX;
+
+    /**
      * Bytes of a session's output the peek overlay reads, counted from the
      * END. Splitting the whole buffer every frame would make repaint cost
      * grow with session length — the exact per-frame-work-proportional-to-
@@ -294,22 +303,12 @@ final class AgentDashboardPane
      */
     private static function body(App $a, array $entries, int $inner, int $budget, Theme $theme): string
     {
-        $grouped = [];
-        foreach ($entries as $index => $entry) {
-            $grouped[self::group($entry->status)][] = [$index, $entry];
-        }
-
         $lines = [];
-        foreach (self::GROUP_LABELS as $groupId => $label) {
-            if (!isset($grouped[$groupId])) {
-                continue;
-            }
-
-            $members = $grouped[$groupId];
+        foreach (self::grouped($entries) as $groupId => $members) {
             $lines[] = Style::new()
                 ->bold()
                 ->foreground(AgentViewPane::statusColor($members[0][1]->status, $theme))
-                ->render($label . ' (' . count($members) . ')');
+                ->render(self::GROUP_LABELS[$groupId] . ' (' . count($members) . ')');
 
             foreach ($members as [$index, $entry]) {
                 $lines[] = self::row($index, $entry, $a->selectedAgentIndex === $index, $inner, $theme);
@@ -317,6 +316,74 @@ final class AgentDashboardPane
         }
 
         return implode("\n", self::clip($lines, $budget, $inner, $theme));
+    }
+
+    /**
+     * $entries by display group, in render order: group id => list of
+     * [entries index, entry]. {@see body()} draws it; {@see zones()} reads
+     * the same order, so a zone sits on the row it names.
+     *
+     * @param list<AgentOutputState> $entries
+     * @return array<string, non-empty-list<array{0: int, 1: AgentOutputState}>>
+     */
+    private static function grouped(array $entries): array
+    {
+        $grouped = [];
+        foreach ($entries as $index => $entry) {
+            $grouped[self::group($entry->status)][] = [$index, $entry];
+        }
+
+        $ordered = [];
+        foreach (array_keys(self::GROUP_LABELS) as $groupId) {
+            if (isset($grouped[$groupId])) {
+                $ordered[$groupId] = $grouped[$groupId];
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * The click zones of {@see render()}'s frame at the same size: one
+     * `agent:<runId>` span per delegated run's row that survived the height
+     * clip, as [row, from column, to column, zone id] in the pane's own
+     * coordinates (row 0 is the box's top border). None under the peek
+     * overlay, which covers the rows, and none for a background session's
+     * row, which has no run to open.
+     *
+     * @return list<array{0: int, 1: int, 2: int, 3: string}>
+     */
+    public static function zones(App $a, int $width, int $rows): array
+    {
+        $entries = self::entries($a);
+        if ($entries === [] || $a->agentViewMode === AgentViewMode::Peek) {
+            return [];
+        }
+
+        $inner = AgentViewPane::contentWidth($width, 20);
+        $budget = max(1, $rows - 2);
+
+        $keys = [];
+        foreach (self::grouped($entries) as $members) {
+            $keys[] = null;
+            foreach ($members as [, $entry]) {
+                $keys[] = $entry->key;
+            }
+        }
+        // clip() trades the last kept row for its "N more" trailer.
+        if (count($keys) > $budget) {
+            $keys = array_slice($keys, 0, max(0, $budget - 1));
+        }
+
+        $zones = [];
+        foreach ($keys as $line => $key) {
+            if ($key !== null && $key !== '') {
+                // One column of border, one of padding, then the row.
+                $zones[] = [1 + $line, 2, 2 + $inner, self::ZONE_PREFIX . $key];
+            }
+        }
+
+        return $zones;
     }
 
     /**

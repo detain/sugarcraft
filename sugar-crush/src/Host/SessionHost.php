@@ -586,6 +586,11 @@ final class SessionHost
                 // WF-4): run, and leave the run holding the session.
                 return $this->command($text) ?? TurnTicket::refused($turns->hostCommandNotice($text));
 
+            case TurnController::ROUTE_SIDE_QUESTION:
+                // `/btw` (roadmap 5.14b): answered beside the running turn,
+                // never queued behind it and never in the model's history.
+                return $this->command($text) ?? TurnTicket::refused($turns->hostCommandNotice($text));
+
             case TurnController::ROUTE_QUIT:
             case TurnController::ROUTE_REFUSE_COMMAND:
                 return TurnTicket::refused($turns->hostCommandNotice($text));
