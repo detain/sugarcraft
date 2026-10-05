@@ -79,8 +79,8 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withEnvVar('SUGARCRUSH_SERVER_ALLOWED_IPS')
                 ->withUi(UiEditability::List)
-                ->withLabel('Server allowed client IPs')
-                ->withHelp('Client IPs or CIDR ranges allowed to connect beside loopback; anyone else is refused 403 before sign-in. Empty: no address filter.')
+                ->withLabel(Lang::t('settings.server.allowedIps.label'))
+                ->withHelp(Lang::t('settings.server.allowedIps.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.trustedProxies', SettingType::StringList, [])
@@ -133,15 +133,15 @@ final class ServerSettings implements SettingDefinitionSet
             SettingDefinition::new('server.dirBrowse', SettingType::Bool, false)
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
-                ->withLabel('Server directory browsing')
-                ->withHelp('Let signed-in clients list directory names under server.browseRoot and start sessions there (same as --allow-dir-browse). Off by default.')
+                ->withLabel(Lang::t('settings.server.dirBrowse.label'))
+                ->withHelp(Lang::t('settings.server.dirBrowse.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.browseRoot', SettingType::Path)
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
-                ->withLabel('Server browse root')
-                ->withHelp('The directory server.dirBrowse is confined to (same as --browse-root); unset is your home directory.')
+                ->withLabel(Lang::t('settings.server.browseRoot.label'))
+                ->withHelp(Lang::t('settings.server.browseRoot.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
         ];

@@ -2298,6 +2298,12 @@ TXT,
     // --- end tui/palette (W11-d) ---
 
     // --- serve remote (feature) ---
+    'settings.server.allowedIps.label' => 'Server allowed client IPs',
+    'settings.server.allowedIps.help' => 'Client IPs or CIDR ranges allowed to connect beside loopback; anyone else is refused 403 before sign-in. Empty: no address filter.',
+    'settings.server.dirBrowse.label' => 'Server directory browsing',
+    'settings.server.dirBrowse.help' => 'Let signed-in clients list directory names under server.browseRoot and start sessions there (same as --allow-dir-browse). Off by default.',
+    'settings.server.browseRoot.label' => 'Server browse root',
+    'settings.server.browseRoot.help' => 'The directory server.dirBrowse is confined to (same as --browse-root); unset is your home directory.',
     'serve.ip_refused' => 'this server does not accept connections from {address}; start it with --allowed-ips {address} or add it to server.allowedIps',
     'serve.ip_refused.log' => 'refused client {address}: not in --allowed-ips / server.allowedIps',
     'serve.ip_refused.unknown' => 'an unknown address',
