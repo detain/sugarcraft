@@ -131,18 +131,11 @@ final class StepSummarizer
         ?callable $onHeartbeat = null,
         ?string $model = null,
     ): ?CompressionBlock {
-        $rows = array_values($app->messages);
-        $cut = self::cutIndex($rows, $unsentFrom);
-        $keepFrom = $cut === null ? null : self::firstCallId($rows[$cut]);
-        if ($cut === null || $keepFrom === null) {
+        $plan = self::plan($app, $ledger, $unsentFrom);
+        if ($plan === null) {
             return null;
         }
-
-        $range = \array_slice($rows, 0, $cut);
-        $compressed = ContextProjector::new()->project($range, $ledger)->tokens();
-        if ($compressed < self::MIN_SOURCE_TOKENS) {
-            return null;
-        }
+        [$range, $keepFrom, $compressed] = $plan;
 
         $summaryApp = $app->withMessages($range)->withContextLedger($ledger);
         if ($model !== null && $model !== '') {
@@ -170,6 +163,40 @@ final class StepSummarizer
         }
 
         return new CompressionBlock($block->id, $keepFrom, $summary, $compressed, $summaryTokens, PruneAuthor::Harness);
+    }
+
+    /**
+     * Whether {@see summarise()} would ask the provider for a summary of $app
+     * at all — a cut exists, and what it would condense is worth a summary —
+     * without asking. What runs ahead of a summary and costs a provider call
+     * of its own (the memory flush, roadmap 2.11) asks this first, so a turn
+     * with nothing to condense is never sent a request for it.
+     */
+    public static function wouldSummarise(App $app, ContextLedger $ledger, int $unsentFrom): bool
+    {
+        return self::plan($app, $ledger, $unsentFrom) !== null;
+    }
+
+    /**
+     * The rows {@see summarise()} would condense, the call id the kept tail
+     * starts at, and their projected tokens; null when there is no cut or too
+     * little before it.
+     *
+     * @return array{0: list<mixed>, 1: string, 2: int}|null
+     */
+    private static function plan(App $app, ContextLedger $ledger, int $unsentFrom): ?array
+    {
+        $rows = array_values($app->messages);
+        $cut = self::cutIndex($rows, $unsentFrom);
+        $keepFrom = $cut === null ? null : self::firstCallId($rows[$cut]);
+        if ($cut === null || $keepFrom === null) {
+            return null;
+        }
+
+        $range = \array_slice($rows, 0, $cut);
+        $compressed = ContextProjector::new()->project($range, $ledger)->tokens();
+
+        return $compressed < self::MIN_SOURCE_TOKENS ? null : [$range, $keepFrom, $compressed];
     }
 
     /**

@@ -451,6 +451,7 @@ final class MemoryPromptWiringTest extends TestCase
             'withSummaryModel' => fn(EngineBackend $b): EngineBackend => $b->withSummaryModel('memory-summary-model'),
             'withContextLedger' => fn(EngineBackend $b): EngineBackend => $b->withContextLedger(\SugarCraft\Crush\Context\Pruning\ContextLedger::new()),
             'withTurnInbox' => fn(EngineBackend $b): EngineBackend => $b->withTurnInbox(null),
+            'withWrapUpAt' => fn(EngineBackend $b): EngineBackend => $b->withWrapUpAt(70),
             'withoutHooks' => fn(EngineBackend $b): EngineBackend => $b->withoutHooks(),
             // withMemoryStore() is the setter itself, so "preserves" is not a
             // meaningful question for it; it is exercised by every other case.

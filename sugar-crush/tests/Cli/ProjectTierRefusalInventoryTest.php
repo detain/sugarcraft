@@ -375,6 +375,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'MCP/OAuthDiscovery.php|.well-known/oauth-authorization-server' => self::NOT_A_TIER,
         'MCP/OAuthDiscovery.php|.well-known/oauth-protected-resource' => self::NOT_A_TIER,
         'Tools/IgnoreRules.php|.git/info' => self::NOT_A_TIER,
+        // Roadmap 5.7-1: where plan mode's one allowed write may land — a
+        // write DESTINATION, like the worktrees directory above, never a file
+        // the session reads configuration from. `PermissionGate::isPlanFile()`
+        // resolves the target as the tool will (symlinks followed) and allows
+        // it only inside the root.
+        'Permissions/PermissionGate.php|.sugar-crush/plans' => self::NOT_A_TIER,
     ];
 
     private const REPOSITORY = 'repository-chosen';
@@ -400,8 +406,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY-THREE occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-ONE distinct paths. NINETEEN of those
+     * APPEARS IN. On this tree that is FIFTY-FOUR occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-TWO distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are FIFTEEN distinct paths — which is the figure
@@ -572,7 +578,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(31, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(32, $distinct, 'distinct dot-DIRECTORY paths in src/');
         self::assertCount(15, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
@@ -581,7 +587,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         );
 
         self::assertStringContainsString('FIFTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('THIRTY-ONE distinct', $enumeration);
+        self::assertStringContainsString('THIRTY-TWO distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -597,7 +603,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
-            28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE'];
+            28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN'];
 

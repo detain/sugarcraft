@@ -1953,9 +1953,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                             // its own copy of the chain (a fresh loop guard, so
                             // the turn's repeat counts never see it); a failed
                             // flush costs the summary nothing.
+                            // Only when the summary will be asked for: a turn
+                            // with nothing to condense is never sent a flush.
                             $flushCycle = (string) ($contextLedger->activeBlock()?->id ?? 0);
                             if (($memoryFlushedFor ?? null) !== $flushCycle
                                 && \SugarCraft\Crush\Context\Compaction\MemoryFlush::available($app->tools)
+                                && \SugarCraft\Crush\Context\Compaction\StepSummarizer::wouldSummarise($app, $contextLedger, $sentRows ?? count($app->messages))
                             ) {
                                 $memoryFlushedFor = $flushCycle;
                                 try {

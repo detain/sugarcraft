@@ -103,6 +103,18 @@ final class MemoryFlushBeforeCompactionTest extends TestCase
         $this->assertSame(1, \count(array_filter($provider->requests, self::isFlush(...))), 'the memory was flushed once');
     }
 
+    /** W9 integration: an over-budget turn with nothing a summary could condense is sent no flush. */
+    public function testNothingToCondenseNoFlush(): void
+    {
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'hi')], contextWindow: 2_000);
+
+        $this->engine($provider)->withTools([self::probe(), $this->memoryTool()])
+            ->completeTranscript([new UserMessage(str_repeat('a long first prompt ', 800))]);
+
+        $this->assertCount(1, $provider->requests, 'one request: the answer');
+        $this->assertSame(0, \count(array_filter($provider->requests, self::isFlush(...))));
+    }
+
     public function testNoMemoryToolNoFlush(): void
     {
         $provider = self::provider(summary: 'SUMMARY.');
