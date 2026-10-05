@@ -580,9 +580,20 @@ final class BackgroundSessionRunner
 
         // Its seat (roadmap 4.7-3) is counted against the session that
         // started it, not against this daemon's own id.
+        //
+        // Roadmap 4.9: and an `isolation: worktree` preset gets its git
+        // worktree here exactly as the launch's own Task would — of the tree
+        // the daemon was spawned to work in (the launch's root,
+        // BackgroundSupervisor's `workingDirectory`), so the trees land in the
+        // same `.sugar-crush/worktrees/` registry the launch sweeps. Without
+        // it every background Task for such a preset was refused for want of
+        // a manager.
         $tool = (new \SugarCraft\Crush\Tools\BuiltIn\TaskTool($agents))
             ->withEngine($backend)
-            ->withDelegationScope($this->delegation['scope'] ?? null);
+            ->withDelegationScope($this->delegation['scope'] ?? null)
+            ->withWorktreeManager(\SugarCraft\Crush\Agents\WorktreeManager::new(
+                $this->workingDirectory !== '' ? $this->workingDirectory : (getcwd() ?: '.'),
+            ));
         $result = $tool->execute(\array_filter([
             'id' => 'bg_' . $this->sessionId,
             'agent' => $agentName,

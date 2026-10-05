@@ -7,6 +7,8 @@ namespace SugarCraft\Crush\Tests\Sessions;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Agents\Isolation;
+use SugarCraft\Crush\Agents\WorktreeManager;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Context\DelegatedOutputFence;
@@ -22,6 +24,7 @@ use SugarCraft\Crush\Tests\Support\ScriptedProvider;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Workspace\GitRunner;
 
 /**
  * Roadmap 4.3-2, the daemon half: a background `Task` session runs the roster
@@ -107,6 +110,56 @@ final class BackgroundAgentRunnerTest extends TestCase
         }
     }
 
+    /**
+     * Roadmap 4.9 in the daemon: a background `Task` for an
+     * `isolation: worktree` preset gets a git worktree of the daemon's working
+     * tree, as the launch's own `Task` does — not a refusal for want of a
+     * worktree manager. Needs a real `git`.
+     */
+    public function testAnIsolatedPresetRunsInAWorktreeOfTheDaemonsCheckout(): void
+    {
+        if (!GitRunner::available()) {
+            self::markTestSkipped('needs a git executable');
+        }
+        $saved = [];
+        foreach (['SUGARCRUSH_WORKTREES_DIR', 'SUGAR_CRUSH_WORKTREES_DIR'] as $name) {
+            $saved[$name] = getenv($name);
+            putenv($name);
+        }
+        try {
+            $repo = $this->dir . '/repo';
+            mkdir($repo, 0o700, true);
+            $git = GitRunner::new($repo);
+            self::assertTrue($git->run('init', '-q', '-b', 'main')['ok']);
+            file_put_contents($repo . '/a.txt', "one\n");
+            self::assertTrue($git->run('add', 'a.txt')['ok']);
+            self::assertTrue($git->run('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'initial')['ok']);
+
+            $probe = self::probe('Grep', 'two matches');
+            $provider = new ScriptedProvider([
+                new CompleteResponse(content: '', toolCalls: [new ToolCall('c1', 'Grep', ['pattern' => 'TODO'])]),
+                new CompleteResponse(content: 'found two TODOs'),
+            ]);
+            $agents = new AgentManager(new ScriptedProvider([]), new SkillRegistry(), toolRegistry: [$probe], toolUniverse: [$probe]);
+            $agents->register(RosterAgent::named('isolated', ['Grep'], maxTurns: 5, isolation: Isolation::Worktree));
+
+            $exit = $this->runner(['agent' => 'isolated'], $repo)
+                ->executeTask(EngineBackend::new($provider, 'm')->withoutHooks()->withRoot($repo)->withTools([$probe]), null, $agents);
+
+            $buffer = $this->buffer();
+            $this->assertStringNotContainsString('no worktree manager', $buffer);
+            $this->assertSame(0, $exit, $buffer);
+            $this->assertCount(1, $probe->calls, 'the isolated run did its work');
+            $this->assertStringContainsString(DelegatedOutputFence::wrap('found two TODOs'), $buffer);
+            $this->assertDirectoryExists($repo . '/.sugar-crush/worktrees', 'its tree was made under the daemon\'s checkout');
+            $this->assertSame([], WorktreeManager::new($repo)->listWorktrees(), 'and removed with the run, which left no work');
+        } finally {
+            foreach ($saved as $name => $value) {
+                putenv($value === false ? $name : $name . '=' . $value);
+            }
+        }
+    }
+
     public function testABackendWithNoEngineFailsNamingWhy(): void
     {
         $exit = $this->runner(['agent' => 'reviewer'])->executeTask(new EchoBackend(), null, $this->manager(self::probe('Grep', ''), ['Grep']));
@@ -137,14 +190,14 @@ final class BackgroundAgentRunnerTest extends TestCase
     // ── harness ─────────────────────────────────────────────────────────
 
     /** @param array<string, string> $delegation */
-    private function runner(array $delegation): BackgroundSessionRunner
+    private function runner(array $delegation, ?string $workingDirectory = null): BackgroundSessionRunner
     {
         return new BackgroundSessionRunner(
             sessionId: 'sess_20261004120000_abcdef01',
             socketPath: $this->dir . '/s.sock',
             bufferPath: $this->dir . '/session.buffer',
             task: 'look for TODOs in src/',
-            workingDirectory: $this->dir,
+            workingDirectory: $workingDirectory ?? $this->dir,
             delegation: $delegation,
         );
     }
