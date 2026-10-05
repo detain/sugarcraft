@@ -115,6 +115,17 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     private \ArrayObject $serverInfoMemo;
 
     /**
+     * Whether THIS provider has parsed a populated `cached_tokens` yet (key
+     * `seen`), so {@see parseUsage()} may read SGLang's cold-request
+     * `"prompt_tokens_details": null` as a measured zero. An object behind a
+     * once-assigned property for the same `final readonly class` reason as
+     * {@see $truncationRiskWarned}.
+     *
+     * @var \ArrayObject<string, true>
+     */
+    private \ArrayObject $cacheReportMemo;
+
+    /**
      * §Q8 (E-56): longest server-authored error text kept when it is lifted
      * out of an error body for display. Measured SGLang bodies (E-40/E-10)
      * are one short sentence, so this only exists to stop a pathological
@@ -653,6 +664,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
 
         $this->truncationRiskWarned = new \ArrayObject();
         $this->serverInfoMemo = new \ArrayObject();
+        $this->cacheReportMemo = new \ArrayObject();
     }
 
     /**
@@ -2633,19 +2645,30 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * usage fields, so {@see parseResponse()} and any later carrier agree by
      * construction about what the server actually said.
      *
-     * THE SHAPE, MEASURED ON THE LIVE DEPLOYMENT (skynet2 sglang, 2026-09-02):
-     * `{"prompt_tokens":N,"total_tokens":N,"completion_tokens":N,`
-     * `"prompt_tokens_details":null,"reasoning_tokens":N}` — the
-     * `prompt_tokens_details` KEY is on the wire, its VALUE has been null on
-     * every response, including a re-sent 1,258-token prefix the server's
-     * radix cache cannot miss: this deployment is not launched with cache
-     * reporting, so it reports NO cache fields. This parse therefore invents
-     * nothing: `cached_tokens` is read only if a server populates it, and the
-     * member's shape is this repo's own vendored OpenAI-compatible DTO
+     * THE SHAPE, MEASURED ON THE LIVE DEPLOYMENT (skynet2 sglang, re-measured
+     * 2026-10-05 with raw requests, `prompt_kit/findings/crush-report/live-checks.md`
+     * LIVE-0.1): the server runs with `enable_cache_report: true`, and reports
+     * a hit as `"prompt_tokens_details":{"cached_tokens":N}` (N a multiple of
+     * its 64-token page) but a request with NO hit as
+     * `"prompt_tokens_details":null` — the key on the wire, its value null.
+     * (An earlier reading, 2026-09-02, saw null on every response and
+     * concluded the deployment had no cache reporting; the deployment has
+     * since been relaunched with it, and the null is now only the cold case.)
+     * The member's shape is this repo's own vendored OpenAI-compatible DTO
      * (`OpenAI\Responses\Chat\CreateResponseUsagePromptTokensDetails`).
-     * Absent-or-null details decodes to UNREPORTED (`null`), never to a
-     * fabricated zero — the distinction {@see Usage}'s "Zero is not the same
-     * as unknown" exists to keep.
+     *
+     * NULL MEANS ZERO ONLY AFTER A REPORT. On its own a null `details` is
+     * indistinguishable from a server launched without cache reporting, so it
+     * decodes to UNREPORTED (`null`), never to a fabricated zero — the
+     * distinction {@see Usage}'s "Zero is not the same as unknown" exists to
+     * keep. But once THIS provider instance has parsed a populated
+     * `cached_tokens` ({@see $cacheReportMemo}), the server has proven it
+     * reports cache hits, so a later null on a response that names its
+     * `prompt_tokens` is that server's spelling of a MEASURED zero: it is read
+     * as `0`, which is what lets the status bar's cache share and
+     * `CacheHealthWatch` count a cold request instead of skipping it. The
+     * memo lives on the instance, so a forked turn child learns it from its
+     * own first hit; a key absent altogether is never upgraded.
      *
      * `prompt_tokens` on this family COUNTS the cached prefix — OpenAI's
      * published API docs describe `cached_tokens` as the cached PART of
@@ -2696,6 +2719,18 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
 
         if (is_array($details)) {
             $cached = self::usageInt($details['cached_tokens'] ?? null);
+        }
+
+        if ($cached !== null) {
+            $this->cacheReportMemo['seen'] = true;
+        } elseif (
+            $details === null
+            && $prompt !== null
+            && array_key_exists('prompt_tokens_details', $usage)
+            && isset($this->cacheReportMemo['seen'])
+        ) {
+            // A proven-reporting server's cold request: a measured zero.
+            $cached = 0;
         }
 
         return Usage::new(
