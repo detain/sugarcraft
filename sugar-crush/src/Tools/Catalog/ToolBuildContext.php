@@ -10,6 +10,7 @@ use SugarCraft\Crush\LSP\LspClient;
 use SugarCraft\Crush\Memory\MemoryWriter;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tools\ReadLedger;
 
 /**
  * Everything one launch shares between its built-in tools, handed to each
@@ -22,6 +23,15 @@ use SugarCraft\Crush\Skills\SkillRegistry;
  *
  * `memory` is the launch's {@see MemoryWriter}, the router `/memory add` uses
  * too; null leaves the `Memory` tool answering that no store is configured.
+ *
+ * `readLedger` is the session's {@see ReadLedger} (roadmap 3.I-2), shared by
+ * Read, Edit, Write and ApplyPatch for the same reason the loader is: a read
+ * through one must be visible to the others. It is a field rather than a
+ * lookup keyed weakly on this object, so the launch that builds the context
+ * ({@see \SugarCraft\Crush\Cli\Bootstrap::unfilteredTools()}) owns the
+ * ledger it hands out and nothing else can mint a second one for the same
+ * build. Defaulted, so a context built without one (a test, an embedder)
+ * still gives its tools one shared ledger.
  */
 final readonly class ToolBuildContext
 {
@@ -35,6 +45,7 @@ final readonly class ToolBuildContext
         public bool $rgAvailable = false,
         public bool $fdAvailable = false,
         public ?MemoryWriter $memory = null,
+        public ReadLedger $readLedger = new ReadLedger(),
     ) {
     }
 }

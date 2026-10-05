@@ -197,7 +197,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, lsp: $context->lsp, readLedger: ReadLedger::forContext($context));
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, lsp: $context->lsp, readLedger: $context->readLedger);
     }
 
     public function name(): string

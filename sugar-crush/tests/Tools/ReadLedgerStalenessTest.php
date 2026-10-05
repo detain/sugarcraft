@@ -270,7 +270,7 @@ final class ReadLedgerStalenessTest extends TestCase
 
         $ledger = ReadLedger::in($tools);
         $this->assertNotNull($ledger);
-        foreach (['Read', 'Edit', 'Write'] as $name) {
+        foreach (['Read', 'Edit', 'Write', 'ApplyPatch'] as $name) {
             $this->assertSame($ledger, $byName[$name]->readLedger(), "{$name} records into the shared ledger");
         }
         $this->assertNotSame($ledger, ReadLedger::in(ToolCatalog::build(self::context($this->dir))), 'a second build is a second session');
@@ -347,6 +347,44 @@ final class ReadLedgerStalenessTest extends TestCase
         file_put_contents($a, "alpha\nchanged\n");
         $this->assertTrue($edit->execute(['file_path' => 'a.txt', 'old_string' => 'alpha', 'new_string' => 'ALPHA'])->isError());
         $this->assertFalse($edit->execute(['file_path' => 'b.txt', 'old_string' => 'beta', 'new_string' => 'BETA'])->isError());
+    }
+
+    /**
+     * The ledger is the build context's own field (roadmap 3.I-2 remainder),
+     * not a lookup keyed on the context: the launch that builds the tool set
+     * hands it in, and every ledger-carrying tool takes exactly that one.
+     */
+    public function testTheContextsOwnLedgerIsTheOneEveryToolTakes(): void
+    {
+        $skills = new SkillRegistry();
+        $ledger = ReadLedger::new();
+        $tools = ToolCatalog::build(new ToolBuildContext(
+            root: $this->dir,
+            loader: new InstructionFileLoader($this->dir),
+            skills: $skills,
+            skillNudge: SkillPathNudge::new($skills),
+            ruleNudge: RulePathNudge::fromLoader(static fn (): array => []),
+            readLedger: $ledger,
+        ));
+
+        $this->assertSame($ledger, ReadLedger::in($tools));
+    }
+
+    public function testTheLaunchBuildsOneLedgerForItsWholeToolSet(): void
+    {
+        $tools = \SugarCraft\Crush\Cli\Bootstrap::unfilteredTools($this->dir);
+        $ledger = ReadLedger::in($tools);
+
+        $this->assertNotNull($ledger, 'the launch\'s tools carry no read ledger — the staleness refusal is unwired');
+        $carriers = 0;
+        foreach ($tools as $tool) {
+            if (method_exists($tool, 'readLedger')) {
+                $this->assertSame($ledger, $tool->readLedger(), $tool->name() . ' holds a ledger of its own');
+                ++$carriers;
+            }
+        }
+        $this->assertSame(4, $carriers, 'Read, Edit, Write and ApplyPatch carry the ledger');
+        $this->assertNotSame($ledger, ReadLedger::in(\SugarCraft\Crush\Cli\Bootstrap::unfilteredTools($this->dir)), 'each build is its own session');
     }
 
     // ── harness ─────────────────────────────────────────────────────────

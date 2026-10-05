@@ -8,7 +8,6 @@ use SugarCraft\Crush\Tools\BuiltIn\ApplyPatch;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\Write;
-use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
 
 /**
  * The session's read ledger (roadmap 3.I-2): for every file the model has
@@ -56,11 +55,12 @@ use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
  * recorded LAST wins, so applying an export twice, or two children's exports
  * in either order, lands on the same ledger.
  *
- * ONE PER TOOL BUILD. Read, Edit and Write must share an instance or a read
- * through one would be invisible to the others; {@see forContext()} hands
- * every tool built from the same {@see ToolBuildContext} the same ledger,
- * which is the same scope the instruction loader and nudge trackers have. A
- * tool constructed without one keeps its pre-3.I-2 behaviour exactly.
+ * ONE PER TOOL BUILD. Read, Edit, Write and ApplyPatch must share an instance
+ * or a read through one would be invisible to the others; the launch puts one
+ * on the {@see \SugarCraft\Crush\Tools\Catalog\ToolBuildContext} it builds
+ * every tool from (`readLedger`), the same scope the instruction loader and
+ * nudge trackers have. A tool constructed without one keeps its pre-3.I-2
+ * behaviour exactly.
  *
  * BOUNDED: at most {@see MAX_ENTRIES} paths, the least recently recorded
  * evicted first, so neither the result frame nor the notice scan grows with a
@@ -93,23 +93,9 @@ final class ReadLedger
      */
     private array $entries = [];
 
-    /** @var \WeakMap<ToolBuildContext, self>|null */
-    private static ?\WeakMap $byContext = null;
-
     public static function new(): self
     {
         return new self();
-    }
-
-    /**
-     * The ledger every tool built from $context shares, created on first ask.
-     * Keyed weakly, so a discarded tool build takes its ledger with it.
-     */
-    public static function forContext(ToolBuildContext $context): self
-    {
-        self::$byContext ??= new \WeakMap();
-
-        return self::$byContext[$context] ??= new self();
     }
 
     /**

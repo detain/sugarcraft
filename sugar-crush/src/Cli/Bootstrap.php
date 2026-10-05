@@ -8698,6 +8698,10 @@ final class Bootstrap
                     static fn (): ?MemoryStore => self::memoryStoreOrNull($root),
                     $root,
                 ),
+                // Roadmap 3.I-2: ONE read ledger for this build — Read records
+                // into it, Edit/Write/ApplyPatch refuse a stale file against it
+                // — owned here, by the build, for the loader's reason above.
+                readLedger: \SugarCraft\Crush\Tools\ReadLedger::new(),
             )),
             ...self::mcpTools($root),
         ];

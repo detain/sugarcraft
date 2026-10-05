@@ -65,7 +65,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, readLedger: ReadLedger::forContext($context));
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, readLedger: $context->readLedger);
     }
 
     /** The read ledger this instance checks and records into, or null. */

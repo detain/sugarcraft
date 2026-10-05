@@ -379,7 +379,7 @@ sugar-crush/tests/Agents/ForeignAgentPresetRegistryTest.php	0.403	39
 sugar-crush/tests/Agents/MailboxTest.php	0.401	23
 sugar-crush/tests/Host/EventLogTest.php	0.400	8
 sugar-crush/tests/Chat/CacheReusingSummaryRouteTest.php	0.400	8
-sugar-crush/tests/Tools/ReadLedgerStalenessTest.php	0.400	18
+sugar-crush/tests/Tools/ReadLedgerStalenessTest.php	0.400	20
 sugar-crush/tests/Memory/DreamPassTest.php	0.400	9
 sugar-crush/tests/Backend/LiveLedgerFrameTest.php	0.400	9
 sugar-crush/tests/Backend/InTurnCompressionTest.php	0.400	5
