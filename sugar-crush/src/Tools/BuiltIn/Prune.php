@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
+use SugarCraft\Crush\Compactor;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Context\Pruning\ContextProjector;
 use SugarCraft\Crush\Context\Pruning\LedgerDelta;
@@ -163,7 +164,7 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
             ), true);
         }
 
-        [$delta, $pruned, $distilled, $skipped] = self::plan($targets, $reason, $ledger, $messages);
+        [$delta, $pruned, $distilled, $skipped, $files] = self::plan($targets, $reason, $ledger, $messages);
         if ($delta->isEmpty()) {
             return new ToolResult($callId, 'Error: nothing was pruned.' . self::skippedText($skipped), true);
         }
@@ -178,18 +179,19 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
             return new ToolResult($callId, 'Error: the turn\'s context ledger could not be reached from where this call ran; nothing was pruned.', true);
         }
 
-        return new ToolResult($callId, self::receipt($delta, $pruned, $distilled, $skipped));
+        return new ToolResult($callId, self::receipt($delta, $pruned, $distilled, $skipped, (new Compactor())->describeTargets($files)));
     }
 
     /**
      * Resolve every target against the rows the model read and the ledger as
      * it stands: the delta to apply, the tools pruned (name => count), the
-     * refs distilled, and each skipped target with why.
+     * refs distilled, each skipped target with why, and the arguments of
+     * every pruned call (for the receipt's files, {@see Compactor::describeTargets()}).
      *
      * @param list<mixed>                                $targets
      * @param list<\SugarCraft\Crush\Messages\Message>   $messages
      *
-     * @return array{0: LedgerDelta, 1: array<string, int>, 2: list<string>, 3: list<string>}
+     * @return array{0: LedgerDelta, 1: array<string, int>, 2: list<string>, 3: list<string>, 4: list<array<array-key, mixed>>}
      */
     private static function plan(array $targets, PruneReason $reason, ContextLedger $ledger, array $messages): array
     {
@@ -207,6 +209,7 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
         $pruned = [];
         $distilled = [];
         $skipped = [];
+        $files = [];
         $named = [];
         foreach ($targets as $target) {
             $written = \is_array($target) ? ($target['ref'] ?? null) : null;
@@ -275,23 +278,26 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
 
             $delta = $delta->withPrune(new PruneEntry($id, $kind, $reason, PruneAuthor::Model, $saves, $distillation));
             $pruned[$tool] = ($pruned[$tool] ?? 0) + 1;
+            $files[] = $arguments;
             if ($kind === PruneKind::Distilled) {
                 $distilled[] = $label;
             }
         }
 
-        return [$delta, $pruned, $distilled, $skipped];
+        return [$delta, $pruned, $distilled, $skipped, $files];
     }
 
     /**
-     * `Pruned 4 outputs (~18.2K tokens): Read ×3, Grep ×1. Distilled: r12.
-     * Skipped: r9 (protected: Task).`
+     * `Pruned 4 outputs (~18.2K tokens): Read ×3, Grep ×1; files: code ×2,
+     * config ×1. Distilled: r12. Skipped: r9 (protected: Task).` — the files
+     * the pruned calls named, grouped by the dormant {@see Compactor}
+     * (roadmap 3.B-5, DCP §13.2 P2-11), and left out when none named one.
      *
      * @param array<string, int> $pruned
      * @param list<string>       $distilled
      * @param list<string>       $skipped
      */
-    private static function receipt(LedgerDelta $delta, array $pruned, array $distilled, array $skipped): string
+    private static function receipt(LedgerDelta $delta, array $pruned, array $distilled, array $skipped, string $files = ''): string
     {
         $total = array_sum($pruned);
         $byTool = [];
@@ -300,11 +306,12 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
         }
 
         return sprintf(
-            'Pruned %d output%s (~%s tokens): %s.%s%s',
+            'Pruned %d output%s (~%s tokens): %s%s.%s%s',
             $total,
             $total === 1 ? '' : 's',
             TokenCount::compact($delta->freedTokens()),
             implode(', ', $byTool),
+            $files === '' ? '' : '; files: ' . $files,
             $distilled === [] ? '' : ' Distilled: ' . implode(', ', $distilled) . '.',
             self::skippedText($skipped),
         );

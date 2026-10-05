@@ -77,7 +77,7 @@ final class PruneToolTest extends TestCase
         ]);
 
         $this->assertFalse($result->isError(), $result->content());
-        $this->assertMatchesRegularExpression('/^Pruned 2 outputs \(~[\d.]+K? tokens\): Read ×2\. Distilled: r3\.$/u', $result->content());
+        $this->assertMatchesRegularExpression('/^Pruned 2 outputs \(~[\d.]+K? tokens\): Read ×2; files: code ×2\. Distilled: r3\.$/u', $result->content());
 
         $this->assertCount(1, $this->applied, 'one delta per call');
         $first = $this->ledger->prune('c1');

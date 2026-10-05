@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Compactor;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Context\Pruning\PrunedOutputPlaceholder;
 use SugarCraft\Crush\Context\Pruning\PruneAuthor;
@@ -81,6 +82,7 @@ final class SweepCommand
         }
 
         $swept = [];
+        $files = [];
         $tokens = 0;
         $skipped = ['protected' => [], 'already pruned' => 0, 'too small' => 0];
         foreach ($outputs as [$result, $arguments]) {
@@ -104,10 +106,11 @@ final class SweepCommand
             }
             $ledger = $ledger->withPrune(new PruneEntry($id, PruneKind::Output, PruneReason::Swept, PruneAuthor::User, $saves));
             $swept[$result->name] = ($swept[$result->name] ?? 0) + 1;
+            $files[] = $arguments;
             $tokens += $saves;
         }
 
-        return [$ledger, self::receipt($swept, $tokens, $skipped)];
+        return [$ledger, self::receipt($swept, $tokens, $skipped, (new Compactor())->describeTargets($files))];
     }
 
     /**
@@ -162,8 +165,10 @@ final class SweepCommand
     /**
      * @param array<string, int> $swept tool name => outputs swept
      * @param array{protected: array<string, true>, 'already pruned': int, 'too small': int} $skipped
+     * @param string $files the files the swept calls named, grouped by
+     *        {@see Compactor::describeTargets()} (roadmap 3.B-5); '' for none
      */
-    private static function receipt(array $swept, int $tokens, array $skipped): string
+    private static function receipt(array $swept, int $tokens, array $skipped, string $files = ''): string
     {
         $parts = [];
         if ($skipped['protected'] !== []) {
@@ -188,11 +193,12 @@ final class SweepCommand
         }
 
         return sprintf(
-            'Swept %d tool output%s (~%s tokens): %s. The model now sees a one-line placeholder for each; the transcript keeps them.%s',
+            'Swept %d tool output%s (~%s tokens): %s%s. The model now sees a one-line placeholder for each; the transcript keeps them.%s',
             $total,
             $total === 1 ? '' : 's',
             TokenCount::compact($tokens),
             implode(', ', $byTool),
+            $files === '' ? '' : '; files: ' . $files,
             $skippedText,
         );
     }

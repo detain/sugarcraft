@@ -34,7 +34,7 @@ final class SweepCommandTest extends TestCase
         $this->assertSame([PruneKind::Output, PruneReason::Swept, PruneAuthor::User], [$entry?->kind, $entry?->reason, $entry?->by]);
         $this->assertGreaterThan(0, $entry?->tokens);
         $this->assertStringStartsWith('Swept 2 tool outputs (~', $reply);
-        $this->assertStringContainsString('Read ×1, Grep ×1', $reply);
+        $this->assertStringContainsString('Read ×1, Grep ×1; files: code ×1.', $reply, 'roadmap 3.B-5: the files the swept calls named, by category');
         $this->assertStringContainsString('Skipped: protected Task; 1 too small to be worth a placeholder.', $reply);
     }
 

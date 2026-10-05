@@ -33,7 +33,8 @@ own counts.
 
 `/context` (or `/tokens`) breaks the *next* request down: the system prompt
 layer by layer, the tool schemas, the history, what pruning removed (each
-pruned output by its `r17`-style ref, with why and by whom), the free space,
+pruned output by its `r17`-style ref, with why and by whom, and the files the
+pruned calls read grouped by kind, `files: code ×3, config ×1`), the free space,
 the largest messages, how much of each prompt the provider served from its
 cache, and how many requests lost the prefix the request before them had
 cached (a *cache break*: one after a prune or a compression is that rewrite's
@@ -221,7 +222,8 @@ you) can point at a specific output.
   or replaces each with a shorter *distillation* the model writes
   (`{"targets": [{"ref": "r17", "distillation": "…"}], "reason": "done"}`). It
   skips protected tools and anything already pruned, and costs no permission
-  prompt. In `auto` mode the model is nudged towards it as the context grows
+  prompt. Its receipt, like `/sweep`'s, counts what it took by tool and the
+  files those calls read by kind (`Read ×3; files: code ×2, config ×1`). In `auto` mode the model is nudged towards it as the context grows
   (`contextPruning.minContextTokens`, `maxContextTokens`, `nudgeFrequency`,
   `iterationNudgeThreshold`).
 - **`Compress`** replaces a closed *range* of the conversation (`r12` to

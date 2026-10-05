@@ -501,7 +501,8 @@ served from its cache — for the last reply and across the session — and how
 many requests lost the prefix the request before them had cached (cache
 breaks, the newest with its cached share before and after). It also
 says what the session's pruning takes out of what the model is sent — pruned
-tool outputs (the newest named by ref, `r17`, with why and by whom), superseded
+tool outputs (the newest named by ref, `r17`, with why and by whom, and the
+files they read grouped by kind, `code ×3, config ×1`), superseded
 state rows and an active step summary — and the total is the estimate after
 it. `/sweep` prunes the tool outputs since your last prompt (`/sweep 5`: the
 last five), and `/pruning auto|manual|off` sets how much happens on its own for

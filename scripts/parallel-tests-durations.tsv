@@ -860,7 +860,7 @@ sugar-crush/tests/Hooks/HookDispatcherTest.php	0.019	55
 sugar-crush/tests/MouseWiringTest.php	0.019	16
 sugar-crush/tests/MCP/HttpMcpServerTest.php	0.019	28
 sugar-crush/tests/Skills/SkillPathPatternTest.php	0.018	17
-sugar-crush/tests/CompactorTest.php	0.018	13
+sugar-crush/tests/CompactorTest.php	0.020	15
 sugar-crush/tests/Support/HomeDirectoryTest.php	0.018	27
 sugar-crush/tests/Renderer/BidiOverrideFrameTest.php	0.018	7
 sugar-crush/tests/Providers/ToolCallRawArgumentsReplayTest.php	0.018	22

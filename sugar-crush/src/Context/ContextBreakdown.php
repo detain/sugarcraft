@@ -60,7 +60,7 @@ final readonly class ContextBreakdown
      *        1-based position in the transcript
      * @param array{read: int, prompt: int}|null $lastCache    the newest reply's cache split
      * @param array{read: int, prompt: int, replies: int}|null $sessionCache every reply's, summed
-     * @param array{mode: string, sessionMode: bool, outputs: int, outputTokens: int, contextRows: int, contextRowTokens: int, block: ?array{id: int, compressed: int, summary: int}, rows: list<array{ref: ?int, tool: string, reason: string, by: string, tokens: int}>}|null $pruning
+     * @param array{mode: string, sessionMode: bool, outputs: int, outputTokens: int, files?: string, contextRows: int, contextRowTokens: int, block: ?array{id: int, compressed: int, summary: int}, rows: list<array{ref: ?int, tool: string, reason: string, by: string, tokens: int}>}|null $pruning
      *        what the session's context ledger takes out of the history the
      *        model is sent (roadmap 5.6 / 3.B), null when not measured
      *        ({@see withPruning()})
@@ -93,7 +93,9 @@ final readonly class ContextBreakdown
      * This breakdown with what $ledger takes out of the history the model is
      * sent (roadmap 5.6 remainder): the pruned tool outputs — the newest
      * {@see PRUNED_ROWS} named by ref, tool, reason and author — the
-     * superseded `<turn-context>` rows left out, and the active step summary.
+     * superseded `<turn-context>` rows left out, and the active step summary;
+     * `files` groups the files every pruned call named
+     * ({@see \SugarCraft\Crush\Compactor::describeTargets()}, roadmap 3.B-5).
      * Only what still names a row of $history counts ({@see
      * \SugarCraft\Crush\Context\Pruning\ContextLedger::syncAgainstHistory()}),
      * and the figures are the ledger's own estimates of what each saves.
@@ -104,18 +106,27 @@ final readonly class ContextBreakdown
     {
         $ledger = $ledger->syncAgainstHistory($history);
         $tools = [];
+        $arguments = [];
         foreach ($history as $row) {
+            foreach ($row->toolCalls as $call) {
+                if ($call instanceof \SugarCraft\Crush\ToolCall && $call->id !== null && $call->id !== '') {
+                    $arguments[$call->id] = $call->arguments;
+                }
+            }
             foreach ($row->toolResults as $result) {
                 if ($result instanceof \SugarCraft\Crush\ToolResult && $result->id !== null) {
                     $tools[$result->id] = $result->name;
+                    $arguments[$result->id] ??= $result->arguments;
                 }
             }
         }
 
         $rows = [];
+        $pruned = [];
         $outputTokens = 0;
         foreach ($ledger->prunes as $id => $entry) {
             $outputTokens += $entry->tokens;
+            $pruned[] = $arguments[(string) $id] ?? [];
             $rows[] = [
                 'ref' => $ledger->refOf((string) $id),
                 'tool' => $tools[(string) $id] ?? 'tool',
@@ -142,6 +153,7 @@ final readonly class ContextBreakdown
                 'sessionMode' => $ledger->mode !== null,
                 'outputs' => \count($rows),
                 'outputTokens' => $outputTokens,
+                'files' => (new \SugarCraft\Crush\Compactor())->describeTargets($pruned),
                 'contextRows' => \count($ledger->droppedContextRows),
                 'contextRowTokens' => array_sum($ledger->droppedContextRows),
                 'block' => $block === null ? null : ['id' => $block->id, 'compressed' => $block->compressedTokens, 'summary' => $block->summaryTokens],

@@ -95,7 +95,7 @@ final class ContextCommandsTest extends TestCase
 
         $this->assertNull($cmd);
         $report = $shown->history[array_key_last($shown->history)]->content;
-        $this->assertMatchesRegularExpression('/^Pruned: ~\S+ out of what the model is sent \(mode auto, configured\) — 1 tool output \(~\S+\)\. The transcript keeps every row\.$/m', $report);
+        $this->assertMatchesRegularExpression('/^Pruned: ~\S+ out of what the model is sent \(mode auto, configured\) — 1 tool output \(~\S+; files: code ×1\)\. The transcript keeps every row\.$/m', $report, 'roadmap 3.B-5: the pruned calls\' files, by category');
         $this->assertMatchesRegularExpression('/^  —\s+Read\s+~\S+\s+swept by user$/m', $report, 'no ref yet: no turn has read it since');
 
         [$fresh] = $this->type(new Chat(history: self::history()), '/context');

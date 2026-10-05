@@ -155,8 +155,10 @@ final class ContextCommand
 
     /**
      * The pruned part (roadmap 5.6 remainder): what the session's context
-     * ledger takes out of the history the model is sent, by kind, and the
-     * newest pruned outputs by ref. Nothing when not measured.
+     * ledger takes out of the history the model is sent, by kind — the
+     * pruned outputs with the files their calls named, grouped by category
+     * (roadmap 3.B-5) — and the newest pruned outputs by ref. Nothing when
+     * not measured.
      *
      * @return list<string>
      */
@@ -173,7 +175,13 @@ final class ContextCommand
 
         $parts = [];
         if ($p['outputs'] > 0) {
-            $parts[] = sprintf('%s (~%s)', self::plural($p['outputs'], 'tool output'), TokenCount::compact($p['outputTokens']));
+            $files = $p['files'] ?? '';
+            $parts[] = sprintf(
+                '%s (~%s%s)',
+                self::plural($p['outputs'], 'tool output'),
+                TokenCount::compact($p['outputTokens']),
+                $files === '' ? '' : '; files: ' . $files,
+            );
         }
         if ($p['contextRows'] > 0) {
             $parts[] = sprintf('%s (~%s)', self::plural($p['contextRows'], 'superseded state row'), TokenCount::compact($p['contextRowTokens']));

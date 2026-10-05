@@ -231,4 +231,27 @@ final class CompactorTest extends TestCase
         $this->assertSame('', $compactor->describe([]));
         $this->assertSame('other ×2', $compactor->describe(['Makefile', 'LICENSE']));
     }
+
+    /**
+     * Roadmap 3.B-5 (DCP §13.2 P2-11): the pruning receipts name the files
+     * their calls read — each call's `file_path`, once per file — and a call
+     * that names none (Bash, Grep over a directory) is not counted.
+     */
+    public function testDescribeTargetsGroupsTheFilesToolCallsName(): void
+    {
+        $compactor = new Compactor();
+
+        $this->assertSame('code ×2, config ×1', $compactor->describeTargets([
+            ['file_path' => 'src/A.php'],
+            ['file_path' => '/etc/app.conf', 'offset' => 10],
+            ['file_path' => 'src/A.php'],
+            ['file_path' => 'b.ts'],
+            ['command' => 'ls'],
+            ['path' => 'src', 'pattern' => 'TODO'],
+            ['file_path' => '  '],
+            ['file_path' => 7],
+        ]));
+        $this->assertSame('', $compactor->describeTargets([['command' => 'make']]));
+        $this->assertSame('', $compactor->describeTargets([]));
+    }
 }

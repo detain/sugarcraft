@@ -231,6 +231,29 @@ final class Compactor
     }
 
     /**
+     * {@see describe()} over the files a list of tool calls name — each
+     * call's `file_path` argument (Read, Edit, Write, …), once per file: how
+     * the pruning receipts (`Prune`, `/sweep`, `/context`'s pruned list,
+     * roadmap 3.B-5) say what the outputs they took away were about. A call
+     * that names no file (Bash, a Grep over a directory) is not counted, so
+     * a list of only those describes as empty. Pure, like describe().
+     *
+     * @param iterable<array<array-key, mixed>> $argumentLists each call's arguments
+     */
+    public function describeTargets(iterable $argumentLists): string
+    {
+        $paths = [];
+        foreach ($argumentLists as $arguments) {
+            $path = $arguments['file_path'] ?? null;
+            if (\is_string($path) && trim($path) !== '') {
+                $paths[trim($path)] = true;
+            }
+        }
+
+        return $this->describe(array_map('strval', array_keys($paths)));
+    }
+
+    /**
      * Threshold in bytes used for compaction decisions.
      *
      * @return positive-int
