@@ -756,6 +756,9 @@ final class KeyBindingRegistry
             KeyBinding::new('settings.back', 'n', 'Leave the preview unsaved (or Esc)', $c),
             KeyBinding::new('settings.trust', 'y', 'Confirm a project trust grant', $c),
             KeyBinding::new('settings.discard', 'd', 'Discard unsaved changes and close', $c),
+            // N-P5: the narrow layout and the scrolling save preview.
+            KeyBinding::new('settings.details', 'i', 'Details in the list\'s place (narrow view)', $c),
+            KeyBinding::new('settings.preview-scroll', '↑ / ↓', 'Scroll the save preview (or k / j)', $c),
         ];
     }
 

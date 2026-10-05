@@ -36,8 +36,14 @@ final class FilesTouched
     /** Tool names whose successful result means the file was read. */
     public const READ_TOOLS = ['Read'];
 
-    /** Tool names whose successful result means the file was modified. */
-    public const MODIFY_TOOLS = ['Edit', 'Write'];
+    /**
+     * Tool names whose successful result means the file was modified — every
+     * file its patch names, for `ApplyPatch` ({@see PATCH_ARGUMENT}).
+     */
+    public const MODIFY_TOOLS = ['Edit', 'Write', 'ApplyPatch'];
+
+    /** The argument `ApplyPatch` carries its patch (and so its paths) in. */
+    public const PATCH_ARGUMENT = 'patch';
 
     /** The argument key every built-in file tool names its path under. */
     public const PATH_ARGUMENT = 'file_path';
@@ -80,6 +86,17 @@ final class FilesTouched
     {
         if ($result->isError()) {
             return $this;
+        }
+
+        if ($result->name === 'ApplyPatch') {
+            $touched = $this;
+            foreach (\SugarCraft\Crush\Tools\Edit\PatchParser::paths($result->arguments[self::PATCH_ARGUMENT] ?? null) ?? [] as $path) {
+                if (trim($path) !== '') {
+                    $touched = $touched->withModified(trim($path));
+                }
+            }
+
+            return $touched;
         }
 
         $path = $result->arguments[self::PATH_ARGUMENT] ?? null;

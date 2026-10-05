@@ -1331,7 +1331,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $agentInbox = $parentSessionId === null ? null : \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($parentSessionId);
         if ($agentInbox !== null) {
             try {
-                $turnInbox = \SugarCraft\Crush\Backend\MailboxTurnInbox::new($agentInbox, $subAgent->id, $log);
+                $turnInbox = \SugarCraft\Crush\Backend\MailboxTurnInbox::new($agentInbox, $subAgent->id, $log, $this->parentAgentId ?? SendMessageTool::MAIN);
             } catch (\InvalidArgumentException) {
                 // An id no mailbox can be named by (an embedder's own
                 // SubAgent): the run cannot be messaged, and still runs.
@@ -1632,7 +1632,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // to throw or to wait: a soft cancel at the next tool start or step,
         // as Esc's cancel_tool does, so the run stops resumable; a pause at
         // the next step boundary, so the step it is in finishes first.
-        $control = ['cancel' => false, 'paused' => false, 'background' => false, 'size' => -1, 'probedAt' => null];
+        $control = ['cancel' => false, 'cancelledBy' => null, 'paused' => false, 'background' => false, 'size' => -1, 'probedAt' => null];
         $controlClock = $this->activityClock ?? static fn (): float => microtime(true);
         $runId = $subAgent->id;
         $readControls = static function (bool $force) use ($agentInbox, $runId, &$control, $controlClock, $log): void {
@@ -1663,6 +1663,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 return;
             }
             foreach ($verbs as $verb) {
+                if ($verb->text === 'cancel') {
+                    // Who asked decides the wording: the user from the Agent
+                    // View, or the agent that launched the run (`Subagents
+                    // cancel`, roadmap 4.4).
+                    $control['cancelledBy'] = $verb->from;
+                }
                 match ($verb->text) {
                     'cancel' => $control['cancel'] = true,
                     'pause' => $control['paused'] = true,
@@ -1893,9 +1899,12 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 );
             }
             $cancelled = $failure->getPrevious() instanceof \SugarCraft\Crush\Support\ToolCallCancelled;
-            $why = $cancelled
-                ? sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc')
-                : sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
+            $why = match (true) {
+                !$cancelled => sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage()),
+                $control['cancel'] && $control['cancelledBy'] !== null && $control['cancelledBy'] !== \SugarCraft\Crush\Agents\Live\AgentMessage::FROM_USER
+                    => sprintf('sub-agent "%s" was cancelled by the agent that launched it (Subagents cancel)', $agentName),
+                default => sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc'),
+            };
             [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
             $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger, $keptWorktree);
             $finish(

@@ -72,11 +72,12 @@ final readonly class TurnContextBlock
     public const MAX_RECENT_FILES = 10;
 
     /**
-     * The tools whose `file_path` argument names a file the agent wrote.
+     * The tools whose `file_path` argument names a file the agent wrote —
+     * or, for `ApplyPatch`, whose patch names every file it wrote.
      * Bash and MCP tools also write, but their targets are not knowable from
      * the call, and the git status in the same row already lists them.
      */
-    public const FILE_WRITING_TOOLS = ['Edit', 'Write'];
+    public const FILE_WRITING_TOOLS = ['Edit', 'Write', 'ApplyPatch'];
 
     /**
      * Opens the roster of skills loaded this session (roadmap 2.6). One line,
@@ -380,7 +381,7 @@ final readonly class TurnContextBlock
      */
     public static function recentlyModifiedIn(iterable $messages): array
     {
-        /** @var array<string, string> $candidates callId => path, in call order */
+        /** @var array<string, list<string>> $candidates callId => paths, in call order */
         $candidates = [];
         /** @var array<string, true> $failed */
         $failed = [];
@@ -391,11 +392,14 @@ final readonly class TurnContextBlock
                     if (!$call instanceof ToolCall || !\in_array($call->name(), self::FILE_WRITING_TOOLS, true)) {
                         continue;
                     }
-                    $path = $call->arguments()['file_path'] ?? null;
-                    if (\is_string($path) && $path !== '') {
+                    $written = $call->name() === 'ApplyPatch'
+                        ? (\SugarCraft\Crush\Tools\Edit\PatchParser::paths($call->arguments()['patch'] ?? null) ?? [])
+                        : [$call->arguments()['file_path'] ?? null];
+                    $written = array_values(array_filter($written, static fn (mixed $p): bool => \is_string($p) && $p !== ''));
+                    if ($written !== []) {
                         // A repeated id (a replay) re-orders to its latest use.
                         unset($candidates[$call->id()]);
-                        $candidates[$call->id()] = $path;
+                        $candidates[$call->id()] = $written;
                     }
                 }
             } elseif ($message instanceof ToolResultMessage && $message->isError()) {
@@ -404,13 +408,18 @@ final readonly class TurnContextBlock
         }
 
         $paths = [];
-        foreach (array_reverse($candidates, true) as $id => $path) {
-            if (isset($failed[(string) $id]) || \in_array($path, $paths, true)) {
+        foreach (array_reverse($candidates, true) as $id => $written) {
+            if (isset($failed[(string) $id])) {
                 continue;
             }
-            $paths[] = $path;
-            if (\count($paths) === self::MAX_RECENT_FILES) {
-                break;
+            foreach ($written as $path) {
+                if (\in_array($path, $paths, true)) {
+                    continue;
+                }
+                $paths[] = $path;
+                if (\count($paths) === self::MAX_RECENT_FILES) {
+                    break 2;
+                }
             }
         }
 

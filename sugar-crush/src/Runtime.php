@@ -442,16 +442,17 @@ final class Runtime
      *
      * A SECOND SPELLING OF AN EXISTING ROSTER, and said so rather than
      * presented as new. `PermissionGate::isWriteTool()` answers exactly this
-     * question — it holds `['Bash', 'Edit', 'Write', 'Task']` plus the same
-     * `mcp__` prefix rule —
+     * question — it holds the catalog's write class (`Bash`, `Edit`,
+     * `Write`, `ApplyPatch`, `Task`, `Workflow`) plus the same `mcp__`
+     * prefix rule —
      * and this constant repeats it. THREE NEIGHBOURING tool-name rosters answer
      * DIFFERENT questions and are deliberately not reconciled with it — and
      * this census said TWO until a reviewer found the third, which is the one
      * that matters most because it is in the same file this classifier's drift
      * test already parses:
      *
-     *  - `ProtectFilesHook`'s `^(Bash|Edit|Write|Read)$` (`:121`) and
-     *    `PermissionRule::PATH_SUBJECT_TOOLS` (`:220`) both include `Read`,
+     *  - `ProtectFilesHook::matcher()` and
+     *    `PermissionRule::PATH_SUBJECT_TOOLS` both include `Read`,
      *    because they are about which calls carry a path subject, not about
      *    which calls change one.
      *  - `PermissionGate::isReadOnlyTool()`, a few lines above the
@@ -470,11 +471,14 @@ final class Runtime
      *    make. "Did the working tree move" and "may this call be denied
      *    without asking" are different questions, and the answers differ.
      *    The no-ask tools — `Memory`, `Prune`, `Todo`, `Compress`, `Recall`,
-     *    `Team` — diverge too, for the opposite reason: they move no file, so
-     *    they are read-only here, but the gate classes them no-ask rather than
-     *    read, because each touches only harness-owned state (memory notes,
-     *    the context ledger, the todo list, the session's own rows, the
-     *    per-user team store).
+     *    `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`,
+     *    `InterruptAgent`, `BoardPost` — diverge too, for the opposite
+     *    reason: they move no file, so they are read-only here, but the gate
+     *    classes them no-ask rather than read, because each touches only
+     *    harness-owned state (memory notes, the context ledger, the todo
+     *    list, the session's own rows, the per-user team store, a question
+     *    to the user, the sub-agent mailboxes and run cards, a batch's
+     *    board).
      *
      *    NEITHER THE NAMES NOR THE DIVERGENCE ARE ASSERTED HERE ANY MORE, and
      *    that is the second correction to this bullet. It first stated the

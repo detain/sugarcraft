@@ -981,7 +981,7 @@ every path (it still is for `-p` and background sessions; the TUI now starts in
 ### Post-edit lint
 
 After every `Write` or `Edit`, `PostEditLintHook` lints the file the call
-changed and appends what the linter found to that call's result, so the model
+changed (each file, for an `ApplyPatch`) and appends what the linter found to that call's result, so the model
 reads it on the very result it looks at next. The format is Aider's: the
 command that ran, its output, then the flagged lines marked `█` among
 `│`-marked context, with `⋮...` where lines were skipped.
@@ -1038,8 +1038,8 @@ of the box. Add, replace or switch off linters by file extension with
 ### Post-edit diagnostics
 
 When you list a language server under `lsp` in your own
-`~/.sugar-crush/config.json` (or `settings.json`), every `Write` or `Edit` to a
-file that server owns is followed by `PostEditDiagnosticsHook`: the server is
+`~/.sugar-crush/config.json` (or `settings.json`), every `Write`, `Edit` or
+`ApplyPatch` to a file that server owns is followed by `PostEditDiagnosticsHook`: the server is
 asked to re-check the file as it now is on disk, and the **errors** it reports
 are appended to that call's result:
 
@@ -1091,7 +1091,8 @@ Aider's way:
   title model, the spend cap is reached, or its answer is unusable. One
   transcript line says what was committed or why not. A turn that a queued
   prompt follows at once is not committed on its own.
-- `edit` — `AutoCommitHook` commits each `Write`/`Edit` as it lands, with the
+- `edit` — `AutoCommitHook` commits each `Write`/`Edit` as it lands (an
+  `ApplyPatch` file by file; a deleted or moved-away file is not committed), with the
   call's own `description` as the subject (`chore: rename the legacy config
   helper`), and tells the model the commit it made. It never refuses; a commit
   that fails leaves the change in the file, uncommitted, and says why.
@@ -1127,7 +1128,7 @@ runs your tests before it ends, Aider's way:
 {"testCommand": "composer test", "autoTest": true}
 ```
 
-- `AutoTestEditHook` (`PostToolUse` on `^(Write|Edit)$`) notes each edit and
+- `AutoTestEditHook` (`PostToolUse` on `^(Write|Edit|ApplyPatch)$`) notes each edit and
   never changes a result. `AutoTestHook` (`Stop`) runs the command only when an
   edit was noted since its last run, so a turn that only read and answered ends
   exactly as before. A `Task` sub-agent's edits count toward its caller's turn;

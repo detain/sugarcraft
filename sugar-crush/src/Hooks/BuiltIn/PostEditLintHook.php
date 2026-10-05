@@ -12,7 +12,7 @@ use SugarCraft\Crush\Lint\LintRunner;
 use SugarCraft\Crush\Support\HookContextFiles;
 
 /**
- * Lints the file a `Write` or `Edit` just changed and tells the model what the
+ * Lints the file a `Write` or `Edit` (or each file an `ApplyPatch`) just changed and tells the model what the
  * linter found — Aider's post-edit lint loop (step 3.E), with `php -l` on by
  * default and the user-tier `lintCommands` map for everything else
  * ({@see LintRunner}).
@@ -60,13 +60,10 @@ final readonly class PostEditLintHook implements BoundedHookInterface
         return HookEvent::PostToolUse;
     }
 
-    /**
-     * The two tools that change a file's contents in place. Each names its
-     * target in `file_path`.
-     */
+    /** The tools that change a file's contents ({@see EditedFiles}). */
     public function matcher(): string
     {
-        return '^(Write|Edit)$';
+        return EditedFiles::MATCHER;
     }
 
     /** The runner this hook lints with — for a caller that reads the chain back. */
@@ -86,27 +83,28 @@ final readonly class PostEditLintHook implements BoundedHookInterface
     }
 
     /**
-     * Lint `file_path` and return its report as the note — or a bare ALLOW
-     * when there is nothing to lint or nothing wrong.
+     * Lint each changed file ({@see EditedFiles}) and return the reports as
+     * the note — or a bare ALLOW when there is nothing to lint or nothing wrong.
      *
      * A failed edit is linted too: the file then holds what it held before,
      * and that is exactly the text the model's next attempt edits.
      */
     public function execute(HookContext $context): HookResult
     {
-        $path = $context->toolArgs['file_path'] ?? null;
-        if (!is_string($path) || trim($path) === '') {
-            return HookResult::allow();
+        $rendered = [];
+        foreach (EditedFiles::of($context) as $path) {
+            $report = $this->runner->lint($path, $context->projectRoot);
+            if ($report !== null && !$report->passed()) {
+                $rendered[] = $report->render();
+            }
         }
-
-        $report = $this->runner->lint($path, $context->projectRoot);
-        if ($report === null || $report->passed()) {
+        if ($rendered === []) {
             return HookResult::allow();
         }
 
         return HookResult::allow(
             '',
-            HookContextFiles::bound($report->render(), HookResult::MAX_ADDITIONAL_CONTEXT_BYTES),
+            HookContextFiles::bound(implode("\n\n", $rendered), HookResult::MAX_ADDITIONAL_CONTEXT_BYTES),
         );
     }
 }

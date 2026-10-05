@@ -49,6 +49,7 @@ final class ToolSummary
 
         $summary = match ($tool) {
             'Read', 'Edit', 'Write' => $path,
+            'ApplyPatch' => self::patchPaths($args['patch'] ?? null),
             'Grep' => self::quoted(self::line($args['pattern'] ?? null)) . ($path === '' ? '' : ' ' . $path),
             'Glob' => self::line($args['pattern'] ?? null),
             'Bash' => self::line(self::firstLine($args['command'] ?? null)),
@@ -58,6 +59,22 @@ final class ToolSummary
         };
 
         return self::clip(trim($summary));
+    }
+
+    /**
+     * The files a patch touches, the first and a count of the rest — or ''
+     * for a patch that does not parse.
+     */
+    private static function patchPaths(mixed $patch): string
+    {
+        $paths = array_values(array_unique(\SugarCraft\Crush\Tools\Edit\PatchParser::paths($patch) ?? []));
+        if ($paths === []) {
+            return '';
+        }
+
+        $first = self::line($paths[0]);
+
+        return \count($paths) === 1 ? $first : $first . ' +' . (\count($paths) - 1);
     }
 
     private static function mcp(string $tool): string

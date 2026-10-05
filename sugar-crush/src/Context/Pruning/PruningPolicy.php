@@ -13,7 +13,7 @@ namespace SugarCraft\Crush\Context\Pruning;
  * PROTECTED TOOLS. `Task` and `Skill` results are what the model cannot get
  * back by re-running a cheap call: a delegated run's report is the only record
  * of minutes of sub-agent work, and a skill body is the instruction the model
- * is following. `Edit` and `Write` answer with a one-line receipt, so pruning
+ * is following. `Edit`, `Write` and `ApplyPatch` answer with a short receipt, so pruning
  * them would save nothing and lose the record of a change.
  *
  * THE FIGURES. The newest {@see PROTECT_TOKENS} of tool output and everything
@@ -26,7 +26,7 @@ namespace SugarCraft\Crush\Context\Pruning;
 final readonly class PruningPolicy
 {
     /** @var list<string> */
-    public const PROTECTED_TOOLS = ['Task', 'Skill', 'Edit', 'Write'];
+    public const PROTECTED_TOOLS = ['Task', 'Skill', 'Edit', 'Write', 'ApplyPatch'];
 
     /**
      * The outputs a `Compress` range keeps VERBATIM beside its summary

@@ -282,7 +282,7 @@ final class KeyBindingDriftTest extends TestCase
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
      * near-misses probed, because seven `*.move` rows describe arrow movement
-     * (seventeen rows carry an arrow GLYPH in their label; both counts are asserted
+     * (eighteen rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -518,9 +518,9 @@ final class KeyBindingDriftTest extends TestCase
             . implode(', ', $move),
         );
         $this->assertCount(
-            17,
+            18,
             $arrowLabelled,
-            'KEYISH\'s docblock says seventeen rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says eighteen rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
@@ -1862,6 +1862,20 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertNotNull($asking->settingsEditor?->confirm, 'Esc with changes asks first');
                 [$closed] = $asking->update($k[0]);
                 $this->assertNull($closed->settingsEditor);
+            },
+            'settings.details' => function (array $k): void {
+                [$detail] = $this->settingsOpenApp()->update($k[0]);
+                $this->assertTrue($detail->settingsEditor?->detail, 'the details take the list\'s place');
+                [$list] = $detail->update($k[0]);
+                $this->assertFalse($list->settingsEditor?->detail, 'and the same key brings the list back');
+            },
+            'settings.preview-scroll' => function (array $k): void {
+                [$previewing] = $this->settingsEditApp('max tool steps', stage: true)->update(new KeyMsg(KeyType::Char, 's'));
+                $this->assertNotNull($previewing->settingsEditor?->preview, 'fixture: the save preview is open');
+                [$down] = $previewing->update($k[1]);
+                $this->assertSame(1, $down->settingsEditor?->previewOffset, 'down scrolls the preview, not the list');
+                [$up] = $down->update($k[0]);
+                $this->assertSame(0, $up->settingsEditor?->previewOffset);
             },
 
             // ── Menu bar ─────────────────────────────────────────────────

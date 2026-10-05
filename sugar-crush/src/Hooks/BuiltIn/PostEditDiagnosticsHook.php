@@ -15,7 +15,7 @@ use SugarCraft\Crush\Support\ToolOutputSpill;
 use SugarCraft\Crush\Tools\PathJail;
 
 /**
- * After a `Write` or `Edit`, asks the file's language server to re-check it
+ * After a `Write` or `Edit` (each file of an `ApplyPatch`), asks the file's language server to re-check it
  * and hands the model the ERRORS it reports — opencode's and Claude Code's
  * post-edit diagnostics loop (step 3.F): at most {@see MAX_ERRORS_PER_FILE}
  * per file, waiting at most {@see DEFAULT_WAIT_SECONDS} for the verdict.
@@ -73,10 +73,10 @@ final readonly class PostEditDiagnosticsHook implements BoundedHookInterface
         return HookEvent::PostToolUse;
     }
 
-    /** The two tools that change a file's contents; each names it in `file_path`. */
+    /** The tools that change a file's contents ({@see EditedFiles}). */
     public function matcher(): string
     {
-        return '^(Write|Edit)$';
+        return EditedFiles::MATCHER;
     }
 
     public function timeoutSeconds(): float
@@ -91,9 +91,28 @@ final readonly class PostEditDiagnosticsHook implements BoundedHookInterface
 
     public function execute(HookContext $context): HookResult
     {
-        $path = $context->toolArgs['file_path'] ?? null;
-        if (!\is_string($path) || trim($path) === '' || str_contains($path, "\0") || $context->projectRoot === '') {
+        if ($context->projectRoot === '') {
             return HookResult::allow();
+        }
+
+        $reports = [];
+        foreach (EditedFiles::of($context) as $path) {
+            $report = $this->reportFor($context, $path);
+            if ($report !== null) {
+                $reports[] = $report;
+            }
+        }
+
+        return $reports === []
+            ? HookResult::allow()
+            : HookResult::allow('', HookContextFiles::bound(implode("\n\n", $reports), HookResult::MAX_ADDITIONAL_CONTEXT_BYTES));
+    }
+
+    /** One changed file's diagnostics block, or null when it has none to report. */
+    private function reportFor(HookContext $context, string $path): ?string
+    {
+        if (str_contains($path, "\0")) {
+            return null;
         }
 
         // JAILED EXACTLY AS THE EDIT WAS, for {@see PostEditLintHook}'s
@@ -103,28 +122,24 @@ final readonly class PostEditDiagnosticsHook implements BoundedHookInterface
         // answer outside the root, a saved tool-output file, is no edit target.
         $path = PathJail::resolve($context->projectRoot, $path);
         if ($path === null || !is_file($path) || ToolOutputSpill::readablePath($path) !== null) {
-            return HookResult::allow();
+            return null;
         }
 
         $language = $this->client->languageFor($path);
         if ($language === null) {
-            return HookResult::allow();
+            return null;
         }
 
         try {
             $fresh = $this->client->freshDiagnostics($language, $path, $this->waitSeconds);
         } catch (\Throwable) {
-            return HookResult::allow();
+            return null;
         }
         if ($fresh === null || !$fresh['delivered']) {
-            return HookResult::allow();
+            return null;
         }
 
-        $report = self::render($path, $fresh['diagnostics']);
-
-        return $report === null
-            ? HookResult::allow()
-            : HookResult::allow('', HookContextFiles::bound($report, HookResult::MAX_ADDITIONAL_CONTEXT_BYTES));
+        return self::render($path, $fresh['diagnostics']);
     }
 
     /**

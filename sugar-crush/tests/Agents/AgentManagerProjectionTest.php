@@ -106,6 +106,8 @@ final class AgentManagerProjectionTest extends TestCase
         $cases = [
             SubAgentActivity::OUTCOME_FAILED => [SubAgent::STATUS_FAILED, 'step cap 50 reached'],
             SubAgentActivity::OUTCOME_CANCELLED => [SubAgent::STATUS_STOPPED, 'cancelled by the user'],
+            // P-E3: the foreground leg stopped; a background session goes on.
+            SubAgentActivity::OUTCOME_BACKGROUNDED => [SubAgent::STATUS_STOPPED, 'moved to the background'],
             SubAgentActivity::OUTCOME_EMPTY => [SubAgent::STATUS_COMPLETE, null],
             SubAgentActivity::OUTCOME_COMPLETE => [SubAgent::STATUS_COMPLETE, null],
         ];

@@ -494,13 +494,17 @@ final class AgentManager
         // FAILED/STOPPED with their reason, where every run used to settle
         // COMPLETE. A v1 frame carries no outcome and keeps that old reading.
         $row->output = $activity->tail;
+        // A run moved to the background (P-E3) did not complete here: its
+        // foreground leg STOPPED and a background session carries the work.
         $row->status = match ($activity->outcome) {
             SubAgentActivity::OUTCOME_FAILED => SubAgent::STATUS_FAILED,
-            SubAgentActivity::OUTCOME_CANCELLED => SubAgent::STATUS_STOPPED,
+            SubAgentActivity::OUTCOME_CANCELLED, SubAgentActivity::OUTCOME_BACKGROUNDED => SubAgent::STATUS_STOPPED,
             default => SubAgent::STATUS_COMPLETE,
         };
         if ($activity->error !== null && $row->status !== SubAgent::STATUS_COMPLETE) {
             $row->error = $activity->error;
+        } elseif ($activity->outcome === SubAgentActivity::OUTCOME_BACKGROUNDED) {
+            $row->error = 'moved to the background';
         }
         $row->completedAt = new \DateTimeImmutable();
 
@@ -583,6 +587,8 @@ final class AgentManager
             $store->markSubAgentStatus($childId, match ($finished->outcome) {
                 SubAgentActivity::OUTCOME_FAILED => 'failed',
                 SubAgentActivity::OUTCOME_CANCELLED => 'cancelled',
+                // P-E3: this leg was interrupted; a background session goes on.
+                SubAgentActivity::OUTCOME_BACKGROUNDED => 'interrupted',
                 default => 'complete',
             });
         } catch (\Throwable $unstored) {

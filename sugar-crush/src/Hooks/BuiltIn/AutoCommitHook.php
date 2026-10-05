@@ -14,7 +14,7 @@ use SugarCraft\Crush\Workspace\AutoCommitter;
 use SugarCraft\Crush\Workspace\CommitMessageWriter;
 
 /**
- * `autoCommit: edit` (step 3.G): every `Write`/`Edit` that changed a file is
+ * `autoCommit: edit` (step 3.G): every `Write`/`Edit`/`ApplyPatch` that changed a file is
  * committed as it lands — the user's own earlier changes to that file first,
  * in a commit of their own — and the model is told the commit it made.
  *
@@ -61,10 +61,10 @@ final readonly class AutoCommitHook implements BoundedHookInterface
         return HookEvent::PostToolUse;
     }
 
-    /** The two tools that change a file's contents; each names it in `file_path`. */
+    /** The tools that change a file's contents ({@see EditedFiles}). */
     public function matcher(): string
     {
-        return '^(Write|Edit)$';
+        return EditedFiles::MATCHER;
     }
 
     public function timeoutSeconds(): float
@@ -79,15 +79,36 @@ final readonly class AutoCommitHook implements BoundedHookInterface
 
     public function execute(HookContext $context): HookResult
     {
-        $path = $context->toolArgs['file_path'] ?? null;
-        if (!\is_string($path) || trim($path) === '' || str_contains($path, "\0") || $context->projectRoot === '') {
+        if ($context->projectRoot === '') {
             return HookResult::allow();
+        }
+
+        $notes = [];
+        foreach (EditedFiles::of($context) as $path) {
+            $note = $this->commitOne($context, $path);
+            if ($note !== null) {
+                $notes[] = $note;
+            }
+        }
+
+        return $notes === [] ? HookResult::allow() : HookResult::allow('', implode(' ', $notes));
+    }
+
+    /**
+     * Commit one changed file; the note for the model, or null when there is
+     * nothing to say. An `ApplyPatch` commits each file it changed in turn,
+     * as that many edits would have.
+     */
+    private function commitOne(HookContext $context, string $path): ?string
+    {
+        if (str_contains($path, "\0")) {
+            return null;
         }
         // Jailed as the edit was: a refused edit outside the workspace is
         // never committed.
         $path = PathJail::resolve($context->projectRoot, $path);
         if ($path === null || ToolOutputSpill::readablePath($path) !== null) {
-            return HookResult::allow();
+            return null;
         }
 
         $description = \is_string($context->toolArgs['description'] ?? null) ? $context->toolArgs['description'] : '';
@@ -101,23 +122,20 @@ final readonly class AutoCommitHook implements BoundedHookInterface
                 \is_array($workspace) ? $workspace : null,
             );
         } catch (\Throwable $e) {
-            return HookResult::allow('', 'Auto-commit skipped: ' . $e->getMessage());
+            return 'Auto-commit skipped: ' . $e->getMessage();
         }
 
         if ($outcome === null) {
-            return HookResult::allow();
+            return null;
         }
         if (!$outcome['ok']) {
-            return HookResult::allow('', 'Auto-commit skipped for ' . implode(', ', $outcome['paths']) . ': ' . $outcome['reason'] . '. The change is in the file, uncommitted.');
+            return 'Auto-commit skipped for ' . implode(', ', $outcome['paths']) . ': ' . $outcome['reason'] . '. The change is in the file, uncommitted.';
         }
 
         $first = $outcome['snapshot'] !== null
             ? ' The user\'s earlier uncommitted changes to it were committed first, in ' . substr($outcome['snapshot'], 0, 7) . '.'
             : '';
 
-        return HookResult::allow(
-            '',
-            'Auto-committed ' . substr((string) $outcome['sha'], 0, 7) . ': ' . $outcome['subject'] . '.' . $first,
-        );
+        return 'Auto-committed ' . substr((string) $outcome['sha'], 0, 7) . ': ' . $outcome['subject'] . '.' . $first;
     }
 }

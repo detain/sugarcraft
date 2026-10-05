@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Permissions;
 
 use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tools\Edit\PatchParser;
 
 /**
  * A rule that matches a tool call and specifies what action to take.
@@ -84,7 +85,8 @@ use SugarCraft\Crush\ToolCall;
  * `$(echo rm) -rf x`, `bash -c 'rm -rf x'`, `eval "rm -rf x"`,
  * `alias`/function indirection, `find . -delete`.
  *
- * PATH subjects (`Read`, `Edit`, `Write`, `Glob`, `Grep`, `Lsp`). Closed by
+ * PATH subjects (`Read`, `Edit`, `Write`, `Glob`, `Grep`, `Lsp`, and each
+ * path of an `ApplyPatch` — {@see matchesPatch()}). Closed by
  * {@see matchesPathSubject()}: the `./` prefix, `//` runs, and `.`/`..`
  * segments, all normalised away on BOTH sides — so `Deny Read(./.env)` now also
  * covers `.env`, `.//.env` and `./foo/../.env`, which it did not before and
@@ -385,6 +387,10 @@ final class PermissionRule
      */
     public function matches(ToolCall $call, bool $argumentsKnown = true, ?string $projectRoot = null): bool
     {
+        if ($call->name === self::PATCH_TOOL) {
+            return $this->matchesPatch($call, $argumentsKnown, $projectRoot === '' ? null : $projectRoot);
+        }
+
         if (!self::matchesToolName($this->toolNamePattern(), $call->name)) {
             return false;
         }
@@ -436,6 +442,80 @@ final class PermissionRule
             $call->name,
             $projectRoot === '' ? null : $projectRoot,
         );
+    }
+
+    /**
+     * The one tool whose subject is SEVERAL paths: `ApplyPatch` (roadmap
+     * 3.I-3) adds, changes, moves and deletes every file its patch names.
+     */
+    private const PATCH_TOOL = 'ApplyPatch';
+
+    /**
+     * The tools whose RESTRICTIVE rules also bind a patch. A patch is an
+     * `Edit` and a `Write` by another name, so `Deny Edit(.env)` that let
+     * `ApplyPatch` rewrite `.env` would be a deny with a second door.
+     *
+     * @var list<string>
+     */
+    private const PATCH_PROXY_TOOLS = ['Edit', 'Write'];
+
+    /**
+     * Does this rule match an `ApplyPatch` call?
+     *
+     * Two ways in. A rule naming `ApplyPatch` itself (`Deny ApplyPatch`,
+     * `Allow ApplyPatch(src/*)`) binds it like any tool, its argument glob
+     * read against each path. A restrictive rule naming `Edit` or `Write`
+     * ({@see PATCH_PROXY_TOOLS}) binds it too, name-only or by path: the
+     * patch writes files, and the user's `Deny Edit(.env)` is a statement
+     * about `.env`, not about which tool spells the write. An `Allow` for
+     * `Edit`/`Write` is NOT carried over — a grant covers what it names,
+     * and a patch can also delete and move, which neither of them can.
+     *
+     * The class doc-block's asymmetry over the path list: a restrictive rule
+     * fires when ANY path matches, an `Allow` only when EVERY path does. A
+     * patch whose paths do not parse is an unknowable subject — a restrictive
+     * argument-scoped rule fires (fail closed), a grant does not.
+     */
+    private function matchesPatch(ToolCall $call, bool $argumentsKnown, ?string $projectRoot): bool
+    {
+        $namePattern = $this->toolNamePattern();
+        $named = self::matchesToolName($namePattern, self::PATCH_TOOL);
+        if (!$named && $this->action !== PermissionAction::Allow) {
+            foreach (self::PATCH_PROXY_TOOLS as $proxy) {
+                if (self::matchesToolName($namePattern, $proxy)) {
+                    $named = true;
+                    break;
+                }
+            }
+        }
+        if (!$named) {
+            return false;
+        }
+
+        $argumentPattern = $this->argumentPattern();
+        if ($argumentPattern === null) {
+            return true;
+        }
+        if (!$argumentsKnown) {
+            return false;
+        }
+
+        $paths = PatchParser::paths($call->arguments['patch'] ?? null);
+        if ($paths === null || $paths === []) {
+            return $this->action !== PermissionAction::Allow;
+        }
+
+        foreach ($paths as $path) {
+            $hit = $this->matchesPathSubject($path, $argumentPattern, $projectRoot);
+            if ($this->action === PermissionAction::Allow && !$hit) {
+                return false;
+            }
+            if ($this->action !== PermissionAction::Allow && $hit) {
+                return true;
+            }
+        }
+
+        return $this->action === PermissionAction::Allow;
     }
 
     /**

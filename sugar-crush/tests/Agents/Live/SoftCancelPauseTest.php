@@ -68,6 +68,22 @@ final class SoftCancelPauseTest extends TestCase
         $this->assertCount(1, $provider->requests, 'the next step never went out');
     }
 
+    public function testACancelFromTheLaunchingAgentSaysSo(): void
+    {
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('c1', 'probe', [])]),
+            new CompleteResponse(content: 'never reached'),
+        ]);
+        // `Subagents cancel` (roadmap 4.4) sends the same verb as the parent.
+        $probe = $this->probe(fn (): mixed => $this->inbox()->control((string) $this->runId, 'cancel', \SugarCraft\Crush\Agents\Live\AgentMessage::FROM_PARENT));
+
+        $result = $this->task($provider, $probe)->execute($this->call());
+
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('was cancelled by the agent that launched it (Subagents cancel)', $result->content());
+        $this->assertStringNotContainsString('by the user', $result->content());
+    }
+
     public function testAPauseHoldsTheRunAtItsNextStepUntilResumed(): void
     {
         $provider = new ScriptedProvider([

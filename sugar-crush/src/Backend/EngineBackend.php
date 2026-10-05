@@ -1186,6 +1186,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The session's own agent's mailbox (roadmap 4.4), drained at the main
+     * turn's step boundaries so a sub-agent's `SendMessage` reply reaches it
+     * without a `Subagents list|wait` — or null with no session, no owned
+     * home, or a session id no mailbox can be named by.
+     */
+    public function mainMailbox(): ?MailboxTurnInbox
+    {
+        if ($this->sessionId === null) {
+            return null;
+        }
+        $inbox = \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($this->sessionId);
+        if ($inbox === null) {
+            return null;
+        }
+        try {
+            return MailboxTurnInbox::forMain($inbox);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
      * The same engine, running its turns as session $sessionId — see
      * {@see $sessionId}. A blank id is no session.
      */
@@ -3001,7 +3023,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             $emitter = $tool instanceof \SugarCraft\Crush\Tools\BuiltIn\TaskTool && $tool->delegationDepth() > 0
                 ? $tool->subAgentEmitter()
                 : $subAgentEmitter;
-            $tools[] = $tool->withEngine($bound, $heartbeat, $emitter);
+            $boundTool = $tool->withEngine($bound, $heartbeat, $emitter);
+            // Roadmap 5.7-2: `AskUser` and `PlanExit` put their question to the
+            // turn's own approver — the 1.C modal in the TUI child (which binds
+            // its channel's approver here before the turn), `permission.requested`
+            // under `serve`. `Task` relays its run's asks through its own
+            // channel and is left alone; a headless run has already marked the
+            // two tools ({@see \SugarCraft\Crush\Cli\NonInteractive}), so they
+            // still refuse.
+            if ($boundTool instanceof \SugarCraft\Crush\Tools\RelaysPermissionAsks
+                && !$boundTool instanceof \SugarCraft\Crush\Tools\BuiltIn\TaskTool
+                && $this->permissionApprover !== null) {
+                $boundTool = $boundTool->withPermissionApprover($this->permissionApprover);
+            }
+            $tools[] = $boundTool;
         }
 
         return $tools;
@@ -4596,8 +4631,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 $transcript,
                 $onStep,
                 $stopRequested,
-                // 1.C-3: the user's mid-turn messages, as `steer` frames.
-                CompositeTurnInbox::of(SocketSteerInbox::new($channel)),
+                // 1.C-3: the user's mid-turn messages, as `steer` frames;
+                // roadmap 4.4: the replies its sub-agents send the session's
+                // own agent, from the `main` mailbox.
+                CompositeTurnInbox::of(SocketSteerInbox::new($channel), $engine->mainMailbox()),
             )->withAttachmentNotice($attachmentNotice);
             $transcriptRows = [];
             foreach ($message->turnTranscript as $row) {

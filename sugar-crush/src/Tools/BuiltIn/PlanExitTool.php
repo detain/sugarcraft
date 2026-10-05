@@ -53,9 +53,11 @@ use SugarCraft\Crush\Tools\ToolResult;
  * PERMISSION CLASS: no-ask, as for AskUser: the call is itself the question,
  * and it has to run in `plan`, the one mode it exists for.
  *
- * NOT YET REACHABLE BY A PERSON: the engine does not bind its approver to
- * this tool (only {@see withPermissionApprover()} does), so a live call takes
- * the no-approver branch until it does, and `Alt+M` stays the way out.
+ * {@see \SugarCraft\Crush\Backend\EngineBackend::turnTools()} binds the
+ * turn's approver through {@see withPermissionApprover()}; the TUI
+ * ({@see \SugarCraft\Crush\Chat}) and `serve`
+ * ({@see \SugarCraft\Crush\Host\TurnRunner}) apply {@see approval()} once
+ * the turn has ended. `Alt+M` still leaves plan mode without asking.
  */
 #[BuiltInTool(name: self::NAME, permission: ToolPermissionClass::NoAsk, position: 22, gloss: 'leave plan mode: put the written plan to the user for approval')]
 final readonly class PlanExitTool implements Tool, BuildsFromCatalog, DelegatesToEngine, RelaysPermissionAsks, TakesToolCallId

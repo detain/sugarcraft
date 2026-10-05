@@ -61,7 +61,7 @@ final class AutoTestHookTest extends TestCase
         self::assertInstanceOf(BoundedHookInterface::class, $hook);
         self::assertSame('auto-test-edits', $edits->name());
         self::assertSame(HookEvent::PostToolUse, $edits->event());
-        self::assertSame('^(Write|Edit)$', $edits->matcher());
+        self::assertSame('^(Write|Edit|ApplyPatch)$', $edits->matcher());
     }
 
     public function testTheEditHalfNotesEachEditAndChangesNothing(): void

@@ -125,7 +125,8 @@ final class ForeignAgentPresetRegistry
      *
      * The map is by CAPABILITY, not by name: opencode splits file mutation
      * across `edit`/`write`/`patch` and listing across `glob`/`list`, while
-     * sugar-crush performs all of those through Edit and Glob. Passing `write`
+     * sugar-crush performs an edit or a write through Edit, a patch through
+     * ApplyPatch (roadmap 3.I-3) and both listings through Glob. Passing `write`
      * through untouched would make `write: false` an inert deny against a
      * capability the imported agent demonstrably still has, so the aliases
      * fold onto the tool that actually performs the work; recordDecision()'s
@@ -136,7 +137,7 @@ final class ForeignAgentPresetRegistry
         'bash' => 'Bash',
         'edit' => 'Edit',
         'write' => 'Edit',
-        'patch' => 'Edit',
+        'patch' => 'ApplyPatch',
         'read' => 'Read',
         'glob' => 'Glob',
         'list' => 'Glob',

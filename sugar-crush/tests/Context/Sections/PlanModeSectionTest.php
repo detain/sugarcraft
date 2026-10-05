@@ -50,6 +50,8 @@ final class PlanModeSectionTest extends TestCase
 
         self::assertStringContainsString('`' . PermissionGate::PLANS_DIR . '/`', $body);
         self::assertStringContainsString('Alt+M', $body);
+        self::assertStringContainsString(\SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME, $body, 'plan mode names its own way out (roadmap 5.7-2)');
+        self::assertStringContainsString(\SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME, $body);
         self::assertStringContainsString('The tool list is the same in every mode', $body);
     }
 

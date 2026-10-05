@@ -749,6 +749,44 @@ final class TurnRunner
         return $updated;
     }
 
+    /**
+     * The mode switch an approved `PlanExit` (roadmap 5.7-2) asks for, read
+     * off the turn that just ended in $history — or null when its latest
+     * `PlanExit` result was not an approval, or it called none.
+     *
+     * The host applies it once the turn has ended and only while the session
+     * is still in `plan`: a running turn keeps the gate it forked with
+     * ({@see \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::approval()}).
+     * The walk stops at the turn's user prompt and at a mode-switch row, so
+     * an approval an earlier turn already applied is never applied again.
+     *
+     * @param list<Message> $history
+     */
+    public static function approvedPlanExit(array $history): ?\SugarCraft\Crush\PermissionModeToggledMsg
+    {
+        for ($i = \count($history) - 1; $i >= 0; $i--) {
+            $row = $history[$i];
+            if (!$row->uiOnly && $row->role === Role::User) {
+                return null;
+            }
+            if ($row->role === Role::System && str_starts_with($row->content, \SugarCraft\Crush\Chat::MODE_NOTICE_PREFIX)) {
+                return null;
+            }
+            foreach (array_reverse($row->toolResults) as $result) {
+                if (!$result instanceof \SugarCraft\Crush\ToolResult || $result->name !== \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME) {
+                    continue;
+                }
+
+                return \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::approval(
+                    $result->name,
+                    new \SugarCraft\Crush\Tools\ToolResult('', $result->isError() ? (string) $result->error : $result->result, $result->isError()),
+                );
+            }
+        }
+
+        return null;
+    }
+
     // ── what the caller folded ─────────────────────────────────────────
 
     /**

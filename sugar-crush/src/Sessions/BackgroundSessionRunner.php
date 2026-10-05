@@ -849,9 +849,12 @@ final class BackgroundSessionRunner
             \putenv('SUGARCRUSH_MODEL=' . $this->model);
         }
 
+        // Roadmap 5.7-2: nobody sits at a daemon's keyboard (fd 0 is
+        // /dev/null), so `AskUser` and `PlanExit` say so instead of reading
+        // the console approver's `false` as "the user declined".
         if ($this->provider !== '') {
             try {
-                return Bootstrap::backendFor($this->provider, $root, null, null, true);
+                return \SugarCraft\Crush\Cli\NonInteractive::withoutInteractiveUser(Bootstrap::backendFor($this->provider, $root, null, null, true));
             } catch (PermissionConfigException $e) {
                 // Same arm {@see \SugarCraft\Crush\Cli\NonInteractive::run()}
                 // and {@see Bootstrap::backend()} carry: an unusable permission
@@ -871,7 +874,7 @@ final class BackgroundSessionRunner
             }
         }
 
-        return Bootstrap::backend($root, null, null, true);
+        return \SugarCraft\Crush\Cli\NonInteractive::withoutInteractiveUser(Bootstrap::backend($root, null, null, true));
     }
 
     /**

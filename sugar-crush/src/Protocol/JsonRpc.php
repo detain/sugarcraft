@@ -8,14 +8,18 @@ namespace SugarCraft\Crush\Protocol;
  * The `sugarcrush.v1` JSON-RPC 2.0 codec (Appendix O §6.1).
  *
  * WHY NOT `SugarCraft\Mcp\McpMessage`. Appendix O names that class as the
- * codec, on the condition that lifting a protocol-neutral one is clean. It is
- * not, yet: McpMessage folds every integer `id` into a string (a response must
- * echo the id exactly as sent), cannot build an error whose id is `null` (the
- * answer to text that does not parse), and decodes without a depth limit
- * (§8.7). Decision D12 schedules an id-preserving variant in sugar-mcp for the
- * ACP adapter; until it lands, this small codec is the wire's, and it is not a
- * third copy of the MCP envelope — it builds and reads exactly the four shapes
- * this protocol uses and nothing else.
+ * codec, on the condition that lifting a protocol-neutral one is clean. Its
+ * plain {@see \SugarCraft\Crush\McpMessage::parse()} is not: it folds every
+ * integer `id` into a string (a response must echo the id exactly as sent),
+ * cannot build an error whose id is `null` (the answer to text that does not
+ * parse), and decodes without a depth limit (§8.7). Decision D12's
+ * id-preserving variant has since landed for the ACP adapter (roadmap 5.9-2):
+ * {@see \SugarCraft\Crush\McpMessage::parsePreservingId()} and
+ * {@see \SugarCraft\Crush\McpMessage::withWireId()}, which `Acp\AcpServer`
+ * speaks through. This codec predates it and stays the `sugarcrush.v1` wire's:
+ * it is not a third copy of the MCP envelope — it builds and reads exactly
+ * the four shapes this protocol uses and nothing else — and moving
+ * {@see decode()} onto the variant is a refactor with no behaviour to gain.
  *
  * Decoding never throws past {@see decode()}: text that is not a request comes
  * back as the {@see RpcError} the caller answers with.

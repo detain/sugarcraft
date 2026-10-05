@@ -1178,6 +1178,7 @@ final class SessionHost
             $this->root(),
             $this->workspace->sessionStore,
             $this->workspace->permissionGate,
+            $this->workspace->skills,
         );
         $newTurnMessages = [...$reports, ...$notes, ...$attachmentNotes, $userTurn];
 
@@ -1276,9 +1277,27 @@ final class SessionHost
             $this->settleOpenAsks('the turn ended');
             $this->history[] = $reply;
             $this->turn = null;
+            $this->applyApprovedPlanExit();
             $this->save();
             $this->releaseQueue();
         });
+    }
+
+    /**
+     * Roadmap 5.7-2: a plan the user approved through `PlanExit` ends plan
+     * mode once its turn is over — the mode the approval names, else
+     * `default` — and only while the session is still in `plan`, before a
+     * queued prompt starts the next turn ({@see TurnRunner::approvedPlanExit()}).
+     */
+    private function applyApprovedPlanExit(): void
+    {
+        if ($this->permissionMode() !== PermissionMode::Plan) {
+            return;
+        }
+        $switch = TurnRunner::approvedPlanExit($this->history);
+        if ($switch !== null) {
+            $this->setPermissionMode($switch->mode ?? PermissionMode::Default);
+        }
     }
 
     /**

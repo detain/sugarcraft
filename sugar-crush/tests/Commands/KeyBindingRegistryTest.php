@@ -312,11 +312,14 @@ final class KeyBindingRegistryTest extends TestCase
      *
      * 124 -> 125 live (125 all) and 1 -> 0 dormant with background
      * promotion (roadmap P-E3): `agentview.background`, `Ctrl+X b`.
+     *
+     * 125 -> 127 live (127 all) with the settings editor's polish (roadmap
+     * N-P5): `settings.details` (`i`) and `settings.preview-scroll` (`↑ / ↓`).
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(125, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(125, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(127, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(127, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(12, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

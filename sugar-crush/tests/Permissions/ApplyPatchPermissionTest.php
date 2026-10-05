@@ -7,9 +7,11 @@ namespace SugarCraft\Crush\Tests\Permissions;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook;
 use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionDecision;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Permissions\PermissionRule;
 use SugarCraft\Crush\Permissions\SafetyClassifier;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\ToolCall;
@@ -81,6 +83,57 @@ final class ApplyPatchPermissionTest extends TestCase
         self::assertFalse($hook->execute(self::context(self::patch(['src/a.php', 'config/.env'])))->isAllowed(), 'a secret among ordinary files refuses the call');
         self::assertTrue($hook->execute(self::context(self::patch(['src/a.php', '.mcp.json'])))->isAsk(), 'a policy file asks');
         self::assertFalse($hook->execute(self::context("*** Begin Patch\n*** Rename File: .env\n*** End Patch"))->isAllowed(), 'an unparseable patch is judged as its raw text');
+    }
+
+    public function testAPathDenyOnEditRefusesAPatchThatTouchesThatFile(): void
+    {
+        // The W10 integration's security fix: before it, `Deny Edit(.env)`
+        // matched no `ApplyPatch` call at all, so the patch tool was a second
+        // door to the file the user had denied.
+        $gate = new PermissionGate(PermissionMode::BypassPermissions, [new PermissionRule('Edit(.env)', PermissionAction::Deny)]);
+
+        self::assertSame(PermissionDecision::Allow, $gate->evaluate(self::call(['src/a.php']), $this->root));
+        self::assertSame(PermissionDecision::Deny, $gate->evaluate(self::call(['.env']), $this->root));
+        self::assertSame(PermissionDecision::Deny, $gate->evaluate(self::call(['src/a.php', './.env']), $this->root), 'any one path decides a restrictive rule');
+        self::assertSame(PermissionDecision::Deny, $gate->evaluate(self::call(['config/.env']), $this->root), 'a relative restrictive pattern matches at any depth, as for Edit');
+        self::assertSame(
+            PermissionDecision::Deny,
+            $gate->evaluate(new ToolCall('ApplyPatch', ['patch' => "*** Begin Patch\n*** Update File: src/a.php\n*** Move to: .env\n@@\n-x\n+y\n*** End Patch"]), $this->root),
+            'a move destination is a path the patch writes',
+        );
+        self::assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall('ApplyPatch', ['patch' => 'not a patch']), $this->root), 'paths that do not parse fail closed');
+    }
+
+    public function testWriteRulesBindAPatchTooNameOnlyOrByPath(): void
+    {
+        $ask = new PermissionGate(PermissionMode::BypassPermissions, [new PermissionRule('Write(dist/*)', PermissionAction::Ask)]);
+        self::assertSame(PermissionDecision::Ask, $ask->evaluate(self::call(['src/a.php', 'dist/app.js']), $this->root));
+        self::assertSame(PermissionDecision::Allow, $ask->evaluate(self::call(['src/a.php']), $this->root));
+
+        $deny = new PermissionGate(PermissionMode::BypassPermissions, [new PermissionRule('Write', PermissionAction::Deny)]);
+        self::assertSame(PermissionDecision::Deny, $deny->evaluate(self::call(['src/a.php']), $this->root));
+        self::assertTrue($deny->refuses(new \SugarCraft\Crush\Permissions\ToolDeclaration('ApplyPatch')), 'a name-only Write deny refuses the declaration as well');
+    }
+
+    public function testAnEditAllowGrantsNoPatchButAnApplyPatchAllowGrantsWhenEveryPathMatches(): void
+    {
+        $edit = new PermissionGate(PermissionMode::Default, [new PermissionRule('Edit(src/*)', PermissionAction::Allow)]);
+        self::assertSame(PermissionDecision::Ask, $edit->evaluate(self::call(['src/a.php']), $this->root), 'a patch can also delete and move, which Edit cannot');
+
+        $patch = new PermissionGate(PermissionMode::Default, [new PermissionRule('ApplyPatch(src/*)', PermissionAction::Allow)]);
+        self::assertSame(PermissionDecision::Allow, $patch->evaluate(self::call(['src/a.php', 'src/b.php']), $this->root));
+        self::assertSame(PermissionDecision::Ask, $patch->evaluate(self::call(['src/a.php', 'README.md']), $this->root), 'one path outside the grant leaves the call to the mode');
+        self::assertSame(PermissionDecision::Ask, $patch->evaluate(new ToolCall('ApplyPatch', ['patch' => 'not a patch']), $this->root), 'a grant never fires on paths nobody could read');
+    }
+
+    public function testTheSafetyClassifierJudgesAPatchByItsWorstPath(): void
+    {
+        $classifier = new SafetyClassifier();
+
+        self::assertNull($classifier->classify(self::call(['src/a.php']), $this->root));
+        self::assertSame(SafetyClassifier::CATEGORY_PROTECTED_PATH_WRITE, $classifier->classify(self::call(['src/a.php', '.git/hooks/pre-commit']), $this->root));
+        self::assertSame(SafetyClassifier::CATEGORY_OUTSIDE_ROOT_WRITE, $classifier->classify(self::call(['.git/x', '../out.php']), $this->root));
+        self::assertSame(SafetyClassifier::CATEGORY_OUTSIDE_ROOT_WRITE, $classifier->classify(new ToolCall('ApplyPatch', ['patch' => 'nope']), $this->root));
     }
 
     public function testRuntimeCountsItAsAWrite(): void

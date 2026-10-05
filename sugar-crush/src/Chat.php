@@ -11438,6 +11438,11 @@ final class Chat implements Model
     private static function releaseQueuedPrompts(array $settled): array
     {
         [$chat, $cmd] = $settled;
+        // Roadmap 5.7-2: a plan the user approved through `PlanExit` ends plan
+        // mode now that the turn is over — before a queued prompt starts the
+        // next one, so that turn already runs in the mode the plan asked for.
+        $chat = $chat->withApprovedPlanExitApplied();
+        $settled = [$chat, $cmd];
         if ($chat->queuedPrompts === []) {
             return $settled;
         }
@@ -16694,6 +16699,22 @@ final class Chat implements Model
     public const MODE_NOTICE_PREFIX = 'The permission mode changed from ';
 
     /**
+     * Apply the mode switch an approved `PlanExit` asked for
+     * ({@see \SugarCraft\Crush\Host\TurnRunner::approvedPlanExit()}) — only
+     * between turns and only while the session is still in `plan`, so a
+     * switch the user made meanwhile (`Alt+M`) wins.
+     */
+    private function withApprovedPlanExitApplied(): self
+    {
+        if ($this->inFlight || $this->permissionGate()?->mode() !== \SugarCraft\Crush\Permissions\PermissionMode::Plan) {
+            return $this;
+        }
+        $switch = \SugarCraft\Crush\Host\TurnRunner::approvedPlanExit($this->history);
+
+        return $switch === null ? $this : $this->togglePermissionMode($switch)[0];
+    }
+
+    /**
      * Switch the session's permission mode (roadmap 5.7-1): `Alt+M`'s toggle
      * into and out of `plan`, or the exact mode a {@see PermissionModeToggledMsg}
      * names.
@@ -17480,6 +17501,28 @@ final class Chat implements Model
     }
 
     /**
+     * The framed messages waiting in the session's own agent's mailbox, taken
+     * once — [] when there is no engine session to address or nothing waits.
+     *
+     * @return list<string>
+     */
+    private function drainMainMailbox(): array
+    {
+        $mailbox = $this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend ? $this->backend->mainMailbox() : null;
+        if ($mailbox === null) {
+            return [];
+        }
+        try {
+            return array_map(
+                static fn (\SugarCraft\Crush\Messages\UserMessage $message): string => $message->content(),
+                $mailbox->drain(0),
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Run one poll of {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor}
      * and announce whatever changed since the previous poll.
      *
@@ -17558,6 +17601,19 @@ final class Chat implements Model
             if ($session !== null && $session->isSettled()) {
                 $announcements[] = $session->announcement();
             }
+        }
+
+        // Roadmap 4.4: a reply a background sub-agent sent the session's own
+        // agent (`SendMessage` to `parent`) while no turn runs wakes it, the
+        // way a settled session's result does. While a turn runs, its child
+        // drains the same `main` mailbox at each step boundary instead
+        // ({@see \SugarCraft\Crush\Backend\EngineBackend::mainMailbox()}).
+        $replies = $this->inFlight ? [] : $this->drainMainMailbox();
+        if ($replies !== []) {
+            $notices[] = Message::notice(count($replies) === 1
+                ? 'A sub-agent sent the agent a message; it goes to the agent now.'
+                : sprintf('Sub-agents sent the agent %d messages; they go to the agent now.', count($replies)));
+            $announcements = [...$announcements, ...$replies];
         }
 
         if ($notices === [] && $statuses === $this->backgroundStatuses) {

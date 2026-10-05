@@ -57,9 +57,9 @@ use SugarCraft\Crush\Tools\ToolResult;
  * a sub-agent must not interrupt the user directly (Kilo's `question: false`,
  * Claude Code's subagent tool removals).
  *
- * NOT YET REACHABLE BY A PERSON: the engine does not bind its approver to
- * this tool (only {@see withPermissionApprover()} does), so a live call takes
- * the no-approver branch until it does.
+ * {@see \SugarCraft\Crush\Backend\EngineBackend::turnTools()} binds the
+ * turn's approver through {@see withPermissionApprover()}: the TUI child's
+ * channel (the 1.C modal), `serve`'s `permission.requested`.
  */
 #[BuiltInTool(name: self::NAME, permission: ToolPermissionClass::NoAsk, position: 21, gloss: 'put one question to the user, with optional choices, and wait for the answer')]
 final readonly class AskUserTool implements Tool, BuildsFromCatalog, DelegatesToEngine, RelaysPermissionAsks, TakesToolCallId

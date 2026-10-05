@@ -447,6 +447,7 @@ sugar-crush/tests/Backend/AutoTestReflectionTest.php	0.300	3
 sugar-crush/tests/Tools/WebSearchEndpointSettingTest.php	0.300	6
 sugar-crush/tests/Cli/NonInteractiveAskUserTest.php	0.300	2
 sugar-crush/tests/Support/AiCommentWatcherTest.php	0.300	15
+sugar-crush/tests/Tools/BuiltIn/QuestionToolWiringTest.php	0.300	4
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10
@@ -711,6 +712,7 @@ sugar-crush/tests/Tools/BuiltIn/TodoToolTest.php	0.050	15
 sugar-crush/tests/Tools/Edit/PatchParserTest.php	0.050	16
 sugar-crush/tests/MCP/McpMessageIdPreservingTest.php	0.050	4
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
+sugar-crush/tests/Hooks/BuiltIn/ApplyPatchEditedFilesTest.php	0.048	4
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5
 sugar-crush/tests/Commands/NoticesCommandTest.php	0.046	12

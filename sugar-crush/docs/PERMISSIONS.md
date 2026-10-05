@@ -503,6 +503,16 @@ How the argument half is matched:
   and `..` segments — so `Deny Read(./.env)` also covers `.env` and
   `./foo/../.env`, and a relative restrictive pattern matches at any depth
   (`/home/you/proj/.env`).
+- **`ApplyPatch` is judged per path.** A patch writes every file it adds,
+  updates, moves (both ends) or deletes, so a rule's argument glob is read
+  against each of them: a `deny` or `ask` fires when **any** path matches, an
+  `allow` only when **every** path does. A restrictive rule naming `Edit` or
+  `Write` binds a patch too, name-only or by path — `Deny Edit(.env)` refuses
+  an `ApplyPatch` that touches `.env`, and `Deny Write` refuses every patch —
+  because the rule is about the file, not about which tool spells the write.
+  An `allow` for `Edit` or `Write` does **not** carry over (a patch can also
+  delete and move); grant `ApplyPatch(...)` itself. A patch whose paths do not
+  parse is an unknowable subject: a restrictive path rule fires on it.
 - **A path rule judges the file the tool will open** (audit F-J3). The tools
   resolve a relative path against `--root`, and both the gate on the live hook
   chain and a sub-agent's — its session gate and its preset's own
@@ -671,9 +681,10 @@ with no approver bound, `AskUser` returns a result telling the model to decide
 and state its assumption, and `PlanExit` refuses and leaves plan mode on.
 `PlanExit` also refuses outside plan mode. Both are withheld from `Task`
 sub-agents and workflow stages, so a sub-agent cannot interrupt you directly.
-**Not wired yet:** the engine does not hand its approver to these two tools, so
-today every call takes the no-approver branch, and `Alt+M` is still how plan
-mode ends.
+`EngineBackend::turnTools()` hands both the turn's approver: in the TUI the
+question is the permission modal, under `serve` it is a `permission.requested`
+event, and the background-session daemon marks them headless like `-p`.
+`Alt+M` still leaves plan mode without asking.
 
 And any caller that holds no prompt at all must not turn "would
 have asked" into "no" — `PermissionGate::refuses()` answers `true` only for

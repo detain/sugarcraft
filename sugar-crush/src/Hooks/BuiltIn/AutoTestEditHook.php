@@ -66,10 +66,10 @@ final class AutoTestEditHook implements HookInterface
         return HookEvent::PostToolUse;
     }
 
-    /** The two tools that change a file's contents, as the post-edit lint matches them. */
+    /** The tools that change a file's contents, as the post-edit lint matches them. */
     public function matcher(): string
     {
-        return '^(Write|Edit)$';
+        return EditedFiles::MATCHER;
     }
 
     public function execute(HookContext $context): HookResult
