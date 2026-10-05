@@ -208,6 +208,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // `refusedPaths()` and nothing in `Cli/Bootstrap.php` drains them into
         // `$projectTierRefusals`, so it has no {@see DRAIN_EVIDENCE} entry.
         'Context/RuleLoader.php|.sugar-crush/rules' => self::REPOSITORY,
+        // Roadmap 5.14d: `/newrule` lists the `*.md` NAMES already in the same
+        // project directory so the model knows which are taken; it reads no
+        // rule and refuses nothing, so there is nothing to drain either.
+        'Host/Commands/NewRulePrompt.php|.sugar-crush/rules' => self::REPOSITORY,
         // MOVED OUT OF THE PACKAGE-RELATIVE BLOCK BELOW, and the move is the
         // finding rather than a tidy-up. This literal was package-relative
         // because {@see \SugarCraft\Crush\Agents\WorktreeManager} constructed
@@ -406,8 +410,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY-FOUR occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-TWO distinct paths. NINETEEN of those
+     * APPEARS IN. On this tree that is FIFTY-FIVE occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-TWO distinct paths. TWENTY of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are FIFTEEN distinct paths — which is the figure
@@ -605,7 +609,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
-            16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN'];
+            16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY', 21 => 'TWENTY-ONE'];
 
         $occurrences = \count(self::DOT_PATHS);
         $repositoryOccurrences = 0;

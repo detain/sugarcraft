@@ -334,6 +334,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'docs/SETTINGS.md' => self::class . '::testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints',
         ],
         'PROJECT_TIER_REFUSAL_FORMAT' => [
+            'README.md' => self::PAGE_QUOTE_IS_COINCIDENCE,
             'docs/TROUBLESHOOTING.md' => self::class
                 . '::testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints',
         ],
@@ -355,29 +356,47 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
     private const PAGE_QUOTE_IS_PROSE = '<prose about the shape, not a quotation of a rendered line>';
 
     /**
+     * The verdict for a page the bounded sweep nominates on an unrelated
+     * sentence — the "near" case {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()}
+     * pins, settled by a person reading the page.
+     *
+     * README.md is the holder since W10 widened {@see PAGE_QUOTE_FIELD_BYTES}
+     * for the twenty-four-name tool list: its "rather than ignoring it"
+     * sentence and a later em dash now fall inside the bound for
+     * {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT}'s `ignoring %s — %s`.
+     * README quotes no refusal line.
+     */
+    private const PAGE_QUOTE_IS_COINCIDENCE = '<an unrelated sentence the bounded shape happens to match>';
+
+    /**
      * How many bytes of page text one `%s` is allowed to stand for.
      *
      * IT IS THE INSTRUMENT'S ALPHABET AND IT IS MEASURED, not a round number.
-     * With the bound removed — `.*?` in place of `.{1,160}?` — the sweep
+     * With the bound removed — `.*?` in place of `.{1,220}?` — the sweep
      * nominates `README.md` as a reader of
      * {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT} (`ignoring %s — %s`),
      * because README.md contains the unrelated sentence "reject one at exit
      * `2` rather than ignoring it" and, some hundreds of bytes later, an em
      * dash. That is round 46's own false positive, the one a human had to
      * remove from the hand-run sweep by reading the page. MEASURED on PHP
-     * 8.3.6 at round 47: with the bound in place the sweep nominates
-     * `docs/TROUBLESHOOTING.md` and nothing else for that constant.
+     * 8.3.6 at round 47: with the bound in place (160 then) the sweep
+     * nominated `docs/TROUBLESHOOTING.md` and nothing else for that constant;
+     * at 220 it nominates README.md as well, recorded as
+     * {@see PAGE_QUOTE_IS_COINCIDENCE}, and the fixture's 280-byte "far" page
+     * still falls outside.
      *
      * THE COST IS STATED RATHER THAN HIDDEN, because it is the direction that
      * loses a finding: a page that quotes a launch line whose interpolated
      * field is longer than this is NOT nominated, and the sweep reports its
      * absence as silence. Nothing here can detect that, which is why the bound
-     * is generous — every field the four quoting pages actually interpolate is
-     * under sixty bytes — and why the fixture in
+     * is generous — the longest field a quoting page interpolates is the
+     * project-tier tool-removal report's survivor list, 205 bytes for the
+     * twenty-four tools it names since W10 (it was 160 until that list
+     * outgrew it), every other one under sixty — and why the fixture in
      * {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()} pins
      * both directions rather than only the one this file wants.
      */
-    private const PAGE_QUOTE_FIELD_BYTES = 160;
+    private const PAGE_QUOTE_FIELD_BYTES = 220;
 
     /**
      * PHPUnit's own two output forms. Never excused by an anchor — see
@@ -1654,9 +1673,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         foreach (self::PAGE_QUOTES as $constant => $verdicts) {
             foreach ($verdicts as $page => $verdict) {
                 if (!str_contains($verdict, '::')) {
-                    self::assertSame(
-                        self::PAGE_QUOTE_IS_PROSE,
+                    self::assertContains(
                         $verdict,
+                        [self::PAGE_QUOTE_IS_PROSE, self::PAGE_QUOTE_IS_COINCIDENCE],
                         "self::PAGE_QUOTES[{$constant}][{$page}] is neither a Class::method guard reference "
                         . 'nor one of this file\'s stated reasons for there being no guard',
                     );

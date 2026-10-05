@@ -164,7 +164,7 @@ final class EngineBackendWorktreeJailTest extends TestCase
         }
 
         sort($takers);
-        $this->assertSame(['Bash', 'Edit', 'Glob', 'Grep', 'LspTool', 'Read', 'RepoMapTool', 'Write'], $takers);
+        $this->assertSame(['ApplyPatch', 'Bash', 'Edit', 'Glob', 'Grep', 'LspTool', 'Read', 'RepoMapTool', 'Write'], $takers);
     }
 
     /**

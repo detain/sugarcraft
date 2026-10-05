@@ -36,7 +36,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Read;
  *     splice that still renders would double-present every scoped body — the
  *     P7.S3 double-presentation failure mode, previously closed by a -97 B
  *     golden move);
- *  2. `Bootstrap::tools()` really hands ONE tracker to all five path-resolving
+ *  2. `Bootstrap::tools()` really hands ONE tracker to all six path-resolving
  *     tools, derived from the tools that declare the property rather than from a
  *     hand-kept list, because a hand-kept list is exactly what let the skills
  *     channel ship `Write` unwired;
@@ -175,21 +175,21 @@ final class RulePathScopingWiringTest extends TestCase
         self::assertStringNotContainsString('BUDGET SCOPED CANARY', $prompt, 'and the disjointness holds the other way too');
     }
 
-    // -- 2. the boot path hands one tracker to all five tools ------------------
+    // -- 2. the boot path hands one tracker to all six tools ------------------
 
     public function testBootstrapHandsOneRuleTrackerToEveryPathResolvingTool(): void
     {
         $trackers = $this->ruleTrackerRoster();
 
         self::assertSame(
-            ['Edit', 'Glob', 'Grep', 'Read', 'Write'],
+            ['ApplyPatch', 'Edit', 'Glob', 'Grep', 'Read', 'Write'],
             array_keys($trackers),
             'the set of tools holding a RulePathNudge changed; derive the roster again rather than widening this list',
         );
 
         $first = reset($trackers);
         foreach ($trackers as $tool => $tracker) {
-            self::assertSame($first, $tracker, $tool . ' holds a different tracker — five trackers re-announce the same rule once per tool');
+            self::assertSame($first, $tracker, $tool . ' holds a different tracker — six trackers re-announce the same rule once per tool');
         }
 
         self::assertSame([], $first->announcedPaths(), 'a fresh launch has announced nothing yet');
@@ -225,7 +225,7 @@ final class RulePathScopingWiringTest extends TestCase
             'the set of tools spending a SHARE of their own cap on the rule nudge changed',
         );
         self::assertSame(
-            ['Edit', 'Write'],
+            ['ApplyPatch', 'Edit', 'Write'],
             $roster['unbudgeted'],
             'the set of tools passing NO budget changed; an unbudgeted caller spends the class ceiling, so it must stay a deliberate, named bucket',
         );
@@ -339,14 +339,14 @@ final class RulePathScopingWiringTest extends TestCase
         $trackers = $this->ruleTrackerRosterFrom(Bootstrap::tools($this->repo, rulesState: $state));
 
         self::assertSame(
-            ['Edit', 'Glob', 'Grep', 'Read', 'Write'],
+            ['ApplyPatch', 'Edit', 'Glob', 'Grep', 'Read', 'Write'],
             array_keys($trackers),
-            'the roster that receives the set is the same derived five as the unthreaded boot',
+            'the roster that receives the set is the same derived six as the unthreaded boot',
         );
 
         $first = reset($trackers);
         foreach ($trackers as $tool => $tracker) {
-            self::assertSame($first, $tracker, $tool . ' holds a second tracker — a set threaded into one of five is threaded into none');
+            self::assertSame($first, $tracker, $tool . ' holds a second tracker — a set threaded into one of six is threaded into none');
             self::assertSame($state, self::rulesStateOf($tracker), $tool . "'s tracker was handed a copy of the session set, so a later `/rules` keystroke would miss it");
         }
 

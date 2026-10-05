@@ -454,6 +454,9 @@ final class ForeignAgentPresetWiringTest extends TestCase
 
         $this->assertSame(
             [
+                // 5.9-2: NOT an Agent reader — ACP's `currentModeId` reads the
+                // session's own mode through SessionHost::permissionMode().
+                'Acp/AcpServer.php',
                 'Agents/Agent.php',
                 // O-3a: NOT Agent readers — the needle also matches another
                 // class's own `$permissionMode`. `serve` reads its ParsedArgs

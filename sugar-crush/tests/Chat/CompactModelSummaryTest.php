@@ -1308,11 +1308,14 @@ final class CompactModelSummaryTest extends TestCase
             history: [Message::user('hi'), Message::assistant('there')],
             backend: new EchoBackend(),
         );
-        [$next, $cmd] = $this->type($chat, '/new');
+        // `/new session`, not a bare `/new`: since 5.14d a bare `/new` is a
+        // prefix of `/newrule`, so Enter completes the popup instead of
+        // submitting (the SlashDispatchTest negative control made the same move).
+        [$next, $cmd] = $this->type($chat, '/new session');
 
         $this->assertNotNull($cmd, '/new falls through and is dispatched as a prompt');
         $this->assertTrue($next->inFlight);
-        $this->assertSame('/new', $next->history[count($next->history) - 1]->content);
+        $this->assertSame('/new session', $next->history[count($next->history) - 1]->content);
     }
 
     /** Read the private generation counter — there is no accessor for it. */

@@ -63,7 +63,7 @@ final readonly class PostEditLintHook implements BoundedHookInterface
     /** The tools that change a file's contents ({@see EditedFiles}). */
     public function matcher(): string
     {
-        return EditedFiles::MATCHER;
+        return '^(Write|Edit|ApplyPatch)$';
     }
 
     /** The runner this hook lints with — for a caller that reads the chain back. */

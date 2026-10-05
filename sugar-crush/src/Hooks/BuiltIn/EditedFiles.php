@@ -19,7 +19,7 @@ use SugarCraft\Crush\Tools\Edit\PatchParser;
  */
 final class EditedFiles
 {
-    /** The PostToolUse matcher every post-edit hook shares. */
+    /** The PostToolUse matcher every post-edit hook spells as its literal `matcher()` (HOOKS.md quotes it). */
     public const MATCHER = '^(Write|Edit|ApplyPatch)$';
 
     private function __construct()

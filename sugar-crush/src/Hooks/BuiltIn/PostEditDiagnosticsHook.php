@@ -76,7 +76,7 @@ final readonly class PostEditDiagnosticsHook implements BoundedHookInterface
     /** The tools that change a file's contents ({@see EditedFiles}). */
     public function matcher(): string
     {
-        return EditedFiles::MATCHER;
+        return '^(Write|Edit|ApplyPatch)$';
     }
 
     public function timeoutSeconds(): float

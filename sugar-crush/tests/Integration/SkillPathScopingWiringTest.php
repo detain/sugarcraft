@@ -462,9 +462,10 @@ final class SkillPathScopingWiringTest extends TestCase
      * nudge-carrying tool cannot join the seam and be counted by no guard: it
      * either reds this list, reds the roster above, or reds the parse.
      *
-     * {@see \SugarCraft\Crush\Tools\BuiltIn\Edit} and
-     * {@see \SugarCraft\Crush\Tools\BuiltIn\Write} are here because their
-     * result is a one-line success message — there is no output cap to spend a
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Edit},
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Write} and
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\ApplyPatch} are here because their
+     * result is a short success message — there is no output cap to spend a
      * fraction of, so `forPath($path)` is called with the budget argument
      * omitted and the tracker's own ceiling stands. `Edit` declares a
      * `maxBytes` all the same, which is exactly why the roster cannot be keyed
@@ -475,7 +476,7 @@ final class SkillPathScopingWiringTest extends TestCase
         $roster = $this->nudgeSpendRoster();
 
         self::assertSame(
-            ['Edit', 'Write'],
+            ['ApplyPatch', 'Edit', 'Write'],
             $roster['unbudgeted'],
             'the set of nudge-carrying tools that pass no budget has changed; a tool that gained an '
             . 'output cap belongs in the ceiling guards above, and one that lost its budget has left them',
