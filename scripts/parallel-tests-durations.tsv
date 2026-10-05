@@ -346,9 +346,11 @@ sugar-crush/tests/Permissions/ChatAlwaysGrantScopeTest.php	0.491	5
 sugar-crush/tests/MCP/StdioMcpServerToolListRobustnessTest.php	0.486	9
 sugar-crush/tests/Backend/EngineBackendAttachmentsTest.php	0.485	6
 sugar-crush/tests/Providers/PromptPrefixByteStabilityTest.php	0.483	4
+sugar-crush/tests/Tools/TaskToolWorktreeIsolationTest.php	0.480	6
 sugar-crush/tests/Renderer/StatusBarModelAndReadOnlyTest.php	0.478	10
 sugar-crush/tests/Chat/ChatPostToolUseBlockTest.php	0.478	7
 sugar-crush/tests/Backend/SessionAffinityWiringTest.php	0.478	6
+sugar-crush/tests/Agents/WorktreeManagerReleaseTest.php	0.477	6
 sugar-crush/tests/Chat/ChatCancelKeepsLoopLiveTest.php	0.464	2
 sugar-crush/tests/SuiteTempSandboxContractTest.php	0.463	5
 sugar-crush/tests/Host/TurnControllerTest.php	0.460	16

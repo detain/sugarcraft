@@ -66,6 +66,11 @@ use SugarCraft\Crush\Usage;
  * stored as the ledger's own plain-array form ({@see ContextLedger::toArray()})
  * and rebuilt leniently, so the restorable classes above stay exactly the
  * transcript's — no ledger value object is ever handed to `unserialize()`.
+ *
+ * THE RUN'S OWN WORKTREE (roadmap 4.9). An `isolation: worktree` run that
+ * left work in its git worktree keeps the tree, and the suspension names it
+ * (by the {@see WorktreeManager} id it was created under), so a resume works
+ * on in the same tree instead of starting a clean one beside it.
  */
 final class SuspendedDelegations
 {
@@ -134,12 +139,14 @@ final class SuspendedDelegations
      *        resume keeps appending to (see the class doc); null for none
      * @param ContextLedger|null $ledger the run's ephemeral context ledger
      *        (see the class doc); null for a run that kept none
+     * @param string|null $worktree the id of the worktree the run kept (see the
+     *        class doc); null for a run that kept none
      *
      * @return string the resume id
      *
      * @throws \RuntimeException when the store directory is unsafe or unwritable
      */
-    public function save(string $agent, array $transcript, int $resumes, ?string $id = null, ?string $transcriptLog = null, ?ContextLedger $ledger = null): string
+    public function save(string $agent, array $transcript, int $resumes, ?string $id = null, ?string $transcriptLog = null, ?ContextLedger $ledger = null, ?string $worktree = null): string
     {
         $dir = HookContextFiles::verifiedDirectory($this->dir);
         $this->sweep($dir);
@@ -155,6 +162,7 @@ final class SuspendedDelegations
             'savedAt' => time(),
             'transcriptLog' => $transcriptLog,
             'contextLedger' => $ledger?->toArray(),
+            'worktree' => $worktree,
         ]);
 
         $temp = @tempnam($dir, 'suspending-');
@@ -172,12 +180,13 @@ final class SuspendedDelegations
     }
 
     /**
-     * @return array{agent: string, transcript: list<Message>, resumes: int, transcriptLog: ?string, contextLedger: ?array<string, mixed>}|null
+     * @return array{agent: string, transcript: list<Message>, resumes: int, transcriptLog: ?string, contextLedger: ?array<string, mixed>, worktree: ?string}|null
      *         null for an id that is malformed, unknown, expired or unreadable;
      *         `transcriptLog` is null for a run saved without one (or before P-C1);
      *         `contextLedger` is the run's ledger in {@see ContextLedger::toArray()}
      *         form, for {@see ContextLedger::fromArray()}, or null (none kept, or
-     *         saved before roadmap 3.B-5)
+     *         saved before roadmap 3.B-5); `worktree` the id of the worktree
+     *         the run kept, or null
      */
     public function load(string $id): ?array
     {
@@ -220,6 +229,7 @@ final class SuspendedDelegations
             'resumes' => $data['resumes'],
             'transcriptLog' => \is_string($data['transcriptLog'] ?? null) && $data['transcriptLog'] !== '' ? $data['transcriptLog'] : null,
             'contextLedger' => \is_array($data['contextLedger'] ?? null) ? $data['contextLedger'] : null,
+            'worktree' => \is_string($data['worktree'] ?? null) && $data['worktree'] !== '' ? $data['worktree'] : null,
         ];
     }
 

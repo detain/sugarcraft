@@ -17,7 +17,7 @@ final class RosterAgent
      * @param list<string> $tools
      * @param list<string> $skills
      */
-    public static function named(string $name, array $tools = [], array $skills = [], ?int $maxTurns = null): Agent
+    public static function named(string $name, array $tools = [], array $skills = [], ?int $maxTurns = null, ?\SugarCraft\Crush\Agents\Isolation $isolation = null): Agent
     {
         return new Agent(
             name: $name,
@@ -33,6 +33,7 @@ final class RosterAgent
             // A roster entry that names no model of its own: the delegated
             // run stays on the calling engine's (4.1-1).
             inheritsModel: true,
+            isolation: $isolation,
         );
     }
 }

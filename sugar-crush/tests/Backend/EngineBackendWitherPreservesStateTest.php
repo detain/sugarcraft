@@ -157,10 +157,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             ],
             // Registers onto a CLONE of the manager (audit F-J5), so it owns
             // hookManager; it owns hooksDisabled too (re-asserted false), and
-            // tools, whose path-resolving members it re-jails to the worktree.
+            // tools, whose path-resolving members it re-jails to the worktree,
+            // and root (roadmap 4.9), so the run is told where it works.
             'withWorktreeRoot' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withWorktreeRoot('/wt'),
-                ['hookManager', 'hooksDisabled', 'tools'],
+                ['hookManager', 'hooksDisabled', 'tools', 'root'],
             ],
         ];
     }

@@ -105,7 +105,12 @@ final class BackgroundCommand implements HostCommand
      *
      * The session is spawned into the SAME tree this run is rooted at: a
      * `--root <lib>` run that backgrounded work into the enclosing monorepo
-     * would have the child acting outside the parent's jail.
+     * would have the child acting outside the parent's jail — unless the
+     * agent's preset says `isolation: worktree` (roadmap 4.9): then it works
+     * in a git worktree of that tree, created here, off-turn, on a branch of
+     * its own and marked named (a session the person started is never swept
+     * by the stale-worktree cleanup). A tree that cannot be created fails the
+     * spawn rather than running the session in the shared checkout.
      *
      * A failed spawn RESOLVES rather than rejects: a rejection would surface
      * as candy-core's generic `ExceptionMsg` and lose the command context the
@@ -129,18 +134,39 @@ final class BackgroundCommand implements HostCommand
         $tags = $forkedSessionId === null ? null : ['fork', 'session:' . $forkedSessionId];
 
         return static function () use ($supervisor, $command, $name, $task, $agent, $workingDirectory, $tags, $forkedSessionId): PromiseInterface {
+            $worktrees = null;
+            $worktreeId = null;
             try {
+                $worktree = null;
+                if ($agent->isolation === \SugarCraft\Crush\Agents\Isolation::Worktree) {
+                    $worktrees = \SugarCraft\Crush\Agents\WorktreeManager::new($workingDirectory);
+                    $worktreeId = 'bg-' . bin2hex(random_bytes(6));
+                    $worktree = $worktrees->createWorktree($worktreeId);
+                }
                 $session = $supervisor->spawnSession(
                     name: $name,
                     agent: $agent,
                     task: $task,
-                    workingDirectory: $workingDirectory,
+                    workingDirectory: $worktree ?? $workingDirectory,
                     tags: $tags,
                     forkedSessionId: $forkedSessionId,
                 );
+                // Named only once the session exists: a spawn that failed
+                // leaves an unnamed, unused tree, released below.
+                if ($worktree !== null) {
+                    $worktrees?->markWorktreeNamed((string) $worktreeId);
+                }
 
-                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, $session->id));
+                return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, $session->id, worktree: $worktree));
             } catch (\Throwable $e) {
+                if ($worktrees !== null && $worktreeId !== null) {
+                    try {
+                        $worktrees->releaseIfUnused($worktreeId);
+                    } catch (\Throwable) {
+                        // Already reported on the notice seam by the manager.
+                    }
+                }
+
                 return \React\Promise\resolve(new BackgroundSessionSpawnedMsg($command, $name, null, $e->getMessage()));
             }
         };
@@ -213,9 +239,11 @@ final class BackgroundCommand implements HostCommand
             return "Could not start background session '{$msg->name}': {$msg->error}";
         }
 
-        return $msg->command === '/fork'
+        $where = $msg->worktree === null ? '' : " It works in its own git worktree at {$msg->worktree}; its changes stay there for you to review and merge.";
+
+        return ($msg->command === '/fork'
             ? "Forked into background session {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel."
-            : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel.";
+            : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel.") . $where;
     }
 
     /** The answer to a settled `/bg stop`. */

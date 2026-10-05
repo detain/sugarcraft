@@ -2831,7 +2831,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($tableEnd);
         $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
         preg_match_all('/\| `([^`]+)` \| `([^`]+)`/', $segment, $rows, \PREG_SET_ORDER);
-        self::assertCount(10, $rows, 'the sessions table no longer has its ten directory/class rows');
+        self::assertCount(11, $rows, 'the sessions table no longer has its eleven directory/class rows');
         $orderedDirs = [
             '~/.sugar-crush/session.db',
             '~/.sugar-crush/session.db',
@@ -2839,6 +2839,7 @@ final class DocFigureProseDriftTest extends TestCase
             '~/.sugar-crush/memory/',
             '~/.sugar-crush/memory/.compaction-journal-<key>.jsonl',
             '~/.sugar-crush/teams/',
+            '<root>/.sugar-crush/worktrees/',
             '~/.sugar-crush/subagents/',
             '~/.sugar-crush/mailboxes/',
             '<workflowsPath>/.running/',
@@ -2855,6 +2856,9 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('->withTasks($todos->toArray())', self::sourceOf('Host/TranscriptStore.php'), 'the todo list is no longer saved into session_meta.tasks — table row drifted');
         self::assertStringContainsString("'/.compaction-journal-' . (\$home->projectKey() ?? 'shared') . '.jsonl'", self::sourceOf('Memory/CompactionJournal.php'), 'the compaction journal is no longer .compaction-journal-<key>.jsonl in the memory directory — table row drifted');
         self::assertStringContainsString("'~/.sugar-crush/teams'", self::sourceOf('Agents/TeamManager.php'), 'TeamManager no longer defaults to ~/.sugar-crush/teams — table cell drifted');
+        self::assertStringContainsString("string \$basePath = '.sugar-crush/worktrees/'", self::sourceOf('Agents/WorktreeConfig.php'), 'WorktreeConfig no longer defaults to .sugar-crush/worktrees/ — table cell drifted');
+        self::assertStringContainsString("\$path = rtrim(\$this->repoRoot, '/') . '/' . \$path;", self::sourceOf('Agents/WorktreeManager.php'), 'WorktreeManager no longer anchors a relative base at the project root — the table\'s <root> drifted');
+        self::assertStringContainsString('WorktreeManager::new($taskRoot)', self::sourceOf('Cli/Bootstrap.php'), 'Bootstrap no longer builds the launch\'s worktree manager on the tools\' root — table row drifted');
         self::assertSame('subagents', \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::DIR_NAME, 'the transcript log directory no longer spells subagents — table cell drifted');
         self::assertStringContainsString("'/.sugar-crush/' . self::DIR_NAME", self::sourceOf('Agents/Live/SubAgentTranscriptLog.php'), 'SubAgentTranscriptLog no longer roots its logs under ~/.sugar-crush — table cell drifted');
         self::assertSame('mailboxes', \SugarCraft\Crush\Agents\Live\AgentInbox::DIR_NAME, 'the agent mailbox directory no longer spells mailboxes — table cell drifted');

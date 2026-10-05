@@ -210,7 +210,7 @@ carried onto the `Agent` row and read by nothing after that:
 | `permissionMode` | Live, narrow-only: when stricter than the session's mode, a second gate judges every call ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). |
 | `memory` | **Inert.** Carried; no memory tier is selected by it. |
 | `background` | Live: runs the delegation as a background session; the call's own `background` wins (see [What you can actually do with a preset today](#what-you-can-actually-do-with-a-preset-today)). |
-| `isolation` | **Inert.** `none` is what happens anyway; see [Teams and worktrees](#teams-and-worktrees). |
+| `isolation` | Live: `worktree` runs the delegation (and a `/bg` session run as this agent) in a git worktree of its own; see [Teams and worktrees](#teams-and-worktrees). |
 | `color` | **Inert.** Carried; no surface renders it. |
 
 The **Inert** rows are `FrontmatterKeyAudit::INERT`, which
@@ -367,8 +367,10 @@ one":
   its `tools:` (argument-scoped entries included) is the stage's whole grant.
   See [`WORKFLOWS.md`](WORKFLOWS.md).
 - **`/bg` and `/fork`** run a task in a background session
-  (`src/Sessions/BackgroundSessionRunner.php`), again without consulting the
-  preset roster. A **background `Task`** does consult it: `Task` with
+  (`src/Sessions/BackgroundSessionRunner.php`) as the roster's `default`
+  agent (else its first), consulting nothing else of the preset but its
+  provider, model and `isolation:` (a worktree session, see
+  [Teams and worktrees](#teams-and-worktrees)). A **background `Task`** does consult it: `Task` with
   `background: true` — or for an agent whose preset says `background: true`,
   unless the call says `background: false` — returns `{"agent_id": …}` at
   once, and the session daemon runs the agent through `TaskTool` itself, so
@@ -397,11 +399,31 @@ here rather than marketed as delegation.
 launched install. `SUGARCRUSH_WORKTREES_DIR` re-points the worktree base path
 (default `.sugar-crush/worktrees/`) — see [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
-An `isolation: worktree` preset field parses into `Isolation::Worktree` and
-rides onto the roster row, and `SubAgent` accepts an `Isolation`, but nothing
-hands the row's value to a `SubAgent` (see [Which fields act](#which-fields-act)),
-so setting it in a preset has no effect on anything a chat command reaches
-today.
+An `isolation: worktree` preset runs in a **git worktree of its own**. The
+field parses into `Isolation::Worktree`, rides onto the roster row, and every
+`SubAgent` made from that row takes it (`SubAgent::$isolation` defaults to the
+agent's). `Task` then creates the tree through `WorktreeManager` — under
+`<root>/.sugar-crush/worktrees/<run id>/`, on a branch `agent-<run id>-<time>`
+cut from the checkout's `HEAD`, with the files `.worktreeinclude` lists copied
+in — and runs the sub-agent there through `EngineBackend::withWorktreeRoot()`:
+every path-resolving tool it was granted is jailed to the tree, `Bash` runs in
+it and `BashEscapeDenyHook` refuses a command naming a path outside it, and
+the environment block and hook `cwd` name the tree, not the main checkout.
+
+When the run ends, a tree that holds no work — no uncommitted change and no
+commit past the one it started from — is removed with its branch. A tree that
+does is **kept**, never deleted: the result names its path and branch so the
+delegating model (or you) can review and merge it, and the run's resume id
+continues in the same tree. A kept tree with no uncommitted change is swept
+after `worktreeCleanupPeriodDays` (its branch, and so its commits, stays); one
+with uncommitted changes stays until you remove it. A
+`/bg` (or `/fork`) session whose agent — the roster's `default`, else its first
+— says `isolation: worktree` is spawned into such a tree too, marked as a named
+session so the sweep never touches it, and the spawn notice names the path.
+
+A run that cannot be isolated — no git checkout, or `git worktree add` fails —
+is refused with the reason rather than run in the shared checkout. Workflow
+stages do not read the field: a `/workflow` stage still runs in the checkout.
 
 ## See also
 

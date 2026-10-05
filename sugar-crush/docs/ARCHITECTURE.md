@@ -930,6 +930,7 @@ completion can legitimately run for tens of minutes.
 | `~/.sugar-crush/memory/` | `Memory\MemoryStore` | markdown + frontmatter, per scope |
 | `~/.sugar-crush/memory/.compaction-journal-<key>.jsonl` | `Memory\CompactionJournal` | every model-written compaction summary, one JSON line each, per project (`shared` without a root) |
 | `~/.sugar-crush/teams/` | `Agents\TeamManager` | team state |
+| `<root>/.sugar-crush/worktrees/` | `Agents\WorktreeManager` | one git worktree per `isolation: worktree` run (`Task`, `/bg`), `<run id>/` on branch `agent-<run id>-<time>`, and `.registry.json` (branch, start commit, named); a tree that holds no work is removed with its branch when its run ends, one with work is kept; the directory ignores itself (`.gitignore`) |
 | `~/.sugar-crush/subagents/` | `Agents\Live\SubAgentTranscriptLog` | one JSONL transcript per delegated run, `<session>/<agent>.jsonl`; a session's directory goes once the store no longer has the session (`AgentManager::pruneSessionArtifacts()`, on every launch that prunes) |
 | `~/.sugar-crush/mailboxes/` | `Agents\Live\AgentInbox` | messages to a running delegated run, `<session>/<agent>/inbox.jsonl`, read at its step boundaries; a message from the user carries the launch key's HMAC; swept with its session, as `subagents/` is |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |

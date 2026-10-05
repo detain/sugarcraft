@@ -39,9 +39,11 @@ use SugarCraft\Crush\Support\ContainedPath;
  * STRING and one string covered two tiers. And
  * {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest} counts
  * compares that are WRITTEN, of which this had none. Dormancy was not an
- * exemption then either: nothing in `src/` constructs a {@see WorktreeManager}
+ * exemption then either — nothing in `src/` constructed a {@see WorktreeManager}
  * yet, and "DORMANT IS NOT UNGATED" is the doctrine this file was the
- * counter-example to.
+ * counter-example to. It is live since roadmap 4.9: every launch that offers
+ * `Task` builds one on its root ({@see \SugarCraft\Crush\Cli\Bootstrap::tools()}),
+ * so this read now happens on every such launch, gated as above.
  *
  * @note This class is mutable (not `readonly class`) to support the ::new()
  * static factory which reads .sugar-crush/config.json at construction time.
@@ -215,7 +217,8 @@ final class WorktreeConfig
      * there this factory may read.
      *
      * The refusals are recorded nowhere on purpose: {@see new()} has no seam to
-     * report through and this class is dormant, so a refusal here would be a
+     * report through, and it runs while the launch builds its tools, before
+     * any surface that could show a row exists, so a refusal here would be a
      * message with no reader. What it must not be is a SILENT ACCEPTANCE, which
      * is what the inline read it replaces was.
      *

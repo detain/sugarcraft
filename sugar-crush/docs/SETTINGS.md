@@ -1035,8 +1035,9 @@ holds. From a project only `settings.json` and `settings.local.json` (layers 1
 and 2) are read; the name `config.json` is a layer only under your home (layer
 4). In a project that name belongs to the worktree configuration
 (`worktreeCleanupPeriodDays`, `worktreeIncludeFile`), which only
-`SugarCraft\Crush\Agents\WorktreeConfig` reads — and nothing constructs that
-class until worktree support is wired, so the file is inert today. A
+`SugarCraft\Crush\Agents\WorktreeConfig` reads, for the worktree manager every
+launch that offers `Task` builds (an `isolation: worktree` agent's tree, see
+[`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#teams-and-worktrees)). A
 `trustedProjectMcp` written there grants nothing: MCP trust is read from
 `~/.sugar-crush/config.json` only (see [`MCP.md`](MCP.md)). The settings view's
 **Files** tab lists the file as "not a layer". SugarCraft's own repository root

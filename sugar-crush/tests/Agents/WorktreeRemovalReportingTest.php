@@ -411,20 +411,19 @@ final class WorktreeRemovalReportingTest extends TestCase
     }
 
     /**
-     * NOTHING IN `src/` OR `bin/` CONSTRUCTS A `WorktreeManager`, BY ANY SHAPE.
+     * EXACTLY TWO PLACES IN `src/` OR `bin/` BUILD A `WorktreeManager`, BY ANY
+     * SHAPE (roadmap 4.9): `Bootstrap::tools()`, for `Task`'s isolated runs,
+     * and `BackgroundCommand::spawnThunk()`, for a `/bg` session run as an
+     * `isolation: worktree` agent.
      *
-     * Stronger than the `new`-shaped claim that first established this, and
-     * deliberately so: `SglangProvider` scores the same zero on a `new`-shaped
-     * walk and is built on every run, through a static factory with a name of
-     * its own. This walk reports static calls of ANY name, so the two zeroes
-     * are no longer the same evidence.
-     *
-     * IF THIS EVER REDS IT IS GOOD NEWS AND NOT A REGRESSION — someone wired
-     * the class. The response is to repoint this test at the new reachability
-     * and rewrite the four doc-blocks that currently argue dormancy, not to
-     * revert the wiring.
+     * This test pinned ZERO while the class was dormant, and said that the day
+     * it redded would be good news — someone wired the class. Roadmap 4.9 did;
+     * the pin now names the reachability instead. The walk reports static
+     * calls of ANY name (not only `new`-shaped sites: `SglangProvider` once
+     * scored a false zero that way), so a third builder — or a lost one — is a
+     * red that sends the reader to the doc-blocks describing who builds it.
      */
-    public function testNothingInSrcOrBinBuildsAWorktreeManagerByAnyShape(): void
+    public function testExactlyTheTwoWiredBuildersConstructAWorktreeManager(): void
     {
         $root = \dirname(__DIR__, 2);
         $files = self::phpSources($root);
@@ -438,7 +437,10 @@ final class WorktreeRemovalReportingTest extends TestCase
         self::assertContains($root . '/bin/sugarcrush', $files);
         self::assertFileExists($root . '/bin/sugarcrush');
 
-        self::assertSame([], self::sitesIn($files, $root));
+        self::assertSame(
+            ['src/Cli/Bootstrap.php: new', 'src/Host/Commands/BackgroundCommand.php: new'],
+            self::sitesIn($files, $root),
+        );
 
         // AND THE REFUSAL ARM IS DRIVEN, at a roster entry that is a DIRECTORY.
         // Without this line, mutating `is_file($file)` to `true` SURVIVES this

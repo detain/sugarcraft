@@ -283,6 +283,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      *        for; null is the engine's session id
      * @param string|null $slotRoot where the seat files live; null is the
      *        system temp dir (a test seam)
+     * @param \SugarCraft\Crush\Agents\WorktreeManager|null $worktreeManager
+     *        where an `isolation: worktree` run gets its git worktree (roadmap
+     *        4.9, {@see withWorktreeManager()}); null refuses such a run
      */
     public function __construct(
         private ?AgentManager $agentManager = null,
@@ -302,6 +305,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         private ?string $parentAgentId = null,
         private ?string $delegationScope = null,
         private ?string $slotRoot = null,
+        private ?\SugarCraft\Crush\Agents\WorktreeManager $worktreeManager = null,
     ) {}
 
     /**
@@ -338,6 +342,20 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     public function withBackgroundSupervisor(\SugarCraft\Crush\Sessions\BackgroundSupervisor $supervisor, string $workingDirectory): self
     {
         return $this->mutate(['backgroundSupervisor' => $supervisor, 'backgroundDirectory' => $workingDirectory]);
+    }
+
+    /**
+     * The same tool, able to isolate a run (roadmap 4.9): an agent whose
+     * preset says `isolation: worktree` runs in a git worktree of its own,
+     * created through $manager on a branch of its own — its tools jailed to
+     * that tree, its Bash refused paths outside it, its environment and hook
+     * root naming it ({@see EngineBackend::withWorktreeRoot()}). On the way
+     * out a tree that holds no work is removed with its branch; one that does
+     * is kept, and the report names where.
+     */
+    public function withWorktreeManager(?\SugarCraft\Crush\Agents\WorktreeManager $manager): self
+    {
+        return $this->mutate(['worktreeManager' => $manager]);
     }
 
     /** What a background run is spawned through, or null when none is bound. */
@@ -1000,6 +1018,24 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             }
         }
 
+        // Roadmap 4.9: an `isolation: worktree` agent works in a git worktree
+        // of its own — a resumed run in the one it kept — with every tool it
+        // was granted re-jailed there and Bash refused paths outside it. A
+        // run that cannot be isolated is REFUSED rather than run in the
+        // session's checkout: the preset asked for isolation, and running
+        // without it is the one outcome it ruled out.
+        $worktree = null;
+        if ($subAgent->isolation === \SugarCraft\Crush\Agents\Isolation::Worktree) {
+            [$worktree, $why] = $this->enterWorktree($subAgent, $suspension['worktree'] ?? null);
+            if ($worktree === null) {
+                $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $why);
+
+                return $this->refusal($toolCallId, $why);
+            }
+            $engine = $engine->withTools($tools)->withWorktreeRoot($worktree['path']);
+            $tools = $engine->tools();
+        }
+
         // The roster above is narrowed by tool NAME only, so `Bash(git *)`
         // put all of Bash on the wire. Every call the run makes is held to the
         // preset's whole declaration — argument halves and argument-scoped
@@ -1548,7 +1584,8 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             $why = $cancelled
                 ? sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc')
                 : sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
-            $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger);
+            [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
+            $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger, $keptWorktree);
             $finish(
                 $cancelled ? SubAgent::STATUS_STOPPED : SubAgent::STATUS_FAILED,
                 '',
@@ -1563,7 +1600,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
             return $this->refusal(
                 $toolCallId,
-                $why . '. ' . $resume . $failureTail($failure->transcript) . ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer),
+                $why . '. ' . $resume . $failureTail($failure->transcript) . ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote,
                 self::elapsedMs($startedAt),
                 $spent,
             );
@@ -1576,14 +1613,17 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         self::bill($subAgent, $spent, $baseTokens, $baseCost);
         // Saved before the finished frame goes out, so the frame can name
         // the id a later Task call resumes it by (every path below saves).
+        // Roadmap 4.9: the run's worktree, removed when it holds no work and
+        // kept — and named, below and in the suspension — when it does.
+        [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
         // Roadmap 3.B-5: with the ledger the run ended on — its refs fixed
         // over the transcript saved beside it — so a resume keeps its view.
-        $resume = $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger === null ? null : ($reply->contextLedger ?? $runLedger));
+        $resume = $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger === null ? null : ($reply->contextLedger ?? $runLedger), $keptWorktree);
         // P-D1: what the user told the run while it worked, on every return
         // below as on the failure path — the harness's note, so it goes
         // outside the report's fence.
         $inboxTrailer = $turnInbox?->trailer() ?? '';
-        $inboxNote = $inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer;
+        $inboxNote = ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote;
 
         if ($capStop !== null) {
             $why = sprintf(
@@ -1670,6 +1710,92 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             usage: $spent,
         );
         // @endregion finish
+    }
+
+    /**
+     * The git worktree an `isolation: worktree` run works in (roadmap 4.9):
+     * the one its suspension kept when it is still there, else a new one for
+     * this run. Answers it, or null and why the run cannot be isolated.
+     *
+     * @return array{0: array{id: string, path: string}|null, 1: string}
+     */
+    private function enterWorktree(SubAgent $subAgent, mixed $kept): array
+    {
+        $manager = $this->worktreeManager;
+        if ($manager === null) {
+            return [null, sprintf(
+                'agent "%s" declares `isolation: worktree`, but this session has no worktree manager, so the run'
+                . ' cannot be isolated and was not started; remove `isolation:` from the preset, or delegate from'
+                . ' a session launched in a git checkout',
+                $subAgent->agent->name,
+            )];
+        }
+        if (\is_string($kept) && $kept !== '') {
+            try {
+                $path = $manager->getWorktreePath($kept);
+                if (is_dir($path)) {
+                    return [['id' => $kept, 'path' => $path], ''];
+                }
+            } catch (\RuntimeException) {
+                // Swept or removed since: the resumed run starts a fresh tree.
+            }
+        }
+
+        try {
+            // A cheap, rate-limited sweep of stale trees that hold no work.
+            $manager->sweepIfDue();
+        } catch (\RuntimeException) {
+            // A sweep that failed has already said so; it never blocks a run.
+        }
+        try {
+            return [['id' => $subAgent->id, 'path' => $manager->createWorktree($subAgent->id)], ''];
+        } catch (\RuntimeException|\InvalidArgumentException $failure) {
+            return [null, sprintf(
+                'agent "%s" declares `isolation: worktree`, but its worktree could not be created (%s), so the'
+                . ' run was not started',
+                $subAgent->agent->name,
+                $failure->getMessage(),
+            )];
+        }
+    }
+
+    /**
+     * The end of an isolated run (roadmap 4.9): its worktree is removed with
+     * its branch when it holds no work, and kept otherwise — never deleted
+     * with changes in it. Answers the note the result carries (empty when
+     * nothing remains) and the id of a kept tree, for the suspension.
+     *
+     * @param array{id: string, path: string}|null $worktree
+     * @return array{0: string, 1: ?string}
+     */
+    private function leaveWorktree(?array $worktree, string $agentName): array
+    {
+        $manager = $this->worktreeManager;
+        if ($worktree === null || $manager === null) {
+            return ['', null];
+        }
+        try {
+            if ($manager->releaseIfUnused($worktree['id'])) {
+                return ['', null];
+            }
+        } catch (\RuntimeException $failure) {
+            return [sprintf(
+                "\n\n[sub-agent \"%s\" worked in its own git worktree at %s, which made no changes but could not be"
+                . ' removed: %s]',
+                $agentName,
+                $worktree['path'],
+                $failure->getMessage(),
+            ), $worktree['id']];
+        }
+        $branch = $manager->branchOf($worktree['id']);
+
+        return [sprintf(
+            "\n\n[sub-agent \"%s\" worked in its own git worktree; its changes were kept there, not in this checkout:"
+            . ' %s%s. Review them and merge what you want (a resume continues in the same tree).]',
+            $agentName,
+            $worktree['path'],
+            $branch === null ? '' : ' on branch ' . $branch,
+        ), $worktree['id']];
     }
 
     /**
@@ -1818,12 +1944,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * @param string|null $transcriptLog the run's log, which a resume keeps writing (P-C1)
      * @param \SugarCraft\Crush\Context\Pruning\ContextLedger|null $ledger the run's ephemeral
      *        ledger (roadmap 3.B-5), which a resume continues on; null when it kept none
+     * @param string|null $worktree the id of the worktree the run kept (roadmap 4.9),
+     *        which a resume works in again; null when it kept none
      */
-    private function suspend(string $agentName, array $transcript, int $resumes, ?string $id, ?string &$savedId = null, ?string $transcriptLog = null, ?\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger = null): string
+    private function suspend(string $agentName, array $transcript, int $resumes, ?string $id, ?string &$savedId = null, ?string $transcriptLog = null, ?\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger = null, ?string $worktree = null): string
     {
         $savedId = null;
         try {
-            $id = $this->suspendedStore()->save($agentName, $transcript, $resumes, $id, $transcriptLog, $ledger);
+            $id = $this->suspendedStore()->save($agentName, $transcript, $resumes, $id, $transcriptLog, $ledger, $worktree);
         } catch (\RuntimeException $unsaved) {
             return 'It CANNOT be resumed (the run could not be saved: ' . $unsaved->getMessage() . '); start a new Task instead';
         }

@@ -1224,8 +1224,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * place gave the parent's chain the sub-agent's root as a deny boundary
      * too — a `with*()` that mutated its receiver.
      *
-     * Not wired in production yet: it waits on worktree isolation (crush_report
-     * Part II #23), which is what will give a sub-agent a root of its own.
+     * THE ROOT (roadmap 4.9). The backend's {@see withRoot()} root becomes the
+     * worktree too, so what the run is TOLD matches where it works: the
+     * environment block's directory and git fields, the instruction files,
+     * and every hook context's `cwd` name the worktree rather than the main
+     * checkout the parent session runs in.
+     *
+     * Wired by {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} for an
+     * agent whose preset says `isolation: worktree` (crush_report Part II
+     * #23), on a tree {@see \SugarCraft\Crush\Agents\WorktreeManager}
+     * created for that run.
      *
      * @see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook
      */
@@ -1233,6 +1241,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     {
         $jail = new AgentPathJail($worktreeRoot, new PathJailConfig());
         $changes = [
+            'root' => $worktreeRoot,
             'tools' => array_map(
                 static fn(mixed $tool): mixed => $tool instanceof AcceptsWorktreeJail
                     ? $tool->withWorktreeJail($jail)

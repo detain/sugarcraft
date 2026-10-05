@@ -73,6 +73,16 @@ final class SubAgent
     public array $recentCalls = [];
 
     /**
+     * Where the run works (roadmap 4.9): {@see Isolation::Worktree} gives it
+     * a git worktree of its own ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}).
+     * The constructor's argument when one is given, else the agent's preset
+     * `isolation:`, else {@see Isolation::None} — so a roster row built from
+     * an `isolation: worktree` preset is isolated wherever it is turned into
+     * a run, without each construction site having to copy the field over.
+     */
+    public readonly Isolation $isolation;
+
+    /**
      * @param int $timeout    Wall-clock bound in seconds, enforced by
      *                        {@see AgentWorkerPool} on its forking path: the
      *                        forked worker and every process it started are
@@ -99,11 +109,12 @@ final class SubAgent
         public readonly \DateTimeImmutable $createdAt = new \DateTimeImmutable(),
         public readonly int $timeout = 300,
         public readonly int $maxRetries = 0,
-        public readonly Isolation $isolation = Isolation::None,
+        ?Isolation $isolation = null,
         public readonly ?PermissionGate $permissionGate = null,
         public readonly ?string $teamId = null,
         public readonly ?string $teammateId = null,
     ) {
+        $this->isolation = $isolation ?? $agent->isolation ?? Isolation::None;
         $this->status = self::STATUS_PENDING;
         $this->output = '';
     }

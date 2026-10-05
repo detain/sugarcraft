@@ -18,9 +18,10 @@ use SugarCraft\Crush\Tests\Support\DiscardsErrorLogTrait;
  * {@see RuntimeNoticeSink} seam: four in
  * {@see \SugarCraft\Crush\Agents\WorktreeManager} and two in
  * {@see SglangProvider::decodeToolArguments()}. It then established
- * `WorktreeManager`'s dormancy at length — see
- * `StderrEmitterCensusTest::testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt()`
- * — and applied no symmetric check to the other class. Two of the six moves
+ * `WorktreeManager`'s dormancy at length — the guard that pinned it is now
+ * `StderrEmitterCensusTest::testTheWorktreeManagerSeamSitesAreLiveWhereTheTwoBuildersConstructIt()`,
+ * since roadmap 4.9 wired the class — and applied no symmetric check to the
+ * other class. Two of the six moves
  * therefore rested on an unstated assumption. This file states it, in the
  * direction the measurement actually points: `SglangProvider` is LIVE.
  *

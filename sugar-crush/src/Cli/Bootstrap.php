@@ -1065,8 +1065,12 @@ final class Bootstrap
      *    {@see \SugarCraft\Crush\Agents\WorktreeConfig::readConfig()} became
      *    repository-chosen when {@see \SugarCraft\Crush\Agents\WorktreeManager}
      *    started passing the repository under management as its config
-     *    directory. DORMANT: nothing in `src/` constructs a `WorktreeManager`,
-     *    so a refusal recorded there would have no reader;
+     *    directory, and {@see tools()} builds one per launch since roadmap
+     *    4.9 — but it is read on that build, before any collector this map
+     *    feeds exists, and its one repository-chosen path
+     *    (`worktreeIncludeFile`) is gated where it is used
+     *    ({@see \SugarCraft\Crush\Agents\WorktreeManager::resolveWorktreeInclude()}),
+     *    so a refusal recorded here would have no reader;
      *  - `.sugar-crush/settings.json` and
      *  - `.sugar-crush/settings.local.json`
      *    ({@see \SugarCraft\Crush\Config\LayeredSettings}) are the opposite of
@@ -8456,9 +8460,18 @@ final class Bootstrap
         // and adopted by the host's own supervisor on its next poll
         // (BackgroundSupervisor::adoptHandedOff()) — whichever instance that
         // is. The session works in the same tree the tools are jailed to.
+        //
+        // Roadmap 4.9: and able to isolate a run. An agent whose preset says
+        // `isolation: worktree` gets a git worktree of this launch's root,
+        // under `<root>/.sugar-crush/worktrees/` (or SUGARCRUSH_WORKTREES_DIR),
+        // through ONE manager per launch — the registry it keeps is shared
+        // on disk, so the forked turn children that create trees and the
+        // parent that sweeps them agree on which exist.
         if ($taskManager !== null) {
+            $taskRoot = $root ?? (getcwd() ?: '.');
             $tools[] = (new TaskTool($taskManager, $taskPool))
-                ->withBackgroundSupervisor(new BackgroundSupervisor(), $root ?? (getcwd() ?: '.'));
+                ->withBackgroundSupervisor(new BackgroundSupervisor(), $taskRoot)
+                ->withWorktreeManager(\SugarCraft\Crush\Agents\WorktreeManager::new($taskRoot));
         }
 
         return $tools;

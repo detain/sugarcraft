@@ -902,7 +902,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      * X-37a: a key that a file which LOADED declares and nothing acts on is
      * named at launch — one aggregated row per format, on both channels — and
      * the file is never refused for it. One fixture per format: a preset with
-     * an inert `isolation:` and a misspelt key, a skill with
+     * an inert `color:` and a misspelt key, a skill with
      * `allowed-tools` and `context: fork`, a command with `subtask: true`,
      * and a rule whose `enable: false` silently leaves it enabled.
      */
@@ -910,7 +910,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
     {
         $sc = $this->projectRoot . '/.sugar-crush';
         mkdir($sc . '/agents', 0o700, true);
-        file_put_contents($sc . '/agents/rev.md', "---\ndescription: Reviews.\nisolation: worktree\npermisionMode: plan\n---\nReview.\n");
+        file_put_contents($sc . '/agents/rev.md', "---\ndescription: Reviews.\ncolor: red\npermisionMode: plan\n---\nReview.\n");
         mkdir($sc . '/skills/fork-me', 0o700, true);
         file_put_contents($sc . '/skills/fork-me/SKILL.md', "---\ndescription: Forks.\nallowed-tools: Read\ncontext: fork\n---\nbody\n");
         mkdir($sc . '/commands', 0o700, true);
@@ -928,7 +928,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         ));
         self::assertCount(4, $rows, implode("\n", $notices));
         self::assertContains(
-            '1 agent preset declares frontmatter sugar-crush ignores: `isolation: worktree` is not acted on (rev); '
+            '1 agent preset declares frontmatter sugar-crush ignores: `color` is not acted on (rev); '
             . '`permisionMode` is not an agent preset field (did you mean `permissionMode`?) (rev)',
             $rows,
         );

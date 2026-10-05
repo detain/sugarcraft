@@ -18,8 +18,8 @@ use SugarCraft\Crush\Tui\Components\PaneLabel;
  *  - an INERT key: parsed, typed, carried on the value object, and consumed by
  *    nothing on a live path. `context: fork` on a skill was documented in the
  *    README as running the skill in an isolated sub-agent; no production code
- *    dispatches it. A preset's `isolation:` rides onto the roster row and
- *    `Task` still runs in the session's checkout.
+ *    dispatches it. A preset's `color:` rides onto the roster row and no
+ *    surface renders it.
  *  - an UNKNOWN key: a typo (`permisionMode`, `keyword`, `enable: false`) or
  *    another tool's field. The typo is the dangerous one — a rule written
  *    `enable: false` stays enabled — and nothing said so.
@@ -74,10 +74,10 @@ final class FrontmatterKeyAudit
      * exactly what happens.
      *
      * - agent preset: `Task` honours `model`, `effort` and (narrow-only)
-     *   `permissionMode` since roadmap 4.1, and `background` since 4.3-2
-     *   ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}); `memory`,
-     *   `isolation` and `color` are carried onto the roster row and read by
-     *   nothing.
+     *   `permissionMode` since roadmap 4.1, `background` since 4.3-2, and
+     *   `isolation` since 4.9 (a worktree run, `/bg` too)
+     *   ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}); `memory` and
+     *   `color` are carried onto the roster row and read by nothing.
      * - skill: no tool-scoping code reads `allowed-tools`/`disallowed-tools`;
      *   `model` is read only by `App::dispatchSkill()`, which has no
      *   production caller; `effort` is read by nothing; `context: fork` has no
@@ -90,7 +90,6 @@ final class FrontmatterKeyAudit
     public const INERT = [
         self::AGENT => [
             'memory' => [],
-            'isolation' => ['none'],
             'color' => [],
         ],
         self::SKILL => [

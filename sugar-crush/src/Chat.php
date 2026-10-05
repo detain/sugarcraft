@@ -16964,16 +16964,13 @@ final class Chat implements Model
         // turn means the row appears while the turn is still running, which is
         // the entire point of a seam that is not launch-only.
         //
-        // `WorktreeManager`'S FOUR (E192) ARE ON THE SEAM AND ON NO PATH, and
-        // this list named them among the four above as though they were. WHAT
-        // IS TRUE NOW, checked rather than assumed: nothing in `src/` or `bin/`
-        // constructs a `WorktreeManager` — only its own doc-comments mention
-        // the constructor and the factory — and `Team::claimTask()`, the one
-        // method that takes one, has no caller in `src/` either. The class is
-        // dormant, its own doc-block now says so, and the census pins it. They
-        // are named here anyway rather than dropped, because when a first
-        // caller does arrive it will be from tool dispatch, i.e. inside a turn,
-        // and this clause is the one that will cover it.
+        // `WorktreeManager`'S FIVE (E192, E259) ARE ON A LIVE PATH SINCE
+        // ROADMAP 4.9, and from exactly where this clause predicted: tool
+        // dispatch. `Bootstrap::tools()` builds one per launch for `Task`,
+        // which creates, releases and sweeps an `isolation: worktree` run's
+        // tree inside the turn — on the interactive path, inside the forked
+        // child — so its notices are in-turn rows this clause covers. (`/bg`'s
+        // off-turn spawn, `BackgroundCommand::spawnThunk()`, builds the other.)
         //
         // AND `hasPending()` ALONE IS NOT MERELY WEAKER, IT CAN NEVER FIRE ON
         // ITS OWN (E193). `Program` consults this method only when it

@@ -58,6 +58,15 @@ final class FrontmatterKeyAuditTest extends TestCase
         self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, ['subtask' => false]));
     }
 
+    public function testIsolationIsLiveSoAWorktreeRequestIsNotReported(): void
+    {
+        // Roadmap 4.9: `Task` and `/bg` honour `isolation: worktree`, so the
+        // key left the inert map and no value of it is "ignored" any more.
+        self::assertArrayNotHasKey('isolation', FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::AGENT]);
+        self::assertContains('isolation', FrontmatterKeyAudit::KNOWN[FrontmatterKeyAudit::AGENT]);
+        self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::AGENT, ['isolation' => 'worktree']));
+    }
+
     public function testAValueSensitiveInertKeyShowsTheValue(): void
     {
         self::assertSame(

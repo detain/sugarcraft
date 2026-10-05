@@ -29,11 +29,15 @@ final class BackgroundSessionSpawnedMsg implements Msg
      * @param string      $name      The session name that was requested; still meaningful on failure.
      * @param string|null $sessionId Id of the spawned session, or null when the spawn failed.
      * @param string|null $error     Failure reason, or null on success.
+     * @param string|null $worktree  The git worktree the session works in when
+     *                               its agent says `isolation: worktree` (roadmap
+     *                               4.9), or null for the session's own checkout.
      */
     public function __construct(
         public readonly string $command,
         public readonly string $name,
         public readonly ?string $sessionId = null,
         public readonly ?string $error = null,
+        public readonly ?string $worktree = null,
     ) {}
 }

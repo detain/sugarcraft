@@ -1271,9 +1271,12 @@ final class StderrEmitterCensusTest extends TestCase
 
     /**
      * {@see \SugarCraft\Crush\Agents\WorktreeManager} carries FIVE channel-6
-     * sites and NOTHING IN `src/` OR `bin/` CONSTRUCTS IT, so all five are
-     * dormant — and this test is what makes that a pinned fact rather than a
-     * sentence three doc-blocks happen to agree on.
+     * sites, and since roadmap 4.9 exactly TWO files construct it —
+     * `Bootstrap::tools()` (for `Task`'s isolated runs) and
+     * `BackgroundCommand::spawnThunk()` (for a `/bg` worktree session) — so all
+     * five are live. Until then NOTHING built it and this test pinned that
+     * dormancy; the history below is why the pin exists at all, and it now pins
+     * the reachability the same way.
      *
      * WHY A DORMANCY GUARD AND NOT A DELETION. "DORMANT IS NOT UNGATED" is this
      * package's own doctrine — {@see \SugarCraft\Crush\Agents\WorktreeConfig}
@@ -1286,10 +1289,10 @@ final class StderrEmitterCensusTest extends TestCase
      * such sentence is a red rather than a plausible paragraph.
      *
      * WHAT IT ASSERTS, in two halves that fail differently. The roster half
-     * pins the five sites; the construction half pins the zero. A file that
-     * starts building one reds here with a message telling the reader which
-     * paragraphs are now out of date, which is the moment to REWRITE them — not
-     * to delete this test.
+     * pins the five sites; the construction half pins the two builders. A
+     * file that starts (or stops) building one reds here with a message
+     * telling the reader which paragraphs may now be out of date, which is the
+     * moment to REWRITE them — not to delete this test.
      *
      * WHAT THE SCANNER CANNOT SEE, named rather than left to be found:
      * `new $class` with the name in a variable. MEASURED on this tree, PHP
@@ -1333,7 +1336,7 @@ final class StderrEmitterCensusTest extends TestCase
      * factory line E258's second arm added). The gap is the whole reason this
      * scanner discriminates by token shape instead of counting `new`.
      */
-    public function testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt(): void
+    public function testTheWorktreeManagerSeamSitesAreLiveWhereTheTwoBuildersConstructIt(): void
     {
         self::assertSame(
             5,
@@ -1350,15 +1353,17 @@ final class StderrEmitterCensusTest extends TestCase
         }
         ksort($built);
 
+        // Roadmap 4.9 WIRED IT, which is the day this guard was written for:
+        // the pin moved from "nothing builds it" to the two builders, and the
+        // four doc-blocks that argued dormancy (WorktreeManager's, Bootstrap's,
+        // WorktreeConfig's, Chat::subscriptions()'s) were rewritten with it.
         self::assertSame(
-            [],
+            ['src/Cli/Bootstrap.php' => 1, 'src/Host/Commands/BackgroundCommand.php' => 1],
             $built,
-            'something in src/ or bin/ now constructs — or statically calls — a WorktreeManager, so its '
-                . 'five seam sites are live. '
-                . 'That is a good change and this is not a request to revert it — but three doc-blocks say '
-                . 'the class is dormant (WorktreeManager\'s own, Bootstrap\'s, WorktreeConfig\'s) and '
-                . 'Chat::subscriptions() says its notices are NOT among the in-turn emitters. Rewrite those '
-                . 'four, then update this test to pin the new reachability instead of the old dormancy.',
+            'the set of files that construct — or statically call — a WorktreeManager moved. Its five '
+                . 'seam sites fire wherever it is built: re-read WorktreeManager\'s class doc-block (which '
+                . 'names the builders) and Chat::subscriptions()\'s in-turn clause, rewrite whichever no '
+                . 'longer holds, then re-pin the set here.',
         );
 
         // KNOWN-POSITIVE THROUGH THE SAME SCANNER IN THE SAME TEST (rule 15).
@@ -3553,7 +3558,7 @@ final class StderrEmitterCensusTest extends TestCase
      * `bin/` today (MEASURED, PHP 8.3.6), so the arm is a tripwire and not a
      * live path. `new $variable` it can neither see nor detect; that hole is
      * named and measured in {@see
-     * testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt()}.
+     * testTheWorktreeManagerSeamSitesAreLiveWhereTheTwoBuildersConstructIt()}.
      */
     private static function constructionSites(string $class, string $source): int
     {

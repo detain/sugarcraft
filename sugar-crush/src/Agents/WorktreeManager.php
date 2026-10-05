@@ -8,6 +8,7 @@ use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Support\TimedFileLock;
+use SugarCraft\Crush\Workspace\GitRunner;
 
 /**
  * Manages creation, deletion, and listing of git worktrees per agent.
@@ -73,49 +74,49 @@ use SugarCraft\Crush\Support\TimedFileLock;
  *    it belongs on the transcript and not only inside a returned count.
  *
  * WHY THAT IS WORTH TRANSCRIPT TOKENS, which is the objection the routing rule
- * exists to answer — and the first thing this paragraph has to say is that
- * NOTHING IN `src/` OR `bin/` CONSTRUCTS THIS CLASS, so none of the five sites
- * above fires on any path today.
+ * exists to answer: these five now FIRE (roadmap 4.9). The class was dormant —
+ * nothing in `src/` or `bin/` constructed it — until isolated runs wired it:
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} builds one per launch for
+ * `Task`, which creates an `isolation: worktree` run's tree, releases it when
+ * the run ends and sweeps stale ones, and
+ * {@see \SugarCraft\Crush\Host\Commands\BackgroundCommand::spawnThunk()}
+ * builds one for a `/bg` session run as such an agent.
  *
- * WHAT THIS PARAGRAPH SAID: "These fire while the alternate screen is up, so
- * today they land as unprefixed lines on a frame the renderer believes it owns
- * — visible as corruption, or not at all."
+ * WHAT THIS PARAGRAPH ONCE SAID: "These fire while the alternate screen is up,
+ * so today they land as unprefixed lines on a frame the renderer believes it
+ * owns" — written while nothing built the class, so it described a future. It
+ * is the present now, and it is the reason the routing was chosen early: on
+ * the seam they reach the transcript as rows, not as stray bytes on the frame.
+ * `Task` calls these methods inside the turn (on the interactive path, in the
+ * forked child), which is the in-turn case {@see \SugarCraft\Crush\Chat}'s
+ * subscription clause covers; `/bg`'s spawn runs off-turn in the parent.
  *
- * WHAT IS TRUE NOW, checked rather than asserted: neither `new WorktreeManager`
- * nor `WorktreeManager::new(` occurs anywhere in `src/` or `bin/` outside this
- * file's own doc-comments, and {@see Team::claimTask()} — the one method that
- * takes a `WorktreeManager` — has no caller in `src/` either. Only tests build
- * one. So the sentence above describes a FUTURE and not a present, and it was
- * written as a present. Two other files in this package already said as much
- * and this one did not read them: {@see \SugarCraft\Crush\Cli\Bootstrap}'s
- * "DORMANT: nothing in `src/` constructs a `WorktreeManager`", and
- * {@see WorktreeConfig}'s "DORMANT IS NOT UNGATED". The doc-block on the
- * `$config` property below says it too — cited by the symbol and not by a line
- * distance, because the distance was written as "thirty lines below" and is
- * nearer fifty.
+ * WHY THE ROUTING EARNS ITS PLACE. The routing rule answers YES for all five
+ * sites on their merits — each reports a thing the caller asked for and did
+ * not get. The reader who could act on these is the model as much as the
+ * user: a worktree that was not created is a step the next turn must not
+ * assume happened.
  *
- * WHY THE ROUTING STILL EARNS ITS PLACE, which is a different question from
- * whether it fires. "DORMANT IS NOT UNGATED" is this package's own doctrine
- * and {@see WorktreeConfig} is the file it was written against: a dormant
- * emitter's channel is the channel its FIRST caller inherits, and choosing it
- * now costs one commit while changing it after that caller exists costs a
- * reader who has already learned the wrong one. The routing rule answers YES
- * for all five sites on their merits — each reports a thing the caller asked
- * for and did not get — and that answer does not depend on when the first
- * caller arrives. What DOES depend on it is the alternate-screen harm, which
- * is why it is now stated conditionally. The reader who could act on these is
- * the model as much as the user: a worktree that was not created is a step the
- * next turn must not assume happened, on the day a next turn can reach one.
- *
- * THE DORMANCY IS PINNED RATHER THAN MERELY WRITTEN DOWN, which is the other
- * half of that doctrine — see
+ * THE REACHABILITY IS PINNED, as the dormancy was —
  * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}'s
- * construction-site guard. It reds the day something in `src/` builds one, at
- * which point the paragraph above becomes true and is to be rewritten to say
- * so rather than the guard being deleted.
+ * construction-site guard names the two files that build one, so a third
+ * (or a lost one) is a red that sends the reader back to this paragraph.
+ *
+ * GIT RUNS THROUGH {@see GitRunner} (roadmap 4.9), the package's bounded and
+ * accounted spawn: the inherited `GIT_DIR` family is scrubbed, the
+ * repository's own hooks do not run on a harness-made checkout, and every call
+ * has a deadline. The REGISTRY is merged under its lock on every write
+ * ({@see saveRegistry()}), because parallel `Task` members create and remove
+ * trees from forked children at once.
  */
 final class WorktreeManager
 {
+    /**
+     * The bound on one `git worktree add`/`remove`: a checkout of a large
+     * tree is far slower than GitRunner's plumbing default.
+     */
+    public const GIT_ADD_TIMEOUT_SECONDS = 120.0;
+
     /** @var array<string, array{branch: string, createdAt: string}> */
     private array $registry = [];
 
@@ -137,9 +138,11 @@ final class WorktreeManager
      * MEASURED on this host, PHP 8.3, against the unmodified class. Which means
      * the entire default-configuration branch — `new WorktreeManager()`,
      * `WorktreeManager::new($repoRoot)`, the documented factory — was not a
-     * wrong config, it was an uncatchable `Error`. Nothing in `src/` constructs
-     * one (the class is dormant) and every test passed an explicit
-     * {@see WorktreeConfig}, so no suite ever entered the branch. Resolving the
+     * wrong config, it was an uncatchable `Error`. Nothing in `src/` constructed
+     * one then (the class was dormant) and every test passed an explicit
+     * {@see WorktreeConfig}, so no suite ever entered the branch — the branch
+     * the launch's own `WorktreeManager::new($root)` takes since roadmap 4.9.
+     * Resolving the
      * config into a declared property before it is ever written once makes the
      * branch reachable, which is also what makes the `configDir` argument below
      * mean anything at all.
@@ -242,6 +245,9 @@ final class WorktreeManager
             );
         }
 
+        // Re-read first: another process (a parallel Task member, a second
+        // window) may have registered this id since this instance loaded.
+        $this->loadRegistry();
         if ($this->worktreeExists($agentId)) {
             throw new \RuntimeException(
                 sprintf('Worktree for agent "%s" already exists.', $agentId),
@@ -251,25 +257,29 @@ final class WorktreeManager
         $worktreePath = $this->expandedBasePath . '/' . $agentId;
         $branch ??= 'agent-' . $agentId . '-' . time();
 
-        // Ensure parent directory exists
+        // Ensure parent directory exists — and is ignored. The default base
+        // sits INSIDE the repository it serves (`.sugar-crush/worktrees/`),
+        // and a worktree there would otherwise show in the main checkout's
+        // `git status` as an untracked nested repository, one `git add -A`
+        // away from being committed as an embedded repo (roadmap 4.9).
         if (!is_dir($this->expandedBasePath)) {
             mkdir($this->expandedBasePath, 0755, true);
         }
+        $ignore = $this->expandedBasePath . '/.gitignore';
+        if (!file_exists($ignore)) {
+            @file_put_contents($ignore, "*\n");
+        }
 
-        // Create the worktree via git - use -b to create and checkout the new branch atomically
-        $escapedPath = escapeshellarg($worktreePath);
-        $escapedBranch = escapeshellarg($branch);
-        $repoRootArg = $this->repoRoot !== '' ? '-C ' . escapeshellarg($this->repoRoot) . ' ' : '';
+        // Create the worktree via git - use -b to create and checkout the new
+        // branch atomically. Through GitRunner, the package's bounded spawn:
+        // the inherited GIT_DIR family is scrubbed, the repository's hooks do
+        // not run, and the child is accounted for (roadmap 4.9).
+        $result = $this->git($this->repoRoot)->withTimeout(self::GIT_ADD_TIMEOUT_SECONDS)->run('worktree', 'add', '-b', $branch, $worktreePath);
+        $exitCode = $result['exitCode'];
+        $outputStr = trim($result['stdout'] . "\n" . $result['stderr']);
 
-        $cmd = "git {$repoRootArg} worktree add -b {$escapedBranch} {$escapedPath} 2>&1";
-        $output = [];
-        $exitCode = 0;
-        exec($cmd, $output, $exitCode);
-        $outputStr = trim(implode("\n", $output));
-
-        // Git writes worktree path to stdout on success; exit code 0 + dir exists = success.
-        // Any exit code != 0 or output containing "fatal" indicates failure.
-        if ($exitCode !== 0 || str_contains($outputStr, 'fatal')) {
+        // Exit code 0 + dir exists = success; anything else is a failure.
+        if (!$result['ok'] || $exitCode !== 0 || str_contains($outputStr, 'fatal')) {
             RuntimeNoticeSink::warn("WorktreeManager: git worktree add failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
             throw new \RuntimeException(
                 sprintf('Failed to create worktree for agent "%s": %s', $agentId, $outputStr ?: 'unknown error'),
@@ -283,13 +293,20 @@ final class WorktreeManager
             );
         }
 
-        // Register the worktree
-        $this->registry[$agentId] = [
+        // Register the worktree, with the commit it started from — what
+        // hasWork() compares the branch tip with.
+        $base = $this->git($worktreePath)->run('rev-parse', 'HEAD');
+        $entry = [
             'branch' => $branch,
             'createdAt' => (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM),
             'named' => false,
+            'base' => $base['ok'] ? trim($base['stdout']) : '',
         ];
-        $this->saveRegistry();
+        $this->saveRegistry(static function (array $registry) use ($agentId, $entry): array {
+            $registry[$agentId] = $entry;
+
+            return $registry;
+        });
 
         // Copy .worktreeinclude-listed files (e.g. .env, composer auth) into
         // the fresh worktree — previously only reachable via manual reflection.
@@ -317,6 +334,7 @@ final class WorktreeManager
             throw new \InvalidArgumentException('Agent ID must not be empty.');
         }
 
+        $this->loadRegistry();
         if (!$this->worktreeExists($agentId)) {
             throw new \RuntimeException(
                 sprintf('Worktree for agent "%s" does not exist.', $agentId),
@@ -325,26 +343,14 @@ final class WorktreeManager
 
         $worktreePath = $this->expandedBasePath . '/' . $agentId;
 
-        // Remove via git first
-        $escapedPath = escapeshellarg($worktreePath);
-        if ($this->repoRoot !== '') {
-            $cmd = sprintf(
-                'git -C %s worktree remove %s 2>&1',
-                escapeshellarg($this->repoRoot),
-                $escapedPath,
-            );
-        } else {
-            $cmd = "git worktree remove {$escapedPath} 2>&1";
-        }
-
-        $output = [];
-        $exitCode = 0;
-        exec($cmd, $output, $exitCode);
-        $outputStr = trim(implode("\n", $output));
+        // Remove via git first (GitRunner, as createWorktree()).
+        $result = $this->git($this->repoRoot)->withTimeout(self::GIT_ADD_TIMEOUT_SECONDS)->run('worktree', 'remove', $worktreePath);
+        $exitCode = $result['exitCode'];
+        $outputStr = trim($result['stdout'] . "\n" . $result['stderr']);
 
         // Git worktree remove returns exit code 0 on success, but may print to stderr.
         // Any exit code != 0 or output containing "fatal" indicates failure.
-        if ($exitCode !== 0 || str_contains($outputStr, 'fatal')) {
+        if (!$result['ok'] || $exitCode !== 0 || str_contains($outputStr, 'fatal')) {
             RuntimeNoticeSink::warn("WorktreeManager: git worktree remove failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
         }
 
@@ -380,8 +386,11 @@ final class WorktreeManager
             ));
         }
 
-        unset($this->registry[$agentId]);
-        $this->saveRegistry();
+        $this->saveRegistry(static function (array $registry) use ($agentId): array {
+            unset($registry[$agentId]);
+
+            return $registry;
+        });
     }
 
     /**
@@ -393,6 +402,9 @@ final class WorktreeManager
      */
     public function getWorktreePath(string $agentId): string
     {
+        // Fresh from disk: the tree may have been created by another process
+        // (a forked turn child) since this instance loaded the registry.
+        $this->loadRegistry();
         if (!$this->worktreeExists($agentId)) {
             throw new \RuntimeException(
                 sprintf('Worktree for agent "%s" does not exist.', $agentId),
@@ -423,8 +435,16 @@ final class WorktreeManager
 
         // Sync registry if any were removed externally
         if (count($valid) !== count($this->registry)) {
-            $this->registry = $valid;
-            $this->saveRegistry();
+            $base = $this->expandedBasePath;
+            $this->saveRegistry(static function (array $registry) use ($base): array {
+                foreach (array_keys($registry) as $agentId) {
+                    if (!is_dir($base . '/' . $agentId)) {
+                        unset($registry[$agentId]);
+                    }
+                }
+
+                return $registry;
+            });
         }
 
         return $this->registry;
@@ -942,16 +962,83 @@ final class WorktreeManager
             return false;
         }
 
-        $escapedPath = escapeshellarg($worktreePath);
-        $cmd = "git -C {$escapedPath} status --porcelain 2>&1";
+        $result = $this->git($worktreePath)->run('status', '--porcelain');
 
-        $output = [];
-        $exitCode = 0;
-        exec($cmd, $output, $exitCode);
+        // A status that could not be read counts as dirty: the callers keep a
+        // tree they cannot vouch for rather than delete work they never saw.
+        return !$result['ok'] || trim($result['stdout']) !== '';
+    }
 
-        $outputStr = trim(implode("\n", $output));
+    /**
+     * The branch the worktree for $agentId was created on, or null when this
+     * manager has no worktree for it.
+     */
+    public function branchOf(string $agentId): ?string
+    {
+        $this->loadRegistry();
+        $branch = $this->registry[$agentId]['branch'] ?? null;
 
-        return $outputStr !== '';
+        return \is_string($branch) && $branch !== '' ? $branch : null;
+    }
+
+    /**
+     * Whether the worktree for $agentId holds work that removing it would
+     * lose or strand: uncommitted changes, or commits on its branch past the
+     * one it was created from (roadmap 4.9). A worktree this manager cannot
+     * read counts as holding work.
+     */
+    public function hasWork(string $agentId): bool
+    {
+        $this->loadRegistry();
+        if (!$this->worktreeExists($agentId)) {
+            return false;
+        }
+        $path = $this->expandedBasePath . '/' . $agentId;
+        if ($this->worktreeHasUncommittedDiff($path)) {
+            return true;
+        }
+        $tip = $this->git($path)->run('rev-parse', 'HEAD');
+        $base = $this->registry[$agentId]['base'] ?? null;
+
+        // An entry written before the base was recorded cannot be compared:
+        // it holds work as far as this manager can tell.
+        return !\is_string($base) || ($tip['ok'] ? trim($tip['stdout']) : '') !== $base;
+    }
+
+    /**
+     * Remove the worktree for $agentId AND its branch when it holds no work
+     * ({@see hasWork()}) — the end of an isolated run that changed nothing —
+     * and answer true; leave both in place and answer false otherwise, so
+     * work is never deleted on the way out (roadmap 4.9). A named worktree
+     * ({@see markWorktreeNamed()}) is always left.
+     *
+     * @throws \RuntimeException when an unused worktree could not be removed
+     */
+    public function releaseIfUnused(string $agentId): bool
+    {
+        $this->loadRegistry();
+        if (!$this->worktreeExists($agentId) || ($this->registry[$agentId]['named'] ?? false) === true || $this->hasWork($agentId)) {
+            return false;
+        }
+        $branch = $this->branchOf($agentId);
+        $this->removeWorktree($agentId);
+        if ($branch !== null) {
+            // `-D`: the branch has no commit of its own (hasWork() said so),
+            // so nothing is lost; `-d` would refuse a branch never merged
+            // into the main checkout's HEAD.
+            $this->git($this->repoRoot)->run('branch', '-D', $branch);
+        }
+
+        return true;
+    }
+
+    /**
+     * A bounded git runner in $cwd — the repository root, else the process's
+     * own directory, which is what `git` without `-C` used to run in.
+     */
+    private function git(string $cwd): GitRunner
+    {
+        return GitRunner::new($cwd !== '' ? $cwd : (getcwd() ?: '.'));
     }
 
     /**
@@ -1091,8 +1178,13 @@ final class WorktreeManager
             );
         }
 
-        $this->registry[$agentId]['named'] = true;
-        $this->saveRegistry();
+        $this->saveRegistry(static function (array $registry) use ($agentId): array {
+            if (isset($registry[$agentId]) && \is_array($registry[$agentId])) {
+                $registry[$agentId]['named'] = true;
+            }
+
+            return $registry;
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -1212,6 +1304,14 @@ final class WorktreeManager
             $path = $home . '/' . substr($path, 2);
         }
 
+        // A relative base is the REPOSITORY'S, not the process's (roadmap
+        // 4.9): `git worktree add` runs in the repository root, so a path
+        // left relative to the CWD named one directory to git and another to
+        // every is_dir() here whenever the two differed (`--root <lib>`).
+        if ($this->repoRoot !== '' && !str_starts_with($path, '/')) {
+            $path = rtrim($this->repoRoot, '/') . '/' . $path;
+        }
+
         return $path;
     }
 
@@ -1297,11 +1397,22 @@ final class WorktreeManager
     }
 
     /**
-     * Persist the current worktree registry to disk.
+     * Apply $change to the registry AS IT IS ON DISK, under the exclusive
+     * lock, and keep the result as this instance's view (roadmap 4.9).
+     *
+     * READ-MODIFY-WRITE, NOT A WRITE OF THIS INSTANCE'S COPY. Every isolated
+     * delegation now creates and removes a worktree, and parallel `Task`
+     * members do it from forked children, each holding the registry as it
+     * stood when its process loaded it. Writing that copy back whole let the
+     * last writer drop every entry a contender added in between — a worktree
+     * on disk the registry no longer knew, so never cleaned up. The lock now
+     * spans the read, the change and the write.
+     *
+     * @param \Closure(array<string, mixed>): array<string, mixed> $change
      *
      * @throws \RuntimeException When the file cannot be written.
      */
-    private function saveRegistry(): void
+    private function saveRegistry(\Closure $change): void
     {
         $dir = dirname($this->registryPath);
         if (!is_dir($dir)) {
@@ -1310,10 +1421,11 @@ final class WorktreeManager
 
         // E137: the LOCK_EX flag on file_put_contents() is the same
         // unbounded blocking flock() the read side just left, and it cannot
-        // be given a deadline. 'c' (create, do not truncate) + timed LOCK_EX
-        // + ftruncate keeps the exclusivity the flag was buying — the file is
-        // only ever emptied while the lock is held.
-        $fp = fopen($this->registryPath, 'c');
+        // be given a deadline. 'c+' (create, do not truncate — and readable,
+        // for the merge) + timed LOCK_EX + ftruncate keeps the exclusivity
+        // the flag was buying — the file is only ever emptied while the lock
+        // is held.
+        $fp = fopen($this->registryPath, 'c+');
         if ($fp === false) {
             throw new \RuntimeException(
                 sprintf('Failed to write registry to "%s".', $this->registryPath),
@@ -1323,7 +1435,15 @@ final class WorktreeManager
         try {
             $this->flockTimed($fp, LOCK_EX, $this->registryPath);
 
-            if (ftruncate($fp, 0) === false || fwrite($fp, json_encode($this->registry, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)) === false) {
+            $content = stream_get_contents($fp, -1, 0);
+            try {
+                $current = \is_string($content) && $content !== '' ? json_decode($content, true, 512, JSON_THROW_ON_ERROR) : [];
+            } catch (\JsonException) {
+                $current = [];
+            }
+            $this->registry = $change(\is_array($current) ? $current : []);
+
+            if (ftruncate($fp, 0) === false || fseek($fp, 0) !== 0 || fwrite($fp, json_encode($this->registry, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)) === false) {
                 throw new \RuntimeException(
                     sprintf('Failed to write registry to "%s".', $this->registryPath),
                 );
