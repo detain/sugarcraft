@@ -46,8 +46,9 @@ Open the sign-in URL in a browser on the same machine. The code rides in the URL
 |---|---|---|
 | `--host <ip>` | `127.0.0.1` | Address to bind. `localhost` and `::1` are loopback too. Anything else is refused without `--allow-remote`. |
 | `--port <n>` | `7420` | Port to bind; `0` picks a free one. |
-| `--allow-remote` | off | Permit a non-loopback `--host`. Prints a warning box: there is no built-in TLS. |
-| `--allowed-origin <list>` | none | Comma-separated extra browser origins (`http(s)://host[:port]`) accepted beside the server's own. A repeat keeps the last value. |
+| `--allow-remote` | off | Permit a non-loopback `--host`. Prints a cleartext warning: there is no built-in TLS. On a wildcard bind (`0.0.0.0`, `::`) the server also answers to this machine's own addresses and its sign-in URLs name them ([Remote access](#remote-access)). |
+| `--allowed-host <list>` | none | Comma-separated extra host names (or `host:port`; an IPv6 address in brackets) the server answers to beside the loopback names and its own addresses — e.g. a DNS name for this machine. Repeats accumulate. |
+| `--allowed-origin <list>` | none | Comma-separated extra browser origins (`http(s)://host[:port]`) accepted beside the server's own. Repeats accumulate. |
 | `--web-root <dir>` | the installed `sugarcraft/sugar-crush-web` build | Serve the UI from `<dir>`. |
 | `--no-web` | off | API and WebSocket only. |
 | `--allow-bypass` | off | Let sessions run in `bypass-permissions` or `dont-ask`. |
@@ -70,11 +71,11 @@ the TUI's and does not apply here.
 | `SUGARCRUSH_SERVER_HOST` | `server.host` | Bind address. |
 | `SUGARCRUSH_SERVER_PORT` | `server.port` | Bind port. |
 | `SUGARCRUSH_SERVER_ALLOWED_ORIGINS` | `server.allowedOrigins` | Extra origins (a comma-separated string; the key is a JSON list). |
+| `SUGARCRUSH_SERVER_ALLOWED_HOSTS` | `server.allowedHosts` | Host names (or `host:port`) answered beside the loopback names and the server's own addresses — a reverse proxy's public name (a comma-separated string; the key is a JSON list). |
 | `SUGARCRUSH_SERVER_WEB_ROOT` | — | UI directory. |
 | `SUGARCRUSH_SERVER_TOKEN` | — | The owner token, instead of the stored one (≥ 32 characters; for containers). |
 | `SUGARCRUSH_SERVER_DIR` | — | State directory, default `~/.sugar-crush/server`. |
 | `SUGARCRUSH_SERVER_PARENT_PID` | — | The parent pid to watch, like `--parent-pid`. |
-| — | `server.allowedHosts` | Host names (or `host:port`) answered beside the loopback names — a reverse proxy's public name. |
 | — | `server.trustedProxies` | IPs or CIDRs whose `X-Forwarded-For` / `X-Forwarded-Proto` are believed. |
 | — | `server.allowBypass` | `true` is the same as `--allow-bypass`. |
 
@@ -90,8 +91,8 @@ modes. A non-loopback `server.host` still needs `--allow-remote` on each launch.
 - an operand follows the verb that is not one of `status`, `stop`, `logs`,
   `url` or `token`, a flag belongs to a different action (`serve stop
   --detach`), or a flag value is malformed (a port that is not `0`–`65535`, an
-  origin that is not `http(s)://host[:port]`, a `--parent-pid` that is not a
-  pid);
+  origin that is not `http(s)://host[:port]`, an allowed host that is not
+  `host[:port]`, a `--parent-pid` that is not a pid);
 - `--host` is not loopback and `--allow-remote` was not given;
 - the permission mode is `bypass-permissions` or `dont-ask` and neither
   `--allow-bypass` nor `server.allowBypass` permits it;
@@ -1061,11 +1062,65 @@ socket are also marked close-on-exec, so no tool process ever inherits them.
 Without FFI there is no way to do this, and the leak would be silent — hence the
 refusal.
 
+## Remote access
+
+There is no built-in TLS in v1, so there are three ways to reach the server
+from another machine, safest first.
+
+**An SSH tunnel** — nothing new listens on the network. Keep the default
+loopback bind and forward the port from the machine with the browser:
+
+```sh
+ssh -N -L 7420:127.0.0.1:7420 me@server   # then open the sign-in URL as printed
+```
+
+The printed `http://127.0.0.1:7420/#code=…` works unchanged on the far end,
+because the tunnel delivers it to the server's loopback address.
+
+**A TLS reverse proxy** — [below](#behind-a-reverse-proxy-tls). The server stays
+on loopback; the proxy's public name goes in `server.allowedHosts` (or
+`--allowed-host`).
+
+**A direct bind** — `--host 0.0.0.0 --allow-remote` (or `::`, or one interface
+address). Everything, the token, the sign-in code and the session cookie
+included, then crosses the network in **cleartext**, and the startup lines say
+so. Use it on a network you trust.
+
+```sh
+sugarcrush serve --host 0.0.0.0 --allow-remote
+```
+
+```
+sugarcrush serve: listening on http://0.0.0.0:7420 (pid 4242)
+  …
+  sign in:         http://192.0.2.10:7420/#code=3f9c…
+                   (one-time code, valid 120 s; Ctrl+C stops the server)
+
+  !! Plain HTTP on 0.0.0.0: the token, sign-in code and session cookie cross the network in cleartext — use an SSH tunnel or a TLS reverse proxy (docs/SERVER.md, "Remote access").
+```
+
+On a wildcard bind the server reads this machine's interface addresses once at
+start (loopback and link-local left out; IPv4 only on `0.0.0.0`) and answers to
+each of them, and the sign-in URL — at start and from `serve url` — names each
+one, one per line, all sharing one code. These are literal IPs of this host, so
+answering to them reopens nothing: a DNS-rebinding page reaches the port under
+its own host name, never under one of this machine's addresses. A bind to one
+interface address answers to that address. Any other name — a DNS name for
+this machine, an address added after start — is refused with `421` until it is
+allowed:
+
+```
+{"error":{"kind":"host_refused","message":"this server does not answer to host \"dev.example.com\"; start it with --allowed-host dev.example.com or add it to server.allowedHosts"}}
+```
+
+The server log names the refused host the same way. `--allowed-host` (or
+`SUGARCRUSH_SERVER_ALLOWED_HOSTS`, or `server.allowedHosts`) takes a host name,
+which matches on any port, or a `host:port`, which pins the port.
+
 ## Behind a reverse proxy (TLS)
 
-There is no built-in TLS in v1. To reach the server from another machine, keep
-it on loopback and put a TLS proxy in front of it — Caddy, nginx or
-`tailscale serve`. With nginx:
+To reach the server from another machine over TLS, keep it on loopback and put
+a TLS proxy in front of it — Caddy, nginx or `tailscale serve`. With nginx:
 
 ```nginx
 location / {

@@ -72,6 +72,7 @@ final class ServerConfig
      * @param list<string> $allowedOrigins normalised `scheme://host[:port]`
      * @param list<string> $allowedHosts   lower-cased `host` or `host:port`
      * @param list<string> $trustedProxies IPs or CIDRs whose X-Forwarded-* count
+     * @param list<string> $interfaceAddresses this machine's own IPs, for a wildcard bind ({@see InterfaceAddresses})
      */
     private function __construct(
         public readonly string $host,
@@ -91,6 +92,7 @@ final class ServerConfig
         public readonly int $maxConcurrentTurns = self::DEFAULT_MAX_CONCURRENT_TURNS,
         public readonly float $askTimeoutSeconds = self::DEFAULT_ASK_TIMEOUT_SECONDS,
         public readonly float $drainSeconds = self::DEFAULT_DRAIN_SECONDS,
+        public readonly array $interfaceAddresses = [],
     ) {
     }
 
@@ -158,8 +160,9 @@ final class ServerConfig
             $config = $config->withAllowedOrigins(self::listValue('allowed origins', $origins));
         }
 
-        if (isset($userConfig['server.allowedHosts'])) {
-            $config = $config->withAllowedHosts(self::listValue('allowed hosts', $userConfig['server.allowedHosts']));
+        $hosts = $pick('--allowed-host', 'SUGARCRUSH_SERVER_ALLOWED_HOSTS', 'server.allowedHosts');
+        if ($hosts !== null) {
+            $config = $config->withAllowedHosts(self::listValue('allowed hosts', $hosts));
         }
         if (isset($userConfig['server.trustedProxies'])) {
             $config = $config->withTrustedProxies(self::listValue('trusted proxies', $userConfig['server.trustedProxies']));
@@ -260,19 +263,44 @@ final class ServerConfig
         return $this->mutate(allowedOrigins: \array_values(\array_unique(\array_map(self::normaliseOrigin(...), $origins))));
     }
 
-    /** @param list<string> $hosts */
+    /**
+     * `host` or `host:port`, lower-cased, an IPv6 address bracketed (a bare
+     * `::1` is taken as the address, not as a port).
+     *
+     * @param list<string> $hosts
+     */
     public function withAllowedHosts(array $hosts): self
     {
         $normalised = [];
         foreach ($hosts as $host) {
             $host = \strtolower(\trim($host));
-            if ($host === '' || \preg_match('/^(\[[0-9a-f:.]+\]|[a-z0-9.-]+)(:\d{1,5})?$/', $host) !== 1) {
-                throw new ServerConfigException(\sprintf('allowed host "%s" is not a host name or host:port', $host));
+            if (\str_contains($host, ':') && !\str_starts_with($host, '[') && @\inet_pton($host) !== false) {
+                $host = '[' . $host . ']';
+            }
+            if (
+                $host === ''
+                || \preg_match('/^(\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::(\d{1,5}))?$/', $host, $m) !== 1
+                || (\str_starts_with($m[1], '[') && @\inet_pton(\substr($m[1], 1, -1)) === false)
+                || (isset($m[2]) && (int) $m[2] > 65535)
+            ) {
+                throw new ServerConfigException(\sprintf('allowed host "%s" is not a host name or host:port (an IPv6 address in brackets)', $host));
             }
             $normalised[] = $host;
         }
 
         return $this->mutate(allowedHosts: \array_values(\array_unique($normalised)));
+    }
+
+    /**
+     * This machine's own addresses ({@see InterfaceAddresses::detect()}),
+     * which a wildcard `--allow-remote` bind answers to and names in its
+     * sign-in URLs ({@see reachableHosts()}).
+     *
+     * @param list<string> $addresses
+     */
+    public function withInterfaceAddresses(array $addresses): self
+    {
+        return $this->mutate(interfaceAddresses: InterfaceAddresses::usable($addresses));
     }
 
     /** @param list<string> $proxies */
@@ -365,6 +393,43 @@ final class ServerConfig
     {
         return \in_array($this->host, self::LOOPBACK_HOSTS, true)
             || \str_starts_with($this->host, '127.');
+    }
+
+    /** Whether the bind address is every interface: `0.0.0.0` or `::`. */
+    public function isWildcard(): bool
+    {
+        $packed = @\inet_pton($this->host);
+
+        return $packed === "\0\0\0\0" || $packed === \str_repeat("\0", 16);
+    }
+
+    /**
+     * The hosts, as a URL authority spells them (no port), that a client on
+     * another machine dials this server under: the bind address, or — on a
+     * wildcard `--allow-remote` bind — each of this machine's
+     * {@see $interfaceAddresses} (IPv4 only on `0.0.0.0`), falling back to
+     * loopback when there are none. The first is the one a single URL names.
+     *
+     * @return list<string>
+     */
+    public function reachableHosts(): array
+    {
+        if (!$this->isWildcard() || !$this->allowRemote) {
+            return [$this->hostForUrl()];
+        }
+        $v4Only = \strlen((string) @\inet_pton($this->host)) === 4;
+        $hosts = [];
+        foreach ($this->interfaceAddresses as $address) {
+            if (\str_contains($address, ':')) {
+                if (!$v4Only) {
+                    $hosts[] = '[' . $address . ']';
+                }
+                continue;
+            }
+            $hosts[] = $address;
+        }
+
+        return $hosts !== [] ? $hosts : [$v4Only ? self::DEFAULT_HOST : '[::1]'];
     }
 
     /** The `tcp://` URI the listener binds, IPv6 bracketed. */

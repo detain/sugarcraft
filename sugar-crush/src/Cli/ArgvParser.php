@@ -593,6 +593,12 @@ final class ArgvParser
                         }
                         continue;
                     }
+                    if (
+                        \is_string($subcommandFlags[$name] ?? null)
+                        && \in_array($name, ParsedArgs::REPEATABLE_SUBCOMMAND_FLAGS[$subcommand] ?? [], true)
+                    ) {
+                        $value = $subcommandFlags[$name] . ',' . $value;
+                    }
                     $subcommandFlags[$name] = $value;
                     continue;
                 }

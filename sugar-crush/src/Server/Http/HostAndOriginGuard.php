@@ -14,8 +14,12 @@ use SugarCraft\Crush\Server\ServerConfig;
  *
  * - **Host — DNS rebinding.** A page at `evil.example` whose name is re-pointed
  *   at 127.0.0.1 reaches this port with `Host: evil.example`. Only the
- *   loopback names, the bind address itself (a `--allow-remote` bind) and
- *   `server.allowedHosts` are answered; anything else is 421.
+ *   loopback names, the bind address itself (a `--allow-remote` bind), this
+ *   machine's own interface IPs on a wildcard `--allow-remote` bind
+ *   ({@see ServerConfig::reachableHosts()} — literal IPs of this host, which
+ *   no rebinding page can send) and `--allowed-host` / `server.allowedHosts`
+ *   are answered; anything else is 421, naming the host and the way to
+ *   allow it.
  * - **Origin — CSWSH and CSRF.** On every upgrade and every non-GET request a
  *   present `Origin` must be this server's own origin (the validated `Host`,
  *   over http or https) or one of `server.allowedOrigins`; anything else,
@@ -41,15 +45,30 @@ final class HostAndOriginGuard
 
     private const LOOPBACK_NAMES = ['127.0.0.1', 'localhost', '[::1]'];
 
-    public function __construct(private readonly ServerConfig $config)
-    {
+    /**
+     * @param (\Closure(string): void)|null $log one line per refused host
+     */
+    public function __construct(
+        private readonly ServerConfig $config,
+        private readonly ?\Closure $log = null,
+    ) {
     }
 
     public function __invoke(ServerRequestInterface $request, callable $next): mixed
     {
         $host = self::normaliseAuthority($request->getHeaderLine('Host'));
-        if ($host === null || !$this->answersTo($host)) {
+        if ($host === null) {
             return Responses::error(421, 'host_refused', 'this server does not answer to that host name');
+        }
+        if (!$this->answersTo($host)) {
+            // The name passed normaliseAuthority()'s pattern: no quote, space
+            // or control byte can ride into the message or the log.
+            $fix = \sprintf('start it with --allowed-host %s or add it to server.allowedHosts', $host['name']);
+            if ($this->log !== null) {
+                ($this->log)(\sprintf('refused host "%s": %s', $host['name'], $fix));
+            }
+
+            return Responses::error(421, 'host_refused', \sprintf('this server does not answer to host "%s"; %s', $host['name'], $fix));
         }
 
         if (!self::isStateChanging($request)) {
@@ -107,6 +126,7 @@ final class HostAndOriginGuard
         $names = self::LOOPBACK_NAMES;
         if (!$this->config->isLoopback()) {
             $names[] = $this->config->hostForUrl();
+            \array_push($names, ...$this->config->reachableHosts());
         }
         if (\in_array($host['name'], $names, true)) {
             return true;

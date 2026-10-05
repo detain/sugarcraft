@@ -67,9 +67,10 @@ final class ServerSettings implements SettingDefinitionSet
             SettingDefinition::new('server.allowedHosts', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
+                ->withEnvVar('SUGARCRUSH_SERVER_ALLOWED_HOSTS')
                 ->withUi(UiEditability::List)
                 ->withLabel('Server allowed hosts')
-                ->withHelp('Host names (or host:port) the server answers to beside the loopback names, e.g. a reverse proxy\'s.')
+                ->withHelp('Host names (or host:port) the server answers to beside the loopback names and its own addresses, e.g. a reverse proxy\'s.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.trustedProxies', SettingType::StringList, [])

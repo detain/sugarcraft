@@ -106,7 +106,7 @@ final class Server
             return (string) $this->listener->getAddress();
         }
 
-        $guard = new HostAndOriginGuard($this->config);
+        $guard = new HostAndOriginGuard($this->config, $this->log);
         $authMiddleware = new AuthMiddleware($this->auth, $this->config);
         $api = new ApiController($this->auth, $this->config);
         $upgrade = new Upgrade(
@@ -172,7 +172,27 @@ final class Server
      */
     public function loginUrl(): string
     {
-        return $this->url() . '/#code=' . $this->auth->loginCodes->mint();
+        return $this->loginUrls()[0];
+    }
+
+    /**
+     * The sign-in URL under each host a client may dial
+     * ({@see ServerConfig::reachableHosts()}: the bind address, or this
+     * machine's own interface addresses on a wildcard `--allow-remote` bind,
+     * where `0.0.0.0` names nothing a browser can open). One code serves
+     * every entry — it is spent by whichever one is opened first.
+     *
+     * @return non-empty-list<string>
+     */
+    public function loginUrls(): array
+    {
+        $code = $this->auth->loginCodes->mint();
+        $port = $this->port() ?? $this->config->port;
+
+        return \array_map(
+            static fn (string $host): string => 'http://' . $host . ':' . $port . '/#code=' . $code,
+            $this->config->reachableHosts(),
+        );
     }
 
     /**

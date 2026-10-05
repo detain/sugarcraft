@@ -746,7 +746,7 @@ sugar-crush/tests/Hooks/HookConfigTest.php	0.045	61
 sugar-crush/tests/Hooks/ProtectFilesPolicySurfacesTest.php	0.045	15
 sugar-crush/tests/Agents/Live/AgentLiveRegistryTest.php	0.045	11
 sugar-crush/tests/Server/AuthMiddlewareTest.php	0.045	9
-sugar-crush/tests/Cli/ServeArgsTest.php	0.050	27
+sugar-crush/tests/Cli/ServeArgsTest.php	0.050	32
 sugar-crush/tests/Protocol/EventTypeTest.php	0.045	3
 sugar-crush/tests/Providers/OpenAIProviderTest.php	0.044	47
 sugar-crush/tests/Providers/CustomProviderSystemInPlaceTest.php	0.044	7
@@ -762,7 +762,8 @@ sugar-crush/tests/Context/Pruning/ContextProjectorTest.php	0.040	6
 sugar-crush/tests/Context/Pruning/ContextLedgerTest.php	0.040	5
 sugar-crush/tests/Context/Pruning/CompressionBlockProjectionTest.php	0.040	6
 sugar-crush/tests/Chat/SummaryRejectedWhenNotSmallerTest.php	0.040	4
-sugar-crush/tests/Server/HostAndOriginGuardTest.php	0.040	9
+sugar-crush/tests/Server/HostAndOriginGuardTest.php	0.040	12
+sugar-crush/tests/Server/InterfaceAddressesTest.php	0.040	3
 sugar-crush/tests/Server/StaticFilesTest.php	0.040	6
 sugar-crush/tests/Server/TicketsTest.php	0.040	10
 sugar-crush/tests/Context/Pruning/ContextLedgerSyncTest.php	0.040	5

@@ -16,6 +16,7 @@ use SugarCraft\Crush\Server\Auth\LoginCodes;
 use SugarCraft\Crush\Server\Auth\TokenStore;
 use SugarCraft\Crush\Server\DiscoveryFile;
 use SugarCraft\Crush\Server\Http\StaticFiles;
+use SugarCraft\Crush\Server\InterfaceAddresses;
 use SugarCraft\Crush\Server\Listener;
 use SugarCraft\Crush\Server\ParentPidWatchdog;
 use SugarCraft\Crush\Server\Preflight;
@@ -81,7 +82,7 @@ final class Serve
      * @var array<string, list<string>>
      */
     public const ACTION_FLAGS = [
-        '' => ['--allow-bypass', '--allow-remote', '--allow-root', '--allowed-origin', '--detach', '--host', '--no-web', '--parent-pid', '--port', '--web-root'],
+        '' => ['--allow-bypass', '--allow-remote', '--allow-root', '--allowed-host', '--allowed-origin', '--detach', '--host', '--no-web', '--parent-pid', '--port', '--web-root'],
         'status' => [],
         'stop' => ['--force'],
         'logs' => ['--follow', '-f'],
@@ -121,7 +122,7 @@ final class Serve
      */
     private const CONTROL_RELOAD_TOKEN = 'reload-token';
 
-    private const USAGE = 'Usage: sugarcrush serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-origin <origins>]'
+    private const USAGE = 'Usage: sugarcrush serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-origin <origins>]'
         . ' [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>]'
         . ' | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]';
 
@@ -185,6 +186,11 @@ final class Serve
         );
         if ($config->stateDir === '') {
             throw new ServerConfigException('cannot determine a home directory this user owns for the server state; set SUGARCRUSH_SERVER_DIR');
+        }
+        // Read once, here: the guard answers to these and the sign-in URLs
+        // name them, since `0.0.0.0` is not an address a browser can open.
+        if ($config->isWildcard() && $config->allowRemote) {
+            $config = $config->withInterfaceAddresses(InterfaceAddresses::detect());
         }
 
         return $config;
@@ -404,10 +410,12 @@ final class Serve
 
         $control = self::openControlSocket($state, $server, $tokens, $log);
 
+        $loginUrls = $server->loginUrls();
         $report([
             'ok' => true,
             'url' => $server->url(),
-            'loginUrl' => $server->loginUrl(),
+            'loginUrl' => $loginUrls[0],
+            'loginUrls' => $loginUrls,
             'pid' => \getmypid(),
             'log' => $detached ? $state->logPath() : null,
         ]);
@@ -564,7 +572,7 @@ final class Serve
                 }
                 $answer = match (true) {
                     !$tokens->matches(\trim($token)) => ['ok' => false, 'error' => 'unauthorized'],
-                    $verb === self::CONTROL_LOGIN_URL => ['ok' => true, 'loginUrl' => $server->loginUrl()],
+                    $verb === self::CONTROL_LOGIN_URL => (static fn (array $urls): array => ['ok' => true, 'loginUrl' => $urls[0], 'loginUrls' => $urls])($server->loginUrls()),
                     $verb === self::CONTROL_RELOAD_TOKEN => ['ok' => true, 'rotated' => $reloaded !== null, 'closed' => $reloaded ?? 0],
                     default => ['ok' => false, 'error' => 'unknown request'],
                 };
@@ -752,10 +760,12 @@ final class Serve
             return self::answer($args, ['loginUrl' => null, 'reason' => $why], 'sugarcrush serve url: ' . $why, NonInteractive::EXIT_FAILURE);
         }
 
+        // A server older than `loginUrls` answers with the one URL.
+        $loginUrls = self::loginUrlsOf($answer);
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
-            echo NonInteractive::encodeDocument(['result' => ['url' => $record->url, 'loginUrl' => $answer['loginUrl'], 'pid' => $record->pid]]) . "\n";
+            echo NonInteractive::encodeDocument(['result' => ['url' => $record->url, 'loginUrl' => $answer['loginUrl'], 'loginUrls' => $loginUrls, 'pid' => $record->pid]]) . "\n";
         } else {
-            echo $answer['loginUrl'] . "\n";
+            echo \implode("\n", $loginUrls) . "\n";
             self::stderr('(one-time code, valid ' . LoginCodes::TTL_SECONDS . ' s)');
         }
 
@@ -1111,6 +1121,7 @@ final class Serve
             'SUGARCRUSH_SERVER_HOST',
             'SUGARCRUSH_SERVER_PORT',
             'SUGARCRUSH_SERVER_ALLOWED_ORIGINS',
+            'SUGARCRUSH_SERVER_ALLOWED_HOSTS',
             'SUGARCRUSH_SERVER_WEB_ROOT',
             'SUGARCRUSH_SERVER_TOKEN',
             'SUGARCRUSH_SERVER_DIR',
@@ -1154,12 +1165,14 @@ final class Serve
     {
         $url = (string) $report['url'];
         $loginUrl = (string) $report['loginUrl'];
+        $loginUrls = self::loginUrlsOf($report);
         $pid = (int) $report['pid'];
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             echo NonInteractive::encodeDocument(['result' => [
                 'url' => $url,
                 'loginUrl' => $loginUrl,
+                'loginUrls' => $loginUrls,
                 'pid' => $pid,
                 'protocol' => ServerConfig::PROTOCOL_MAJOR,
                 'root' => $config->root,
@@ -1177,7 +1190,7 @@ final class Serve
             '  root:            ' . ($config->root ?? '(none)'),
             '  permission mode: ' . $config->permissionMode->value . ($config->allowBypass ? ' (clients may choose bypass)' : ''),
             '  web UI:          ' . ($static->root() ?? 'not installed (composer require sugarcraft/sugar-crush-web)'),
-            '  sign in:         ' . $loginUrl,
+            '  sign in:         ' . \implode("\n                   ", $loginUrls),
             $detached
                 ? '                   (one-time code, valid ' . LoginCodes::TTL_SECONDS . ' s; a fresh one: sugarcrush serve url)'
                 : '                   (one-time code, valid ' . LoginCodes::TTL_SECONDS . ' s; Ctrl+C stops the server)',
@@ -1186,13 +1199,29 @@ final class Serve
             $lines[] = '  log:             ' . (string) ($report['log'] ?? '');
             $lines[] = '  stop:            sugarcrush serve stop';
         }
+        if ($config->isWildcard() && $config->interfaceAddresses === []) {
+            $lines[] = '                   (no interface address of this machine was found: use the one other machines reach it at)';
+        }
         if (!$config->isLoopback()) {
             $lines[] = '';
-            $lines[] = '  !! LISTENING BEYOND THIS MACHINE (' . $config->host . ') WITHOUT TLS.';
-            $lines[] = '  !! Anyone who can reach the port and learns the token can run code as you.';
-            $lines[] = '  !! Put a TLS reverse proxy in front of it (see docs/SERVER.md).';
+            $lines[] = '  !! Plain HTTP on ' . $config->host . ': the token, sign-in code and session cookie cross the network in cleartext — use an SSH tunnel or a TLS reverse proxy (docs/SERVER.md, "Remote access").';
         }
         self::stderr(\implode("\n", $lines));
+    }
+
+    /**
+     * The sign-in URLs a report or a `serve url` answer carries; one, the
+     * `loginUrl`, when it predates `loginUrls`.
+     *
+     * @param array<string, mixed> $answer
+     *
+     * @return list<string>
+     */
+    private static function loginUrlsOf(array $answer): array
+    {
+        $urls = \is_array($answer['loginUrls'] ?? null) ? \array_values(\array_filter($answer['loginUrls'], 'is_string')) : [];
+
+        return $urls !== [] ? $urls : [(string) ($answer['loginUrl'] ?? '')];
     }
 
     /**

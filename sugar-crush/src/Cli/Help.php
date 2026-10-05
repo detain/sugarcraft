@@ -99,9 +99,9 @@ session; acp runs turns for an editor, until the editor disconnects):
                          equivalent .mcp.json block to stdout. Prints only
                          the document and writes no file; the renames the
                          translation made are listed on stderr.
-  serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-origin <list>]
-        [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root]
-        [--detach] [--parent-pid <pid>]
+  serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <list>]
+        [--allowed-origin <list>] [--web-root <dir>] [--no-web]
+        [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>]
                          Run the WebSocket + HTTP server the web UI talks to,
                          in the foreground until Ctrl+C. Binds 127.0.0.1:7420
                          by default and prints a sign-in URL whose one-time
@@ -113,11 +113,17 @@ session; acp runs turns for an editor, until the editor disconnects):
                          unless --allow-remote is given too.
       --port <n>         Port to bind (default 7420; 0 picks a free one).
       --allow-remote     Permit a non-loopback --host. There is no built-in
-                         TLS: put a reverse proxy in front of it.
+                         TLS: put a reverse proxy in front of it. On 0.0.0.0
+                         or :: the server answers to this machine's own
+                         addresses, and the sign-in URL names them.
+      --allowed-host <list>
+                         Comma-separated extra host names (or host:port) the
+                         server answers to, e.g. a DNS name for this machine.
+                         Repeatable.
       --allowed-origin <list>
                          Comma-separated extra browser origins
                          (http(s)://host[:port]) allowed beside the server's
-                         own.
+                         own. Repeatable.
       --web-root <dir>   Serve the web UI from <dir> instead of the installed
                          sugarcraft/sugar-crush-web package.
       --no-web           Serve the API and WebSocket only, no UI files.
@@ -333,6 +339,9 @@ Environment variables:
    SUGARCRUSH_SERVER_ALLOWED_ORIGINS
                           Comma-separated extra origins `serve` accepts
                           (--allowed-origin wins).
+   SUGARCRUSH_SERVER_ALLOWED_HOSTS
+                          Comma-separated extra host names `serve` answers to
+                          (--allowed-host wins).
    SUGARCRUSH_SERVER_WEB_ROOT
                           Directory `serve` serves the web UI from (--web-root
                           wins).

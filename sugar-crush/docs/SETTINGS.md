@@ -1111,7 +1111,7 @@ project-settable.
 | `server.host` | Server | string | `127.0.0.1` | C | `SUGARCRUSH_SERVER_HOST` | restart | security |
 | `server.port` | Server | int | `7420` | C | `SUGARCRUSH_SERVER_PORT` | restart | security |
 | `server.allowedOrigins` | Server | list | `[]` | C | `SUGARCRUSH_SERVER_ALLOWED_ORIGINS` | restart | security |
-| `server.allowedHosts` | Server | list | `[]` | C | — | restart | security |
+| `server.allowedHosts` | Server | list | `[]` | C | `SUGARCRUSH_SERVER_ALLOWED_HOSTS` | restart | security |
 | `server.trustedProxies` | Server | list | `[]` | C | — | restart | security |
 | `server.maxOpenSessions` | Server | int | `32` | C | — | restart | security |
 | `server.maxConcurrentTurns` | Server | int | `4` | C | — | restart | security |

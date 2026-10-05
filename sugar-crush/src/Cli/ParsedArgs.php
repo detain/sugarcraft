@@ -77,14 +77,16 @@ final readonly class ParsedArgs
         ],
         // `serve` (Appendix O §4.7): every flag scoped, none global — a
         // `--port` before the verb is an unknown option, not a server setting.
-        // `--allowed-origin` takes a comma-separated list; a repeat keeps the
-        // last one, as every value flag here does. The management actions'
+        // `--allowed-origin` and `--allowed-host` take a comma-separated list
+        // and, unlike every other value flag here, ACCUMULATE across repeats
+        // (self::REPEATABLE_SUBCOMMAND_FLAGS). The management actions'
         // flags (`stop --force`, `logs -f`, `token --rotate`; O-4a) share the
         // verb's table; which action each belongs to is `Serve::ACTION_FLAGS`.
         'serve' => [
             '--allow-bypass' => false,
             '--allow-remote' => false,
             '--allow-root' => false,
+            '--allowed-host' => true,
             '--allowed-origin' => true,
             '--detach' => false,
             '--follow' => false,
@@ -104,6 +106,17 @@ final readonly class ParsedArgs
             '--limit' => true,
             '--with-children' => false,
         ],
+    ];
+
+    /**
+     * The value flags of {@see self::SUBCOMMAND_FLAGS} whose repeats are
+     * joined with commas (`--allowed-host a --allowed-host b` is `a,b`)
+     * rather than the last one winning: each names a list.
+     *
+     * @var array<string, list<string>>
+     */
+    public const REPEATABLE_SUBCOMMAND_FLAGS = [
+        'serve' => ['--allowed-host', '--allowed-origin'],
     ];
 
     /**

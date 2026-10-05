@@ -108,6 +108,32 @@ final class ServeArgsTest extends TestCase
         self::assertSame(['http://key.example'], $key->allowedOrigins);
     }
 
+    public function testAllowedHostsResolveFlagThenVariableThenUserKey(): void
+    {
+        $env = ['SUGARCRUSH_SERVER_ALLOWED_HOSTS' => 'env.example, Env2.example:8443'];
+        $user = ['server.allowedHosts' => ['key.example']];
+
+        self::assertSame(['flag.example', '[::1]', 'other.example:9000'], self::config(['serve', '--allowed-host', 'flag.example,::1', '--allowed-host=other.example:9000'], $env, $user)->allowedHosts, 'repeats accumulate; a bare IPv6 address is bracketed');
+        self::assertSame(['env.example', 'env2.example:8443'], self::config(['serve'], $env, $user)->allowedHosts);
+        self::assertSame(['key.example'], self::config(['serve'], [], $user)->allowedHosts);
+        self::assertSame([], self::config(['serve'])->allowedHosts);
+        self::assertSame(['--allowed-origin' => 'http://a.example,http://b.example'], self::parse(['serve', '--allowed-origin', 'http://a.example', '--allowed-origin', 'http://b.example'])->subcommandFlags);
+        self::assertSame(['--port' => '2'], self::parse(['serve', '--port', '1', '--port', '2'])->subcommandFlags, 'other value flags still keep the last');
+    }
+
+    public function testAWildcardRemoteBindNamesThisMachinesAddressesInItsUrls(): void
+    {
+        $wildcard = self::config(['serve', '--host', '0.0.0.0', '--allow-remote'])->withInterfaceAddresses(['127.0.0.1', '69.10.33.243', 'fe80::1', '2001:db8::1', '10.0.0.5']);
+
+        self::assertTrue($wildcard->isWildcard());
+        self::assertSame(['69.10.33.243', '10.0.0.5'], $wildcard->reachableHosts(), 'IPv4 only on 0.0.0.0, loopback and link-local dropped');
+        self::assertSame(['69.10.33.243', '10.0.0.5', '[2001:db8::1]'], $wildcard->withHost('::')->reachableHosts());
+        self::assertSame(['127.0.0.1'], $wildcard->withInterfaceAddresses([])->reachableHosts(), 'no interface found: loopback, never 0.0.0.0');
+        self::assertSame(['192.168.7.9'], $wildcard->withHost('192.168.7.9')->reachableHosts());
+        self::assertFalse(self::config(['serve'])->isWildcard());
+        self::assertSame(['127.0.0.1'], self::config(['serve'])->reachableHosts());
+    }
+
     public function testTheUserOnlyKeysAndTheStateDirectory(): void
     {
         $config = self::config(
@@ -140,6 +166,9 @@ final class ServeArgsTest extends TestCase
             'env mode' => [['serve'], ['SUGARCRUSH_PERMISSION_MODE' => 'nope'], [], 'is not one of'],
             'proxy' => [['serve'], [], ['server.trustedProxies' => ['10.0.0.0/99']], 'is not an IP address or CIDR'],
             'allowed host' => [['serve'], [], ['server.allowedHosts' => ['a b']], 'is not a host name'],
+            'allowed host flag' => [['serve', '--allowed-host', 'http://a.example'], [], [], 'is not a host name'],
+            'allowed host port' => [['serve'], ['SUGARCRUSH_SERVER_ALLOWED_HOSTS' => 'a.example:70000'], [], 'is not a host name'],
+            'allowed host brackets' => [['serve', '--allowed-host', '[nothex]'], [], [], 'is not a host name'],
             'bypass key type' => [['serve'], [], ['server.allowBypass' => 'yes'], 'must be true or false'],
             'list type' => [['serve'], [], ['server.allowedOrigins' => [1]], 'list of strings'],
         ];
