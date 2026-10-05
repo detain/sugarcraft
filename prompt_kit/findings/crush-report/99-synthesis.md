@@ -29,12 +29,12 @@
 
 # Part I — Key findings
 
-1. **Agent self-pruning is half built.** The model can `Prune` its finished tool outputs (3.B-3), but cannot `Compress` a range into a summary, and a prune shows on screen only once the turn settles. Fix: 3.B-4, 3.B-5 (Appendix D §13.2).
-2. **Sub-agents are still synchronous and partly closed off.**
-   - Preset `isolation` and `background` are inert (4.9, 4.3-2).
-   - The user cannot message or steer a running child from the UI yet: the signed agent inbox exists (P-D1), the composer route and controls do not (P-D2, P-D3). The model has no messaging tools (4.4).
+1. **Agent self-pruning stops at the parent.** The model can `Prune` its finished tool outputs and `Compress` a closed range into a summary (3.B-3, 3.B-4), but a sub-agent cannot prune its own run and pruned content cannot be recalled. Fix: 3.B-5 (Appendix D §13.2).
+2. **Sub-agents are partly closed off.**
+   - Preset `isolation` is inert (4.9).
+   - The model has no messaging tools (4.4).
    - `TeamManager` is dormant (4.6-2).
-3. **Requested features still open:** the `sugar-crush-web` UI over the server protocol (O-5b, O-6), direct chat and controls in the agent view (P-D2, P-D3, P-E), and the remaining constants promoted to settings (N-P4b–g, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
+3. **Requested features still open:** the `sugar-crush-web` UI over the server protocol (O-5b, O-6), the agent view's hard cancel, approval relay and board (P-E), and the remaining constants promoted to settings (N-P4b–g, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
 
 ---
 
@@ -46,7 +46,7 @@ Severity is the user impact on the live default path.
 |---|---|---|---|
 | 1 | High | Plan mode unusable interactively: no plan-mode prompt section, no plan exit or user question over the frame channel | 5.7-1, 5.7-2 |
 | 21 | Medium | Percentage thresholds fire too late on 1M windows: the absolute caps exist but are unset by default and have no settings keys | N-P4b |
-| 23 | Medium | Preset `isolation`/`background` inert | 4.9, 4.3-2 |
+| 23 | Medium | Preset `isolation` inert | 4.9 |
 
 ---
 
@@ -86,7 +86,6 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 |---|---|---|---|
 | 2.6 | **Post-compaction re-injection**: the 5 most recently edited/read files (≤5k tokens each) or Cline's "Required Files" (≤8 files/100k chars), invoked skill bodies, fresh git snapshot, todo list, plan | M | CC Cline |
 | 2.9 | **Absolute thresholds** on by default (DCP's 50k/100k "smart zone"; on a 1M window, 70% is far past the point where quality holds) with their settings keys and a thrash-breaker that cannot refuse every prompt under a cap; an absolute term in the step-level `ContextBudget` | S | DCP |
-| 2.10 | Ahead-of-need **background summarisation** at 70% so the 85% submit never blocks; splice in if the history fingerprint still matches | M | Aider |
 | 2.11 | **Memory flush before compaction**: one silent tool-enabled turn that writes durable notes to memory, once per compaction cycle | S–M | Claw |
 
 ## 3.x — safety net and agent self-management
@@ -94,24 +93,21 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 3.A | **Workspace checkpoints**: optionally capture after each write step (`EngineBackend::runTurn`) | M | CC OC Kilo Cline Zed dsh |
-| 3.B | **Agent self-pruning tools** (the user's headline request). `Prune` is live (3.B-3); what remains: the live `ledger` fork frame so a prune shows mid-turn, and `Compress{topic,ranges:[{from,to,summary}]}` over the DCP ledger/projector. Nested blocks with placeholders; size guard (`summary ≤ 0.5×source + 2000`, DCP #573); nesting cap 16k. Task/Skill outputs re-attached verbatim. Anchored nudges (never on an assistant message, DCP #520), cooldown after a compress. Commands `/compress [focus]`, `/decompress bN`, `/recompress bN`. Default: Prune **auto**, Compress **manual** until evals show good behaviour. Optional `Recall` tool to bring back pruned content. Sub-agents get an ephemeral ledger. **Full design: Appendix D §13.2 (classes, schemas, tests, rollout phases 1–5).** Add Kilo-legacy `/compact --self` (the model writes the summary, the user previews in a Veil modal; don't repeat Kilo's re-summarise bug) | L | DCP Kilo Goose |
+| 3.B | **Agent self-pruning tools** (the user's headline request). `Prune` and `Compress` are live (3.B-3, 3.B-4), with `/compress`, `/decompress`, `/recompress` and `/compact --self`. What remains (3.B-5): sub-agents prune their own run on an ephemeral ledger keyed by call (the delegated prompt never prunable, the ledger surviving a `SuspendedDelegations` resume), an optional `Recall` tool to bring pruned content back, cache-health telemetry after compressions, and grouping pruned targets with the dormant `Compactor`. **Full design: Appendix D §13.2.** | S–M | DCP |
 | 3.C | Todo list for the web: a `todo.updated` event (with O-6c); a compact menu strip below ~101 columns | S | 8 reports |
-| 3.D | `/goal <condition>` (judge via title backend, strict JSON, "claimed-but-unverified ≠ satisfied" — OpenHands) and `/grind` | M | CC Goose OH Cline dsh |
-| 3.H | **Auto-test reflection**: `testCommand` + `autoTest`, up to 3 reflections, using Aider's `run_output` shape | M | Aider |
 | 3.I | Optional `ApplyPatch`, refusing a stale file through the session read ledger like `Edit` | M | OC Kilo Cline Zed Claw nano dsh |
 
 ## 4.x — sub-agents and orchestration
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 4.3 | **Background Task** (`background:true` / preset `background`): returns `{agent_id}` at once ("DO NOT sleep or poll"). Runs via `BackgroundSupervisor` or `AgentWorkerPool`. On settle, a user-role announce row (`[Subagent '<label>' completed] … status from the runtime outcome (ok/error/timeout), stats line: runtime, tokens, cost, resume id`) is appended, and a turn is auto-dispatched if idle or injected via steer if busy. An "Active subagents" block appears in each turn context. | M–L | Claw nano dsh Goose Kilo OC |
+| 4.3 | **Background Task** settle: a settled result is injected via steer when a turn is running (it waits for the turn's end today), and the announce stats line carries the resume id | S | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
 | 4.6 | **Teams**: construct `TeamManager` (`AgentManager::setTeamManager`), `team_*` tools on `TaskList` (claim/complete/dependencies); make `GroupInputCmd`/`CancelAgentCmd`/`ResumeAgentCmd`/`StopAllAgentsCmd` real | L | CC Cline dsh |
-| 4.7 | Stop a child at 80–90% of its window with "wrap up or hand off" (Zed); depth 2–3 nesting with caps (CC 3/20, OpenClaw depth 5, 8 concurrent) | S–M | Zed CC OC Claw |
+| 4.7 | Stop a child at 80–90% of its window with "wrap up or hand off" (Zed) | S–M | Zed |
 | 4.8 | Sub-agents as stored child sessions: navigable in the tab strip, typable into, promotable to background (opencode Ctrl+B) | L | OC |
 | 4.9 | Worktree isolation for `isolation: worktree` presets and `/bg` (wire `WorktreeManager`, `withWorktreeRoot`, `BashEscapeDenyHook`) | M | CC Claw |
-| 4.10 | Model-authored workflows: expose `WorkflowEngine` as a tool taking a YAML plan | M | OH dsh |
 
 ## 5.x — memory, codebase understanding, UX, integrations
 
@@ -121,7 +117,7 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 | 5.7 | **Plan mode** made real: plan-mode prompt section, plans-dir write exception (the command guard exists), `PlanExit` + `ask_user` tools over the 1.C channel, `Alt+M` toggle (Shift+Tab is pane-prev), superseding "agent changed" reminder | M | OC Kilo Cline dsh |
 | 5.9 | **ACP mode** (`sugarcrush acp`): stdio JSON-RPC so Zed, JetBrains and Neovim can host sugar-crush; reuse `McpMessage` framing | L | Zed |
 | 5.11 | LLM exec reviewer / smart-approve for `auto` mode (title backend, JSON verdict, untrusted transcript; the 3-strike breaker exists); security findings force Ask even in auto | M | Goose Claw dsh OH |
-| 5.14 | Small UX: bell/OSC 9 notifications on turn end or approval wait; `/btw` side question; `/handoff` (new session seeded with a summary); `/newrule`; watch-files `AI!` comments; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
+| 5.14 | Small UX: `/handoff` (new session seeded with a summary); `/newrule`; watch-files `AI!` comments; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
 | 5.15 | Settings pane, configurable behaviours, server mode, web UI, session management, live agent lines and agent view | — | **Part V** |
 
 ---
@@ -272,12 +268,11 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
    - Approvals are events: any client may answer, the first answer wins, and pending asks are re-sent on reconnect.
    - The method and event catalogue (§6) covers sessions, prompting, steering, cancel, tools, diffs, sub-agents, usage, compaction, settings get/set, slash commands, memory, todos and background agents. It also includes a version handshake and backpressure rules (watermarks, 1013 close).
 2. **Headless core.** `Chat.php` (over 19,000 lines) and candy-core `Program::run` own the event loop and the terminal. A strangler-pattern extraction therefore moves non-UI logic into `src/Host/`, which holds `TranscriptStore`, `EventLog`, `SpendLedger`, `ContextMeter`, `TitleService`, `CompactionService`, `TurnRunner`, `TurnController`, `SessionHost`, `SessionHub` and the slash-command bodies (`Host\Commands`). Both `Chat` and the server are clients of it. The built-ins whose logic is still Chat's (`/compact`, `/budget`, `/model`, `/init`, `/new`, the session and settings pickers) answer `ui_only` over the wire.
-   - `Bootstrap` holds more than 25 static, root-sensitive caches. So one server process handles **one project root**.
-   - Multi-root support comes later, with one workspace-host child process per root.
+   - `Bootstrap` holds more than 25 static, root-sensitive caches. So one server process handles **one project root**, and `serve` runs each other root in a workspace-host child process behind its gateway.
 3. **Background mode:** the server re-adopts background daemons at boot through `BackgroundSupervisor::reconnect` (O-4b), as the TUI launch already does.
 4. **TLS** through a reverse proxy in v1.
 5. **Later phases:**
-   - `sugarcrush attach` lets the TUI act as a client.
+   - An attached TUI (`sugarcrush attach`) still runs slash commands and compaction on its own copy of the transcript, and shows a turn another client starts only when it re-attaches: server-logic commands go to `command.exec`, local compaction is skipped, and foreign `message.*`/`turn.*`/`session.updated` events are applied live.
    - `sugarcrush acp` is an Agent Client Protocol stdio adapter (about 8 methods) so Zed and JetBrains can host sugar-crush.
 
 ## V.3 `sugar-crush-web` (Appendix O §7)
@@ -316,15 +311,11 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 
 **Live agent activity lines.**
 - **What exists:** an `AgentLiveRegistry` in the parent draws one width-safe line per agent under its Task row (`└ ⠋ Grep "LoginController" · 7 tools · 0:12 · 4.1k tok`), with a set drop order on narrow terminals and the outcome glyphs ✓/✗/⏹/⏸. Each line is a click zone that opens the agent view.
-- **Still to build:** `agent:` zones on the dashboard's run rows.
-
   This is how opencode and Claude Code show running agents.
 
 **Agent view and direct chat.**
-- **What exists:** the read-only view. Clicking an agent line, Enter on a strip item or `/agent <id|name>` swaps the main transcript area for that agent's live transcript, tailed from the **per-agent JSONL transcript log written by the agent's own process**; Esc leaves it. The signed `AgentInbox` on `Mailbox` exists too, drained at the sub-agent's step boundaries. The cancel, resume, stop-all and group-input commands are still inert.
-- **Messaging the agent (still to build):** the input box becomes that agent's composer and sends through the `AgentInbox` (HMAC-signed `from:'user'`, framed as untrusted).
-  - That uses the same `TurnInbox` seam as the Wave 1.C steering, **but does not depend on it**.
-- **Controls:** soft cancel (an inbox control message), then hard cancel (SIGTERM via the turn child); pause, capped at 10 min with heartbeats; stop-all; broadcast; and "open as session".
+- **What exists:** the read-only view. Clicking an agent line, Enter on a strip item or `/agent <id|name>` swaps the main transcript area for that agent's live transcript, tailed from the **per-agent JSONL transcript log written by the agent's own process**; Esc leaves it. The input box is that agent's composer, sending through the signed `AgentInbox` drained at the sub-agent's step boundaries; soft cancel, pause, stop-all, broadcast and "open as session" are live.
+- **Still to build:** hard cancel (SIGTERM via the turn child, P-E1); a draft per target; `Ctrl+X Enter` to send a result to the main chat and `Ctrl+Enter` to interrupt; the broadcast audience in the view's header and footer; a paused state on the live line; the view following a cold-resumed run's new id.
 - **Finished agents**' child sessions (`kind='subagent'`, `parent_id`) become viewable and cold-resumable.
 - **Web compatibility:** every DTO serialises to the same event envelope the server mode uses (`agent.spawned`, `agent.activity`, `agent.status`, `agent.message`), so the web UI gets the same features.
 
@@ -339,7 +330,7 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 
 These features are scheduled in Appendix R together with Part III:
 - The web MVP (W8) and multi-session web (W9) build on the protocol.
-- The agent view's direct chat and controls (P-D2, P-D3, P-E) run W8–W10.
+- The agent view's remaining controls (P-E) run W9–W10.
 
 ---
 

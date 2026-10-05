@@ -236,16 +236,7 @@ Columns:
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 3.B-4 (+ 3.B-3 remainder: the live `ledger` frame — `ContextLedgerChanged` through `encodeEvent`/`decodeEvent`, `completeAsync`'s `$consume`, every `$onEvent` consumer, `Chat::pumpLiveToolEvents()` applying the delta mid-turn, `ContextLedgerUpdatedMsg` for the blocking path; `renderView` passing a cached session ledger to `renderHistory()` so the prune badge shows; Prune dispatching `PreCompact`; + 3.D-2 remainder: `PreCompact`/`PostCompact` around the step-level `StepSummarizer::summarise()` calls) | `src/Backend/EngineBackend.php`, `src/Host/Commands/Compact*.php`, `src/Renderer.php`, new `src/Tools/BuiltIn/Compress.php`, `src/Context/Pruning/NudgePolicy.php`, `builtin-commands/NNNN-{compress,decompress,recompress}.php` | EB: `runTurn` `step-top`. RN: collapsed block row, status bar | PROMPT_ENGINEERING reminder text | sugar-veil (modal) | L |
-| b | 2.10 | `src/Host/{CompactionService,TurnController}.php`, `src/Chat.php`, `src/HistoryCompactedMsg.php`, new `src/Context/Compaction/HistoryFingerprint.php` | CompactionService: `applyModelCompaction`, `buildSummarizationRequest`. TC: `submit` tier block, `dispatchTurn` reminder. Chat: `route` HistoryCompacted arm | README :1112-1117 tiers | — | M |
 | c | O-5b | `sugar-crush-web/src-web/**`, `sugar-crush-web/e2e/**`, `sugar-crush-web/dist/**`, `src/Providers/EchoProvider.php` | — | sugar-crush-web README; SERVER.md "Web UI" | sugar-crush-web | L |
-| d | O-8a, O-7 | `src/Cli/{Attach,ParsedArgs,Subcommands,Help}.php`, `src/Cli/Bootstrap.php`, `src/Chat.php`, `tools/check-child-lifetimes.php`, new `src/Backend/RemoteBackend.php`, `src/Host/RemoteSessionHost.php`, `src/Server/Workspace/**` | BS: `openSession`. Chat: `relockedForCurrentSession`. **R-CLI** | README "Subcommands"; SERVER.md | — | L |
-| e | 4.3-2, 4.7-3 | `src/Tools/BuiltIn/TaskTool.php`, `src/Sessions/{BackgroundSupervisor,BackgroundSessionRunner}.php`, `src/Support/Daemonize.php`, `src/Cli/Bootstrap.php`, `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Events/SubAgentActivity.php`, `src/Host/TurnRunner.php` | TT: `schema`, `execute`, `setup`. RT: `executeConcurrently` `fork` (admission). EB: `turnTools`. BS: `tools` (supervisor bind). **TR** | AGENTS_AUTHORING `/bg` paragraph; ARCHITECTURE :456; README :1361/:1275 | — | L |
-| f | 4.10-2 | `src/Workflows/{WorkflowEngine,WorkflowRegistry}.php`, new `src/Tools/BuiltIn/WorkflowTool.php` | — | WORKFLOWS (model-authored plans); AGENTS_AUTHORING workflow bullet | — | M |
-| g | O-4b (calls `reconnect()`; no edit to `BackgroundSupervisor`) | `src/Chat.php`, new `src/Host/BackgroundEvents.php`, `src/Protocol/Methods/BgMethods.php` | Chat: `pumpBackgroundSessions` | SERVER.md `bg.*` | — | S–M |
-| h | P-D2, P-D3 (+ P-D1 remainder: prune `~/.sugar-crush/mailboxes/<session>/` and `subagents/<session>/` with the launch-time session prune, Appendix P §5.6) | `src/Chat.php`, `src/Renderer.php`, `src/App/App.php`, `src/Tui/KeyboardHandler.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Agents/AgentManager.php`, `src/Message.php`, new `src/Host/AgentResume.php`, `src/{AgentMessageSentMsg,AgentControlMsg}.php` | Chat: `submit` delegator (route to `AgentInbox`), `route` AgentControlMsg arm. RN: `renderInput` placeholder. TT: `run` (`onProgress` control). **R-KEYBIND** | README Limitations (inert-commands bullet), "Keys", "What you see"; AGENTS_AUTHORING | — | L |
-| i | 3.H | new `src/Hooks/BuiltIn/AutoTestHook.php`, `src/Lint/TestRunner.php`, `src/Cli/Bootstrap.php`, `src/Config/Settings/Definitions/Tools.php` | BS: `hooks`. **R-HOOKS** | HOOKS built-ins | — | M |
-| j | 3.D-3 (`/goal`, `/grind`), 5.14a, 5.14b | `src/Chat.php`, `src/Host/TurnController.php`, new `src/Goal/GoalJudge.php`, `src/GoalJudgedMsg.php`, `builtin-commands/NNNN-{goal,grind,btw}.php`, `src/Config/Settings/Definitions/Ui.php` | Chat: `route` AssistantMsg arm, `requestPermission` (bell). TC: `refuseWhileInFlight` | COMMANDS/README slash roster (generated) | — | M |
 
 ### W9 (order: a, b, c, d, e, f, g, h, i, j)
 
@@ -305,7 +296,7 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (64 steps)
+## 5. Step index (47 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -315,30 +306,21 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 
 **Context engine**
 - 2.6 M · 1.A-2, 2.5 · W9-a
-- 2.10 M · 2.9, 2.5, O-2g · W8-b
 - 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
 
 **Safety and self-management**
-- 3.B-3 remainder (live `ledger` frame, mid-turn apply, prune badge fed a ledger, Prune `PreCompact`) S–M · 3.B-3 · W8-a
-- 3.B-4 L · 3.B-3 · W8-a
 - 3.B-5 S–M · 3.B-4 · W9-b
 - 3.C remainder (`todo.updated` event) S · 3.C, O-6c · W9-e
 - 3.C remainder (compact menu strip) S · 3.C · W10-f
-- 3.D-2 remainder (`PreCompact`/`PostCompact` around the step-level summary) S · 3.D-2 · W8-a
-- 3.D-3 S–M · 3.D-2 · W8-j
-- 3.H M · 3.D-2 · W8-i
 - 3.I-2 remainder (`ToolBuildContext` ledger field, Chat-native path ledger carry, README clause) S · 3.I-2 · W10-a
 - 3.I-3 M · 3.I-1, DH-TOOLS · W10-a
 
 **Sub-agents**
-- 4.3-2 M–L · 4.3-1, P-B1, 1.A-2 · W8-e
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
 - 4.5 M · RELAY · W10-c
 - 4.6-2 M–L · 4.6-1, 4.3-2, P-D1 · W9-g
 - 4.7-2 S–M · 1.C-4a · W9-a
-- 4.7-3 M · 4.1-1 · W8-e
 - 4.9 M · 4.1-1, 4.3-2 · W9-b
-- 4.10-2 M · 4.10-1, 4.2, RELAY · W8-f
 
 **Memory, codebase understanding, UX, integrations**
 - 5.7-1 M · 4.1-2, DEF-MODE, D8 · W9-j
@@ -346,8 +328,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.9-1 M · — · W10-h
 - 5.9-2 M · 5.9-1, O-2g · W10-h
 - 5.11-2 (incl. security findings force Ask in `auto`) M · 1.C-2, N-P2 · W10-a
-- 5.14a S · 1.C-2 · W8-j
-- 5.14b S–M · O-2g · W8-j
 - 5.14c M · 2.5, P-A1 · W10-e
 - 5.14d S · 0.8 · W10-e
 - 5.14i M · 1.A-2 · W10-f
@@ -363,22 +343,16 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-D1 remainder (mailbox and sub-agent log retention) S · P-D1 · W8-h
-- P-D2 M · P-D1, P-C2 · W8-h
-- P-D3 M · P-D1, P-C2 · W8-h
 - P-E1 S–M · P-D3, RELAY · W9-f
 - P-E2 S · 1.C-5, P-C2 · W9-f
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-4b S–M · O-4a, O-3b, 4.3-3 · W8-g
 - O-5a M · — · W5-d
 - O-5b L · O-5a, O-3c · W8-c
 - O-6a L · O-5b · W9-c
 - O-6b M · O-5b, N-P2 · W9-d
 - O-6c L · O-5b, P-B2, 4.3-2, 3.C · W9-e
-- O-7 M–L · O-4a, O-3b · W8-d
-- O-8a M · O-3b, O-2g · W8-d
 
 **Deferred and live checks**
 - 15b-14-1 S · — · W10-i
