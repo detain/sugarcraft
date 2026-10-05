@@ -1404,49 +1404,53 @@ final class KeyBindingDriftTest extends TestCase
 
             // ── Permission prompt ────────────────────────────────────────
             'permission.once' => fn(array $k) => $this->assertPermissionAnsweredBy($k[0]),
-            // "Ask to allow", not "allow": the row's description changed
-            // because the key did, and this is the observation that holds the
-            // two together. `a` alone must leave the prompt up and the grant
-            // map empty; the grant is what the CONFIRM writes.
+            // `a` answers at once — the row's description promises the
+            // session grant, and this is the observation that holds the two
+            // together: one key, the prompt comes down, and the grant map
+            // holds the scope the modal's `a` row named.
             //
             // Raised by the REAL permission gate, not hand-dispatched: since
             // audit F-P9 a grant answers only the gate's own question, so a
             // prompt with no attributed ask behind it grants nothing at all.
             'permission.always' => function (array $k): void {
-                [$confirming] = $this->blockedOnTheGate()->update($k[0]);
+                $blocked = $this->blockedOnTheGate();
+                $this->assertSame('Bash(make clean *)', $blocked->permissionAlwaysScope());
 
-                $this->assertNotNull(
-                    $confirming->pendingPermission(),
-                    "'a' must not answer the prompt on its own any more — it asks",
-                );
-                $this->assertSame(PermissionPromptStage::ConfirmingAlways, $confirming->permissionStage());
-                $this->assertSame(
-                    [],
-                    $confirming->permissionGrants(),
-                    'and nothing is granted until the confirm is answered',
-                );
-
-                [$granted, $cmd] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
-                $this->assertNull($granted->pendingPermission(), 'the confirm answers the prompt');
+                [$granted, $cmd] = $blocked->update($k[0]);
+                $this->assertNull($granted->pendingPermission(), "'a' answers the prompt on its own — no confirm box");
                 $this->assertSame(
                     ['rule:Bash(make clean)' => true, 'rule:Bash(make clean *)' => true],
                     $granted->permissionGrants(),
-                    'and THAT is what the row promises: calls like this one, for the whole session, once confirmed',
+                    'and THAT is what the row promises: calls like this one, for the whole session',
                 );
                 $this->reapReleasedBatch($cmd);
 
-                // The prose half. Everything above proves `a` no longer grants
-                // on its own; nothing else in this suite reads a description's
-                // WORDS back, so a row left saying "Allow this tool for the
-                // whole session" would keep making the promise the key stopped
-                // keeping — measured, reverting that wording alone left this
-                // file, KeyBindingRegistryTest, KeyHelpTest and RendererTest
-                // all green.
+                // The prose half: nothing else in this suite reads a
+                // description's WORDS back.
                 $this->assertStringStartsWith(
-                    'Ask',
+                    'Allow calls like this one',
                     KeyBindingRegistry::byId('permission.always')?->description ?? '',
-                    'the row must say it ASKS, because that is what the key does',
+                    'the row must say what the key does',
                 );
+            },
+            // `e` opens the scope editor prefilled with what `a` would
+            // remember; Enter saves the edited scope and allows the call.
+            'permission.edit' => function (array $k): void {
+                [$editing] = $this->blockedOnTheGate()->update($k[0]);
+                $this->assertSame(PermissionPromptStage::EditingScope, $editing->permissionStage());
+                $this->assertSame('make clean *', $editing->inputBuf, 'prefilled with the suggestion');
+                $this->assertNotNull($editing->pendingPermission(), "'e' does not answer");
+
+                // Widen the suggestion to `make *`: back over "clean *".
+                foreach (range(1, 7) as $_) {
+                    [$editing] = $editing->update(new KeyMsg(KeyType::Backspace));
+                }
+                [$editing] = $editing->update(new KeyMsg(KeyType::Char, '*'));
+                $this->assertSame('make *', $editing->inputBuf);
+                [$granted, $cmd] = $editing->update(new KeyMsg(KeyType::Enter));
+                $this->assertNull($granted->pendingPermission(), 'Enter saves it and allows the call');
+                $this->assertSame(['rule:Bash(make *)' => true], $granted->permissionGrants());
+                $this->reapReleasedBatch($cmd);
             },
             'permission.deny' => fn(array $k) => $this->assertPermissionAnsweredBy($k[0]),
             // The note is typed after the key, and Enter sends it with the

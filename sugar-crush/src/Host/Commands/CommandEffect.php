@@ -100,6 +100,32 @@ final class CommandEffect
     }
 
     /** @return list<Message> {@see self::restoreCheckpoint()}'s rows */
+    /** The session's "always" grants become $grants ({@see grants()}). */
+    public static function setPermissionGrants(\SugarCraft\Crush\Permissions\SessionPermissionMemo $grants): self
+    {
+        return new self(CommandEffectKind::SetPermissionGrants, ['grants' => $grants]);
+    }
+
+    /** The session's next turns run in $mode ({@see permissionMode()}). */
+    public static function setPermissionMode(\SugarCraft\Crush\Permissions\PermissionMode $mode): self
+    {
+        return new self(CommandEffectKind::SetPermissionMode, ['mode' => $mode]);
+    }
+
+    public function grants(): ?\SugarCraft\Crush\Permissions\SessionPermissionMemo
+    {
+        $grants = $this->data['grants'] ?? null;
+
+        return $grants instanceof \SugarCraft\Crush\Permissions\SessionPermissionMemo ? $grants : null;
+    }
+
+    public function permissionMode(): ?\SugarCraft\Crush\Permissions\PermissionMode
+    {
+        $mode = $this->data['mode'] ?? null;
+
+        return $mode instanceof \SugarCraft\Crush\Permissions\PermissionMode ? $mode : null;
+    }
+
     public function messages(): array
     {
         return $this->data['messages'] ?? [];

@@ -35,4 +35,10 @@ enum CommandEffectKind: string
 
     /** Work that holds the session like a turn until its report lands (`/workflow run`). */
     case OccupyTurn = 'occupy-turn';
+
+    /** Replace the session's "always" grants (`/permissions revoke`). */
+    case SetPermissionGrants = 'set-permission-grants';
+
+    /** Switch the session's permission mode for its next turns (`/permissions mode`). */
+    case SetPermissionMode = 'set-permission-mode';
 }

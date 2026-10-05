@@ -632,16 +632,15 @@ final class KeyBindingRegistry
     }
 
     /**
-     * The prompt's four keys, and why the two descriptions that changed had to.
+     * The prompt's keys.
      *
      * A permission prompt only answers to a letter while it is ARMED, and one
      * keystroke that is not an answer disarms it
-     * ({@see \SugarCraft\Crush\Permissions\PermissionPromptStage}). So `a` no
-     * longer grants — it asks — and `Enter` is a live binding of its own rather
-     * than an inert key, which is exactly the kind of promise this reference
-     * exists to keep honest. Leaving the old wording would have this screen
-     * telling a user that one keystroke buys a session-wide grant, which is the
-     * behaviour the fix removed.
+     * ({@see \SugarCraft\Crush\Permissions\PermissionPromptStage}), so
+     * `Enter` is a live binding of its own rather than an inert key. `a`
+     * answers at once — the confirm box it once raised is gone, and the modal's
+     * `a` row names what it remembers before the key is pressed — and `e`
+     * edits that scope first.
      *
      * @return list<KeyBinding>
      */
@@ -652,11 +651,13 @@ final class KeyBindingRegistry
         return [
             KeyBinding::new('permission.once', 'y', Lang::t('keys.permission.once'), $c),
             // "Calls like this one", not "this call" or "every call to this
-            // tool": a confirmed grant is remembered as a PATTERN on the engine
-            // path (Permissions\SessionPermissionMemo — `git status` grants
-            // `Bash(git status *)`, an edit grants that path) and as the exact
-            // call on Chat's own path, which is a call like itself.
+            // tool": a grant is remembered as a PATTERN on both tool paths
+            // (Permissions\SessionPermissionMemo — `git status` grants
+            // `Bash(git status *)`, a pipeline each segment, an edit that
+            // path). It answers at once; the modal's `a` row names the scope.
             KeyBinding::new('permission.always', 'a', Lang::t('keys.permission.always'), $c),
+            // ...and `e` edits that scope before it is remembered.
+            KeyBinding::new('permission.edit', 'e', Lang::t('keys.permission.edit'), $c),
             KeyBinding::new('permission.deny', 'n', Lang::t('keys.permission.deny'), $c),
             // R-KEYBIND (1.C-3 wave): refuse with words the model reads, and
             // refuse-and-stop (the turn ends at the step boundary).

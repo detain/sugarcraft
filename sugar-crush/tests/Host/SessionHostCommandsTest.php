@@ -107,6 +107,20 @@ final class SessionHostCommandsTest extends TestCase
         );
     }
 
+    /** The session's grants come back with it, and `/permissions revoke` takes one back for good. */
+    public function testAHostStartsFromTheSessionsGrantsAndRevokeSavesTheChange(): void
+    {
+        $this->store->savePermissionGrants('s', ['rule:Bash(git status *)', 'rule:Bash(ls *)']);
+        $host = $this->host(gate: new PermissionGate(PermissionMode::Default));
+        self::assertSame(['Bash(git status *)', 'Bash(ls *)'], $host->grants()->entries());
+
+        $host->submit('/permissions revoke 1');
+
+        self::assertSame(['Bash(ls *)'], $host->grants()->entries());
+        self::assertSame(['rule:Bash(ls *)'], $this->store->permissionGrants('s'), 'saved with the session');
+        $host->release();
+    }
+
     public function testClearEmptiesTheTranscriptWithoutAnEcho(): void
     {
         $host = $this->host(history: [Message::user('one'), Message::assistant('two')]);

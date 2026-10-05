@@ -782,6 +782,14 @@ final class Chat implements Model
          */
         private readonly array $pendingPermissionJobs = [],
         /**
+         * The modal's scope editor (`e`) while it is open: the draft that was
+         * in the box when it opened (put back when it closes), and why the
+         * last Enter was refused. Null while the editor is closed.
+         *
+         * @var array{draft: string, error: ?string}|null
+         */
+        private readonly ?array $permissionScopeEdit = null,
+        /**
          * The session's {@see PermissionReply::Always} answers, as the
          * grant map {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo}
          * reads (`rule:<pattern>` / `call:<exact call>` => true) — opencode's
@@ -4247,12 +4255,27 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // What `always` remembers, named before the prompt comes down: the
+        // one transcript row that says what was allowed, and where to undo it.
+        $remembered = null;
+        if ($reply === PermissionReply::Always) {
+            $remembered = $scope !== null
+                ? \SugarCraft\Crush\Permissions\SessionPermissionMemo::patternFromScope(
+                    $scope,
+                    $request->pendingAsk?->tool ?? $request->toolCall->name,
+                )
+                : $this->permissionAlwaysScope();
+        }
+        $rememberedNotice = $remembered === null ? [] : [Message::notice(Lang::t('chat.permission.remembered', [
+            'scope' => $remembered,
+        ]))];
+
         $jobs = $this->pendingPermissionJobs;
         $cleared = [
             'pendingPermission' => null,
             // Reset with the prompt rather than left behind: the stage is only
             // meaningful while a prompt is up, and a Chat carrying
-            // ConfirmingAlways with nothing pending is a state nothing means.
+            // EditingScope with nothing pending is a state nothing means.
             // requestPermission() arms the next ask anyway, so this is hygiene
             // on the accessor, not the arm rule.
             'permissionStage' => PermissionPromptStage::Armed,
@@ -4279,20 +4302,24 @@ final class Chat implements Model
         // the session's grant map and handed to every later turn's gate.
         if ($request->pendingAsk !== null) {
             $ask = $request->pendingAsk;
-            if ($reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled()) {
+            $remembers = $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled();
+            if ($remembers) {
                 $memo = \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants);
                 $memo = ($scope === null ? null : $memo->withPattern($scope, $ask->tool, $ask->arguments, $this->projectRoot()))
                     ?? $memo->withGrant($ask->tool, $ask->arguments, $this->projectRoot());
                 $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
             }
             $ask->reply($reply, $note === '' ? null : $note);
+            if ($remembers && $rememberedNotice !== []) {
+                $cleared['history'] = [...$this->history, ...$rememberedNotice];
+            }
 
             // P-E2: a delegated run's question leaves a ui-only row saying
             // what the user answered it, so the parent transcript — where the
             // run's Task row is — keeps the record the modal took away.
             $origin = \SugarCraft\Crush\Permissions\AskOrigin::locate($ask, $this->history, $this->agentLive());
             if ($origin !== null) {
-                $cleared['history'] = [...$this->history, Message::notice(Lang::t('chat.permission.subagent_answered', [
+                $cleared['history'] = [...($cleared['history'] ?? $this->history), Message::notice(Lang::t('chat.permission.subagent_answered', [
                     'agent' => $origin->name !== '' ? $origin->name : $origin->id,
                     'tool' => $ask->tool,
                     'answer' => match (true) {
@@ -4374,6 +4401,9 @@ final class Chat implements Model
             if ($answeredAsk !== null) {
                 $grants = self::rememberNative($grants, $request->toolCall, $answeredAsk, $this->projectRoot(), $scope);
                 $cleared['permissionGrants'] = $grants;
+                if ($answeredAsk->isRememberable() && $rememberedNotice !== []) {
+                    $cleared['history'] = [...$this->history, ...$rememberedNotice];
+                }
             }
         }
 
@@ -4439,12 +4469,13 @@ final class Chat implements Model
      *   * `Escape` is live in every stage, and refuses. Nothing a user TYPES
      *     produces it, and the answer it gives is the safe one.
      *
-     * And `a` no longer grants on its own: it raises a confirm that one `y`
-     * commits, because {@see PermissionReply::Always} is the only reply that
-     * outlives the call it answers ({@see gateToolCall()} honours
-     * `permissionGrants[<tool>]` for the rest of the session). `n`/Escape at
-     * the confirm cancel back to an ARMED prompt (the user is plainly deciding
-     * in the dialog); any other key cancels back to a DISARMED one.
+     * `a` answers at once, like `y`: the modal's `a` row names exactly what
+     * it remembers (`always allow Bash(git status *)`), and the confirm box
+     * that used to follow it only stood between the user and an answer they
+     * had already read (user report 2026-10-05). `e` opens the scope editor
+     * instead ({@see PermissionPromptStage::EditingScope}). A question that
+     * cannot be remembered offers no `a`, so there `a` disarms like any other
+     * key that is not an answer.
      *
      * ── MEASURED, one `KeyMsg(Char, c)` per character, at a `bash` prompt ──
      *
@@ -4460,12 +4491,9 @@ final class Chat implements Model
      *   | `/agents`, Enter, `y` | 9th | `y`  | approved ONCE (the recovery)   |
      *   | `yes` / `Y`    | 1st        | `y`  | approved once                  |
      *   | `no` / `nay`   | 1st        | `n`  | denied                         |
-     *   | `a`            | never      | --   | confirm raised, nothing granted|
-     *   | `an`           | never      | --   | confirm cancelled, still armed |
-     *   | `ay` / `aye`   | 2nd        | `y`  | ALWAYS: `{"bash":true}`        |
+     *   | `a` / `also`   | 1st        | `a`  | ALWAYS, for the named scope    |
      *
-     * Every session grant in that table now costs two deliberate keystrokes,
-     * and not one of the six slash commands reaches an answer at all.
+     * Not one of the six slash commands reaches an answer at all.
      *
      * A pasted command does not walk this table. Bracketed paste arrives as one
      * {@see PasteMsg}, which {@see update()} catches at its own arm ABOVE the
@@ -4478,25 +4506,20 @@ final class Chat implements Model
      *
      * ── THE RESIDUAL, stated rather than apologised for ──
      *
-     * A message that BEGINS with `y` or `n` still answers on its first
-     * keystroke — `yes`, `no`, `nay` above. That is not a hole in the arm rule,
+     * A message that BEGINS with `y`, `n` or `a` still answers on its first
+     * keystroke — `yes`, `no`, `nay`, `also` above. That is not a hole in the arm rule,
      * it is the rule working: those keys ARE the answers, and the first
      * keystroke is the only one at which the prompt has no evidence to the
      * contrary. Closing it needs an Enter-to-commit modal (type the letter,
      * press Enter), which was weighed and rejected: it taxes every single
      * answer to the common question in order to catch a message that happens to
-     * open with one of two letters, and the outcomes it would catch are
-     * "allowed this one call" and "refused this one call" — both recoverable,
-     * neither persistent.
-     *
-     * A first-keystroke `a` (`aye`, `and`, `also`) opens the confirm rather
-     * than granting, which is why the confirm is where the second keystroke was
-     * spent: it costs a `y` in second position to matter, and any other next
-     * key cancels it. `ay`/`aye` in the table are that residual, driven.
+     * open with one of three letters. `a` is the persistent one, and it is
+     * recoverable too: the transcript row it leaves names the grant and
+     * `/permissions revoke` takes it back.
      *
      * All of it is pinned keystroke-for-keystroke by
      * KeyHelpTest::testTypingAtALivePromptIsSwallowedUntilEnterReArmsIt() and
-     * its confirm/recovery siblings, so any change shows up as a red test
+     * its recovery siblings, so any change shows up as a red test
      * rather than as a silent shift.
      *
      * @return array{0:Chat,1:?\Closure}
@@ -4531,25 +4554,31 @@ final class Chat implements Model
             return $this->delegateToInput($msg);
         }
 
-        // ── the confirm, which only `a` at an armed prompt can raise ──
+        // ── the scope editor, which only `e` at an armed prompt opens ──
         //
-        // Checked first because in this stage the letters mean something else
-        // entirely: `y` is not "allow once", it is "yes, the whole session".
-        if ($this->permissionStage === PermissionPromptStage::ConfirmingAlways) {
-            if ($isChar && $rune === 'y') {
-                return $this->answerPermission(PermissionReply::Always);
+        // The scope is typed into the draft box (the draft that was there is
+        // put back when the editor closes). Enter saves it as the session
+        // grant and allows the call — or, when it is not a pattern that
+        // covers this call, says why and stays open; Escape goes back to the
+        // question.
+        if ($this->permissionStage === PermissionPromptStage::EditingScope) {
+            if ($msg->type === KeyType::Escape) {
+                return [$this->closingScopeEditor()->mutate(['permissionStage' => PermissionPromptStage::Armed]), null];
+            }
+            if ($msg->type === KeyType::Enter && !$msg->alt && !$msg->shift && !$msg->ctrl) {
+                $scope = trim($this->inputBuf);
+                $refusal = $this->permissionScopeRefusal($scope);
+                if ($refusal !== null) {
+                    return [$this->mutate(['permissionScopeEdit' => [
+                        'draft' => $this->permissionScopeEdit['draft'] ?? '',
+                        'error' => $refusal,
+                    ]]), null];
+                }
+
+                return $this->closingScopeEditor()->answerPermission(PermissionReply::Always, '', $scope);
             }
 
-            // `n`/Escape are the confirm's OWN answers, so pressing one proves
-            // the user is reading this dialog and deciding in it - the base
-            // prompt stays armed and one `y` still allows the call. Anything
-            // else is the same evidence that raised the confirm by accident,
-            // so it cancels AND disarms.
-            $stage = ($msg->type === KeyType::Escape || ($isChar && $rune === 'n'))
-                ? PermissionPromptStage::Armed
-                : PermissionPromptStage::Disarmed;
-
-            return [$this->mutate(['permissionStage' => $stage]), null];
+            return $this->delegateToInput($msg);
         }
 
         // Enter is the re-arm, and answers nothing. It is the recovery from a
@@ -4593,11 +4622,25 @@ final class Chat implements Model
             }
         }
 
-        // `a` no longer grants; it ASKS. The reply it leads to is the only one
-        // that outlives the call being answered, so it is the only one worth a
-        // second keystroke - see PermissionPromptStage::ConfirmingAlways.
-        if ($isChar && $rune === 'a' && $question === null) {
-            return [$this->mutate(['permissionStage' => PermissionPromptStage::ConfirmingAlways]), null];
+        // `a` answers at once, like `y` and `n`: the `a` row already names
+        // what it remembers, and a second confirm box only stood between the
+        // user and the answer they had read. A question that cannot be
+        // remembered offers no `a`, so there it is just another key that is
+        // not an answer — the arm rule below disarms on it.
+        if ($isChar && $rune === 'a' && $question === null && $this->permissionAlwaysScope() !== null) {
+            return $this->answerPermission(PermissionReply::Always);
+        }
+
+        // `e` opens the scope editor on what `a` would remember, so the user
+        // can grant something broader (`sed *`) or narrower instead.
+        if ($isChar && $rune === 'e' && $question === null) {
+            $scope = $this->permissionEditableScope();
+            if ($scope !== null) {
+                return [$this->mutate([
+                    'permissionStage' => PermissionPromptStage::EditingScope,
+                    'permissionScopeEdit' => ['draft' => $this->inputBuf, 'error' => null],
+                ])->withInputBuf($scope), null];
+            }
         }
 
         // `r` opens the rejection note: the refusal then carries the user's
@@ -4645,7 +4688,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 132 rows across 12 contexts, every one of them live, so all
+     * declares 133 rows across 12 contexts, every one of them live, so all
      * are listed) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -4846,6 +4889,68 @@ final class Chat implements Model
         }
 
         return null;
+    }
+
+    /**
+     * What the modal's `e` editor starts from for the question that is up —
+     * the argument half of what `a` would remember (`sed * | sort * | uniq *`),
+     * or the command itself when `a` would remember the exact call — or null
+     * when there is nothing to edit (`a` is not offered, or the tool has no
+     * subject argument, so its only scope is the tool).
+     */
+    public function permissionEditableScope(): ?string
+    {
+        $request = $this->pendingPermission;
+        if ($request === null || $this->permissionAlwaysScope() === null) {
+            return null;
+        }
+        [$tool, $arguments] = $request->pendingAsk !== null
+            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
+            : [$request->toolCall->name, $request->toolCall->arguments];
+
+        return \SugarCraft\Crush\Permissions\SessionPermissionMemo::editableScopeOf($tool, $arguments, $this->projectRoot());
+    }
+
+    /**
+     * Why the scope being edited cannot be saved, shown on the modal, or null
+     * while it has not been refused.
+     */
+    public function permissionScopeError(): ?string
+    {
+        $error = $this->permissionScopeEdit['error'] ?? null;
+
+        return \is_string($error) ? $error : null;
+    }
+
+    /**
+     * Why $scope may not be saved as the grant for the question that is up,
+     * or null when it may: it must be a well-formed pattern for this tool
+     * that covers this very call ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::withPattern()}).
+     */
+    private function permissionScopeRefusal(string $scope): ?string
+    {
+        $request = $this->pendingPermission;
+        if ($request === null) {
+            return Lang::t('chat.permission.scope_invalid');
+        }
+        [$tool, $arguments] = $request->pendingAsk !== null
+            ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
+            : [$request->toolCall->name, $request->toolCall->arguments];
+        if (\SugarCraft\Crush\Permissions\SessionPermissionMemo::patternFromScope($scope, $tool) === null) {
+            return Lang::t('chat.permission.scope_invalid');
+        }
+
+        return \SugarCraft\Crush\Permissions\SessionPermissionMemo::new()->withPattern($scope, $tool, $arguments, $this->projectRoot()) === null
+            ? Lang::t('chat.permission.scope_does_not_cover')
+            : null;
+    }
+
+    /** This Chat with the scope editor closed and the draft it held back in the box. */
+    private function closingScopeEditor(): self
+    {
+        $draft = $this->permissionScopeEdit['draft'] ?? '';
+
+        return $this->mutate(['permissionScopeEdit' => null])->withInputBuf(\is_string($draft) ? $draft : '');
     }
 
     /**
@@ -9912,6 +10017,7 @@ final class Chat implements Model
             'permissionStage' => $this->permissionStage,
             'permissionDeferred' => $this->permissionDeferred,
             'pendingPermissionJobs' => $this->pendingPermissionJobs,
+            'permissionScopeEdit' => $this->permissionScopeEdit,
             'permissionGrants' => $this->permissionGrants,
             'expanded' => $this->expanded,
             'paletteMru' => $this->paletteMru,
@@ -12301,6 +12407,7 @@ final class Chat implements Model
             contextTokenLimit: $this->contextTokenLimit(),
             contextTokens: $this->contextTokens(),
             workspace: $this->workspace,
+            grants: \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants),
         );
     }
 
@@ -12340,6 +12447,7 @@ final class Chat implements Model
         $cmds = [];
         $cursor = null;
         $openTitleEditor = false;
+        $mode = null;
 
         foreach ($result->effects as $effect) {
             switch ($effect->kind) {
@@ -12401,11 +12509,26 @@ final class Chat implements Model
                     $changes['workflowTurnInFlight'] = $effect->isWorkflow();
                     $cmds[] = self::settleCommandRun($effect->run(), $cancellation);
                     break;
+
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::SetPermissionGrants:
+                    // `/permissions revoke`: the map is the memo's alone, so
+                    // the memo's own entries replace it whole.
+                    $changes['permissionGrants'] = $effect->grants()?->grants() ?? [];
+                    break;
+
+                case \SugarCraft\Crush\Host\Commands\CommandEffectKind::SetPermissionMode:
+                    $mode = $effect->permissionMode();
+                    break;
             }
         }
 
         $changes['history'] = [...$history, ...$result->rows];
         $next = $this->mutate($changes);
+        if ($mode !== null) {
+            // Through the one switch Alt+M uses, so the gate is replaced in
+            // both places a turn reads it and the model is told.
+            [$next] = $next->togglePermissionMode(new PermissionModeToggledMsg($mode));
+        }
         // AFTER the mutate: naming `inputBuf` rebuilds the draft with the caret
         // at the end, so a captured offset is re-applied to the rebuilt draft.
         if ($cursor !== null) {

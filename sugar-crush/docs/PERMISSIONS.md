@@ -590,8 +590,8 @@ situations, not two:
   (a command taller than twelve rows loses rows from its middle, with a row
   saying how many — the head and the tail stay); the model's `description` is
   shown only beneath it, as the agent's note. Chat's own tool path remembers
-  `a` + `y` as the exact call (same rules for the caption and for a leading
-  in-project `cd`, below). An engine turn runs in a forked child;
+  `a` with the same scope as the engine path, below (the exact call for a
+  tool whose subject argument is unknown). An engine turn runs in a forked child;
   `Chat` starts it through `InteractiveTurn::completeInteractive()`, so each
   `Ask` the child's gate raises crosses the turn's socket as an `ask` frame,
   becomes the same y/n/a modal, and the answer returns as `ask_reply` while
@@ -607,7 +607,12 @@ situations, not two:
   - a question the turn ends underneath (the child or its stream gone) is
     `Permission required:`, because nobody answered it;
   - `y` allows **this call only**: the same command later asks again.
-  - `a` + `y` remembers a **pattern** for the rest of the session
+  - `a` remembers a **pattern** for the rest of the session — at once, no
+    second confirm: the modal's `a` row names the scope before you press it,
+    and a transcript row says what was allowed afterwards (`Allowed
+    Bash(sed * | sort * | uniq *) for this session — /permissions to review
+    or revoke`). `/permissions` lists the session's grants, numbered, and
+    `/permissions revoke <n>` (or `all`) takes them back. What is remembered
     (`Permissions\SessionPermissionMemo`): `git status` → `Bash(git status)`
     and `Bash(git status *)`, an `Edit` → that path, a `WebFetch` → that host,
     a tool with no subject argument (`mcp__*`, `Task`) → the tool. A
@@ -646,9 +651,18 @@ situations, not two:
     `pushd`, `cd x; …`, `cd x || …` — and with `CDPATH` set, a bare relative
     name (use `./name`). Only the grant sees the stripped form: configured
     rules, the mode and its refusals still judge the line as written. The
-    modal names the scope before you confirm (`a always allow Bash(git status
+    modal names the scope on the `a` row (`a always allow Bash(git status
     *) (this session)`, `this exact command`, or `this exact command without
     the leading cd`).
+  - `e` **edits the scope** before it is remembered: the draft box is
+    prefilled with what `a` would remember (`sed * | sort * | uniq *`, or the
+    command itself where that is exact) and `Enter` saves your version as the
+    session grant and allows the call. Write `sort` for "sort with no
+    arguments" and `sort *` for "any arguments". It must be a well-formed
+    pattern that covers the call in front of you, or the modal says why and
+    stays open; `Esc` goes back to the question. This is how you grant
+    something broader than the suggestion (`rm *`, which is never suggested)
+    or narrower.
     A grant covers later calls of the **same turn** — the parent answers the
     child's question without putting it up, and the turn's own channel
     remembers the same scope, so a parallel `Task` member's question is
@@ -695,7 +709,7 @@ situations, not two:
   client may answer with `permission.respond` — **the first valid answer
   wins**, and a later one is refused `already_resolved` with the winner. A
   client that reconnects is handed every question still open, whatever its
-  cursor. `always` is remembered for that session exactly as `a` + `y` is in
+  cursor. `always` is remembered for that session exactly as `a` is in
   the TUI (`remember: "project"` is refused — permission rules are user-tier
   only), and a reject sent with `cascade: true` rejects the session's other
   open questions and stops the turn at its next step. With

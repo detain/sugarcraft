@@ -4933,8 +4933,15 @@ final class ChatTest extends TestCase
 
         $this->assertSame(['call:bash {"cmd":"rm -rf /"}' => true], $granted->permissionGrants());
 
+        // One row says what was allowed and where to take it back.
+        $this->assertSame(
+            'Allowed this exact call for this session — /permissions to review or revoke',
+            $granted->history[0]->content,
+        );
+        $this->assertTrue($granted->history[0]->uiOnly, 'the model never sees it');
+
         $afterFirst = $this->awaitToolResults($granted, $resumeCmd);
-        $this->assertSame('total 0', $afterFirst->history[1]->content);
+        $this->assertSame('total 0', $afterFirst->history[2]->content);
 
         // Second turn, same call, same asking gate: no prompt this time.
         [$secondTurn, $secondCmd] = $afterFirst->update(new AssistantMsg($this->askingToolCall()));
@@ -4998,9 +5005,7 @@ final class ChatTest extends TestCase
         foreach ($keys as $index => $key) {
             [$answered, $cmd] = $answered->update($key);
 
-            // Only the LAST key may decide. The `a` sequence is two keys
-            // precisely because the first one must NOT answer: it raises the
-            // confirm that the session grant now costs.
+            // Only the LAST key may decide.
             if ($index < count($keys) - 1) {
                 $this->assertNotNull(
                     $answered->pendingPermission(),
@@ -5041,10 +5046,9 @@ final class ChatTest extends TestCase
     {
         return [
             'y approves once' => [[new KeyMsg(KeyType::Char, 'y')], PermissionReply::Once],
-            'a then y approves always' => [
-                [new KeyMsg(KeyType::Char, 'a'), new KeyMsg(KeyType::Char, 'y')],
-                PermissionReply::Always,
-            ],
+            // One key, like the others: the `a` row names the scope, and the
+            // confirm box that used to follow it is gone.
+            'a approves always' => [[new KeyMsg(KeyType::Char, 'a')], PermissionReply::Always],
             'n refuses' => [[new KeyMsg(KeyType::Char, 'n')], PermissionReply::Reject],
             'escape refuses' => [[new KeyMsg(KeyType::Escape, '')], PermissionReply::Reject],
         ];
@@ -5180,7 +5184,8 @@ final class ChatTest extends TestCase
         $this->assertSame(['call:alpha []' => true], $granted->permissionGrants());
         $this->assertNotNull($granted->pendingPermission(), 'an always for alpha released beta');
         $this->assertSame('beta', $granted->pendingPermission()->toolCall->name);
-        $this->assertSame([], $granted->history);
+        $this->assertCount(1, $granted->history, 'only the row naming the grant');
+        $this->assertTrue($granted->history[0]->uiOnly);
         $this->assertFileDoesNotExist($beta);
         $this->assertFileDoesNotExist($alpha);
         $this->assertInstanceOf(\Closure::class, $cmd);

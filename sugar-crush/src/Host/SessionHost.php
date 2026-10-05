@@ -1021,6 +1021,15 @@ final class SessionHost
                     $this->occupy($effect);
                     break;
 
+                case CommandEffectKind::SetPermissionGrants:
+                    $this->grants = $effect->grants() ?? SessionPermissionMemo::new();
+                    $this->transcripts->savePermissionGrants($this->sessionId, $this->grants->grants());
+                    break;
+
+                case CommandEffectKind::SetPermissionMode:
+                    $this->setPermissionMode($effect->permissionMode());
+                    break;
+
                 case CommandEffectKind::SwitchSession:
                 case CommandEffectKind::RenameSession:
                 case CommandEffectKind::OpenTitleEditor:
@@ -1158,6 +1167,7 @@ final class SessionHost
             contextTokenLimit: $backend === null ? null : $this->meter()->limit($backend),
             contextTokens: $this->estimate($this->history),
             workspace: $this->workspace,
+            grants: $this->grants,
         );
     }
 

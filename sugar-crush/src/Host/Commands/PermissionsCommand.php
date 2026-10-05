@@ -24,16 +24,71 @@ use SugarCraft\Crush\Permissions\PermissionMode;
  * still being there when the next refusal lands — which is exactly when it
  * gets typed.
  *
- * READ-ONLY, in the strong sense: see {@see report()} for the accessors it is
- * built on and why reaching for {@see PermissionGate::evaluate()} here would
- * have been a bug rather than a shortcut. The argument, if any, is ignored:
- * the report is total.
+ * The report is READ-ONLY, in the strong sense: see {@see report()} for the
+ * accessors it is built on and why reaching for {@see PermissionGate::evaluate()}
+ * here would have been a bug rather than a shortcut. It also lists the
+ * session's "always" grants, numbered, and ONE subcommand changes them:
+ * `/permissions revoke <n>|all` takes grants back (the transcript row `a`
+ * leaves points here). Any other argument is ignored: the report is total.
  */
 final class PermissionsCommand implements HostCommand
 {
     public function run(CommandContext $context, string $text): CommandResult
     {
-        return CommandResult::reply($text, self::report($context->permissionGate));
+        $words = preg_split('/\s+/', trim(CommandText::argument($text))) ?: [];
+        if (strtolower($words[0] ?? '') === 'revoke') {
+            return self::revoke($context, $text, $words[1] ?? '');
+        }
+
+        return CommandResult::reply(
+            $text,
+            self::report($context->permissionGate) . "\n\n" . self::grantsReport($context->grants),
+        );
+    }
+
+    /**
+     * The session's "always" grants, numbered as `revoke` takes them, and
+     * how to take one back — or that there are none and how one is made.
+     */
+    public static function grantsReport(\SugarCraft\Crush\Permissions\SessionPermissionMemo $grants): string
+    {
+        $entries = $grants->entries();
+        if ($entries === []) {
+            return Lang::t('host.permissions.no_grants');
+        }
+
+        $lines = [Lang::t('host.permissions.grants', ['count' => \count($entries)])];
+        foreach ($entries as $index => $entry) {
+            $lines[] = sprintf('  %d. %s', $index + 1, self::reportField($entry));
+        }
+        $lines[] = Lang::t('host.permissions.revoke_hint');
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * `/permissions revoke <n>|all`: the grants without row <n> (as the
+     * report numbers them), or none.
+     */
+    private static function revoke(CommandContext $context, string $text, string $which): CommandResult
+    {
+        $grants = $context->grants;
+        if (strtolower($which) === 'all') {
+            $count = \count($grants->entries());
+
+            return CommandResult::reply($text, Lang::t('host.permissions.revoked_all', ['count' => $count]))
+                ->withEffect(CommandEffect::setPermissionGrants(\SugarCraft\Crush\Permissions\SessionPermissionMemo::new()));
+        }
+
+        $index = ctype_digit($which) ? (int) $which : 0;
+        $kept = $grants->without($index);
+        if ($kept === null) {
+            return CommandResult::reply($text, Lang::t('host.permissions.revoke_usage') . "\n\n" . self::grantsReport($grants));
+        }
+
+        return CommandResult::reply($text, Lang::t('host.permissions.revoked', [
+            'grant' => self::reportField($grants->entries()[$index - 1]),
+        ]))->withEffect(CommandEffect::setPermissionGrants($kept));
     }
 
     /**

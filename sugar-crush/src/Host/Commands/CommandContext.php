@@ -17,6 +17,7 @@ use SugarCraft\Crush\Host\WorkspaceContext;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\SessionPermissionMemo;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
@@ -48,6 +49,7 @@ final class CommandContext
      * @param bool $readOnly whether this window may not write the session (another TUI holds its lock)
      * @param int|null $contextTokenLimit the window `/context` measures against, when known
      * @param int|null $contextTokens the history's token estimate, the status bar's own
+     * @param SessionPermissionMemo $grants the session's "always" answers, which `/permissions` lists and revokes
      */
     private function __construct(
         public readonly array $history,
@@ -70,6 +72,7 @@ final class CommandContext
         public readonly ?int $contextTokenLimit,
         public readonly ?int $contextTokens,
         public readonly ?WorkspaceContext $workspace,
+        public readonly SessionPermissionMemo $grants,
     ) {
     }
 
@@ -97,6 +100,7 @@ final class CommandContext
         ?int $contextTokenLimit = null,
         ?int $contextTokens = null,
         ?WorkspaceContext $workspace = null,
+        ?SessionPermissionMemo $grants = null,
     ): self {
         return new self(
             history: array_values($history),
@@ -119,6 +123,7 @@ final class CommandContext
             contextTokenLimit: $contextTokenLimit,
             contextTokens: $contextTokens,
             workspace: $workspace,
+            grants: $grants ?? SessionPermissionMemo::new(),
         );
     }
 

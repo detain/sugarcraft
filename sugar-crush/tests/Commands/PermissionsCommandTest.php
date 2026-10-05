@@ -500,8 +500,9 @@ final class PermissionsCommandTest extends TestCase
      *
      * So the property asserted is no longer about bytes. IT IS ABOUT LINES:
      * this report is built one line per fact and joined with `"\n"`, so its
-     * line count is `count($rules) + 6` — mode, description, blank, one rules
-     * line, one line per rule, blank, breaker — for EVERY possible config.
+     * line count is `count($rules) + 8` — mode, description, blank, one rules
+     * line, one line per rule, blank, breaker, blank, the (here empty) session
+     * grants line — for EVERY possible config.
      * Nothing a caller supplies may change it. That is a property the
      * `untrusted()` call cannot satisfy on its own, which is exactly what makes
      * it worth asserting.
@@ -517,7 +518,7 @@ final class PermissionsCommandTest extends TestCase
         $text = $this->report(new PermissionGate($mode, $rules, new SafetyClassifier(), $modeSource));
 
         self::assertSame(
-            count($rules) + 6,
+            count($rules) + 8,
             substr_count($text, "\n") + 1,
             'a configured value forged a report line — the report must be one line per fact, always',
         );
@@ -645,5 +646,46 @@ final class PermissionsCommandTest extends TestCase
 
         self::assertSame($before, array_slice($next->history, 0, count($before)));
         self::assertCount(count($before) + 2, $next->history);
+    }
+
+    // ── the session's grants: listed, and revocable ──────────────────────
+
+    private function chatWithGrants(string $draft): Chat
+    {
+        $grants = \SugarCraft\Crush\Permissions\SessionPermissionMemo::new()
+            ->withGrant('Bash', ['command' => 'git status'])
+            ->withGrant('Bash', ['command' => 'sed -n 1,5p f | sort | uniq'])
+            ->grants();
+
+        return (new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            inputBuf: $draft,
+            backend: new EchoBackend(),
+            permissionGrants: $grants,
+        ))->withSize(100, 30);
+    }
+
+    public function testTheReportListsTheSessionsGrantsNumbered(): void
+    {
+        $next = $this->submit($this->chatWithGrants('/permissions'));
+        $text = $next->history[\count($next->history) - 1]->content;
+
+        self::assertStringContainsString("  1. Bash(git status *)\n  2. Bash(sed * | sort * | uniq *)", $text);
+        self::assertStringContainsString('/permissions revoke <n>', $text);
+        self::assertStringContainsString('Session grants: none', $this->report(new PermissionGate(PermissionMode::Default)));
+    }
+
+    public function testRevokeTakesOneGrantBackAndAllTakesThemAll(): void
+    {
+        $one = $this->submit($this->chatWithGrants('/permissions revoke 1'));
+        self::assertSame(['rule:Bash(sed * | sort * | uniq *)' => true], $one->permissionGrants());
+        self::assertStringContainsString('Revoked Bash(git status *)', $one->history[\count($one->history) - 1]->content);
+
+        $all = $this->submit($this->chatWithGrants('/permissions revoke all'));
+        self::assertSame([], $all->permissionGrants());
+
+        $bad = $this->submit($this->chatWithGrants('/permissions revoke 9'));
+        self::assertCount(2, \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($bad->permissionGrants())->entries(), 'nothing revoked');
+        self::assertStringContainsString('Usage: `/permissions revoke <n>`', $bad->history[\count($bad->history) - 1]->content);
     }
 }

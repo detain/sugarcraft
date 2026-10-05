@@ -543,13 +543,15 @@ final class Renderer
      * other key disarms the prompt rather than answering it, so advertising it
      * would promise an answer that never arrives.
      *
-     * `a` is labelled as a request rather than as the grant it used to be:
-     * pressing it raises {@see PERMISSION_CONFIRM_OPTIONS}, and a label that
-     * still read "allow always" would make the confirm look like a bug.
+     * `a` names what it remembers (`always allow Bash(git status *)`) and
+     * answers at once; `e` edits that before it is remembered. Both rows are
+     * left out for a question nothing can remember, and `e` for a tool whose
+     * only scope is the tool itself.
      */
     private const PERMISSION_OPTIONS = [
         ['y', 'tui.permission.allow_once'],
         ['a', 'tui.permission.always_scope'],
+        ['e', 'tui.permission.edit_scope'],
         ['n / Esc', 'tui.permission.reject'],
         ['r', 'tui.permission.reject_with_note'],
         ['x', 'tui.permission.reject_and_stop'],
@@ -566,18 +568,14 @@ final class Renderer
     ];
 
     /**
-     * The confirm's own keys, shown instead of {@see PERMISSION_OPTIONS} while
-     * `a` is waiting on its second keystroke
-     * ({@see \SugarCraft\Crush\Permissions\PermissionPromptStage::ConfirmingAlways}).
-     *
-     * A separate table because in this stage the same letters mean different
-     * things - `y` is not "allow once" here, it is the session grant - and one
-     * table with stage-dependent labels is exactly the drift this pair of
-     * constants exists to prevent.
+     * The scope editor's own keys, shown while `e` has the user editing what
+     * `a` would remember
+     * ({@see \SugarCraft\Crush\Permissions\PermissionPromptStage::EditingScope}).
+     * The scope itself is typed into the draft box and painted above these.
      */
-    private const PERMISSION_CONFIRM_OPTIONS = [
-        ['y', 'tui.permission.confirm_yes'],
-        ['n / Esc', 'tui.permission.confirm_no'],
+    private const PERMISSION_SCOPE_OPTIONS = [
+        ['Enter', 'tui.permission.save_scope'],
+        ['Esc', 'tui.permission.scope_back'],
     ];
 
     /**
@@ -6148,8 +6146,6 @@ final class Renderer
      * disarmed by a stray keystroke looks identical to a live one, so without
      * the {@see PERMISSION_DISARMED_NOTICE} half a user would press `y`, watch
      * nothing happen, and have no way to find out that Enter is the way back.
-     * The confirm half is the same argument in the other direction - `a` no
-     * longer grants, so a modal that kept saying it did would read as a bug.
      *
      * Everything shown here is untrusted: a hook's message, a tool call's
      * name and its arguments are all model-authored text. Unlike every other
@@ -6213,25 +6209,20 @@ final class Renderer
             ));
         }
 
-        // The confirm REPLACES the question's own keys rather than being added
-        // under them: while it is up those keys do not work, and a modal
-        // showing two live meanings for `y` at once is the misreading that
-        // would turn a session grant into a slip again.
-        if ($stage === PermissionPromptStage::ConfirmingAlways) {
+        // The scope being edited, in the modal itself (the draft box it is
+        // typed into sits under the overlay), and why Enter refused it.
+        if ($stage === PermissionPromptStage::EditingScope) {
+            $scope = trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($chat->inputBuf)));
             $lines[] = '';
-            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
-                self::wrapPermissionText(
-                    // The grant is a PATTERN on the engine path (SessionPermissionMemo)
-                    // and the exact call on Chat's own — never "every later call to
-                    // this tool", which is what this used to say. Named exactly,
-                    // so the user knows what the `y` they are about to press
-                    // covers; a question that cannot be remembered says so.
-                    $alwaysScope === null
-                        ? Lang::t('tui.permission.confirm_question_once')
-                        : Lang::t('tui.permission.confirm_question', ['scope' => self::permissionVisibleOneLine($alwaysScope)]),
-                    $inner,
-                ),
-            );
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(self::wrapPermissionText(
+                Lang::t('tui.permission.scope_lead', ['tool' => self::permissionVisibleOneLine($call->name)])
+                    . ' ' . ($scope === '' ? Lang::t('tui.permission.type_a_scope') : $scope),
+                $inner,
+            ));
+            $error = $chat->permissionScopeError();
+            if ($error !== null) {
+                $lines[] = Style::new()->foreground($theme->systemLabel)->bold()->render(self::wrapPermissionText($error, $inner));
+            }
         }
 
         $question = $request->pendingAsk?->question();
@@ -6258,7 +6249,7 @@ final class Renderer
             );
         }
 
-        $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope);
+        $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope, $chat->permissionEditableScope() !== null);
 
         $lines[] = '';
         foreach ($options as $option) {
@@ -6292,8 +6283,9 @@ final class Renderer
      *
      * The `a` row names what it would remember ($alwaysScope, from
      * {@see \SugarCraft\Crush\Chat::permissionAlwaysScope()}) — `Bash(git status *)`,
-     * `this exact command` — and, for a question that cannot be remembered
-     * (null), says that `a` counts as once.
+     * `this exact command` — and answers at once; `e` ($editable) edits that
+     * scope first. A question that cannot be remembered (null) offers
+     * neither: the modal says why above the keys.
      *
      * Each label is a `lang/en.php` key; a third element carries its
      * placeholders.
@@ -6302,15 +6294,13 @@ final class Renderer
      *
      * @return list<array{0: string, 1: string, 2?: array<string, int|string>}>
      */
-    private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices, ?string $alwaysScope = null): array
+    private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices, ?string $alwaysScope = null, bool $editable = false): array
     {
         $askUser = \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME;
         $planExit = \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME;
 
         return match ($stage) {
-            PermissionPromptStage::ConfirmingAlways => $alwaysScope === null
-                ? [['y', 'tui.permission.confirm_yes_once'], self::PERMISSION_CONFIRM_OPTIONS[1]]
-                : self::PERMISSION_CONFIRM_OPTIONS,
+            PermissionPromptStage::EditingScope => self::PERMISSION_SCOPE_OPTIONS,
             PermissionPromptStage::Disarmed => self::PERMISSION_DISARMED_OPTIONS,
             PermissionPromptStage::WritingNote => match ($question) {
                 $askUser => [['Enter', 'tui.permission.send_answer'], self::PERMISSION_NOTE_OPTIONS[1]],
@@ -6341,14 +6331,14 @@ final class Renderer
                 // the modal says why above the keys instead.
                 $alwaysScope === null => array_values(array_filter(
                     self::PERMISSION_OPTIONS,
-                    static fn (array $row): bool => $row[0] !== 'a',
+                    static fn (array $row): bool => $row[0] !== 'a' && $row[0] !== 'e',
                 )),
-                default => array_map(
+                default => array_values(array_map(
                     static fn (array $row): array => $row[0] !== 'a'
                         ? $row
                         : ['a', 'tui.permission.always_scope', ['scope' => self::permissionVisibleOneLine($alwaysScope)]],
-                    self::PERMISSION_OPTIONS,
-                ),
+                    array_filter(self::PERMISSION_OPTIONS, static fn (array $row): bool => $editable || $row[0] !== 'e'),
+                )),
             },
         };
     }

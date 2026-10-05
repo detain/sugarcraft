@@ -1121,8 +1121,10 @@ final class KeyHelpTest extends TestCase
         // `permission.choice`: 151 lines, 125 -> 126, fitting at 100x156.
         // The settings view's files and profiles (N-P5 remainder) declared
         // `settings.open-file`, `.export`, `.import` and `.profile-go`: 155
-        // lines, 126 -> 130, fitting at 100x160.
-        foreach ([[100, 30, 130], [100, 160, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // lines, 126 -> 130, fitting at 100x160. The permission modal's scope
+        // editor declared `permission.edit`: 156 lines, 130 -> 131, fitting
+        // at 100x161.
+        foreach ([[100, 30, 131], [100, 161, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1186,8 +1188,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 160 rows, not 80: the list is 155 content lines now (132 live
-            // rows, 12 headers, 11 separators; 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
+            // 161 rows, not 80: the list is 156 content lines now (133 live
+            // rows, 12 headers, 11 separators; 155 before `permission.edit`, 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
             // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
@@ -1196,7 +1198,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 160))),
+                Width::of($this->footer($this->chat('', $cols, 161))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }
@@ -2101,18 +2103,14 @@ final class KeyHelpTest extends TestCase
             'no' => [1, 'n', [], PermissionPromptStage::Armed],
             'nay' => [1, 'n', [], PermissionPromptStage::Armed],
 
-            // A leading `a` opens the confirm instead of granting, so it takes
-            // a `y` in SECOND position to buy a session grant — and any other
-            // next key takes the confirm away again.
-            'a' => [null, null, [], PermissionPromptStage::ConfirmingAlways],
+            // This fixture's prompt is hand-dispatched and carries no
+            // attributed ask, so nothing can remember it (audit F-P9) and it
+            // offers no `a`: there `a` is a key that is not an answer, and
+            // disarms. Where `a` IS offered it answers on keystroke one —
+            // testTheSessionGrantIsOneKeystrokeWhereItIsOffered().
+            'a' => [null, null, [], PermissionPromptStage::Disarmed],
             'and' => [null, null, [], PermissionPromptStage::Disarmed],
-            'an' => [null, null, [], PermissionPromptStage::Armed],
-            // `a` then `y` commits Always, but this fixture's prompt is
-            // hand-dispatched and carries no attributed ask, so it grants
-            // nothing (audit F-P9: only the gate's own question is grantable).
-            // The grant itself is asserted against the real gate in
-            // testTheSessionGrantTakesASecondDeliberateKeystroke().
-            'aye' => [2, 'y', [], PermissionPromptStage::Armed],
+            'aye' => [null, null, [], PermissionPromptStage::Disarmed],
         ] as $typed => [$answersAt, $rune, $grants, $stage]) {
             $chat = $this->blockedOnPermission('bash');
             $at = null;
@@ -2150,85 +2148,30 @@ final class KeyHelpTest extends TestCase
     }
 
     /**
-     * The second half of the fix, which the table above can only see the shadow
-     * of: `a` does not grant, it ASKS, and the grant is what the confirm's `y`
-     * writes.
-     *
-     * `Always` is the only reply that outlives the call it answers, so it is
-     * the only one that costs a second keystroke. All four exits from the
-     * confirm are driven here because they are not the same exit: `y` commits;
-     * `n` and Escape are the confirm's own answers, so they cancel back to an
-     * ARMED prompt (a user pressing them is plainly deciding in this dialog and
-     * must not have their next `y` swallowed); anything else is the same
-     * evidence that opened the confirm by accident, so it cancels back to a
-     * DISARMED one.
+     * `a` answers on keystroke one where it is offered — the confirm box that
+     * used to follow it is gone (user report 2026-10-05: "what\'s the point
+     * of the second y/n box") — and is no answer where it is not: a prompt
+     * nothing can remember offers no `a`, so the key disarms it.
      */
-    public function testTheSessionGrantTakesASecondDeliberateKeystroke(): void
+    public function testTheSessionGrantIsOneKeystrokeWhereItIsOffered(): void
     {
         $blocked = $this->blockedOnPermission('bash');
+        [$disarmed] = $blocked->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertNotNull($disarmed->pendingPermission(), '"a" is not an answer where it is not offered');
+        $this->assertSame(PermissionPromptStage::Disarmed, $disarmed->permissionStage());
+        $this->assertSame([], $disarmed->permissionGrants());
 
-        [$confirming] = $blocked->update(new KeyMsg(KeyType::Char, 'a'));
-        $this->assertNotNull($confirming->pendingPermission(), '"a" alone must not answer the prompt');
-        $this->assertSame(PermissionPromptStage::ConfirmingAlways, $confirming->permissionStage());
-        $this->assertSame(
-            [],
-            $confirming->permissionGrants(),
-            'and above all it must not grant: THAT is the keystroke that used to cost the session',
-        );
-
-        [$granted, $cmd] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
-        $this->assertNull($granted->pendingPermission(), '"y" at the confirm commits the grant and releases the call');
-        $this->assertSame(
-            [],
-            $granted->permissionGrants(),
-            'a hand-dispatched prompt carries no attributed ask, so even Always grants nothing (F-P9)',
-        );
-        $this->assertNotNull($cmd, 'and a released batch hands back the Cmd that runs it');
-
-        // The same two keystrokes at a prompt the REAL permission gate raised:
-        // there `y` at the confirm writes the grant, scoped to this exact call.
+        // At a prompt the REAL permission gate raised, `a` writes the grant,
+        // scoped as the `a` row said (a tool with no known subject: the call).
         $gated = $this->promptRaisedByTheRealGate(self::permissionGateHooks());
-        [$gatedConfirming] = $gated->update(new KeyMsg(KeyType::Char, 'a'));
-        $this->assertSame([], $gatedConfirming->permissionGrants(), '"a" alone grants nothing at the real gate either');
-        [$gatedGranted, $gatedCmd] = $gatedConfirming->update(new KeyMsg(KeyType::Char, 'y'));
-        $this->assertNull($gatedGranted->pendingPermission());
+        $this->assertSame('this exact call', $gated->permissionAlwaysScope());
+        [$gatedGranted, $gatedCmd] = $gated->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertNull($gatedGranted->pendingPermission(), '"a" answers at once');
         $this->assertSame(['call:bash {"cmd":"rm -rf build/"}' => true], $gatedGranted->permissionGrants());
         $this->assertInstanceOf(\Closure::class, $gatedCmd);
         // Reap the released batch: dispatch forks its child eagerly, and only
         // the Cmd collects the child's IPC payload.
         $this->reapReleasedBatch($gatedCmd);
-
-        foreach ([
-            'n' => new KeyMsg(KeyType::Char, 'n'),
-            'Escape' => new KeyMsg(KeyType::Escape),
-        ] as $label => $key) {
-            [$cancelled] = $confirming->update($key);
-            $this->assertNotNull(
-                $cancelled->pendingPermission(),
-                "{$label} at the confirm cancels it — it must not fall through to the base prompt's own "
-                . 'meaning and refuse the call',
-            );
-            $this->assertSame([], $cancelled->permissionGrants(), "nothing is granted by {$label}");
-            $this->assertSame(
-                PermissionPromptStage::Armed,
-                $cancelled->permissionStage(),
-                "and {$label} leaves the prompt ARMED, so the next \"y\" still allows the call",
-            );
-
-            [$afterCancel] = $cancelled->update(new KeyMsg(KeyType::Char, 'y'));
-            $this->assertNull($afterCancel->pendingPermission(), "which is what {$label} owes the user");
-            $this->assertSame([], $afterCancel->permissionGrants(), 'once, not always');
-        }
-
-        [$stray] = $confirming->update(new KeyMsg(KeyType::Char, 'q'));
-        $this->assertNotNull($stray->pendingPermission());
-        $this->assertSame(
-            PermissionPromptStage::Disarmed,
-            $stray->permissionStage(),
-            'any OTHER key cancels the confirm AND disarms — it is the same evidence that the person at '
-            . 'the keyboard is typing rather than answering',
-        );
-        $this->assertSame([], $stray->permissionGrants());
     }
 
     /**
@@ -2311,10 +2254,10 @@ final class KeyHelpTest extends TestCase
      * `requestPermission()` that arms nothing would look identical. Both
      * non-armed exits are driven, one per half:
      *
-     *  1. through the CONFIRM — `a` then `y`, so the answering Chat is
-     *     `ConfirmingAlways`. Two DIFFERENT tools, because an `Always` on
-     *     `alpha` clears `alpha`'s other queued asks by design and would take
-     *     the second question with it;
+     *  1. through the SCOPE EDITOR — `e` then Enter, so the answering Chat is
+     *     `EditingScope`. Two DIFFERENT commands, because an `Always` on the
+     *     first clears the other queued asks its grant covers by design and
+     *     would take the second question with it;
      *  2. through the `PermissionReplyMsg` path from a DISARMED prompt — the
      *     palette/embedder route, which is an explicit decision rather than a
      *     keystroke and so is deliberately not gated on the stage at all.
@@ -2322,9 +2265,8 @@ final class KeyHelpTest extends TestCase
     public function testEachQueuedAskArmsAfresh(): void
     {
         $chat = (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))
-            ->registerTool('alpha', static fn(array $args): string => 'alpha ok')
-            ->registerTool('beta', static fn(array $args): string => 'beta ok')
-            ->withHooks(self::askEveryToolHooks())
+            ->registerTool('Bash', static fn(array $args): string => 'ok')
+            ->withHooks(self::permissionGateHooks())
             ->withSize(100, 30);
 
         foreach (['h', 'i'] as $rune) {
@@ -2333,22 +2275,22 @@ final class KeyHelpTest extends TestCase
         [$chat] = $chat->update(new KeyMsg(KeyType::Enter));
         [$first] = $chat->update(new \SugarCraft\Crush\AssistantMsg(
             Message::assistant('running')->withToolCalls([
-                new \SugarCraft\Crush\ToolCall('alpha', [], 'call_a'),
-                new \SugarCraft\Crush\ToolCall('beta', [], 'call_b'),
+                new \SugarCraft\Crush\ToolCall('Bash', ['command' => 'ls a'], 'call_a'),
+                new \SugarCraft\Crush\ToolCall('Bash', ['command' => 'pwd'], 'call_b'),
             ]),
         ));
         $this->assertNotNull($first->pendingPermission(), 'fixture: the first call is gated');
         $this->assertSame('call_a', $first->pendingPermission()?->toolCall->id, 'fixture: alpha is asked first');
 
-        // 1. answered from ConfirmingAlways.
-        [$confirming] = $first->update(new KeyMsg(KeyType::Char, 'a'));
+        // 1. answered from EditingScope.
+        [$editing] = $first->update(new KeyMsg(KeyType::Char, 'e'));
         $this->assertSame(
-            PermissionPromptStage::ConfirmingAlways,
-            $confirming->permissionStage(),
+            PermissionPromptStage::EditingScope,
+            $editing->permissionStage(),
             'fixture: the answer to question one has to be given from a stage that is not Armed, or this '
             . 'test cannot tell arming afresh from inheriting',
         );
-        [$second] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+        [$second] = $editing->update(new KeyMsg(KeyType::Enter));
 
         $this->assertSame(
             'call_b',

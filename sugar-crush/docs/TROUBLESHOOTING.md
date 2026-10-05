@@ -225,8 +225,9 @@ identical to having no gate at all except for `ProtectFilesHook`,
 `ConfirmRemoveHook` and the `rm -rf /` breaker. Set `permissionMode` in
 `config.json`, or pass `--permission-mode default`.
 
-**Every edit asks.** That is the TUI's default mode, `default`. `a` then `y`
-on the prompt remembers a pattern for the rest of the session; for a
+**Every edit asks.** That is the TUI's default mode, `default`. `a` on the
+prompt remembers a pattern for the rest of the session (`e` edits it first,
+`/permissions revoke` takes it back); for a
 standing choice set `permissionMode` to `accept-edits` (edits inside the
 project run unprompted, shell commands still ask) or add `permissionRules`
 allow entries. A sub-agent's questions come up in the same modal, naming the

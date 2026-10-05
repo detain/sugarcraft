@@ -549,7 +549,7 @@ asked about — the `askId` is a hash of the call's id, tool and arguments.
 
 - `always` is remembered for the session, for every later turn, and also
   answers the session's other open questions that what it remembered covers
-  (listed in the answer's `cascaded`) — the same scope as the TUI's `a` + `y`
+  (listed in the answer's `cascaded`) — the same scope as the TUI's `a`
   ([`PERMISSIONS.md`](PERMISSIONS.md)): `always` on `git status` answers an
   open `git status --short`, never an open `git push`; a leading in-project
   `cd <dir> &&` is a no-op there too, and a pipeline or chain is remembered

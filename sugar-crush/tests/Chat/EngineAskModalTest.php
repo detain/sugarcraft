@@ -143,9 +143,12 @@ final class EngineAskModalTest extends TestCase
 
         self::assertSame($hookAsk, $asking->pendingPermission()?->pendingAsk);
 
-        // ...and `always` there settles as `once`, remembering nothing.
-        [$confirming] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
-        [$answered] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+        // ...it offers no `a` (the key answers nothing there), and an
+        // `always` that reaches it anyway settles as `once`, remembering nothing.
+        [$pressed] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
+        self::assertFalse($hookAsk->isSettled(), '`a` is not offered on a hook\'s question');
+        self::assertSame($grants, $pressed->permissionGrants());
+        [$answered] = $asking->update(new \SugarCraft\Crush\PermissionReplyMsg(PermissionReply::Always));
         self::assertSame(PermissionReply::Once, $hookAsk->resolution()?->reply);
         self::assertSame($grants, $answered->permissionGrants());
     }

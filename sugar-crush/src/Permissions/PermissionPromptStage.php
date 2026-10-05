@@ -11,18 +11,20 @@ namespace SugarCraft\Crush\Permissions;
  * printable rune reaches {@see \SugarCraft\Crush\Chat::handlePermissionKey()}
  * and nothing types. That made an ordinary slash command an answer: `/agents`
  * typed at a prompt used to hit `a` on its second keystroke and write a
- * session-long grant. This enum is the state that stops it — a prompt only
+ * session-long grant (it went through a confirm box for a while; the arm rule
+ * alone is what stops it now). This enum is the state that stops it — a prompt only
  * answers to a letter while it is {@see Armed}, and one non-answer keystroke
  * takes that away.
  *
- * A single enum rather than a pair of booleans because the three states are
- * mutually exclusive by construction: `armed && confirming` is not a state
+ * A single enum rather than a pair of booleans because the states are
+ * mutually exclusive by construction: `armed && editing` is not a state
  * the prompt has, and two flags would let it be built.
  */
 enum PermissionPromptStage: string
 {
     /**
-     * The prompt is listening: `y`/`n`/`a`/Escape answer it.
+     * The prompt is listening: `y`/`n`/`a`/Escape answer it, `e` edits what
+     * `a` would remember.
      *
      * Every newly-raised prompt starts here — including each queued ask a
      * previous answer promotes ({@see \SugarCraft\Crush\Chat::answerPermission()}
@@ -43,14 +45,18 @@ enum PermissionPromptStage: string
     case Disarmed = 'disarmed';
 
     /**
-     * `a` was pressed at an armed prompt and the session-wide grant is waiting
-     * on a second, deliberate `y`.
+     * `e` was pressed at an armed prompt whose `a` would remember something:
+     * the user is editing WHAT it remembers (`sed * | sort | uniq`) in the
+     * draft box, prefilled with the suggestion.
      *
-     * `Always` is the only reply that outlives the call it answers, so it is
-     * the only one that costs a confirm. `n`/Escape cancel back to
-     * {@see Armed}; any other key cancels back to {@see Disarmed}.
+     * Enter saves it as the session grant and allows the call — unless it is
+     * not a pattern for this tool that covers this very call, when the modal
+     * says why and the editor stays open; Escape goes back to {@see Armed}
+     * and puts the draft that was in the box back. (`a` itself answers at
+     * once: the confirm that used to follow it is gone — the `a` row names
+     * the scope before the key is pressed.)
      */
-    case ConfirmingAlways = 'confirming-always';
+    case EditingScope = 'editing-scope';
 
     /**
      * `r` was pressed at an armed prompt: the user is typing a note for the

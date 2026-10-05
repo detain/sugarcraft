@@ -1634,7 +1634,7 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('always allow Bash(git status *) (this session)', $out);
         // Wrapped across two rows at this width; read as one line.
         $flat = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip($out)));
-        $this->assertStringContainsString('(this session) — asks first', $flat);
+        $this->assertStringContainsString('(this session) e edit what "always" allows', $flat, '`e` edits it first');
         $this->assertStringContainsString('reject', $out);
         $this->assertStringContainsString('n / Esc', $out);
 
@@ -1675,25 +1675,28 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * The confirm REPLACES the question's own keys rather than being added
-     * under them: while it is up, `y` means "the whole session", not "this one
-     * call", and a modal showing both meanings at once is how a session grant
-     * becomes a slip again.
+     * `a` answers at once — there is no confirm box any more — and `e`'s
+     * scope editor REPLACES the question's own keys rather than being added
+     * under them: while it is up, letters type the scope, so a modal still
+     * advertising `y` would promise an answer the key no longer gives.
      */
-    public function testTheAlwaysConfirmIsRenderedWithItsOwnQuestionAndKeys(): void
+    public function testTheScopeEditorIsRenderedWithItsOwnLeadAndKeys(): void
     {
-        [$confirming] = $this->chatAwaitingGateAsk()->update(new KeyMsg(KeyType::Char, 'a'));
-        $this->assertSame(PermissionPromptStage::ConfirmingAlways, $confirming->permissionStage());
+        [$answered] = $this->chatAwaitingGateAsk()->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertNull($answered->pendingPermission(), '`a` answers without a second box');
 
-        $out = Renderer::render($confirming);
+        [$editing] = $this->chatAwaitingGateAsk()->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame(PermissionPromptStage::EditingScope, $editing->permissionStage());
 
-        $this->assertStringContainsString('Always allow Bash(git status *) for the rest of', $out);
-        $this->assertStringContainsString('remember it for this session', $out);
+        $out = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip(Renderer::render($editing))));
+
+        $this->assertStringContainsString('Always allow (Bash): git status *', $out);
+        $this->assertStringContainsString('remember this for the session and allow the call', $out);
         $this->assertStringContainsString('back to the question', $out);
         $this->assertStringNotContainsString(
             'allow once',
             $out,
-            'the base prompt\'s keys are gone: "y" does not mean "once" in this stage',
+            'the base prompt\'s keys are gone: letters type the scope in this stage',
         );
     }
 

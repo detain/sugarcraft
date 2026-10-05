@@ -95,10 +95,64 @@ final class BashPermissionPromptTest extends TestCase
         self::assertSame('Bash(git status *)', $asking->permissionAlwaysScope());
         self::assertStringContainsString('always allow Bash(git status *) (this session)', self::plain($asking));
 
-        [$confirming] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
-        $confirm = self::plain($confirming);
-        self::assertStringContainsString('Always allow Bash(git status *) for the rest', $confirm);
-        self::assertStringContainsString('$ git status --short', $confirm, 'the command stays on screen while confirming');
+        // One key: no second box asks whether it meant it.
+        [$granted] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
+        self::assertNull($granted->pendingPermission(), '`a` answers at once');
+        self::assertSame(['rule:Bash(git status)' => true, 'rule:Bash(git status *)' => true], $granted->permissionGrants());
+        $last = $granted->history[\count($granted->history) - 1];
+        self::assertSame('Allowed Bash(git status *) for this session — /permissions to review or revoke', $last->content);
+        self::assertTrue($last->uiOnly, 'the model never sees it');
+    }
+
+    /**
+     * `e` edits what `a` would remember: prefilled, validated against the
+     * call being asked about, then saved and answered.
+     */
+    public function testEEditsTheScopeBeforeItIsRemembered(): void
+    {
+        [$asking, $ask] = $this->asking(self::bash('sed -n 1,5p f | sort | uniq', 'count'), draft: 'half a message');
+
+        [$editing] = $asking->update(new KeyMsg(KeyType::Char, 'e'));
+        self::assertSame(\SugarCraft\Crush\Permissions\PermissionPromptStage::EditingScope, $editing->permissionStage());
+        self::assertSame('sed * | sort * | uniq *', $editing->inputBuf);
+        $flat = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', self::plain($editing)));
+        self::assertStringContainsString('Always allow (Bash): sed * | sort * | uniq *', $flat);
+
+        // A scope that does not cover the call is refused, and says why.
+        [$refused] = self::retype($editing, 'grep *')->update(new KeyMsg(KeyType::Enter));
+        self::assertNotNull($refused->pendingPermission());
+        self::assertSame('That pattern does not cover this call, so it would still ask: widen it, or Esc.', $refused->permissionScopeError());
+        self::assertStringContainsString('does not cover this call', (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', self::plain($refused))));
+
+        [$granted] = self::retype($refused, 'sed * | sort | uniq')->update(new KeyMsg(KeyType::Enter));
+        self::assertNull($granted->pendingPermission());
+        self::assertSame(PermissionReply::Always, $ask->resolution()?->reply);
+        self::assertSame(['rule:Bash(sed * | sort | uniq)' => true], $granted->permissionGrants());
+        self::assertSame('half a message', $granted->inputBuf, 'the draft that was in the box is back');
+        self::assertStringContainsString('Allowed Bash(sed * | sort | uniq) for this session', $granted->history[\count($granted->history) - 1]->content);
+
+        // Esc goes back to the question, draft restored, nothing granted.
+        [$editing] = $asking->update(new KeyMsg(KeyType::Char, 'e'));
+        [$back] = $editing->update(new KeyMsg(KeyType::Escape));
+        self::assertSame(\SugarCraft\Crush\Permissions\PermissionPromptStage::Armed, $back->permissionStage());
+        self::assertNotNull($back->pendingPermission());
+        self::assertSame('half a message', $back->inputBuf);
+        self::assertSame([], $back->permissionGrants());
+    }
+
+    /** A question that cannot be remembered offers no `a`/`e`: they are keys that are not answers. */
+    public function testAAndEAnswerNothingOnAQuestionThatAlwaysAsks(): void
+    {
+        [$asking, $ask] = $this->asking(self::bash('git push', 'Push'), [PermissionReply::Once->value, PermissionReply::Reject->value]);
+        self::assertNull($asking->permissionEditableScope());
+
+        foreach (['a', 'e'] as $key) {
+            [$after] = $asking->update(new KeyMsg(KeyType::Char, $key));
+            self::assertNotNull($after->pendingPermission(), "`{$key}` answered a question it is not offered on");
+            self::assertSame(\SugarCraft\Crush\Permissions\PermissionPromptStage::Disarmed, $after->permissionStage(), 'the arm rule');
+            self::assertSame([], $after->permissionGrants());
+        }
+        self::assertFalse($ask->isSettled());
     }
 
     /**
@@ -343,9 +397,7 @@ final class BashPermissionPromptTest extends TestCase
 
         self::assertSame('Bash(git status *)', $asking->permissionAlwaysScope(), 'the modal names the scope without the cd');
         self::assertStringContainsString('always allow Bash(git status *) (this session)', self::plain($asking));
-        [$confirming] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
-        self::assertStringContainsString('Always allow Bash(git status *) for the rest', self::plain($confirming));
-        [$granted] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+        [$granted] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
         self::assertNull($granted->pendingPermission());
 
         $n = 1;
@@ -462,11 +514,12 @@ final class BashPermissionPromptTest extends TestCase
      *
      * @return array{0: Chat, 1: PendingAsk, 2: \ArrayObject}
      */
-    private function asking(array $arguments, ?array $suggestions = null, int $cols = 100, ?string $root = null): array
+    private function asking(array $arguments, ?array $suggestions = null, int $cols = 100, ?string $root = null, string $draft = ''): array
     {
         $inbox = new \ArrayObject();
         $chat = (new Chat(
             history: [Message::user('go')],
+            inputBuf: $draft,
             backend: new EchoBackend(),
             inFlight: true,
             generation: self::GENERATION,
@@ -481,10 +534,23 @@ final class BashPermissionPromptTest extends TestCase
         return [$asking, $ask, $inbox];
     }
 
+    /** Clear the draft box and type $text into it, a key at a time. */
+    private static function retype(Chat $chat, string $text): Chat
+    {
+        for ($i = mb_strlen($chat->inputBuf); $i > 0; $i--) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Backspace));
+        }
+        foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
+            [$chat] = $chat->update($char === ' ' ? new KeyMsg(KeyType::Space, '') : new KeyMsg(KeyType::Char, $char));
+        }
+        self::assertSame($text, $chat->inputBuf, 'fixture: retyped');
+
+        return $chat;
+    }
+
     private static function always(Chat $asking): Chat
     {
-        [$confirming] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
-        [$granted] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+        [$granted] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
         self::assertNull($granted->pendingPermission());
 
         return $granted;
