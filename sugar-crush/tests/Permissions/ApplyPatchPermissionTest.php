@@ -50,8 +50,9 @@ final class ApplyPatchPermissionTest extends TestCase
         $gate = new PermissionGate(PermissionMode::Auto, [], new SafetyClassifier());
 
         self::assertSame(PermissionDecision::Allow, $gate->evaluate(self::call(['src/a.php']), $this->root));
-        self::assertSame(PermissionDecision::Deny, $gate->evaluate(self::call(['src/a.php', '.sugar-crush/x.md']), $this->root));
-        self::assertSame('protected-path-write', $gate->autoBreaker()['lastBlockedCategory']);
+        // A protected path is a security finding: asked about (roadmap 5.11-2).
+        self::assertSame(PermissionDecision::Ask, $gate->evaluate(self::call(['src/a.php', '.sugar-crush/x.md']), $this->root));
+        self::assertStringContainsString('protected-path-write', (string) $gate->lastAutoReason());
         self::assertSame(PermissionDecision::Deny, $gate->evaluate(self::call(['/etc/hosts', '.git/x']), $this->root));
         self::assertSame('outside-root-write', $gate->autoBreaker()['lastBlockedCategory']);
         self::assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall('ApplyPatch', ['patch' => '']), $this->root));

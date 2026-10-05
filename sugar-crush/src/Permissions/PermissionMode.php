@@ -162,8 +162,10 @@ enum PermissionMode: string
             // `.git/hooks`, a WebFetch carrying `?k=SECRET` and every MCP call
             // ran under "unless the classifier objects" with nothing to object.
             self::Auto => 'Everything runs unless the safety classifier objects — it reads shell commands, '
-                . 'Edit and Write targets (outside the project, .git and policy files are blocked) and '
-                . 'WebFetch URLs that carry a query. MCP tools ask first. Blocked calls trip a circuit '
+                . 'Edit, Write and ApplyPatch targets and WebFetch URLs that carry a query. Security findings '
+                . '(fetched code piped to a shell, data sent out, credentials, .git and policy files) ask you; '
+                . 'other flagged calls (outside the project, force pushes, deploys) are blocked, or reviewed by '
+                . 'the title model when autoReview is on. MCP tools ask first. Blocked calls trip a circuit '
                 . 'breaker that escalates to asking.',
             self::DontAsk => 'Read-only tools run; WebFetch is not one of them. Everything else is denied '
                 . 'outright rather than asked about.',

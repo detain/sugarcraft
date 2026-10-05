@@ -53,6 +53,15 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withLabel('Permission rules')
                 ->withHelp('Ordered allow / deny / ask rules matched against each tool call.')
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
+            // Roadmap 5.11-2: user tier only (never a project's to switch on),
+            // because every review is a paid call on the title model.
+            SettingDefinition::new('autoReview', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withLabel('Auto mode reviewer')
+                ->withHelp('Under auto, a call the safety classifier flags (other than a security finding, which always asks) is reviewed by the title model, which allows it, asks you or denies it.')
+                ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             SettingDefinition::new('secretEnvAllowlist', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Permissions)
                 ->withRiskClass(RiskClass::Security)

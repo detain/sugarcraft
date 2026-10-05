@@ -501,6 +501,7 @@ final class LayeredSettings
         'contextPruning.nudgeFrequency',
         'contextPruning.iterationNudgeThreshold',
         'contextWindow',
+        'autoReview',
         'secretEnvAllowlist',
         'allowedTools',
         'disabledTools',

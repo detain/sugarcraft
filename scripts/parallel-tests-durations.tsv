@@ -602,6 +602,7 @@ sugar-crush/tests/Context/MemoryIndexInjectionTest.php	0.080	9
 sugar-crush/tests/Permissions/MemoryToolClassificationTest.php	0.080	34
 sugar-crush/tests/Tui/Settings/SettingsFieldFactoryTest.php	0.080	10
 sugar-crush/tests/Cli/SubagentModelSettingTest.php	0.080	2
+sugar-crush/tests/Permissions/ExecReviewerTest.php	0.080	20
 sugar-crush/tests/Providers/BedrockModelIdTest.php	0.079	30
 sugar-crush/tests/Support/ProjectRootTest.php	0.079	6
 sugar-crush/tests/Support/SubAgentActivityRelayTest.php	0.078	6

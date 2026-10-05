@@ -6341,12 +6341,35 @@ final class Bootstrap
         }
         $mode ??= $interactive ? self::INTERACTIVE_DEFAULT_PERMISSION_MODE : self::DEFAULT_PERMISSION_MODE;
 
+        // Roadmap 5.11-2: `autoReview` in the user's own config.json — never a
+        // project file, because every review is a paid model call — puts an
+        // exec reviewer on the TITLE backend behind Auto's classifier. Built
+        // whatever the mode, for the same shared-instance reason as the
+        // classifier below. It reads the conversation of the session a call
+        // belongs to from the session store (best effort: a session not yet
+        // saved is reviewed on the call alone). No provider to review with is
+        // said out loud: flagged calls then stay denied, as without the key.
+        $reviewer = null;
+        $autoReview = self::readUserConfig()['autoReview'] ?? null;
+        if ($autoReview !== null && !is_bool($autoReview)) {
+            self::warnPermissionConfigOnce('autoReview in your config.json or settings.json must be true or false; the auto exec reviewer stays off.');
+        } elseif ($autoReview === true) {
+            $titleBackend = self::titleBackend();
+            if ($titleBackend === null) {
+                self::warnPermissionConfigOnce('autoReview is on, but no provider is configured to review with; auto mode denies flagged calls as before.');
+            } else {
+                $reviewer = \SugarCraft\Crush\Permissions\ExecReviewer::new($titleBackend)->withTranscript(
+                    static fn (string $sessionId): array => \SugarCraft\Crush\Host\TranscriptStore::new(self::sessionStore(prune: false))->load($sessionId),
+                );
+            }
+        }
+
         // The classifier is what Auto mode gates on, and PermissionGate fails
         // CLOSED (everything Asks) without one — so it is always supplied
         // rather than only when the mode currently happens to be Auto: this
         // gate instance is shared, and a mode read from config is not
         // something this method should have to predict.
-        return new PermissionGate($mode, self::permissionRules($config), new SafetyClassifier(), $modeSource);
+        return new PermissionGate($mode, self::permissionRules($config), new SafetyClassifier(), $modeSource, $reviewer);
     }
 
     /**

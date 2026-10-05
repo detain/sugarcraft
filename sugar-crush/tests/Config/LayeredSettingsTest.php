@@ -52,7 +52,7 @@ final class LayeredSettingsTest extends TestCase
     public function testTheUserTierOnlyKeysAreExactlyTheLayeredKeysNoProjectMaySet(): void
     {
         self::assertSame(
-            ['provider', 'models', 'titleModel', 'summaryModel', 'maxOutputTokens', 'modelPrices', 'extraBody', 'thinkingBudget', 'promptCache', 'maxToolSteps', 'contextWindow', 'secretEnvAllowlist', 'allowedTools', 'bashSandbox', 'testCommand', 'autoTest', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'toolSpillWindowPercent', 'webSearchEndpoint', 'instructions', 'disabledRules', 'embeddingModel', 'enabledSkills', 'subagentModel', 'subagentMaxTurns', 'subagentMaxConcurrent', 'subagentMaxDepth', 'subagentMaxActive', 'attribution', 'lsp', 'autoCommit', 'statusLine', 'layout', 'maxCheckpoints', 'lintCommands'],
+            ['provider', 'models', 'titleModel', 'summaryModel', 'maxOutputTokens', 'modelPrices', 'extraBody', 'thinkingBudget', 'promptCache', 'maxToolSteps', 'contextWindow', 'autoReview', 'secretEnvAllowlist', 'allowedTools', 'bashSandbox', 'testCommand', 'autoTest', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'toolSpillWindowPercent', 'webSearchEndpoint', 'instructions', 'disabledRules', 'embeddingModel', 'enabledSkills', 'subagentModel', 'subagentMaxTurns', 'subagentMaxConcurrent', 'subagentMaxDepth', 'subagentMaxActive', 'attribution', 'lsp', 'autoCommit', 'statusLine', 'layout', 'maxCheckpoints', 'lintCommands'],
             LayeredSettings::userTierOnlyKeys(),
         );
 

@@ -38,7 +38,10 @@ use SugarCraft\Crush\Tools\McpToolBridge;
  *                Edit/Write by path, ApplyPatch by its worst path, WebFetch
  *                by what its URL carries), and
  *                `mcp__*` Asks unless its trusted server declared it
- *                read-only ({@see isReadOnlyMcpTool()}); 3-strike / 20-total
+ *                read-only ({@see isReadOnlyMcpTool()}); a security finding
+ *                ({@see SECURITY_CATEGORIES}) always Asks; any other flagged
+ *                call goes to the optional {@see ExecReviewer} (roadmap
+ *                5.11-2) and is otherwise Denied; 3-strike / 20-total
  *                circuit breaker
  *
  * The Plan line has been wrong twice, and both are worth knowing. It first
@@ -102,12 +105,66 @@ final class PermissionGate
     private const STRIKE_THRESHOLD = 3;
     private const TOTAL_BLOCK_THRESHOLD = 20;
 
+    /**
+     * The {@see SafetyClassifier} categories that are SECURITY FINDINGS
+     * (roadmap 5.11-2): running code fetched from the network, sending data to
+     * an endpoint the model chose, touching live credentials, granting cloud
+     * or repository permissions, side-loading packages, opening interactive
+     * shells or port forwards, and writing the repository's or the session's
+     * own policy files. Under `auto` each of these ASKS the person — every
+     * time: no reviewer verdict and no remembered "always" answer settles it,
+     * only an explicit `permissionRules` entry, which is the user's own word.
+     * Goose's rule, "a security finding forces an approval prompt even in
+     * Auto mode", and the most restrictive verdict wins.
+     *
+     * They used to be Denied outright until a third strike turned them into a
+     * question. A silent deny of `curl -X POST` to the user's own API told the
+     * user nothing; since roadmap 1.C-2 an Ask is a real question in the TUI
+     * (and on `-p` a terminal prompt, or a refusal without one), so the person
+     * now decides on the first one.
+     *
+     * Every other category — production deploys and migrations, mass cloud
+     * deletion, `git push --force` / `reset --hard`, `terraform destroy`,
+     * cross-repo PRs, automation comments, session deletion, writes outside
+     * the root — is operational rather than adversarial, and goes to the
+     * {@see ExecReviewer} when one is configured (`autoReview`), else is
+     * Denied with a strike as before.
+     *
+     * @var list<string>
+     */
+    public const SECURITY_CATEGORIES = [
+        'curl/wget-into-shell',
+        'external-endpoint',
+        'live-credentials',
+        'granting-iam-permissions',
+        'granting-repo-permissions',
+        'package-registry-sideload',
+        'interactive-shell-portforward',
+        SafetyClassifier::CATEGORY_PROTECTED_PATH_WRITE,
+    ];
+
     // -------------------------------------------------------------------------
     // Auto-mode circuit breaker state
     // -------------------------------------------------------------------------
     private int $consecutiveBlocks = 0;
     private int $totalBlocks = 0;
     private ?string $lastBlockedCategory = null;
+
+    /**
+     * Why the latest {@see evaluate()} under `auto` asked or denied — the
+     * classifier's category and, when one ran, the reviewer's verdict — or
+     * null when it allowed or was not an `auto` classification. Read by
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook} so the
+     * question or refusal the user sees says why.
+     */
+    private ?string $lastAutoReason = null;
+
+    /**
+     * Whether the latest {@see evaluate()} asked because of a security
+     * finding, which a remembered session grant must not answer
+     * ({@see SECURITY_CATEGORIES}).
+     */
+    private bool $forcedAsk = false;
 
     /**
      * Where plan mode may write its plan (roadmap 5.7-1), relative to the
@@ -156,7 +213,29 @@ final class PermissionGate
          * guessed at.
          */
         private readonly ?string $modeSource = null,
+        /**
+         * The `auto` mode exec reviewer (roadmap 5.11-2), consulted for a
+         * classified call that is not a security finding. Null — the
+         * default, and what `autoReview: false` builds — keeps the
+         * classifier's Deny and the circuit breaker as the whole policy.
+         */
+        private readonly ?ExecReviewer $reviewer = null,
     ) {}
+
+    /** The `auto` exec reviewer this gate consults, or null. */
+    public function reviewer(): ?ExecReviewer
+    {
+        return $this->reviewer;
+    }
+
+    /**
+     * Why the latest {@see evaluate()} under `auto` asked or denied, or null
+     * — see {@see $lastAutoReason}.
+     */
+    public function lastAutoReason(): ?string
+    {
+        return $this->lastAutoReason;
+    }
 
     /**
      * Returns the permission mode this gate was configured with.
@@ -188,7 +267,7 @@ final class PermissionGate
      */
     public function withMode(PermissionMode $mode, ?string $source = null): self
     {
-        $gate = new self($mode, $this->rules, $this->classifier, $source ?? $this->modeSource);
+        $gate = new self($mode, $this->rules, $this->classifier, $source ?? $this->modeSource, $this->reviewer);
         $gate->sessionRules = $this->sessionRules;
         $gate->toggledFrom = $this->mode;
 
@@ -323,10 +402,14 @@ final class PermissionGate
      *        pass one. Null keeps the lexical-only matching, which judges a
      *        path by its spelling alone — what a caller without a root (Chat's
      *        own `!` shell checks, a bare embedder) gets.
+     * @param string|null $sessionId The session the call belongs to, so an
+     *        `auto` {@see ExecReviewer} can read what the user asked for. Null
+     *        (a sub-agent's gate, an embedder) has the reviewer judge the
+     *        call alone.
      */
-    public function evaluate(ToolCall $call, ?string $projectRoot = null): PermissionDecision
+    public function evaluate(ToolCall $call, ?string $projectRoot = null, ?string $sessionId = null): PermissionDecision
     {
-        return $this->decide($call, commitAutoStrikes: true, argumentsKnown: true, projectRoot: $projectRoot);
+        return $this->decide($call, commitAutoStrikes: true, argumentsKnown: true, projectRoot: $projectRoot, sessionId: $sessionId);
     }
 
     /**
@@ -431,7 +514,16 @@ final class PermissionGate
         bool $commitAutoStrikes,
         bool $argumentsKnown,
         ?string $projectRoot = null,
+        ?string $sessionId = null,
     ): PermissionDecision {
+        // The reason and the forced-ask mark describe ONE real call; a
+        // declaration (refuses()) must leave them as the last real call left
+        // them, like every other piece of auto state.
+        if ($commitAutoStrikes) {
+            $this->lastAutoReason = null;
+            $this->forcedAsk = false;
+        }
+
         // 0. Circuit breaker: `rm -rf /` / `rm -rf ~` is refused unconditionally,
         // in every mode, before rules are considered — no Allow rule and no mode
         // (including BypassPermissions) can talk this gate into a self-destruct.
@@ -442,9 +534,13 @@ final class PermissionGate
         // 1. Check explicit rules first (highest priority), then 2. the
         // mode-specific logic; 3. a session "always" can only answer an Ask.
         $decision = $this->evaluateRules($call, $argumentsKnown, $projectRoot)
-            ?? $this->evaluateMode($call, $commitAutoStrikes, $argumentsKnown, $projectRoot);
+            ?? $this->evaluateMode($call, $commitAutoStrikes, $argumentsKnown, $projectRoot, $sessionId);
 
-        return $decision === PermissionDecision::Ask && $this->sessionAllows($call, $argumentsKnown, $projectRoot)
+        // A security finding's question is put every time (SECURITY_CATEGORIES):
+        // "always allow Bash(curl *)" answered an earlier, different call.
+        $forced = $commitAutoStrikes && $this->forcedAsk;
+
+        return $decision === PermissionDecision::Ask && !$forced && $this->sessionAllows($call, $argumentsKnown, $projectRoot)
             ? PermissionDecision::Allow
             : $decision;
     }
@@ -457,6 +553,7 @@ final class PermissionGate
         bool $commitAutoStrikes,
         bool $argumentsKnown,
         ?string $projectRoot,
+        ?string $sessionId = null,
     ): PermissionDecision {
         // A no-ask tool writes only harness-owned state (the memory
         // directories, the context ledger, the todo list), so every mode lets it run: a prompt would protect
@@ -471,7 +568,7 @@ final class PermissionGate
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call, $projectRoot),
             PermissionMode::Plan => $this->evaluatePlan($call, $argumentsKnown, $projectRoot),
             PermissionMode::Auto => $commitAutoStrikes
-                ? $this->evaluateAuto($call, $projectRoot)
+                ? $this->evaluateAuto($call, $projectRoot, $sessionId)
                 : $this->autoDeclarationDecision(),
             // P2B.S4: DontAsk and BypassPermissions have dedicated evaluators
             PermissionMode::DontAsk => $this->evaluateDontAsk($call),
@@ -660,6 +757,11 @@ final class PermissionGate
      * Auto: everything runs gated by SafetyClassifier; circuit breaker triggers Ask after
      * 3 consecutive blocks of the same category OR 20 total blocks in the session.
      *
+     * Roadmap 5.11-2 splits what a classified call becomes: a security finding
+     * ({@see SECURITY_CATEGORIES}) Asks; any other category goes to the
+     * {@see ExecReviewer} when one is configured — allow, ask, or a deny that
+     * counts as a strike — and is otherwise Denied with a strike, as before.
+     *
      * The ONLY stateful evaluator in this class, and the reason
      * {@see refuses()} exists: every outcome here is recorded, including the
      * safe one, which resets `$consecutiveBlocks`. That reset is correct for a
@@ -678,7 +780,7 @@ final class PermissionGate
      *
      * @see SafetyClassifier for the dangerous-action categories.
      */
-    private function evaluateAuto(ToolCall $call, ?string $projectRoot): PermissionDecision
+    private function evaluateAuto(ToolCall $call, ?string $projectRoot, ?string $sessionId = null): PermissionDecision
     {
         // SafetyClassifier is the gatekeeper for Auto mode. Fail CLOSED when it's
         // missing — a misconfigured gate must never silently become "allow everything";
@@ -705,6 +807,36 @@ final class PermissionGate
             $this->consecutiveBlocks = 0;
             $this->lastBlockedCategory = null;
             return PermissionDecision::Allow;
+        }
+
+        // Roadmap 5.11-2: a security finding asks the person, every time. It
+        // is neither a block nor a safe call, so — like an MCP ask — it leaves
+        // the breaker's counters exactly as they were.
+        if (in_array($category, self::SECURITY_CATEGORIES, true)) {
+            $this->forcedAsk = true;
+            $this->lastAutoReason = "flagged as {$category}, a security finding, which always asks";
+
+            return PermissionDecision::Ask;
+        }
+
+        // Any other flagged call goes to the reviewer when one is configured.
+        // Its allow is a safe call (the run of blocks is broken), its ask is a
+        // question (counters untouched), and its deny is a strike like the
+        // classifier's own — three in a row still reach a person.
+        $this->lastAutoReason = "flagged as {$category}";
+        if ($this->reviewer !== null) {
+            $verdict = $this->reviewer->review($call, $category, $sessionId);
+            $this->lastAutoReason .= '; ' . $verdict->describe();
+            if ($verdict->decision === PermissionDecision::Allow) {
+                $this->consecutiveBlocks = 0;
+                $this->lastBlockedCategory = null;
+                $this->lastAutoReason = null;
+
+                return PermissionDecision::Allow;
+            }
+            if ($verdict->decision === PermissionDecision::Ask) {
+                return PermissionDecision::Ask;
+            }
         }
 
         // Dangerous action blocked — update circuit breaker state

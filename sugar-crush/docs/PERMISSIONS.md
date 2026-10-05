@@ -159,7 +159,7 @@ rule — see [Rules](#rules).
 | `default` | Allow | Ask | Ask |
 | `accept-edits` | Allow | `Edit`/`Write` inside the project root Allow, and an `ApplyPatch` whose every path is; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
 | `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.sugar-crush/plans/` Allow, and an `ApplyPatch` touching only such plans; every other `Edit`/`Write`/`ApplyPatch` and unhinted `mcp__*` Deny | Ask |
-| `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
+| `auto` | gated by `SafetyClassifier`: a security finding Asks, any other flagged call is Denied (or reviewed, with `autoReview`), with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
 
@@ -355,11 +355,52 @@ does a read-only-hinted `mcp__*` allow. An
 explicit rule still comes first — `Allow mcp__git__*` grants those tools under
 `auto` without asking.
 
+**What a flagged call becomes** (roadmap 5.11-2). The categories split in two:
+
+- **Security findings ask, every time**: `curl/wget-into-shell`,
+  `external-endpoint`, `live-credentials`, `granting-iam-permissions`,
+  `granting-repo-permissions`, `package-registry-sideload`,
+  `interactive-shell-portforward` and `protected-path-write`
+  (`PermissionGate::SECURITY_CATEGORIES`). Running fetched code, sending data
+  out, touching credentials or permissions, side-loading packages, opening a
+  shell or a forward, and writing the repository's or the session's own policy
+  files are decisions for the person, so the call is put to you — in the TUI as
+  the usual prompt, on `-p` on the terminal, refused where nobody can answer.
+  They used to be denied outright until the third strike, which told you
+  nothing. Neither a reviewer nor a remembered "always" answer settles one;
+  only an explicit `permissionRules` entry, which is your own word, does.
+- **Every other category** — `production-deploy`, `production-migration`,
+  `mass-deletion-cloud-storage`, `force-push-reset-hard`, `terraform-destroy`,
+  `cross-repo-pr`, `automation-comments`, `pre-session-deletion`,
+  `outside-root-write` — is denied with a strike, as before, unless the
+  **exec reviewer** is on.
+
+**The exec reviewer.** `"autoReview": true` in your own `config.json` or
+`settings.json` (never a project file: every review is a paid call) sends each
+call in that second group to the title model (`titleModel`), with the
+conversation so far, before it is denied. It answers with one JSON object —
+`{"decision":"allow|deny|ask","risk":"low|medium|high|unknown","rationale":"…"}`
+— so `git push --force` to the feature branch you asked it to rewrite can run,
+the same push to `main` can be put to you, and a call nothing in the
+conversation explains stays denied. The call and the conversation are framed
+as untrusted data: text inside them that asks for a verdict is itself a reason
+to deny, and only your own messages count as what you asked for. A reply that
+is not exactly that object, an `allow` at high or unknown risk, a provider
+error or a launch with no provider to review with all mean **ask**, never
+allow. The prompt or refusal you see names the category and the reviewer's
+one-line reason. The review call has the provider's connect timeout and no
+total timeout; it runs once per flagged call, never for a call the classifier
+passed.
+
 ### `auto`'s circuit breaker
 
 `auto` classifies each call through `SafetyClassifier` and keeps counters on
 the gate instance: three consecutive blocks of one category, or twenty blocks in
-total, escalate to `Ask`. Those counters are **mutated by `evaluate()`**, which
+total, escalate to `Ask`. A block is a denied flagged call — the classifier's
+own deny or the exec reviewer's; a security finding's question, a reviewer's
+question and an `mcp__*` question are not blocks and leave the counters as
+they were, and a reviewer's allow breaks a run of blocks the way a safe call
+does. Those counters are **mutated by `evaluate()`**, which
 is why the class has a second, read-only entry point — `refuses()` — for callers
 holding a `ToolDeclaration` rather than a real call. Asking a hypothetical
 question through `evaluate()` moved a counter a real call is judged by.

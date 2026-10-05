@@ -134,17 +134,24 @@ final readonly class PermissionGateHook implements HookInterface
         $mode = $this->gate->mode()->value;
         $root = $context->projectRoot === '' ? null : $context->projectRoot;
 
-        return match ($this->gate->evaluate($call, $root)) {
+        // The session id lets an `auto` exec reviewer read what the user
+        // asked for (roadmap 5.11-2); the reason it leaves says why a call was
+        // asked about or refused, so the person is not answering blind.
+        $decision = $this->gate->evaluate($call, $root, $context->sessionId === '' ? null : $context->sessionId);
+        $reason = $this->gate->lastAutoReason();
+        $why = $reason === null ? '' : " — {$reason}";
+
+        return match ($decision) {
             PermissionDecision::Allow => HookResult::allow(),
             PermissionDecision::Deny => HookResult::deny(
-                "Permission mode '{$mode}' does not allow {$context->toolName}.",
+                "Permission mode '{$mode}' does not allow {$context->toolName}{$why}.",
             ),
             // Not collapsed into a deny: ASK is the whole reason the gate was
             // worth wiring into this chain at all. Whoever owns a UI settles
             // it; a caller with no UI fails closed, which is the existing
             // contract of HookResult::ask().
             PermissionDecision::Ask => HookResult::ask(
-                "Allow {$context->toolName} to run? (permission mode: {$mode})",
+                "Allow {$context->toolName} to run? (permission mode: {$mode}{$why})",
             ),
         };
     }
