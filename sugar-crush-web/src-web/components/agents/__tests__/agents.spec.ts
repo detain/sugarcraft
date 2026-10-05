@@ -89,6 +89,23 @@ describe('AgentView', () => {
     wrapper.unmount()
   })
 
+  it('sends a run it delegated to the background, and offers no such thing for a nested run', async () => {
+    const wire = new Wire()
+    await wire.connect()
+    const wrapper = mount(AgentView, { props: { sessionId: 's1', run: run({}) }, global: { plugins: [pinia] } })
+    await flushPromises()
+    await wrapper.find('[data-testid="agent-background"]').trigger('click')
+    await flushPromises()
+    expect(wire.sent('agents.control').pop()?.params).toMatchObject({ sessionId: 's1', agentId: 'a1', verb: 'background' })
+    wrapper.unmount()
+
+    const nested = mount(AgentView, { props: { sessionId: 's1', run: run({ id: 'a2', parentAgentId: 'a1' }) }, global: { plugins: [pinia] } })
+    await flushPromises()
+    expect(nested.find('[data-testid="agent-pause"]').exists()).toBe(true)
+    expect(nested.find('[data-testid="agent-background"]').exists()).toBe(false)
+    nested.unmount()
+  })
+
   it('offers Continue for a finished run that kept a resume id, and nothing else', async () => {
     const wire = new Wire()
     await wire.connect()

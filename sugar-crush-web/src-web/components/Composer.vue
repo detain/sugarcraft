@@ -7,6 +7,8 @@ const props = defineProps<{
   busy: boolean
   disabled?: boolean
   commands: CommandInfo[]
+  /** The delivery offered first while a turn runs — the server's `queueMode` (`steer` unless set). */
+  defaultDelivery?: Delivery
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: string]
@@ -14,14 +16,19 @@ const emit = defineEmits<{
   stop: []
 }>()
 
-const delivery = ref<Delivery>('queue')
+const initialDelivery = (): Delivery => props.defaultDelivery ?? 'steer'
+const delivery = ref<Delivery>(initialDelivery())
 const selected = ref(0)
 const input = ref<HTMLTextAreaElement | null>(null)
 let lastEscape = 0
 
-// While a turn runs the default is `queue`, as in the TUI; idle, a prompt just starts a turn.
+// While a turn runs the default is the server's `queueMode` — what the TUI's
+// Enter does mid-turn (`steer` unless set); idle, a prompt just starts a turn.
 watch(() => props.busy, (busy) => {
-  if (!busy) delivery.value = 'queue'
+  if (!busy) delivery.value = initialDelivery()
+})
+watch(() => props.defaultDelivery, () => {
+  if (!props.busy) delivery.value = initialDelivery()
 })
 
 /** `/` completion: the commands that can run here (server built-ins and command files). */
@@ -47,7 +54,7 @@ function complete(command: CommandInfo): void {
 function submit(): void {
   const text = props.modelValue.trim()
   if (text === '' || props.disabled) return
-  emit('send', text, props.busy ? delivery.value : 'queue')
+  emit('send', text, props.busy ? delivery.value : initialDelivery())
 }
 
 function onKeydown(event: KeyboardEvent): void {

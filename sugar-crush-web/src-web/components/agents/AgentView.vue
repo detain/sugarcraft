@@ -11,7 +11,9 @@ import AgentTranscript from './AgentTranscript.vue'
  * One delegated run, up close (roadmap O-6c; the TUI's Agent View, Appendix P
  * §5): its own transcript, followed while it runs; a box to message it —
  * read at its next step while it runs, a follow-up once it finished — and its
- * controls (pause, resume, cancel), all through the run's signed mailbox.
+ * controls (pause, resume, cancel, and — for a run the conversation itself
+ * delegated — send it to the background, the TUI's `Ctrl+X b`), all through
+ * the run's signed mailbox.
  */
 const props = defineProps<{ sessionId: string; run: AgentRun }>()
 const emit = defineEmits<{ close: [] }>()
@@ -30,6 +32,8 @@ const view = computed(() => agents.transcript(props.sessionId, props.run.id))
 const live = computed(() => props.run.status === 'running' || props.run.status === 'queued')
 const canWrite = computed(() => connection.scopes.includes('write'))
 const canContinue = computed(() => !live.value && props.run.resumeId !== null)
+// As in the TUI: a nested run's Task call belongs to the run that made it.
+const canBackground = computed(() => live.value && props.run.parentAgentId === null)
 
 function stopPolling(): void {
   if (timer !== null) clearInterval(timer)
@@ -95,6 +99,7 @@ function onKeydown(event: KeyboardEvent): void {
         <template v-if="live">
           <button type="button" data-testid="agent-pause" @click="control('pause')">Pause</button>
           <button type="button" data-testid="agent-resume" @click="control('resume')">Resume</button>
+          <button v-if="canBackground" type="button" data-testid="agent-background" title="Move this run to a background session; it keeps going there" @click="control('background')">Background</button>
           <button type="button" class="danger" data-testid="agent-cancel" @click="control('cancel')">Cancel</button>
         </template>
         <button v-else-if="canContinue" type="button" data-testid="agent-continue" @click="control('resume')">Continue</button>

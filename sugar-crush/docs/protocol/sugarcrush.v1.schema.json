@@ -642,7 +642,7 @@
     },
     "methods": {
         "agents.control": {
-            "description": "Cancel, pause or resume a delegated run.",
+            "description": "Cancel, pause, resume or background a delegated run.",
             "scope": "write",
             "idempotent": true,
             "params": {
@@ -660,7 +660,8 @@
                         "enum": [
                             "cancel",
                             "pause",
-                            "resume"
+                            "resume",
+                            "background"
                         ]
                     },
                     "text": {
@@ -2038,6 +2039,14 @@
                         "properties": {
                             "permissionMode": {
                                 "$ref": "#/$defs/PermissionMode"
+                            },
+                            "delivery": {
+                                "enum": [
+                                    "queue",
+                                    "steer",
+                                    "interrupt"
+                                ],
+                                "description": "The delivery a client should offer first for a prompt sent while a turn runs: the `queueMode` setting, `steer` unless set. A `session.send` that names none still queues."
                             }
                         }
                     },

@@ -5,7 +5,7 @@ import { describe } from '../session'
 import { useConnectionStore } from '../connection'
 
 export type TranscriptEntry = MethodResult<'agents.transcript'>['items'][number]
-export type ControlVerb = 'cancel' | 'pause' | 'resume'
+export type ControlVerb = 'cancel' | 'pause' | 'resume' | 'background'
 
 /** A message sent to a run that its transcript has not shown arriving yet. */
 export interface PendingMessage {

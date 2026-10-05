@@ -193,6 +193,7 @@ sugar-crush/tests/MCP/McpMessageResultTypeTest.php	1.807	34
 sugar-crush/tests/PaletteClickTest.php	1.800	20
 sugar-crush/tests/Agents/Live/SoftCancelPauseTest.php	1.800	4
 sugar-crush/tests/Acp/AcpCancelTest.php	1.800	4
+sugar-crush/tests/Server/AgentsBackgroundControlTest.php	1.800	3
 sugar-crush/tests/Config/DocumentParagraphsTest.php	1.773	18
 sugar-crush/tests/Config/DocFigureProseDriftTest.php	1.767	89
 sugar-crush/tests/Acp/AcpSessionLoadTest.php	1.750	6
@@ -420,6 +421,7 @@ sugar-crush/tests/MCP/McpFrameCapTest.php	0.366	3
 sugar-crush/tests/Context/EnvironmentBlockGitConfigIsolationTest.php	0.358	4
 sugar-crush/tests/Skills/SkillLoaderTest.php	0.353	61
 sugar-crush/tests/Backend/StructuredReplayTest.php	0.350	11
+sugar-crush/tests/Server/HelloDefaultDeliveryTest.php	0.350	2
 sugar-crush/tests/Integration/TaskToolWiringTest.php	0.343	4
 sugar-crush/tests/Host/ContextMeterTest.php	0.338	12
 sugar-crush/tests/Permissions/McpReadOnlyHintTest.php	0.330	21

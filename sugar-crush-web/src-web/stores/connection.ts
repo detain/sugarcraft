@@ -59,6 +59,12 @@ export const useConnectionStore = defineStore('connection', () => {
   const statusLabel = computed(() => LABELS[status.value])
   const connected = computed(() => status.value === 'connected')
   const scopes = computed(() => hello.value?.principal.scopes ?? [])
+  /**
+   * What the composer offers first for a prompt sent while a turn runs: the
+   * server's `queueMode` setting, as the terminal's Enter reads it — `steer`
+   * unless the server says otherwise (decision D6).
+   */
+  const defaultDelivery = computed<NonNullable<MethodParams<'session.send'>['delivery']>>(() => hello.value?.defaults?.delivery ?? 'steer')
 
   let client: SugarCrushClient | null = null
   let overrides: Partial<ClientOptions> = {}
@@ -193,6 +199,7 @@ export const useConnectionStore = defineStore('connection', () => {
     connected,
     hello,
     scopes,
+    defaultDelivery,
     rttMs,
     retryAt,
     lastError,

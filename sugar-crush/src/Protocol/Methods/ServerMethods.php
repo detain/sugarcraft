@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Protocol\Methods;
 
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Backend\QueueMode;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Permissions\PermissionMode;
@@ -110,9 +111,25 @@ final class ServerMethods
             ],
             'defaults' => [
                 'permissionMode' => $config->permissionMode->value,
+                // What a prompt sent mid-turn does when the client picks
+                // nothing: the `queueMode` setting, as the TUI's Enter reads
+                // it (decision D6, `steer` unless set), in the wire's words.
+                'delivery' => self::defaultDelivery(),
             ],
             'resumed' => $resumed === [] ? new \stdClass() : $resumed,
         ];
+    }
+
+    /**
+     * The `queueMode` setting ({@see QueueMode::onEnter()}) as a
+     * `session.send` delivery ({@see TurnMethods::DELIVERY}), so a client's
+     * composer defaults to what the terminal's Enter does mid-turn.
+     */
+    public static function defaultDelivery(): string
+    {
+        $delivery = \array_search(QueueMode::onEnter(), TurnMethods::DELIVERY, true);
+
+        return \is_string($delivery) ? $delivery : 'steer';
     }
 
     /** @return array<string, mixed> */

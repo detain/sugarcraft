@@ -77,8 +77,10 @@ documents the protocol and the UI).
   output (the full text on request when the event was capped) and diff.
 - **Permission cards**: once / always (this session) / reject / reject & stop,
   `y` `a` `n` on a focused card. The first answer from any client wins.
-- **Composer**: Enter sends; while a turn runs, queue (default), steer or
-  interrupt; Stop or Esc Esc cancels; `/` completes server-runnable commands.
+- **Composer**: Enter sends; while a turn runs, steer, queue or interrupt —
+  offered first is the server's `queueMode` (`server.hello`'s
+  `defaults.delivery`; `steer` unless set, as the TUI's Enter does mid-turn);
+  Stop or Esc Esc cancels; `/` completes server-runnable commands.
 - **Status bar**: activity and step, context used, spend, model, and the
   permission mode (changeable).
 - **Reconnects** after 0.5 s doubling to 15 s (±30 % jitter) with a fresh
@@ -86,7 +88,9 @@ documents the protocol and the UI).
 - **Side panels** (roadmap O-6c; the *panels* button): **Agents** — the
   session's delegated runs as a live tree, also under each `Task` card, each
   opening into an agent view with the run's own transcript, a box to message it
-  (or continue it once finished) and pause / resume / cancel; **Todo** — the
+  (or continue it once finished) and pause / resume / cancel, plus
+  *Background* for a run the conversation itself delegated (the TUI's
+  `Ctrl+X b`: the run moves to a background session); **Todo** — the
   agent's todo list, live; **Background** — `/bg` sessions with output, stop
   and *send to this session*; **Workflows** — run one, and the session's
   `/workflow` and `Workflow` tool runs; **Memory** — notes per scope, search,
@@ -94,7 +98,8 @@ documents the protocol and the UI).
 - **Command palette** (Ctrl+K / ⌘K): sessions, slash commands, panels, new
   session, theme.
 - **Settings** (the *settings* link in the top bar): a form generated from
-  `settings.schema` — your tier or a trusted project's, each value's
+  `settings.schema` — your tier or a trusted project's local or committed
+  shared file, each value's
   provenance, env and flag locks, apply-mode badges — with a diff preview of
   the file before anything is saved (`settings.preview`, then `settings.set`).
 

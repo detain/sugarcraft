@@ -96,7 +96,10 @@ final class MethodSchemas
                         'via' => Schema::string(),
                         'scopes' => Schema::arrayOf(Schema::enum(['read', 'write', 'approve', 'admin'])),
                     ], ['kind', 'scopes']),
-                    'defaults' => Schema::object(['permissionMode' => Schema::ref(D::PERMISSION_MODE)]),
+                    'defaults' => Schema::object([
+                        'permissionMode' => Schema::ref(D::PERMISSION_MODE),
+                        'delivery' => Schema::enum(['queue', 'steer', 'interrupt'])->describe('The delivery a client should offer first for a prompt sent while a turn runs: the `queueMode` setting, `steer` unless set. A `session.send` that names none still queues.'),
+                    ]),
                     'resumed' => Schema::map(Schema::oneOf(
                         Schema::ref(D::SUBSCRIPTION),
                         Schema::object(['error' => Schema::string()], ['error'], false),
@@ -388,7 +391,7 @@ final class MethodSchemas
                 Schema::object([
                     ...$sid,
                     'agentId' => $agentId,
-                    'verb' => Schema::enum(\SugarCraft\Crush\Agents\Live\AgentInbox::CONTROL_VERBS),
+                    'verb' => Schema::enum(\SugarCraft\Crush\Protocol\Methods\AgentsMethods::CONTROL_VERBS),
                     'text' => Schema::string(65_536)->describe('What a resumed FINISHED run is told; the default asks it to continue.'),
                 ], ['sessionId', 'agentId', 'verb']),
                 $agentSent,

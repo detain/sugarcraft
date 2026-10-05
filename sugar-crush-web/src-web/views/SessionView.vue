@@ -143,6 +143,7 @@ async function rename(): Promise<void> {
         :busy="session.busy"
         :disabled="sending || !connection.connected"
         :commands="session.commands"
+        :default-delivery="connection.defaultDelivery"
         @send="send"
         @stop="stop"
       />

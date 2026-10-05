@@ -316,8 +316,8 @@ preset. See [`WORKFLOWS.md`](WORKFLOWS.md).
 
 ## Not yet available
 
-- `Ctrl+X` `b` is not offered for a nested run, and the web client's
-  `agent.control` cannot send a run to the background.
+- `Ctrl+X` `b` is not offered for a nested run — nor is the web client's
+  `agents.control` `background`, which is refused for one.
 - A `/bg` session has no live line or Agent View transcript; the Agents pane
   shows its output.
 

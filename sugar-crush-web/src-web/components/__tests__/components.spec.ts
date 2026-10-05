@@ -123,7 +123,18 @@ describe('Composer', () => {
     await wrapper.find('textarea').trigger('keydown', { key: 'Enter', shiftKey: true })
     expect(wrapper.emitted('send')).toBeUndefined()
     await wrapper.find('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('send')?.[0]).toEqual(['hello', 'queue'])
+    expect(wrapper.emitted('send')?.[0]).toEqual(['hello', 'steer'])
+  })
+
+  it('offers the server\'s queueMode first while a turn runs, steer unless it says otherwise', async () => {
+    const steer = mount(Composer, { props: { modelValue: 'more', busy: true, commands: [] } })
+    expect((steer.find('[data-testid="composer-delivery"]').element as HTMLSelectElement).value).toBe('steer')
+    expect(steer.find('[data-testid="composer-send"]').text()).toBe('Steer')
+
+    const queue = mount(Composer, { props: { modelValue: 'more', busy: true, commands: [], defaultDelivery: 'queue' } })
+    expect((queue.find('[data-testid="composer-delivery"]').element as HTMLSelectElement).value).toBe('queue')
+    await queue.find('[data-testid="composer-send"]').trigger('click')
+    expect(queue.emitted('send')?.[0]).toEqual(['more', 'queue'])
   })
 
   it('picks queue, steer or interrupt while a turn runs, and stops on Esc Esc', async () => {

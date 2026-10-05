@@ -109,7 +109,7 @@ export function helloResult(overrides: Record<string, unknown> = {}): Record<str
     features: { methods: [], events: [] },
     limits: { tickIntervalMs: 15000 },
     principal: { kind: 'owner', scopes: ['read', 'write', 'approve', 'admin'] },
-    defaults: { permissionMode: 'default' },
+    defaults: { permissionMode: 'default', delivery: 'steer' },
     resumed: {},
     ...overrides,
   }

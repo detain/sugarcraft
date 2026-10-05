@@ -58,6 +58,15 @@ final class AgentsMethods
     /** Bytes of one message to a run. */
     private const MAX_MESSAGE_BYTES = 65_536;
 
+    /**
+     * The `agents.control` verbs on the wire: the inbox's control verbs plus
+     * {@see AgentInbox::BACKGROUND_VERB} — the TUI Agent View's `Ctrl+X b`
+     * (roadmap P-E3), which promotes the running run to a background session.
+     * The inbox keeps that verb out of its own list; the wire offers it here,
+     * and the schema's enum is this list.
+     */
+    public const CONTROL_VERBS = [...AgentInbox::CONTROL_VERBS, AgentInbox::BACKGROUND_VERB];
+
     /** The fields a transcript item may carry over the wire, by type. */
     private const ITEM_FIELDS = ['text', 'callId', 'tool', 'args', 'ok', 'content', 'truncated', 'status', 'outcome', 'error', 'from', 'mode', 'msgId', 'step'];
 
@@ -71,7 +80,7 @@ final class AgentsMethods
         $registry->add(MethodSpec::new('agents.subtree', Scope::Read, 'The sub-agents a session\'s turns have delegated to, with their latest activity.', self::subtree(...)));
         $registry->add(MethodSpec::new('agents.transcript', Scope::Read, 'A delegated run\'s own transcript, read from a byte offset.', self::transcript(...)));
         $registry->add(MethodSpec::new('agents.message', Scope::Write, 'Message a delegated run: into its mailbox while it runs, as a follow-up once it finished.', self::message(...), true));
-        $registry->add(MethodSpec::new('agents.control', Scope::Write, 'Cancel, pause or resume a delegated run.', self::control(...), true));
+        $registry->add(MethodSpec::new('agents.control', Scope::Write, 'Cancel, pause, resume or background a delegated run.', self::control(...), true));
     }
 
     /** @return array<string, mixed> */
@@ -151,7 +160,7 @@ final class AgentsMethods
         $sessionId = SessionMethods::sessionId($params);
         $host = $call->host($sessionId);
         $agentId = self::agentId($params);
-        $verb = $params->enum('verb', AgentInbox::CONTROL_VERBS);
+        $verb = $params->enum('verb', self::CONTROL_VERBS);
         $run = self::runs($call, $host)[$agentId]
             ?? throw RpcError::notFound(\sprintf('%s is not a delegated run of this session', $agentId), 'agent_not_found');
 
@@ -161,6 +170,12 @@ final class AgentsMethods
             }
 
             throw RpcError::of(ErrorCode::Conflict, \sprintf('%s has already finished', self::name($run)), 'agent_finished');
+        }
+
+        // As in the TUI (P-E3): a nested run's Task call belongs to the run
+        // that made it, so only a run the conversation delegated is handed on.
+        if ($verb === AgentInbox::BACKGROUND_VERB && \is_string($run['parentAgentId'] ?? null) && $run['parentAgentId'] !== '') {
+            throw RpcError::of(ErrorCode::Conflict, \sprintf('%s is a nested run; only a run this conversation delegated can move to the background', self::name($run)), 'agent_nested');
         }
 
         $message = self::inbox($host)->control($agentId, $verb);

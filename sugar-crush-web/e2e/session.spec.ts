@@ -63,7 +63,10 @@ test.describe('a session', () => {
     await send(page, '::tool Bash {"command":"echo first"}')
     await expect(page.getByTestId('permission-card')).toBeVisible()
 
-    await expect(page.getByTestId('composer-delivery')).toHaveValue('queue')
+    // The composer offers the server's queueMode first — steer, as the TUI's
+    // Enter does mid-turn — and queue is one pick away.
+    await expect(page.getByTestId('composer-delivery')).toHaveValue('steer')
+    await page.getByTestId('composer-delivery').selectOption('queue')
     await send(page, 'and then this')
     await expect(page.getByTestId('queue-entry')).toContainText('and then this')
 
