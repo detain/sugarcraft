@@ -515,8 +515,9 @@ sugarcrush session list          # newest first
 sugarcrush session delete <id>   # exits 1 if no session has that id
 ```
 
-Sessions are pruned only if `SUGARCRUSH_SESSION_RETENTION_DAYS` is a positive
-integer; the default `0` prunes nothing. A named session is never pruned, nor is
+Sessions are pruned only if `SUGARCRUSH_SESSION_RETENTION_DAYS` (or, when it
+is unset, the `sessionRetentionDays` setting) is a positive integer; the default
+`0` prunes nothing. A named session is never pruned, nor is
 the one about to be resumed.
 
 ## See also

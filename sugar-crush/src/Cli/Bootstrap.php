@@ -9320,9 +9320,22 @@ final class Bootstrap
         }
     }
 
+    /** The settings key {@see sessionRetentionDays()} falls back to. */
+    public const SESSION_RETENTION_DAYS_SETTING = 'sessionRetentionDays';
+
     /**
      * How many days an unnamed session survives without being touched, from
-     * `SUGARCRUSH_SESSION_RETENTION_DAYS`.
+     * `SUGARCRUSH_SESSION_RETENTION_DAYS`, else the `sessionRetentionDays`
+     * setting (roadmap N-P4g).
+     *
+     * THE VARIABLE WINS WHENEVER IT IS SET AT ALL — a non-empty value decides,
+     * including a value that reads as `0` — so a wrapper that exports
+     * `SUGARCRUSH_SESSION_RETENTION_DAYS=0` keeps every session whatever a
+     * settings file says. The setting is the operator's own (user tier only: a
+     * checkout must not be able to delete the operator's history), read when
+     * the store is built at launch, so a saved change applies at the next one.
+     * Out of its `0..`{@see SessionStore::MAX_RETENTION_DAYS} range it reads as
+     * the default `0`, never as a guess at a cutoff.
      *
      * **Retention is opt-in: the default is `0`, which disables it.** An
      * unset variable cannot mean "delete my history", and the only signal
@@ -9342,12 +9355,12 @@ final class Bootstrap
     public static function sessionRetentionDays(): int
     {
         $raw = getenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
-        if ($raw === false) {
-            return 0;
+        $trimmed = $raw === false ? '' : trim($raw);
+        if ($trimmed === '') {
+            return \SugarCraft\Crush\Config\Settings\UiSettings::int(self::SESSION_RETENTION_DAYS_SETTING);
         }
 
-        $trimmed = trim($raw);
-        if ($trimmed === '' || !ctype_digit($trimmed)) {
+        if (!ctype_digit($trimmed)) {
             return 0;
         }
 

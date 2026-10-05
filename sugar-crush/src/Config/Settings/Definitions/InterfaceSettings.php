@@ -18,6 +18,7 @@ use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Support\AiCommentWatcher;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\TerminalBackground;
@@ -198,6 +199,19 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel('Tool output preview lines')
                 ->withHelp('Lines of a collapsed tool result shown in the transcript; Ctrl+O expands the rest.')
                 ->withReaderSymbol(Renderer::class . '::toolOutputPreviewLines'),
+            // Retention DELETES conversations, so it is the operator's own
+            // switch: a checkout must not be able to prune their history.
+            SettingDefinition::new(Bootstrap::SESSION_RETENTION_DAYS_SETTING, SettingType::Int, 0)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnvVar('SUGARCRUSH_SESSION_RETENTION_DAYS')
+                ->withRange(0, SessionStore::MAX_RETENTION_DAYS)
+                ->withLabel('Session retention (days)')
+                ->withHelp('Each launch deletes unnamed, unpinned sessions untouched for this many days and says which; 0 (the default) keeps everything.')
+                ->withReaderSymbol(Bootstrap::class . '::sessionRetentionDays')
+                ->withReadBy('`Bootstrap::sessionStore()` at launch → `sessionRetentionDays()`'),
             SettingDefinition::new('maxCheckpoints', SettingType::Int, EnhancedSessionStore::MAX_CHECKPOINTS_PER_SESSION)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Tuning)

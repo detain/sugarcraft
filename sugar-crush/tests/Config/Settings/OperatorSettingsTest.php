@@ -116,6 +116,53 @@ final class OperatorSettingsTest extends TestCase
         }
     }
 
+    // ── session retention ───────────────────────────────────────────────
+
+    public function testRetentionIsTheSettingUnlessTheVariableIsSetAtAll(): void
+    {
+        $was = getenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
+        putenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
+        try {
+            self::assertSame(0, Bootstrap::sessionRetentionDays(), 'off by default');
+
+            $this->writeConfig(['sessionRetentionDays' => 30]);
+            self::assertSame(30, Bootstrap::sessionRetentionDays());
+
+            putenv('SUGARCRUSH_SESSION_RETENTION_DAYS=0');
+            self::assertSame(0, Bootstrap::sessionRetentionDays(), 'an explicit 0 keeps everything whatever the file says');
+            putenv('SUGARCRUSH_SESSION_RETENTION_DAYS=7');
+            self::assertSame(7, Bootstrap::sessionRetentionDays());
+            putenv('SUGARCRUSH_SESSION_RETENTION_DAYS=');
+            self::assertSame(30, Bootstrap::sessionRetentionDays(), 'an empty variable is unset');
+
+            $this->writeConfig(['sessionRetentionDays' => 99999999]);
+            self::assertSame(0, Bootstrap::sessionRetentionDays(), 'out of range is the default, never a guessed cutoff');
+        } finally {
+            putenv($was === false ? 'SUGARCRUSH_SESSION_RETENTION_DAYS' : 'SUGARCRUSH_SESSION_RETENTION_DAYS=' . $was);
+        }
+    }
+
+    public function testALaunchPrunesByTheSetting(): void
+    {
+        $was = getenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
+        putenv('SUGARCRUSH_SESSION_RETENTION_DAYS');
+        try {
+            $store = Bootstrap::sessionStore(prune: false);
+            $store->createSession('stale', 'p', 'm');
+            $store->createSession('fresh', 'p', 'm');
+            (new \PDO('sqlite:' . $this->home . '/.sugar-crush/session.db'))
+                ->exec("UPDATE sessions SET updated_at = '2020-01-01 00:00:00' WHERE id = 'stale'");
+
+            $this->writeConfig(['sessionRetentionDays' => 7]);
+            $pruned = Bootstrap::sessionStore();
+
+            self::assertNull($pruned->getSession('stale'), 'the stale unnamed session went');
+            self::assertNotNull($pruned->getSession('fresh'));
+        } finally {
+            putenv($was === false ? 'SUGARCRUSH_SESSION_RETENTION_DAYS' : 'SUGARCRUSH_SESSION_RETENTION_DAYS=' . $was);
+        }
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────
 
     private function forcePush(int $n): ToolCall

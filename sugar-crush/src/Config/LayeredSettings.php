@@ -565,6 +565,7 @@ final class LayeredSettings
         'paletteMru',
         'diffPreviewRows',
         'toolOutputPreviewLines',
+        'sessionRetentionDays',
         'maxCheckpoints',
         'lintCommands',
         'disabledMcpServers',
