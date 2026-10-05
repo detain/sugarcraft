@@ -2,7 +2,7 @@
 
 This appendix schedules every remaining roadmap step (Part III, Part V, Part VI) into **11 fix waves plus one final verification pass**. All work lands straight on `master`, with no PRs and at most 10 groups at a time.
 
-**Step definitions** live in Part III (0.x–5.x), Appendix N (N-*), Appendix O (O-*), Appendix P (B1–B3, P-*) and Appendix Q/Part VI (15b-14).
+**Step definitions** live in Part III (0.x–5.x), Appendix N (N-*), Appendix O (O-*), Appendix P (B1–B3, P-*) and Part VI (the LIVE checks).
 
 **Per-step file impact** (exact files, method regions, forced docs and drift tests, dependencies) lives in `prompt_kit/findings/crush-report/impact/<batch>.md`. These files are research inputs and are not assembled into this report. The batches are:
 
@@ -236,15 +236,6 @@ The blocked live checks.
 
 Run the blocked live checks from `sugar-crush/` with `php scripts/provider-cache-live-probe.php --check=<ID>` once the credentials exist.
 
-### W11: i18n (order: a, b, c, d)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 15b-14-2 (CLI) | `src/Cli/**`, `src/Cli/Bootstrap.php` (launch notices) | — | — | — | M |
-| b | 15b-14-3 (registries) | `src/Commands/**` (specs, KeyBindingRegistry) | — | generated docs pinned to `en` | — | S–M |
-| c | 15b-14-4a (Chat + Host) | `src/Chat.php`, `src/Host/**` | — | — | — | L |
-| d | 15b-14-4b (TUI) | `src/Renderer.php`, `src/App/App.php`, `src/Tui/**`, `src/Palette/**` | — | — | — | L |
-
 ### Final (one agent, after W11)
 
 1. Serial full runs:
@@ -260,7 +251,7 @@ Run the blocked live checks from `sugar-crush/` with `php scripts/provider-cache
    - reassemble.
 7. Push.
 
-## 5. Step index (9 steps)
+## 5. Step index (5 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -283,10 +274,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Server and web**
 
 **Deferred and live checks**
-- 15b-14-2 M · all roadmap steps · W11-a
-- 15b-14-3 S–M · all roadmap steps · W11-b
-- 15b-14-4a L · all roadmap steps · W11-c
-- 15b-14-4b L · all roadmap steps · W11-d
 - LIVE-X31b, LIVE-A15b, LIVE-A15v, LIVE-A21b, LIVE-CH (blocked on credentials) · W10-i
 
 **Subsumed (no separate work):**

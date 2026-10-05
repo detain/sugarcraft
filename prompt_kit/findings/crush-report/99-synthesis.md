@@ -17,7 +17,6 @@
 - **Part VI:** code-audit status and live checks.
 - **Appendices A–M:** the baseline and competitor reports, trimmed to the parts a step needs. Each starts with a "Feeds steps" line.
 - **Appendices N–P:** the three feature designs.
-- **Appendix Q:** the open code-audit finding (15b-14, i18n).
 - **Appendix R:** the execution plan (waves, ownership, rules, step index).
 
 **Where things live:**
@@ -29,7 +28,7 @@
 
 # Part I — Key findings
 
-1. **The scheduled work left is i18n and the live checks.** sugar-crush has no i18n yet (15b-14, W11), and five live provider checks wait on credentials (Part VI). Parts III and V still list unscheduled polish (2.9, 3.A, 4.3, the agent view's remaining items).
+1. **The scheduled work left is the live checks.** Five live provider checks wait on credentials (Part VI). Parts III and V still list unscheduled polish (2.9, 3.A, 4.3, the agent view's remaining items).
 
 ---
 
@@ -271,7 +270,7 @@ These features are scheduled in Appendix R together with Part III.
 
 # Part VI — Code-audit status and live checks
 
-The five code audits have one open finding (Appendix Q): **15b-14**, sugar-crush has no i18n (Low). It is deferred by decision until after the roadmap: 15b-14-2…4b run in W11 (Appendix R), on the `Lang` facade and `lang/en.php` already in place.
+The five code audits have no open finding.
 
 **Corrections to earlier assumptions:**
 - Argument-scoped **permission rules** are implemented (`PermissionRule::matches`/`matchesShellSubject`, fail-closed on `$(…)`, backticks and redirects).

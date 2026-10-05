@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Assemble crush_report.md = synthesis + the trimmed per-agent reports as lettered appendices.
-# Audits 15a/15c/15d/15e (no open findings) and impact/ research files are not assembled.
+# Audits 15a–15e (no open findings) and impact/ research files are not assembled.
 # Headings inside appendices are demoted one level (outside ``` fences only) so the
 # appendix title stays the top-level heading and quoted prompts are left byte-exact.
 set -euo pipefail
@@ -23,7 +23,6 @@ declare -a MAP=(
   "N|13-settings-pane-and-configurability.md|Design: settings pane and configurability"
   "O|14-server-mode-and-web-ui.md|Design: server mode and sugar-crush-web"
   "P|16-sessions-and-live-agent-view.md|Design: sessions, live agent lines, agent view"
-  "Q|15b-audit-chat-tui.md|Audit: the open finding (15b-14, i18n)"
   "R|17-execution-plan.md|Execution plan: concurrency-aware waves"
 )
 {

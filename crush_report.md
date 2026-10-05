@@ -17,7 +17,6 @@
 - **Part VI:** code-audit status and live checks.
 - **Appendices A–M:** the baseline and competitor reports, trimmed to the parts a step needs. Each starts with a "Feeds steps" line.
 - **Appendices N–P:** the three feature designs.
-- **Appendix Q:** the open code-audit finding (15b-14, i18n).
 - **Appendix R:** the execution plan (waves, ownership, rules, step index).
 
 **Where things live:**
@@ -29,7 +28,7 @@
 
 # Part I — Key findings
 
-1. **The scheduled work left is i18n and the live checks.** sugar-crush has no i18n yet (15b-14, W11), and five live provider checks wait on credentials (Part VI). Parts III and V still list unscheduled polish (2.9, 3.A, 4.3, the agent view's remaining items).
+1. **The scheduled work left is the live checks.** Five live provider checks wait on credentials (Part VI). Parts III and V still list unscheduled polish (2.9, 3.A, 4.3, the agent view's remaining items).
 
 ---
 
@@ -271,7 +270,7 @@ These features are scheduled in Appendix R together with Part III.
 
 # Part VI — Code-audit status and live checks
 
-The five code audits have one open finding (Appendix Q): **15b-14**, sugar-crush has no i18n (Low). It is deferred by decision until after the roadmap: 15b-14-2…4b run in W11 (Appendix R), on the `Lang` facade and `lang/en.php` already in place.
+The five code audits have no open finding.
 
 **Corrections to earlier assumptions:**
 - Argument-scoped **permission rules** are implemented (`PermissionRule::matches`/`matchesShellSubject`, fail-closed on `$(…)`, backticks and redirects).
@@ -309,7 +308,6 @@ Each appendix holds one source report, trimmed to what the remaining steps need 
 - [Appendix N — Design: settings pane and configurability](#appendix-n) (`13-settings-pane-and-configurability.md`)
 - [Appendix O — Design: server mode and sugar-crush-web](#appendix-o) (`14-server-mode-and-web-ui.md`)
 - [Appendix P — Design: sessions, live agent lines, agent view](#appendix-p) (`16-sessions-and-live-agent-view.md`)
-- [Appendix Q — Audit: the open finding (15b-14, i18n)](#appendix-q) (`15b-audit-chat-tui.md`)
 - [Appendix R — Execution plan: concurrency-aware waves](#appendix-r) (`17-execution-plan.md`)
 
 
@@ -9015,32 +9013,6 @@ Phase A is independent and ships first. Phases B and C together answer the secon
 
 ---
 
-<a id="appendix-q"></a>
-
-# Appendix Q — Audit: the open finding (15b-14, i18n)
-
-*Source: `prompt_kit/findings/crush-report/15b-audit-chat-tui.md`*
-
-## 15b — Audit: sugar-crush interactive UI state machine and rendering
-
-Feeds steps: 15b-14-1, 15b-14-2, 15b-14-3, 15b-14-4a, 15b-14-4b
-
-Scope: `src/Chat.php`, `src/Renderer.php`, `src/App/`, `src/Tui/`, `src/Commands/`, `src/CommandParser.php`, the `*Msg.php` classes, `src/Attachment*.php`.
-
-**One finding remains open.**
-
----
-
-### Open finding
-
-#### 15b-14 — sugar-crush has no i18n: every user-facing string is hard-coded
-- **Severity:** Low (convention gap) · **Confidence:** Verified-by-reading · **Status:** deferred by decision until after the roadmap
-- **Where:** `grep -rl 'Lang::t' src/` finds no PHP file. There is no `lang/` directory. `Renderer.php` acknowledges this.
-- **Conflict:** CLAUDE.md requires `Lang::t()`. This is recorded for completeness; it is a large job and not a defect in any one string.
-
-
----
-
 <a id="appendix-r"></a>
 
 # Appendix R — Execution plan: concurrency-aware waves
@@ -9051,7 +9023,7 @@ Scope: `src/Chat.php`, `src/Renderer.php`, `src/App/`, `src/Tui/`, `src/Commands
 
 This appendix schedules every remaining roadmap step (Part III, Part V, Part VI) into **11 fix waves plus one final verification pass**. All work lands straight on `master`, with no PRs and at most 10 groups at a time.
 
-**Step definitions** live in Part III (0.x–5.x), Appendix N (N-*), Appendix O (O-*), Appendix P (B1–B3, P-*) and Appendix Q/Part VI (15b-14).
+**Step definitions** live in Part III (0.x–5.x), Appendix N (N-*), Appendix O (O-*), Appendix P (B1–B3, P-*) and Part VI (the LIVE checks).
 
 **Per-step file impact** (exact files, method regions, forced docs and drift tests, dependencies) lives in `prompt_kit/findings/crush-report/impact/<batch>.md`. These files are research inputs and are not assembled into this report. The batches are:
 
@@ -9285,15 +9257,6 @@ The blocked live checks.
 
 Run the blocked live checks from `sugar-crush/` with `php scripts/provider-cache-live-probe.php --check=<ID>` once the credentials exist.
 
-#### W11: i18n (order: a, b, c, d)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 15b-14-2 (CLI) | `src/Cli/**`, `src/Cli/Bootstrap.php` (launch notices) | — | — | — | M |
-| b | 15b-14-3 (registries) | `src/Commands/**` (specs, KeyBindingRegistry) | — | generated docs pinned to `en` | — | S–M |
-| c | 15b-14-4a (Chat + Host) | `src/Chat.php`, `src/Host/**` | — | — | — | L |
-| d | 15b-14-4b (TUI) | `src/Renderer.php`, `src/App/App.php`, `src/Tui/**`, `src/Palette/**` | — | — | — | L |
-
 #### Final (one agent, after W11)
 
 1. Serial full runs:
@@ -9309,7 +9272,7 @@ Run the blocked live checks from `sugar-crush/` with `php scripts/provider-cache
    - reassemble.
 7. Push.
 
-### 5. Step index (9 steps)
+### 5. Step index (5 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -9332,10 +9295,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Server and web**
 
 **Deferred and live checks**
-- 15b-14-2 M · all roadmap steps · W11-a
-- 15b-14-3 S–M · all roadmap steps · W11-b
-- 15b-14-4a L · all roadmap steps · W11-c
-- 15b-14-4b L · all roadmap steps · W11-d
 - LIVE-X31b, LIVE-A15b, LIVE-A15v, LIVE-A21b, LIVE-CH (blocked on credentials) · W10-i
 
 **Subsumed (no separate work):**
