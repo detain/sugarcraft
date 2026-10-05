@@ -82,7 +82,7 @@ final class CommandRegistryTest extends TestCase
         // is what holds this list and the dispatch together from now on -
         // moving a row into the popup without a handler reds THAT test, which
         // is the check this one could never be.
-        foreach (['new', 'docs'] as $paletteOnly) {
+        foreach (['new-picker', 'docs'] as $paletteOnly) {
             $this->assertNotContains($paletteOnly, $slashNames);
         }
         $this->assertContains('model', $slashNames);

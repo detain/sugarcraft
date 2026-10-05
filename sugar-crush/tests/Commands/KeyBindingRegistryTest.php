@@ -47,6 +47,7 @@ final class KeyBindingRegistryTest extends TestCase
             KeyBindingRegistry::CONTEXT_CHAT,
             KeyBindingRegistry::CONTEXT_PALETTE,
             KeyBindingRegistry::CONTEXT_PICKER,
+            KeyBindingRegistry::CONTEXT_DIRPICKER,
             KeyBindingRegistry::CONTEXT_PERMISSION,
             KeyBindingRegistry::CONTEXT_AGENTS,
             KeyBindingRegistry::CONTEXT_AGENT_STRIP,
@@ -325,13 +326,17 @@ final class KeyBindingRegistryTest extends TestCase
      *
      * 132 -> 133 live (133 all) with the permission modal's scope editor:
      * `permission.edit` (`e`) edits what `a` would remember.
+     *
+     * 133 -> 142 live (142 all), 12 -> 13 groups, with `/new`'s folder
+     * picker: `dirpicker.move`, `.enter`, `.open`, `.up`, `.parent`,
+     * `.hidden`, `.path`, `.start` and `.close`.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(133, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(133, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(142, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(142, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
-        $this->assertCount(12, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
+        $this->assertCount(13, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
     /**

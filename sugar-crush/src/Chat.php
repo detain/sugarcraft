@@ -1074,12 +1074,10 @@ final class Chat implements Model
          * {@see update()}, which abandons a turn rather than replacing a
          * transcript; see the comment there for why it is unconditional and why
          * it became necessary once the 85% tier started parking turns behind a
-         * summarization ({@see scheduleParkedCompaction()}). Note the palette
-         * action is
-         * NOT reachable as `/new`: the registry row is `slashVisible: false`
-         * ({@see \SugarCraft\Crush\Commands\CommandRegistry}) and
-         * {@see dispatchCommand()} has no `new` arm, so a typed `/new` falls
-         * through and is sent to the model as an ordinary prompt.
+         * summarization ({@see scheduleParkedCompaction()}). A typed `/new`
+         * reaches the same action through its folder picker
+         * ({@see handleNewCommand()}): "Start session here" on this project
+         * root is {@see handlePaletteNewSession()}.
          */
         private readonly ?string $pendingCompactionId = null,
         /**
@@ -1540,6 +1538,19 @@ final class Chat implements Model
          * @var array{id: string, sessionId: ?string, fingerprint: Context\Compaction\HistoryFingerprint, summaries: ?array<string, string>}|null
          */
         private readonly ?array $backgroundSummary = null,
+        /**
+         * The `/new` folder picker ({@see handleNewCommand()}), while it is up:
+         * it owns every key until it closes, like {@see $sessionPicker}.
+         */
+        private readonly ?\SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPicker $dirPicker = null,
+        /**
+         * The directory `/new` chose to restart sugar-crush in — another
+         * project root, which this process (one root per process, Bootstrap's
+         * statics) cannot serve. Set together with `Cmd::quit()`; read by
+         * `bin/sugarcrush` once the program has restored the terminal
+         * ({@see pendingRelaunch()}, {@see \SugarCraft\Crush\Support\SessionRelaunch}).
+         */
+        private readonly ?string $relaunchDir = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -2772,6 +2783,10 @@ final class Chat implements Model
             // file - what dropping a screenshot onto most terminals types -
             // becomes an `@` mention of it instead, so the image is attached
             // when the prompt is sent rather than its path sent as prose.
+            // The `/new` folder picker takes a pasted path into its path box.
+            if ($this->dirPicker !== null) {
+                return [$this->mutate(['dirPicker' => $this->dirPicker->withPaste($msg->content)]), null];
+            }
             $imagePath = self::pastedImagePath($msg->content);
             if ($imagePath !== null) {
                 return [$this->withInput($this->input->insertString($this->mentionFor($imagePath) . ' ')), null];
@@ -2943,7 +2958,7 @@ final class Chat implements Model
         // The session picker is excluded for the same reason the palette is:
         // Escape closes the overlay there (see handleSessionPickerKey()),
         // which is more specific than "cancel the in-flight turn".
-        if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null) {
+        if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null && $this->dirPicker === null) {
             if (!$this->inFlight) {
                 return [$this->mutate(['lastEscapeAt' => null]), null];
             }
@@ -3119,6 +3134,11 @@ final class Chat implements Model
         // be open.
         if ($this->sessionPicker !== null) {
             return $this->handleSessionPickerKey($msg);
+        }
+
+        // And for the `/new` folder picker: every key browses or chooses.
+        if ($this->dirPicker !== null) {
+            return $this->handleDirPickerKey($msg);
         }
 
         return match (true) {
@@ -7760,6 +7780,10 @@ final class Chat implements Model
             if ($this->sessionPicker !== null) {
                 return $this->sessionPickerWheel($msg->button);
             }
+            // The `/new` folder picker's list scrolls under the wheel too.
+            if ($this->dirPicker !== null) {
+                return $this->handleDirPickerKey(new KeyMsg($msg->button === MouseButton::WheelUp ? KeyType::Up : KeyType::Down));
+            }
 
             return $this->scrollTranscript($msg->button);
         }
@@ -10120,6 +10144,8 @@ final class Chat implements Model
             // Dropped here, the summary fetched at 70% would be forgotten on
             // the first keystroke and the 85% tier would park after all.
             'backgroundSummary' => $this->backgroundSummary,
+            'dirPicker' => $this->dirPicker,
+            'relaunchDir' => $this->relaunchDir,
         ];
 
         // P-A4: who named the session, and a half-typed title, both belong to
@@ -11294,6 +11320,7 @@ final class Chat implements Model
             && $this->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
+            && $this->dirPicker === null
             && !$this->slashMenuOwnsTab()
             && !$this->mentionOwnsTab();
     }
@@ -16275,6 +16302,7 @@ final class Chat implements Model
             && $this->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
+            && $this->dirPicker === null
             && $this->slashMenuMatches() !== [];
     }
 
@@ -16364,6 +16392,7 @@ final class Chat implements Model
             && $this->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
+            && $this->dirPicker === null
             && $this->mentionTokenAtCaret() !== null;
     }
 
@@ -17041,6 +17070,7 @@ final class Chat implements Model
             PaletteAction::SwitchSession => $closed->handleSessionsCommand('/sessions'),
             PaletteAction::ToggleMcp => $closed->handleMcpAuthCommand('mcp auth list'),
             PaletteAction::NewSession => $closed->handlePaletteNewSession(),
+            PaletteAction::NewSessionPicker => $closed->handleNewCommand('/new'),
             PaletteAction::OpenDocs => $closed->handlePaletteOpenDocs(),
             // The gesture phase's palette twins: the same handlers the slash
             // commands reach, driven with fully-formed text.
@@ -17490,6 +17520,81 @@ final class Chat implements Model
     }
 
     /**
+     * `/new [dir]` — a new session, in a directory the user picks.
+     *
+     * Bare, it opens the folder picker ({@see \SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPicker})
+     * on the current project root with "Start session here" highlighted, so
+     * `/new` + Enter is the plain new session {@see handlePaletteNewSession()}
+     * makes. With a path it skips the browsing: the current root starts the
+     * session at once, another directory opens the picker on its confirm
+     * question ("this restarts sugar-crush there"), and a path that does not
+     * resolve opens the picker with the reason.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleNewCommand(string $text): array
+    {
+        $argument = \trim((string) \substr(\trim($text), \strlen('/new')));
+        $picker = \SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPicker::open($this->projectRoot());
+        if ($argument === '') {
+            return [$this->mutate(['dirPicker' => $picker, 'inputBuf' => '', 'palette' => null, 'sessionPicker' => null, 'keyHelp' => null]), null];
+        }
+
+        [$picker, $action] = $picker->chooseTyped($argument);
+
+        return $this->mutate(['inputBuf' => '', 'palette' => null, 'sessionPicker' => null, 'keyHelp' => null])->applyDirPickerAction($picker, $action);
+    }
+
+    /**
+     * A key while the `/new` folder picker is up.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleDirPickerKey(KeyMsg $msg): array
+    {
+        if ($this->dirPicker === null) {
+            return [$this, null];
+        }
+        [$picker, $action] = $this->dirPicker->update($msg);
+
+        return $this->applyDirPickerAction($picker, $action);
+    }
+
+    /**
+     * Carry out what the folder picker decided: keep it open, close it, start
+     * a new session here ({@see handlePaletteNewSession()}, the palette's own
+     * route), or quit so `bin/sugarcrush` restarts in the chosen directory.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function applyDirPickerAction(
+        \SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPicker $picker,
+        ?\SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPickerAction $action,
+    ): array {
+        return match ($action?->kind) {
+            null => [$this->mutate(['dirPicker' => $picker]), null],
+            \SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPickerAction::CANCEL => [$this->mutate(['dirPicker' => null]), null],
+            \SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPickerAction::HERE => $this->mutate(['dirPicker' => null])->handlePaletteNewSession(),
+            default => [$this->mutate(['dirPicker' => null, 'relaunchDir' => $action->path]), Cmd::quit()],
+        };
+    }
+
+    /** The `/new` folder picker, while it is up. */
+    public function dirPicker(): ?\SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPicker
+    {
+        return $this->dirPicker;
+    }
+
+    /**
+     * The directory `/new` chose to restart sugar-crush in, once the program
+     * has quit; null for an ordinary exit.
+     */
+    public function pendingRelaunch(): ?string
+    {
+        return $this->relaunchDir;
+    }
+
+    /**
      * `/handoff [focus]` (roadmap 5.14c) —
      * {@see \SugarCraft\Crush\Host\Commands\HandoffHostCommand}: a new session,
      * forked as a branch of this one, that starts from a state summary of it
@@ -17920,6 +18025,7 @@ final class Chat implements Model
             && $this->pendingPermission === null
             && $this->palette === null
             && $this->sessionPicker === null
+            && $this->dirPicker === null
             && !$this->readOnlySession
             && \SugarCraft\Crush\Support\AiCommentWatcher::enabled($this->workspace?->userConfig ?? [])
         ) {

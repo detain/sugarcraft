@@ -305,7 +305,8 @@ edit it by hand.
 <!-- commands:table:begin -->
 | Command | S | CP | Takes | What the row says |
 |---|---|---|---|---|
-| `/new` | | | — | Start a fresh session |
+| `/new` | ✓ | | `[dir]` | Start a fresh session, here or in a directory you pick |
+| `/new-picker` | | | — | Start a fresh session in a directory picked from a folder browser |
 | `/sessions` | ✓ | | `[<query>]` | List, search and manage sessions |
 | `/session-pin` | | | — | Pin the current session to the front of the list, or unpin it |
 | `/session-delete` | | | — | Open the session list to delete a session |
@@ -356,7 +357,7 @@ edit it by hand.
 | `/handoff` | ✓ | | `[focus]` | Continue in a new session that starts from a state summary of this one |
 <!-- commands:table:end -->
 
-**S** is blank on `new`, `session-pin`, `session-delete`, `docs`,
+**S** is blank on `new-picker`, `session-pin`, `session-delete`, `docs`,
 `pane-dock-left` and `pane-dock-right` alone: they are palette-only
 (`slashVisible: false`), reachable from Ctrl+P and from no "/" popup. All six
 share the typed-name asymmetry —
@@ -367,6 +368,17 @@ drive the COMPLETE command text (`/pane dock left`) through
 `Chat::handlePaneCommand()`, the handler the real `/pane` row dispatches to.
 The Ctrl+P palette and the draft box are two different surfaces over one
 registry, and a palette row may be a fuller sentence than a slash spelling.
+
+`/new` is the one row that is both: typed, it opens the folder picker
+(`Chat::handleNewCommand()`; `/new <dir>` chooses straight away), while its
+palette row, **New session**, stays the immediate new session on this project
+(`Chat::handlePaletteNewSession()`) — what `Ctrl+N` and the **Session** menu's
+**New session** run too. The picker's own palette and menu row is `new-picker`,
+**New session…**. A directory other than this project root restarts
+sugar-crush there on a new session, after asking, because one process serves
+one root (`Support\SessionRelaunch`); a bare `/new` used to complete to
+`/newrule ` in the "/" popup, and now an exact `/new` submits — `/newr` still
+completes to `/newrule`.
 
 One row's description understates its handler. `/memory`'s text names every
 sub-action but one: `Chat::handleMemoryCommand()` also answers `delete`. The

@@ -754,7 +754,7 @@ final class KeyboardHandler
         $chat = $app->chat;
         if ($app->pane !== Pane::Chat || $chat === null || $app->settingsEditor !== null || MenuBar::getActiveMenu() > 0
             || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
-            || $chat->palette() !== null || $chat->sessionPicker() !== null) {
+            || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->dirPicker() !== null) {
             return null;
         }
 
@@ -847,7 +847,7 @@ final class KeyboardHandler
         if ($app->agentViewTarget === null || $app->pane !== Pane::Chat || $chat === null
             || $app->agentStripFocus !== null || $app->settingsEditor !== null || MenuBar::getActiveMenu() > 0
             || $chat->pendingPermission() !== null || $chat->keyHelp() !== null
-            || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->titleEditor() !== null) {
+            || $chat->palette() !== null || $chat->sessionPicker() !== null || $chat->dirPicker() !== null || $chat->titleEditor() !== null) {
             return null;
         }
 

@@ -284,8 +284,8 @@ final class KeyBindingDriftTest extends TestCase
      *
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
-     * near-misses probed, because seven `*.move` rows describe arrow movement
-     * (eighteen rows carry an arrow GLYPH in their label; both counts are asserted
+     * near-misses probed, because eight `*.move` rows describe arrow movement
+     * (twenty-one rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -515,15 +515,15 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         $this->assertCount(
-            7,
+            8,
             $move,
-            'KEYISH\'s docblock says seven `*.move` rows describe arrow movement; it found: '
+            'KEYISH\'s docblock says eight `*.move` rows describe arrow movement; it found: '
             . implode(', ', $move),
         );
         $this->assertCount(
-            18,
+            21,
             $arrowLabelled,
-            'KEYISH\'s docblock says eighteen rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says twenty-one rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
@@ -1402,6 +1402,78 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertNotContains($child, $ids($hidden), 'the second hides them again');
             },
 
+            // ── Folder picker (/new) ─────────────────────────────────────
+            // Clamped like the session list: from "▶ Start session here" (row
+            // 0) the UP key holds and the DOWN key reaches the first directory.
+            'dirpicker.move' => function (array $k): void {
+                $open = $this->chatWithDirPicker();
+                [$up] = $open->update($k[0]);
+                [$down] = $open->update($k[1]);
+                $this->assertSame(0, $up->dirPicker()?->selectedIndex(), 'the first key must hold at the top');
+                $this->assertSame(1, $down->dirPicker()?->selectedIndex(), 'the second key must move DOWN');
+            },
+            // Both halves: on a directory Enter opens it; on "▶ Start session
+            // here" (this project root) it starts a new session in this process.
+            'dirpicker.enter' => function (array $k): void {
+                $open = $this->chatWithDirPicker();
+                [$onAlpha] = $open->update(new KeyMsg(KeyType::Down));
+                [$opened] = $onAlpha->update($k[0]);
+                $this->assertSame($this->dirPickerRoot . '/alpha', $opened->dirPicker()?->path());
+
+                [$started] = $open->update($k[0]);
+                $this->assertNull($started->dirPicker(), 'starting closes the picker');
+                $this->assertNotSame($open->currentSessionId(), $started->currentSessionId(), 'and a new session id is minted');
+                $this->assertNull($started->pendingRelaunch(), 'this root needs no restart');
+            },
+            'dirpicker.open' => function (array $k): void {
+                [$onAlpha] = $this->chatWithDirPicker()->update(new KeyMsg(KeyType::Down));
+                [$opened] = $onAlpha->update($k[0]);
+                $this->assertSame($this->dirPickerRoot . '/alpha', $opened->dirPicker()?->path());
+            },
+            'dirpicker.up' => function (array $k): void {
+                $this->assertUpReturnsToTheParent($k[0]);
+            },
+            'dirpicker.parent' => function (array $k): void {
+                $this->assertUpReturnsToTheParent($k[0]);
+            },
+            'dirpicker.hidden' => function (array $k): void {
+                $open = $this->chatWithDirPicker();
+                $this->assertNotContains('.hidden', \array_map(static fn ($e): string => $e->name, $open->dirPicker()?->listing()->entries ?? []));
+                [$shown] = $open->update($k[0]);
+                $this->assertTrue($shown->dirPicker()?->showsHidden());
+                $this->assertContains('.hidden', \array_map(static fn ($e): string => $e->name, $shown->dirPicker()?->listing()->entries ?? []));
+                [$hidden] = $shown->update($k[0]);
+                $this->assertFalse($hidden->dirPicker()?->showsHidden(), 'and the next press hides them again');
+            },
+            'dirpicker.path' => function (array $k): void {
+                [$typing] = $this->chatWithDirPicker()->update($k[0]);
+                $this->assertSame('', $typing->dirPicker()?->typedPath(), 'the key opens the path box');
+                $went = $this->pressAll($typing, [new KeyMsg(KeyType::Char, 'b'), new KeyMsg(KeyType::Char, 'e'), new KeyMsg(KeyType::Char, 't'), new KeyMsg(KeyType::Char, 'a'), new KeyMsg(KeyType::Enter)]);
+                $this->assertSame($this->dirPickerRoot . '/beta', $went->dirPicker()?->path(), 'and Enter goes to what was typed');
+            },
+            // Both halves: this root starts here; another one asks first, and
+            // yes quits for bin/sugarcrush to restart there.
+            'dirpicker.start' => function (array $k): void {
+                $open = $this->chatWithDirPicker();
+                [$here] = $open->update($k[0]);
+                $this->assertNull($here->dirPicker());
+                $this->assertNotSame($open->currentSessionId(), $here->currentSessionId());
+
+                $inAlpha = $this->pressAll($open, [new KeyMsg(KeyType::Down), new KeyMsg(KeyType::Right)]);
+                [$asking] = $inAlpha->update($k[0]);
+                $this->assertSame($this->dirPickerRoot . '/alpha', $asking->dirPicker()?->confirming(), 'another directory asks first');
+                [$quitting, $cmd] = $asking->update(new KeyMsg(KeyType::Char, 'y'));
+                $this->assertNotNull($cmd, 'yes quits');
+                $this->assertSame($this->dirPickerRoot . '/alpha', $quitting->pendingRelaunch());
+            },
+            'dirpicker.close' => function (array $k): void {
+                $open = $this->chatWithDirPicker();
+                [$closed, $cmd] = $open->update($k[0]);
+                $this->assertNull($closed->dirPicker());
+                $this->assertNull($cmd);
+                $this->assertSame($open->currentSessionId(), $closed->currentSessionId(), 'nothing starts');
+            },
+
             // ── Permission prompt ────────────────────────────────────────
             'permission.once' => fn(array $k) => $this->assertPermissionAnsweredBy($k[0]),
             // `a` answers at once — the row's description promises the
@@ -2194,6 +2266,48 @@ final class KeyBindingDriftTest extends TestCase
             sessionStore: $store,
             currentSessionId: $ids[0],
         ))->withSize(100, 30);
+    }
+
+    /** The real path of the `/new` folder picker fixture's project root. */
+    private string $dirPickerRoot = '';
+
+    /**
+     * A chat on a throwaway project root holding `alpha/`, `beta/` and
+     * `.hidden/`, with `/new` run: the folder picker open on that root.
+     */
+    private function chatWithDirPicker(): Chat
+    {
+        $root = $this->sandbox . '/dirpicker-root';
+        foreach (['alpha/inner', 'beta', '.hidden'] as $dir) {
+            if (!\is_dir($root . '/' . $dir)) {
+                \mkdir($root . '/' . $dir, 0o700, true);
+            }
+        }
+        $this->dirPickerRoot = (string) \realpath($root);
+        $store = new SessionStore($this->sandbox . '/sessions-' . (++$this->storeSeq) . '.db');
+        $store->createSession('session-1', 'openai', 'gpt-4', null, 'Session 1');
+        $chat = (new Chat(
+            history: [],
+            backend: new EchoBackend(),
+            sessionStore: $store,
+            currentSessionId: 'session-1',
+            projectRoot: $this->dirPickerRoot,
+        ))->withSize(100, 30);
+        [$open] = $chat->runCommand('/new');
+        $this->assertNotNull($open->dirPicker(), 'fixture: /new must open the folder picker');
+        $this->assertSame($this->dirPickerRoot, $open->dirPicker()?->path(), 'fixture: on the project root');
+
+        return $open;
+    }
+
+    /** Open `alpha/`, then press $key: back on the root with `alpha/` highlighted. */
+    private function assertUpReturnsToTheParent(KeyMsg $key): void
+    {
+        $inAlpha = $this->pressAll($this->chatWithDirPicker(), [new KeyMsg(KeyType::Down), new KeyMsg(KeyType::Right)]);
+        $this->assertSame($this->dirPickerRoot . '/alpha', $inAlpha->dirPicker()?->path(), 'fixture: inside alpha/');
+        [$up] = $inAlpha->update($key);
+        $this->assertSame($this->dirPickerRoot, $up->dirPicker()?->path());
+        $this->assertSame(1, $up->dirPicker()?->selectedIndex(), 'with the directory just left highlighted');
     }
 
     private function chatWithPicker(int $sessions = 2): Chat

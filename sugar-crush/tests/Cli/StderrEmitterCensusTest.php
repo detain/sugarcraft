@@ -57,9 +57,10 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twenty sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — twenty-one sites. The channel that census describes.
  *     (Roadmap 5.9: `Acp::stderr()`, `acp`'s one funnel — stdout is the
- *     editor's protocol, so everything else goes here.)
+ *     editor's protocol, so everything else goes here. And `/new`'s
+ *     `SessionRelaunch::tell()`, after the TUI has exited.)
  *     (O-3a: `Serve::stderr()`, `serve`'s one funnel for its startup lines,
  *     request log and stop notice. E710: `Subcommands::mcpImportLine()` joined it — the import verb's
  *     notes and post-read failures, one funnel site, stderr-only by design.
@@ -311,6 +312,12 @@ final class StderrEmitterCensusTest extends TestCase
         // its log.
         'src/Cli/Serve.php' => 1,
         'src/Cli/Subcommands.php' => 4,
+        // `/new` into another directory: SessionRelaunch::tell(), the one
+        // line saying why sugar-crush could not restart there (no
+        // pcntl_exec, an unenterable directory, a failed exec) and the
+        // command that does it by hand. Stderr alone: the TUI has exited and
+        // the terminal is the user's shell again; no transcript is left.
+        'src/Support/SessionRelaunch.php' => 1,
     ];
 
     /**
@@ -2199,7 +2206,7 @@ final class StderrEmitterCensusTest extends TestCase
         $flat = self::flattened(self::censusSource($path));
 
         $matched = preg_match_all(
-            '/call sites across `src\/` and `bin\/` is ([A-Z]+)/',
+            '/call sites across `src\/` and `bin\/` is ([A-Z]+(?:-[A-Z]+)?)/',
             $flat,
             $all,
             PREG_SET_ORDER,
@@ -2822,7 +2829,7 @@ final class StderrEmitterCensusTest extends TestCase
     {
         return [
             [
-                'anchor' => '/`fwrite\(STDERR, …\)` — ([a-z]+) sites/',
+                'anchor' => '/`fwrite\(STDERR, …\)` — ([a-z]+(?:-[a-z]+)?) sites/',
                 'expected' => array_sum(self::DIRECT_SITES),
                 'what' => 'channel 1, the fwrite(STDERR, …) total',
             ],

@@ -26,7 +26,7 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWENTY-ONE:
  *
  *  - {@see \SugarCraft\Crush\Cli\NonInteractive}, nine —
  *    `run()` twice (a thrown backend error, and an answer that would not encode
@@ -55,6 +55,9 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  *    `warnPermissionConfig()`, which IS the stderr channel the seam delegates
  *    to and so cannot be a migration target, and `reportPrunedSessions()`'s
  *    per-session id rows, which stay raw on purpose.
+ *  - {@see \SugarCraft\Crush\Support\SessionRelaunch}, one — `tell()`, the
+ *    line saying why `/new` could not restart sugar-crush in another
+ *    directory, and the command to run instead.
  *  - `bin/sugarcrush`, two — this branch, and the TUI's one-line fatal-error
  *    notice (audit C2a), which names the log file PHP's own diagnostics were
  *    redirected into, because on that path display_errors is off.

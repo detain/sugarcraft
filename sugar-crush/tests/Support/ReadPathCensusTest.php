@@ -751,6 +751,9 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — list() reads the child DIRECTORY names of a directory resolve() confined to the browse root '
                 . '(ContainedPath::within on the real path; each linked child re-checked); no file content is ever read',
         ],
+        'Support/SessionRelaunch.php|scandir' => [
+            'PROCESS_DERIVED — closeInheritedOnExec() lists /proc/self/fd, this process\'s own descriptor table, to mark each close-on-exec before the restart',
+        ],
         'Support/ForkedChild.php|scandir' => [
             'PROCESS_DERIVED — closeInheritedServerFds() lists /proc/self/fd, this process\'s own descriptor table',
         ],

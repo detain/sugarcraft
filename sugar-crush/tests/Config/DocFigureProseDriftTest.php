@@ -5432,9 +5432,9 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertSame($live[$row[1]]['plane'], ($row[3] ?? '') === '✓', "the CP column on /{$row[1]} disagrees with CommandRegistry::CONTROL_PLANE — the intro states CP marks exactly the reserved names");
         }
         self::assertSame(
-            ['new', 'session-pin', 'session-delete', 'docs', 'pane-dock-left', 'pane-dock-right'],
+            ['new-picker', 'session-pin', 'session-delete', 'docs', 'pane-dock-left', 'pane-dock-right'],
             array_keys(array_filter($live, static fn(array $spec): bool => !$spec['slash'])),
-            'the page says S is blank on the new/session-pin/session-delete/docs/dock-pseudo six — the palette-only set changed shape'
+            'the page says S is blank on the new-picker/session-pin/session-delete/docs/dock-pseudo six — the palette-only set changed shape'
         );
         self::assertStringContainsString('(`slashVisible: false`)', self::markdownProse($raw), 'the asymmetry paragraph no longer quotes the spec flag the S column proves');
         self::assertStringContainsString('**CP** marks a reserved name', self::markdownProse($raw), 'the intro no longer states what the CP column marks — that derivation is the sentence');

@@ -145,15 +145,14 @@ final class SlashDispatchTest extends TestCase
      * if `/new` had quietly grown a handler, the registry flag would be lying
      * in the other direction.
      *
-     * `/new` is driven WITH an argument since `/newrule` (roadmap 5.14d): a
-     * bare `/new` is now a prefix of a slash-visible row, so Enter completes
-     * the popup into `/newrule ` rather than submitting, and the argument is
-     * what closes the popup. A handler taking text would still claim
-     * `/new session`, so the control discriminates exactly as before.
+     * `/new` itself dispatches since it gained its folder picker
+     * ({@see testSlashNewOpensTheFolderPickerAndNewruleIsStillReachable()}),
+     * so the palette-only row here is its palette twin `new-picker`: typed,
+     * `/new-picker` is a prompt, because only `/new` is its slash spelling.
      */
     public function testADraftThatIsNotACommandDoesGoToTheModel(): void
     {
-        foreach (['hello there', '/definitely-not-a-command', '/new session', '/docs'] as $draft) {
+        foreach (['hello there', '/definitely-not-a-command', '/new-picker', '/docs'] as $draft) {
             $next = $this->submit($draft);
 
             $this->assertTrue($next->inFlight, "{$draft} must be sent to the model");
@@ -681,6 +680,65 @@ final class SlashDispatchTest extends TestCase
 
         $this->assertNotSame([], $fresh->history, '/new keeps the conversation on screen');
         $this->assertNotSame('sess-1', $fresh->currentSessionId(), 'and mints a new id');
+    }
+
+    /**
+     * `/new` vs `/newrule`: `/new` was palette-only, and a bare `/new` was a
+     * PREFIX of `/newrule`, so Enter completed the popup into `/newrule `.
+     * Now the exact `/new` is a row of its own: Enter submits it (the popup
+     * never intercepts an exact name) and the folder picker opens on this
+     * project root; `/newr` + Enter still completes to `/newrule `.
+     */
+    public function testSlashNewOpensTheFolderPickerAndNewruleIsStillReachable(): void
+    {
+        $root = $this->sandbox . '/project';
+        mkdir($root . '/sub', 0o700, true);
+        $root = (string) realpath($root);
+        $chat = (new Chat(history: [], inputBuf: '/new', backend: new EchoBackend(), projectRoot: $root))->withSize(100, 30);
+
+        $opened = $this->submit('/new', $chat);
+        $this->assertNotNull($opened->dirPicker(), '`/new` opens the folder picker');
+        $this->assertSame($root, $opened->dirPicker()?->path(), 'on the project root');
+        $this->assertSame(0, $opened->dirPicker()?->selectedIndex(), 'with "Start session here" highlighted');
+        $this->assertFalse($opened->inFlight, 'and sends nothing to the model');
+
+        [$completed] = $this->chat('/newr')->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame('/newrule ', $completed->inputBuf, '`/newrule` is still one Enter away');
+    }
+
+    /**
+     * `/new <dir>` skips the browsing: this project root starts the session
+     * at once; another directory asks first (a restart there), and yes quits
+     * with the directory left for bin/sugarcrush; a missing one says why.
+     */
+    public function testSlashNewWithADirectory(): void
+    {
+        $store = new EnhancedSessionStore($this->sandbox . '/sessions.sqlite');
+        $store->createSession('sess-1', 'echo', 'echo-model');
+        $root = $this->sandbox . '/project';
+        mkdir($root . '/sub', 0o700, true);
+        $root = (string) realpath($root);
+        $chat = fn (string $draft): Chat => (new Chat(history: [], inputBuf: $draft, backend: new EchoBackend(), projectRoot: $root))
+            ->withSessionStore($store)->withCurrentSessionId('sess-1')->withSize(100, 30);
+
+        $here = $this->submit('/new .', $chat('/new .'));
+        $this->assertNull($here->dirPicker(), 'this root starts at once');
+        $this->assertNotSame('sess-1', $here->currentSessionId());
+        $this->assertNull($here->pendingRelaunch());
+
+        $asking = $this->submit('/new sub', $chat('/new sub'));
+        $this->assertSame($root . '/sub', $asking->dirPicker()?->confirming(), 'another directory asks first');
+        [$no] = $asking->update(new KeyMsg(KeyType::Char, 'n'));
+        $this->assertNull($no->dirPicker()?->confirming(), 'n stays');
+        $this->assertNotNull($no->dirPicker());
+        [$yes, $cmd] = $asking->update(new KeyMsg(KeyType::Enter));
+        $this->assertNotNull($cmd, 'yes quits');
+        $this->assertSame($root . '/sub', $yes->pendingRelaunch());
+        $this->assertSame('sess-1', $yes->currentSessionId(), 'no session is minted in this process');
+
+        $missing = $this->submit('/new nope', $chat('/new nope'));
+        $this->assertNotNull($missing->dirPicker(), 'a missing directory leaves the picker open');
+        $this->assertStringContainsString('no directory at', (string) $missing->dirPicker()?->notice());
     }
 
     // ── item 7: the refactor must not have widened dispatch ──────────────

@@ -22,6 +22,8 @@ use SugarCraft\Crush\Commands\CommandSpec;
 enum PaletteAction: string
 {
     case NewSession = 'new_session';
+    // `/new`'s folder picker: a new session in a directory chosen first.
+    case NewSessionPicker = 'new_session_picker';
     case SwitchSession = 'switch_session';
     case SwitchModel = 'switch_model';
     case ShareSession = 'share_session';

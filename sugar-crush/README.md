@@ -165,6 +165,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Esc` | On an engine turn that reports its steps: stop the running tool, then the turn after the current step. The running call is cancelled, not waited for: a parallel member's process is killed, and a lone `Task` stops at its sub-agent's next tool or step and stays resumable. A sequential tool such as `Bash` still runs to its end. The cancelled call reads `Cancelled by the user (Esc) while it was running.` and the turn's other results are kept. The status bar then reads `stopping after step N · Esc to cancel now`, and any later `Esc` cancels hard |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (the `doubleEscSeconds` setting). On a turn that reports no steps a single `Esc` only arms the cancel, which is why the status bar reads `Esc Esc to cancel` while thinking |
 | `Esc` | Close the palette or the session picker (a filter typed into the picker is cleared first) |
+| `/new` | **Folder picker** for a new session, opened on this project with **▶ Start session here** highlighted (so `/new` `Enter` is a plain new session). `↑`/`↓` move, `Enter` or `→` opens the highlighted directory, `Backspace` or `←` goes to the parent (the directory you left stays highlighted; there is no upper limit — it is your machine), `.` shows hidden directories, `/` types or pastes a path (`Enter` goes, `Esc` stops typing), `s` (or `Enter` on **▶ Start session here**) chooses the directory on screen, `Esc` cancels. Directories only, with a `[project]` badge on those holding `.git`, `composer.json`, `package.json` or `.sugar-crush`; one you cannot read is refused rather than entered. Another directory asks first — *This restarts sugar-crush there* — because one process serves one project: `y`/`Enter` restarts in it with your `--config`/`--model`/`--permission-mode` and a new session, `n`/`Esc` stays. `/new <dir>` skips the browsing. The palette has both **New session** (here, at once) and **New session…** (the picker), and so does the **Session** menu |
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
 | `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
 | `Ctrl+O` | Expand/collapse the most recent tool call's output and thought |
@@ -434,9 +435,9 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
 `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
 `/exit` (`/quit`) `/fork` `/goal` `/grind` `/handoff` `/help` `/init` `/keys`
-`/layout` `/mcp` `/memory` `/model` `/newrule` `/notices` `/pane` `/permissions`
-`/pruning` `/recompress` `/redo` `/rename` `/rewind` `/rules` `/sessions`
-`/settings` (`/config`) `/share` `/skills` `/sweep` `/theme` `/undo`
+`/layout` `/mcp` `/memory` `/model` `/new` `/newrule` `/notices` `/pane`
+`/permissions` `/pruning` `/recompress` `/redo` `/rename` `/rewind` `/rules`
+`/sessions` `/settings` (`/config`) `/share` `/skills` `/sweep` `/theme` `/undo`
 `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
@@ -450,7 +451,7 @@ By task (every command, with its arguments, is in
 
 | Task | Commands |
 |---|---|
-| Sessions | `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/handoff [focus]`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/clear` |
+| Sessions | `/new [dir]`, `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/handoff [focus]`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/clear` |
 | Checkpoints | `/undo`, `/redo`, `/rewind [n] [--chat\|--files\|--both]`, `/diff [n]` |
 | Context | `/context`, `/compact [--self] [focus]`, `/sweep [n]`, `/pruning [mode]`, `/compress [focus]`, `/decompress [bN]`, `/recompress [bN]` |
 | Working | `/goal <condition>`, `/grind <condition>`, `/btw <question>`, `/init [focus]`, `/editor [text]`, `/websearch <query>`, `/workflow …` |
@@ -832,6 +833,14 @@ sugarcrush --continue       # reopen the most recently used session (short: -c)
 sugarcrush --resume 3f9a    # reopen one by id, unique id prefix, or name
 sugarcrush --resume         # open the session picker at launch
 ```
+
+Inside the TUI, `/new` starts another one: a folder picker opens on this
+project (`Enter` starts the session right here; browse anywhere else and the
+choice restarts sugar-crush in that directory, on a new session, after asking —
+one process serves one project root), and `/new <dir>` goes straight there. See
+[Keys](#keys) for the picker's keys. The terminal is restored before the
+restart (the same exit path as `/exit`); without `pcntl_exec()` sugar-crush
+prints the `cd … && php …/bin/sugarcrush …` command to run instead.
 
 `--resume <id>` also accepts `--resume=<id>`; ids come from `sugarcrush session
 list` or the picker. A target that names no stored session is a usage error

@@ -1248,9 +1248,9 @@ final class CompactModelSummaryTest extends TestCase
     }
 
     /**
-     * And so does the Ctrl+P palette's New session action — which is the ONLY
-     * route to it. `/new` is `slashVisible: false` in the registry and has no
-     * `dispatchCommand()` arm, so typing it sends the literal text to the model.
+     * And so does the Ctrl+P palette's New session action — and `/new`, whose
+     * folder picker reaches the same action
+     * ({@see testSlashNewAlsoAbandonsAnOutstandingSummarization()}).
      */
     public function testThePalettesNewSessionActionAbandonsAnOutstandingSummarization(): void
     {
@@ -1291,31 +1291,46 @@ final class CompactModelSummaryTest extends TestCase
         }
     }
 
-    /** `/new` is not a slash command at all — the palette action is the route. */
-    public function testSlashNewIsNotACommandAndIsSentToTheModel(): void
+    /**
+     * `/new` is typeable since its folder picker, and it must clear the
+     * compaction latch like the palette route: its "Start session here" IS
+     * {@see Chat::handlePaletteNewSession()}, so the summary that lands after
+     * it is not spliced into the new session.
+     */
+    public function testSlashNewAlsoAbandonsAnOutstandingSummarization(): void
     {
-        $rows = array_filter(
-            \SugarCraft\Crush\Commands\CommandRegistry::all(),
-            static fn(object $spec): bool => $spec->name === 'new',
-        );
-        $this->assertCount(1, $rows, 'fixture: there is a registry row named new');
-        $this->assertFalse(
-            array_values($rows)[0]->slashVisible,
-            'if /new ever becomes typeable it must clear the compaction latch too',
-        );
+        $dir = sys_get_temp_dir() . '/compact_slashnew_' . uniqid('', true);
+        mkdir($dir, 0755, true);
 
-        $chat = new Chat(
-            history: [Message::user('hi'), Message::assistant('there')],
-            backend: new EchoBackend(),
-        );
-        // `/new session`, not a bare `/new`: since 5.14d a bare `/new` is a
-        // prefix of `/newrule`, so Enter completes the popup instead of
-        // submitting (the SlashDispatchTest negative control made the same move).
-        [$next, $cmd] = $this->type($chat, '/new session');
+        try {
+            $store = new SessionStore($dir . '/s.db');
+            $chat = new Chat(
+                history: $this->history(),
+                backend: new EchoBackend(),
+                compactorConfig: $this->compactorConfig(),
+                summaryBackend: $this->summarizer($this->records([1 => 'a', 2 => 'b', 3 => 'c', 4 => 'd'])),
+                sessionStore: $store,
+                currentSessionId: 'sess',
+                projectRoot: $dir,
+            );
 
-        $this->assertNotNull($cmd, '/new falls through and is dispatched as a prompt');
-        $this->assertTrue($next->inFlight);
-        $this->assertSame('/new session', $next->history[count($next->history) - 1]->content);
+            [$pending, $cmd] = $this->type($chat, '/compact');
+            $msg = $this->resolve($cmd);
+
+            [$picker, $none] = $this->type($pending, '/new');
+            $this->assertNull($none, '`/new` sends nothing to the model');
+            $this->assertNotNull($picker->dirPicker(), 'it opens the folder picker');
+            [$fresh] = $picker->update(new KeyMsg(KeyType::Enter, ''));
+            $this->assertNull($fresh->dirPicker());
+            $this->assertNotSame('sess', $fresh->currentSessionId(), 'Enter on "Start session here" is a new session');
+
+            $before = count($fresh->history);
+            [$after] = $fresh->update($msg);
+
+            $this->assertSame($before, count($after->history), 'the summary must not rewrite the new session');
+        } finally {
+            \SugarCraft\Crush\Tests\Server\Support\ProtocolFixture::removeTree($dir);
+        }
     }
 
     /** Read the private generation counter — there is no accessor for it. */

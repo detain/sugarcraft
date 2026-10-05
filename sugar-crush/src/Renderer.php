@@ -1935,6 +1935,9 @@ final class Renderer
         if ($overlay === '') {
             $overlay = self::renderSessionPicker($chat, $theme);
         }
+        if ($overlay === '') {
+            $overlay = self::renderDirectoryPicker($chat, $theme);
+        }
         if ($overlay !== '') {
             // The width invariant does not stop at $body: a Veil box is built
             // at its own natural width AFTER fitToPane()'s choke point (the
@@ -5663,6 +5666,24 @@ final class Renderer
         );
 
         return $overlay;
+    }
+
+    /**
+     * The `/new` folder picker, composited over the frame like the session
+     * picker and sized by the same rule
+     * ({@see \SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPicker::overlayGeometry()}),
+     * every line fitted to it. Keyboard-driven; the wheel moves its
+     * highlight ({@see Chat::dirPicker()}).
+     */
+    private static function renderDirectoryPicker(Chat $chat, Theme $theme): string
+    {
+        $picker = $chat->dirPicker();
+        if ($picker === null) {
+            return '';
+        }
+        [$width, $height] = \SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPicker::overlayGeometry($chat->cols(), $chat->rows(), self::SHELL_CHROME_COLS);
+
+        return $picker->render($width, $height, $theme);
     }
 
     /**

@@ -219,6 +219,7 @@ use SugarCraft\Crush\Cli\Subcommands;
 use SugarCraft\Crush\Diagnostics\TuiErrorLog;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Support\HomeDirectory;
+use SugarCraft\Crush\Support\SessionRelaunch;
 
 // The locale comes first: everything below — the parser's refusals included —
 // may print user-facing text, and it reads the locale when it does. LC_ALL /
@@ -527,6 +528,12 @@ fwrite(STDOUT, Ansi::popKittyKeyboard());
 $finalChat = $finalModel instanceof \SugarCraft\Crush\App\App ? $finalModel->chat : ($finalModel instanceof Chat ? $finalModel : null);
 if ($finalChat !== null) {
     NonInteractive::fireSessionEnd($finalChat->hooks(), $finalChat->currentSessionId() ?? '', $finalChat->projectRoot(), 'prompt_input_exit');
+}
+// `/new` picked another project root: the terminal is restored by now, so
+// restart there — one root per process (Support\SessionRelaunch).
+$relaunchDir = $finalChat?->pendingRelaunch();
+if ($relaunchDir !== null) {
+    exit(SessionRelaunch::exec($relaunchDir, $argv, __FILE__));
 }
 
 } catch (PermissionConfigException $e) {

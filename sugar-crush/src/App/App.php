@@ -3310,7 +3310,9 @@ final class App implements Model
             return [$this->withStatus(Lang::t('tui.app.no_chat', ['name' => $name])), null];
         }
 
-        [$next, $cmd] = $spec->slashVisible
+        // `new` is both `/new` (the folder picker) and the palette's
+        // immediate "New session"; the menu row and Ctrl+N name the latter.
+        [$next, $cmd] = $spec->slashVisible && $spec->name !== 'new'
             ? $this->chat->runCommand('/' . $spec->name)
             : $this->chat->runPaletteAction($spec->label());
 

@@ -761,13 +761,14 @@ final class RendererTest extends TestCase
 
         $row = '';
         foreach (explode("\n", $out) as $line) {
-            if (str_contains((string) preg_replace('/\x1b\[[0-9;]*m/', '', $line), '/sessions')) {
+            if (str_contains((string) preg_replace('/\x1b\[[0-9;]*m/', '', $line), '/new [dir]')) {
                 $row = $line;
             }
         }
 
         $this->assertNotSame('', $row, 'the bare "/" popup was not rendered');
-        $this->assertStringContainsString('▸ /sessions', $row, 'so the row itself carries no inner SGR at all');
+        // `/new` is the registry's first slash row since it gained its picker.
+        $this->assertStringContainsString('▸ /new', $row, 'so the row itself carries no inner SGR at all');
     }
 
     /**

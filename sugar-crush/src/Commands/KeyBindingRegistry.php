@@ -66,6 +66,8 @@ final class KeyBindingRegistry
     public const CONTEXT_PALETTE = 'Command palette';
     /** Keys the Ctrl+R session picker answers while it is open. */
     public const CONTEXT_PICKER = 'Session picker';
+    /** Keys the `/new` folder picker answers while it is open. */
+    public const CONTEXT_DIRPICKER = 'Folder picker';
     /** Keys the blocking permission prompt answers while it is up. */
     public const CONTEXT_PERMISSION = 'Permission prompt';
     /** Keys the full-pane agent dashboard answers. */
@@ -96,6 +98,7 @@ final class KeyBindingRegistry
             ...self::shell(),
             ...self::palette(),
             ...self::picker(),
+            ...self::dirPicker(),
             ...self::permission(),
             ...self::agents(),
             ...self::agentStrip(),
@@ -161,6 +164,7 @@ final class KeyBindingRegistry
             self::CONTEXT_CHAT => Lang::t('keys.context.chat'),
             self::CONTEXT_PALETTE => Lang::t('keys.context.palette'),
             self::CONTEXT_PICKER => Lang::t('keys.context.picker'),
+            self::CONTEXT_DIRPICKER => Lang::t('keys.context.dirpicker'),
             self::CONTEXT_PERMISSION => Lang::t('keys.context.permission'),
             self::CONTEXT_AGENTS => Lang::t('keys.context.agents'),
             self::CONTEXT_AGENT_STRIP => Lang::t('keys.context.agent-strip'),
@@ -628,6 +632,30 @@ final class KeyBindingRegistry
             KeyBinding::new('picker.children', 'Tab', Lang::t('keys.picker.children'), $c),
             KeyBinding::new('picker.branch', 'Ctrl+B', Lang::t('keys.picker.branch'), $c),
             KeyBinding::new('picker.close', 'Esc', Lang::t('keys.picker.close'), $c),
+        ];
+    }
+
+    /**
+     * The `/new` folder picker's keys ({@see \SugarCraft\Crush\Tui\DirectoryPicker\DirectoryPicker}).
+     * Its letters (`k`/`j`, `h`/`l`, `q`) are unadvertised aliases; the rows
+     * name the keys every terminal has.
+     *
+     * @return list<KeyBinding>
+     */
+    private static function dirPicker(): array
+    {
+        $c = self::CONTEXT_DIRPICKER;
+
+        return [
+            KeyBinding::new('dirpicker.move', '↑ / ↓', Lang::t('keys.dirpicker.move'), $c),
+            KeyBinding::new('dirpicker.enter', 'Enter', Lang::t('keys.dirpicker.enter'), $c),
+            KeyBinding::new('dirpicker.open', '→', Lang::t('keys.dirpicker.open'), $c),
+            KeyBinding::new('dirpicker.up', 'Backspace', Lang::t('keys.dirpicker.up'), $c),
+            KeyBinding::new('dirpicker.parent', '←', Lang::t('keys.dirpicker.parent'), $c),
+            KeyBinding::new('dirpicker.hidden', '.', Lang::t('keys.dirpicker.hidden'), $c),
+            KeyBinding::new('dirpicker.path', '/', Lang::t('keys.dirpicker.path'), $c),
+            KeyBinding::new('dirpicker.start', 's', Lang::t('keys.dirpicker.start'), $c),
+            KeyBinding::new('dirpicker.close', 'Esc', Lang::t('keys.dirpicker.close'), $c),
         ];
     }
 

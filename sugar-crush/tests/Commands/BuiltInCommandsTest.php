@@ -105,7 +105,8 @@ final class BuiltInCommandsTest extends TestCase
             }
         }
 
-        self::assertNull(BuiltInCommands::forSpelling('new'), 'a palette-only row is not a dispatching spelling');
+        self::assertNull(BuiltInCommands::forSpelling('new-picker'), 'a palette-only row is not a dispatching spelling');
+        self::assertSame('handleNewCommand', BuiltInCommands::forSpelling('new')?->handler, '`/new` dispatches since its folder picker');
         self::assertNull(BuiltInCommands::forSpelling('zzzsecret'));
         self::assertSame(['quit', 'config', 'agent', 'tokens', 'background'], BuiltInCommands::aliases());
     }
