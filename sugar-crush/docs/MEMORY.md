@@ -5,10 +5,10 @@ often confused, so they are documented side by side:
 
 | | **Memory store** | **Instruction files** |
 |---|---|---|
-| Written by | `/memory add`, as UUID-named markdown files | you, by hand |
+| Written by | `/memory add`, the model's `Memory` tool, auto-memory and the dream pass, as markdown files | you, by hand (`/init` drafts one) |
 | Lives in | `~/.sugar-crush/memory/<scope>/<uuid>.md` (`project/<key>/` per project) | `CLAUDE.md` / `AGENTS.md` (or an alias) in the repo; `~/.sugar-crush/AGENTS.md` |
 | Reaches the prompt as | a `<project-memory>` block | full documents |
-| Scope that reaches the prompt | **`project` only** | root files always; nested ones on touch |
+| Scope that reaches the prompt | **`project` and `user`** (as an index; `agent` never) | root files always; nested ones on touch |
 
 ---
 
@@ -768,3 +768,5 @@ nothing is written for a heuristic compaction. It is what the
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — every variable, including the config
   keys these mechanisms read.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — where the system prompt is assembled.
+- [`CONTEXT.md`](CONTEXT.md) — the compactions the memory flush runs before.
+- The [README](../README.md#documentation-index) — every other page.

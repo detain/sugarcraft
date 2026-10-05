@@ -931,3 +931,5 @@ unusable — which is precisely the diagnosis you ran it for.
 - [`SETTINGS.md`](SETTINGS.md) — the layered settings stack, and what a
   project file is allowed to contribute once you have trusted it.
 - [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — exit 2 at launch, and why.
+- [`AGENTS.md`](AGENTS.md) — how a sub-agent's calls are judged and asked.
+- The [README](../README.md#documentation-index) — every other page.

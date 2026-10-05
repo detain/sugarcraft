@@ -893,9 +893,10 @@ hands that one instance to every turn — so a change applies at the next launch
 
 Why on: a model's quality degrades well before 70% of a 1M-token window, and
 a percentage alone scales the wrong way there — the first reminder would land
-at 700,000 tokens. The caps only bind on a window over about 142,000 tokens
-(70% of 142,857 is 100,000; 85% of 176,470 is 150,000), so a 128k model behaves
-exactly as the percentages always said. The trade-off is cost: on a large
+at 700,000 tokens. The reminder cap only binds on a window over about 142,000
+tokens and the automatic one over about 176,000 (70% of 142,857 is 100,000; 85%
+of 176,470 is 150,000), so a 128k model behaves exactly as the percentages
+always said. The trade-off is cost: on a large
 window compaction, and the in-turn step budget that follows
 `compaction.autoTokens`, run sooner and more often, and each model-written
 summary is billed. DCP's lower pair (50,000 / 100,000) remains available as
@@ -1302,3 +1303,6 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   counted the keys rather than copying the sentence, which is what found it.
   The sentence is now generated from `SettingsSchema`, so a key can no longer
   join the stack without landing in it.)
+- [`CONTEXT.md`](CONTEXT.md) — what the `compaction.*` and `contextPruning.*`
+  keys actually move.
+- The [README](../README.md#documentation-index) — every other page.

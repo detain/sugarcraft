@@ -559,7 +559,7 @@ has no key binding: Ctrl+G is already the shell's group-input chord.
 What keeps the table honest is not this page — no guard counts the rows here. It
 is `Commands\SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`,
 which fails if a row `CommandRegistry::slashCommands()` advertises has no arm to
-answer it. The reverse direction, an arm with no row, is exactly the three
+answer it. The reverse direction, an arm with no row, is exactly the five
 aliases above and is deliberately allowed.
 
 ---
@@ -657,3 +657,7 @@ prompt build on, and a commit away from every other checkout.
   `/rules` toggle.
 - [`MEMORY.md`](MEMORY.md) — `/memory`'s sub-actions, including `import`.
 - [`PERMISSIONS.md`](PERMISSIONS.md) — the gate `/permissions` reports on.
+- [`CONTEXT.md`](CONTEXT.md) — `/context`, `/compact`, `/sweep`, `/pruning`,
+  `/compress`, `/decompress`, `/recompress`.
+- [`AGENTS.md`](AGENTS.md) — `/agents`, `/bg`, `/fork` and the Agent View.
+- The [README](../README.md#documentation-index) — every other page.

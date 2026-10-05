@@ -514,3 +514,5 @@ resolution — but an embedder should pass one explicitly.
 - [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md) — why the preset roster and a
   stage's `agent:` do not meet.
 - [`PERMISSIONS.md`](PERMISSIONS.md) — the declaration check.
+- [`AGENTS.md`](AGENTS.md) — `Task` sub-agents, the other way to delegate.
+- The [README](../README.md#documentation-index) — every other page.

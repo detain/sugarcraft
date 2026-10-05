@@ -1288,3 +1288,7 @@ express; it needs an embedder, not a config file.
 - [`PERMISSIONS.md`](PERMISSIONS.md) — the layer the chain ends in.
 - [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — "sugarcrush exits 2 and will not
   start".
+- [`CONTEXT.md`](CONTEXT.md) — the compactions `PreCompact` and `PostCompact`
+  surround.
+- [`AGENTS.md`](AGENTS.md) — the sub-agents `SubagentStop` reports on.
+- The [README](../README.md#documentation-index) — every other page.

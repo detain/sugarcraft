@@ -271,3 +271,13 @@ Read for their standard meanings, not as SugarCrush settings:
 | `VISUAL`, `EDITOR` | The editor `/editor` opens to compose a prompt — `VISUAL` first, then `EDITOR`, then `vi` (`notepad` on Windows). Run through the shell, so a value with arguments (`code --wait`) works. |
 | `TMUX`, `TERM_PROGRAM` | Multiplexer detection (tmux vs iTerm2) for split-pane support. |
 | `COLORFGBG` | Background detection for the `adaptive` theme — the *last* resort, consulted when `SUGARCRUSH_BACKGROUND` has not settled it **and** the terminal has not answered the OSC 11 background query the TUI sends at startup (it has not answered *yet* during the first frames after launch; it never will on a terminal that does not implement the query, over a pipe, or on the one-shot `-p`/`run` path, which starts no TUI and so never asks). The **last** `;`-separated field is the background — xterm/rxvt emit a three-field `fg;faint;bg` form as well as the usual two — and it is read as an xterm-256 palette index put through a luminance test, not matched against a list of "light" indices. Anything that is not a palette index at all (the literal `default`, an empty or malformed value, a number above 255) reads as dark. |
+
+## See also
+
+- [`SETTINGS.md`](SETTINGS.md) — the settings files these variables outrank,
+  and which settings keys have an environment override.
+- [`PERMISSIONS.md`](PERMISSIONS.md) — `SUGARCRUSH_PERMISSION_MODE` and the
+  modes it can name.
+- [`SERVER.md`](SERVER.md) — the `SUGARCRUSH_SERVER_*` variables.
+- [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — what a bad value does at launch.
+- The [README](../README.md#documentation-index) — every other page.

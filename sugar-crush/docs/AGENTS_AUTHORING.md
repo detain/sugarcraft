@@ -537,5 +537,8 @@ stages do not read the field: a `/workflow` stage still runs in the checkout.
   those.
 - [`PERMISSIONS.md`](PERMISSIONS.md) — where the launch's mode actually comes
   from.
-- [`WORKFLOWS.md`](WORKFLOWS.md) — the one surface that does dispatch
-  sub-agents.
+- [`WORKFLOWS.md`](WORKFLOWS.md) — staged pipelines, whose `agent:` is a label
+  rather than a preset.
+- [`AGENTS.md`](AGENTS.md) — using sub-agents: `Task`, background and nested
+  runs, teams, the live lines and the Agent View.
+- The [README](../README.md#documentation-index) — every other page.

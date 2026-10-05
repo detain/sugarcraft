@@ -68,8 +68,9 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    its `## Skill:` heading and is replaced by one line saying how to load it (the Skill tool, or
    Read on its file), never clipped. The budgets are the App's `compactorConfig` when it carries
    one, else `CompactorConfig::new()`'s defaults. An engine turn's App always carries one:
-   `EngineBackend::withCompactorConfig()`'s, else those same defaults — the source the launch
-   notice prices against, since no settings key feeds compaction budgets. Each build records its
+   `EngineBackend::compactorConfig()` — the `withCompactorConfig()` one, else
+   `CompactorConfig::fromSettings()` over your settings — which gives the same skill budgets,
+   because no settings key feeds them; it is the source the launch notice prices against. Each build records its
    deferrals on `Runtime::skillDeferrals()`, and the launch names them in one notice (audit R1).
 11. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
@@ -156,7 +157,7 @@ re-prefills the whole conversation behind it.
   request through the session's `Context\Pruning\ContextLedger`. An old tool result
   then reads, in place of its output,
   `[Read src/Tools/Bash.php — output pruned to save context; re-run the tool if you need it]`
-  — the tool and its main argument, on one line, bounded to 120 characters
+  — the tool and its main argument (the argument cut to 120 characters), on one line
   (`Context\Pruning\PrunedOutputPlaceholder`) — and every `<turn-context>` row but
   the newest is left out, as its own preamble says it supersedes them. Both are
   pure functions of the rows and the ledger, and the ledger moves only at a
@@ -583,6 +584,8 @@ guards named under the fence section are the behavioural half.
 ## See also
 
 - `docs/ARCHITECTURE.md` — the runtime map, with the assembly-order survey.
-- `docs/ENVIRONMENT.md` — the environment-variable roster, including the dormant prompt-cache row.
+- `docs/ENVIRONMENT.md` — the environment-variable roster, including the prompt-cache switch.
+- `docs/CONTEXT.md` — pruning, compaction and re-injection, the machinery that rewrites what the turn-context row and the history carry.
 - `docs/MEMORY.md`, `docs/SKILLS.md`, `docs/SETTINGS.md`, `docs/COMMANDS.md`, `docs/HOOKS.md` —
   the per-feature surfaces whose prompt paths are summarised above.
+- The [README](../README.md#documentation-index) — every other page.

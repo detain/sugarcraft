@@ -454,3 +454,8 @@ the one about to be resumed.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — every variable and its unset behaviour.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — what runs where, when something makes
   no sense at all.
+- [`CONTEXT.md`](CONTEXT.md) — "This turn was NOT sent", compaction and
+  pruning.
+- [`AGENTS.md`](AGENTS.md) — sub-agents that are refused, queued or stopped.
+- [`SERVER.md`](SERVER.md) — `serve` refusals and their exit codes.
+- The [README](../README.md#documentation-index) — every other page.

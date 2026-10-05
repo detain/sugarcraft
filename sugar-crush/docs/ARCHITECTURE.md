@@ -1218,7 +1218,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
 4. **A count carries its domain.** "Twenty-eight tools" means wired built-ins.
-   "Twelve skills" means directories under `src/Skills/BuiltIn/` that load.
+   "Eight skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are
    derived by a test rather than typed.
@@ -1229,4 +1229,9 @@ Four patterns worth recognising, because they explain otherwise-odd code:
   [`HOOKS.md`](HOOKS.md) · [`MCP.md`](MCP.md) · [`SKILLS.md`](SKILLS.md) ·
   [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md) ·
   [`WORKFLOWS.md`](WORKFLOWS.md) · [`MEMORY.md`](MEMORY.md) ·
-  [`COMMANDS.md`](COMMANDS.md) · [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
+  [`COMMANDS.md`](COMMANDS.md) · [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) ·
+  [`SETTINGS.md`](SETTINGS.md) · [`CONTEXT.md`](CONTEXT.md) ·
+  [`AGENTS.md`](AGENTS.md) · [`SERVER.md`](SERVER.md) ·
+  [`PROMPT_ENGINEERING.md`](PROMPT_ENGINEERING.md)
+- The [README](../README.md#documentation-index) — the user guide and the
+  index of every page.

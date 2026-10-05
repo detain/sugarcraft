@@ -1081,3 +1081,14 @@ origin through the forwarded `Host` and needs no `--allowed-origin`.
 
 `serve` needs pcntl and posix, which Windows PHP does not have; it refuses to
 start there. WSL works.
+
+## See also
+
+- [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) — the
+  browser UI's own README: its panels, its keyboard, and developing it.
+- [`protocol/sugarcrush.v1.schema.json`](protocol/sugarcrush.v1.schema.json) —
+  the generated JSON Schema of every method and event.
+- [`SETTINGS.md`](SETTINGS.md) — the `server.*` keys.
+- [`PERMISSIONS.md`](PERMISSIONS.md) — the modes a served session runs under.
+- [`AGENTS.md`](AGENTS.md) — the sub-agents the Agents panel shows.
+- The [README](../README.md#documentation-index) — every other page.

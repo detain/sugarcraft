@@ -586,3 +586,4 @@ check, and its reason is on `SkillRegistry::unavailable()`.
 - [`COMMANDS.md`](COMMANDS.md) — file-based slash commands, the other
   markdown-plus-frontmatter surface.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — where the registry sits.
+- The [README](../README.md#documentation-index) — every other page.

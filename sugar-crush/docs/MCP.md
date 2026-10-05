@@ -677,3 +677,5 @@ install.
 - [`PERMISSIONS.md`](PERMISSIONS.md) — `mcp__*` rule patterns, the other three
   `trustedProject*` keys.
 - [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — "my MCP tools are missing".
+- [`SETTINGS.md`](SETTINGS.md) — `mcpResultCapBytes` and the `claudeMcp*` keys.
+- The [README](../README.md#documentation-index) — every other page.
