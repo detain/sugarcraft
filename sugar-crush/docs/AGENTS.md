@@ -153,8 +153,8 @@ Teams live under `~/.sugar-crush/teams/` (a registry, and one SQLite task list
 and mailbox per team), shared by every process. A teammate needs `Team` in its
 grant to claim for itself; a preset with no `tools:` list has it, the six
 built-ins do not, so with those the lead claims on the teammate's behalf. The
-team hook events (`TaskCreated`, `TaskCompleted`, `TeammateIdle`) are not
-dispatched yet — see [`HOOKS.md`](HOOKS.md#events).
+team hook events (`TaskCreated`, `TaskCompleted`, `TeammateIdle`) fire through
+the launch's hook chain — see [`HOOKS.md`](HOOKS.md#the-team-events).
 
 ## Watching and steering runs in the TUI
 

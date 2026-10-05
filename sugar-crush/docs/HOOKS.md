@@ -170,20 +170,20 @@ already run:
 | `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()` |
 | `PreCompact` | before a compaction condenses the history — the one that can skip it | `Chat::preCompactGate()`, `EngineBackend::runTurn()` |
 | `PostCompact` | after a compaction was applied | `Chat::postCompactCmd()`, `EngineBackend::runTurn()` |
-| `TeammateIdle` | a teammate went idle | — |
-| `TaskCreated` / `TaskCompleted` | task lifecycle | — |
+| `TeammateIdle` | a teammate asked the board for its next task — the `Team` tool's `claim` with no `task` | `TeamManager::handleTeammateIdle()`, `TaskList::dispatchTeammateIdle()` |
+| `TaskCreated` | before a task joins a team's board (`Team`'s `add`) — the one that can refuse it | `TaskList::addTaskIfAbsent()` |
+| `TaskCompleted` | after a teammate completed a task (`Team`'s `complete`) | `TaskList::completeTask()` |
 
-The `—` rows are **dormant, not removed**: an entry naming one of them parses
-from `hooks.yaml`, registers, and keeps the block semantics below — but nothing
-in `src/` reaches them at this tip. `TaskCreated`, `TaskCompleted` and
-`TeammateIdle` do have call sites, all three in `TaskList`, but each is guarded
-on an injected `HookDispatcher`, and `src/` constructs that class nowhere —
-`Team.php`, the only production `new TaskList(…)`, leaves the parameter at its
-default. So the operative reason a script written against one will never run is
-the dispatcher that is never built, not a call site that was left out. Wiring
-them is open work. (`HookDispatcher` also carries a method for `Stop`,
-`SubagentStop` and `SessionEnd`; nothing calls those either — the live chain
-dispatches all three through `HookManager`, see *The stop events* below.)
+The three team rows are the ones raised outside a tool call and outside a turn,
+so they do not go through `HookManager`: `TaskList` raises them through a
+`HookDispatcher` over the launch's own registry. `Bootstrap::hooks()` hands
+`HookManager::dispatcher()` to `TeamManager::useLaunchHooks()`, and every
+`Team` that manager builds — the `Team` tool opens one per call — passes it to
+its `TaskList`, so an entry in `hooks.yaml` reaches a team's board the same way
+a `PreToolUse` entry reaches a tool call. See *The team events* below.
+(`HookDispatcher` also carries a method for `Stop`, `SubagentStop` and
+`SessionEnd`; nothing calls those — the live chain dispatches all three
+through `HookManager`, see *The stop events* below.)
 
 What a **block** (exit 2) does depends on the event, because for some of them
 the action has already happened:
@@ -218,8 +218,10 @@ the action has already happened:
   characters blanked. A refusal no single hook owns — a chain that ran out of
   its time budget, or kept rewriting — reads `[output withheld by the
   PostToolUse hook chain: <reason>]` instead of guessing a name.
-- `TaskCompleted` — too late to stop; surfaces through `continueOnBlock` on
-  the `HookDispatcher`, which `src/` never builds (see above).
+- `TaskCompleted` — too late to stop: the completion stands, and is marked
+  **contested** on the board (`list` shows `completion contested`).
+- `TeammateIdle` — the teammate is handed **no task this time**; its `claim`
+  says a hook held the next task back, with the hook's stderr as the reason.
 - `SessionEnd` — nothing is left to stop, so the reason is one line on stderr
   and the exit is unchanged.
 - `PreCompact` — **skips the compaction**: the history is left as it was, and
@@ -365,6 +367,27 @@ does not fire them yet.
   it), and `toolInput` is JSON: `{"trigger": …, "custom_instructions": "<the
   /compact focus>"}` for `PreCompact`, `{"trigger": …, "compact_summary": "<the
   summary rows the model now reads>"}` for `PostCompact`.
+
+### The team events
+
+A team's task board (the `Team` tool, see
+[`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md)) raises three events, in whichever
+process runs the `Team` call — the forked turn child on the TUI path, or a
+background teammate's own session:
+
+- **`TaskCreated`** fires on `add`, before the task is stored. A block refuses
+  it: nothing is stored, and the `add` fails with `a TaskCreated hook refused
+  "<title>": <stderr>`.
+- **`TaskCompleted`** fires once a `complete` has landed. A block cannot undo
+  it; the task is marked contested.
+- **`TeammateIdle`** fires when a teammate `claim`s without naming a task,
+  before the next task is picked. A block hands it nothing this time.
+- **Context.** `toolName` is `TaskList` (write the `matcher:` against it), the
+  session id is the team id, and `toolInput` is JSON:
+  `{"task_id", "task_subject", "team_name", "teammate_name"}` for the two task
+  events (`teammate_name` is the claimant, `null` for a task nobody holds yet),
+  `{"team_name", "teammate_name"}` for `TeammateIdle`. Hooks run in the
+  launch's project root.
 
 ---
 

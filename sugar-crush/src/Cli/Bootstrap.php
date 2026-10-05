@@ -5615,6 +5615,15 @@ final class Bootstrap
             $hooks->register(new PermissionGateHook($gate));
         }
 
+        // Roadmap 4.6-2: the team task events (`TaskCreated`, `TaskCompleted`,
+        // `TeammateIdle`) are raised by a team's TaskList, not by a tool
+        // call, so they reach this chain through a dispatcher over the same
+        // registry — handed to every TeamManager this process builds (the
+        // `Team` tool opens one per call, in the forked turn child that
+        // inherits this). Re-installed on each build, so a provider switch's
+        // rebuilt chain is the one teams use.
+        \SugarCraft\Crush\Agents\TeamManager::useLaunchHooks($hooks->dispatcher(), $root);
+
         return $hooks;
     }
 

@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\Task;
-use SugarCraft\Crush\Agents\TaskBlockedException;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Agents\TaskStatus;
 use SugarCraft\Crush\Agents\Team;
 use SugarCraft\Crush\Agents\TeamConfig;
 use SugarCraft\Crush\Agents\TeamManager;
 use SugarCraft\Crush\Agents\TeamMessage;
+use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
 use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
@@ -49,6 +49,12 @@ use SugarCraft\Crush\Tools\ToolResult;
  * for; the registry on disk is shared state between them, so the manager is
  * built per call, in the process that runs it, and nothing is opened when the
  * tool set is built.
+ *
+ * HOOKS. The task lists raise `TaskCreated` (an `add`; a block refuses the
+ * task), `TaskCompleted` (a `complete`; a block marks the completion
+ * contested) and `TeammateIdle` (a `claim` with no task named; a block hands
+ * the teammate nothing this time) through the launch's hook chain, the one
+ * `hooks.yaml` configures — see {@see TeamManager::useLaunchHooks()}.
  *
  * PERMISSION CLASS: no-ask. It writes only harness-owned coordination state,
  * never the project; `permissionRules` still apply first, so
@@ -103,9 +109,17 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         );
     }
 
+    /**
+     * The launch's Team tool: the user's team store, whose task lists raise
+     * `TaskCreated` / `TaskCompleted` / `TeammateIdle` through the launch's
+     * hook chain ({@see TeamManager::useLaunchHooks()}), run in this launch's
+     * root — the directory a hook script sees as its working directory.
+     */
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return self::new();
+        $root = $context->root;
+
+        return self::new(static fn (): TeamManager => new TeamManager(projectRoot: $root));
     }
 
     public function name(): string
@@ -252,24 +266,18 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         // picks again from what is stored now.
         $id = null;
         for ($attempt = 0; $attempt < self::ADD_ATTEMPTS && $id === null; $attempt++) {
+            // A TaskCreated hook that refuses the task throws, worded for
+            // the model; execute()'s catch turns it into this call's error.
             $candidate = self::nextId($list);
-            try {
-                $added = $list->addTaskIfAbsent(new Task(
-                    id: $candidate,
-                    teamId: $team->id,
-                    title: $title,
-                    description: '',
-                    prompt: $prompt,
-                    createdAt: new \DateTimeImmutable(),
-                    dependsOn: $blockers,
-                ));
-            } catch (TaskBlockedException $blocked) {
-                return self::error(sprintf(
-                    'a TaskCreated hook refused "%s"%s',
-                    $title,
-                    $blocked->getMessage() === '' ? '' : ': ' . $blocked->getMessage(),
-                ));
-            }
+            $added = $list->addTaskIfAbsent(new Task(
+                id: $candidate,
+                teamId: $team->id,
+                title: $title,
+                description: '',
+                prompt: $prompt,
+                createdAt: new \DateTimeImmutable(),
+                dependsOn: $blockers,
+            ));
             $id = $added ? $candidate : null;
         }
         if ($id === null) {
@@ -377,7 +385,13 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
         $taskId = self::str($args, 'task');
         if ($taskId === '') {
-            $claimed = $teams->handleTeammateIdle($team->id, $teammate, $this->ownerPid);
+            $claimed = $teams->handleTeammateIdle($team->id, $teammate, $this->ownerPid, $refusal);
+            if ($refusal !== null) {
+                return self::ok($recovered . sprintf(
+                    'Nothing claimed: a TeammateIdle hook held the next task back%s.',
+                    self::hookReason($refusal),
+                ));
+            }
             if ($claimed === null) {
                 return self::ok($recovered . self::nothingToClaim($list));
             }
@@ -579,6 +593,23 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             $task->status->value,
             $task->assignedTo === null ? '' : ', assigned to ' . $task->assignedTo,
         );
+    }
+
+    /**
+     * A hook's block reason as a `: <reason>` suffix, with the dispatcher's
+     * audience tags taken off — the model is who reads a Team result, and a
+     * `[unspecified-block]` marker means nothing to it.
+     */
+    private static function hookReason(string $message): string
+    {
+        foreach ([HookDispatcher::UNSPECIFIED_BLOCK_PREFIX, HookDispatcher::STDERR_ONLY_PREFIX, HookDispatcher::UNANSWERED_ASK_PREFIX] as $tag) {
+            if (str_starts_with($message, $tag)) {
+                $message = substr($message, \strlen($tag));
+            }
+        }
+        $message = trim($message);
+
+        return $message === '' ? '' : ': ' . $message;
     }
 
     /** The crash-recovery sweep, as the line that leads a result (empty when nothing moved). */

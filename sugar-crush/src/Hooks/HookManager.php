@@ -182,6 +182,22 @@ final class HookManager
     }
 
     /**
+     * A {@see HookDispatcher} over THIS manager's registry — the same chain,
+     * for the events dispatched outside a tool call: the team task events
+     * (`TaskCreated`, `TaskCompleted`, `TeammateIdle`), which
+     * {@see \SugarCraft\Crush\Agents\TaskList} raises (roadmap 4.6-2).
+     *
+     * Shares the registry rather than copying it, so a hook registered after
+     * this call — {@see \SugarCraft\Crush\Cli\Bootstrap::hooks()} appends the
+     * permission gate last — is part of what the dispatcher scans, and a
+     * disabled hook stays disabled on both paths.
+     */
+    public function dispatcher(): HookDispatcher
+    {
+        return new HookDispatcher($this->registry);
+    }
+
+    /**
      * The hook registered for $event under $name, or null.
      *
      * A reader rather than an exposed registry, so a caller can find the one

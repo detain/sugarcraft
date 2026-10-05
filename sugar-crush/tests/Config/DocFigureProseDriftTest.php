@@ -2274,7 +2274,7 @@ final class DocFigureProseDriftTest extends TestCase
         $caseNames = array_map(static fn (HookEvent $case): string => $case->name, $cases);
 
         $sectionStart = strpos($hooksRaw, '## Events');
-        $sectionEnd = strpos($hooksRaw, 'The `—` rows are');
+        $sectionEnd = strpos($hooksRaw, 'The three team rows are');
         self::assertIsInt($sectionStart);
         self::assertIsInt($sectionEnd);
         $section = substr($hooksRaw, $sectionStart, $sectionEnd - $sectionStart);
@@ -2312,9 +2312,17 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertEqualsCanonicalizing($caseNames, array_merge(array_keys($citations), $dashes), 'the table no longer covers every HookEvent case exactly once');
 
         // Wired rows: the cited methods are EXACTLY where each event is reached.
+        // An event HookManager has no method for is reached only through a
+        // HookDispatcher (roadmap 4.6-2's team events), so its origin is the
+        // dispatcher call rather than a HookEvent case handed to the manager.
         foreach ($citations as $event => $cited) {
             $toolScoped = str_contains($event, 'ToolUse');
-            $token = $toolScoped ? '->' . lcfirst($event) . '(' : 'HookEvent::' . $event;
+            $viaDispatcher = !method_exists(\SugarCraft\Crush\Hooks\HookManager::class, lcfirst($event));
+            $token = match (true) {
+                $toolScoped => '->' . lcfirst($event) . '(',
+                $viaDispatcher => '->dispatch' . $event . '(',
+                default => 'HookEvent::' . $event,
+            };
             $found = [];
             foreach (self::srcTexts() as $relative => $text) {
                 if (str_starts_with($relative, 'src/Hooks/')) {
@@ -2331,42 +2339,48 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertEqualsCanonicalizing($cited, $found, "docs/HOOKS.md's Dispatched-from column for {$event} no longer matches where {$token} is actually called in src/");
         }
 
-        // Dormancy paragraph: the two halves, told apart exactly as the page does.
+        // The dispatcher paragraph (roadmap 4.6-2 wired the team events): every
+        // row is cited, the three it names are exactly the rows HookManager has
+        // no method for, and the chain they ride is the launch's — built from
+        // HookManager::dispatcher() inside Bootstrap::hooks() and installed on
+        // TeamManager there, nowhere else.
         $paraEnd = strpos($hooksRaw, 'What a **block**');
         self::assertIsInt($paraEnd);
         $para = self::markdownProse(substr($hooksRaw, $sectionEnd, $paraEnd - $sectionEnd));
-        // Step 3.D-2 wired Stop / SubagentStop / SessionEnd through HookManager,
-        // so the guarded trio is now every dash row; the page's aside says the
-        // dispatcher's own methods for the wired three are still uncalled.
-        self::assertSame(1, preg_match('/`(\w+)`, `(\w+)` and `(\w+)` do have call sites, all three in `(\w+)`, but each is guarded on an injected `HookDispatcher`, and `src\/` constructs that class nowhere/', $para, $trio), 'the guarded-trio sentence of the dormancy paragraph moved');
-        self::assertEqualsCanonicalizing($dashes, [$trio[1], $trio[2], $trio[3]], 'the guarded trio no longer is every dash row');
-        self::assertSame(1, preg_match('/`HookDispatcher` also carries a method for `(\w+)`,\s+`(\w+)` and `(\w+)`; nothing calls those either/', $para, $wiredAside), 'the aside on the dispatcher\'s methods for the wired events moved');
+        self::assertSame([], $dashes, 'a `—` row is back — the page says every event is dispatched, and the dispatcher paragraph has no dormant half any more');
+        $viaDispatcherEvents = array_values(array_filter(
+            $caseNames,
+            static fn (string $event): bool => !str_contains($event, 'ToolUse') && !method_exists(\SugarCraft\Crush\Hooks\HookManager::class, lcfirst($event)),
+        ));
+        preg_match_all('/`(\w+)`/', (string) strstr($section, '| `TeammateIdle`'), $teamRowEvents);
+        self::assertSame(1, preg_match('/The three team rows are the ones raised outside a tool call/', $para), 'the team-rows sentence of the dispatcher paragraph moved');
+        self::assertCount(3, $viaDispatcherEvents, 'the paragraph says THREE events bypass HookManager');
+        foreach ($viaDispatcherEvents as $event) {
+            self::assertArrayHasKey($event, $citations, "{$event} reaches only a HookDispatcher but its table row cites nothing");
+            self::assertContains($event, $teamRowEvents[1], "{$event} bypasses HookManager but is not one of the team rows the paragraph is about");
+            foreach (self::srcOccurrences('$this->hookDispatcher->dispatch' . $event . '(') as [$relative, $pos]) {
+                self::assertSame('TaskList.php', basename($relative), "{$event} is dispatched outside TaskList — the page names TaskList as what raises the team events");
+                self::assertMatchesRegularExpression('/hookDispatcher [!=]== null/', self::enclosingFunctionSlice($relative, $pos), "the {$event} dispatch lost its null-dispatcher guard — a list built without a chain must raise nothing");
+            }
+        }
+        self::assertSame(1, preg_match('/`(\w+)::(\w+)\(\)` hands\s+`HookManager::dispatcher\(\)` to `TeamManager::(\w+)\(\)`/', $para, $install), 'the install sentence of the dispatcher paragraph moved');
+        self::assertTrue(method_exists(\SugarCraft\Crush\Hooks\HookManager::class, 'dispatcher'), 'HookManager::dispatcher() vanished — the page says the team chain is built from it');
+        self::assertTrue(method_exists(\SugarCraft\Crush\Agents\TeamManager::class, $install[3]), "TeamManager::{$install[3]}() vanished — the page says the launch installs its chain there");
+        $installs = self::srcOccurrences('TeamManager::' . $install[3] . '(');
+        $installs = array_values(array_filter($installs, static fn (array $hit): bool => !str_contains(substr(self::srcTexts()[$hit[0]], max(0, $hit[1] - 6), 6), '@see')));
+        self::assertCount(1, $installs, 'the launch chain is installed from more than one place, or from none — the page names exactly one');
+        self::assertSame($install[1] . '::' . $install[2], basename($installs[0][0], '.php') . '::' . self::enclosingMethodName($installs[0][0], self::srcTexts()[$installs[0][0]], $installs[0][1]), 'the launch chain is installed from somewhere other than the method the page names');
+        self::assertStringContainsString('->dispatcher()', self::enclosingFunctionSlice($installs[0][0], $installs[0][1]), 'the installed chain is no longer the launch manager\'s own dispatcher');
+        self::assertSame(1, preg_match('/`HookDispatcher` also carries a method for `(\w+)`,\s+`(\w+)` and `(\w+)`; nothing calls those/', $para, $wiredAside), 'the aside on the dispatcher\'s methods for the HookManager events moved');
         foreach ([$wiredAside[1], $wiredAside[2], $wiredAside[3]] as $event) {
             self::assertArrayHasKey($event, $citations, "{$event} is named as wired through HookManager, but its table row is a dash");
             self::assertSame([], self::srcOccurrences('->dispatch' . $event . '('), "{$event} gained a HookDispatcher call site — the aside says nothing calls it");
         }
-        $trioFile = $trio[4];
-        foreach ([$trio[1], $trio[2], $trio[3]] as $event) {
-            $hits = self::srcOccurrences('$this->hookDispatcher->dispatch' . $event . '(');
-            self::assertCount(1, $hits, "{$event}: the page says all three trio call sites sit guarded in {$trioFile}, one dispatch each");
-            [$relative, $pos] = $hits[0];
-            self::assertSame(basename($relative), $trioFile . '.php', "{$event} is now dispatched from " . basename($relative) . " — the page names {$trioFile} as the only host");
-            self::assertMatchesRegularExpression('/hookDispatcher [!=]== null/', self::enclosingFunctionSlice($relative, $pos), "the {$event} dispatch lost its injected-dispatcher guard — the page's whole dormant-not-removed argument rests on it");
-        }
-        self::assertSame([], self::srcOccurrences('new HookDispatcher('), 'src/ constructs a HookDispatcher somewhere — the dormancy explanation ("the dispatcher that is never built") is now false');
-        self::assertSame(
-            1,
-            preg_match('/`(\w+)\.php`, the only production `new TaskList/', $para, $teamCite),
-            'the sole-TaskList-host sentence moved',
-        );
         $taskListHits = self::srcOccurrences('new TaskList(');
-        self::assertCount(1, $taskListHits, 'a second production new TaskList appeared — the sentence calls Team.php the only one');
-        self::assertSame('src/Agents/' . $teamCite[1] . '.php', $taskListHits[0][0], 'the lone new TaskList(…) moved off the class the page names');
-        [$teamText] = [self::srcTexts()[$taskListHits[0][0]]];
-        $argStart = $taskListHits[0][1] + \strlen('new TaskList(');
-        $argText = self::balancedArguments($teamText, $argStart);
-        self::assertStringNotContainsString(',', $argText, 'the only production new TaskList(…) no longer passes a single argument — the dispatcher is no longer left at its default');
-        self::assertSame(1, preg_match('/\?HookDispatcher \$hookDispatcher = null/', self::sourceOf('Agents/TaskList.php')), 'TaskList lost the defaulted injected-dispatcher parameter the page explains dormancy with');
+        self::assertCount(1, $taskListHits, 'a second production new TaskList appeared — the page says every Team passes the chain to ITS TaskList');
+        self::assertSame('src/Agents/Team.php', $taskListHits[0][0], 'the lone new TaskList(…) moved off Team');
+        $argText = self::balancedArguments(self::srcTexts()[$taskListHits[0][0]], $taskListHits[0][1] + \strlen('new TaskList('));
+        self::assertStringContainsString('$hookDispatcher', $argText, 'Team no longer hands its TaskList the dispatcher — the team events would be raised through nothing');
 
         // Turn events: one dispatcher, reached from exactly the two methods the page
         // names — submit()'s tail and the parked 85% route (audit 15b-01) — one call each.

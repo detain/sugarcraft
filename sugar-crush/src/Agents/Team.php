@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
@@ -33,8 +34,16 @@ final class Team
          * construction time so addTeammate() can enforce the cap directly.
          */
         public readonly int $maxTeammates = 5,
+        /**
+         * The chain the task list raises `TaskCreated`, `TaskCompleted` and
+         * `TeammateIdle` through (roadmap 4.6-2) — the launch's, handed down
+         * by {@see TeamManager}. Null raises nothing.
+         */
+        ?HookDispatcher $hookDispatcher = null,
+        /** Where those hooks run ({@see TaskList}'s `$projectRoot`); null is the process directory. */
+        ?string $projectRoot = null,
     ) {
-        $this->taskList = new TaskList($this->basePath() . '/tasks.sqlite');
+        $this->taskList = new TaskList($this->basePath() . '/tasks.sqlite', $hookDispatcher, $projectRoot);
         $this->mailbox = new Mailbox($this->basePath() . '/mailbox');
     }
 

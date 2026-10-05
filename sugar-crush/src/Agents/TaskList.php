@@ -18,11 +18,12 @@ use SugarCraft\Crush\Support\TimedFileLock;
  * multiple teammate agents access the same database from different processes.
  * The table is auto-created on first construction (migration).
  *
- * Hooks wired:
+ * Hooks wired (through the injected dispatcher — the launch's chain, roadmap 4.6-2):
  * - TaskCreated: dispatched before inserting a new task; block aborts the insert
  * - TaskCompleted: dispatched after a task completes; block with continueOnBlock
  *                  marks the completion as contested
- * - TeammateIdle: dispatched when a teammate has no more tasks to work on
+ * - TeammateIdle: dispatched when a teammate asks for its next task
+ *                 ({@see TeamManager::handleTeammateIdle()}); block hands it none
  *
  * Concurrency (roadmap 4.6-1, 4.6-2):
  * - Every write bumps the row's `revision`, and {@see claimTask()},
@@ -54,19 +55,19 @@ final class TaskList
 
     /**
      * @param string $dbPath Path to the SQLite database file
-     * @param HookDispatcher|null $hookDispatcher Optional hook dispatcher for lifecycle events
+     * @param HookDispatcher|null $hookDispatcher The chain the task events are
+     *        raised through. In production this is the launch's hook chain
+     *        (roadmap 4.6-2): {@see \SugarCraft\Crush\Cli\Bootstrap::hooks()}
+     *        hands it to {@see TeamManager::useLaunchHooks()}, and every
+     *        {@see Team} that manager builds passes it here. Null raises nothing.
      * @param string|null $projectRoot Directory the task-scoped hooks run in.
      *        {@see HookContext::$projectRoot} becomes the `proc_open()` cwd in
      *        {@see \SugarCraft\Crush\Hooks\ScriptHook::execute()}, so this is a
      *        root-resolving position even though no `getcwd()` appears at the
-     *        site (crush_code.md Phase 0 item 6). It is nullable because the
-     *        only construction path — {@see Team}, keyed on
-     *        `~/.sugar-crush/teams/{teamId}/` — holds no project root of its
-     *        own yet: teams are a dormant seam, not wired to `--root` through
-     *        {@see \SugarCraft\Crush\Cli\Bootstrap}. This parameter is the
-     *        injection point for when they are; until then the process
-     *        directory is the honest answer, and it beats the hardcoded `''`
-     *        that used to sit in makeHookContext().
+     *        site (crush_code.md Phase 0 item 6). The `Team` tool passes its
+     *        launch's root ({@see \SugarCraft\Crush\Tools\BuiltIn\TeamTool::fromCatalog()});
+     *        null falls back to the process directory, which beats the
+     *        hardcoded `''` that used to sit in makeHookContext().
      */
     public function __construct(
         private readonly string $dbPath,
@@ -176,10 +177,19 @@ final class TaskList
 
         // Dispatch TaskCreated hook — block aborts the insert
         if ($this->hookDispatcher !== null) {
-            $context = $this->makeHookContext($task->teamId, $task->id, $task->title);
+            $context = $this->makeHookContext($task->teamId, self::taskPayload($task));
             $result = $this->hookDispatcher->dispatchTaskCreated($context);
             if ($result->isBlock()) {
-                throw new TaskBlockedException($task->id, $result->message);
+                // Worded for whoever asked for the task — the `Team` tool hands
+                // this message to the model as its error — and kept off the
+                // denial vocabulary (`DenialKind`): a refused task is not a
+                // refused tool call.
+                $reason = trim($result->message);
+                throw new TaskBlockedException($task->id, sprintf(
+                    'a TaskCreated hook refused "%s"%s',
+                    $task->title,
+                    $reason === '' ? '' : ': ' . $reason,
+                ));
             }
         }
 
@@ -288,7 +298,7 @@ final class TaskList
 
         // Dispatch TaskCompleted hook (post-action) — block with continueOnBlock marks contested
         if ($landed && $this->hookDispatcher !== null && $task->teamId !== '') {
-            $context = $this->makeHookContext($task->teamId, $taskId, $task->title);
+            $context = $this->makeHookContext($task->teamId, self::taskPayload($task));
             $hookResult = $this->hookDispatcher->dispatchTaskCompleted($context);
             if ($hookResult->isBlock() && $hookResult->shouldContinueOnBlock()) {
                 $this->markContested($taskId);
@@ -384,15 +394,10 @@ final class TaskList
      */
     public function dispatchTeammateIdle(string $teamId, string $teammateId): HookDispatchResult
     {
+        $context = $this->makeHookContext($teamId, ['team_name' => $teamId, 'teammate_name' => $teammateId]);
         if ($this->hookDispatcher === null) {
-            return HookDispatchResult::allow(
-                \SugarCraft\Crush\Hooks\HookEvent::TeammateIdle,
-                $this->makeHookContext($teamId, $teammateId, ''),
-                'no dispatcher',
-            );
+            return HookDispatchResult::allow(\SugarCraft\Crush\Hooks\HookEvent::TeammateIdle, $context, 'no dispatcher');
         }
-
-        $context = $this->makeHookContext($teamId, $teammateId, '');
 
         return $this->hookDispatcher->dispatchTeammateIdle($context);
     }
@@ -1114,20 +1119,23 @@ final class TaskList
     /**
      * Build a HookContext for task-scoped hook events.
      *
-     * Uses the teamId as sessionId since TaskList operates at the team level.
-     * The toolName is always 'TaskList' for task-scoped events.
+     * The team id is the session id (a task list belongs to a team, not to a
+     * conversation), and the tool name is always `TaskList`, which is what a
+     * `matcher:` on these events is tested against. The payload is the same
+     * JSON object a script reads in `CRUSH_TOOL_INPUT` and a PHP hook reads
+     * as `toolArgs` — named the way Claude Code names its team hook fields,
+     * so a hook written for one reads the other.
      *
-     * @param string $teamId   Used as sessionId in the context
-     * @param string $taskId   Used as toolInput in the context
-     * @param string $taskTitle Used as toolArgs['title'] in the context
+     * @param array<string, string|null> $payload e.g. `task_id`, `task_subject`,
+     *        `team_name`, `teammate_name`
      */
-    private function makeHookContext(string $teamId, string $taskId, string $taskTitle): HookContext
+    private function makeHookContext(string $teamId, array $payload): HookContext
     {
         return new HookContext(
             sessionId: $teamId,
             toolName: 'TaskList',
-            toolArgs: ['title' => $taskTitle],
-            toolInput: $taskId,
+            toolArgs: $payload,
+            toolInput: (string) json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
             toolOutput: '',
             model: '',
             provider: '',
@@ -1137,5 +1145,20 @@ final class TaskList
             // cannot start a process in a directory that does not exist.
             projectRoot: $this->projectRoot ?? (getcwd() ?: ''),
         );
+    }
+
+    /**
+     * The hook payload describing $task.
+     *
+     * @return array<string, string|null>
+     */
+    private static function taskPayload(Task $task): array
+    {
+        return [
+            'task_id' => $task->id,
+            'task_subject' => $task->title,
+            'team_name' => $task->teamId,
+            'teammate_name' => $task->assignedTo,
+        ];
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Agents;
 
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
@@ -56,10 +57,47 @@ final class TeamManager
 
     private readonly string $registryPath;
 
+    /**
+     * The launch's hook chain and project root — see {@see useLaunchHooks()}.
+     */
+    private static ?HookDispatcher $launchHooks = null;
+
+    private static ?string $launchRoot = null;
+
+    /**
+     * @param ?HookDispatcher $hooks       the chain every team's task list
+     *        raises `TaskCreated`, `TaskCompleted` and `TeammateIdle` through;
+     *        null is the launch's ({@see useLaunchHooks()}), when there is one
+     * @param ?string         $projectRoot where those hooks run; null is the
+     *        launch's root, then the process directory
+     */
     public function __construct(
         private readonly string $basePath = '~/.sugar-crush/teams',
+        private readonly ?HookDispatcher $hooks = null,
+        private readonly ?string $projectRoot = null,
     ) {
         $this->registryPath = $this->expandPath($this->basePath) . '/registry.json';
+    }
+
+    /**
+     * Make $hooks the chain every team in this process raises its task events
+     * through, run in $root (roadmap 4.6-2).
+     *
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::hooks()} calls this with the launch's
+     * own chain — the hook files, built-ins and permission gate a tool call is
+     * judged by — so a `TaskCreated` entry in `hooks.yaml` reaches the `Team`
+     * tool's task list the same way a `PreToolUse` entry reaches a tool call.
+     * A process-wide default rather than a constructor argument threaded
+     * through the tool catalog because the team store is opened per call, in
+     * whichever process runs it (a turn's forked child inherits this; a
+     * background teammate's daemon builds its own launch and calls this
+     * itself), and the chain is the launch's, not any one caller's. A manager
+     * handed a chain of its own keeps it.
+     */
+    public static function useLaunchHooks(?HookDispatcher $hooks, ?string $root = null): void
+    {
+        self::$launchHooks = $hooks;
+        self::$launchRoot = $root;
     }
 
     // -------------------------------------------------------------------------
@@ -105,6 +143,8 @@ final class TeamManager
             leadAgentId: $leadAgentId,
             createdAt: new \DateTimeImmutable(),
             maxTeammates: $config->maxTeammates,
+            hookDispatcher: $this->hooks ?? self::$launchHooks,
+            projectRoot: $this->projectRoot ?? self::$launchRoot,
         );
 
         $this->teams[$teamId] = $team;
@@ -193,11 +233,17 @@ final class TeamManager
      * process the claim is recorded against for crash recovery
      * ({@see TaskList::releaseOrphanedClaims()}); null records this one.
      *
+     * A `TeammateIdle` hook that blocks hands the teammate nothing this time;
+     * its reason comes back in $refusal (empty when it gave none), so the
+     * caller can tell "the hook said wait" from "the board is empty".
+     *
+     * @param-out ?string $refusal
      * @return string|null The ID of the task just claimed, or null if the team/teammate
      *                      was not found, the hook blocked, or no unblocked task exists.
      */
-    public function handleTeammateIdle(string $teamId, string $teammateId, ?int $ownerPid = null): ?string
+    public function handleTeammateIdle(string $teamId, string $teammateId, ?int $ownerPid = null, ?string &$refusal = null): ?string
     {
+        $refusal = null;
         $team = $this->getTeam($teamId);
         if ($team === null) {
             return null;
@@ -207,6 +253,8 @@ final class TeamManager
 
         $hookResult = $taskList->dispatchTeammateIdle($teamId, $teammateId);
         if ($hookResult->isBlock()) {
+            $refusal = $hookResult->message;
+
             return null;
         }
 
@@ -340,6 +388,8 @@ final class TeamManager
             leadAgentId: $meta['leadAgentId'],
             createdAt: new \DateTimeImmutable($meta['createdAt']),
             maxTeammates: $config->maxTeammates,
+            hookDispatcher: $this->hooks ?? self::$launchHooks,
+            projectRoot: $this->projectRoot ?? self::$launchRoot,
         );
     }
 

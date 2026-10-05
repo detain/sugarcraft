@@ -497,8 +497,10 @@ those the lead claims on the teammate's behalf and completes the task from its
 report. The launch's `AgentManager` holds a `TeamManager` over the same store,
 `~/.sugar-crush/teams` (a registry plus one task database and mailbox per
 team), and the registry on disk is what every process shares.
-`HookEvent`'s `TaskCreated`, `TaskCompleted` and `TeammateIdle` still never
-fire: see [`HOOKS.md`](HOOKS.md).
+`add`, `complete` and a `claim` with no task named raise `TaskCreated`,
+`TaskCompleted` and `TeammateIdle` through the launch's hook chain, so a
+`hooks.yaml` entry can refuse a task, contest a completion or hold a teammate's
+next task back: see [`HOOKS.md`](HOOKS.md#the-team-events).
 
 `src/Agents/` also holds `Teammate`, `TeamConfig`, `TeamMessage`,
 `WorktreeManager`, `WorktreeConfig` and
