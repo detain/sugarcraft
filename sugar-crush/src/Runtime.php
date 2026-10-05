@@ -191,7 +191,14 @@ final class Runtime
      * tool-time channel, because a rule that silently vanished is the one outcome
      * worse than a rule deferred.
      */
-    private const MAX_STANDING_RULE_BYTES = 65_536;
+    public const MAX_STANDING_RULE_BYTES = 65_536;
+
+    /**
+     * Roadmap N-P4d: the setting that replaces {@see self::MAX_STANDING_RULE_BYTES}
+     * for one prompt build ({@see self::systemPromptSections()}), the constant
+     * staying its default.
+     */
+    public const SETTING_STANDING_MAX_BYTES = 'rules.standingMaxBytes';
 
     /**
      * The most pointer lines ONE tier's standing-rule deferral fence may carry,
@@ -4447,7 +4454,26 @@ final class Runtime
             // rather than competed for, because a deferred rule must be able to name
             // itself unconditionally: a pointer that found no room would be the silent
             // vanishing the whole design refuses.
-            $standingRemaining = self::MAX_STANDING_RULE_BYTES - self::standingDeferReserve();
+            //
+            // Roadmap N-P4d: `rules.standingMaxBytes` (the operator's, config.json
+            // only) replaces the constant when it is a positive int; read only when
+            // there is a standing rule to price. A budget smaller than the reserve
+            // defers every rule — each still named by its pointer line.
+            $standingMax = self::MAX_STANDING_RULE_BYTES;
+            if ($rules !== []) {
+                try {
+                    $configured = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()[self::SETTING_STANDING_MAX_BYTES] ?? null;
+                } catch (\Throwable) {
+                    $configured = null;
+                }
+                if (\is_float($configured) && is_finite($configured) && floor($configured) === $configured && abs($configured) < 1e15) {
+                    $configured = (int) $configured;
+                }
+                if (\is_int($configured) && $configured >= 1) {
+                    $standingMax = $configured;
+                }
+            }
+            $standingRemaining = $standingMax - self::standingDeferReserve();
             $userDeferred = [];
             $userOverflow = 0;
 
@@ -5417,11 +5443,15 @@ final class Runtime
         // cwd, model, date — are what it freezes), keyed by root and model so
         // a `/model` switch re-captures. An injected block skips the memo: its
         // owner already holds the session-wide snapshot.
+        //
+        // Roadmap N-P4d: the `env.*` diff settings are laid over the memoised
+        // capture once per Runtime — once per turn — so a saved change applies
+        // from the next turn; an injected block is its owner's, as it is.
         $block = $this->environmentBlock ??= $this->sessionPromptMemo()->remember(
             $app->sessionId,
             'env:' . hash('xxh128', self::projectRoot($app) . "\0" . $app->model),
             static fn(): EnvironmentBlock => EnvironmentBlock::capture(self::projectRoot($app), $app->model),
-        );
+        )->withSettings();
 
         // The system prompt carries the static half only; the git section is
         // the volatile half, sent as the `<turn-context>` row by run() (see
@@ -5683,12 +5713,29 @@ final class Runtime
      */
     private function repoMapSnapshot(App $app): RepoMapBlock
     {
+        if ($this->repoMapBlock !== null) {
+            return $this->repoMapBlock;
+        }
+
+        // Roadmap N-P4d: `repoMap.enabled` / `repoMap.maxBytes`, read once per
+        // Runtime — once per turn, in the turn child — and laid over the
+        // session's capture rather than kept in the memo, so a saved change
+        // applies from the next turn. Switched off, the walk is skipped too.
+        try {
+            $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            $config = [];
+        }
+        if (!RepoMapBlock::enabledBySettings($config)) {
+            return $this->repoMapBlock = RepoMapBlock::empty();
+        }
+
         // Step 1.A-1: per SESSION through the memo, keyed by root.
-        return $this->repoMapBlock ??= $this->sessionPromptMemo()->remember(
+        return $this->repoMapBlock = $this->sessionPromptMemo()->remember(
             $app->sessionId,
             'repo-map:' . hash('xxh128', self::projectRoot($app)),
             static fn(): RepoMapBlock => RepoMapBlock::capture(self::projectRoot($app)),
-        );
+        )->withSettings($config);
     }
 
     /**

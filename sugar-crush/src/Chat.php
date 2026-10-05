@@ -8661,6 +8661,9 @@ final class Chat implements Model
      *    window, `paletteMru`, `maxCheckpoints`) are read through
      *    {@see \SugarCraft\Crush\Config\Settings\UiSettings}, whose held
      *    values every save drops, so the next frame or keystroke reads them.
+     *    `memory.projectNoteMaxBytes` (roadmap N-P4d) is read by
+     *    {@see \SugarCraft\Crush\Context\ProjectMemoryWriter::maxContentBytes()}
+     *    as each note is written.
      *  - LIVE, Chat state: the `compaction.*` keys (roadmap N-P4b) rebuild
      *    {@see $compactorConfig} through {@see withCompactorSettings()}, so
      *    the next prompt is judged by the new tiers, idle offer, summary mode

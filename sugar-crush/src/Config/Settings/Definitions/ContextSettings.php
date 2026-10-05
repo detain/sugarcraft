@@ -12,9 +12,12 @@ use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\Settings\Validator\ThresholdOrderValidator;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Context\Pruning\PruningMode;
+use SugarCraft\Crush\Context\RepoMapBlock;
 use SugarCraft\Crush\Context\SymbolMapBlock;
 use SugarCraft\Crush\Providers\ProviderFactory;
 
@@ -192,6 +195,63 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withHelp('Put the ranked symbol-level repo map in the system prompt, captured once per session.')
                 ->withReaderSymbol(SymbolMapBlock::class . '::disabledBySettings')
                 ->withReadBy('`SymbolMapBlock::capture()` → `disabledBySettings()`, at the session\'s first turn'),
+            // Roadmap N-P4d: the repo map and the `<env>` git sections. Each is
+            // laid over the session's capture once per turn by Runtime, so a
+            // saved change applies next turn. Switching a block off only
+            // removes text, so a trusted project may; raising a byte cap
+            // bills more input on every request, so that half is the
+            // operator's (the toolOutputCapBytes argument).
+            SettingDefinition::new(RepoMapBlock::SETTING_ENABLED, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withLabel('Repo map')
+                ->withHelp('Put the map of where code lives (packages and PSR-4 source directories) in the system prompt.')
+                ->withReaderSymbol(RepoMapBlock::class . '::enabledBySettings')
+                ->withReadBy('`Runtime::repoMapSnapshot()` → `RepoMapBlock::enabledBySettings()`, per turn'),
+            SettingDefinition::new(RepoMapBlock::SETTING_MAX_BYTES, SettingType::Int, RepoMapBlock::MAX_SECTION_BYTES)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(RepoMapBlock::MAX_ENTRY_BYTES)
+                ->withLabel('Repo map: bytes per section')
+                ->withHelp('Byte budget for each of the repo map\'s two sections; entries past it are counted, not listed.')
+                ->withReaderSymbol(RepoMapBlock::class . '::withSettings')
+                ->withReadBy('`Runtime::repoMapSnapshot()` → `RepoMapBlock::withSettings()`, per turn'),
+            SettingDefinition::new(EnvironmentBlock::SETTING_GIT_DIFF_AFTER_WRITES, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withLabel('Git diff after writes')
+                ->withHelp('After a step that wrote files, show the staged and unstaged git diffs in the turn context.')
+                ->withReaderSymbol(EnvironmentBlock::class . '::withSettings')
+                ->withReadBy('`Runtime::environmentSnapshot()` → `EnvironmentBlock::withSettings()`, per turn'),
+            SettingDefinition::new(EnvironmentBlock::SETTING_DIFF_MAX_BYTES, SettingType::Int, EnvironmentBlock::DIFF_MAX_BYTES)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(EnvironmentBlock::MIN_DIFF_MAX_BYTES)
+                ->withLabel('Git diff: bytes per section')
+                ->withHelp('Bytes each of the two git diff sections keeps before it is truncated with a note.')
+                ->withReaderSymbol(EnvironmentBlock::class . '::withSettings')
+                ->withReadBy('`Runtime::environmentSnapshot()` → `EnvironmentBlock::withSettings()`, per turn'),
+            // Roadmap N-P4d: the launch-notice shelf. config.json only, read
+            // while the launch records its notices, so it applies at restart.
+            SettingDefinition::new(Bootstrap::SETTING_LAUNCH_NOTICE_LIMIT, SettingType::Int, Bootstrap::LAUNCH_NOTICE_LIMIT)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withApplyMode(ApplyMode::Restart)
+                ->withRange(0)
+                ->withLabel('Launch notices in transcript')
+                ->withHelp('Most launch warnings seated as transcript rows; the rest are counted in one "and N more" row, and stderr carries them all.')
+                ->withReaderSymbol(Bootstrap::class . '::launchNoticeLimit')
+                ->withReadBy('`Bootstrap::warnPermissionConfigInTranscript()` → `launchNoticeLimit()`, at launch'),
             SettingDefinition::new('contextWindow', SettingType::Json)
                 ->withCategory(SettingCategory::Context)
                 ->withRiskClass(RiskClass::Tuning)

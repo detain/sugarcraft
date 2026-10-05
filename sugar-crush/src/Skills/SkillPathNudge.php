@@ -78,6 +78,14 @@ final class SkillPathNudge
     private const FOOTER = "\n</system-reminder>";
 
     /**
+     * Roadmap N-P4d: `skills.pathNudges: false` stops the nudge. Read per
+     * call by {@see enabled()}, so a saved change applies from the next tool
+     * call; a skill not announced while it was off is still pending, and is
+     * announced on the first matching call once it is back on.
+     */
+    public const SETTING_PATH_NUDGES = 'skills.pathNudges';
+
+    /**
      * The most bytes ONE `- name: description` entry may occupy.
      *
      * A `description` is frontmatter written by whoever shipped the skill —
@@ -173,6 +181,27 @@ final class SkillPathNudge
     }
 
     /**
+     * Whether `skills.pathNudges` lets a nudge out (roadmap N-P4d). Anything
+     * but a boolean `false` is the default, on; unreadable settings are the
+     * default too.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`)
+     */
+    public static function enabled(?array $config = null): bool
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                return true;
+            }
+        }
+
+        return ($config[self::SETTING_PATH_NUDGES] ?? true) !== false;
+    }
+
+    /**
      * Nudge text for a single touched file, or null when nothing new matches.
      *
      * $budget as in {@see forPaths()}.
@@ -228,6 +257,12 @@ final class SkillPathNudge
         }
 
         if ($pending === []) {
+            return null;
+        }
+
+        // Asked only once something would be announced, so a call that
+        // matches nothing never reads the settings.
+        if (!self::enabled()) {
             return null;
         }
 

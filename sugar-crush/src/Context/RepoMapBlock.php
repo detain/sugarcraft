@@ -262,6 +262,17 @@ final readonly class RepoMapBlock implements PromptSection
     public const MAX_SECTION_BYTES = 8192;
 
     /**
+     * Roadmap N-P4d: `repoMap.enabled` (default true; false keeps the map out
+     * of the prompt and skips the capture) and `repoMap.maxBytes`, each
+     * section's budget (default {@see MAX_SECTION_BYTES}, never below
+     * {@see MAX_ENTRY_BYTES} so one entry always fits). Read by
+     * {@see enabledBySettings()} and {@see withSettings()}, which
+     * `Runtime::repoMapSnapshot()` applies once per turn.
+     */
+    public const SETTING_ENABLED = 'repoMap.enabled';
+    public const SETTING_MAX_BYTES = 'repoMap.maxBytes';
+
+    /**
      * Per-line ceiling, in bytes, INCLUDING the truncation marker.
      *
      * Applied to the ASSEMBLED line rather than to the description field
@@ -432,6 +443,7 @@ final readonly class RepoMapBlock implements PromptSection
     private function __construct(
         private array $packages,
         private array $sourceDirectories,
+        private int $maxSectionBytes = self::MAX_SECTION_BYTES,
     ) {}
 
     /**
@@ -459,6 +471,60 @@ final readonly class RepoMapBlock implements PromptSection
     public static function empty(): self
     {
         return new self([], []);
+    }
+
+    /**
+     * Whether `repoMap.enabled` leaves the map in the prompt (roadmap N-P4d).
+     * Anything but a boolean `false` is the default, on.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`)
+     */
+    public static function enabledBySettings(?array $config = null): bool
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                return true;
+            }
+        }
+
+        return ($config[self::SETTING_ENABLED] ?? true) !== false;
+    }
+
+    /**
+     * This map under `repoMap.maxBytes` (roadmap N-P4d): an int of at least
+     * {@see MAX_ENTRY_BYTES} becomes each section's budget, anything else
+     * keeps {@see MAX_SECTION_BYTES}. Never throws; the same instance when
+     * nothing differs, so a held map keeps its identity.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`)
+     */
+    public function withSettings(?array $config = null): self
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+
+        $max = $config[self::SETTING_MAX_BYTES] ?? null;
+        if (\is_float($max) && is_finite($max) && floor($max) === $max && abs($max) < 1e15) {
+            $max = (int) $max;
+        }
+        $max = \is_int($max) && $max >= self::MAX_ENTRY_BYTES ? $max : self::MAX_SECTION_BYTES;
+
+        return $max === $this->maxSectionBytes ? $this : new self($this->packages, $this->sourceDirectories, $max);
+    }
+
+    /** Each section's byte budget: {@see MAX_SECTION_BYTES} or `repoMap.maxBytes`. */
+    public function maxSectionBytes(): int
+    {
+        return $this->maxSectionBytes;
     }
 
     /**
@@ -539,7 +605,7 @@ final readonly class RepoMapBlock implements PromptSection
             . 'Each section keeps at most %d bytes of entries and clips any single entry to %d bytes, so a '
             . 'large workspace may be mapped incompletely; a directory missing from this map is not evidence '
             . 'that it does not exist.',
-            self::MAX_SECTION_BYTES,
+            $this->maxSectionBytes,
             self::MAX_ENTRY_BYTES,
         );
 
@@ -632,7 +698,7 @@ final readonly class RepoMapBlock implements PromptSection
             $line = $this->clip(PromptFence::escape(Utf8Scrub::clean($line)));
             $lineBytes = strlen($line);
 
-            if ($bytes + $lineBytes > self::MAX_SECTION_BYTES) {
+            if ($bytes + $lineBytes > $this->maxSectionBytes) {
                 break;
             }
 

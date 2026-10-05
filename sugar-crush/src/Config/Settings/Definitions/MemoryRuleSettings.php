@@ -15,8 +15,11 @@ use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\ProjectMemoryWriter;
 use SugarCraft\Crush\Memory\AutoMemoryConsolidator;
 use SugarCraft\Crush\Memory\DreamPass;
+use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Skills\SkillPathNudge;
 
 /**
  * The "Memory & Rules" category's keys. One file per category so a step adding a
@@ -28,8 +31,15 @@ use SugarCraft\Crush\Memory\DreamPass;
  * decide how much note text — repository-shipped notes included — becomes
  * system prompt, and auto-memory is a billed call on the operator's
  * credential. Each default IS the constant it replaced, cited, not restated.
- * Every one is next turn: the caps are read by the turn's Runtime, the
- * auto-memory switches when a turn settles.
+ * The caps are next turn — read by the turn's Runtime — and the auto-memory
+ * switches when a turn settles. The project-note cap is live: it is read as
+ * each note is written.
+ *
+ * THE RULE AND NUDGE KEYS (roadmap N-P4d remainder) follow the same rule:
+ * `rules.standingMaxBytes` decides how much standing-rule text becomes
+ * system prompt, so it is the operator's alone; `skills.pathNudges` sits
+ * beside it because its nudge is the skill twin of the path-scoped rule
+ * nudge, and turning it off only removes text, so a trusted project may.
  */
 final class MemoryRuleSettings implements SettingDefinitionSet
 {
@@ -51,6 +61,34 @@ final class MemoryRuleSettings implements SettingDefinitionSet
             ->withReadBy('`Runtime::memorySnapshot()` → `MemoryBlock::withSettings()`, per turn');
 
         return [
+            SettingDefinition::new(Runtime::SETTING_STANDING_MAX_BYTES, SettingType::Int, Runtime::MAX_STANDING_RULE_BYTES)
+                ->withCategory(SettingCategory::MemoryRules)
+                ->withRiskClass(RiskClass::Prompt)
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(1)
+                ->withLabel('Standing rules: bytes')
+                ->withHelp('Byte budget, framed and escaped, for the rule files spliced whole into every prompt; a rule past it is named by one pointer line instead.')
+                ->withReaderSymbol(Runtime::class . '::systemPromptSections')
+                ->withReadBy('`Runtime::systemPromptSections()`, per prompt build'),
+            SettingDefinition::new(SkillPathNudge::SETTING_PATH_NUDGES, SettingType::Bool, true)
+                ->withCategory(SettingCategory::MemoryRules)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withLabel('Skill path nudges')
+                ->withHelp('When a tool touches a file a path-scoped skill covers, remind the model that skill exists, once per skill.')
+                ->withReaderSymbol(SkillPathNudge::class . '::enabled')
+                ->withReadBy('`SkillPathNudge::forPaths()` → `enabled()`, per tool call'),
+            SettingDefinition::new(ProjectMemoryWriter::SETTING_MAX_CONTENT_BYTES, SettingType::Int, ProjectMemoryWriter::MAX_CONTENT_BYTES)
+                ->withCategory(SettingCategory::MemoryRules)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(1)
+                ->withLabel('Project note: max bytes')
+                ->withHelp('Largest one project memory note may be when it is written to the repository\'s .sugar-crush/memory/.')
+                ->withReaderSymbol(ProjectMemoryWriter::class . '::maxContentBytes')
+                ->withReadBy('`ProjectMemoryWriter::write()` → `maxContentBytes()`, per note'),
             $cap(MemoryBlock::SETTING_MAX_ENTRIES, MemoryBlock::MAX_ENTRIES, 'Memory index: notes', 'Most notes the prompt\'s memory index lists, newest first; user notes count inside it.'),
             $cap(MemoryBlock::SETTING_MAX_BYTES, MemoryBlock::MAX_BYTES, 'Memory index: bytes', 'Byte budget for the memory index\'s note lines; the user-note budget is lowered to fit inside it.'),
             $cap(MemoryBlock::SETTING_MAX_ENTRY_BYTES, MemoryBlock::MAX_ENTRY_BYTES, 'Memory index: bytes per note', 'Longest one note\'s index line may be before it is shown truncated; lowered to the user-note budget if over it.'),

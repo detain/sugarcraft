@@ -240,6 +240,23 @@ final readonly class EnvironmentBlock implements PromptSection
     public const DIFF_MAX_BYTES = 8192;
 
     /**
+     * Roadmap N-P4d: `env.gitDiffAfterWrites` — whether the two diff sections
+     * render after a write at all (default true, the P3.S2 behaviour) — and
+     * `env.diffMaxBytes`, each section's cap (default {@see DIFF_MAX_BYTES}).
+     * Read by {@see withSettings()}, which `Runtime::environmentSnapshot()`
+     * lays over the session's capture once per turn.
+     */
+    public const SETTING_GIT_DIFF_AFTER_WRITES = 'env.gitDiffAfterWrites';
+    public const SETTING_DIFF_MAX_BYTES = 'env.diffMaxBytes';
+
+    /**
+     * The smallest `env.diffMaxBytes` taken: room for the truncation note
+     * {@see truncateOutput()} appends and a few lines of patch. Below it the
+     * setting is ignored rather than rendering a section that is all marker.
+     */
+    public const MIN_DIFF_MAX_BYTES = 256;
+
+    /**
      * Retained bytes for the `--porcelain` status and the recent-log lines, each.
      *
      * NOT part of P8.10, and here because P8.10's cap was measurably defeated by
@@ -710,6 +727,10 @@ final readonly class EnvironmentBlock implements PromptSection
      *                                               Defaults to TRUE (the full block); Runtime
      *                                               derives the static-only copy for the system
      *                                               prompt — see {@see withVolatile()}.
+     * @param bool               $diffsAfterWrites   `env.gitDiffAfterWrites`: FALSE withholds the two
+     *                                               diff sections even after a write. Defaults TRUE.
+     * @param int                $diffMaxBytes       `env.diffMaxBytes`: each diff section's cap.
+     *                                               Defaults to {@see DIFF_MAX_BYTES}.
      */
     public function __construct(
         private string $cwd,
@@ -718,6 +739,8 @@ final readonly class EnvironmentBlock implements PromptSection
         private ?string $platform = null,
         private bool $writeSinceLastRender = true,
         private bool $volatile = true,
+        private bool $diffsAfterWrites = true,
+        private int $diffMaxBytes = self::DIFF_MAX_BYTES,
     ) {}
 
     /**
@@ -801,7 +824,7 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withWriteSinceLastRender(bool $writeSinceLastRender): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender, $this->volatile);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender, $this->volatile, $this->diffsAfterWrites, $this->diffMaxBytes);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
@@ -908,12 +931,66 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withVolatile(bool $volatile): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $volatile);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $volatile, $this->diffsAfterWrites, $this->diffMaxBytes);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
 
         return $copy;
+    }
+
+    /**
+     * This block under the `env.*` settings (roadmap N-P4d), over the
+     * defaults: `env.gitDiffAfterWrites` (bool) and `env.diffMaxBytes` (int,
+     * at least {@see MIN_DIFF_MAX_BYTES}). Never throws, like every per-turn
+     * settings reader: a value of the wrong shape keeps its default. Returns
+     * this same instance when nothing differs, so a held block keeps its
+     * identity.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`), and
+     *        unreadable settings are the defaults
+     */
+    public function withSettings(?array $config = null): self
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+
+        $diffs = $config[self::SETTING_GIT_DIFF_AFTER_WRITES] ?? null;
+        $diffs = \is_bool($diffs) ? $diffs : true;
+        $max = $config[self::SETTING_DIFF_MAX_BYTES] ?? null;
+        if (\is_float($max) && is_finite($max) && floor($max) === $max && abs($max) < 1e15) {
+            $max = (int) $max;
+        }
+        $max = \is_int($max) && $max >= self::MIN_DIFF_MAX_BYTES ? $max : self::DIFF_MAX_BYTES;
+
+        if ($diffs === $this->diffsAfterWrites && $max === $this->diffMaxBytes) {
+            return $this;
+        }
+
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $this->volatile, $diffs, $max);
+        if (isset($this->enclosingRepo)) {
+            $copy->enclosingRepo = $this->enclosingRepo;
+        }
+
+        return $copy;
+    }
+
+    /** Whether a write is followed by the two diff sections (`env.gitDiffAfterWrites`). */
+    public function diffsAfterWrites(): bool
+    {
+        return $this->diffsAfterWrites;
+    }
+
+    /** Each diff section's cap in bytes (`env.diffMaxBytes`). */
+    public function diffMaxBytes(): int
+    {
+        return $this->diffMaxBytes;
     }
 
     /**
@@ -1259,7 +1336,9 @@ final readonly class EnvironmentBlock implements PromptSection
         // The labels name the PORCELAIN command a reader would type to see
         // the same section; what runs is its lock-free plumbing equivalent
         // (see DIFF_FLAGS), whose patch is byte-identical under default config.
-        if ($this->writeSinceLastRender) {
+        // `env.gitDiffAfterWrites: false` (roadmap N-P4d) withholds them,
+        // and their two subprocesses, after a write too.
+        if ($this->writeSinceLastRender && $this->diffsAfterWrites) {
             $section .= "\n\n" . $this->gitDiffSection(
                 'Staged changes (git diff --cached, index vs HEAD)',
                 ['diff-index', '--cached', '-M', ...self::DIFF_FLAGS, 'HEAD'],
@@ -1455,7 +1534,7 @@ final readonly class EnvironmentBlock implements PromptSection
         // A `git diff` over an accidentally-unignored vendor tree is hundreds of
         // megabytes, and shell_exec() would materialise all of it before any cap
         // could apply.
-        $captured = $this->runGit($argv, self::DIFF_MAX_BYTES);
+        $captured = $this->runGit($argv, $this->diffMaxBytes);
 
         // `diff-index HEAD` fails on an unborn branch, where `git diff --cached`
         // compared against the empty tree. Probed only after a failure, so the
@@ -1464,7 +1543,7 @@ final readonly class EnvironmentBlock implements PromptSection
             $emptyTree = $this->emptyTreeIfHeadIsUnborn($timedOut);
             if ($emptyTree !== null) {
                 $argv[\count($argv) - 1] = $emptyTree;
-                $captured = $this->runGit($argv, self::DIFF_MAX_BYTES);
+                $captured = $this->runGit($argv, $this->diffMaxBytes);
             }
         }
 
@@ -1490,7 +1569,7 @@ final readonly class EnvironmentBlock implements PromptSection
         // as gitField(): escape, then cap.
         return $label . ":\n" . $this->truncateOutput(
             PromptFence::escape($captured['stdout']),
-            self::DIFF_MAX_BYTES,
+            $this->diffMaxBytes,
             $captured['stdoutDropped'],
             $captured['stdoutMidLine'],
         );

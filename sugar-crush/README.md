@@ -970,7 +970,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these eighty-six keys are layered — `provider`, `models`, `titleModel`,
+Only these ninety-one keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
@@ -981,15 +981,16 @@ Only these eighty-six keys are layered — `provider`, `models`, `titleModel`,
 `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`,
 `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
 `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
-`contextWindow`, `autoReview`, `secretEnvAllowlist`, `allowedTools`,
-`disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
-`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
-`toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
+`repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
+`env.diffMaxBytes`, `contextWindow`, `autoReview`, `secretEnvAllowlist`,
+`allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`,
+`toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
+`readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
 `webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
 `webSearchEndpoint`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
-`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `instructions`,
-`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
-`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `skills.pathNudges`,
+`instructions`, `disabledRules`, `embeddingModel`, `disabledSkills`,
+`enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
 `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
 `attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
 `watchFiles`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`,
@@ -1032,7 +1033,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, forty-two keys are **never** taken from a project file:
+Even for a trusted project, forty-four keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1079,7 +1080,11 @@ result may hand the model,
 because every byte a result carries is replayed into each later request of the
 turn — the same money axis paid in input tokens, so a checkout may not raise
 them (the timeouts and memory bounds beside them only cost time, and a trusted
-project *may* set those); `webSearchEndpoint`, because it decides which host
+project *may* set those); `repoMap.maxBytes` and `env.diffMaxBytes`, the repo
+map's and the git diffs' byte budgets, for the same reason — both ride the
+requests of every turn, so raising them is the same input-token bill (switching
+either block off only removes text, and a trusted project *may* do that);
+`webSearchEndpoint`, because it decides which host
 receives every WebSearch query, and those queries routinely quote the
 repository's code, file names and error text — the `provider` argument applied
 to search; `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`

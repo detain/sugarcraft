@@ -211,7 +211,34 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    private const LAUNCH_NOTICE_LIMIT = 40;
+    public const LAUNCH_NOTICE_LIMIT = 40;
+
+    /**
+     * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
+     * default) — `config.json` only, read as notices are recorded
+     * ({@see launchNoticeLimit()}), so it applies to the next launch.
+     */
+    public const SETTING_LAUNCH_NOTICE_LIMIT = 'notices.transcriptLimit';
+
+    /**
+     * How many launch notices this launch seats on the transcript:
+     * `notices.transcriptLimit` when it is an int of at least 0 (0 seats none,
+     * leaving the one "and N more" row), else {@see LAUNCH_NOTICE_LIMIT}.
+     *
+     * Read from `config.json` ALONE, not the merged settings: the merge itself
+     * can raise launch notices (a refused project file), and a reader that
+     * re-entered it from inside the recorder would recurse. Every notice
+     * still reaches stderr whatever this says.
+     */
+    public static function launchNoticeLimit(): int
+    {
+        $value = self::rawUserConfig()[self::SETTING_LAUNCH_NOTICE_LIMIT] ?? null;
+        if (\is_float($value) && is_finite($value) && floor($value) === $value && abs($value) < 1e15) {
+            $value = (int) $value;
+        }
+
+        return \is_int($value) && $value >= 0 ? $value : self::LAUNCH_NOTICE_LIMIT;
+    }
 
     /**
      * Every method that raises launch notices onto the transcript seam, with
@@ -7072,7 +7099,7 @@ final class Bootstrap
         // counted as an overflow — a repeat costs the transcript nothing, and
         // charging it to the "and N more" tail would overstate what was lost.
         if (!\in_array($notice, self::$launchNotices, true)) {
-            if (\count(self::$launchNotices) < self::LAUNCH_NOTICE_LIMIT) {
+            if (\count(self::$launchNotices) < self::launchNoticeLimit()) {
                 self::$launchNotices[] = $notice;
             } else {
                 self::$launchNoticesDropped[$notice] = true;

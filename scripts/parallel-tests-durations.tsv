@@ -387,6 +387,7 @@ sugar-crush/tests/Tui/Settings/SettingsEditorPolishTest.php	0.450	11
 sugar-crush/tests/Support/ForkedChildTest.php	0.449	2
 sugar-crush/tests/Workspace/ShadowGarbageCollectorTest.php	0.448	3
 sugar-crush/tests/Chat/CompactionLiveSettingsTest.php	0.447	12
+sugar-crush/tests/Context/PromptCapSettingsTest.php	0.446	10
 sugar-crush/tests/Backend/EngineBackendHeartbeatThreadingTest.php	0.445	4
 sugar-crush/tests/Backend/EngineBackendFrameSocketInheritanceTest.php	0.443	2
 sugar-crush/tests/Backend/ForkChannelReplyAfterCancelTest.php	0.422	1

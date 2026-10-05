@@ -29,7 +29,9 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    the slot is absent from the list entirely, not rendered empty. Fragments are ordered by
    `name()`, so the bytes cannot depend on registration order. Static.
 4. **Repo map** (`RepoMapBlock`) — fenced `repo-map`; per-session memoized snapshot of derived
-   repository facts.
+   repository facts. `repoMap.enabled: false` leaves the slot out (and skips the walk), and
+   `repoMap.maxBytes` moves each section's 8,192-byte budget (`RepoMapBlock::MAX_SECTION_BYTES`);
+   both are read once per turn (`Runtime::repoMapSnapshot()`, roadmap N-P4d).
 5. **Symbol map** (`SymbolMapBlock`) — fenced `symbol-map`; the definitions the rest of the workspace
    references most, ranked by PageRank over which files use which names (an Aider repo map, roadmap
    5.5-5), unfocused and capped at 1,024 tokens. PerSession and byte-stable: `EngineBackend` captures
@@ -38,7 +40,10 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    so every other prompt build is unchanged.
 6. **User-tier rules** — each enabled rule from `RuleLoader::load()` whose tier is `user` gets its
    own fence, `user-rules`, with the operator-authority preamble — except a `paths:`-scoped rule,
-   which is delivered at tool time instead (see the trigger bullets below).
+   which is delivered at tool time instead (see the trigger bullets below). The user and project
+   standing rules share one budget, `Runtime::MAX_STANDING_RULE_BYTES` (65,536 framed bytes), which
+   `rules.standingMaxBytes` (`config.json` only, roadmap N-P4d) replaces; a rule past it becomes one
+   pointer line.
 7. **Instruction documents** — `InstructionFileLoader::loadRoot()` then `loadForced()` (read
    through their path-keyed sibling `loadDocuments()`), each non-blank document its own
    `project-instructions` fence with the project-authority preamble. Budgeted like the rules
@@ -106,7 +111,9 @@ re-prefills the whole conversation behind it.
 
 - **The `<turn-context>` row.** `Runtime::turnContext()` builds a `Context\TurnContextBlock`: the
   git section (`EnvironmentBlock::renderVolatile()` — caveat, branch, porcelain status, recent
-  log and, after a write step, both diffs), the files this conversation's Edit and Write calls
+  log and, after a write step, both diffs, each capped at `env.diffMaxBytes`, default
+  `EnvironmentBlock::DIFF_MAX_BYTES`, and left out altogether by `env.gitDiffAfterWrites: false`),
+  the files this conversation's Edit and Write calls
   touched (`TurnContextBlock::recentlyModifiedIn()`), the memory notes most relevant to the latest
   user message (`Runtime::memoryRecall()` — a `Context\MemoryRecallBlock` fenced `memory-recall`, at
   most three notes, ranked once per turn by `Memory\HybridMemoryRanker` in the parent before the

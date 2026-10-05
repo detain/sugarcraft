@@ -236,7 +236,7 @@ The model reads and writes the same notes through the `Memory` tool
 | Action | Arguments | Does |
 |---|---|---|
 | `view` | `id` (optional) | the note in full, with its type, scope and store; without an `id`, the whole index grouped by scope and store |
-| `save` | `content`, `scope` (`project` default, or `user`), `type` (`pattern` default, `convention`, `decision`, `preference`), `tags` | a new note; content over `ProjectMemoryWriter::MAX_CONTENT_BYTES` (8192) is refused |
+| `save` | `content`, `scope` (`project` default, or `user`), `type` (`pattern` default, `convention`, `decision`, `preference`), `tags` | a new note; content over `ProjectMemoryWriter::MAX_CONTENT_BYTES` (8192) is refused — the `memory.projectNoteMaxBytes` setting (`config.json` only, read as each project note is written) moves the cap a note written into the repository is held to |
 | `str_replace` | `id`, `old_str`, `new_str` | replaces the one occurrence of `old_str`; zero or several occurrences are refused |
 | `delete` | `id` | removes the note |
 | `recall` | `query` | the notes whose content, type or tags match the query, best first (the `/memory search` ranking), at most 20 |

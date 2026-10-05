@@ -36,7 +36,8 @@ use SugarCraft\Crush\Support\ProjectRoot;
  * doc-block there for why symlinks and not hard links are the case
  * containment serves here).
  *
- * Fail-fast bound: one note's content is capped at {@see MAX_CONTENT_BYTES}.
+ * Fail-fast bound: one note's content is capped at {@see MAX_CONTENT_BYTES},
+ * or at `memory.projectNoteMaxBytes` ({@see maxContentBytes()}).
  * The fold already clips each entry to {@see MemoryBlock::MAX_ENTRY_BYTES}
  * at render time, but the cap here keeps a pathological write from filling
  * the tree with megabytes of never-displayed bytes; the number is the store
@@ -57,6 +58,12 @@ final class ProjectMemoryWriter
      * the bound's job is bounding what lands on disk.
      */
     public const MAX_CONTENT_BYTES = 8192;
+
+    /**
+     * Roadmap N-P4d: the setting that replaces {@see MAX_CONTENT_BYTES} (its
+     * default), read per write by {@see maxContentBytes()}.
+     */
+    public const SETTING_MAX_CONTENT_BYTES = 'memory.projectNoteMaxBytes';
 
     private function __construct(
         private readonly MemoryStore $store,
@@ -147,13 +154,41 @@ final class ProjectMemoryWriter
             throw new \InvalidArgumentException('Project memory content must not be empty.');
         }
 
-        if (strlen($content) > self::MAX_CONTENT_BYTES) {
+        $max = self::maxContentBytes();
+        if (strlen($content) > $max) {
             throw new \InvalidArgumentException(
-                'Project memory content exceeds ' . self::MAX_CONTENT_BYTES . ' bytes.'
+                'Project memory content exceeds ' . $max . ' bytes.'
             );
         }
 
         return $this->store->add($content, MemoryScope::Project, $tags);
+    }
+
+    /**
+     * The ceiling on one note's raw content: `memory.projectNoteMaxBytes`
+     * when it is a positive int, else {@see MAX_CONTENT_BYTES}. Read per call
+     * (a write is an explicit act, not a keystroke), so a saved change applies
+     * to the next note. Never throws; unreadable settings are the default.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`)
+     */
+    public static function maxContentBytes(?array $config = null): int
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                return self::MAX_CONTENT_BYTES;
+            }
+        }
+
+        $value = $config[self::SETTING_MAX_CONTENT_BYTES] ?? null;
+        if (\is_float($value) && is_finite($value) && floor($value) === $value && abs($value) < 1e15) {
+            $value = (int) $value;
+        }
+
+        return \is_int($value) && $value >= 1 ? $value : self::MAX_CONTENT_BYTES;
     }
 
     /** The store the prompt fold reads through — {@see MemoryBlock::capture()}. */
