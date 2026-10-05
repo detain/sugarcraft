@@ -17,6 +17,7 @@ use SugarCraft\Crush\Config\Settings\Validator\AbsolutePathValidator;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Permissions\ReadOnlyCommands;
 
 /**
  * The "Permissions" category's keys. One file per category so a step adding a
@@ -89,6 +90,21 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withHelp('Under auto, once this many calls have been blocked in a session every further block asks you instead.')
                 ->withReaderSymbol(PermissionGate::class . '::autoBreakerLimits')
                 ->withReadBy('`PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()`'),
+            // User decision 2026-10-11: under default and accept-edits a Bash
+            // line made entirely of read-only commands runs unasked. Turning
+            // it off only adds questions, so a trusted project may (Narrowing)
+            // — and only off: the reader ANDs the value without the project
+            // tier, so a project cannot switch back on what the user turned off.
+            SettingDefinition::new(ReadOnlyCommands::SETTING, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withLabel(Lang::t('settings.permissions.autoAllowReadOnly.label'))
+                ->withHelp('Under default and accept-edits, run a Bash line made only of read-only commands (ls, cat, grep, git log, …; no file redirection, no substitution, cd only inside the project) without asking. A project may only switch it off.')
+                ->withReaderSymbol(ReadOnlyCommands::class . '::autoAllowEnabled')
+                ->withReadBy('`PermissionGate::evaluateDefault()` / `evaluateAcceptEdits()` → `readOnlyAutoAllow()` → `ReadOnlyCommands::autoAllowEnabled()`'),
             SettingDefinition::new('secretEnvAllowlist', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Permissions)
                 ->withRiskClass(RiskClass::Security)

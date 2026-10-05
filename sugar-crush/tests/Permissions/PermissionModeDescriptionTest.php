@@ -121,18 +121,22 @@ final class PermissionModeDescriptionTest extends TestCase
         $D = PermissionDecision::Deny;
 
         return [
-            // "Reads run silently. Everything else asks first: writes, shell,
-            //  WebFetch and WebSearch."  WebFetch was ALLOW here until audit
-            //  F-P6 took it out of the read-only class.
+            // "Reads run silently, and so does a shell command made only of
+            //  read-only commands … Everything else asks first: writes, other
+            //  shell commands, WebFetch and WebSearch."  WebFetch was ALLOW
+            //  here until audit F-P6 took it out of the read-only class;
+            //  `Bash exploring` was ASK until the read-only auto-allow
+            //  (user decision 2026-10-11).
             'default' => [
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $K, 'WebFetch with query' => $K,
                 'WebSearch' => $K, 'Write tool' => $K, 'Edit tool' => $K,
                 'Write outside root' => $K, 'Write into .git' => $K, 'Write a plan file' => $K,
-                'Bash exploring' => $K, 'Bash mkdir scoped' => $K, 'Bash rm scoped' => $K,
+                'Bash exploring' => $A, 'Bash mkdir scoped' => $K, 'Bash rm scoped' => $K,
                 'Bash rm unscoped' => $K, 'Bash redirecting' => $K, 'Bash fetching' => $K,
                 'Bash into shell' => $K, 'MCP tool' => $K,
             ],
-            // "Reads run, and so do edits: the Write and Edit tools on a file
+            // "Reads run (read-only shell commands included), and so do edits:
+            //  the Write and Edit tools on a file
             //  inside the project, and the shell commands mkdir, touch and
             //  rmdir on paths below the working directory. The same edit
             //  outside the project, or into .git or policy files, asks.
@@ -145,7 +149,7 @@ final class PermissionModeDescriptionTest extends TestCase
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $K, 'WebFetch with query' => $K,
                 'WebSearch' => $K, 'Write tool' => $A, 'Edit tool' => $A,
                 'Write outside root' => $K, 'Write into .git' => $K, 'Write a plan file' => $K,
-                'Bash exploring' => $K, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $K,
+                'Bash exploring' => $A, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $K,
                 'Bash rm unscoped' => $K, 'Bash redirecting' => $K, 'Bash fetching' => $K,
                 'Bash into shell' => $K, 'MCP tool' => $K,
             ],
@@ -234,13 +238,15 @@ final class PermissionModeDescriptionTest extends TestCase
         return [
             'default' => [
                 ['Reads run silently', 'Read'],
+                ['a shell command made only of read-only commands', 'Bash exploring'],
                 ['asks first: writes', 'Write tool'],
-                ['shell', 'Bash exploring'],
+                ['other shell commands', 'Bash rm scoped'],
                 ['WebFetch', 'WebFetch'],
                 ['WebSearch', 'WebSearch'],
             ],
             'accept-edits' => [
                 ['Reads run', 'Read'],
+                ['read-only shell commands included', 'Bash exploring'],
                 ['the Write and Edit tools on a file inside the project', 'Write tool'],
                 ['mkdir, touch and rmdir on paths below the working directory', 'Bash mkdir scoped'],
                 ['The same edit outside the project', 'Write outside root'],

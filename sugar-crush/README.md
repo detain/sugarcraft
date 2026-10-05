@@ -993,7 +993,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these one hundred and nine keys are layered — `provider`, `models`,
+Only these one hundred and ten keys are layered — `provider`, `models`,
 `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`,
 `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1008,25 +1008,25 @@ Only these one hundred and nine keys are layered — `provider`, `models`,
 `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
 `env.diffMaxBytes`, `contextWindow`, `autoReview`,
 `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
-`secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`,
-`testCommand`, `autoTest`, `toolOutputCapBytes`, `mcpResultCapBytes`,
-`readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`,
-`toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
-`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
-`webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`,
-`bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
-`chatToolTimeoutSeconds`, `skills.pathNudges`, `instructions`, `disabledRules`,
-`embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
-`subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
-`subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
-`autoCommit`, `theme`, `statusLine`, `layout`, `notify`, `watchFiles`,
-`queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
-`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
-`sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
-`promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `lintCommands`,
-`disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
-`providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
-`debug.commands`, `debug.rules`, `debug.stream`.
+`permissions.autoAllowReadOnly`, `secretEnvAllowlist`, `allowedTools`,
+`disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
+`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+`toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`,
+`toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
+`webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
+`webSearchEndpoint`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `skills.pathNudges`,
+`instructions`, `disabledRules`, `embeddingModel`, `disabledSkills`,
+`enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
+`attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
+`watchFiles`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`,
+`scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
+`toolOutputPreviewLines`, `sessionRetentionDays`, `sessions.autoTitle`,
+`promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`,
+`maxCheckpoints`, `lintCommands`, `disabledMcpServers`, `mcp.enabled`,
+`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`,
+`debug.skills`, `debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1235,8 +1235,8 @@ the rule grammar and the sandbox are in
 
 | Mode | Reads | Edits and shell | Notes |
 |---|---|---|---|
-| `default` | run | ask | the **TUI's default**: the y/n/a modal asks for every write, shell command and network call |
-| `accept-edits` | run | in-project `Edit`/`Write` run; most shell commands ask | |
+| `default` | run | ask — except a shell line made only of read-only commands (`ls`, `git log`, `grep` …), which runs | the **TUI's default**: the y/n/a modal asks for every write, other shell command and network call |
+| `accept-edits` | run | in-project `Edit`/`Write` and read-only shell lines run; most other shell commands ask | |
 | `plan` | run | refused, except a Markdown plan in `.sugar-crush/plans/` and read-only `Bash` | toggle with **`Alt+M`** between turns; the model leaves it with `PlanExit`, which asks you to approve the plan |
 | `auto` | classified | classified by `SafetyClassifier`: a security finding (fetched code into a shell, data sent out, credentials, policy files) asks; any other flagged call is refused — or first reviewed by the title model with `autoReview` — and asks after three blocks in a row or twenty in all | |
 | `dont-ask` | run | refused | never prompts |
@@ -1253,6 +1253,18 @@ Whatever you allow, `/undo` and `/rewind` can take the files back. On Linux,
 `"bashSandbox": "on"` (or `"no-network"`) additionally runs every `Bash`
 command inside bubblewrap, writable only in the project.
 
+- **Read-only shell commands run unasked** under `default` and
+  `accept-edits` — alone or as a chain or pipeline made entirely of them, so
+  `cd <project> && ls -d */ | head -80 && echo --- && git log --oneline -3`
+  never asks. The list is conservative (`ls`, `cat`, `head`, `tail`, `wc`,
+  `grep`/`rg`, `find` without `-exec`/`-delete`, `sort` without `-o`, `git`'s
+  read subcommands, `php -l`, `composer show`, `npm ls` …), and a writing
+  redirection, a substitution, `xargs`/`sed`/`awk`, a `cd` out of the project,
+  a protected file (`.env`, keys) or anything else off the list makes the
+  whole line ask as before. Configured rules and hooks still win;
+  `"permissions.autoAllowReadOnly": false` (yours; a project may only switch
+  it off) asks about every shell line again. See
+  [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md#read-only-shell-commands-run-unasked).
 - **`ApplyPatch` is judged per file.** A patch runs without asking only when
   every path it adds, updates, moves or deletes would; a `deny` or `ask` rule
   fires when any path matches. A restrictive `Edit` or `Write` rule binds a

@@ -4174,6 +4174,20 @@ final class Bootstrap
     }
 
     /**
+     * {@see readUserConfig()} WITHOUT the project tier — what the user's own
+     * files (and the session tier) say. For a key a trusted project may only
+     * switch OFF ({@see \SugarCraft\Crush\Permissions\ReadOnlyCommands::autoAllowEnabled()}):
+     * the merged value lets the project narrow it, this one stops the project
+     * widening it back.
+     *
+     * @return array<string, mixed>
+     */
+    public static function readUserConfigWithoutProjectTier(): array
+    {
+        return self::mergedConfig(false);
+    }
+
+    /**
      * {@see readUserConfig()}, with the project tier optionally left out.
      *
      * ONE COPY OF THE LAYERING, and that is the whole reason this exists rather

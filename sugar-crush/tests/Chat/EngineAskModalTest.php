@@ -249,7 +249,7 @@ final class EngineAskModalTest extends TestCase
         $this->requireFork();
         $inbox = new \ArrayObject();
         $script = [
-            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'Bash', ['command' => 'git status'])]),
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'Bash', ['command' => 'git push'])]),
             new CompleteResponse(content: 'done'),
         ];
         $chat = new Chat(inputBuf: 'go', backend: self::engine($script, 'Bash'), liveToolEvents: $inbox);
@@ -262,7 +262,7 @@ final class EngineAskModalTest extends TestCase
         [$granted] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
         $this->runUntil(static fn (): bool => $first->msg !== null);
         $settled = $this->apply($granted, $first->msg);
-        self::assertArrayHasKey(SessionPermissionMemo::RULE_KEY . 'Bash(git status)', $settled->permissionGrants());
+        self::assertArrayHasKey(SessionPermissionMemo::RULE_KEY . 'Bash(git push)', $settled->permissionGrants());
 
         // The second turn runs the same command in a NEW child, whose
         // per-turn memo is empty. Nothing pumps the inbox this time: had the

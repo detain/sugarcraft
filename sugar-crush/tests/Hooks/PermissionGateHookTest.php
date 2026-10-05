@@ -67,7 +67,7 @@ final class PermissionGateHookTest extends TestCase
     {
         $hook = new PermissionGateHook(new PermissionGate(PermissionMode::Default));
 
-        $result = $hook->execute($this->context('Bash', ['command' => 'ls']));
+        $result = $hook->execute($this->context('Bash', ['command' => 'npm install']));
 
         $this->assertTrue($result->isAsk());
         $this->assertFalse($result->permitsExecution());

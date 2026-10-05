@@ -138,7 +138,7 @@ final class TaskToolArgumentScopedGrantTest extends TestCase
         $provider = new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [
                 new ToolCall('c1', 'Bash', ['command' => 'npm publish']),
-                new ToolCall('c2', 'Bash', ['command' => 'git status']),
+                new ToolCall('c2', 'Bash', ['command' => 'git push']),
             ]),
             new CompleteResponse(content: 'done'),
         ]);
@@ -154,8 +154,8 @@ final class TaskToolArgumentScopedGrantTest extends TestCase
 
         $this->task($manager, $engine)->execute(self::call('reviewer'));
 
-        $this->assertSame(['git status'], $asked, 'the grant refused npm before the gate could ask about it');
-        $this->assertSame([['command' => 'git status']], $bash->calls, 'the session gate still judged the admitted call');
+        $this->assertSame(['git push'], $asked, 'the grant refused npm before the gate could ask about it');
+        $this->assertSame([['command' => 'git push']], $bash->calls, 'the session gate still judged the admitted call');
     }
 
     public function testTheGrantNeverLeaksOntoTheCallersSharedHookChain(): void

@@ -18,6 +18,7 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\PendingAsk;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Config\Settings\SessionSettings;
 use SugarCraft\Crush\Events\PermissionAsked;
 use SugarCraft\Crush\Events\PermissionResolved;
 use SugarCraft\Crush\Events\SubAgentActivity;
@@ -30,6 +31,7 @@ use SugarCraft\Crush\Permissions\AskOrigin;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\PermissionReply;
+use SugarCraft\Crush\Permissions\ReadOnlyCommands;
 use SugarCraft\Crush\Permissions\SessionPermissionMemo;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Renderer;
@@ -476,8 +478,20 @@ final class BashPermissionPromptTest extends TestCase
     /** @var list<string> */
     private array $projects = [];
 
+    /**
+     * These tests are about what a GRANT remembers and covers, and their
+     * commands (`ls`, `git status`) are read-only — which the read-only
+     * auto-allow would run without a question to grant. Switched off here;
+     * ReadOnlyAutoAllowTest pins it on.
+     */
+    protected function setUp(): void
+    {
+        SessionSettings::apply([ReadOnlyCommands::SETTING => false]);
+    }
+
     protected function tearDown(): void
     {
+        SessionSettings::reset();
         foreach ($this->projects as $base) {
             @rmdir($base . '/project/sub');
             @rmdir($base . '/project');

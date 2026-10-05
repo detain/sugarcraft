@@ -65,10 +65,15 @@ final class PermissionGateTest extends TestCase
 
         $decision = $gate->evaluate(new ToolCall(
             name: 'Bash',
-            arguments: ['command' => 'ls -la'],
+            arguments: ['command' => 'npm install'],
         ));
 
         $this->assertSame(PermissionDecision::Ask, $decision);
+        $this->assertSame(
+            PermissionDecision::Ask,
+            $gate->withReadOnlyAutoAllow(false)->evaluate(new ToolCall('Bash', ['command' => 'ls -la'])),
+            'with the read-only auto-allow off, even `ls` asks',
+        );
     }
 
     // =========================================================================

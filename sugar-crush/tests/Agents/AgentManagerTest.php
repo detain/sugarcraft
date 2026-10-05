@@ -849,7 +849,7 @@ final class AgentManagerTest extends TestCase
             ->willReturn(new CompleteResponse(
                 content: 'Result',
                 toolCalls: [
-                    new ToolCall(name: 'Bash', arguments: ['command' => 'ls']),
+                    new ToolCall(name: 'Bash', arguments: ['command' => 'make build']),
                 ],
             ));
 
@@ -875,7 +875,7 @@ final class AgentManagerTest extends TestCase
     public function testExecuteSubAgentPermissionGateAskThrowsRuntimeException(): void
     {
         // Custom gate factory that returns a gate which asks (not denies) for Bash tool calls
-        // Default mode: Bash is not read-only, so it returns Ask
+        // Default mode: `make build` is not a read-only command, so it returns Ask
         $askGate = new PermissionGate(PermissionMode::Default);
 
         $customAgentManager = new AgentManager(
@@ -895,7 +895,7 @@ final class AgentManagerTest extends TestCase
             ->willReturn(new CompleteResponse(
                 content: 'Result',
                 toolCalls: [
-                    new ToolCall(name: 'Bash', arguments: ['command' => 'ls']),
+                    new ToolCall(name: 'Bash', arguments: ['command' => 'make build']),
                 ],
             ));
 
@@ -947,7 +947,7 @@ final class AgentManagerTest extends TestCase
         $this->provider->method('complete')
             ->willReturn(new CompleteResponse(
                 content: 'Result',
-                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'ls'])],
+                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'make build'])],
             ));
 
         foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
@@ -976,7 +976,7 @@ final class AgentManagerTest extends TestCase
         $this->provider->method('complete')
             ->willReturn(new CompleteResponse(
                 content: 'Result',
-                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'ls'])],
+                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'make build'])],
             ));
 
         // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
@@ -1019,7 +1019,7 @@ final class AgentManagerTest extends TestCase
         $this->provider->method('complete')
             ->willReturn(new CompleteResponse(
                 content: 'Result',
-                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'ls'])],
+                toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'make build'])],
             ));
 
         $this->expectException(\RuntimeException::class);
@@ -3379,7 +3379,7 @@ final class AgentManagerTest extends TestCase
                 // read-only tool, and an Allow `continue`s past the approver —
                 // which is the very path this test has to avoid, since the hole
                 // is specific to a call that was ASKED about and approved.
-                new ToolCall(name: 'Bash', arguments: ['command' => 'git status']),
+                new ToolCall(name: 'Bash', arguments: ['command' => 'git push']),
                 new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
             ],
             ['Bash(git *)'],
@@ -3394,7 +3394,7 @@ final class AgentManagerTest extends TestCase
         $this->assertSame(
             PermissionDecision::Ask,
             (new PermissionGate(PermissionMode::Default))
-                ->evaluate(new ToolCall('Bash', ['command' => 'git status'])),
+                ->evaluate(new ToolCall('Bash', ['command' => 'git push'])),
             'the premise: call #1 must reach the approver, not be auto-allowed',
         );
 

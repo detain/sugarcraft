@@ -902,15 +902,23 @@ final class McpToolWiringTest extends TestCase
             'every PermissionMode needs a row in this table',
         );
 
+        // The Bash probe (`ls`) stands for "a write-capable tool", so the
+        // read-only auto-allow — which would run it unasked under `default`
+        // and `accept-edits` — is switched off for the comparison.
+        \SugarCraft\Crush\Config\Settings\SessionSettings::apply([\SugarCraft\Crush\Permissions\ReadOnlyCommands::SETTING => false]);
         $measured = [];
-        foreach (array_keys($expected) as $mode) {
-            Bootstrap::writeUserConfig(['permissionMode' => $mode]);
-            $hooks = $this->launchHooks();
+        try {
+            foreach (array_keys($expected) as $mode) {
+                Bootstrap::writeUserConfig(['permissionMode' => $mode]);
+                $hooks = $this->launchHooks();
 
-            $measured[$mode] = [
-                $this->gateAction($hooks, 'mcp__fake__ping'),
-                $this->gateAction($hooks, 'Bash'),
-            ];
+                $measured[$mode] = [
+                    $this->gateAction($hooks, 'mcp__fake__ping'),
+                    $this->gateAction($hooks, 'Bash'),
+                ];
+            }
+        } finally {
+            \SugarCraft\Crush\Config\Settings\SessionSettings::reset();
         }
 
         $this->assertSame($expected, $measured);

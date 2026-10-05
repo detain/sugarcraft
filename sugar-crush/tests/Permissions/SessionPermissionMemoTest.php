@@ -129,7 +129,8 @@ final class SessionPermissionMemoTest extends TestCase
 
     public function testASessionRuleAnswersTheQuestionTheModeWouldHaveAsked(): void
     {
-        $gate = new PermissionGate(PermissionMode::Default);
+        // `git status` is read-only, which the auto-allow would run unasked.
+        $gate = (new PermissionGate(PermissionMode::Default))->withReadOnlyAutoAllow(false);
         $call = new ToolCall('Bash', ['command' => 'git status -s']);
         self::assertSame(PermissionDecision::Ask, $gate->evaluate($call), 'fixture: default mode asks about Bash');
 

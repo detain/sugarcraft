@@ -109,8 +109,14 @@ enum PermissionMode: string
             // And then the POLICY moved under it (audit F-P6): an outbound
             // fetch whose URL the model composes is how a secret leaves, so
             // WebFetch left the read-only class and now asks with the rest.
-            self::Default => 'Reads run silently. Everything else asks first: writes, shell, WebFetch '
-                . 'and WebSearch.',
+            //
+            // And then it moved again (user decision 2026-10-11): a shell line
+            // made only of read-only commands runs silently too
+            // (ReadOnlyCommands, `permissions.autoAllowReadOnly`), so "shell"
+            // became "other shell commands".
+            self::Default => 'Reads run silently, and so does a shell command made only of read-only commands '
+                . '(`ls`, `git log`, `grep` …) with no output redirection or substitution. Everything else asks '
+                . 'first: writes, other shell commands, WebFetch and WebSearch.',
             // MEASURED, not assumed. A first draft of this said "writes scoped
             // to the working directory run without asking", which reads as the
             // Write and Edit TOOLS — and PermissionGate::evaluateAcceptEdits()
@@ -132,7 +138,7 @@ enum PermissionMode: string
             // and Edit tools while running `rm`, `mv` and `cp` unprompted. The
             // tools now carry the grant inside the project, and the shell keeps
             // only the create-only verbs.
-            self::AcceptEdits => 'Reads run, and so do edits: the Write and Edit tools on a file inside the '
+            self::AcceptEdits => 'Reads run (read-only shell commands included), and so do edits: the Write and Edit tools on a file inside the '
                 . 'project, and the shell commands mkdir, touch and rmdir on paths below the working '
                 . 'directory. The same edit outside the project, or into .git or policy files, asks. '
                 . 'Everything else asks too — rm, mv and cp included, and WebFetch.',

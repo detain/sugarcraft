@@ -163,12 +163,71 @@ rule — see [Rules](#rules).
 
 | Mode | Read-only | Writes | Everything else |
 |---|---|---|---|
-| `default` | Allow | Ask | Ask |
-| `accept-edits` | Allow | `Edit`/`Write` inside the project root Allow, and an `ApplyPatch` whose every path is; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
+| `default` | Allow | Ask — except a `Bash` line made only of read-only commands, Allow ([below](#read-only-shell-commands-run-unasked)) | Ask |
+| `accept-edits` | Allow | a read-only `Bash` line Allow, as under `default`; `Edit`/`Write` inside the project root Allow, and an `ApplyPatch` whose every path is; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
 | `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.sugar-crush/plans/` Allow, and an `ApplyPatch` touching only such plans; every other `Edit`/`Write`/`ApplyPatch` and unhinted `mcp__*` Deny | Ask |
 | `auto` | gated by `SafetyClassifier`: a security finding Asks, any other flagged call is Denied (or reviewed, with `autoReview`), with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
+
+### Read-only shell commands run unasked
+
+Under `default` and `accept-edits`, a `Bash` line made **entirely** of
+read-only commands runs without asking — alone, or as a chain or pipeline of
+them (`|`, `&&`, `||`, `;`, newlines) — and shows only its normal tool row.
+The model re-shapes the same exploration every time
+(`cd /repo && ls -d */ | head -80 && echo "---GIT---" && git log --oneline -3`),
+so no remembered grant could cover it; this does. One list,
+`Permissions\ReadOnlyCommands`, is also what `plan` runs its shell commands
+against, so the two cannot drift.
+
+**The commands.** `ls`, `pwd`, `cat`, `head`, `tail` (`-f` included), `wc`,
+`file` (not `-C`), `stat`, `du`, `df`, `tree` (not `-o`/`-R`), `echo`,
+`printf` (not `-v`), `true`, `false`, `which`, `whereis`, `type`, `id`,
+`whoami`, `date` (display forms only), `uname`, `env` and `printenv` **with no
+arguments** (`env rm x` runs `rm`), `grep`/`egrep`/`fgrep`, `rg` (not
+`--pre`), `ag` (not `--pager`), `find` (not `-exec`, `-execdir`, `-ok`,
+`-okdir`, `-delete`, `-fprint*`, `-fls`), `sort` (not `-o`, `-T`,
+`--compress-program`), `uniq` (at most one operand — a second is written),
+`cut`, `tr`, `column`, `nl`, `diff`, `cmp`, `comm`, `basename`, `dirname`,
+`realpath`, `readlink`, `jq`; `git` read subcommands only — `status`, `log`,
+`show`, `diff`, `blame`, `shortlog`, `rev-parse`, `rev-list`, `ls-files`,
+`ls-tree`, `describe`, `cat-file`, `grep` (not `-O`), `branch` and `tag` in
+their **list** forms (no `-d`/`-D`/`-m`/`-c`, no name to create),
+`remote [-v]`/`get-url`/`show`, `config` with `--get*`/`--list` — and none of
+them with `--output`, or a global option other than `--no-pager` (`-C`,
+`-c`, `--git-dir` refuse); `php -l <files>`; `composer show`/`info`/`validate`;
+`npm ls`/`list`/`view`/`info`. A command must be spelled literally:
+`/bin/ls`, `l?`, `$CMD` or a `FOO=1` prefix is not on the list.
+
+**`cd`** is allowed only into an existing directory **inside the project**
+(resolved like the leading `cd` an "always" grant strips — symlinks followed,
+no `~`, no `-`, and with `CDPATH` set a bare relative name does not count);
+after one `cd`, a further one must be absolute. `cd /etc && ls`,
+`cd .. && ls` and bare `cd` ask.
+
+**What makes the whole line ask** (fail closed — anything not shown read-only
+is a question, exactly as before): a command off the list (`sed`, `awk`,
+`xargs`, `tee`, `sh`, `php artisan …`, `npm test`, …, so `ls | sh` and
+`ls | xargs rm` ask); a writing redirection (`> f`, `>> f`, `&> f` —
+`2>/dev/null`, `>/dev/null` and `2>&1` are fine); a command or process
+substitution (`$(…)`, backticks, `<(…)`) or a `${…}` expansion; a
+background `&`; a line that does not parse (an open quote, a here-doc); a
+file `protect-files` guards (`grep x .env`, `cat deploy.pem`, the policy
+files); and anything the `auto` classifier flags (`env | grep SECRET`).
+
+**What still wins.** It is a mode decision, so a configured `deny` or `ask`
+rule (`{"pattern": "Bash(git log *)", "action": "deny"}`) comes first, and the
+hooks run before the gate at all — `protect-files` still refuses
+`grep API_KEY .env`. Paths are not restricted: reading outside the project is
+still reading, as it is with `Read`. `plan` keeps its own judgement (there a
+`cd` may go anywhere); `auto` classifies as before; `dont-ask` still refuses
+`Bash`.
+
+**Switching it off.** `"permissions.autoAllowReadOnly": false` in your
+`settings.json` or `config.json` (or the settings view) puts every shell line
+to you again, from the next call. It is user-tier: a trusted project's
+settings may switch it **off** but never back on over yours.
 
 ### `accept-edits`
 

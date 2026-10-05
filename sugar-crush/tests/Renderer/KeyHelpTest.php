@@ -2276,8 +2276,8 @@ final class KeyHelpTest extends TestCase
         [$chat] = $chat->update(new KeyMsg(KeyType::Enter));
         [$first] = $chat->update(new \SugarCraft\Crush\AssistantMsg(
             Message::assistant('running')->withToolCalls([
-                new \SugarCraft\Crush\ToolCall('Bash', ['command' => 'ls a'], 'call_a'),
-                new \SugarCraft\Crush\ToolCall('Bash', ['command' => 'pwd'], 'call_b'),
+                new \SugarCraft\Crush\ToolCall('Bash', ['command' => 'touch a'], 'call_a'),
+                new \SugarCraft\Crush\ToolCall('Bash', ['command' => 'make b'], 'call_b'),
             ]),
         ));
         $this->assertNotNull($first->pendingPermission(), 'fixture: the first call is gated');

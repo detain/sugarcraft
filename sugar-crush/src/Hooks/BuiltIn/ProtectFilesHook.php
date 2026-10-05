@@ -493,6 +493,30 @@ final readonly class ProtectFilesHook implements HookInterface
     }
 
     /**
+     * Does this shell line name a file the DEFAULT lists guard — a secret
+     * ({@see self::DEFAULT_PROTECTED_PATTERNS}) or the policy surface
+     * ({@see self::POLICY_ASK_PATTERNS}) — in any spelling bash would
+     * produce? For a caller that GRANTS without asking
+     * ({@see \SugarCraft\Crush\Permissions\ReadOnlyCommands::autoAllows()}),
+     * so a read-only `grep x .env` is not waved through on the strength of its
+     * command name: the hook's own verdict still decides it, but nothing
+     * upstream of the hook pre-empts the question either.
+     */
+    public static function namesProtectedFile(string $command): bool
+    {
+        $spellings = self::shellSpellings($command);
+        foreach ([...self::DEFAULT_PROTECTED_PATTERNS, ...self::POLICY_ASK_PATTERNS] as $pattern) {
+            foreach ($spellings as $spelling) {
+                if (preg_match($pattern, $spelling) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * $command as written plus every quote-removed form bash would produce
      * from it: the dequoted command text, each word on its own (so a `^`
      * anchored custom pattern sees a word start), and each redirection target

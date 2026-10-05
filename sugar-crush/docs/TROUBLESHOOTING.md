@@ -217,7 +217,8 @@ Both go to stderr **and** to the session transcript as a system row, so an
 interactive session shows them after the alt screen has opened.
 
 **Everything I do is allowed.** In the TUI the shipped default mode is
-`default`, which asks before every write and shell command — so either a mode
+`default`, which asks before every write and every shell command that is not
+made only of read-only commands — so either a mode
 was configured (`sugarcrush doctor` names it on its `permission policy` line,
 and `/permissions` shows which source set it) or this is a `-p` or background
 run, whose default is `bypass-permissions`. With no rules configured, that is
@@ -232,6 +233,14 @@ standing choice set `permissionMode` to `accept-edits` (edits inside the
 project run unprompted, shell commands still ask) or add `permissionRules`
 allow entries. A sub-agent's questions come up in the same modal, naming the
 agent that asked (a parallel member's are relayed one at a time).
+
+**A shell command ran without asking under `default`.** A line made only of
+read-only commands (`ls`, `cat`, `grep`, `git log`, `find` without `-exec`, …
+— no writing redirection, no substitution, a `cd` only into the project) runs
+unasked under `default` and `accept-edits`. To be asked about those too, set
+`"permissions.autoAllowReadOnly": false`, or add an `ask` rule for the command
+(`{"pattern": "Bash(cat *)", "action": "ask"}`). See
+[`PERMISSIONS.md`](PERMISSIONS.md#read-only-shell-commands-run-unasked).
 
 **`Allow Edit(...)` does not cover `ApplyPatch`.** A restrictive `Edit` or
 `Write` rule binds a patch, but an allow does not carry over, because a patch

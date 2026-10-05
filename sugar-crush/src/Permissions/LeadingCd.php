@@ -74,7 +74,7 @@ final class LeadingCd
 
         $raw = $match['path'];
         $path = ($raw[0] === '\'' || $raw[0] === '"') ? substr($raw, 1, -1) : $raw;
-        if ($path === '' || $path[0] === '-' || $path[0] === '~') {
+        if ($path === '') {
             return null;
         }
 
@@ -92,17 +92,36 @@ final class LeadingCd
             }
         }
 
+        return self::landsInside($path, $projectRoot) ? $rest : null;
+    }
+
+    /**
+     * Would `cd <$path>` — $path being the quote-removed word bash hands `cd`,
+     * which the caller has already shown bash will not rewrite (no `$`,
+     * backtick, glob or brace) — land in an EXISTING directory inside the
+     * project root? The one copy of that judgement: the leading-`cd` strip
+     * above and {@see ReadOnlyCommands}' mid-chain `cd` both ask it.
+     *
+     * No for an empty path, `-…` (`cd -`, `cd -P`), `~…`, no root, a path
+     * that resolves outside the root (symlinks followed) or to nothing, and —
+     * with `CDPATH` set — a bare relative name, which bash would look up in
+     * `CDPATH` first.
+     */
+    public static function landsInside(string $path, ?string $projectRoot): bool
+    {
+        if ($projectRoot === null || $projectRoot === '' || $path === '' || str_contains($path, "\0")
+            || $path[0] === '-' || $path[0] === '~') {
+            return false;
+        }
+
         $cdpath = getenv('CDPATH');
         if (is_string($cdpath) && $cdpath !== '' && $path[0] !== '/'
             && !str_starts_with($path, './') && !str_starts_with($path, '../') && $path !== '.' && $path !== '..') {
-            return null;
+            return false;
         }
 
         $resolved = PathJail::resolveDir($projectRoot, $path);
-        if ($resolved === null || !is_dir($resolved)) {
-            return null;
-        }
 
-        return $rest;
+        return $resolved !== null && is_dir($resolved);
     }
 }
