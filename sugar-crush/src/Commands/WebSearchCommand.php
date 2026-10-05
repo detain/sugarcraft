@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Host\Commands\CommandContext;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -60,7 +61,7 @@ final class WebSearchCommand
                     }
                 }
                 // Invalid safesearch value
-                $this->printError("Invalid safesearch value '{$value}'. Must be 0, 1, or 2.");
+                $this->printError(Lang::t('cmd.websearch.bad-safesearch', ['value' => $value]));
                 return 1;
             }
 
@@ -72,7 +73,7 @@ final class WebSearchCommand
                     continue;
                 }
                 // Invalid time-range value
-                $this->printError("Invalid time-range '{$value}'. Must be day, month, or year.");
+                $this->printError(Lang::t('cmd.websearch.bad-time-range', ['value' => $value]));
                 return 1;
             }
 
@@ -80,7 +81,7 @@ final class WebSearchCommand
             if (str_starts_with($arg, '--')) {
                 $validFlags = ['--safesearch', '--time-range', '--help', '-h'];
                 if (!in_array($arg, $validFlags, true)) {
-                    $this->printError("Unknown flag '{$arg}'. Valid flags: --safesearch, --time-range, --help");
+                    $this->printError(Lang::t('cmd.websearch.unknown-flag', ['flag' => $arg]));
                     return 1;
                 }
                 $i++;
@@ -100,12 +101,12 @@ final class WebSearchCommand
         }
 
         if (strlen($query) > self::MAX_QUERY_LENGTH) {
-            $this->printError("Query exceeds maximum length of " . self::MAX_QUERY_LENGTH . " characters");
+            $this->printError(Lang::t('cmd.websearch.too-long', ['max' => self::MAX_QUERY_LENGTH]));
             return 1;
         }
 
         // Execute search
-        echo "  Searching...\n";
+        echo '  ' . Lang::t('cmd.websearch.searching') . "\n";
 
         $result = $this->webSearch->execute([
             'query' => $query,
@@ -141,30 +142,17 @@ final class WebSearchCommand
      */
     private function printUsage(): void
     {
-        echo "\n";
-        echo "  Usage: /websearch <query> [--safesearch 0|1|2] [--time-range day|month|year]\n";
-        echo "  Use /websearch --help for full options.\n";
-        echo "\n";
+        echo "\n" . TranscriptTable::indented(Lang::t('cmd.websearch.usage')) . "\n";
     }
 
     private function printHelp(): void
     {
         echo "\n";
         echo "  " . str_repeat("─", 54) . "\n";
-        echo "  /websearch — Search the web via SearXNG\n";
+        echo '  ' . Lang::t('cmd.websearch.help.title') . "\n";
         echo "  " . str_repeat("─", 54) . "\n";
         echo "\n";
-        echo "  Usage: /websearch <query> [options]\n";
-        echo "\n";
-        echo "  Options:\n";
-        echo "    --safesearch 0|1|2   Safe search (0=none, 1=moderate, 2=strict)\n";
-        echo "    --time-range day|month|year  Limit results to time period\n";
-        echo "    --help, -h           Show this help message\n";
-        echo "\n";
-        echo "  Examples:\n";
-        echo "    /websearch \"php tutorial\"\n";
-        echo "    /websearch \"news\" --safesearch 2 --time-range month\n";
-        echo "    /websearch --time-range year \"rust\"\n";
+        echo TranscriptTable::indented(Lang::t('cmd.websearch.help.body'));
         echo "\n";
     }
 

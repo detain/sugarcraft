@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Config\Settings;
 
+use SugarCraft\Core\I18n\T;
+
 /**
  * Every settings key sugar-crush reads from a settings file, described once.
  *
@@ -24,6 +26,10 @@ namespace SugarCraft\Crush\Config\Settings;
  * gives — a key nothing reads is worse than a missing one, because it looks
  * configurable. Package provider definitions (`config.dev.json`) are not
  * settings keys and are not here.
+ *
+ * CACHED PER LOCALE: a definition's label is `Lang::t()` of its `labelKey`,
+ * evaluated as the definitions are built (audit 15b-14), so one build answers
+ * one locale.
  */
 final class SettingsSchema
 {
@@ -51,8 +57,8 @@ final class SettingsSchema
         Definitions\EngineSettings::class,
     ];
 
-    /** @var list<SettingDefinition>|null */
-    private static ?array $all = null;
+    /** @var array<string, list<SettingDefinition>> by locale */
+    private static array $all = [];
 
     private function __construct()
     {
@@ -65,8 +71,9 @@ final class SettingsSchema
      */
     public static function all(): array
     {
-        if (self::$all !== null) {
-            return self::$all;
+        $locale = T::locale();
+        if (isset(self::$all[$locale])) {
+            return self::$all[$locale];
         }
 
         $definitions = self::definitions();
@@ -84,7 +91,7 @@ final class SettingsSchema
             static fn (SettingDefinition $a, SettingDefinition $b): int => $a->category->order() <=> $b->category->order(),
         );
 
-        return self::$all = $definitions;
+        return self::$all[$locale] = $definitions;
     }
 
     public static function byKey(string $key): ?SettingDefinition

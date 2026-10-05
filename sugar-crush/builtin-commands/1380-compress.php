@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // Roadmap 3.B-4 (DCP `/dcp-compress`). Next to `/sweep` and `/pruning`: the
 // other way to take context out of what the model is sent. It STARTS A TURN —
@@ -12,7 +13,7 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // Chat::handleCompressCommand().
 return BuiltInCommand::new(CommandSpec::new(
     'compress',
-    'Ask the model to compress a closed part of the conversation into a summary',
-    'App',
-    argumentHint: '[focus]',
+    Lang::t('cmd.compress.description'),
+    Lang::t('cmd.category.app'),
+    argumentHint: Lang::t('cmd.compress.hint'),
 ))->withHandler('handleCompressCommand');

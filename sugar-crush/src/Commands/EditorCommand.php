@@ -9,6 +9,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Crush\App\ErrorMsg;
 use SugarCraft\Crush\App\StatusMsg;
+use SugarCraft\Crush\Lang;
 
 /**
  * The `/editor` command (roadmap 5.14h): compose the next prompt in the user's
@@ -93,9 +94,7 @@ final class EditorCommand
     {
         $path = $this->prepareFile($initial);
         if ($path === null) {
-            return Cmd::send(new ErrorMsg(
-                'editor: could not create a temporary file in ' . $this->tempDir . ' to edit the prompt in',
-            ));
+            return Cmd::send(new ErrorMsg(Lang::t('cmd.editor.no-temp-file', ['dir' => $this->tempDir])));
         }
 
         $editor = $this->editor();
@@ -117,17 +116,17 @@ final class EditorCommand
         @unlink($path);
 
         if ($error !== null) {
-            return new ErrorMsg(sprintf('editor: %s could not be started (%s); the draft is unchanged', $editor, $error->getMessage()));
+            return new ErrorMsg(Lang::t('cmd.editor.not-started', ['editor' => $editor, 'error' => $error->getMessage()]));
         }
         if ($exit !== 0) {
-            return new ErrorMsg(sprintf('editor: %s exited with status %d; the draft is unchanged', $editor, $exit));
+            return new ErrorMsg(Lang::t('cmd.editor.failed', ['editor' => $editor, 'status' => $exit]));
         }
 
         // An editor terminates the last line with a newline the user did not
         // mean as part of the prompt; inner newlines are kept as typed.
         $text = $text === false ? '' : rtrim($text, "\r\n");
         if (trim($text) === '') {
-            return new StatusMsg('editor: nothing was written, so the draft is unchanged');
+            return new StatusMsg(Lang::t('cmd.editor.empty'));
         }
 
         return new PasteMsg($text);

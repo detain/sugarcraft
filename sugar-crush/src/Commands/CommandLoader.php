@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Commands;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Support\ProjectRoot;
@@ -361,13 +362,10 @@ final class CommandLoader
             // passes `$HOME`. A refusal naming an operand the caller did not pass
             // is the failure this round found in three other messages, so the word
             // is "tree" and the path is interpolated for the reader to judge.
-            $reason = sprintf(
-                'Skipping commands directory %s: resolves to %s, %s the tree it was anchored to (%s)',
-                $dir,
-                $realDir,
-                realpath($anchoredIn) === $realDir ? 'which is exactly' : 'outside',
-                $anchoredIn,
-            );
+            $where = ['dir' => $dir, 'real' => $realDir, 'anchor' => $anchoredIn];
+            $reason = realpath($anchoredIn) === $realDir
+                ? Lang::t('cmd.loader.dir-is-anchor', $where)
+                : Lang::t('cmd.loader.dir-outside', $where);
             $this->report($reason);
             // Keyed on the path as GIVEN, not on $realDir: the collector's
             // readers print the directory the user can go and look at, and
@@ -397,7 +395,7 @@ final class CommandLoader
             // {@see ContainedPath} rather than a local prefix compare, so this
             // class is not a fourth spelling of the predicate.
             if (!ContainedPath::within($file->getPathname(), $realDir)) {
-                $skip = "Skipping command file outside {$realDir}: {$file->getPathname()}";
+                $skip = Lang::t('cmd.loader.file-outside', ['dir' => $realDir, 'file' => $file->getPathname()]);
                 $this->skippedFiles[$file->getPathname()] = $skip;
                 $this->report($skip);
 
@@ -412,7 +410,7 @@ final class CommandLoader
                 $commands[$name] = CommandSpec::fromFile($realPath, $name, $tier);
                 $this->commandSources[$name] = $realPath;
             } catch (\Throwable $e) {
-                $skip = "Failed to load command from {$realPath}: {$e->getMessage()}";
+                $skip = Lang::t('cmd.loader.file-failed', ['file' => $realPath, 'error' => $e->getMessage()]);
                 $this->skippedFiles[$realPath] = $skip;
                 $this->report($skip);
             }
@@ -458,9 +456,7 @@ final class CommandLoader
     {
         $home = HomeDirectory::owned();
         if ($home === null) {
-            $reason = 'Skipping user commands: this process cannot establish that $HOME is this user\'s own '
-                . 'directory (see HomeDirectory::owned()), so there is no anchor to hold '
-                . '~/.sugar-crush/commands inside.';
+            $reason = Lang::t('cmd.loader.no-home');
             $this->report($reason);
             // Recorded under the literal `~/...` spelling because there is no
             // resolved path to name — establishing one is exactly what failed.
@@ -534,12 +530,10 @@ final class CommandLoader
                 continue;
             }
 
-            $reason = sprintf(
-                'Refusing file-based command /%s: it is a control-plane command (%s) and a command file '
-                . 'cannot take one over. The built-in still runs; rename the file to use it.',
-                $reserved,
-                implode(', ', CommandRegistry::CONTROL_PLANE),
-            );
+            $reason = Lang::t('cmd.loader.control-plane', [
+                'name' => $reserved,
+                'reserved' => implode(', ', CommandRegistry::CONTROL_PLANE),
+            ]);
             $this->report($reason);
             // Keyed on the FILE, not the name, so the launch report prints
             // something the user can open. {@see $commandSources} holds the path

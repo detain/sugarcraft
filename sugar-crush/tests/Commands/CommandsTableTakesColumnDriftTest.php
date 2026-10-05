@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Commands;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Commands\CommandRegistry;
+use SugarCraft\Crush\Tests\Support\PinsEnglishLocaleTrait;
 
 /**
  * docs/COMMANDS.md says the built-in table's *Takes* column "is the row's own
@@ -20,6 +21,9 @@ use SugarCraft\Crush\Commands\CommandRegistry;
  */
 final class CommandsTableTakesColumnDriftTest extends TestCase
 {
+    // The registries answer through Lang::t(); the pages are English (audit 15b-14).
+    use PinsEnglishLocaleTrait;
+
     /** @return array<string, array{takes: string, says: string}> */
     private static function documentedRows(): array
     {

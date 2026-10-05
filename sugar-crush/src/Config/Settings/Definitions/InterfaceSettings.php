@@ -17,6 +17,7 @@ use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Host\TitleService;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
@@ -58,7 +59,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnumValues(Theme::names())
                 ->withOptionsSource(OptionsSource::Themes)
-                ->withLabel('Theme')
+                ->withLabel(Lang::t('settings.theme.label'))
                 ->withHelp('Colour theme; /theme and the palette change it live.')
                 ->withReaderSymbol(Bootstrap::class . '::chat'),
             SettingDefinition::new('statusLine', SettingType::Map)
@@ -68,7 +69,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 // N-P3: a save re-runs `StatusLineCommand::reconfigure()`.
                 ->withApplyMode(ApplyMode::Live)
                 ->withUi(UiEditability::Complex)
-                ->withLabel('Status line command')
+                ->withLabel(Lang::t('settings.statusLine.label'))
                 ->withHelp('{"type": "command", "command": "…", "refreshSeconds": 2}: a shell command whose output paints the status bar, re-run every refreshSeconds (2 to 3600, default 2).')
                 ->withReaderSymbol(StatusLineCommand::class . '::fromSettings')
                 ->withReadBy('`Bootstrap::chat()`, `Chat::applySettings()` → `StatusLineCommand::fromSettings()`'),
@@ -78,7 +79,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::Live)
                 ->withUi(UiEditability::ReadOnly)
-                ->withLabel('Pane layout')
+                ->withLabel(Lang::t('settings.layout.label'))
                 ->withHelp('The docked-pane manifest; written by the shell when panes move.')
                 ->withReaderSymbol(Bootstrap::class . '::app')
                 ->withReadBy('`Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()`'),
@@ -90,7 +91,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withEnumValues(TerminalNotifier::MODES)
-                ->withLabel('Notifications')
+                ->withLabel(Lang::t('settings.notify.label'))
                 ->withHelp('off, bell (BEL) or osc9 (a desktop notification): sent when a turn ends and when the agent waits for an approval.')
                 ->withReaderSymbol(TerminalNotifier::class . '::fromConfig')
                 ->withReadBy('`Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()`'),
@@ -100,7 +101,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Prompt)
                 ->withLayered()
-                ->withLabel('Watch files for AI comments')
+                ->withLabel(Lang::t('settings.watchFiles.label'))
                 ->withHelp('Send a prompt when a saved file holds a comment ending in AI! (make a change) or AI? (answer a question); plain AI comments ride along as context. Polled while the chat is idle; only comments saved after launch fire, each once.')
                 ->withReaderSymbol(AiCommentWatcher::class . '::enabled')
                 ->withReadBy('`Chat::subscriptions()` → `AiCommentWatcher::enabled()`'),
@@ -111,7 +112,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnumValues(array_map(static fn (QueueMode $m): string => $m->value, QueueMode::cases()))
-                ->withLabel('Enter while a turn runs')
+                ->withLabel(Lang::t('settings.queueMode.label'))
                 ->withHelp('steer (the agent reads it at its next step), followup (sent after the turn) or interrupt (stop the turn at its next step, then send). Tab always queues.')
                 ->withReaderSymbol(QueueMode::class . '::onEnter')
                 ->withReadBy('`Chat::submit()`, `SubmitOptions::effectiveDelivery()` → `QueueMode::onEnter()`'),
@@ -125,7 +126,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar(TerminalBackground::ENV_OVERRIDE)
                 ->withEnumValues(TerminalBackground::SETTING_VALUES)
-                ->withLabel('Terminal background')
+                ->withLabel(Lang::t('settings.terminalBackground.label'))
                 ->withHelp('What the adaptive theme assumes behind the text: auto asks the terminal (OSC 11, then COLORFGBG); light or dark says so outright.')
                 ->withReaderSymbol(TerminalBackground::class . '::setting')
                 ->withReadBy('`Theme::adaptive()`, the shell chrome → `TerminalBackground::isDark()`, `color()` → `setting()`'),
@@ -136,7 +137,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('SUGARCRUSH_DISABLE_MOUSE')
-                ->withLabel('Mouse')
+                ->withLabel(Lang::t('settings.mouse.label'))
                 ->withHelp('Report the mouse to sugar-crush (clicks, wheel, selection); off gives the terminal its own copy-on-select back.')
                 ->withReaderSymbol(Chat::class . '::mouseMode')
                 ->withReadBy('`Chat::programOptions()` at launch, `Chat::applySettings()` on a save → `Chat::mouseMode()`'),
@@ -147,7 +148,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('SUGARCRUSH_DISABLE_MOUSE_CLICKS')
-                ->withLabel('Mouse clicks')
+                ->withLabel(Lang::t('settings.mouseClicks.label'))
                 ->withHelp('Clicks and drags act on what they hit; off keeps the wheel and ignores clicks.')
                 ->withReaderSymbol(Chat::class . '::mouseClicksEnabled'),
             SettingDefinition::new('scrollWheelLines', SettingType::Int, Chat::SCROLL_WHEEL_LINES)
@@ -157,7 +158,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1, 20)
-                ->withLabel('Wheel step (lines)')
+                ->withLabel(Lang::t('settings.scrollWheelLines.label'))
                 ->withHelp('Transcript lines one wheel tick scrolls.')
                 ->withReaderSymbol(Chat::class . '::scrollWheelLines'),
             SettingDefinition::new('doubleEscSeconds', SettingType::Float, Chat::DOUBLE_ESCAPE_WINDOW_SECONDS)
@@ -167,7 +168,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(0.2, 3.0)
-                ->withLabel('Esc Esc window (s)')
+                ->withLabel(Lang::t('settings.doubleEscSeconds.label'))
                 ->withHelp('How quickly the second Esc must follow the first to cancel a running turn.')
                 ->withReaderSymbol(Chat::class . '::doubleEscapeWindowSeconds'),
             SettingDefinition::new('paletteMru', SettingType::Int, Chat::PALETTE_MRU_LIMIT)
@@ -177,7 +178,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(0, 50)
-                ->withLabel('Palette recent items')
+                ->withLabel(Lang::t('settings.paletteMru.label'))
                 ->withHelp('How many recently used palette rows are remembered and ranked first; 0 remembers none.')
                 ->withReaderSymbol(Chat::class . '::paletteMruLimit'),
             SettingDefinition::new('diffPreviewRows', SettingType::Int, Renderer::DIFF_MAX_ROWS)
@@ -187,7 +188,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(4, 1000)
-                ->withLabel('Diff preview rows')
+                ->withLabel(Lang::t('settings.diffPreviewRows.label'))
                 ->withHelp('Rows of an Edit or Write diff shown in the transcript before the rest is summarised.')
                 ->withReaderSymbol(Renderer::class . '::diffPreviewRows'),
             SettingDefinition::new('toolOutputPreviewLines', SettingType::Int, Renderer::TOOL_OUTPUT_MAX_LINES)
@@ -197,7 +198,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1, 200)
-                ->withLabel('Tool output preview lines')
+                ->withLabel(Lang::t('settings.toolOutputPreviewLines.label'))
                 ->withHelp('Lines of a collapsed tool result shown in the transcript; Ctrl+O expands the rest.')
                 ->withReaderSymbol(Renderer::class . '::toolOutputPreviewLines'),
             // Retention DELETES conversations, so it is the operator's own
@@ -209,7 +210,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar('SUGARCRUSH_SESSION_RETENTION_DAYS')
                 ->withRange(0, SessionStore::MAX_RETENTION_DAYS)
-                ->withLabel('Session retention (days)')
+                ->withLabel(Lang::t('settings.sessionRetentionDays.label'))
                 ->withHelp('Each launch deletes unnamed, unpinned sessions untouched for this many days and says which; 0 (the default) keeps everything.')
                 ->withReaderSymbol(Bootstrap::class . '::sessionRetentionDays')
                 ->withReadBy('`Bootstrap::sessionStore()` at launch → `sessionRetentionDays()`'),
@@ -223,7 +224,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
-                ->withLabel('Auto-title sessions')
+                ->withLabel(Lang::t('settings.sessions.autoTitle.label'))
                 ->withHelp('Name each new session from its first turn with one call on the title model; off leaves it unnamed until /rename.')
                 ->withReaderSymbol(TitleService::class . '::autoTitleEnabled')
                 ->withReadBy('`Chat` turn dispatch → `TitleService::titleCall()` → `autoTitleEnabled()`'),
@@ -234,7 +235,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS')
-                ->withLabel('Prompt suggestions')
+                ->withLabel(Lang::t('settings.promptSuggestions.label'))
                 ->withHelp('After each turn, ask the title model for the message you are likely to send next and show it greyed in the empty input box (→ accepts it).')
                 ->withReaderSymbol(TitleService::class . '::promptSuggestionsEnabled')
                 ->withReadBy('`Chat` turn settle → `TitleService::suggestionCall()` → `promptSuggestionsEnabled()`'),
@@ -244,7 +245,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1, 100)
-                ->withLabel('Prompt suggestion history')
+                ->withLabel(Lang::t('settings.promptSuggestionHistory.label'))
                 ->withHelp('Recent messages (each clipped to 2000 characters) the prompt-suggestion call is shown.')
                 ->withReaderSymbol(TitleService::class . '::promptSuggestionHistory')
                 ->withReadBy('`TitleService::suggestionCall()` → `promptSuggestionHistory()`'),
@@ -254,7 +255,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
-                ->withLabel('Expand tool output')
+                ->withLabel(Lang::t('settings.expandToolOutput.label'))
                 ->withHelp('Show each finished tool call\'s output in full in the transcript; Ctrl+O or a click still collapses one.')
                 ->withReaderSymbol(Renderer::class . '::toolOutputExpandedByDefault')
                 ->withReadBy('`Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()`'),
@@ -264,7 +265,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1, 10000)
-                ->withLabel('Checkpoints kept per session')
+                ->withLabel(Lang::t('settings.maxCheckpoints.label'))
                 ->withHelp('Turn checkpoints /rewind can return to, per session; the oldest are pruned past this.')
                 ->withReaderSymbol(EnhancedSessionStore::class . '::maxCheckpoints')
                 ->withReadBy('`EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()`'),

@@ -14,6 +14,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\Settings\Validator\AbsolutePathValidator;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 
@@ -40,7 +41,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withCliFlag('--permission-mode')
                 ->withEnumValues(array_map(static fn (PermissionMode $m): string => $m->value, PermissionMode::cases()))
                 ->withOptionsSource(OptionsSource::PermissionModes)
-                ->withLabel('Permission mode')
+                ->withLabel(Lang::t('settings.permissionMode.label'))
                 ->withHelp('How tool calls are gated. Never taken from a project file.')
                 // D5: the TUI asks by default; `-p` and the daemon have nobody
                 // to ask, so they keep the schema default.
@@ -51,7 +52,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withStrict()
                 ->withUi(UiEditability::Complex)
-                ->withLabel('Permission rules')
+                ->withLabel(Lang::t('settings.permissionRules.label'))
                 ->withHelp('Ordered allow / deny / ask rules matched against each tool call.')
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             // Roadmap 5.11-2: user tier only (never a project's to switch on),
@@ -60,7 +61,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Permissions)
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
-                ->withLabel('Auto mode reviewer')
+                ->withLabel(Lang::t('settings.autoReview.label'))
                 ->withHelp('Under auto, a call the safety classifier flags (other than a security finding, which always asks) is reviewed by the title model, which allows it, asks you or denies it.')
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             // Roadmap N-P4g: Auto's circuit breaker, promoted from the gate's
@@ -74,7 +75,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 100)
-                ->withLabel('Auto breaker: blocks in a row')
+                ->withLabel(Lang::t('settings.permissions.autoStrikeLimit.label'))
                 ->withHelp('Under auto, this many blocked calls of one category in a row turn the next one into a question.')
                 ->withReaderSymbol(PermissionGate::class . '::autoBreakerLimits')
                 ->withReadBy('`PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()`'),
@@ -84,7 +85,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 1000)
-                ->withLabel('Auto breaker: blocks in total')
+                ->withLabel(Lang::t('settings.permissions.autoTotalLimit.label'))
                 ->withHelp('Under auto, once this many calls have been blocked in a session every further block asks you instead.')
                 ->withReaderSymbol(PermissionGate::class . '::autoBreakerLimits')
                 ->withReadBy('`PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()`'),
@@ -93,7 +94,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withLayered()
                 ->withUi(UiEditability::List)
-                ->withLabel('Secret env allowlist')
+                ->withLabel(Lang::t('settings.secretEnvAllowlist.label'))
                 ->withHelp('Credential-shaped variable names (or globs) Bash, Grep and script hooks still inherit.')
                 ->withReaderSymbol(Bootstrap::class . '::installSecretEnvAllowlist')
                 ->withReadBy('`Bootstrap::tools()` → `installSecretEnvAllowlist()`'),
@@ -103,7 +104,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withUi(UiEditability::List)
                 ->withValidators(AbsolutePathValidator::new())
-                ->withLabel('Trusted project hooks')
+                ->withLabel(Lang::t('settings.trustedProjectHooks.label'))
                 ->withHelp('Project roots whose .sugar-crush/hooks.yaml may run.')
                 ->withReaderSymbol(Bootstrap::class . '::trustedRootsForThisProcess'),
             SettingDefinition::new('trustedProjectMcp', SettingType::StringList, [])
@@ -112,7 +113,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withUi(UiEditability::List)
                 ->withValidators(AbsolutePathValidator::new())
-                ->withLabel('Trusted project MCP')
+                ->withLabel(Lang::t('settings.trustedProjectMcp.label'))
                 ->withHelp('Project roots whose .mcp.json servers may be launched.')
                 ->withReaderSymbol(Bootstrap::class . '::projectMcpIsTrusted'),
             SettingDefinition::new('trustedProjectCommands', SettingType::StringList, [])
@@ -121,7 +122,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withUi(UiEditability::List)
                 ->withValidators(AbsolutePathValidator::new())
-                ->withLabel('Trusted project commands')
+                ->withLabel(Lang::t('settings.trustedProjectCommands.label'))
                 ->withHelp('Project roots whose slash commands may run !`cmd` shell blocks.')
                 ->withReaderSymbol(Bootstrap::class . '::projectCommandShellIsTrusted'),
             SettingDefinition::new('trustedProjectSettings', SettingType::StringList, [])
@@ -130,7 +131,7 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withUi(UiEditability::List)
                 ->withValidators(AbsolutePathValidator::new())
-                ->withLabel('Trusted project settings')
+                ->withLabel(Lang::t('settings.trustedProjectSettings.label'))
                 ->withHelp('Project roots whose .sugar-crush/settings*.json may set the project-tier keys.')
                 ->withReaderSymbol(Bootstrap::class . '::projectSettingsTrusted'),
         ];

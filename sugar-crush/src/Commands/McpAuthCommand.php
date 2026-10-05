@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Host\Commands\CommandContext;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\MCP\McpAuthStore;
 
 /**
@@ -128,7 +129,7 @@ final class McpAuthCommand
             'add' => $this->addServer($args),
             'remove' => $this->removeServer($args),
             'login' => $this->printLoginGuidance(),
-            default => $this->printError("Unknown sub-command '{$subCommand}'. Use: list, add, remove, login"),
+            default => $this->printError(Lang::t('cmd.mcp-auth.unknown', ['sub' => $subCommand])),
         };
     }
 
@@ -145,15 +146,7 @@ final class McpAuthCommand
      */
     private function printLoginGuidance(): int
     {
-        echo "\n";
-        echo "  Interactive login is a shell command, not a chat turn:\n";
-        echo "\n";
-        echo "    sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url]\n";
-        echo "\n";
-        echo "  It runs the OAuth authorization-code flow with PKCE: your browser\n";
-        echo "  returns the code to a loopback listener in the shell, and the stored\n";
-        echo "  tokens are attached to matching http servers from the next launch.\n";
-        echo "\n";
+        echo "\n" . TranscriptTable::indented(Lang::t('cmd.mcp-auth.login-guidance')) . "\n";
 
         return 0;
     }
@@ -196,14 +189,9 @@ final class McpAuthCommand
             // holds OAuth credentials ONLY, and the servers themselves come
             // from .mcp.json (the panel above already teaches that; these
             // lines fix what THIS table is actually empty of).
-            echo "\n";
-            echo "  No stored MCP credentials.\n";
-            echo "\n";
-            echo "  Credentials are only for servers that demand OAuth login; a\n";
-            echo "  declared http server that needs none runs from its \"url\" alone.\n";
-            echo "  Servers themselves are declared under \"mcpServers\" in\n";
-            echo "  <project>/.mcp.json — recipe: docs/MCP.md, \"" . \SugarCraft\Crush\Tui\McpPanel::GUIDANCE_SECTION . "\".\n";
-            echo "\n";
+            echo "\n" . TranscriptTable::indented(Lang::t('cmd.mcp-auth.empty', [
+                'section' => \SugarCraft\Crush\Tui\McpPanel::GUIDANCE_SECTION,
+            ])) . "\n";
 
             return 0;
         }
@@ -211,7 +199,12 @@ final class McpAuthCommand
         // COLUMNS is the budget at a comfortable width; fit() is what makes it
         // true at the width this pane actually has. The 88-cell worst case
         // below only ever renders when the pane is at least that wide.
-        $columns = TranscriptTable::fit(self::COLUMNS, $paneWidth, self::COLUMN_FLOORS);
+        $labels = self::headers();
+        $columns = TranscriptTable::fit(
+            TranscriptTable::relabel(self::COLUMNS, $labels),
+            $paneWidth,
+            TranscriptTable::relabel(self::COLUMN_FLOORS, $labels),
+        );
         $table = TranscriptTable::headed($columns);
 
         foreach ($servers as $serverUrl => $status) {
@@ -220,21 +213,21 @@ final class McpAuthCommand
             // TranscriptTable's derived cap, so the cap's proportional shrink
             // never fires and never clips a column that had room.
             $table = $table->row(
-                TranscriptTable::cell((string) $serverUrl, $columns['Server']),
-                TranscriptTable::cell($this->formatStatus($status->statusLabel()), $columns['Status']),
+                TranscriptTable::cell((string) $serverUrl, $columns[$labels['Server']]),
+                TranscriptTable::cell($this->formatStatus($status->statusLabel()), $columns[$labels['Status']]),
                 TranscriptTable::cell(
                     $status->expiresAt !== null ? date('Y-m-d H:i', $status->expiresAt) : '—',
-                    $columns['Expires'],
+                    $columns[$labels['Expires']],
                 ),
                 TranscriptTable::cell(
                     $status->scopes !== [] ? implode(', ', $status->scopes) : '—',
-                    $columns['Scopes'],
+                    $columns[$labels['Scopes']],
                 ),
             );
         }
 
         echo "\n";
-        echo "  **MCP Servers**\n";
+        echo '  ' . Lang::t('cmd.mcp-auth.heading') . "\n";
         echo "\n";
         echo $table->render() . "\n";
         echo "\n";
@@ -252,7 +245,7 @@ final class McpAuthCommand
         $serverUrl = $args[1] ?? null;
 
         if ($serverUrl === null) {
-            return $this->printError('Usage: mcp auth add <server> [registration-url] [token-url]');
+            return $this->printError(Lang::t('cmd.mcp-auth.add-usage'));
         }
 
         $registrationUrl = $args[2] ?? null;
@@ -273,19 +266,14 @@ final class McpAuthCommand
         }
 
         if ($registrationUrl === null || $tokenUrl === null) {
-            echo "\n";
-            echo "  ! OAuth endpoints could not be discovered for `{$serverUrl}`.\n";
-            echo "\n";
-            echo "  Please provide them explicitly:\n";
-            echo "    `mcp auth add {$serverUrl}` *<registration-url>* *<token-url>*\n";
             // E709: failed discovery very often means there was nothing to
             // discover — a plain no-auth remote exposes no OAuth metadata and
-            // answers 404 here. Say so before the operator hunts endpoints.
-            echo "\n";
-            echo "  Nothing to discover usually means nothing to register: a\n";
-            echo "  server that needs no login runs from its \"url\" alone once\n";
-            echo "  declared in .mcp.json (docs/MCP.md, \"" . \SugarCraft\Crush\Tui\McpPanel::GUIDANCE_SECTION . "\").\n";
-            echo "\n";
+            // answers 404 here. The message's second paragraph says so before
+            // the operator hunts endpoints.
+            echo "\n" . TranscriptTable::indented(Lang::t('cmd.mcp-auth.undiscovered', [
+                'server' => $serverUrl,
+                'section' => \SugarCraft\Crush\Tui\McpPanel::GUIDANCE_SECTION,
+            ])) . "\n";
 
             return 1;
         }
@@ -323,18 +311,15 @@ final class McpAuthCommand
 
             $oauth->saveAuth($serverUrl, $entry);
 
-            echo "\n";
-            echo "  ✓ Successfully registered `{$serverUrl}`\n";
-            echo "  Client ID: `{$registered['clientId']}`\n";
-            echo "  Requests to an http MCP server with this exact URL now carry this\n";
-            echo "  token automatically, refreshed before expiry; servers started before\n";
-            echo "  this command pick it up on the next launch.\n";
-            echo "\n";
+            echo "\n" . TranscriptTable::indented(Lang::t('cmd.mcp-auth.registered', [
+                'server' => $serverUrl,
+                'client' => $registered['clientId'],
+            ])) . "\n";
 
             return 0;
         } catch (\Throwable $e) {
             echo "\n";
-            echo "  ✗ Registration failed: {$e->getMessage()}\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.failed', ['error' => $e->getMessage()]) . "\n";
             echo "\n";
 
             return 1;
@@ -351,12 +336,12 @@ final class McpAuthCommand
         $serverUrl = $args[1] ?? null;
 
         if ($serverUrl === null) {
-            return $this->printError('Usage: mcp auth remove <server>');
+            return $this->printError(Lang::t('cmd.mcp-auth.remove-usage'));
         }
 
         if (!$this->authStore->hasServer($serverUrl)) {
             echo "\n";
-            echo "  ! No credentials found for `{$serverUrl}`.\n";
+            echo '  ' . Lang::t('cmd.mcp-auth.not-found', ['server' => $serverUrl]) . "\n";
             echo "\n";
 
             return 1;
@@ -365,7 +350,7 @@ final class McpAuthCommand
         $this->authStore->removeServer($serverUrl);
 
         echo "\n";
-        echo "  ✓ Removed credentials for `{$serverUrl}`\n";
+        echo '  ' . Lang::t('cmd.mcp-auth.removed', ['server' => $serverUrl]) . "\n";
         echo "\n";
 
         return 0;
@@ -455,10 +440,10 @@ final class McpAuthCommand
     private function formatStatus(string $label): string
     {
         return match ($label) {
-            'active' => '● active',
-            'expired' => '○ expired',
-            'expiring soon' => '● expiring soon',
-            'no credentials' => "○ no credentials",
+            'active' => Lang::t('cmd.mcp-auth.status.active'),
+            'expired' => Lang::t('cmd.mcp-auth.status.expired'),
+            'expiring soon' => Lang::t('cmd.mcp-auth.status.expiring'),
+            'no credentials' => Lang::t('cmd.mcp-auth.status.none'),
             default => "{$label}",
         };
     }
@@ -471,13 +456,24 @@ final class McpAuthCommand
         echo "\n";
         echo "  ✗ {$message}\n";
         echo "\n";
-        echo "  Usage:\n";
-        echo "    mcp auth list                    — list registered servers\n";
-        echo "    mcp auth add <server> [reg-url] [token-url]  — store OAuth credentials for a server\n";
-        echo "    mcp auth remove <server>         — remove a server's credentials\n";
-        echo "    mcp auth login <server>          — print the shell command for interactive login\n";
+        echo TranscriptTable::indented(Lang::t('cmd.mcp-auth.usage'));
         echo "\n";
 
         return 1;
+    }
+
+    /**
+     * Each {@see COLUMNS} id's header in the active locale.
+     *
+     * @return array<string, string>
+     */
+    private static function headers(): array
+    {
+        return [
+            'Server' => Lang::t('cmd.mcp-auth.column.server'),
+            'Status' => Lang::t('cmd.mcp-auth.column.status'),
+            'Expires' => Lang::t('cmd.mcp-auth.column.expires'),
+            'Scopes' => Lang::t('cmd.mcp-auth.column.scopes'),
+        ];
     }
 }

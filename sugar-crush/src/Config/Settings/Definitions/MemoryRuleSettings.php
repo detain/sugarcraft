@@ -16,6 +16,7 @@ use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Context\MemoryBlock;
 use SugarCraft\Crush\Context\ProjectMemoryWriter;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Memory\AutoMemoryConsolidator;
 use SugarCraft\Crush\Memory\DreamPass;
 use SugarCraft\Crush\Runtime;
@@ -66,7 +67,7 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Prompt)
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1)
-                ->withLabel('Standing rules: bytes')
+                ->withLabel(Lang::t('settings.rules.standingMaxBytes.label'))
                 ->withHelp('Byte budget, framed and escaped, for the rule files spliced whole into every prompt; a rule past it is named by one pointer line instead.')
                 ->withReaderSymbol(Runtime::class . '::systemPromptSections')
                 ->withReadBy('`Runtime::systemPromptSections()`, per prompt build'),
@@ -76,7 +77,7 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
-                ->withLabel('Skill path nudges')
+                ->withLabel(Lang::t('settings.skills.pathNudges.label'))
                 ->withHelp('When a tool touches a file a path-scoped skill covers, remind the model that skill exists, once per skill.')
                 ->withReaderSymbol(SkillPathNudge::class . '::enabled')
                 ->withReadBy('`SkillPathNudge::forPaths()` → `enabled()`, per tool call'),
@@ -85,21 +86,21 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Tuning)
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1)
-                ->withLabel('Project note: max bytes')
+                ->withLabel(Lang::t('settings.memory.projectNoteMaxBytes.label'))
                 ->withHelp('Largest one project memory note may be when it is written to the repository\'s .sugar-crush/memory/.')
                 ->withReaderSymbol(ProjectMemoryWriter::class . '::maxContentBytes')
                 ->withReadBy('`ProjectMemoryWriter::write()` and the Memory tool\'s `save` → `maxContentBytes()`, per note'),
-            $cap(MemoryBlock::SETTING_MAX_ENTRIES, MemoryBlock::MAX_ENTRIES, 'Memory index: notes', 'Most notes the prompt\'s memory index lists, newest first; user notes count inside it.'),
-            $cap(MemoryBlock::SETTING_MAX_BYTES, MemoryBlock::MAX_BYTES, 'Memory index: bytes', 'Byte budget for the memory index\'s note lines; the user-note budget is lowered to fit inside it.'),
-            $cap(MemoryBlock::SETTING_MAX_ENTRY_BYTES, MemoryBlock::MAX_ENTRY_BYTES, 'Memory index: bytes per note', 'Longest one note\'s index line may be before it is shown truncated; lowered to the user-note budget if over it.'),
-            $cap(MemoryBlock::SETTING_USER_MAX_ENTRIES, MemoryBlock::USER_MAX_ENTRIES, 'Memory index: user notes', 'Most of your cross-project (user-scope) notes listed first, inside the note count.'),
-            $cap(MemoryBlock::SETTING_USER_MAX_BYTES, MemoryBlock::USER_MAX_BYTES, 'Memory index: user-note bytes', 'Byte budget for the user-scope lines, inside the total budget.'),
+            $cap(MemoryBlock::SETTING_MAX_ENTRIES, MemoryBlock::MAX_ENTRIES, Lang::t('settings.memory.promptMaxEntries.label'), 'Most notes the prompt\'s memory index lists, newest first; user notes count inside it.'),
+            $cap(MemoryBlock::SETTING_MAX_BYTES, MemoryBlock::MAX_BYTES, Lang::t('settings.memory.promptMaxBytes.label'), 'Byte budget for the memory index\'s note lines; the user-note budget is lowered to fit inside it.'),
+            $cap(MemoryBlock::SETTING_MAX_ENTRY_BYTES, MemoryBlock::MAX_ENTRY_BYTES, Lang::t('settings.memory.entryMaxBytes.label'), 'Longest one note\'s index line may be before it is shown truncated; lowered to the user-note budget if over it.'),
+            $cap(MemoryBlock::SETTING_USER_MAX_ENTRIES, MemoryBlock::USER_MAX_ENTRIES, Lang::t('settings.memory.userMaxEntries.label'), 'Most of your cross-project (user-scope) notes listed first, inside the note count.'),
+            $cap(MemoryBlock::SETTING_USER_MAX_BYTES, MemoryBlock::USER_MAX_BYTES, Lang::t('settings.memory.userMaxBytes.label'), 'Byte budget for the user-scope lines, inside the total budget.'),
             SettingDefinition::new(AutoMemoryConsolidator::SETTING, SettingType::Bool, true)
                 ->withCategory(SettingCategory::MemoryRules)
                 ->withRiskClass(RiskClass::Spend)
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withEnvVar(AutoMemoryConsolidator::ENV_DISABLE)
-                ->withLabel('Auto-memory')
+                ->withLabel(Lang::t('settings.memory.autoConsolidate.label'))
                 ->withHelp('Save durable facts from finished turns into memory, and fold the compaction journal into it (the dream pass); each is a billed call.')
                 ->withReaderSymbol(AutoMemoryConsolidator::class . '::enabled')
                 ->withReadBy('`AutoMemoryConsolidator::call()`, `DreamPass::call()` → `AutoMemoryConsolidator::enabled()`, as a turn settles'),
@@ -108,7 +109,7 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(DreamPass::MIN_INTERVAL_SECONDS)
-                ->withLabel('Dream pass interval (s)')
+                ->withLabel(Lang::t('settings.memory.dreamIntervalSeconds.label'))
                 ->withHelp('Least time between two dream passes for one project; each pass is a billed, read-only turn.')
                 ->withReaderSymbol(DreamPass::class . '::interval')
                 ->withReadBy('`DreamPass::call()` → `interval()`, as a turn settles'),
@@ -116,7 +117,7 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::MemoryRules)
                 ->withRiskClass(RiskClass::Prompt)
                 ->withApplyMode(ApplyMode::NextTurn)
-                ->withLabel('Dream pass: propose skills')
+                ->withLabel(Lang::t('settings.memory.dreamProposeSkills.label'))
                 ->withHelp('Let the dream pass propose skills as drafts in ~/.sugar-crush/skills-proposed; none is live until you /skills accept it.')
                 ->withReaderSymbol(DreamPass::class . '::proposesSkills')
                 ->withReadBy('`DreamPass::call()` → `proposesSkills()`, as a turn settles'),
@@ -125,7 +126,7 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Prompt)
                 ->withLayered()
                 ->withUi(UiEditability::List)
-                ->withLabel('Forced instructions')
+                ->withLabel(Lang::t('settings.instructions.label'))
                 ->withHelp('Globs of files whose contents become authoritative system-prompt text.')
                 ->withReaderSymbol(Bootstrap::class . '::forcedInstructions'),
             SettingDefinition::new('disabledRules', SettingType::StringList, [])
@@ -134,7 +135,7 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::List)
                 ->withOptionsSource(OptionsSource::RulePacks)
-                ->withLabel('Disabled rule packs')
+                ->withLabel(Lang::t('settings.disabledRules.label'))
                 ->withHelp('User-tier rule packs kept out of the prompt from the first turn.')
                 ->withReaderSymbol(Bootstrap::class . '::rulePacksToDisable')
                 ->withReadBy('`Bootstrap::chat()` → `RulesState::new()`'),
@@ -143,7 +144,7 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
-                ->withLabel('Embedding model')
+                ->withLabel(Lang::t('settings.embeddingModel.label'))
                 ->withHelp('Embedding model for the per-turn memory recall; unset ranks notes by keyword only.')
                 ->withReaderSymbol(EngineBackend::class . '::completeAsync'),
         ];

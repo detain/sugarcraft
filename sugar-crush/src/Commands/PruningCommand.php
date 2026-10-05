@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Context\Pruning\PruningMode;
+use SugarCraft\Crush\Lang;
 
 /**
  * Implements `/pruning [auto|manual|off]` (roadmap 3.B-2, DCP §4.13 manual
@@ -30,7 +31,11 @@ use SugarCraft\Crush\Context\Pruning\PruningMode;
  */
 final class PruningCommand
 {
-    public const USAGE = 'Usage: /pruning [auto|manual|off|default]';
+    /** The usage line a bad argument gets, in the active locale. */
+    public static function usage(): string
+    {
+        return Lang::t('cmd.pruning.usage');
+    }
 
     /**
      * @param ContextLedger $ledger the session's ledger, its default mode
@@ -47,12 +52,12 @@ final class PruningCommand
         if ($argument === 'default') {
             $ledger = $ledger->withMode(null);
 
-            return [$ledger, 'This session now follows the configured mode. ' . self::status($ledger)];
+            return [$ledger, Lang::t('cmd.pruning.default') . ' ' . self::status($ledger)];
         }
 
         $mode = PruningMode::fromSetting($argument);
         if ($mode === null) {
-            return [$ledger, self::USAGE];
+            return [$ledger, self::usage()];
         }
         $ledger = $ledger->withMode($mode);
 
@@ -64,18 +69,18 @@ final class PruningCommand
     {
         $mode = $ledger->effectiveMode();
         $source = $ledger->mode !== null
-            ? 'set for this session with /pruning'
-            : 'the configured mode (`' . PruningMode::SETTING . '` / `' . PruningMode::ENV . '`)';
+            ? Lang::t('cmd.pruning.source.session')
+            : Lang::t('cmd.pruning.source.configured', ['setting' => PruningMode::SETTING, 'env' => PruningMode::ENV]);
 
-        return sprintf('Context pruning: %s — %s. %s.', $mode->value, self::meaning($mode), ucfirst($source));
+        return Lang::t('cmd.pruning.status', ['mode' => $mode->value, 'meaning' => self::meaning($mode), 'source' => $source]);
     }
 
     private static function meaning(PruningMode $mode): string
     {
         return match ($mode) {
-            PruningMode::Auto => 'superseded rows are pruned at each turn start, the model may prune its own tool outputs (Prune), and tool results carry their ref tags',
-            PruningMode::Manual => 'nothing is pruned on its own, by the strategies or the model; /sweep prunes by hand, and tool results carry their ref tags',
-            PruningMode::Off => 'no strategies and no ref tags, and /sweep is refused; an over-full request is still relieved',
+            PruningMode::Auto => Lang::t('cmd.pruning.meaning.auto'),
+            PruningMode::Manual => Lang::t('cmd.pruning.meaning.manual'),
+            PruningMode::Off => Lang::t('cmd.pruning.meaning.off'),
         };
     }
 }

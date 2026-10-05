@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Commands\Specs;
 
+use SugarCraft\Core\I18n\T;
+
 /**
  * The built-in commands, ONE SPEC FILE PER COMMAND in the package's
  * `builtin-commands/` directory ({@see self::specDir()}).
@@ -31,17 +33,23 @@ namespace SugarCraft\Crush\Commands\Specs;
  * installation's own shipped source, never a path from config, the project or
  * `$HOME`. It is a `require` all the same, which is why
  * `Tests\Support\ReadPathCensusTest` names it as an execute path.
+ *
+ * CACHED PER LOCALE. A spec's description, category, palette label and
+ * argument hint are `Lang::t()` lookups evaluated when the file is required
+ * (audit 15b-14), so one scan answers one locale only. The generated pages
+ * pin `en` around their read ({@see CommandDocGenerator}), and a scan cached
+ * under the operator's locale must not answer that read.
  */
 final class BuiltInCommands
 {
     /** The spec-file shape; every `.php` file in {@see self::specDir()} must match it. */
     public const FILE_PATTERN = '/^(\d{4})-([a-z][a-z-]*)\.php$/';
 
-    /** @var list<BuiltInCommand>|null */
-    private static ?array $all = null;
+    /** @var array<string, list<BuiltInCommand>> by locale */
+    private static array $all = [];
 
-    /** @var array<string, BuiltInCommand>|null by every dispatching spelling */
-    private static ?array $bySpelling = null;
+    /** @var array<string, array<string, BuiltInCommand>> by locale, then by every dispatching spelling */
+    private static array $bySpelling = [];
 
     private function __construct()
     {
@@ -60,8 +68,9 @@ final class BuiltInCommands
      */
     public static function all(): array
     {
-        if (self::$all !== null) {
-            return self::$all;
+        $locale = T::locale();
+        if (isset(self::$all[$locale])) {
+            return self::$all[$locale];
         }
 
         $files = [];
@@ -101,22 +110,23 @@ final class BuiltInCommands
             $commands[] = $command;
         }
 
-        return self::$all = $commands;
+        return self::$all[$locale] = $commands;
     }
 
     /** The built-in that `/$spelling` dispatches to (a name or an alias), or null. */
     public static function forSpelling(string $spelling): ?BuiltInCommand
     {
-        if (self::$bySpelling === null) {
-            self::$bySpelling = [];
+        $locale = T::locale();
+        if (!isset(self::$bySpelling[$locale])) {
+            self::$bySpelling[$locale] = [];
             foreach (self::all() as $command) {
                 foreach ($command->spellings() as $name) {
-                    self::$bySpelling[$name] = $command;
+                    self::$bySpelling[$locale][$name] = $command;
                 }
             }
         }
 
-        return self::$bySpelling[$spelling] ?? null;
+        return self::$bySpelling[$locale][$spelling] ?? null;
     }
 
     /**

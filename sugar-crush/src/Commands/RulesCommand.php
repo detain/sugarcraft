@@ -10,6 +10,7 @@ use SugarCraft\Crush\Host\Commands\CommandContext;
 use SugarCraft\Crush\Context\Rule;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulesState;
+use SugarCraft\Crush\Lang;
 
 /**
  * Implements the /rules command: list the operator's rule packs, or toggle one
@@ -148,30 +149,30 @@ final class RulesCommand
     private function listPacks(Chat|CommandContext $chat, array $packs): int
     {
         if ($packs === []) {
-            echo "\n  No rule packs found.\n";
-            echo "  A pack is one markdown file in ~/.sugar-crush/rulebooks/ (or ~/.sugar-crush/rules/),\n";
-            echo "  named by its filename: terse.md is toggled with /rules terse.\n";
-            echo "  /newrule has the agent draft a project rule from this conversation.\n\n";
+            echo "\n" . TranscriptTable::indented(Lang::t('cmd.rules.empty')) . "\n";
 
             return 0;
         }
 
-        $columns = TranscriptTable::fit(self::COLUMNS, TranscriptTable::paneWidth($chat), self::COLUMN_FLOORS);
+        $labels = self::headers();
+        $columns = TranscriptTable::fit(
+            TranscriptTable::relabel(self::COLUMNS, $labels),
+            TranscriptTable::paneWidth($chat),
+            TranscriptTable::relabel(self::COLUMN_FLOORS, $labels),
+        );
         $table = TranscriptTable::headed($columns);
 
         foreach ($packs as $rule) {
             $table = $table->row(
-                TranscriptTable::cell($rule->key, $columns['Pack']),
-                TranscriptTable::cell($this->stateLabel($rule), $columns['State']),
-                TranscriptTable::cell($this->sourceLabel($rule), $columns['Source']),
+                TranscriptTable::cell($rule->key, $columns[$labels['Pack']]),
+                TranscriptTable::cell($this->stateLabel($rule), $columns[$labels['State']]),
+                TranscriptTable::cell($this->sourceLabel($rule), $columns[$labels['Source']]),
             );
         }
 
-        echo "\n  Rule packs (session only — nothing here is written to config):\n\n";
+        echo "\n  " . Lang::t('cmd.rules.heading') . "\n\n";
         echo $table->render() . "\n\n";
-        echo "  /rules <name> toggles one. A pack marked frontmatter is disabled by its\n";
-        echo "  own file and stays out of the prompt either way. /newrule has the agent\n";
-        echo "  draft a project rule (.sugar-crush/rules/) from this conversation.\n\n";
+        echo TranscriptTable::indented(Lang::t('cmd.rules.footer')) . "\n";
 
         return 0;
     }
@@ -211,12 +212,12 @@ final class RulesCommand
             // text - the same defect
             // {@see \SugarCraft\Crush\Tests\Commands\NoRawAnsiInTranscriptTest} exists
             // for, acquired at runtime where that source-reading guard cannot see it.
-            echo "\n  Unknown rule pack: " . Ansi::strip($name) . "\n";
+            echo "\n  " . Lang::t('cmd.rules.unknown', ['name' => Ansi::strip($name)]) . "\n";
             $knownNames = implode(', ', array_map(Ansi::strip(...), array_keys($known)));
 
-            echo count($known) === 1
-                ? "  The only pack here is: {$knownNames}\n\n"
-                : "  Available packs: {$knownNames}\n\n";
+            echo '  ' . (count($known) === 1
+                ? Lang::t('cmd.rules.only-pack', ['names' => $knownNames])
+                : Lang::t('cmd.rules.available', ['names' => $knownNames])) . "\n\n";
 
             return 1;
         }
@@ -225,9 +226,10 @@ final class RulesCommand
             // The arity refusal quotes the operator's bytes back at them, which is
             // the same hand-composed-outside-a-cell route as the two lines above,
             // so it carries the same defence.
-            echo "\n  /rules takes one pack name; read it as \""
-                . implode(' ', array_map(Ansi::strip(...), array_map('strval', $args))) . "\".\n";
-            echo "  Nothing was toggled.\n\n";
+            echo "\n  " . Lang::t('cmd.rules.arity', [
+                'args' => implode(' ', array_map(Ansi::strip(...), array_map('strval', $args))),
+            ]) . "\n";
+            echo '  ' . Lang::t('cmd.rules.untoggled') . "\n\n";
 
             return 1;
         }
@@ -238,8 +240,11 @@ final class RulesCommand
         // The success line echoes the same untrusted name the lookup matched on,
         // and a match says only that a FILE on disk is spelled this way — stems are
         // disk bytes, not vetted ones, so this strip rides the same rule as above.
-        echo "\n  Pack " . Ansi::strip($name) . ": " . ($nowEnabled ? 'ON' : 'OFF') . " for this session."
-            . $this->collisionNote($matches[$name]) . "\n";
+        echo "\n  " . Lang::t('cmd.rules.toggled', [
+            'name' => Ansi::strip($name),
+            'state' => $nowEnabled ? Lang::t('cmd.rules.toggled.on') : Lang::t('cmd.rules.toggled.off'),
+            'note' => $this->collisionNote($matches[$name]),
+        ]) . "\n";
         echo '  ' . $this->effectLine($rule, $nowEnabled) . "\n\n";
 
         return 0;
@@ -267,7 +272,7 @@ final class RulesCommand
     private function collisionNote(int $matchingPacks): string
     {
         return $matchingPacks > 1
-            ? " (this name matches {$matchingPacks} packs — both toggled)"
+            ? Lang::t('cmd.rules.collision', ['count' => $matchingPacks])
             : '';
     }
 
@@ -281,10 +286,10 @@ final class RulesCommand
     private function stateLabel(Rule $rule): string
     {
         if (!$this->state->effectiveRule($rule)->enabled) {
-            return $rule->enabled ? 'off (session)' : 'off (frontmatter)';
+            return $rule->enabled ? Lang::t('cmd.rules.state.off-session') : Lang::t('cmd.rules.state.off-frontmatter');
         }
 
-        return 'on';
+        return Lang::t('cmd.rules.state.on');
     }
 
     /**
@@ -303,12 +308,25 @@ final class RulesCommand
     private function effectLine(Rule $rule, bool $nowEnabled): string
     {
         if (!$rule->enabled) {
-            return 'Its own frontmatter says enabled: false, so it stays out of the prompt'
-                . ' until that line changes - the toggle could not override a file that disabled itself.';
+            return Lang::t('cmd.rules.effect.self-disabled');
         }
 
         return $nowEnabled
-            ? 'It will be in the prompt from the next turn onward.'
-            : 'It will be out of the prompt from the next turn onward.';
+            ? Lang::t('cmd.rules.effect.in')
+            : Lang::t('cmd.rules.effect.out');
+    }
+
+    /**
+     * Each {@see COLUMNS} id's header in the active locale.
+     *
+     * @return array<string, string>
+     */
+    private static function headers(): array
+    {
+        return [
+            'Pack' => Lang::t('cmd.rules.column.pack'),
+            'State' => Lang::t('cmd.rules.column.state'),
+            'Source' => Lang::t('cmd.rules.column.source'),
+        ];
     }
 }

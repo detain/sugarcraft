@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // Roadmap 5.14d. A canned prompt, like `/init`: the agent drafts a project rule
 // from the conversation and writes it into `.sugar-crush/rules/`, a policy
@@ -13,7 +14,7 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // TURN — see Chat::handleNewRuleCommand().
 return BuiltInCommand::new(CommandSpec::new(
     'newrule',
-    'Have the agent draft a project rule from this conversation',
-    'Rules',
-    argumentHint: '[focus]',
+    Lang::t('cmd.newrule.description'),
+    Lang::t('cmd.category.rules'),
+    argumentHint: Lang::t('cmd.newrule.hint'),
 ))->withHandler('handleNewRuleCommand');

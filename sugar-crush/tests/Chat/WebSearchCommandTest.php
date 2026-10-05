@@ -147,6 +147,21 @@ final class WebSearchCommandTest extends TestCase
         $this->assertStringContainsString('Usage:', $output);
         $this->assertStringContainsString('--safesearch', $output);
         $this->assertStringContainsString('--time-range', $output);
+        // Byte-exact in English (audit 15b-14 moved the text into the catalogue).
+        $rule = '  ' . str_repeat('─', 54) . "\n";
+        $this->assertSame(
+            "\n{$rule}  /websearch — Search the web via SearXNG\n{$rule}\n"
+            . "  Usage: /websearch <query> [options]\n\n"
+            . "  Options:\n"
+            . "    --safesearch 0|1|2   Safe search (0=none, 1=moderate, 2=strict)\n"
+            . "    --time-range day|month|year  Limit results to time period\n"
+            . "    --help, -h           Show this help message\n\n"
+            . "  Examples:\n"
+            . "    /websearch \"php tutorial\"\n"
+            . "    /websearch \"news\" --safesearch 2 --time-range month\n"
+            . "    /websearch --time-range year \"rust\"\n\n",
+            $output,
+        );
     }
 
     public function testWebSearchCommandShowsHelpWithHFlag(): void

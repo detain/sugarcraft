@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // The optional focus steers the model-written summary (roadmap 2.12): it is
 // sent beside the exchanges and handed to PreCompact hooks as
@@ -12,7 +13,7 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // before it applies. See Chat::handleCompactCommand().
 return BuiltInCommand::new(CommandSpec::new(
     'compact',
-    'Manually compact chat history to save context',
-    'Session',
-    argumentHint: '[--self] [focus]',
+    Lang::t('cmd.compact.description'),
+    Lang::t('cmd.category.session'),
+    argumentHint: Lang::t('cmd.compact.hint'),
 ))->withHandler('handleCompactCommand');

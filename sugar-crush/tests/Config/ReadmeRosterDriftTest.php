@@ -13,6 +13,7 @@ use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
 use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Tests\Support\PinsEnglishLocaleTrait;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -71,6 +72,9 @@ use SugarCraft\Crush\Tools\Tool;
  */
 final class ReadmeRosterDriftTest extends TestCase
 {
+    // The registries answer through Lang::t(); the pages are English (audit 15b-14).
+    use PinsEnglishLocaleTrait;
+
     private const README = __DIR__ . '/../../README.md';
 
     private function readme(): string

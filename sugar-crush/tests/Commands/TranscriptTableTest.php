@@ -320,4 +320,19 @@ final class TranscriptTableTest extends TestCase
     {
         $this->assertSame([], TranscriptTable::fit([], 80));
     }
+
+    /** Audit 15b-14: budgets keyed by a stable id, headers by their translated label. */
+    public function testRelabelReKeysBudgetsByHeaderInOrderAndKeepsAnUnnamedId(): void
+    {
+        $this->assertSame(
+            ['Serveur' => 30, 'Status' => 16, 'Portées' => 13],
+            TranscriptTable::relabel(['Server' => 30, 'Status' => 16, 'Scopes' => 13], ['Scopes' => 'Portées', 'Server' => 'Serveur']),
+        );
+    }
+
+    public function testIndentedPutsTheMarginOnEveryLineButABlankOne(): void
+    {
+        $this->assertSame("  one\n\n  two\n", TranscriptTable::indented("one\n\ntwo"));
+        $this->assertSame("  single\n", TranscriptTable::indented('single'));
+    }
 }

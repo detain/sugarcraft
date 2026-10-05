@@ -14,6 +14,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Lint\TestRunner;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
@@ -59,7 +60,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::List)
                 ->withOptionsSource(OptionsSource::Tools)
-                ->withLabel('Allowed tools')
+                ->withLabel(Lang::t('settings.allowedTools.label'))
                 ->withHelp('Whitelist of tool names or globs; unset offers every tool.')
                 ->withReaderSymbol(Bootstrap::class . '::filterToolSet')
                 ->withReadBy('`Bootstrap::tools()` → `filterToolSet()`'),
@@ -70,7 +71,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withUi(UiEditability::List)
                 ->withOptionsSource(OptionsSource::Tools)
-                ->withLabel('Disabled tools')
+                ->withLabel(Lang::t('settings.disabledTools.label'))
                 ->withHelp('Tool names or globs removed from the model-facing tool set.')
                 ->withReaderSymbol(Bootstrap::class . '::filterToolSet')
                 ->withReadBy('`Bootstrap::tools()` → `filterToolSet()`'),
@@ -81,7 +82,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withLayered()
                 ->withEnumValues(Bubblewrap::MODES)
-                ->withLabel('Bash sandbox')
+                ->withLabel(Lang::t('settings.bashSandbox.label'))
                 ->withHelp('Linux only: run Bash inside bubblewrap, writable only in the working root (`no-network` also cuts the network). Refuses commands when bwrap cannot start.')
                 ->withReaderSymbol(Bash::class . '::fromCatalog')
                 ->withReadBy('`Bash::fromCatalog()` → `Bubblewrap::fromSetting()`'),
@@ -93,7 +94,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Tools)
                 ->withRiskClass(RiskClass::Exec)
                 ->withLayered()
-                ->withLabel('Test command')
+                ->withLabel(Lang::t('settings.testCommand.label'))
                 ->withHelp('Shell command that runs the project\'s tests, in the project root (`composer test`, `pytest -q`); what `autoTest` runs.')
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `TestRunner::withCommand()`'),
@@ -101,7 +102,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Tools)
                 ->withRiskClass(RiskClass::Exec)
                 ->withLayered()
-                ->withLabel('Auto-test')
+                ->withLabel(Lang::t('settings.autoTest.label'))
                 ->withHelp('After a turn that edited a file, run `testCommand`; on failure the output goes back to the model, at most 3 times a turn.')
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `AutoTestHook`'),
@@ -111,7 +112,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(4096, 1048576)
-                ->withLabel('Tool output cap (bytes)')
+                ->withLabel(Lang::t('settings.toolOutputCapBytes.label'))
                 ->withHelp('Most bytes one Bash, Grep, Glob, Lsp or WebFetch result may hand the model; what is cut is saved to a file the result names.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
@@ -121,7 +122,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(4096, 1048576)
-                ->withLabel('MCP result cap (bytes)')
+                ->withLabel(Lang::t('settings.mcpResultCapBytes.label'))
                 ->withHelp('Most bytes one MCP tool\'s answer may hand the model.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
@@ -131,7 +132,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(4096, 4194304)
-                ->withLabel('Read bound (bytes)')
+                ->withLabel(Lang::t('settings.readMaxBytes.label'))
                 ->withHelp('Ceiling on one Read call; the page below is the size a read usually comes back at.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
@@ -141,7 +142,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(10, 100000)
-                ->withLabel('Read page (lines)')
+                ->withLabel(Lang::t('settings.readPageLines.label'))
                 ->withHelp('Lines a Read returns when the call names no `limit`.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
@@ -151,7 +152,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1024, 1048576)
-                ->withLabel('Read page (bytes)')
+                ->withLabel(Lang::t('settings.readPageBytes.label'))
                 ->withHelp('Bytes one Read page may hold, line numbers included, whatever `limit` asks for.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
@@ -163,7 +164,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(5, 90)
-                ->withLabel('Tool result window share (%)')
+                ->withLabel(Lang::t('settings.toolSpillWindowPercent.label'))
                 ->withHelp('Largest share of the context window one tool result may take; past it the result is saved to a file and the model shown its start and end.')
                 ->withReaderSymbol(ToolOutputSpill::class . '::forModel')
                 ->withReadBy('`Runtime::settle()` → `ToolOutputSpill::forModel()`, per large result'),
@@ -176,7 +177,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1024, 1048576)
-                ->withLabel('Nested instruction cap (bytes)')
+                ->withLabel(Lang::t('settings.toolInstructionCapBytes.label'))
                 ->withHelp('Most bytes of a governing CLAUDE.md/AGENTS.md body an Edit, Write or ApplyPatch result may carry; the rest is cut with a marker.')
                 ->withReaderSymbol(Edit::class . '::instructionCapBytes')
                 ->withReadBy('`TruncatesOutput::instructionCapBytes()`, each Edit, Write or ApplyPatch call'),
@@ -190,7 +191,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(65536, 67108864)
-                ->withLabel('Spill capture (bytes)')
+                ->withLabel(Lang::t('settings.toolSpillCaptureBytes.label'))
                 ->withHelp('Most of a Bash command\'s output (per stream) held in memory and saved to the spill file when the result is cut; never below the output cap.')
                 ->withReaderSymbol(ToolOutputSpill::class . '::captureBytes')
                 ->withReadBy('`TruncatesOutput::captureBound()` → `ToolOutputSpill::captureBytes()`, as a capture starts'),
@@ -201,7 +202,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(2048, 1048576)
-                ->withLabel('Spill floor (bytes)')
+                ->withLabel(Lang::t('settings.toolSpillMinCapBytes.label'))
                 ->withHelp('Smallest result cap at which a cut tool result is saved to a file; under it the cut is announced and the rest dropped.')
                 ->withReaderSymbol(ToolOutputSpill::class . '::minCapBytes')
                 ->withReadBy('`TruncatesOutput::spillOverflow()` → `ToolOutputSpill::minCapBytes()`, per cut result'),
@@ -212,7 +213,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(10, 100000)
-                ->withLabel('Glob match cap')
+                ->withLabel(Lang::t('settings.globMaxMatches.label'))
                 ->withHelp('Paths one Glob collects before its walk stops; the output cap still bounds the result.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
@@ -223,7 +224,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(65536, 67108864)
-                ->withLabel('WebFetch body bound (bytes)')
+                ->withLabel(Lang::t('settings.webFetchMaxBytes.label'))
                 ->withHelp('Most of a fetched body held in memory; a memory bound, the output cap is what reaches the model.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
@@ -234,7 +235,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 600)
-                ->withLabel('WebFetch timeout (s)')
+                ->withLabel(Lang::t('settings.webFetchTimeoutSeconds.label'))
                 ->withHelp('Seconds a WebFetch socket read may stall before the fetch fails.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
@@ -244,7 +245,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withRange(1, 50)
-                ->withLabel('WebSearch results')
+                ->withLabel(Lang::t('settings.webSearchMaxResults.label'))
                 ->withHelp('Results one WebSearch digest lists, each a title, URL and snippet.')
                 ->withReaderSymbol(WebSearch::class . '::__construct')
                 ->withReadBy('`WebSearch::__construct()`, at launch and for `/websearch`'),
@@ -254,7 +255,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withRange(1, 600)
-                ->withLabel('WebSearch timeout (s)')
+                ->withLabel(Lang::t('settings.webSearchTimeoutSeconds.label'))
                 ->withHelp('Seconds one search request may take.')
                 ->withReaderSymbol(WebSearch::class . '::__construct')
                 ->withReadBy('`WebSearch::__construct()`, at launch and for `/websearch`'),
@@ -267,7 +268,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withEnvVar('SUGARCRUSH_SEARCH_ENDPOINT')
                 ->withDefaultText('unset: no default; WebSearch refuses every call until one is set')
-                ->withLabel('WebSearch endpoint')
+                ->withLabel(Lang::t('settings.webSearchEndpoint.label'))
                 ->withHelp('Search URL of a SearXNG instance you trust (`https://searx.example.org/search`); every WebSearch query is sent there.')
                 ->withReaderSymbol(WebSearch::class . '::__construct')
                 ->withReadBy('`WebSearch::__construct()`, at launch and for `/websearch`'),
@@ -278,7 +279,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1.0, 600.0)
-                ->withLabel('Interactive Bash idle (s)')
+                ->withLabel(Lang::t('settings.bashInteractiveIdleSeconds.label'))
                 ->withHelp('Seconds an `interactive: true` Bash run may print nothing before it is stopped as waiting for a keystroke.')
                 ->withReaderSymbol(Bash::class . '::runCapturedInteractive')
                 ->withReadBy('`CapturesProcessOutput::runCapturedInteractive()`, as the run starts'),
@@ -293,7 +294,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 3600)
-                ->withLabel('Bash timeout (s)')
+                ->withLabel(Lang::t('settings.bashTimeoutSeconds.label'))
                 ->withHelp('Seconds a Bash command may run when the model passes no `timeout`; never above the Bash ceiling.')
                 ->withReaderSymbol(Bash::class . '::withTimeoutBounds')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn'),
@@ -304,7 +305,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 3600)
-                ->withLabel('Bash timeout ceiling (s)')
+                ->withLabel(Lang::t('settings.bashMaxTimeoutSeconds.label'))
                 ->withHelp('The largest `timeout` a Bash command may ask for; larger values are clamped to it.')
                 ->withReaderSymbol(Bash::class . '::withTimeoutBounds')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn'),
@@ -315,7 +316,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 3600)
-                ->withLabel('Chat-native tool timeout (s)')
+                ->withLabel(Lang::t('settings.chatToolTimeoutSeconds.label'))
                 ->withHelp('Wall-clock budget of a batch of tool calls the chat-native (`command` provider) path forks; stragglers are killed.')
                 ->withReaderSymbol(Chat::class . '::waitForToolChildrenAsync')
                 ->withReadBy('`Chat::waitForToolChildrenAsync()`, as a batch starts'),

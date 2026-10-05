@@ -10,6 +10,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Server\ServerConfig;
 
 /**
@@ -42,7 +43,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
                 ->withEnvVar('SUGARCRUSH_SERVER_HOST')
-                ->withLabel('Server bind address')
+                ->withLabel(Lang::t('settings.server.host.label'))
                 ->withHelp('The address `serve` binds. Anything but loopback also needs --allow-remote at launch.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
@@ -51,7 +52,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withEnvVar('SUGARCRUSH_SERVER_PORT')
                 ->withRange(0, 65535)
-                ->withLabel('Server port')
+                ->withLabel(Lang::t('settings.server.port.label'))
                 ->withHelp('The port `serve` binds; 0 picks a free one.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
@@ -60,7 +61,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withEnvVar('SUGARCRUSH_SERVER_ALLOWED_ORIGINS')
                 ->withUi(UiEditability::List)
-                ->withLabel('Server allowed origins')
+                ->withLabel(Lang::t('settings.server.allowedOrigins.label'))
                 ->withHelp('Extra browser origins (http(s)://host[:port]) the server accepts beside its own.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
@@ -69,7 +70,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withEnvVar('SUGARCRUSH_SERVER_ALLOWED_HOSTS')
                 ->withUi(UiEditability::List)
-                ->withLabel('Server allowed hosts')
+                ->withLabel(Lang::t('settings.server.allowedHosts.label'))
                 ->withHelp('Host names (or host:port) the server answers to beside the loopback names and its own addresses, e.g. a reverse proxy\'s.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
@@ -77,7 +78,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
                 ->withUi(UiEditability::List)
-                ->withLabel('Server trusted proxies')
+                ->withLabel(Lang::t('settings.server.trustedProxies.label'))
                 ->withHelp('IPs or CIDRs whose X-Forwarded-For / X-Forwarded-Proto the server believes.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
@@ -85,7 +86,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
                 ->withRange(1, null)
-                ->withLabel('Server open sessions')
+                ->withLabel(Lang::t('settings.server.maxOpenSessions.label'))
                 ->withHelp('Sessions a server keeps open at once; past it the least recently used idle one is released.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
@@ -93,7 +94,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
                 ->withRange(1, null)
-                ->withLabel('Server concurrent turns')
+                ->withLabel(Lang::t('settings.server.maxConcurrentTurns.label'))
                 ->withHelp('Turns a server runs at once across its sessions; one more is refused busy (retryable).')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
@@ -101,7 +102,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
                 ->withRange(0, null)
-                ->withLabel('Server permission-question timeout')
+                ->withLabel(Lang::t('settings.server.askTimeoutSeconds.label'))
                 ->withHelp('Seconds a permission question waits for a client before it is refused; 0 waits forever.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
@@ -109,14 +110,14 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
                 ->withRange(0, null)
-                ->withLabel('Server drain time')
+                ->withLabel(Lang::t('settings.server.drainSeconds.label'))
                 ->withHelp('Seconds a stopping server waits for running turns before cancelling them; 0 stops at once.')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.allowBypass', SettingType::Bool, false)
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)
-                ->withLabel('Server allows bypass modes')
+                ->withLabel(Lang::t('settings.server.allowBypass.label'))
                 ->withHelp('Whether server sessions may run in bypass-permissions or dont-ask (same as --allow-bypass).')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),

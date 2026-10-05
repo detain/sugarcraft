@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands\Specs;
 
 use SugarCraft\Crush\Commands\CommandRegistry;
+use SugarCraft\Crush\Lang;
 
 /**
  * The command documentation that is DERIVED from the spec files, rendered.
@@ -22,6 +23,11 @@ use SugarCraft\Crush\Commands\CommandRegistry;
  *
  * Pure: the caller (`tools/gen-command-docs.php`, the drift test) owns the file
  * I/O. Everything outside the markers is the pages' own prose.
+ *
+ * PINNED TO `en`: a spec's description and hint are `Lang::t()` text (audit
+ * 15b-14), and the pages are English whatever `LANG` the generator runs
+ * under, so both blocks are read under {@see Lang::inLocale()} —
+ * {@see BuiltInCommands} caches per locale, so that read is an English scan.
  */
 final class CommandDocGenerator
 {
@@ -49,10 +55,10 @@ final class CommandDocGenerator
     /** @return array<string, array<string, string>> page => block name => content */
     public function blocks(): array
     {
-        return [
+        return Lang::inLocale('en', fn (): array => [
             self::README => ['roster' => $this->readmeRoster()],
             self::COMMANDS_DOC => ['table' => $this->commandsTable()],
-        ];
+        ]);
     }
 
     /** README's slash roster: advertised rows A–Z, aliases parenthesised after their row. */
@@ -94,6 +100,11 @@ final class CommandDocGenerator
 
     /** COMMANDS.md's built-in table, in registry order. */
     public function commandsTable(): string
+    {
+        return Lang::inLocale('en', fn (): string => $this->englishCommandsTable());
+    }
+
+    private function englishCommandsTable(): string
     {
         $lines = [
             '| Command | S | CP | Takes | What the row says |',

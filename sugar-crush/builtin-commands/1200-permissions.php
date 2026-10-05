@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // Category 'App', matching /keys and /budget: the gate is built once per LAUNCH
 // by Cli\Bootstrap::permissionGate() and carried across /new, /clear and a
@@ -23,7 +24,7 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // every spelling gets a superset rather than a "no such subcommand".
 return BuiltInCommand::new(CommandSpec::new(
     'permissions',
-    'Show this session\'s permission mode, its source, and the rules it decides by',
-    'App',
+    Lang::t('cmd.permissions.description'),
+    Lang::t('cmd.category.app'),
 ))->withHandler('handlePermissionsCommand')
     ->withHostCommand(\SugarCraft\Crush\Host\Commands\PermissionsCommand::class);

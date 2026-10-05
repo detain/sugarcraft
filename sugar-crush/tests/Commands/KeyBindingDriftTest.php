@@ -35,6 +35,7 @@ use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\PinsEnglishLocaleTrait;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tui\AgentViewMode;
@@ -89,6 +90,8 @@ use SugarCraft\Mouse\Zone;
 final class KeyBindingDriftTest extends TestCase
 {
     use HomeSandboxTrait;
+    // The rows are read back from the English catalogue (audit 15b-14).
+    use PinsEnglishLocaleTrait;
 
     private ProviderInterface $provider;
     private string $sandbox = '';

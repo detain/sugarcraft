@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use Symfony\Component\Yaml\Exception\ParseException;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\Frontmatter;
@@ -287,25 +288,25 @@ final class CommandSpec
     public static function fromFile(string $path, string $name, ?string $tier = null): self
     {
         if (preg_match(self::NAME_PATTERN, $name) !== 1) {
-            throw new \InvalidArgumentException("Unsafe command name: $name");
+            throw new \InvalidArgumentException(Lang::t('cmd.file.unsafe-name', ['name' => $name]));
         }
 
         // Check first so a missing path throws cleanly instead of emitting a
         // PHP warning from file_get_contents before we throw.
         if (!is_file($path)) {
-            throw new \RuntimeException("Command file not found: $path");
+            throw new \RuntimeException(Lang::t('cmd.file.not-found', ['path' => $path]));
         }
 
         $content = file_get_contents($path);
         if ($content === false) {
-            throw new \RuntimeException("Failed to read command file: $path");
+            throw new \RuntimeException(Lang::t('cmd.file.unreadable', ['path' => $path]));
         }
 
         if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches) === 1) {
             try {
                 $meta = Frontmatter::parse($matches[1]);
             } catch (ParseException $e) {
-                throw new \InvalidArgumentException("Malformed frontmatter in $path: {$e->getMessage()}", 0, $e);
+                throw new \InvalidArgumentException(Lang::t('cmd.file.malformed', ['path' => $path, 'error' => $e->getMessage()]), 0, $e);
             }
             $body = substr($content, strlen($matches[0]));
         } else {
@@ -315,12 +316,12 @@ final class CommandSpec
 
         // `--- \n null \n ---` parses to a scalar, not a map.
         if (!is_array($meta)) {
-            throw new \InvalidArgumentException("Frontmatter must be a YAML mapping in $path");
+            throw new \InvalidArgumentException(Lang::t('cmd.file.not-mapping', ['path' => $path]));
         }
 
         $template = trim($body);
         if ($template === '') {
-            throw new \InvalidArgumentException("Command file has an empty template body: $path");
+            throw new \InvalidArgumentException(Lang::t('cmd.file.empty', ['path' => $path]));
         }
 
         return new self(
@@ -334,8 +335,8 @@ final class CommandSpec
             // boundary: escapes, C0/C1 controls and line breaks all go.
             // The name needs no pass of its own - NAME_PATTERN above is ASCII
             // alphanumerics, '_', '-' and '/' only.
-            description: self::displayField($meta, 'description', $path) ?? "Custom command: $name",
-            category: 'Custom',
+            description: self::displayField($meta, 'description', $path) ?? Lang::t('cmd.custom.description', ['name' => $name]),
+            category: Lang::t('cmd.category.custom'),
             argumentHint: self::displayField($meta, 'argument-hint', $path),
             template: $template,
             model: self::stringField($meta, 'model', $path),
@@ -972,7 +973,7 @@ final class CommandSpec
             return null;
         }
         if (!is_string($value) && !is_int($value) && !is_float($value)) {
-            throw new \InvalidArgumentException("Frontmatter '$key' must be a string in $path");
+            throw new \InvalidArgumentException(Lang::t('cmd.file.not-string', ['key' => $key, 'path' => $path]));
         }
 
         return (string)$value;
@@ -1002,7 +1003,7 @@ final class CommandSpec
     {
         $value = $meta[$key] ?? false;
         if (!is_bool($value)) {
-            throw new \InvalidArgumentException("Frontmatter '$key' must be a boolean in $path");
+            throw new \InvalidArgumentException(Lang::t('cmd.file.not-bool', ['key' => $key, 'path' => $path]));
         }
 
         return $value;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Memory\MemoryHistory;
 
 /**
@@ -24,28 +25,28 @@ use SugarCraft\Crush\Memory\MemoryHistory;
  */
 final class MemoryHistoryCommand
 {
-    /** The subject of a commit recording changes no `/memory` command made (the Memory tool, auto-memory, a hand edit). */
+    /**
+     * The subject of a commit recording changes no `/memory` command made (the
+     * Memory tool, auto-memory, a hand edit). Stored data in the history
+     * repository, not display text, so it stays English in every locale.
+     */
     public const OUTSIDE_SUBJECT = 'memory: changes made outside /memory';
-
-    private const NO_HISTORY = 'Memory history covers the home memory directory (~/.sugar-crush/memory) only, '
-        . 'and this session has no home memory store.';
 
     /** `/memory log [count]`. */
     public static function log(?MemoryHistory $history, string $args): string
     {
         if ($history === null) {
-            return self::NO_HISTORY;
+            return Lang::t('cmd.memory.no-history');
         }
 
         $args = trim($args);
         if ($args !== '' && preg_match('/\A[1-9][0-9]{0,5}\z/D', $args) !== 1) {
-            return 'Usage: /memory log [count] — count is a whole number of commits, at most '
-                . MemoryHistory::MAX_LOG_ENTRIES . '.';
+            return Lang::t('cmd.memory.log-usage', ['max' => MemoryHistory::MAX_LOG_ENTRIES]);
         }
         $limit = $args === '' ? MemoryHistory::DEFAULT_LOG_ENTRIES : (int) $args;
 
         if (!MemoryHistory::available()) {
-            return 'Memory history needs `git` on PATH; none was found.';
+            return Lang::t('cmd.memory.no-git');
         }
 
         try {
@@ -54,14 +55,14 @@ final class MemoryHistoryCommand
             $history->commit(self::OUTSIDE_SUBJECT);
             $revisions = $history->log($limit);
         } catch (\Throwable $e) {
-            return 'Memory history failed: ' . Chat::reportField($e->getMessage());
+            return Lang::t('cmd.memory.log-failed', ['error' => Chat::reportField($e->getMessage())]);
         }
 
         if ($revisions === []) {
-            return 'Memory history is empty: nothing has been saved to ' . Chat::reportField($history->dir()) . ' yet.';
+            return Lang::t('cmd.memory.empty', ['dir' => Chat::reportField($history->dir())]);
         }
 
-        $lines = ['**Memory history** (' . \count($revisions) . ', newest first) — `/memory restore <commit>` puts memory back as it stood at one:', ''];
+        $lines = [Lang::t('cmd.memory.log-heading', ['count' => \count($revisions)]), ''];
         foreach ($revisions as $revision) {
             $lines[] = '`' . $revision->shortSha . '`  ' . $revision->committedAt->format('Y-m-d H:i')
                 . '  ' . Chat::reportField($revision->subject);
@@ -74,32 +75,31 @@ final class MemoryHistoryCommand
     public static function restore(?MemoryHistory $history, string $args): string
     {
         if ($history === null) {
-            return self::NO_HISTORY;
+            return Lang::t('cmd.memory.no-history');
         }
 
         $revision = trim($args);
         if ($revision === '' || preg_match('/\s/', $revision) === 1) {
-            return 'Usage: /memory restore <commit> — a commit id `/memory log` lists.';
+            return Lang::t('cmd.memory.restore-usage');
         }
 
         if (!MemoryHistory::available()) {
-            return 'Memory history needs `git` on PATH; none was found.';
+            return Lang::t('cmd.memory.no-git');
         }
 
         try {
             $committed = $history->restore($revision);
         } catch (\InvalidArgumentException $e) {
-            return 'Cannot restore: ' . Chat::reportField($e->getMessage()) . '.';
+            return Lang::t('cmd.memory.restore-refused', ['error' => Chat::reportField($e->getMessage())]);
         } catch (\Throwable $e) {
-            return 'Memory restore failed: ' . Chat::reportField($e->getMessage());
+            return Lang::t('cmd.memory.restore-failed', ['error' => Chat::reportField($e->getMessage())]);
         }
 
         $shown = Chat::reportField($revision);
 
         return $committed === null
-            ? "Memory already matches `{$shown}`; nothing changed."
-            : "Memory restored to `{$shown}` as commit `{$committed}`. "
-                . 'The notes it replaced are still in the history: `/memory log`, then `/memory restore` the commit before this one.';
+            ? Lang::t('cmd.memory.unchanged', ['revision' => $shown])
+            : Lang::t('cmd.memory.restored', ['revision' => $shown, 'commit' => $committed]);
     }
 
     /**
@@ -117,7 +117,7 @@ final class MemoryHistoryCommand
         try {
             $history->commit($subject);
         } catch (\Throwable $e) {
-            return 'Memory history could not record this change: ' . Chat::reportField($e->getMessage());
+            return Lang::t('cmd.memory.record-failed', ['error' => Chat::reportField($e->getMessage())]);
         }
 
         return null;

@@ -62,7 +62,7 @@ final class SweepCommandTest extends TestCase
         foreach (['0', '-2', 'all', '1.5'] as $bad) {
             [$same, $reply] = SweepCommand::run(self::history(), $ledger, $bad);
             $this->assertSame($ledger, $same, $bad);
-            $this->assertSame(SweepCommand::USAGE, $reply, $bad);
+            $this->assertSame(SweepCommand::usage(), $reply, $bad);
         }
     }
 
@@ -96,7 +96,7 @@ final class SweepCommandTest extends TestCase
 
         [$same, $reply] = PruningCommand::run($ledger, 'sometimes');
         $this->assertSame($ledger, $same);
-        $this->assertSame(PruningCommand::USAGE, $reply);
+        $this->assertSame(PruningCommand::usage(), $reply);
     }
 
     /** A session ledger as the host hands it over: following the configured `auto`. */

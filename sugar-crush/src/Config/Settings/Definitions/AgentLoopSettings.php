@@ -13,6 +13,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\Validator\SpendCapValidator;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Runtime;
 
 /**
@@ -37,7 +38,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withEnvVar('SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS')
-                ->withLabel('Parallel tool calls')
+                ->withLabel(Lang::t('settings.parallelToolCalls.label'))
                 ->withHelp('Run a turn\'s read-only tool calls concurrently.')
                 ->withReaderSymbol(EngineBackend::class . '::complete'),
             SettingDefinition::new('parallelToolDeadlineSeconds', SettingType::Int, Runtime::PARALLEL_TOOL_DEADLINE_SECONDS)
@@ -48,7 +49,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withEnvVar('SUGARCRUSH_PARALLEL_TOOL_DEADLINE')
                 ->withRange(1)
-                ->withLabel('Parallel tool deadline (s)')
+                ->withLabel(Lang::t('settings.parallelToolDeadlineSeconds.label'))
                 ->withHelp('Wall-clock ceiling for one batch of concurrently dispatched tool calls.')
                 ->withReaderSymbol(EngineBackend::class . '::complete'),
             SettingDefinition::new('maxToolSteps', SettingType::Int)
@@ -60,7 +61,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 // held until a running turn ends.
                 ->withApplyMode(ApplyMode::Live)
                 ->withRange(1)
-                ->withLabel('Max tool steps')
+                ->withLabel(Lang::t('settings.maxToolSteps.label'))
                 ->withHelp('Provider calls one turn may make; unset keeps the engine default.')
                 ->withReaderSymbol(Bootstrap::class . '::resolvedMaxToolSteps')
                 ->withReadBy('`Bootstrap::backend()`, `Chat::applySettings()` → `resolvedMaxToolSteps()`'),
@@ -77,7 +78,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('SUGARCRUSH_MAX_COST')
                 ->withValidators(SpendCapValidator::new())
-                ->withLabel('Spend cap (USD)')
+                ->withLabel(Lang::t('settings.maxCostUsd.label'))
                 ->withHelp('Refuse new turns once the provider-reported spend of a launch reaches this many US dollars; unset is no cap. /budget changes it for the running launch only.')
                 ->withDefaultText('unset (no cap)')
                 ->withReaderSymbol(Bootstrap::class . '::maxCostUsd')

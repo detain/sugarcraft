@@ -13,6 +13,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\Settings\Validator\ExecutableValidator;
+use SugarCraft\Crush\Lang;
 
 /**
  * The "Hooks & MCP" category's keys. One file per category so a step adding a
@@ -39,7 +40,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Exec)
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
-                ->withLabel('Lint commands')
+                ->withLabel(Lang::t('settings.lintCommands.label'))
                 ->withHelp('Post-edit lint command per file extension ({"php": "…", "js": false}); `php -l` is built in.')
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `LintRunner::withCommands()`'),
@@ -51,7 +52,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Tuning)
                 ->withApplyMode(ApplyMode::Restart)
                 ->withRange(1.0, 3600.0)
-                ->withLabel('Hook timeout (s)')
+                ->withLabel(Lang::t('settings.hooksDefaultTimeoutSeconds.label'))
                 ->withHelp('Seconds a hook entry with no `timeout:` may run before it is killed and counted as a refusal.')
                 ->withReaderSymbol(\SugarCraft\Crush\Hooks\ScriptHook::class . '::defaultTimeoutSeconds')
                 ->withReadBy('`HookConfig::parse()` → `ScriptHook::defaultTimeoutSeconds()`, as each hook file loads'),
@@ -65,7 +66,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Restart)
                 ->withUi(UiEditability::List)
-                ->withLabel('Disabled MCP servers')
+                ->withLabel(Lang::t('settings.disabledMcpServers.label'))
                 ->withHelp('`.mcp.json` server names or globs (`untrusted_*`) that are never started, listed or called, for the main agent and every sub-agent.')
                 ->withReaderSymbol(Bootstrap::class . '::mcpClient')
                 ->withReadBy('`Bootstrap::mcpClient()` → `McpClient::setDenyPatterns()`, at the first MCP launch'),
@@ -78,7 +79,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::Restart)
                 ->withEnvVar(Bootstrap::MCP_DISABLE_ENV)
-                ->withLabel('Project MCP servers')
+                ->withLabel(Lang::t('settings.mcp.enabled.label'))
                 ->withHelp('Start the MCP servers a trusted project\'s .mcp.json names; off starts none, as if the file were absent.')
                 ->withReaderSymbol(Bootstrap::class . '::mcpDisabled')
                 ->withReadBy('`Bootstrap::mcpConfigDecision()` (so `mcpClient()` and `mcp list`) → `mcpDisabled()`'),
@@ -87,7 +88,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Exec)
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withValidators(ExecutableValidator::new())
-                ->withLabel('Claude MCP binary')
+                ->withLabel(Lang::t('settings.claudeMcpBinary.label'))
                 ->withHelp('Absolute path of the `claude` binary the claude-mcp transport may spawn.')
                 ->withReaderSymbol(Bootstrap::class . '::claudeMcpGrant'),
             SettingDefinition::new('claudeMcpArgs', SettingType::StringList)
@@ -95,7 +96,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Exec)
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withUi(UiEditability::List)
-                ->withLabel('Claude MCP arguments')
+                ->withLabel(Lang::t('settings.claudeMcpArgs.label'))
                 ->withHelp('Arguments for that binary; unset uses the transport default.')
                 ->withReaderSymbol(Bootstrap::class . '::claudeMcpGrant'),
             SettingDefinition::new('claudeMcpEnv', SettingType::Map)
@@ -103,7 +104,7 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Security)
                 ->withApplyMode(ApplyMode::Frozen)
                 ->withUi(UiEditability::Complex)
-                ->withLabel('Claude MCP environment')
+                ->withLabel(Lang::t('settings.claudeMcpEnv.label'))
                 ->withHelp('Literal environment variables handed to that binary.')
                 ->withReaderSymbol(Bootstrap::class . '::claudeMcpGrant'),
         ];

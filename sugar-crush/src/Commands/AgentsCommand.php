@@ -8,6 +8,7 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Host\Commands\CommandContext;
+use SugarCraft\Crush\Lang;
 
 /**
  * Implements the /agents and /agent commands for listing and inspecting agents.
@@ -119,14 +120,14 @@ final class AgentsCommand
             // active.
             $idle = count($this->agentManager->all());
             if ($idle > 0) {
-                echo "\n  No agents are working right now.\n";
-                echo "  {$idle} agent(s) registered and idle — use /agent <name> for details.\n\n";
+                echo "\n  " . Lang::t('cmd.agents.none-working') . "\n";
+                echo '  ' . Lang::t('cmd.agents.idle', ['count' => $idle]) . "\n\n";
 
                 return 0;
             }
 
-            echo "\n  No active agents configured.\n";
-            echo "  Use the agents configuration file to define agents.\n\n";
+            echo "\n  " . Lang::t('cmd.agents.none-configured') . "\n";
+            echo '  ' . Lang::t('cmd.agents.none-configured-hint') . "\n\n";
 
             return 0;
         }
@@ -135,23 +136,28 @@ final class AgentsCommand
         // true at the width this pane actually has. Both the header row and
         // every cell are sized from the SAME returned array, so the derived cap
         // still cannot be reached from below.
-        $columns = TranscriptTable::fit(self::COLUMNS, $paneWidth, self::COLUMN_FLOORS);
+        $labels = self::headers();
+        $columns = TranscriptTable::fit(
+            TranscriptTable::relabel(self::COLUMNS, $labels),
+            $paneWidth,
+            TranscriptTable::relabel(self::COLUMN_FLOORS, $labels),
+        );
         $table = TranscriptTable::headed($columns);
 
         foreach ($agents as $agent) {
             $table = $table->row(
-                TranscriptTable::cell($agent->name, $columns['Agent']),
-                TranscriptTable::cell($agent->description, $columns['Description']),
+                TranscriptTable::cell($agent->name, $columns[$labels['Agent']]),
+                TranscriptTable::cell($agent->description, $columns[$labels['Description']]),
                 // Through cell() like its neighbours even though this class
                 // writes the string itself: what keeps the table's natural
                 // width under TranscriptTable's derived cap — and so keeps the
                 // cap's proportional shrink from ever firing — is that EVERY
                 // cell respects its budget, not most of them.
-                TranscriptTable::cell($agent->isActive ? "● active" : "○ inactive", $columns['Status']),
+                TranscriptTable::cell($agent->isActive ? Lang::t('cmd.agents.cell.active') : Lang::t('cmd.agents.cell.inactive'), $columns[$labels['Status']]),
             );
         }
 
-        echo "\n  Active Agents:\n\n";
+        echo "\n  " . Lang::t('cmd.agents.heading') . "\n\n";
         echo $table->render() . "\n\n";
 
         return 0;
@@ -165,33 +171,49 @@ final class AgentsCommand
         $agent = $this->agentManager->get($name);
 
         if ($agent === null) {
-            echo "\n  Unknown agent: {$name}\n";
-            echo "  Use /agents to see available agents.\n\n";
+            echo "\n  " . Lang::t('cmd.agents.unknown', ['name' => $name]) . "\n";
+            echo '  ' . Lang::t('cmd.agents.unknown-hint') . "\n\n";
 
             return 1;
         }
 
-        echo "\n  Agent: {$agent->name}\n";
+        echo "\n  " . Lang::t('cmd.agents.detail.agent', ['name' => $agent->name]) . "\n";
         echo "  " . str_repeat("─", 50) . "\n";
-        echo "  Description: {$agent->description}\n";
-        echo "  Model:       {$agent->model}\n";
-        echo "  Provider:     {$agent->provider}\n";
-        echo "  Status:       " . ($agent->isActive ? "active" : "inactive") . "\n";
+        echo '  ' . Lang::t('cmd.agents.detail.description', ['description' => $agent->description]) . "\n";
+        echo '  ' . Lang::t('cmd.agents.detail.model', ['model' => $agent->model]) . "\n";
+        echo '  ' . Lang::t('cmd.agents.detail.provider', ['provider' => $agent->provider]) . "\n";
+        echo '  ' . Lang::t('cmd.agents.detail.status', [
+            'status' => $agent->isActive ? Lang::t('cmd.agents.status.active') : Lang::t('cmd.agents.status.inactive'),
+        ]) . "\n";
 
         if ($agent->skillNames !== []) {
-            echo "  Skills:      " . implode(", ", $agent->skillNames) . "\n";
+            echo '  ' . Lang::t('cmd.agents.detail.skills', ['skills' => implode(", ", $agent->skillNames)]) . "\n";
         }
 
         if ($agent->tools !== []) {
-            echo "  Tools:       " . implode(", ", $agent->tools) . "\n";
+            echo '  ' . Lang::t('cmd.agents.detail.tools', ['tools' => implode(", ", $agent->tools)]) . "\n";
         }
 
         if ($agent->hooks !== []) {
-            echo "  Hooks:       " . implode(", ", $agent->hooks) . "\n";
+            echo '  ' . Lang::t('cmd.agents.detail.hooks', ['hooks' => implode(", ", $agent->hooks)]) . "\n";
         }
 
         echo "\n";
 
         return 0;
+    }
+
+    /**
+     * Each {@see COLUMNS} id's header in the active locale.
+     *
+     * @return array<string, string>
+     */
+    private static function headers(): array
+    {
+        return [
+            'Agent' => Lang::t('cmd.agents.column.agent'),
+            'Description' => Lang::t('cmd.agents.column.description'),
+            'Status' => Lang::t('cmd.agents.column.status'),
+        ];
     }
 }

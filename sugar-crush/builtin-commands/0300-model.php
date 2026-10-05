@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 use SugarCraft\Crush\Commands\Specs\CommandArguments;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Palette\PaletteAction;
 
 // Optional, and the three forms do different things: bare `/model` opens the
@@ -17,9 +18,9 @@ use SugarCraft\Crush\Palette\PaletteAction;
 // already unquoted them.
 return BuiltInCommand::new(CommandSpec::new(
     'model',
-    'Switch the active provider, or a provider and its model',
-    'Model',
+    Lang::t('cmd.model.description'),
+    Lang::t('cmd.category.model'),
     paletteAction: PaletteAction::SwitchModel,
-    paletteLabel: 'Switch model',
-    argumentHint: '[provider [model]]',
+    paletteLabel: Lang::t('cmd.model.label'),
+    argumentHint: Lang::t('cmd.model.hint'),
 ))->withHandler('handleModelCommand', CommandArguments::Parsed);

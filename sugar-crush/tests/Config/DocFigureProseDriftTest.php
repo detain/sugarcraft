@@ -3991,7 +3991,10 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertCount($wordNumbers['four'], $subs[1], 'the /mcp match arms changed — the page fence and this count move together');
         preg_match_all('/^\/mcp (list|add|remove|login)\b/m', $raw, $fence);
         self::assertSame(['list', 'add', 'remove', 'login'], $fence[1], 'the page fence no longer lists the four commands in code order');
-        self::assertStringContainsString('Use: list, add, remove, login', $authSource, 'the unknown-sub-command message stopped enumerating the roster');
+        // The message is catalogue text since audit 15b-14: the source routes the
+        // key, and the English the key resolves to enumerates the roster.
+        self::assertStringContainsString("Lang::t('cmd.mcp-auth.unknown'", $authSource, 'the unknown-sub-command arm stopped printing its message');
+        self::assertStringContainsString('Use: list, add, remove, login', \SugarCraft\Crush\Lang::inLocale('en', static fn (): string => \SugarCraft\Crush\Lang::t('cmd.mcp-auth.unknown')), 'the unknown-sub-command message stopped enumerating the roster');
         self::assertTrue(class_exists('SugarCraft\Crush\MCP\McpAuthStore'), 'McpAuthStore vanished — the page credits it as backing');
         self::assertTrue(class_exists('SugarCraft\Crush\MCP\OAuthClientRegistration'), 'OAuthClientRegistration vanished — the page credits it as backing');
 
@@ -4164,7 +4167,8 @@ final class DocFigureProseDriftTest extends TestCase
         $authSource = self::sourceOf('Commands/McpAuthCommand.php');
         self::assertStringContainsString("'login' => \$this->printLoginGuidance(),", $authSource, 'the chat arm no longer routes login to guidance');
         self::assertStringNotContainsString('new OAuthLoopbackFlow(', $authSource, 'the chat surface must only MENTION the flow, never construct it');
-        self::assertStringContainsString('sugarcrush mcp auth login <server>', $authSource, 'the guidance stopped printing the very form the page names');
+        self::assertStringContainsString("Lang::t('cmd.mcp-auth.login-guidance')", $authSource, 'the guidance arm stopped printing its catalogue text');
+        self::assertStringContainsString('sugarcrush mcp auth login <server>', \SugarCraft\Crush\Lang::inLocale('en', static fn (): string => \SugarCraft\Crush\Lang::t('cmd.mcp-auth.login-guidance')), 'the guidance stopped printing the very form the page names');
     }
 
     /**
@@ -6087,8 +6091,11 @@ final class DocFigureProseDriftTest extends TestCase
 
         // The credentials table's own empty state scopes credentials to OAuth
         // and states the zero-auth truth in words the page repeats.
-        self::assertStringContainsString('demand OAuth login', $auth);
-        self::assertStringContainsString('runs from its \"url\" alone', $auth, 'the empty store stopped promising the zero-auth path');
+        // Catalogue text since audit 15b-14, read in English.
+        $emptyStore = \SugarCraft\Crush\Lang::inLocale('en', static fn (): string => \SugarCraft\Crush\Lang::t('cmd.mcp-auth.empty'));
+        self::assertStringContainsString("Lang::t('cmd.mcp-auth.empty'", $auth, 'the empty store stopped printing its catalogue text');
+        self::assertStringContainsString('demand OAuth login', $emptyStore);
+        self::assertStringContainsString('runs from its "url" alone', $emptyStore, 'the empty store stopped promising the zero-auth path');
 
         // README pointer (this round's sentence, one leg).
         $readme = (string) file_get_contents(\dirname(__DIR__, 2) . '/README.md');

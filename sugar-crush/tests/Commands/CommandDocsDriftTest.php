@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Commands;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\Specs\CommandDocGenerator;
+use SugarCraft\Crush\Tests\Support\PinsEnglishLocaleTrait;
 
 /**
  * The generated command docs are byte-equal to what the spec files produce —
@@ -15,6 +16,9 @@ use SugarCraft\Crush\Commands\Specs\CommandDocGenerator;
  */
 final class CommandDocsDriftTest extends TestCase
 {
+    // The registries answer through Lang::t(); the pages are English (audit 15b-14).
+    use PinsEnglishLocaleTrait;
+
     private static function package(): string
     {
         return \dirname(__DIR__, 2);

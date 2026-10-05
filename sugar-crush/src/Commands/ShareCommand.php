@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Commands;
 use RuntimeException;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Host\Commands\CommandContext;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Share\ShareResult;
 use SugarCraft\Crush\Share\ShareSession;
 use SugarCraft\Crush\Support\AtomicFileWriter;
@@ -63,14 +64,14 @@ final class ShareCommand
             if ($format !== null) {
                 array_shift($args);
             } elseif (!$this->looksLikePath($args[0])) {
-                $this->printError("Invalid format '{$args[0]}'. Supported: md, html, json, text");
+                $this->printError(Lang::t('cmd.share.bad-format', ['format' => $args[0]]));
                 return 1;
             }
         }
 
         $path = array_shift($args);
         if ($args !== []) {
-            $this->printError('Too many arguments.');
+            $this->printError(Lang::t('cmd.share.too-many'));
             return 1;
         }
 
@@ -85,7 +86,7 @@ final class ShareCommand
             return 1;
         }
 
-        echo "Exported {$session->messageCount()} message(s) as {$format} to `{$target}`.\n";
+        echo Lang::t('cmd.share.exported', ['count' => $session->messageCount(), 'format' => $format, 'target' => $target]) . "\n";
 
         $uploadBaseUrl = $this->getUploadBaseUrl();
         if ($uploadBaseUrl !== null) {
@@ -94,8 +95,7 @@ final class ShareCommand
                 // ShareUploader::upload() is `never` and always throws, so
                 // there is no success line to print until a real backend lands.
             } catch (RuntimeException $e) {
-                echo "\nUpload to {$uploadBaseUrl} did not happen: {$e->getMessage()} "
-                    . "The local file above is the export.\n";
+                echo "\n" . Lang::t('cmd.share.upload-failed', ['url' => $uploadBaseUrl, 'error' => $e->getMessage()]) . "\n";
             }
         }
 
@@ -147,8 +147,11 @@ final class ShareCommand
         $resolved = $root === '' ? null : PathJail::resolveForCreate($root, $path);
         if ($resolved === null) {
             throw new RuntimeException(
-                "Refusing to write '{$path}': an export path must stay inside the project root"
-                . ($root === '' ? '' : " ({$root})") . '. Omit the path to write to ~/' . self::EXPORTS_SUBDIR . '.',
+                Lang::t('cmd.share.outside-root', [
+                    'path' => $path,
+                    'root' => $root === '' ? '' : " ({$root})",
+                    'exports' => self::EXPORTS_SUBDIR,
+                ]),
             );
         }
 
@@ -169,8 +172,7 @@ final class ShareCommand
         $home = HomeDirectory::owned();
         if ($home === null) {
             throw new RuntimeException(
-                'Cannot determine a home directory this user owns, so there is no safe default export '
-                . 'location. Pass a path inside the project instead: /share md exports/session.md',
+                Lang::t('cmd.share.no-home'),
             );
         }
 
@@ -216,9 +218,9 @@ final class ShareCommand
         echo "\n";
         echo "  ✗ {$message}\n";
         echo "\n";
-        echo "  Usage: /share [md|html|json|text] [path]\n";
+        echo '  ' . Lang::t('cmd.share.usage') . "\n";
         echo "\n";
-        echo "  Without a path the export goes to ~/" . self::EXPORTS_SUBDIR . "/; a path must stay inside the project.\n";
+        echo '  ' . Lang::t('cmd.share.usage-hint', ['exports' => self::EXPORTS_SUBDIR]) . "\n";
         echo "\n";
     }
 }

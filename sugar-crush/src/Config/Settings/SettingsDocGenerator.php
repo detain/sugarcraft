@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Config\Settings;
 
+use SugarCraft\Crush\Lang;
+
 /**
  * Projects {@see SettingsSchema} onto the pages that document it, so the key
  * tables are generated rather than proof-read.
@@ -36,6 +38,11 @@ namespace SugarCraft\Crush\Config\Settings;
  * is enforced by {@see \SugarCraft\Crush\Tests\Config\Settings\SettingsSchemaDocDriftTest}.
  * Pure text in, text out: the file I/O lives in those two callers, so this
  * class adds no read or write sink to `src/`.
+ *
+ * PINNED TO `en`: a category label is `Lang::t()` text (audit 15b-14), and a
+ * page generated under an operator's `LANG` must still read as the English
+ * the drift test compares, so the text-producing methods run under
+ * {@see Lang::inLocale()}.
  */
 final class SettingsDocGenerator
 {
@@ -94,7 +101,7 @@ final class SettingsDocGenerator
      */
     public function blocks(): array
     {
-        return [
+        return Lang::inLocale('en', fn (): array => [
             self::SETTINGS_DOC => [
                 '' => $this->everyKeyTable(),
                 'layered' => $this->layeredTable(),
@@ -104,7 +111,7 @@ final class SettingsDocGenerator
             self::README => [
                 'layered' => $this->readmeLayeredRoster(),
             ],
-        ];
+        ]);
     }
 
     /**
@@ -314,6 +321,11 @@ final class SettingsDocGenerator
 
     /** The "Every key" table: one row per schema key, in category order. */
     public function everyKeyTable(): string
+    {
+        return Lang::inLocale('en', fn (): string => $this->englishEveryKeyTable());
+    }
+
+    private function englishEveryKeyTable(): string
     {
         $lines = [
             '| Key | Category | Type | Default | Tiers | Env / flag | Applies | Risk |',

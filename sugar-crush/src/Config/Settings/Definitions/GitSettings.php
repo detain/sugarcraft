@@ -12,6 +12,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\LSP\LspLauncher;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Workspace\AutoCommitter;
 
 /**
@@ -34,7 +35,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Narrowing)
                 ->withLayered()
                 ->withProjectSettable()
-                ->withLabel('Git instructions')
+                ->withLabel(Lang::t('settings.includeGitInstructions.label'))
                 ->withHelp('Whether the Bash tool\'s generic commit guidance rides the system prompt.')
                 ->withReaderSymbol(Bootstrap::class . '::tools')
                 ->withReadBy('`Bootstrap::tools()` → `Bash::withGitGuidance()`'),
@@ -43,7 +44,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Prompt)
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
-                ->withLabel('Attribution')
+                ->withLabel(Lang::t('settings.attribution.label'))
                 ->withHelp('{"commit": "…", "pr": "…"}: the trailer and PR line the git guidance asks for.')
                 ->withReaderSymbol(Bootstrap::class . '::tools')
                 ->withReadBy('`Bootstrap::tools()` → `Bash::withGitGuidance()`'),
@@ -56,7 +57,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Exec)
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
-                ->withLabel('Language servers')
+                ->withLabel(Lang::t('settings.lsp.label'))
                 ->withHelp('{"php": {"command": "intelephense", "args": ["--stdio"]}}: servers for post-edit diagnostics, Read outlines and the Lsp tool.')
                 ->withReaderSymbol(Bootstrap::class . '::lspClient')
                 ->withReadBy('`Bootstrap::lspClient()` → `LspLauncher::fromConfig()`'),
@@ -68,7 +69,7 @@ final class GitSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Exec)
                 ->withLayered()
                 ->withEnumValues(AutoCommitter::MODES)
-                ->withLabel('Auto-commit')
+                ->withLabel(Lang::t('settings.autoCommit.label'))
                 ->withHelp('off, turn (one commit per turn, message from the title model) or edit (one per Write/Edit); /undo reverts it.')
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `AutoCommitHook`; `Chat` (turn mode)'),

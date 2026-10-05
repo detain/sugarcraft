@@ -219,6 +219,45 @@ final class TranscriptTable
     }
 
     /**
+     * `$text` with every line indented by the transcript's two-space margin
+     * and terminated by a newline — the shape these commands echo their prose
+     * in. A translated paragraph (audit 15b-14) is one catalogue entry with
+     * its own line breaks, so the margin is applied here rather than spelled
+     * into each line of every locale. An empty line stays empty: a margin of
+     * trailing spaces is not a blank line.
+     */
+    public static function indented(string $text): string
+    {
+        $out = '';
+        foreach (explode("\n", $text) as $line) {
+            $out .= ($line === '' ? '' : '  ' . $line) . "\n";
+        }
+
+        return $out;
+    }
+
+    /**
+     * `$columns` re-keyed through `$labels`: a command declares its budget map
+     * (and its floors) under STABLE ENGLISH column ids, and the header a
+     * reader sees is the translated label (audit 15b-14), so the map is
+     * re-keyed once, before {@see fit()}, and cells are looked up by
+     * `$labels[$id]`. A column `$labels` does not name keeps its id.
+     *
+     * @param array<string, int> $columns column id => cell budget
+     * @param array<string, string> $labels column id => header text
+     * @return array<string, int> header text => cell budget
+     */
+    public static function relabel(array $columns, array $labels): array
+    {
+        $relabelled = [];
+        foreach ($columns as $id => $budget) {
+            $relabelled[$labels[$id] ?? $id] = $budget;
+        }
+
+        return $relabelled;
+    }
+
+    /**
      * A bordered, unstyled table ready for {@see Table::row()} calls.
      *
      * Returns candy-sprinkles' own {@see Table} rather than wrapping it: the

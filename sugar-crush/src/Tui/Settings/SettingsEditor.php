@@ -40,9 +40,9 @@ use SugarCraft\Sprinkles\Style;
  * preview and `y` confirms it. `Enter` on a trust list opens the confirmed
  * trust action instead ({@see CONFIRM_TRUST}), and `Esc` with changes staged
  * asks before it throws them away ({@see CONFIRM_DISCARD}). The keys that
- * need the writer (`s`, `y`) are the shell's, because the writer is. Labels
- * are literal English (D7): the schema's `labelKey`/`helpKey` are kept for
- * i18n, which arrives later.
+ * need the writer (`s`, `y`) are the shell's, because the writer is. Tab
+ * and key labels arrive translated from the schema (`labelKey` through
+ * `Lang::t()`, audit 15b-14).
  *
  * FILES AND PROFILES (N-P5). `e` opens a settings file in `$EDITOR` — the
  * highlighted one on the Files tab, else the file the chosen tier saves to —

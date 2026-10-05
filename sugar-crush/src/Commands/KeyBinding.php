@@ -21,9 +21,16 @@ final class KeyBinding
         public readonly string $id,
         /** The chord as a user reads it, e.g. "Ctrl+P", "Alt+1…9", "Esc Esc". */
         public readonly string $keys,
-        /** One line, in the imperative: "Open the command palette". */
+        /**
+         * One line, in the imperative: "Open the command palette". Already
+         * translated: the registry looks it up under `keys.<id>`.
+         */
         public readonly string $description,
-        /** Grouping label — one of {@see KeyBindingRegistry}'s CONTEXT_* values. */
+        /**
+         * Grouping key — one of {@see KeyBindingRegistry}'s CONTEXT_* values,
+         * English in every locale; {@see KeyBindingRegistry::contextLabel()}
+         * is the heading shown for it.
+         */
         public readonly string $context,
         /**
          * Why this row is NOT shown in the in-app reference. Non-null means

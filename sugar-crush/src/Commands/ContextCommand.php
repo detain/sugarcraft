@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Commands;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\ContextBreakdown;
 use SugarCraft\Crush\Context\Pruning\RefTag;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Util\TokenCount;
 
 /**
@@ -50,25 +51,27 @@ final class ContextCommand
     public static function compose(ContextBreakdown $b): string
     {
         $lines = [
-            sprintf(
-                'Context: ~%s of %s tokens (%d%%) for the next request — estimates, script-weighted.',
-                TokenCount::compact($b->totalTokens()),
-                TokenCount::compact($b->window),
-                $b->percentOfWindow(),
-            ),
+            Lang::t('cmd.context.total', [
+                'used' => TokenCount::compact($b->totalTokens()),
+                'window' => TokenCount::compact($b->window),
+                'percent' => $b->percentOfWindow(),
+            ]),
             '',
         ];
 
         $system = $b->systemTokens();
         if ($system === null || $b->sections === null) {
-            $lines[] = 'System prompt: not measured — this backend does not report the prompt it sends.';
+            $lines[] = Lang::t('cmd.context.system.unmeasured');
         } else {
-            $lines[] = sprintf(
-                'System prompt: ~%s (%s, %s)',
-                TokenCount::compact($system),
-                self::bytes((int) $b->systemBytes()),
-                self::plural(array_sum(array_column($b->sections, 'sections')), 'section'),
-            );
+            $lines[] = Lang::t('cmd.context.system', [
+                'tokens' => TokenCount::compact($system),
+                'bytes' => self::bytes((int) $b->systemBytes()),
+                'sections' => self::plural(
+                    array_sum(array_column($b->sections, 'sections')),
+                    Lang::t('cmd.context.unit.section'),
+                    Lang::t('cmd.context.unit.sections'),
+                ),
+            ]);
             foreach ($b->sections as $row) {
                 $label = $row['label'] . ($row['sections'] > 1 ? ' ×' . $row['sections'] : '');
                 $lines[] = sprintf('  %-24s ~%-7s %s', Chat::reportField($label), TokenCount::compact($row['tokens']), $row['stability']);
@@ -76,24 +79,26 @@ final class ContextCommand
         }
 
         if ($b->toolTokens === null || $b->toolCount === null) {
-            $lines[] = 'Tool schemas: not measured — this backend does not say which tools it sends.';
+            $lines[] = Lang::t('cmd.context.tools.unmeasured');
         } else {
-            $lines[] = sprintf('Tool schemas: ~%s (%s)', TokenCount::compact($b->toolTokens), self::plural($b->toolCount, 'tool'));
+            $lines[] = Lang::t('cmd.context.tools', [
+                'tokens' => TokenCount::compact($b->toolTokens),
+                'tools' => self::plural($b->toolCount, Lang::t('cmd.context.unit.tool'), Lang::t('cmd.context.unit.tools')),
+            ]);
         }
 
-        $lines[] = sprintf(
-            'History: ~%s (%s sent to the model; %s never sent)',
-            TokenCount::compact($b->historyTokens),
-            self::plural($b->historyMessages, 'message'),
-            self::plural($b->uiOnlyRows, 'UI-only row'),
-        );
+        $lines[] = Lang::t('cmd.context.history', [
+            'tokens' => TokenCount::compact($b->historyTokens),
+            'messages' => self::plural($b->historyMessages, Lang::t('cmd.context.unit.message'), Lang::t('cmd.context.unit.messages')),
+            'rows' => self::plural($b->uiOnlyRows, Lang::t('cmd.context.unit.ui-row'), Lang::t('cmd.context.unit.ui-rows')),
+        ]);
         array_push($lines, ...self::pruningLines($b));
-        $lines[] = sprintf('Free: ~%s', TokenCount::compact(max(0, $b->window - $b->totalTokens())));
+        $lines[] = Lang::t('cmd.context.free', ['tokens' => TokenCount::compact(max(0, $b->window - $b->totalTokens()))]);
 
         $lines[] = '';
-        $lines[] = 'Largest messages:';
+        $lines[] = Lang::t('cmd.context.largest');
         if ($b->largest === []) {
-            $lines[] = '  - none';
+            $lines[] = '  - ' . Lang::t('cmd.context.none');
         }
         foreach ($b->largest as $row) {
             $lines[] = sprintf(
@@ -109,14 +114,17 @@ final class ContextCommand
         $last = $b->lastCachePercent();
         $session = $b->sessionCachePercent();
         if ($last === null || $session === null || $b->sessionCache === null) {
-            $lines[] = 'Prompt cache: no reply has reported a cache split yet.';
+            $lines[] = Lang::t('cmd.context.cache.none');
         } else {
-            $lines[] = sprintf(
-                'Prompt cache: %d%% of the last prompt was read from cache; %d%% across %s.',
-                $last,
-                $session,
-                self::plural($b->sessionCache['replies'], 'reporting reply', 'reporting replies'),
-            );
+            $lines[] = Lang::t('cmd.context.cache', [
+                'last' => $last,
+                'session' => $session,
+                'replies' => self::plural(
+                    $b->sessionCache['replies'],
+                    Lang::t('cmd.context.unit.reporting-reply'),
+                    Lang::t('cmd.context.unit.reporting-replies'),
+                ),
+            ]);
         }
         $breaks = self::cacheBreakLine($b);
         if ($breaks !== null) {
@@ -139,18 +147,17 @@ final class ContextCommand
     {
         $breaks = $b->cacheBreaks;
         if ($breaks === null) {
-            return 'Cache breaks: not measured — this backend does not track its requests\' cache reuse.';
+            return Lang::t('cmd.context.breaks.unmeasured');
         }
         if ($breaks['breaks'] === 0) {
-            return $b->sessionCache === null ? null : 'Cache breaks: none this session.';
+            return $b->sessionCache === null ? null : Lang::t('cmd.context.breaks.none');
         }
         $last = $breaks['last'];
 
-        return sprintf(
-            'Cache breaks: %d this session%s. One after a prune or a compression is that rewrite\'s price; two in a row mean a rewrite is not byte-stable.',
-            $breaks['breaks'],
-            $last === null ? '' : sprintf(' — the newest read %d%% of its prompt from cache, after %d%% on the request before', $last['to'], $last['from']),
-        );
+        return Lang::t('cmd.context.breaks', [
+            'breaks' => $breaks['breaks'],
+            'newest' => $last === null ? '' : Lang::t('cmd.context.breaks.newest', ['to' => $last['to'], 'from' => $last['from']]),
+        ]);
     }
 
     /**
@@ -168,9 +175,12 @@ final class ContextCommand
         if ($p === null) {
             return [];
         }
-        $mode = sprintf('mode %s, %s', $p['mode'], $p['sessionMode'] ? 'set for this session' : 'configured');
+        $mode = Lang::t('cmd.context.pruned.mode', [
+            'mode' => $p['mode'],
+            'source' => $p['sessionMode'] ? Lang::t('cmd.context.pruned.mode.session') : Lang::t('cmd.context.pruned.mode.configured'),
+        ]);
         if ($b->prunedTokens() === 0 && $p['outputs'] === 0 && $p['contextRows'] === 0) {
-            return [sprintf('Pruned: nothing (%s) — /sweep prunes the last turn\'s tool outputs.', $mode)];
+            return [Lang::t('cmd.context.pruned.nothing', ['mode' => $mode])];
         }
 
         $parts = [];
@@ -178,45 +188,46 @@ final class ContextCommand
             $files = $p['files'] ?? '';
             $parts[] = sprintf(
                 '%s (~%s%s)',
-                self::plural($p['outputs'], 'tool output'),
+                self::plural($p['outputs'], Lang::t('cmd.context.unit.tool-output'), Lang::t('cmd.context.unit.tool-outputs')),
                 TokenCount::compact($p['outputTokens']),
-                $files === '' ? '' : '; files: ' . $files,
+                $files === '' ? '' : Lang::t('cmd.context.pruned.files', ['files' => $files]),
             );
         }
         if ($p['contextRows'] > 0) {
-            $parts[] = sprintf('%s (~%s)', self::plural($p['contextRows'], 'superseded state row'), TokenCount::compact($p['contextRowTokens']));
-        }
-        if ($p['block'] !== null) {
             $parts[] = sprintf(
-                'summary b%d (~%s → ~%s)',
-                $p['block']['id'],
-                TokenCount::compact($p['block']['compressed']),
-                TokenCount::compact($p['block']['summary']),
+                '%s (~%s)',
+                self::plural($p['contextRows'], Lang::t('cmd.context.unit.state-row'), Lang::t('cmd.context.unit.state-rows')),
+                TokenCount::compact($p['contextRowTokens']),
             );
         }
-        $lines = [sprintf(
-            'Pruned: ~%s out of what the model is sent (%s) — %s. The transcript keeps every row.',
-            TokenCount::compact($b->prunedTokens()),
-            $mode,
-            implode(', ', $parts),
-        )];
+        if ($p['block'] !== null) {
+            $parts[] = Lang::t('cmd.context.pruned.summary', [
+                'id' => $p['block']['id'],
+                'compressed' => TokenCount::compact($p['block']['compressed']),
+                'summary' => TokenCount::compact($p['block']['summary']),
+            ]);
+        }
+        $lines = [Lang::t('cmd.context.pruned', [
+            'tokens' => TokenCount::compact($b->prunedTokens()),
+            'mode' => $mode,
+            'parts' => implode(', ', $parts),
+        ])];
         foreach ($p['rows'] as $row) {
             $lines[] = sprintf(
-                '  %-6s %-9s ~%-7s %s by %s',
+                '  %-6s %-9s ~%-7s %s',
                 $row['ref'] === null ? '—' : RefTag::label($row['ref']),
                 Chat::reportField($row['tool']),
                 TokenCount::compact($row['tokens']),
-                $row['reason'],
-                $row['by'],
+                Lang::t('cmd.context.pruned.row', ['reason' => $row['reason'], 'by' => $row['by']]),
             );
         }
 
         return $lines;
     }
 
-    private static function plural(int $count, string $one, ?string $many = null): string
+    private static function plural(int $count, string $one, string $many): string
     {
-        return $count . ' ' . ($count === 1 ? $one : ($many ?? $one . 's'));
+        return $count . ' ' . ($count === 1 ? $one : $many);
     }
 
     private static function bytes(int $bytes): string

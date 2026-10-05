@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use SugarCraft\Core\I18n\Lang as BaseLang;
+use SugarCraft\Core\I18n\T;
 
 /**
  * Per-library translation facade for sugar-crush.
@@ -27,4 +28,28 @@ final class Lang extends BaseLang
 {
     protected const NAMESPACE = 'crush';
     protected const DIR = __DIR__ . '/../lang';
+
+    /**
+     * `$fn()` run with the process locale pinned to `$locale`, and the
+     * previous locale restored however it returns.
+     *
+     * What a GENERATED page is built under: `docs/COMMANDS.md`, README's
+     * roster and `docs/SETTINGS.md` are derived from registry text that is
+     * now translated, and a generator run under an operator's `LANG` must
+     * still write the English the drift tests compare against.
+     *
+     * @template TReturn
+     * @param callable(): TReturn $fn
+     * @return TReturn
+     */
+    public static function inLocale(string $locale, callable $fn): mixed
+    {
+        $previous = T::locale();
+        T::setLocale($locale);
+        try {
+            return $fn();
+        } finally {
+            T::setLocale($previous);
+        }
+    }
 }

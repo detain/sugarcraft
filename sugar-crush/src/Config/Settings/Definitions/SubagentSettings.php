@@ -13,6 +13,7 @@ use SugarCraft\Crush\Config\Settings\SettingCategory;
 use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\ToolLimits;
 
@@ -44,7 +45,7 @@ final class SubagentSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Subagents)
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
-                ->withLabel('Sub-agent model')
+                ->withLabel(Lang::t('settings.subagentModel.label'))
                 ->withHelp('Model a delegated sub-agent runs on when its preset says `inherit`; unset follows the session\'s model.')
                 ->withReaderSymbol(Bootstrap::class . '::agentManager'),
             SettingDefinition::new(EngineExecutor::MAX_TURNS_SETTINGS_KEY, SettingType::Int, EngineExecutor::DEFAULT_MAX_TURNS)
@@ -53,7 +54,7 @@ final class SubagentSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1)
-                ->withLabel('Sub-agent max turns')
+                ->withLabel(Lang::t('settings.subagentMaxTurns.label'))
                 ->withHelp('Step cap for a sub-agent — a `Task` delegation, a workflow stage or an `executeAgents` run — whose preset declares no `maxTurns`.')
                 ->withReaderSymbol(EngineExecutor::class . '::defaultMaxTurns')
                 ->withReadBy('`TaskTool` (engine path) and `EngineExecutor::execute()` → `EngineExecutor::defaultMaxTurns()`, as each run starts'),
@@ -62,7 +63,7 @@ final class SubagentSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withRange(1, 16)
-                ->withLabel('Sub-agent fan-out')
+                ->withLabel(Lang::t('settings.subagentMaxConcurrent.label'))
                 ->withHelp('`Task` calls of one batch that run at once (the rest wait for a free slot), and the width of every agent pool.')
                 ->withReaderSymbol(AgentPoolConfig::class . '::withSettings')
                 ->withReadBy('`Bootstrap::agentPoolConfig()` → `AgentPoolConfig::withSettings()`'),
@@ -72,7 +73,7 @@ final class SubagentSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 5)
-                ->withLabel('Delegation depth')
+                ->withLabel(Lang::t('settings.subagentMaxDepth.label'))
                 ->withHelp('Levels below the session a delegated run may be; a run at the last level gets no `Task`. 1 lets sub-agents delegate no further.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `TaskTool::withDelegationLimits()`'),
@@ -82,7 +83,7 @@ final class SubagentSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1, 32)
-                ->withLabel('Sub-agents running at once')
+                ->withLabel(Lang::t('settings.subagentMaxActive.label'))
                 ->withHelp('Delegated runs one session may have going at once, every level, member and background agent counted; past it a `Task` call is refused.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `TaskTool::withDelegationLimits()`'),

@@ -13,6 +13,7 @@ use SugarCraft\Crush\Context\Pruning\PruneEntry;
 use SugarCraft\Crush\Context\Pruning\PruneKind;
 use SugarCraft\Crush\Context\Pruning\PruneReason;
 use SugarCraft\Crush\Context\Pruning\PruningPolicy;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\ToolCall;
@@ -46,8 +47,11 @@ use SugarCraft\Crush\Util\TokenEstimate;
  */
 final class SweepCommand
 {
-    /** The usage line a bad argument gets. */
-    public const USAGE = 'Usage: /sweep [n] — prune every tool output since your last prompt, or the last n tool outputs.';
+    /** The usage line a bad argument gets, in the active locale. */
+    public static function usage(): string
+    {
+        return Lang::t('cmd.sweep.usage');
+    }
 
     /**
      * @param list<Message> $history the transcript as it stands
@@ -62,13 +66,13 @@ final class SweepCommand
         $count = null;
         if ($argument !== '') {
             if (preg_match('/^[1-9]\d{0,5}$/', $argument) !== 1) {
-                return [$ledger, self::USAGE];
+                return [$ledger, self::usage()];
             }
             $count = (int) $argument;
         }
 
         if (!$ledger->effectiveMode()->allowsManualPruning()) {
-            return [$ledger, 'Context pruning is off for this session, so nothing was swept. `/pruning manual` or `/pruning auto` turns it back on.'];
+            return [$ledger, Lang::t('cmd.sweep.off')];
         }
 
         $outputs = self::outputs(array_values($history), $count === null);
@@ -77,8 +81,8 @@ final class SweepCommand
         }
         if ($outputs === []) {
             return [$ledger, $count === null
-                ? 'Nothing to sweep: no tool has answered since your last prompt. `/sweep n` sweeps the last n outputs of any turn.'
-                : 'Nothing to sweep: this conversation has no tool outputs a prune can name.'];
+                ? Lang::t('cmd.sweep.nothing-since-prompt')
+                : Lang::t('cmd.sweep.nothing-at-all')];
         }
 
         $swept = [];
@@ -172,18 +176,20 @@ final class SweepCommand
     {
         $parts = [];
         if ($skipped['protected'] !== []) {
-            $parts[] = 'protected ' . implode(', ', array_map(Chat::reportField(...), array_keys($skipped['protected'])));
+            $parts[] = Lang::t('cmd.sweep.skipped.protected', [
+                'tools' => implode(', ', array_map(Chat::reportField(...), array_keys($skipped['protected']))),
+            ]);
         }
         if ($skipped['already pruned'] > 0) {
-            $parts[] = $skipped['already pruned'] . ' already pruned';
+            $parts[] = Lang::t('cmd.sweep.skipped.pruned', ['count' => $skipped['already pruned']]);
         }
         if ($skipped['too small'] > 0) {
-            $parts[] = $skipped['too small'] . ' too small to be worth a placeholder';
+            $parts[] = Lang::t('cmd.sweep.skipped.small', ['count' => $skipped['too small']]);
         }
-        $skippedText = $parts === [] ? '' : ' Skipped: ' . implode('; ', $parts) . '.';
+        $skippedText = $parts === [] ? '' : Lang::t('cmd.sweep.skipped', ['parts' => implode('; ', $parts)]);
 
         if ($swept === []) {
-            return 'Nothing was swept.' . $skippedText;
+            return Lang::t('cmd.sweep.none') . $skippedText;
         }
 
         $total = array_sum($swept);
@@ -192,14 +198,13 @@ final class SweepCommand
             $byTool[] = Chat::reportField($name) . ' ×' . $n;
         }
 
-        return sprintf(
-            'Swept %d tool output%s (~%s tokens): %s%s. The model now sees a one-line placeholder for each; the transcript keeps them.%s',
-            $total,
-            $total === 1 ? '' : 's',
-            TokenCount::compact($tokens),
-            implode(', ', $byTool),
-            $files === '' ? '' : '; files: ' . $files,
-            $skippedText,
-        );
+        $receipt = [
+            'count' => $total,
+            'tokens' => TokenCount::compact($tokens),
+            'tools' => implode(', ', $byTool),
+            'files' => $files === '' ? '' : Lang::t('cmd.sweep.files', ['files' => $files]),
+        ];
+
+        return ($total === 1 ? Lang::t('cmd.sweep.swept.one', $receipt) : Lang::t('cmd.sweep.swept.many', $receipt)) . $skippedText;
     }
 }

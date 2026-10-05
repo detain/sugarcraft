@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Commands;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Lang;
 
 /**
  * Implements the `/notices` command — every warning this launch raised, whole.
@@ -86,27 +87,26 @@ final class NoticesCommand
     public static function compose(array $launchNotices, array $droppedNotices, ?array $grantWarnings): string
     {
         $lines = [
-            '/notices — every warning this launch raised, whole and un-capped.',
-            'The transcript seeds capped and clipped rows; this list restates none of them short.',
+            Lang::t('cmd.notices.title'),
+            Lang::t('cmd.notices.subtitle'),
             '',
         ];
 
-        $lines[] = 'Launch notices (' . \count($launchNotices) . '):';
+        $lines[] = Lang::t('cmd.notices.launch', ['count' => \count($launchNotices)]);
         $lines = self::appendEntries($lines, $launchNotices);
 
         $lines[] = '';
-        $lines[] = 'Dropped past the transcript cap (' . \count($droppedNotices) . ') — each still went to stderr whole:';
+        $lines[] = Lang::t('cmd.notices.dropped', ['count' => \count($droppedNotices)]);
         $lines = self::appendEntries($lines, $droppedNotices);
 
         $lines[] = '';
         if ($grantWarnings === null) {
-            $lines[] = 'Narrowed agent tool grants: unavailable — no agent manager is wired into this session.';
+            $lines[] = Lang::t('cmd.notices.grants.unavailable');
 
             return implode("\n", $lines);
         }
 
-        $lines[] = 'Narrowed agent tool grants (' . \count($grantWarnings)
-            . ") — each compares an agent's declared tools to this session's ceiling:";
+        $lines[] = Lang::t('cmd.notices.grants', ['count' => \count($grantWarnings)]);
         $lines = self::appendEntries($lines, $grantWarnings);
 
         return implode("\n", $lines);
@@ -123,7 +123,7 @@ final class NoticesCommand
     private static function appendEntries(array $lines, array $entries): array
     {
         if ($entries === []) {
-            $lines[] = '  - none';
+            $lines[] = '  - ' . Lang::t('cmd.notices.none');
 
             return $lines;
         }

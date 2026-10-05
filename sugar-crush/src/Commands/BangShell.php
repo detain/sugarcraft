@@ -10,6 +10,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\BangShellResultMsg;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionDecision;
 use SugarCraft\Crush\Permissions\PermissionGate;
@@ -109,6 +110,10 @@ final class BangShell
      * the rules and nothing else, so no strike counter moves (Auto's breaker
      * counts the AGENT's calls). In `plan` the full {@see PermissionGate::evaluate()}
      * answers, which has no side effect in that mode.
+     *
+     * The reason lands in a UI-only notice the model never reads, so it is in
+     * the active locale (audit 15b-14); {@see row()} is the model's copy of a
+     * run and stays English.
      */
     public static function refusal(string $command, ?PermissionGate $gate, string $root): ?string
     {
@@ -118,13 +123,13 @@ final class BangShell
 
         $call = new ToolCall('Bash', ['command' => $command]);
         if ($gate->ruleDecision($call) === PermissionDecision::Deny) {
-            return 'a permission rule denies Bash for it';
+            return Lang::t('cmd.bang.refused.rule');
         }
 
         if ($gate->mode() === PermissionMode::Plan
             && $gate->evaluate($call, $root === '' ? null : $root) === PermissionDecision::Deny
         ) {
-            return 'plan mode runs only commands it can prove read-only';
+            return Lang::t('cmd.bang.refused.plan');
         }
 
         return null;

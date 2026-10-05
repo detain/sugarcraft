@@ -63,6 +63,16 @@ final class McpAuthLoginGuidanceTest extends TestCase
         self::assertStringContainsString('sugarcrush mcp auth login <server>', $output, 'the guidance names the exact shell form');
         self::assertStringContainsString('not a chat turn', $output, 'and says why in one breath');
         self::assertStringNotContainsString('http://127.0.0.1', $output, 'no flow ran — no loopback URL appears');
+        // Byte-exact in English: the block is one catalogue paragraph since
+        // audit 15b-14, and its margins are applied by TranscriptTable::indented().
+        self::assertSame(
+            "\n  Interactive login is a shell command, not a chat turn:\n\n"
+            . "    sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url]\n\n"
+            . "  It runs the OAuth authorization-code flow with PKCE: your browser\n"
+            . "  returns the code to a loopback listener in the shell, and the stored\n"
+            . "  tokens are attached to matching http servers from the next launch.\n\n",
+            $output,
+        );
     }
 
     public function testLoginBindsNoSocketAndAsksForNoWireAndStoresNothing(): void
@@ -90,6 +100,15 @@ final class McpAuthLoginGuidanceTest extends TestCase
         self::assertSame(1, $rc, $output);
         self::assertStringContainsString("Unknown sub-command 'bogus'", $output);
         self::assertStringContainsString('Use: list, add, remove, login', $output, 'the roster the error offers is the roster the match arms have');
+        self::assertSame(
+            "\n  ✗ Unknown sub-command 'bogus'. Use: list, add, remove, login\n\n  Usage:\n"
+            . "    mcp auth list                    — list registered servers\n"
+            . "    mcp auth add <server> [reg-url] [token-url]  — store OAuth credentials for a server\n"
+            . "    mcp auth remove <server>         — remove a server's credentials\n"
+            . "    mcp auth login <server>          — print the shell command for interactive login\n\n",
+            $output,
+            'the English usage block, byte for byte (audit 15b-14 moved it into the catalogue)',
+        );
     }
 
     private function store(): McpAuthStore

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Commands;
 
+use SugarCraft\Crush\Lang;
+
 /**
  * The ONE list of raw keybindings, read by two surfaces:
  *
@@ -29,6 +31,11 @@ namespace SugarCraft\Crush\Commands;
  *
  * Rows carrying a `dormantReason` are excluded from the reference screen and
  * from nothing else — see {@see KeyBinding::$dormantReason}.
+ *
+ * A row's DESCRIPTION is user-facing text and is looked up in `lang/` under
+ * `keys.<id>` (audit 15b-14); its `$keys` label and `CONTEXT_*` value are
+ * routing data and stay literal. The `(or …)` convention below is read back
+ * from the English catalogue, which is why the drift test pins `en`.
  *
  * Two spelling conventions the drift test enforces, because it reads both back
  * as keystrokes rather than treating them as prose:
@@ -122,7 +129,13 @@ final class KeyBindingRegistry
     }
 
     /**
-     * The live rows as `context => rows`, in declared order.
+     * The live rows as `context heading => rows`, in declared order.
+     *
+     * Keyed by {@see contextLabel()}, the heading the reference screen paints,
+     * rather than by the bare `CONTEXT_*` value: that value is a ROUTING key
+     * ({@see ctrlRunesOf()} compares it), so it stays English in every locale,
+     * while the heading is user-facing text (audit 15b-14). In `en` the two
+     * are the same string.
      *
      * @return array<string, list<KeyBinding>>
      */
@@ -130,10 +143,34 @@ final class KeyBindingRegistry
     {
         $groups = [];
         foreach (self::live() as $binding) {
-            $groups[$binding->context][] = $binding;
+            $groups[self::contextLabel($binding->context)][] = $binding;
         }
 
         return $groups;
+    }
+
+    /**
+     * The heading a `CONTEXT_*` group is shown under, in the active locale.
+     * An unknown context is returned as given — a row declared with a context
+     * this map has not learned yet still gets a heading, in English.
+     */
+    public static function contextLabel(string $context): string
+    {
+        return match ($context) {
+            self::CONTEXT_SHELL => Lang::t('keys.context.shell'),
+            self::CONTEXT_CHAT => Lang::t('keys.context.chat'),
+            self::CONTEXT_PALETTE => Lang::t('keys.context.palette'),
+            self::CONTEXT_PICKER => Lang::t('keys.context.picker'),
+            self::CONTEXT_PERMISSION => Lang::t('keys.context.permission'),
+            self::CONTEXT_AGENTS => Lang::t('keys.context.agents'),
+            self::CONTEXT_AGENT_STRIP => Lang::t('keys.context.agent-strip'),
+            self::CONTEXT_AGENT_TRANSCRIPT => Lang::t('keys.context.agent-transcript'),
+            self::CONTEXT_SKILLS => Lang::t('keys.context.skills'),
+            self::CONTEXT_SETTINGS => Lang::t('keys.context.settings'),
+            self::CONTEXT_MENU => Lang::t('keys.context.menu'),
+            self::CONTEXT_MOUSE => Lang::t('keys.context.mouse'),
+            default => $context,
+        };
     }
 
     /** The row with this id, or null. */
@@ -397,24 +434,24 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_CHAT;
 
         return [
-            KeyBinding::new('chat.send', 'Enter', 'Send, or accept the highlighted "/" command', $c),
+            KeyBinding::new('chat.send', 'Enter', Lang::t('keys.chat.send'), $c),
             // Roadmap 1.C-3 (D6): mid-turn, Enter steers the running turn (the
             // agent reads it at its next step) and Tab queues it for after.
-            KeyBinding::new('chat.steer', 'Enter', 'Mid-turn: steer the agent at its next step', $c),
-            KeyBinding::new('chat.queue', 'Tab', 'Mid-turn: queue the draft for after this turn', $c),
-            KeyBinding::new('chat.newline', 'Alt+Enter', 'Insert a newline instead of sending', $c),
-            KeyBinding::new('chat.slash-menu', '↑ / ↓', 'Move through the "/" command popup', $c),
+            KeyBinding::new('chat.steer', 'Enter', Lang::t('keys.chat.steer'), $c),
+            KeyBinding::new('chat.queue', 'Tab', Lang::t('keys.chat.queue'), $c),
+            KeyBinding::new('chat.newline', 'Alt+Enter', Lang::t('keys.chat.newline'), $c),
+            KeyBinding::new('chat.slash-menu', '↑ / ↓', Lang::t('keys.chat.slash-menu'), $c),
             // Declared in the SAME round the keystroke went live (W4), unlike
             // the editing rows below: without it the reference said Tab
             // "focuses the next pane" full stop, and the completion the user
             // asked for was invisible to the only in-app key list there is.
-            KeyBinding::new('chat.slash-complete', 'Tab', 'Complete the highlighted "/" command', $c),
+            KeyBinding::new('chat.slash-complete', 'Tab', Lang::t('keys.chat.slash-complete'), $c),
             // Audit 15b-15: the second thing a bare Tab completes, on the same
             // shell-yield contract (Chat::mentionOwnsTab()).
-            KeyBinding::new('chat.mention-complete', 'Tab', 'Complete the @file or $skill name at the cursor', $c),
-            KeyBinding::new('chat.recall', '↑', 'Walk back through past prompts (empty box)', $c),
-            KeyBinding::new('chat.recall-next', '↓', 'Walk forward again, then back to your draft', $c),
-            KeyBinding::new('chat.accept-suggestion', '→', 'Take the grayed suggestion (empty input box)', $c),
+            KeyBinding::new('chat.mention-complete', 'Tab', Lang::t('keys.chat.mention-complete'), $c),
+            KeyBinding::new('chat.recall', '↑', Lang::t('keys.chat.recall'), $c),
+            KeyBinding::new('chat.recall-next', '↓', Lang::t('keys.chat.recall-next'), $c),
+            KeyBinding::new('chat.accept-suggestion', '→', Lang::t('keys.chat.accept-suggestion'), $c),
             // ── the draft's own editing keyboard ─────────────────────────
             //
             // Everything from here to `chat.space` is answered by the draft
@@ -424,9 +461,9 @@ final class KeyBindingRegistry
             // it describes went live, which is the gap
             // `ChatInputCursorTest::testEveryDelegatedKeyTypeIsDisclosedInTheReference()`
             // now closes: it fails if the next one arrives the same way.
-            KeyBinding::new('chat.backspace', 'Backspace', 'Delete the previous character', $c),
-            KeyBinding::new('chat.delete-forward', 'Delete', 'Delete the character under the cursor', $c),
-            KeyBinding::new('chat.cursor', '← / →', 'Move the cursor one character', $c),
+            KeyBinding::new('chat.backspace', 'Backspace', Lang::t('keys.chat.backspace'), $c),
+            KeyBinding::new('chat.delete-forward', 'Delete', Lang::t('keys.chat.delete-forward'), $c),
+            KeyBinding::new('chat.cursor', '← / →', Lang::t('keys.chat.cursor'), $c),
             // Labelled with the ALT spelling, and the Ctrl one carried as the
             // alternate, because of what reads this field: KeyBinding::ctrlRune()
             // takes the single-character tail of any `Ctrl+…` label as a RUNE
@@ -435,23 +472,23 @@ final class KeyBindingRegistry
             // `Ctrl+←` label would put a member in that claim set that nothing
             // can ever match. Both spellings are driven either way — the
             // `(or …)` form is what KeyBindingDriftTest presses.
-            KeyBinding::new('chat.word-motion', 'Alt+← / Alt+→', 'Move one word (or Ctrl+← / Ctrl+→)', $c),
-            KeyBinding::new('chat.line-ends', 'Home / End', 'Jump to the first or last column', $c),
-            KeyBinding::new('chat.draft-rows', '↑ / ↓', 'Move between the rows of a multi-line draft', $c),
-            KeyBinding::new('chat.word-delete', 'Ctrl+W', 'Delete the previous word (or Alt+Backspace)', $c),
-            KeyBinding::new('chat.word-delete-back', 'Ctrl+Backspace', 'Delete the previous word', $c),
-            KeyBinding::new('chat.word-delete-forward', 'Ctrl+Delete', 'Delete the word after the cursor', $c),
-            KeyBinding::new('chat.space', 'Ctrl+Space', 'Insert a blank character (modifier ignored)', $c),
-            KeyBinding::new('chat.page', 'PgUp / PgDn', 'Scroll the transcript by a screenful', $c),
-            KeyBinding::new('chat.palette', 'Ctrl+P', 'Open the command palette', $c),
-            KeyBinding::new('chat.tool-output', 'Ctrl+O', 'Expand or collapse newest tool output/thought', $c),
+            KeyBinding::new('chat.word-motion', 'Alt+← / Alt+→', Lang::t('keys.chat.word-motion'), $c),
+            KeyBinding::new('chat.line-ends', 'Home / End', Lang::t('keys.chat.line-ends'), $c),
+            KeyBinding::new('chat.draft-rows', '↑ / ↓', Lang::t('keys.chat.draft-rows'), $c),
+            KeyBinding::new('chat.word-delete', 'Ctrl+W', Lang::t('keys.chat.word-delete'), $c),
+            KeyBinding::new('chat.word-delete-back', 'Ctrl+Backspace', Lang::t('keys.chat.word-delete-back'), $c),
+            KeyBinding::new('chat.word-delete-forward', 'Ctrl+Delete', Lang::t('keys.chat.word-delete-forward'), $c),
+            KeyBinding::new('chat.space', 'Ctrl+Space', Lang::t('keys.chat.space'), $c),
+            KeyBinding::new('chat.page', 'PgUp / PgDn', Lang::t('keys.chat.page'), $c),
+            KeyBinding::new('chat.palette', 'Ctrl+P', Lang::t('keys.chat.palette'), $c),
+            KeyBinding::new('chat.tool-output', 'Ctrl+O', Lang::t('keys.chat.tool-output'), $c),
             // Audit 15b-15: a terminal pastes text only, so the clipboard's
             // IMAGE is read through the platform tool (Support\ClipboardImage).
-            KeyBinding::new('chat.paste-image', 'Ctrl+V', 'Attach the clipboard image as an @ mention', $c),
+            KeyBinding::new('chat.paste-image', 'Ctrl+V', Lang::t('keys.chat.paste-image'), $c),
             KeyBinding::new(
                 'chat.session-picker',
                 'Ctrl+R',
-                'Open the session picker',
+                Lang::t('keys.chat.session-picker'),
                 $c,
                 yieldsToShellReason: 'The picker is painted by Chat and driven by ↑/↓/Enter, all three '
                     . 'of which the shell\'s own keyboard-owning views take — so opening it from one of '
@@ -459,9 +496,9 @@ final class KeyBindingRegistry
                     . 'chord there instead, which is what it did before this table derived the claim '
                     . 'sets. See chatCtrlRunesYieldedToShell() for why Ctrl+P is not treated the same.',
             ),
-            KeyBinding::new('chat.agents', 'Ctrl+A', 'List the active agents (runs /agents)', $c),
-            KeyBinding::new('chat.session-cycle', 'Ctrl+Tab', 'Switch to the next session', $c),
-            KeyBinding::new('chat.session-cycle-prev', 'Ctrl+Shift+Tab', 'Switch to the previous session', $c),
+            KeyBinding::new('chat.agents', 'Ctrl+A', Lang::t('keys.chat.agents'), $c),
+            KeyBinding::new('chat.session-cycle', 'Ctrl+Tab', Lang::t('keys.chat.session-cycle'), $c),
+            KeyBinding::new('chat.session-cycle-prev', 'Ctrl+Shift+Tab', Lang::t('keys.chat.session-cycle-prev'), $c),
             // The reference's OWN keys (Esc/Enter/q to close, ↑↓/PgUp/PgDn to
             // scroll, and the second "?" that closes it while typing a literal
             // "?" so a message beginning with one is still composable) are not
@@ -469,24 +506,24 @@ final class KeyBindingRegistry
             // Renderer::renderKeyHelp(), because they apply only while that
             // screen is up and this table describes the keyboard behind it.
             // Chat::handleKeyHelpKey() is where they live and why.
-            KeyBinding::new('chat.keys', '?', 'Show this reference (empty input box)', $c),
+            KeyBinding::new('chat.keys', '?', Lang::t('keys.chat.keys'), $c),
             // Roadmap 1.C-4a: on an engine turn that reports its steps the
             // first Esc asks for a soft stop at the step boundary, and any
             // later Esc cancels hard; a turn with no steps keeps Esc Esc.
             // 1.C-4b: that first Esc also stops the call running right now
             // (`cancel_tool`) instead of waiting for it to finish.
-            KeyBinding::new('chat.stop', 'Esc', 'Stop the running tool, then the turn', $c),
-            KeyBinding::new('chat.cancel', 'Esc Esc', 'Cancel the turn in flight — twice, quickly', $c),
+            KeyBinding::new('chat.stop', 'Esc', Lang::t('keys.chat.stop'), $c),
+            KeyBinding::new('chat.cancel', 'Esc Esc', Lang::t('keys.chat.cancel'), $c),
             // Roadmap P-B3: the one-row live agents strip above the input
             // takes the keyboard; its own keys are the `Agents strip` rows.
-            KeyBinding::new('chat.agents-strip', 'Alt+↓', 'Focus the live agents strip', $c),
+            KeyBinding::new('chat.agents-strip', 'Alt+↓', Lang::t('keys.chat.agents-strip'), $c),
             // Roadmap 5.7-1 (decision D8): Shift+Tab stays `shell.pane-prev`.
-            KeyBinding::new('chat.plan-mode', 'Alt+M', 'Toggle plan mode (between turns)', $c),
+            KeyBinding::new('chat.plan-mode', 'Alt+M', Lang::t('keys.chat.plan-mode'), $c),
             // E744: with a draft selection held this chord COPIES first and the
             // next press quits (Chat's Ctrl+C arm). The nuance stays out of the
             // description — renderKeyHelp() clips long text and KeyHelpTest
             // demands every row paint in full — and lives in the README table.
-            KeyBinding::new('chat.quit', 'Ctrl+C', 'Quit SugarCrush', $c),
+            KeyBinding::new('chat.quit', 'Ctrl+C', Lang::t('keys.chat.quit'), $c),
         ];
     }
 
@@ -507,10 +544,10 @@ final class KeyBindingRegistry
             // answered by `chat.slash-complete` only while chat itself holds
             // focus, so the row no longer needs to say it, and a dock pane's
             // Tab cycles even with the popup open.
-            KeyBinding::new('shell.pane-next', 'Tab', 'Focus the next docked pane', $c),
-            KeyBinding::new('shell.pane-prev', 'Shift+Tab', 'Focus the previous docked pane', $c),
-            KeyBinding::new('shell.menu', 'F10', 'Open the menu bar', $c),
-            KeyBinding::new('shell.pane-chat', 'Esc', 'Leave the pane, back to the chat', $c),
+            KeyBinding::new('shell.pane-next', 'Tab', Lang::t('keys.shell.pane-next'), $c),
+            KeyBinding::new('shell.pane-prev', 'Shift+Tab', Lang::t('keys.shell.pane-prev'), $c),
+            KeyBinding::new('shell.menu', 'F10', Lang::t('keys.shell.menu'), $c),
+            KeyBinding::new('shell.pane-chat', 'Esc', Lang::t('keys.shell.pane-chat'), $c),
             // Enter keeps its chat meaning (send) everywhere it had it; this
             // row is the one new door: with a dockable pane focused and the
             // draft empty, Enter opens the palette, which is how a read-only
@@ -520,21 +557,21 @@ final class KeyBindingRegistry
             KeyBinding::new(
                 'shell.pane-palette',
                 'Enter',
-                'Open the palette from a list pane (empty draft)',
+                Lang::t('keys.shell.pane-palette'),
                 $c,
             ),
             KeyBinding::new(
                 'shell.settings-open',
                 'Enter',
-                'Open settings view from its pane (empty draft)',
+                Lang::t('keys.shell.settings-open'),
                 $c,
             ),
-            KeyBinding::new('shell.new-session', 'Ctrl+N', 'Start a fresh session', $c),
-            KeyBinding::new('shell.palette', 'Ctrl+K', 'Open the command palette', $c),
-            KeyBinding::new('shell.skills', 'Ctrl+S', 'Open the skill picker', $c),
-            KeyBinding::new('shell.settings', 'Ctrl+,', 'Focus the settings pane; again to open the view', $c),
+            KeyBinding::new('shell.new-session', 'Ctrl+N', Lang::t('keys.shell.new-session'), $c),
+            KeyBinding::new('shell.palette', 'Ctrl+K', Lang::t('keys.shell.palette'), $c),
+            KeyBinding::new('shell.skills', 'Ctrl+S', Lang::t('keys.shell.skills'), $c),
+            KeyBinding::new('shell.settings', 'Ctrl+,', Lang::t('keys.shell.settings'), $c),
             // P-D3: GroupInputCmd became the Agent View composer's broadcast.
-            KeyBinding::new('shell.group-input', 'Ctrl+G', 'Message every running agent at once', $c),
+            KeyBinding::new('shell.group-input', 'Ctrl+G', Lang::t('keys.shell.group-input'), $c),
         ];
     }
 
@@ -546,15 +583,15 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_PALETTE;
 
         return [
-            KeyBinding::new('palette.move', '↑ / ↓', 'Move the highlighted row', $c),
-            KeyBinding::new('palette.run', 'Enter', 'Run the highlighted command', $c),
-            KeyBinding::new('palette.filter', 'any text', 'Filter the list as you type', $c),
+            KeyBinding::new('palette.move', '↑ / ↓', Lang::t('keys.palette.move'), $c),
+            KeyBinding::new('palette.run', 'Enter', Lang::t('keys.palette.run'), $c),
+            KeyBinding::new('palette.filter', 'any text', Lang::t('keys.palette.filter'), $c),
             // Its own row rather than "Backspace erases" tacked onto the one
             // above: a key named in a description outside the `(or …)` form is
             // a promise the drift test cannot read back and therefore never
             // presses — the whole failure mode this table exists to close.
-            KeyBinding::new('palette.erase', 'Backspace', 'Erase the last character of the filter', $c),
-            KeyBinding::new('palette.close', 'Esc', 'Close the palette (or Ctrl+P)', $c),
+            KeyBinding::new('palette.erase', 'Backspace', Lang::t('keys.palette.erase'), $c),
+            KeyBinding::new('palette.close', 'Esc', Lang::t('keys.palette.close'), $c),
         ];
     }
 
@@ -576,21 +613,21 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_PICKER;
 
         return [
-            KeyBinding::new('picker.move', '↑ / ↓', 'Move the highlighted session (or k / j)', $c),
-            KeyBinding::new('picker.resume', 'Enter', 'Resume the highlighted session', $c),
-            KeyBinding::new('picker.preview', 'Space', 'Preview the last messages of the session', $c),
-            KeyBinding::new('picker.filter', '/', 'Filter the sessions as you type', $c),
-            KeyBinding::new('picker.rename', 'r', 'Rename the session in place (or Ctrl+E)', $c),
-            KeyBinding::new('picker.delete', 'd', 'Delete the session, pressed twice (or Ctrl+D)', $c),
-            KeyBinding::new('picker.delete-children', 'D', 'Confirm a delete, its branch sessions too', $c),
-            KeyBinding::new('picker.pin', 'p', 'Pin or unpin the session (or Ctrl+F)', $c),
-            KeyBinding::new('picker.fork', 'f', 'Fork the session and switch to the copy', $c),
-            KeyBinding::new('picker.archive', 'x', 'Archive the session', $c),
-            KeyBinding::new('picker.unarchive', 'u', 'Bring an archived session back', $c),
-            KeyBinding::new('picker.archived', 'a', 'Show or hide archived sessions', $c),
-            KeyBinding::new('picker.children', 'Tab', 'Show or hide sub-agent sessions', $c),
-            KeyBinding::new('picker.branch', 'Ctrl+B', 'Filter to the current git branch, or all', $c),
-            KeyBinding::new('picker.close', 'Esc', 'Close the picker, or clear the filter first', $c),
+            KeyBinding::new('picker.move', '↑ / ↓', Lang::t('keys.picker.move'), $c),
+            KeyBinding::new('picker.resume', 'Enter', Lang::t('keys.picker.resume'), $c),
+            KeyBinding::new('picker.preview', 'Space', Lang::t('keys.picker.preview'), $c),
+            KeyBinding::new('picker.filter', '/', Lang::t('keys.picker.filter'), $c),
+            KeyBinding::new('picker.rename', 'r', Lang::t('keys.picker.rename'), $c),
+            KeyBinding::new('picker.delete', 'd', Lang::t('keys.picker.delete'), $c),
+            KeyBinding::new('picker.delete-children', 'D', Lang::t('keys.picker.delete-children'), $c),
+            KeyBinding::new('picker.pin', 'p', Lang::t('keys.picker.pin'), $c),
+            KeyBinding::new('picker.fork', 'f', Lang::t('keys.picker.fork'), $c),
+            KeyBinding::new('picker.archive', 'x', Lang::t('keys.picker.archive'), $c),
+            KeyBinding::new('picker.unarchive', 'u', Lang::t('keys.picker.unarchive'), $c),
+            KeyBinding::new('picker.archived', 'a', Lang::t('keys.picker.archived'), $c),
+            KeyBinding::new('picker.children', 'Tab', Lang::t('keys.picker.children'), $c),
+            KeyBinding::new('picker.branch', 'Ctrl+B', Lang::t('keys.picker.branch'), $c),
+            KeyBinding::new('picker.close', 'Esc', Lang::t('keys.picker.close'), $c),
         ];
     }
 
@@ -613,22 +650,22 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_PERMISSION;
 
         return [
-            KeyBinding::new('permission.once', 'y', 'Allow this one call', $c),
+            KeyBinding::new('permission.once', 'y', Lang::t('keys.permission.once'), $c),
             // "Calls like this one", not "this call" or "every call to this
             // tool": a confirmed grant is remembered as a PATTERN on the engine
             // path (Permissions\SessionPermissionMemo — `git status` grants
             // `Bash(git status *)`, an edit grants that path) and as the exact
             // call on Chat's own path, which is a call like itself.
-            KeyBinding::new('permission.always', 'a', 'Ask to allow calls like this one for the session', $c),
-            KeyBinding::new('permission.deny', 'n', 'Refuse the call (or Esc)', $c),
+            KeyBinding::new('permission.always', 'a', Lang::t('keys.permission.always'), $c),
+            KeyBinding::new('permission.deny', 'n', Lang::t('keys.permission.deny'), $c),
             // R-KEYBIND (1.C-3 wave): refuse with words the model reads, and
             // refuse-and-stop (the turn ends at the step boundary).
-            KeyBinding::new('permission.note', 'r', 'Refuse with a note the agent reads', $c),
-            KeyBinding::new('permission.stop', 'x', 'Refuse the call and stop the turn', $c),
-            KeyBinding::new('permission.rearm', 'Enter', 'Make the answer keys live again', $c),
+            KeyBinding::new('permission.note', 'r', Lang::t('keys.permission.note'), $c),
+            KeyBinding::new('permission.stop', 'x', Lang::t('keys.permission.stop'), $c),
+            KeyBinding::new('permission.rearm', 'Enter', Lang::t('keys.permission.rearm'), $c),
             // Roadmap 5.7-2: a question the agent put itself (AskUser) answers
             // by its choices' numbers; the question's own footer names them.
-            KeyBinding::new('permission.choice', '1…6', 'Pick that choice when the agent asks a question', $c),
+            KeyBinding::new('permission.choice', '1…6', Lang::t('keys.permission.choice'), $c),
         ];
     }
 
@@ -643,15 +680,15 @@ final class KeyBindingRegistry
         // selected row's run (every running run, for `s`), delivered through
         // the runs' mailboxes — App::consumeShellCmd() names none inert now.
         return [
-            KeyBinding::new('agents.move', '↑ / ↓', 'Move the selection (or k / j)', $c),
-            KeyBinding::new('agents.peek', 'Enter', 'Look at the selected agent (or Space)', $c),
-            KeyBinding::new('agents.attach', 'Enter', 'Open that agent\'s transcript (in the peek)', $c),
-            KeyBinding::new('agents.slot', 'Alt+1…9', 'Jump to that numbered dashboard row', $c),
-            KeyBinding::new('agents.back', 'Esc', 'Drop the selection, then leave the view', $c),
-            KeyBinding::new('agents.quit', 'q', 'Leave the view and any open agent transcript', $c),
-            KeyBinding::new('agents.cancel', 'c', 'Cancel the selected agent; again to stop now', $c),
-            KeyBinding::new('agents.resume', 'r', 'Resume the selected agent, or continue it', $c),
-            KeyBinding::new('agents.stop-all', 's', 'Stop every running agent', $c),
+            KeyBinding::new('agents.move', '↑ / ↓', Lang::t('keys.agents.move'), $c),
+            KeyBinding::new('agents.peek', 'Enter', Lang::t('keys.agents.peek'), $c),
+            KeyBinding::new('agents.attach', 'Enter', Lang::t('keys.agents.attach'), $c),
+            KeyBinding::new('agents.slot', 'Alt+1…9', Lang::t('keys.agents.slot'), $c),
+            KeyBinding::new('agents.back', 'Esc', Lang::t('keys.agents.back'), $c),
+            KeyBinding::new('agents.quit', 'q', Lang::t('keys.agents.quit'), $c),
+            KeyBinding::new('agents.cancel', 'c', Lang::t('keys.agents.cancel'), $c),
+            KeyBinding::new('agents.resume', 'r', Lang::t('keys.agents.resume'), $c),
+            KeyBinding::new('agents.stop-all', 's', Lang::t('keys.agents.stop-all'), $c),
         ];
     }
 
@@ -668,11 +705,11 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_AGENT_STRIP;
 
         return [
-            KeyBinding::new('strip.move', '← / →', 'Move along the strip (or ↑ / ↓)', $c),
-            KeyBinding::new('strip.open', 'Enter', 'Open the focused agent\'s transcript', $c),
-            KeyBinding::new('strip.cancel', 'c', 'Stop the focused agent', $c),
-            KeyBinding::new('strip.dismiss', 'x', 'Dismiss if finished, else stop it', $c),
-            KeyBinding::new('strip.back', 'Esc', 'Back to the input box (or Alt+↑)', $c),
+            KeyBinding::new('strip.move', '← / →', Lang::t('keys.strip.move'), $c),
+            KeyBinding::new('strip.open', 'Enter', Lang::t('keys.strip.open'), $c),
+            KeyBinding::new('strip.cancel', 'c', Lang::t('keys.strip.cancel'), $c),
+            KeyBinding::new('strip.dismiss', 'x', Lang::t('keys.strip.dismiss'), $c),
+            KeyBinding::new('strip.back', 'Esc', Lang::t('keys.strip.back'), $c),
         ];
     }
 
@@ -691,24 +728,24 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_AGENT_TRANSCRIPT;
 
         return [
-            KeyBinding::new('agentview.back', 'Esc', 'Back to the main transcript (or Alt+↑)', $c),
+            KeyBinding::new('agentview.back', 'Esc', Lang::t('keys.agentview.back'), $c),
             // P-D2: the input box is the agent's composer while its view is
             // open — a draft goes to the run's mailbox (or continues a
             // finished run), never to the main model.
-            KeyBinding::new('agentview.send', 'Enter', 'Send the draft to the agent on screen', $c),
+            KeyBinding::new('agentview.send', 'Enter', Lang::t('keys.agentview.send'), $c),
             // P-D3: the view's controls, behind a `Ctrl+X` leader (opencode's
             // chord) — the composer has the plain letters. Read back as
             // two-key sequences by KeyBindingDriftTest; their rune tail is
             // not one character, so they claim no Ctrl rune of their own.
-            KeyBinding::new('agentview.cancel', 'Ctrl+X c', 'Cancel this agent; again to stop it now', $c),
-            KeyBinding::new('agentview.pause', 'Ctrl+X p', 'Pause this agent, or let it go on', $c),
-            KeyBinding::new('agentview.stop-all', 'Ctrl+X s', 'Stop every running agent', $c),
-            KeyBinding::new('agentview.open-session', 'Ctrl+X o', 'Open this agent as a session', $c),
+            KeyBinding::new('agentview.cancel', 'Ctrl+X c', Lang::t('keys.agentview.cancel'), $c),
+            KeyBinding::new('agentview.pause', 'Ctrl+X p', Lang::t('keys.agentview.pause'), $c),
+            KeyBinding::new('agentview.stop-all', 'Ctrl+X s', Lang::t('keys.agentview.stop-all'), $c),
+            KeyBinding::new('agentview.open-session', 'Ctrl+X o', Lang::t('keys.agentview.open-session'), $c),
             // P-E3: the run stops at its next tool or step and a background
             // session continues it; its Task call returns at once.
-            KeyBinding::new('agentview.background', 'Ctrl+X b', 'Send this agent to the background', $c),
-            KeyBinding::new('agentview.next', 'Alt+N', 'Open the next agent of the same batch', $c),
-            KeyBinding::new('agentview.prev', 'Alt+P', 'Open the previous agent of the same batch', $c),
+            KeyBinding::new('agentview.background', 'Ctrl+X b', Lang::t('keys.agentview.background'), $c),
+            KeyBinding::new('agentview.next', 'Alt+N', Lang::t('keys.agentview.next'), $c),
+            KeyBinding::new('agentview.prev', 'Alt+P', Lang::t('keys.agentview.prev'), $c),
         ];
     }
 
@@ -720,9 +757,9 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_SKILLS;
 
         return [
-            KeyBinding::new('skills.move', '↑ / ↓', 'Move the highlighted skill (or k / j)', $c),
-            KeyBinding::new('skills.select', 'Enter', 'Enable the highlighted skill', $c),
-            KeyBinding::new('skills.close', 'Esc', 'Dismiss the picker', $c),
+            KeyBinding::new('skills.move', '↑ / ↓', Lang::t('keys.skills.move'), $c),
+            KeyBinding::new('skills.select', 'Enter', Lang::t('keys.skills.select'), $c),
+            KeyBinding::new('skills.close', 'Esc', Lang::t('keys.skills.close'), $c),
         ];
     }
 
@@ -740,34 +777,34 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_SETTINGS;
 
         return [
-            KeyBinding::new('settings.move', '↑ / ↓', 'Move between settings (or k / j)', $c),
-            KeyBinding::new('settings.category', '← / →', 'Switch category (or h / l)', $c),
-            KeyBinding::new('settings.search', '/', 'Search every category as you type', $c),
-            KeyBinding::new('settings.search-keep', 'Enter', 'Stop typing the search, keep its matches', $c),
-            KeyBinding::new('settings.erase', 'Backspace', 'Erase the last character of the search', $c),
-            KeyBinding::new('settings.close', 'Esc', 'Clear the search, then close the view', $c),
+            KeyBinding::new('settings.move', '↑ / ↓', Lang::t('keys.settings.move'), $c),
+            KeyBinding::new('settings.category', '← / →', Lang::t('keys.settings.category'), $c),
+            KeyBinding::new('settings.search', '/', Lang::t('keys.settings.search'), $c),
+            KeyBinding::new('settings.search-keep', 'Enter', Lang::t('keys.settings.search-keep'), $c),
+            KeyBinding::new('settings.erase', 'Backspace', Lang::t('keys.settings.erase'), $c),
+            KeyBinding::new('settings.close', 'Esc', Lang::t('keys.settings.close'), $c),
             // The editor's own keys (W4-g built the save door; decision D7:
             // plain letters, no Ctrl+S / Ctrl+R). `s` and `y` are answered by
             // the shell (App::settingsShellKey()), which holds the writer.
-            KeyBinding::new('settings.edit', 'Enter', 'Edit the highlighted setting', $c),
-            KeyBinding::new('settings.stage', 'Enter', 'Stage the value being edited', $c),
-            KeyBinding::new('settings.cancel-edit', 'Esc', 'Drop the value being edited', $c),
-            KeyBinding::new('settings.reset', 'r', 'Stage a reset to the default', $c),
-            KeyBinding::new('settings.tier', 't', 'Switch the file a save writes', $c),
-            KeyBinding::new('settings.save', 's', 'Preview the save of what is staged', $c),
-            KeyBinding::new('settings.confirm', 'y', 'Save the previewed changes (or Enter)', $c),
-            KeyBinding::new('settings.back', 'n', 'Leave the preview unsaved (or Esc)', $c),
-            KeyBinding::new('settings.trust', 'y', 'Confirm a project trust grant', $c),
-            KeyBinding::new('settings.discard', 'd', 'Discard unsaved changes and close', $c),
+            KeyBinding::new('settings.edit', 'Enter', Lang::t('keys.settings.edit'), $c),
+            KeyBinding::new('settings.stage', 'Enter', Lang::t('keys.settings.stage'), $c),
+            KeyBinding::new('settings.cancel-edit', 'Esc', Lang::t('keys.settings.cancel-edit'), $c),
+            KeyBinding::new('settings.reset', 'r', Lang::t('keys.settings.reset'), $c),
+            KeyBinding::new('settings.tier', 't', Lang::t('keys.settings.tier'), $c),
+            KeyBinding::new('settings.save', 's', Lang::t('keys.settings.save'), $c),
+            KeyBinding::new('settings.confirm', 'y', Lang::t('keys.settings.confirm'), $c),
+            KeyBinding::new('settings.back', 'n', Lang::t('keys.settings.back'), $c),
+            KeyBinding::new('settings.trust', 'y', Lang::t('keys.settings.trust'), $c),
+            KeyBinding::new('settings.discard', 'd', Lang::t('keys.settings.discard'), $c),
             // N-P5: the narrow layout and the scrolling save preview.
-            KeyBinding::new('settings.details', 'i', 'Details in the list\'s place (narrow view)', $c),
-            KeyBinding::new('settings.preview-scroll', '↑ / ↓', 'Scroll the save preview (or k / j)', $c),
+            KeyBinding::new('settings.details', 'i', Lang::t('keys.settings.details'), $c),
+            KeyBinding::new('settings.preview-scroll', '↑ / ↓', Lang::t('keys.settings.preview-scroll'), $c),
             // N-P5: the file behind a tier in $EDITOR, and settings profiles.
             // All three are the shell's (App::settingsShellKey()): each is I/O.
-            KeyBinding::new('settings.open-file', 'e', 'Open the target file or Files row in $EDITOR', $c),
-            KeyBinding::new('settings.export', 'x', 'Export a settings profile to a file you name', $c),
-            KeyBinding::new('settings.import', 'p', 'Import a settings profile as staged changes', $c),
-            KeyBinding::new('settings.profile-go', 'Enter', 'Export or import at the profile path typed', $c),
+            KeyBinding::new('settings.open-file', 'e', Lang::t('keys.settings.open-file'), $c),
+            KeyBinding::new('settings.export', 'x', Lang::t('keys.settings.export'), $c),
+            KeyBinding::new('settings.import', 'p', Lang::t('keys.settings.import'), $c),
+            KeyBinding::new('settings.profile-go', 'Enter', Lang::t('keys.settings.profile-go'), $c),
         ];
     }
 
@@ -779,10 +816,10 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_MENU;
 
         return [
-            KeyBinding::new('menu.switch', '← / →', 'Switch menu (or h / l)', $c),
-            KeyBinding::new('menu.move', '↑ / ↓', 'Move the highlighted row (or k / j)', $c),
-            KeyBinding::new('menu.run', 'Enter', 'Run the row (or o)', $c),
-            KeyBinding::new('menu.close', 'Esc', 'Close the menu (or q)', $c),
+            KeyBinding::new('menu.switch', '← / →', Lang::t('keys.menu.switch'), $c),
+            KeyBinding::new('menu.move', '↑ / ↓', Lang::t('keys.menu.move'), $c),
+            KeyBinding::new('menu.run', 'Enter', Lang::t('keys.menu.run'), $c),
+            KeyBinding::new('menu.close', 'Esc', Lang::t('keys.menu.close'), $c),
         ];
     }
 
@@ -794,14 +831,14 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_MOUSE;
 
         return [
-            KeyBinding::new('mouse.wheel', 'Wheel', 'Scroll the transcript, or the pane under it', $c),
-            KeyBinding::new('mouse.tab', 'Click tab', 'Switch to that session', $c),
-            KeyBinding::new('mouse.pane', 'Click pane', 'Open the pane menu (palette)', $c),
-            KeyBinding::new('mouse.tool-call', 'Click tool', 'Expand or collapse that call\'s output', $c),
-            KeyBinding::new('mouse.side-row', 'Click side row', 'Expand or collapse that Tools or Agents pane row', $c),
-            KeyBinding::new('mouse.palette-row', 'Click row', 'Run that palette row', $c),
-            KeyBinding::new('mouse.session-action', 'Click ✎ ★ ✕', 'Rename, pin or delete the picker session', $c),
-            KeyBinding::new('mouse.agent', 'Click agent', 'Open that agent\'s transcript (a Task line)', $c),
+            KeyBinding::new('mouse.wheel', 'Wheel', Lang::t('keys.mouse.wheel'), $c),
+            KeyBinding::new('mouse.tab', 'Click tab', Lang::t('keys.mouse.tab'), $c),
+            KeyBinding::new('mouse.pane', 'Click pane', Lang::t('keys.mouse.pane'), $c),
+            KeyBinding::new('mouse.tool-call', 'Click tool', Lang::t('keys.mouse.tool-call'), $c),
+            KeyBinding::new('mouse.side-row', 'Click side row', Lang::t('keys.mouse.side-row'), $c),
+            KeyBinding::new('mouse.palette-row', 'Click row', Lang::t('keys.mouse.palette-row'), $c),
+            KeyBinding::new('mouse.session-action', 'Click ✎ ★ ✕', Lang::t('keys.mouse.session-action'), $c),
+            KeyBinding::new('mouse.agent', 'Click agent', Lang::t('keys.mouse.agent'), $c),
         ];
     }
 }

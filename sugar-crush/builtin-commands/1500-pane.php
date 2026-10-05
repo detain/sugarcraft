@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // The phase-3 gesture pair: keyboard twins of the mouse dock operations. The
 // state they move lives on the shell, so both dispatch an App message over
@@ -13,7 +14,7 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // palette twin, it is a keyboard-only undock.
 return BuiltInCommand::new(CommandSpec::new(
     'pane',
-    'Dock a pane to a side, or toggle its docked state',
-    'Layout',
-    argumentHint: 'dock <left|right>|toggle [name]',
+    Lang::t('cmd.pane.description'),
+    Lang::t('cmd.category.layout'),
+    argumentHint: Lang::t('cmd.pane.hint'),
 ))->withHandler('handlePaneCommand');

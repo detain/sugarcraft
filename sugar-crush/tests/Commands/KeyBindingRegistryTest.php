@@ -81,7 +81,7 @@ final class KeyBindingRegistryTest extends TestCase
         $flattened = [];
         foreach (KeyBindingRegistry::grouped() as $context => $bindings) {
             foreach ($bindings as $binding) {
-                $this->assertSame($context, $binding->context);
+                $this->assertSame($context, KeyBindingRegistry::contextLabel($binding->context));
                 $flattened[] = $binding;
             }
         }

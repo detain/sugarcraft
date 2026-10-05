@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Config\Settings;
 
+use SugarCraft\Crush\Lang;
+
 /**
  * The settings editor's tabs, and the grouping of the generated key table.
  *
@@ -13,9 +15,9 @@ namespace SugarCraft\Crush\Config\Settings;
  * category list is adopted whole so a later key lands in a category that
  * already exists rather than reopening this enum.
  *
- * LABELS ARE LITERAL ENGLISH (decision D7): sugar-crush has no `Lang` class
- * yet, and i18n is deferred until after the roadmap. {@see labelKey()} is kept
- * so that step can swap the source without renaming anything.
+ * A tab's label is user-facing text: {@see label()} resolves {@see labelKey()}
+ * through `Lang::t()` (audit 15b-14), so the English lives in `lang/en.php`.
+ * The generated key table pins `en` ({@see SettingsDocGenerator}).
  */
 enum SettingCategory: string
 {
@@ -33,26 +35,29 @@ enum SettingCategory: string
     case Server = 'server';
     case Advanced = 'advanced';
 
+    /** The tab's label in the active locale. */
     public function label(): string
     {
+        // One literal key per arm rather than Lang::t($this->labelKey()): the
+        // catalogue census (LangParityTest) can only see a literal key.
         return match ($this) {
-            self::ModelProvider => 'Model & Provider',
-            self::AgentLoop => 'Agent loop',
-            self::Context => 'Context & Compaction',
-            self::Permissions => 'Permissions',
-            self::Tools => 'Tools',
-            self::MemoryRules => 'Memory & Rules',
-            self::Skills => 'Skills',
-            self::Subagents => 'Sub-agents',
-            self::Git => 'Git & Automation',
-            self::Interface => 'Interface',
-            self::HooksMcp => 'Hooks & MCP',
-            self::Server => 'Server',
-            self::Advanced => 'Advanced',
+            self::ModelProvider => Lang::t('settings.category.model'),
+            self::AgentLoop => Lang::t('settings.category.loop'),
+            self::Context => Lang::t('settings.category.context'),
+            self::Permissions => Lang::t('settings.category.permissions'),
+            self::Tools => Lang::t('settings.category.tools'),
+            self::MemoryRules => Lang::t('settings.category.memory'),
+            self::Skills => Lang::t('settings.category.skills'),
+            self::Subagents => Lang::t('settings.category.subagents'),
+            self::Git => Lang::t('settings.category.git'),
+            self::Interface => Lang::t('settings.category.interface'),
+            self::HooksMcp => Lang::t('settings.category.hooks'),
+            self::Server => Lang::t('settings.category.server'),
+            self::Advanced => Lang::t('settings.category.advanced'),
         };
     }
 
-    /** The i18n key the label will move to (D7: not resolved yet). */
+    /** The `lang/` key {@see label()} resolves. */
     public function labelKey(): string
     {
         return 'settings.category.' . $this->value;

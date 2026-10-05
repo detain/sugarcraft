@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // Roadmap 3.D-3. Starts a turn, as `/init` does, then keeps the session going:
 // after every turn the title model judges the transcript and the agent is sent
@@ -12,7 +13,7 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // TUI's turn settle, which a headless host does not run.
 return BuiltInCommand::new(CommandSpec::new(
     'goal',
-    'Work until a condition is met, judged by the title model after every turn',
-    'Session',
-    argumentHint: '[<condition>|clear]',
+    Lang::t('cmd.goal.description'),
+    Lang::t('cmd.category.session'),
+    argumentHint: Lang::t('cmd.goal.hint'),
 ))->withHandler('handleGoalCommand');

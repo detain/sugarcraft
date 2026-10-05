@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Palette\PaletteAction;
 
 // The palette row LISTS: its dispatch is `mcp auth list`, and the interactive
@@ -17,10 +18,10 @@ use SugarCraft\Crush\Palette\PaletteAction;
 // the parse by Chat::dispatchCommand() itself and reaches the same handler.
 return BuiltInCommand::new(CommandSpec::new(
     'mcp',
-    'Manage MCP server auth (list/add/remove; login prints the CLI command)',
-    'MCP',
+    Lang::t('cmd.mcp.description'),
+    Lang::t('cmd.category.mcp'),
     paletteAction: PaletteAction::ToggleMcp,
-    paletteLabel: 'List MCP servers',
-    argumentHint: '<list|add|remove|login> [server]',
+    paletteLabel: Lang::t('cmd.mcp.label'),
+    argumentHint: Lang::t('cmd.mcp.hint'),
 ))->withHandler('handleMcpAuthCommand')
     ->withHostCommand(\SugarCraft\Crush\Host\Commands\McpAuthHostCommand::class);

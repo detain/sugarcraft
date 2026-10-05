@@ -14,6 +14,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Providers\ProviderFactory;
 
 /**
@@ -38,7 +39,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::Live)
                 ->withEnvVar('SUGARCRUSH_PROVIDER')
                 ->withOptionsSource(OptionsSource::Providers)
-                ->withLabel('Provider')
+                ->withLabel(Lang::t('settings.provider.label'))
                 ->withHelp('Which LLM provider the session talks to; every prompt is sent to its host.')
                 ->withReaderSymbol(Bootstrap::class . '::selectedProviderName')
                 ->withReadBy('`Bootstrap::selectedProviderName()`, `backend()`'),
@@ -52,7 +53,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withEnvVar('SUGARCRUSH_MODEL')
                 ->withCliFlag('--model')
-                ->withLabel('Model')
+                ->withLabel(Lang::t('settings.models.label'))
                 ->withHelp('The model to run, per provider ({"<provider>": "<model id>"}); unset uses the provider default.')
                 ->withReaderSymbol(Bootstrap::class . '::selectedModelName')
                 ->withReadBy('`Bootstrap::selectedModelName()`, `backendFor()`, `selectedProviderLabel()`'),
@@ -61,7 +62,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withEnvVar('SUGARCRUSH_TITLE_MODEL')
-                ->withLabel('Title model')
+                ->withLabel(Lang::t('settings.titleModel.label'))
                 ->withHelp('Model that names sessions and writes prompt suggestions; unset uses the provider default.')
                 ->withReaderSymbol(Bootstrap::class . '::titleBackend'),
             SettingDefinition::new('summaryModel', SettingType::String)
@@ -69,7 +70,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withEnvVar('SUGARCRUSH_SUMMARY_MODEL')
-                ->withLabel('Summary model')
+                ->withLabel(Lang::t('settings.summaryModel.label'))
                 ->withHelp('Model that writes compaction summaries; unset uses the conversation\'s own model, which reuses the prompt cache.')
                 ->withReaderSymbol(Bootstrap::class . '::summaryModel')
                 ->withReadBy('`Bootstrap::summaryModel()`, `summaryBackend()`'),
@@ -79,7 +80,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1)
-                ->withLabel('Max output tokens')
+                ->withLabel(Lang::t('settings.maxOutputTokens.label'))
                 ->withHelp('Per-request output ceiling; unset sends no override and the provider default applies.')
                 ->withReaderSymbol(EngineBackend::class . '::complete'),
             SettingDefinition::new('modelPrices', SettingType::Map, [])
@@ -87,7 +88,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
-                ->withLabel('Model prices')
+                ->withLabel(Lang::t('settings.modelPrices.label'))
                 ->withHelp('USD per 1M tokens per model ({"input": …, "output": …}), for the spend total and cap.')
                 ->withReaderSymbol(ProviderFactory::class . '::userTierModelPrices')
                 ->withReadBy('`ProviderFactory::createOpenAI()`, `createAnthropic()`, `createVertex()`, `createBedrock()`, `createCustom()` → `userTierModelPrices()`'),
@@ -96,7 +97,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Egress)
                 ->withLayered()
                 ->withUi(UiEditability::Complex)
-                ->withLabel('Extra request body')
+                ->withLabel(Lang::t('settings.extraBody.label'))
                 ->withHelp('Top-level request fields added to every `custom` provider request.')
                 ->withReaderSymbol(ProviderFactory::class . '::createCustom')
                 ->withReadBy('`ProviderFactory::createCustom()` → `CustomProvider`'),
@@ -105,7 +106,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withRange(0)
-                ->withLabel('Thinking budget')
+                ->withLabel(Lang::t('settings.thinkingBudget.label'))
                 ->withHelp('Gemini thinking-token budget on the `vertex` provider; thinking tokens bill as output.')
                 ->withReaderSymbol(ProviderFactory::class . '::createVertex')
                 ->withReadBy('`ProviderFactory::createVertex()` → `VertexProvider`'),
@@ -114,7 +115,7 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withEnvVar('SUGARCRUSH_DISABLE_PROMPT_CACHE')
-                ->withLabel('Prompt cache')
+                ->withLabel(Lang::t('settings.promptCache.label'))
                 ->withHelp('Whether the `vertex` and `bedrock` providers mark prompt-cache breakpoints.')
                 ->withReaderSymbol(ProviderFactory::class . '::promptCacheEnabled')
                 ->withReadBy('`ProviderFactory::createVertex()`, `createBedrock()` → `promptCacheEnabled()`'),

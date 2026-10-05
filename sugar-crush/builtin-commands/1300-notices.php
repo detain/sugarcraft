@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // E653's Shape B. `/permissions` reports the GATE; `/notices` reports the
 // warnings the launch raised about it. The transcript rows those warnings seed
@@ -13,7 +14,7 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // `permissions`' stated reason: the report is already total.
 return BuiltInCommand::new(CommandSpec::new(
     'notices',
-    'Show every warning this launch raised, un-capped and un-aggregated',
-    'App',
+    Lang::t('cmd.notices.description'),
+    Lang::t('cmd.category.app'),
 ))->withHandler('handleNoticesCommand')
     ->withHostCommand(\SugarCraft\Crush\Host\Commands\NoticesHostCommand::class);

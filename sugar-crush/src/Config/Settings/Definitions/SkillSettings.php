@@ -12,6 +12,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lang;
 
 /**
  * The "Skills" category's keys. One file per category so a step adding a
@@ -35,7 +36,7 @@ final class SkillSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withUi(UiEditability::List)
                 ->withOptionsSource(OptionsSource::Skills)
-                ->withLabel('Disabled skills')
+                ->withLabel(Lang::t('settings.disabledSkills.label'))
                 ->withHelp('Skills removed from discovery; also wins over enabledSkills.')
                 ->withReaderSymbol(Bootstrap::class . '::skillRegistry')
                 ->withReadBy('`Bootstrap::chat()` → `skillRegistry()`'),
@@ -45,7 +46,7 @@ final class SkillSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withUi(UiEditability::List)
                 ->withOptionsSource(OptionsSource::Skills)
-                ->withLabel('Enabled skills')
+                ->withLabel(Lang::t('settings.enabledSkills.label'))
                 ->withHelp('Skills whose full bodies ride the system prompt every turn.')
                 ->withReaderSymbol(Bootstrap::class . '::promptEnabledSkills')
                 ->withReadBy('`Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()`'),

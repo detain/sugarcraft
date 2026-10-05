@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // Category 'App', not 'Session': the cap and the tracker behind it are
 // per-LAUNCH, carried by object identity through Chat::mutate() and untouched by
@@ -11,7 +12,7 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // scope it does not have.
 return BuiltInCommand::new(CommandSpec::new(
     'budget',
-    'Show this session\'s reported spend, or cap it',
-    'App',
-    argumentHint: '[amount|off]',
+    Lang::t('cmd.budget.description'),
+    Lang::t('cmd.category.app'),
+    argumentHint: Lang::t('cmd.budget.hint'),
 ))->withHandler('handleBudgetCommand');

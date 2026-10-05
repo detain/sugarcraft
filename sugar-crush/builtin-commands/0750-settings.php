@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Palette\PaletteAction;
 
 // Roadmap N-P1. Opens the full-band settings view, which is SHELL state
@@ -15,9 +16,9 @@ use SugarCraft\Crush\Palette\PaletteAction;
 // answer a key the user aimed at the app.
 return BuiltInCommand::new(CommandSpec::new(
     'settings',
-    'Show every setting, its value, where it came from and when it applies',
-    'App',
+    Lang::t('cmd.settings.description'),
+    Lang::t('cmd.category.app'),
     paletteAction: PaletteAction::OpenSettings,
-    paletteLabel: 'View settings',
-    argumentHint: '[search]',
+    paletteLabel: Lang::t('cmd.settings.label'),
+    argumentHint: Lang::t('cmd.settings.hint'),
 ))->withHandler('handleSettingsCommand')->withAliases('config');

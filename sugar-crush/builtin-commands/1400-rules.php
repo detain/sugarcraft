@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
+use SugarCraft\Crush\Lang;
 
 // Deliberately NOT near `permissions` in category, though the two read alike.
 // `/permissions` reports the gate that decides what a tool call may DO, and is
@@ -13,8 +14,8 @@ use SugarCraft\Crush\Commands\Specs\BuiltInCommand;
 // optional because both forms are real: `/rules` lists, `/rules terse` toggles.
 return BuiltInCommand::new(CommandSpec::new(
     'rules',
-    'List the rule packs, or toggle one for this session',
-    'Rules',
-    argumentHint: '[name]',
+    Lang::t('cmd.rules.description'),
+    Lang::t('cmd.category.rules'),
+    argumentHint: Lang::t('cmd.rules.hint'),
 ))->withHandler('handleRulesCommand')
     ->withHostCommand(\SugarCraft\Crush\Host\Commands\RulesHostCommand::class);
