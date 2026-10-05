@@ -2451,6 +2451,9 @@ final class Chat implements Model
                 Message::assistant(\SugarCraft\Crush\Host\Commands\BtwHostCommand::answerRow($msg))->withUiOnly(),
             ]]), null];
         }
+        if ($msg instanceof \SugarCraft\Crush\Host\Commands\HandoffSeededMsg) {
+            return $this->landHandoff($msg); // Roadmap 5.14c.
+        }
         if ($msg instanceof DreamPassCompletedMsg) {
             // Roadmap 5.4-3: the notes, the memory-history commit and the
             // journal cursor are already written (in this process, as the
@@ -16993,6 +16996,70 @@ final class Chat implements Model
             'history' => [Message::assistant("New session created: {$sessionId}")->withUiOnly()],
             'currentSessionId' => $sessionId,
             'currentSessionName' => null,
+        ]), null];
+    }
+
+    /**
+     * `/handoff [focus]` (roadmap 5.14c) —
+     * {@see \SugarCraft\Crush\Host\Commands\HandoffHostCommand}: a new session,
+     * forked as a branch of this one, that starts from a state summary of it
+     * rather than its transcript. The summary goes to {@see $summaryBackend},
+     * the model compaction summaries go to; at the spend cap nothing is asked
+     * and the block is read off the transcript instead. The landing is
+     * {@see landHandoff()}.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleHandoffCommand(string $text): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\HandoffHostCommand(
+            $this->spendCapReached() ? null : $this->summaryBackend,
+            true,
+        ), $text);
+    }
+
+    /**
+     * A `/handoff` landed: the new session is in the store, seeded. The window
+     * moves onto it — the same resets {@see handlePaletteNewSession()} makes,
+     * the seed row as its transcript — unless it no longer shows the session
+     * the handoff was typed in (the new one waits in the picker), or a turn
+     * started meanwhile (moving would strand it; the row says where to go).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function landHandoff(\SugarCraft\Crush\Host\Commands\HandoffSeededMsg $msg): array
+    {
+        // Accounted first: the summary ran on the user's key whatever follows.
+        $this->accountUsage($msg->usage);
+        if ($msg->fromSessionId !== $this->currentSessionId) {
+            return [$this, null];
+        }
+
+        $report = \SugarCraft\Crush\Host\Commands\HandoffHostCommand::describe($msg);
+        if ($msg->sessionId === null || $this->inFlight) {
+            $row = $msg->sessionId === null
+                ? $report
+                : $report . ' A turn is running here, so this window stayed: open it from /sessions.';
+
+            return [$this->mutate(['history' => [...$this->history, Message::assistant($row)->withUiOnly()]]), null];
+        }
+
+        $transcripts = $this->transcripts();
+        $transcripts->flush();
+        $seeded = $transcripts->load($msg->sessionId);
+        $name = $this->storedSessionName($msg->sessionId);
+
+        return [$this->mutate([
+            ...$this->sessionChangeResets(),
+            'currentSessionId' => $msg->sessionId,
+            'currentSessionName' => $name,
+            'currentSessionTitleSource' => $name === null ? null : $this->storedTitleSource($msg->sessionId),
+            // A store that keeps no transcripts (a bare SessionStore) still
+            // gets the seed: it is what the next turn must read.
+            'history' => [
+                ...($seeded === [] ? [Message::user($msg->seed)] : $seeded),
+                Message::notice('_' . $report . ' The agent reads the summary above on its next turn._'),
+            ],
         ]), null];
     }
 

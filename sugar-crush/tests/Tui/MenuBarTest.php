@@ -110,7 +110,7 @@ final class MenuBarTest extends TestCase
 
         $this->assertIsArray($items);
         $this->assertSame(
-            ['New session', 'Switch session', 'Pin or unpin session', 'Delete session…', 'Share session', 'compact', 'clear', 'Branch session', 'Rename session…', 'rewind', 'undo', 'redo', 'diff', 'bg', 'fork', 'goal', 'grind', 'btw'],
+            ['New session', 'Switch session', 'Pin or unpin session', 'Delete session…', 'Share session', 'compact', 'clear', 'Branch session', 'Rename session…', 'rewind', 'undo', 'redo', 'diff', 'bg', 'fork', 'goal', 'grind', 'btw', 'handoff'],
             $items
         );
     }

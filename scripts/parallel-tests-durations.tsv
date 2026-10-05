@@ -351,6 +351,7 @@ sugar-crush/tests/Tools/WebSearchTransportTest.php	0.504	13
 sugar-crush/tests/Runtime/ParallelGrandchildAskRelayTest.php	0.500	9
 sugar-crush/tests/Host/TurnRunnerLedgerTest.php	0.500	3
 sugar-crush/tests/Hooks/BuiltIn/AutoTestHookTest.php	0.500	12
+sugar-crush/tests/Chat/HandoffCommandTest.php	0.500	12
 sugar-crush/tests/MCP/StdioMcpEnvScrubTest.php	0.497	6
 sugar-crush/tests/Permissions/ChatAlwaysGrantScopeTest.php	0.491	5
 sugar-crush/tests/MCP/StdioMcpServerToolListRobustnessTest.php	0.486	9

@@ -351,6 +351,7 @@ edit it by hand.
 | `/goal` | ✓ | | `[<condition>\|clear]` | Work until a condition is met, judged by the title model after every turn |
 | `/grind` | ✓ | | `[<condition>\|clear]` | Like /goal, with a much longer budget of follow-up rounds |
 | `/btw` | ✓ | | `<question>` | Ask the title model a side question about this conversation, kept out of it |
+| `/handoff` | ✓ | | `[focus]` | Continue in a new session that starts from a state summary of this one |
 <!-- commands:table:end -->
 
 **S** is blank on `new`, `session-pin`, `session-delete`, `docs`,
@@ -525,6 +526,24 @@ happens is the point — and a read-only window runs it too. With no title model
 configured, or with the spend cap reached, it says so and asks nothing. A
 `btw.md` custom command replaces it like any other built-in, and is then a
 prompt, refused mid-turn.
+
+`/handoff [focus]` carries the work into a new session that starts from a
+state summary of this one instead of from its transcript — the way on from a
+context full of dead ends. The summary is the same fixed-heading state block a
+compaction leaves (`Context\Compaction\StateSummaryTemplate`): the summary
+model writes Goal, Constraints, Progress, Key decisions, Current work, Next
+step, Pending tasks and Errors and fixes, steered by the optional focus, while
+the files read and modified and your latest request are read off the
+transcript, never the model. With no summary model, at the spend cap, or when
+the model fails or writes no block, the whole block is read off the transcript,
+so the command always opens a session. The new session is a branch of this one
+(`parent_id`, kind `branch` — the picker shows it under its source; it keeps
+the todos and the checkpoints, so `/rewind` there can step back into the full
+conversation) whose transcript is that one summary row, sent as a user row on
+its first turn; the window moves onto it when the summary lands, unless you
+switched away or started a turn meanwhile, in which case it stays and names the
+new session. A headless host opens the session and leaves it for a client to
+open, as it does a `/branch`.
 
 `/editor` composes the next prompt in your own editor: `$VISUAL`, else
 `$EDITOR`, else `vi` (`notepad` on Windows), run as a shell command line with
