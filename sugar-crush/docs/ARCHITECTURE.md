@@ -521,8 +521,8 @@ the previous response's prompt as the provider counted it, plus an estimate of
 only the rows the step added. The budget is `Context\ContextBudget`: the smaller
 of 80% of the window and the window less `maxOutputTokens` less a reserve for
 tool output (64k, capped at a fifth of the window), and the automatic
-compaction tier's absolute cap (`CompactorConfig::$backgroundCompactionTokens`)
-when one is configured. Every step is measured, with or without an observer;
+compaction tier's absolute cap (`CompactorConfig::$backgroundCompactionTokens`,
+150,000 by default — the `compaction.autoTokens` setting). Every step is measured, with or without an observer;
 the figure and its verdict ride the step's `Events\StepStarted` to `runTurn()`'s
 `$onStep` observer (`completeTranscript()` takes one too, so a `Task` sub-agent
 is measured — and relieved — the same way).

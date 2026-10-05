@@ -116,7 +116,10 @@ final class InTurnCompressionTest extends TestCase
             },
         ], contextWindow: 1_000_000);
 
-        $reply = $this->engine($provider, str_repeat('source line here ', 20_000))
+        // Two ~64k-token reads: past the reminder's 120k limit, and still under
+        // the 150k in-turn step budget the N-P4b default cap sets on a 1M
+        // window — so the request is reminded rather than relieved first.
+        $reply = $this->engine($provider, str_repeat('source line here ', 15_000))
             ->withContextLedger(self::auto())
             ->complete([Message::user('read everything')]);
 

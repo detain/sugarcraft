@@ -276,15 +276,20 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these thirty-seven keys are layered — `provider`, `models`, `titleModel`,
+Only these forty-eight keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
-`maxToolSteps`, `contextWindow`, `secretEnvAllowlist`, `allowedTools`,
-`disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `instructions`,
-`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
-`subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`,
-`theme`, `statusLine`, `layout`, `notify`, `lintCommands`,
-`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`.
+`maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
+`compaction.blockPercent`, `compaction.keepRecent`,
+`compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
+`compaction.toolOutputChars`, `compaction.reminderTokens`,
+`compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
+`contextWindow`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`,
+`bashSandbox`, `testCommand`, `autoTest`, `instructions`, `disabledRules`,
+`embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
+`includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `theme`,
+`statusLine`, `layout`, `notify`, `lintCommands`, `connectTimeoutSeconds`,
+`providerRetryAttempts`, `providerRetryBaseBackoffMs`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1344,10 +1349,14 @@ the transcript, and at 95% the turn is refused rather than spent on a request
 the provider would reject. Each
 tier can also carry an **absolute** token cap beside its percentage, firing at
 whichever is lower, so a 1M-token window need not reach 700,000 tokens before
-the first reminder: `CompactorConfig::withReminderTokens()` and its two
-siblings set them, `withModelTokenOverride()` sets them per model (`model` or
-`provider/model`), and `CompactorConfig::smartZone()` is DCP's 50,000 / 100,000
-pair. The caps are unset by default and no settings key reaches them yet. A
+the first reminder. By default the reminder is capped at 100,000 tokens and
+automatic compaction at 150,000; the 95% refusal keeps no cap, so a window up
+to about 142,000 tokens behaves exactly as the percentages say, and an
+absolute tier never refuses a prompt — when the exchanges compaction keeps are
+themselves over a cap, that tier stands down instead of compacting for
+nothing. The `compaction.*` settings change every figure, per model too
+(`compaction.modelTokenCaps`); see
+[`docs/SETTINGS.md`](docs/SETTINGS.md#compaction-thresholds). A
 refusal is not a dead end — each attempt drops the oldest preserved exchange,
 and `/clear` frees the whole context at once. Those tiers judge at submit; inside
 a turn the engine also measures every step's request before sending it — system

@@ -55,13 +55,14 @@ final class ContextBudgetTest extends TestCase
         $this->assertSame(6_553, ContextBudget::new(8_192, 16_000)->threshold());
     }
 
-    public function testAnAbsoluteCapBindsALargeWindowAndIsOffByDefault(): void
+    public function testAnAbsoluteCapBindsALargeWindowAndIsOnByDefault(): void
     {
         $this->assertSame(100_000, ContextBudget::new(1_000_000, 32_000, 100_000)->threshold());
         $this->assertSame(80_000, ContextBudget::new(100_000, null, 500_000)->threshold(), 'a cap above the share changes nothing');
         $this->assertNull(ContextBudget::new(1_000_000, null, 0)->absoluteTokens, 'a non-positive cap is no cap');
 
-        $this->assertSame(800_000, ContextBudget::forCompactor(1_000_000, 32_000, CompactorConfig::new())->threshold(), 'unset by default');
+        $this->assertSame(150_000, ContextBudget::forCompactor(1_000_000, 32_000, CompactorConfig::new())->threshold(), 'the 150k automatic-tier cap by default (N-P4b)');
+        $this->assertSame(800_000, ContextBudget::forCompactor(1_000_000, 32_000, CompactorConfig::new()->withBackgroundCompactionTokens(null))->threshold(), 'and the two terms alone with the cap off');
         $this->assertSame(
             CompactorConfig::SMART_ZONE_COMPACTION_TOKENS,
             ContextBudget::forCompactor(1_000_000, 32_000, CompactorConfig::smartZone())->threshold(),

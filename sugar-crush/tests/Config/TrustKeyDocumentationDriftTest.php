@@ -394,6 +394,26 @@ final class TrustKeyDocumentationDriftTest extends TestCase
         38 => 'thirty-eight',
         39 => 'thirty-nine',
         40 => 'forty',
+        41 => 'forty-one',
+        42 => 'forty-two',
+        43 => 'forty-three',
+        44 => 'forty-four',
+        45 => 'forty-five',
+        46 => 'forty-six',
+        47 => 'forty-seven',
+        48 => 'forty-eight',
+        49 => 'forty-nine',
+        50 => 'fifty',
+        51 => 'fifty-one',
+        52 => 'fifty-two',
+        53 => 'fifty-three',
+        54 => 'fifty-four',
+        55 => 'fifty-five',
+        56 => 'fifty-six',
+        57 => 'fifty-seven',
+        58 => 'fifty-eight',
+        59 => 'fifty-nine',
+        60 => 'sixty',
     ];
 
     /** README.md as bytes, loud when the page it reads is gone. */
@@ -450,7 +470,7 @@ final class TrustKeyDocumentationDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/Only these\b(.*?)\./', $flat, $m),
+            preg_match('/Only these\b(.*?)\.(?=\s|$)/', $flat, $m),
             'README.md must carry exactly one sentence opening "Only these … keys are layered" — '
                 . 'the LAYERED_KEYS roster this guard reads is gone or reworded',
         );
@@ -482,7 +502,7 @@ final class TrustKeyDocumentationDriftTest extends TestCase
         // match anything" shape assertion — an empty `$actual` against a non-empty
         // constant already fails the comparison below, and a second assert of a
         // fact the first one entails would only inflate the count.
-        preg_match_all('/`([a-z][A-Za-z0-9]*)`/', $sentence, $n);
+        preg_match_all('/`([a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*)`/', $sentence, $n);
         $named = $n[1];
         $expected = LayeredSettings::LAYERED_KEYS;
         sort($expected);

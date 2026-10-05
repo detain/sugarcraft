@@ -6143,6 +6143,7 @@ final class DocFigureProseDriftTest extends TestCase
             'twenty-seven' => 27, 'twenty-eight' => 28, 'twenty-nine' => 29, 'thirty' => 30,
             'thirty-one' => 31, 'thirty-two' => 32, 'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
             'thirty-six' => 36, 'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
+            'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45, 'forty-six' => 46, 'forty-seven' => 47, 'forty-eight' => 48, 'forty-nine' => 49, 'fifty' => 50, 'fifty-one' => 51, 'fifty-two' => 52, 'fifty-three' => 53, 'fifty-four' => 54, 'fifty-five' => 55, 'fifty-six' => 56, 'fifty-seven' => 57, 'fifty-eight' => 58, 'fifty-nine' => 59, 'sixty' => 60,
         ];
 
         self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+(?:-[a-z]+)?)/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');
@@ -6158,8 +6159,8 @@ final class DocFigureProseDriftTest extends TestCase
             'the See-also env-split sentence in docs/SETTINGS.md was reworded out from under this arm',
         );
 
-        preg_match_all('/`([a-z][A-Za-z0-9]*)`/', $envSplit[3], $withEnv);
-        preg_match_all('/`([a-z][A-Za-z0-9]*)`/', $envSplit[4], $withoutEnv);
+        preg_match_all('/`([a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*)`/', $envSplit[3], $withEnv);
+        preg_match_all('/`([a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*)`/', $envSplit[4], $withoutEnv);
 
         self::assertSame($wordNumbers[$envSplit[1]] ?? -1, count($withEnv[1]), 'the first spelled count no longer matches the env-override list it introduces');
         self::assertSame(count($keys), $wordNumbers[$envSplit[2]] ?? -1, 'the second spelled count no longer matches LAYERED_KEYS');

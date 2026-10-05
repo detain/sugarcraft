@@ -527,6 +527,7 @@ sugar-crush/tests/Cli/NonInteractiveStdinPinTest.php	0.125	8
 sugar-crush/tests/MCP/McpNestedArgumentsWireTest.php	0.125	2
 sugar-crush/tests/App/AppBuilderTest.php	0.124	40
 sugar-crush/tests/Context/MemoryBlockUserScopeTest.php	0.124	8
+sugar-crush/tests/Context/CompactionSettingsTest.php	0.124	26
 sugar-crush/tests/Tools/BuiltIn/GlobTest.php	0.123	68
 sugar-crush/tests/Chat/PreCompactHookTest.php	0.123	9
 sugar-crush/tests/Backend/TurnStartPruneTest.php	0.120	3
@@ -569,6 +570,7 @@ sugar-crush/tests/Backend/StepTopRemindersTest.php	0.100	2
 sugar-crush/tests/Chat/TurnEndNotificationTest.php	0.100	8
 sugar-crush/tests/Chat/BtwCommandTest.php	0.100	10
 sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
+sugar-crush/tests/Chat/AbsoluteCapBreakerTest.php	0.097	3
 sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3
 sugar-crush/tests/Providers/SglangProviderServerLimitsTest.php	0.094	35
 sugar-crush/tests/ChatScrollTest.php	0.091	13

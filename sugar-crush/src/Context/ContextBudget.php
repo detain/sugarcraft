@@ -31,10 +31,10 @@ namespace SugarCraft\Crush\Context;
  *
  * AN ABSOLUTE CAP (roadmap 2.9) can sit beside the two terms: the automatic
  * compaction tier's `backgroundCompactionTokens` from
- * {@see CompactorConfig}, so a 1M window configured to compact at 100k also
- * prunes and summarises a turn at 100k rather than at 800k. Unset — the
- * default, until the settings decision N-P4b makes one — it changes nothing.
- * The threshold is the one place the three meet.
+ * {@see CompactorConfig}, so a 1M window that compacts at 150k (the N-P4b
+ * default, `compaction.autoTokens`) also prunes and summarises a turn at 150k
+ * rather than at 800k. Turned off (`0`), it changes nothing. The threshold is
+ * the one place the three meet.
  */
 final readonly class ContextBudget
 {

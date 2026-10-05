@@ -1281,6 +1281,13 @@ final class Bootstrap
             // a compaction that preserved nothing of what a compaction exists to
             // preserve.
             summaryBackend: $workspace->summaryBackend,
+            // Roadmap N-P4b: the compaction tiers, kept tail, summary clips,
+            // absolute caps (100k / 150k by default) and the model's own
+            // context-management thresholds, from the `compaction.*` and
+            // `contextPruning.*` settings. Read once here, so they apply at
+            // the next launch; the Chat hands the same instance to every
+            // turn's backend (TurnRunner::backendForTurn()).
+            compactorConfig: \SugarCraft\Crush\Context\CompactorConfig::fromSettings($userConfig),
             // crush_code.md Phase 5 item 7. Null unless the launch set a cap;
             // `/budget` can set one at runtime either way.
             maxCostUsd: $workspace->maxCostUsd,

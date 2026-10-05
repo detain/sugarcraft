@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Context;
 
+use SugarCraft\Crush\Context\Pruning\NudgePolicy;
+use SugarCraft\Crush\Tools\BuiltIn\Compress;
+
 /**
  * Configuration for automatic context compaction.
  *
@@ -18,13 +21,25 @@ namespace SugarCraft\Crush\Context;
  * a model keeps its quality (DCP's "smart zone", 50k/100k by default). Each
  * cap can be overridden per model ({@see forModel()}).
  *
- * The caps are UNSET by default, so {@see new()} behaves exactly as the
- * percentages always did. {@see smartZone()} is DCP's figures. Not the default,
- * because the automatic tier's thrash breaker refuses the prompt once three
- * compactions in a row leave the context over the tier: with a 100k cap on a 1M
- * window, ten preserved exchanges heavier than 100k would turn every prompt
- * into a refusal whose advice ("/model with a larger context window") cannot
- * help. Choosing that default is a settings decision (N-P4b).
+ * DEFAULTS (roadmap N-P4b, a user decision): the reminder tier is capped at
+ * {@see DEFAULT_REMINDER_TOKENS} (100k) and the automatic-compaction tier at
+ * {@see DEFAULT_COMPACTION_TOKENS} (150k); the blocking tier keeps NO cap, so
+ * the only tier that refuses a prompt is still a percentage of the window.
+ * Quality degrades well before 70% of a 1M window, which is the case the caps
+ * exist for. A window up to ~142k tokens is untouched — its percentage tiers
+ * (70% of 142,857 = 100k, 85% of 176,470 = 150k) come first.
+ *
+ * AN ABSOLUTE TIER NEVER REFUSES. The thrash breaker counts only compactions
+ * that left the turn UNSENT, which only the blocking tier (or the spend cap)
+ * does; and {@see ContextCompactor} skips an absolute tier outright when a
+ * compaction could not bring the history under it (a preserved tail heavier
+ * than the cap), so a session over the cap for good is neither re-compacted
+ * on every prompt nor counted as thrashing. {@see smartZone()} keeps DCP's
+ * lower figures (50k/100k) as an opt-in. `0` in the settings turns a cap off.
+ *
+ * The settings keys (`compaction.*`, Appendix N §2.2) are read by
+ * {@see fromSettings()}, which `Bootstrap::chat()` hands the session and
+ * `EngineBackend::compactorConfig()` falls back to.
  *
  * All values are immutable after construction — use with*() methods
  * to produce derived instances.
@@ -50,6 +65,49 @@ final readonly class CompactorConfig
      * {@see $modelTokenOverrides} entry may carry.
      */
     public const ABSOLUTE_FIELDS = ['reminderTokens', 'backgroundCompactionTokens', 'foregroundBlockingTokens'];
+
+    /** The reminder tier's default absolute cap (N-P4b): min(70%, 100k). */
+    public const DEFAULT_REMINDER_TOKENS = 100_000;
+
+    /** The automatic-compaction tier's default absolute cap (N-P4b): min(85%, 150k). */
+    public const DEFAULT_COMPACTION_TOKENS = 150_000;
+
+    /** `compaction.*` settings keys read by {@see fromSettings()} (Appendix N §2.2). */
+    public const SETTING_REMINDER_PERCENT = 'compaction.reminderPercent';
+    public const SETTING_AUTO_PERCENT = 'compaction.autoPercent';
+    public const SETTING_BLOCK_PERCENT = 'compaction.blockPercent';
+    public const SETTING_KEEP_RECENT = 'compaction.keepRecent';
+    public const SETTING_SUMMARY_USER_CHARS = 'compaction.summaryUserChars';
+    public const SETTING_SUMMARY_ASSISTANT_CHARS = 'compaction.summaryAssistantChars';
+    public const SETTING_TOOL_OUTPUT_CHARS = 'compaction.toolOutputChars';
+    public const SETTING_REMINDER_TOKENS = 'compaction.reminderTokens';
+    public const SETTING_AUTO_TOKENS = 'compaction.autoTokens';
+    public const SETTING_BLOCK_TOKENS = 'compaction.blockTokens';
+    public const SETTING_MODEL_TOKEN_CAPS = 'compaction.modelTokenCaps';
+
+    /**
+     * The model-context-management keys (DCP `contextPruning.*`), carried here
+     * so one launch-built config answers every compaction question.
+     */
+    public const SETTING_NUDGE_MIN_TOKENS = 'contextPruning.minContextTokens';
+    public const SETTING_NUDGE_MAX_TOKENS = 'contextPruning.maxContextTokens';
+    public const SETTING_NUDGE_FREQUENCY = 'contextPruning.nudgeFrequency';
+    public const SETTING_NUDGE_ITERATIONS = 'contextPruning.iterationNudgeThreshold';
+    public const SETTING_COMPRESS = 'contextPruning.compress';
+
+    /** `contextPruning.compress` values: `manual` = only on a `/compress` turn; `auto` = every `auto`-mode turn. */
+    public const COMPRESS_MODES = ['manual', 'auto'];
+
+    /**
+     * The short names a `compaction.modelTokenCaps` entry uses, mapped to the
+     * {@see ABSOLUTE_FIELDS} they set — the same suffixes as the three
+     * top-level cap keys.
+     */
+    public const MODEL_CAP_KEYS = [
+        'reminderTokens' => 'reminderTokens',
+        'autoTokens' => 'backgroundCompactionTokens',
+        'blockTokens' => 'foregroundBlockingTokens',
+    ];
 
     /**
      * @param int $reminderThreshold        Context usage percentage (0-100) at which
@@ -101,18 +159,21 @@ final readonly class CompactorConfig
      * @param ?int $reminderTokens         Absolute cap, in estimated tokens, on the
      *                                      reminder tier (roadmap 2.9): the tier fires
      *                                      at `min(reminderThreshold% of the window,
-     *                                      this)`. Null (the default) is no cap — the
-     *                                      percentage alone decides, as before 2.9.
+     *                                      this)`. Default {@see DEFAULT_REMINDER_TOKENS}
+     *                                      (N-P4b); null is no cap — the percentage
+     *                                      alone decides, as before 2.9.
      * @param bool $reminderTokensSet      Whether $reminderTokens was configured,
      *                                      null included. The sentinel is what lets a
      *                                      per-model override CLEAR a base cap: an
      *                                      override naming the key with null sets it,
      *                                      one that leaves the key out inherits.
      * @param ?int $backgroundCompactionTokens Absolute cap on the automatic
-     *                                      compaction tier, same rule. Null: no cap.
+     *                                      compaction tier, same rule. Default
+     *                                      {@see DEFAULT_COMPACTION_TOKENS}; null: no cap.
      * @param bool $backgroundCompactionTokensSet Sentinel for the above.
      * @param ?int $foregroundBlockingTokens Absolute cap on the blocking tier,
-     *                                      same rule. Null: no cap.
+     *                                      same rule. Null (the default): no cap —
+     *                                      the one tier that refuses stays a percentage.
      * @param bool $foregroundBlockingTokensSet Sentinel for the above.
      * @param array<string, array<string, ?int>> $modelTokenOverrides Per-model
      *                                      absolute caps, keyed by model id or by
@@ -120,6 +181,17 @@ final readonly class CompactorConfig
      *                                      `modelMaxLimits`), each a partial map over
      *                                      {@see ABSOLUTE_FIELDS}. Applied by
      *                                      {@see forModel()}; inert until then.
+     * @param int $nudgeMinContextTokens   Below this the model is not reminded to
+     *                                      manage its context (DCP `minContextTokens`);
+     *                                      {@see nudgePolicy()}.
+     * @param int $nudgeMaxContextTokens   Above this every reminder is the strong one.
+     * @param int $nudgeFrequency          Rows between two reminders.
+     * @param int $nudgeIterationThreshold Tool results since the last prompt that make
+     *                                      an iteration reminder due.
+     * @param string $compressMode         `manual` (the default,
+     *                                      {@see \SugarCraft\Crush\Tools\BuiltIn\Compress::MODE_DEFAULT}):
+     *                                      the model's `Compress` only on a `/compress`
+     *                                      turn; `auto`: on every turn `Prune` is offered.
      */
     public function __construct(
         public int $reminderThreshold = 70,
@@ -131,13 +203,18 @@ final readonly class CompactorConfig
         public int $summaryUserMaxChars = 80,
         public int $summaryAssistantMaxChars = 100,
         public int $toolOutputMaxChars = 2000,
-        public ?int $reminderTokens = null,
+        public ?int $reminderTokens = self::DEFAULT_REMINDER_TOKENS,
         public bool $reminderTokensSet = false,
-        public ?int $backgroundCompactionTokens = null,
+        public ?int $backgroundCompactionTokens = self::DEFAULT_COMPACTION_TOKENS,
         public bool $backgroundCompactionTokensSet = false,
         public ?int $foregroundBlockingTokens = null,
         public bool $foregroundBlockingTokensSet = false,
         public array $modelTokenOverrides = [],
+        public int $nudgeMinContextTokens = NudgePolicy::MIN_CONTEXT_TOKENS,
+        public int $nudgeMaxContextTokens = NudgePolicy::MAX_CONTEXT_TOKENS,
+        public int $nudgeFrequency = NudgePolicy::NUDGE_FREQUENCY,
+        public int $nudgeIterationThreshold = NudgePolicy::ITERATION_THRESHOLD,
+        public string $compressMode = Compress::MODE_DEFAULT,
     ) {
         foreach (self::ABSOLUTE_FIELDS as $field) {
             self::assertAbsolute($field, $this->{$field});
@@ -145,6 +222,115 @@ final readonly class CompactorConfig
         foreach ($modelTokenOverrides as $model => $caps) {
             self::assertOverride((string) $model, $caps);
         }
+        if (!\in_array($compressMode, self::COMPRESS_MODES, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'compressMode must be one of %s; got "%s".',
+                implode(', ', self::COMPRESS_MODES),
+                $compressMode,
+            ));
+        }
+    }
+
+    /**
+     * The config the `compaction.*` and `contextPruning.*` settings describe,
+     * over {@see new()}'s defaults (roadmap N-P4b, Appendix N §2.2).
+     *
+     * NEVER THROWS, like every per-turn settings reader: a value of the wrong
+     * shape or out of range is ignored and that field keeps its default. The
+     * three percentages are taken TOGETHER — if what they would resolve to is
+     * not strictly `reminder < auto < block`, all three keep their defaults
+     * (the schema's `ThresholdOrderValidator` refuses such a save; this guards
+     * a hand edit). A cap of `0` turns that cap OFF; an absent key keeps the
+     * default. `compaction.modelTokenCaps` is `{model: {reminderTokens,
+     * autoTokens, blockTokens}}` (a model id or `provider/model`; `0` or null
+     * clears that cap for the model); a malformed entry is skipped.
+     *
+     * `fromSettings([])` equals {@see new()}.
+     *
+     * @param array<string, mixed> $config the merged settings (`Bootstrap::readUserConfig()`)
+     */
+    public static function fromSettings(array $config): self
+    {
+        $base = self::new();
+        $changes = [];
+
+        $percents = [
+            'reminderThreshold' => self::intSetting($config, self::SETTING_REMINDER_PERCENT, 1, 99) ?? $base->reminderThreshold,
+            'backgroundCompactionThreshold' => self::intSetting($config, self::SETTING_AUTO_PERCENT, 1, 99) ?? $base->backgroundCompactionThreshold,
+            'foregroundBlockingThreshold' => self::intSetting($config, self::SETTING_BLOCK_PERCENT, 1, 99) ?? $base->foregroundBlockingThreshold,
+        ];
+        if ($percents['reminderThreshold'] < $percents['backgroundCompactionThreshold']
+            && $percents['backgroundCompactionThreshold'] < $percents['foregroundBlockingThreshold']
+        ) {
+            $changes = $percents;
+        }
+
+        foreach ([
+            'recentPreserveCount' => self::SETTING_KEEP_RECENT,
+            'summaryUserMaxChars' => self::SETTING_SUMMARY_USER_CHARS,
+            'summaryAssistantMaxChars' => self::SETTING_SUMMARY_ASSISTANT_CHARS,
+            'toolOutputMaxChars' => self::SETTING_TOOL_OUTPUT_CHARS,
+            'nudgeFrequency' => self::SETTING_NUDGE_FREQUENCY,
+            'nudgeIterationThreshold' => self::SETTING_NUDGE_ITERATIONS,
+        ] as $field => $key) {
+            $value = self::intSetting($config, $key, 1);
+            if ($value !== null) {
+                $changes[$field] = $value;
+            }
+        }
+
+        foreach ([
+            'reminderTokens' => self::SETTING_REMINDER_TOKENS,
+            'backgroundCompactionTokens' => self::SETTING_AUTO_TOKENS,
+            'foregroundBlockingTokens' => self::SETTING_BLOCK_TOKENS,
+        ] as $field => $key) {
+            $value = self::intSetting($config, $key, 0);
+            if ($value !== null) {
+                $changes[$field] = $value === 0 ? null : $value;
+                $changes[$field . 'Set'] = true;
+            }
+        }
+
+        $min = self::intSetting($config, self::SETTING_NUDGE_MIN_TOKENS, 0) ?? $base->nudgeMinContextTokens;
+        $max = self::intSetting($config, self::SETTING_NUDGE_MAX_TOKENS, 0) ?? $base->nudgeMaxContextTokens;
+        if ($min <= $max) {
+            $changes['nudgeMinContextTokens'] = $min;
+            $changes['nudgeMaxContextTokens'] = $max;
+        }
+
+        $compress = $config[self::SETTING_COMPRESS] ?? null;
+        if (\is_string($compress) && \in_array(strtolower(trim($compress)), self::COMPRESS_MODES, true)) {
+            $changes['compressMode'] = strtolower(trim($compress));
+        }
+
+        $overrides = self::modelCapsSetting($config[self::SETTING_MODEL_TOKEN_CAPS] ?? null);
+        if ($overrides !== []) {
+            $changes['modelTokenOverrides'] = $overrides;
+        }
+
+        return $changes === [] ? $base : $base->mutate($changes);
+    }
+
+    /**
+     * The model's context reminders (roadmap 3.B-4) with this config's
+     * thresholds — {@see NudgePolicy::new()} when none was configured.
+     */
+    public function nudgePolicy(): NudgePolicy
+    {
+        return NudgePolicy::new()
+            ->withContextTokens($this->nudgeMinContextTokens, $this->nudgeMaxContextTokens)
+            ->withNudgeFrequency($this->nudgeFrequency)
+            ->withIterationThreshold($this->nudgeIterationThreshold);
+    }
+
+    /**
+     * Whether the model's `Compress` is offered on a turn the person did NOT
+     * start with `/compress` (`contextPruning.compress: auto`). Only ever
+     * where `Prune` is offered too — the pruning mode's `auto`.
+     */
+    public function offersCompressUnprompted(): bool
+    {
+        return $this->compressMode === 'auto';
     }
 
     /**
@@ -355,6 +541,60 @@ final readonly class CompactorConfig
     private function mutate(array $changes): self
     {
         return new self(...[...get_object_vars($this), ...$changes]);
+    }
+
+    /**
+     * $config[$key] as an int in [$min, $max], or null when absent or not one
+     * (an integral float such as `85.0` counts; a string does not).
+     *
+     * @param array<string, mixed> $config
+     */
+    private static function intSetting(array $config, string $key, int $min, ?int $max = null): ?int
+    {
+        $value = $config[$key] ?? null;
+        if (\is_float($value) && is_finite($value) && floor($value) === $value && abs($value) < \PHP_INT_MAX) {
+            $value = (int) $value;
+        }
+        if (!\is_int($value) || $value < $min || ($max !== null && $value > $max)) {
+            return null;
+        }
+
+        return $value;
+    }
+
+    /**
+     * `compaction.modelTokenCaps` as {@see $modelTokenOverrides}: entries that
+     * are not a map of known short names to `int >= 0 | null` are dropped
+     * whole, so one typo cannot half-apply.
+     *
+     * @return array<string, array<string, ?int>>
+     */
+    private static function modelCapsSetting(mixed $value): array
+    {
+        if (!\is_array($value)) {
+            return [];
+        }
+
+        $overrides = [];
+        foreach ($value as $model => $caps) {
+            if (!\is_string($model) || trim($model) === '' || !\is_array($caps) || $caps === []) {
+                continue;
+            }
+            $entry = [];
+            foreach ($caps as $name => $tokens) {
+                $field = \is_string($name) ? (self::MODEL_CAP_KEYS[$name] ?? null) : null;
+                if (\is_float($tokens) && is_finite($tokens) && floor($tokens) === $tokens) {
+                    $tokens = (int) $tokens;
+                }
+                if ($field === null || ($tokens !== null && (!\is_int($tokens) || $tokens < 0))) {
+                    continue 2;
+                }
+                $entry[$field] = $tokens === 0 ? null : $tokens;
+            }
+            $overrides[$model] = $entry;
+        }
+
+        return $overrides;
     }
 
     private static function assertAbsolute(string $field, ?int $tokens): void

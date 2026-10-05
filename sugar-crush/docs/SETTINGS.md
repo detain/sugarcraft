@@ -188,6 +188,17 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
 | `maxToolSteps` | `Bootstrap::backend()`, `Chat::applySettings()` → `resolvedMaxToolSteps()` | **no** |
+| `compaction.reminderPercent` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.autoPercent` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.blockPercent` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.keepRecent` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.summaryUserChars` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.summaryAssistantChars` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.toolOutputChars` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.reminderTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.autoTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.blockTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.modelTokenCaps` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `forModel()` | yes |
 | `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createCustom()` → each provider's `contextWindow()` | **no** |
 | `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
 | `allowedTools` | `Bootstrap::tools()` → `filterToolSet()` | **no** |
@@ -216,7 +227,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these thirty-seven, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these forty-eight, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -821,6 +832,55 @@ allow-list admits it AND the deny-list does not name it, in one expression, so
 there is no later stage at which a project's `disabledTools` could re-admit
 what your `allowedTools` excluded.
 
+## Compaction thresholds
+
+The `compaction.*` keys move the tiers every context-usage check is judged by
+(roadmap N-P4b). They are read once, at launch — `Bootstrap::chat()` builds the
+session's `CompactorConfig` from them (`CompactorConfig::fromSettings()`) and
+hands that one instance to every turn — so a change applies at the next launch.
+
+- **The three percentages** — `compaction.reminderPercent` (70),
+  `compaction.autoPercent` (85) and `compaction.blockPercent` (95) — are shares
+  of the model's context window: the reminder (and the ahead-of-need background
+  summary), automatic compaction, and the refusal. They must stay strictly
+  ascending; a save that breaks the order is refused, and a hand edit that
+  breaks it is ignored as a set, leaving all three at their defaults.
+- **`compaction.keepRecent`** (10) is how many recent exchanges a compaction
+  keeps in full; the three `compaction.summary…Chars` / `toolOutputChars` keys
+  bound what a condensed exchange keeps and what the summariser is shown.
+- **The absolute caps** sit beside the percentages, and a tier fires at
+  whichever is LOWER. **On by default:** the reminder at
+  `compaction.reminderTokens` = 100,000 tokens and automatic compaction at
+  `compaction.autoTokens` = 150,000. The refusal's cap,
+  `compaction.blockTokens`, is unset: the only tier that refuses a prompt
+  stays a percentage of the window. `0` turns a cap off.
+
+Why on: a model's quality degrades well before 70% of a 1M-token window, and
+a percentage alone scales the wrong way there — the first reminder would land
+at 700,000 tokens. The caps only bind on a window over about 142,000 tokens
+(70% of 142,857 is 100,000; 85% of 176,470 is 150,000), so a 128k model behaves
+exactly as the percentages always said. The trade-off is cost: on a large
+window compaction, and the in-turn step budget that follows
+`compaction.autoTokens`, run sooner and more often, and each model-written
+summary is billed. DCP's lower pair (50,000 / 100,000) remains available as
+`CompactorConfig::smartZone()` or by setting the two keys.
+
+**An absolute tier never refuses a prompt.** The thrash breaker ("compacted N
+times in a row") counts only compactions that left the prompt unsent, which
+only the percentage refusal (or the spend cap) does. And when the exchanges a
+compaction keeps are themselves at or over a cap — so compacting could not get
+under it — that tier stands down for the prompt instead of compacting for
+nothing; it is judged afresh on the next one. Setting `compaction.blockTokens`
+is the one way to let a cap refuse, which is why it is off.
+
+`compaction.modelTokenCaps` overrides the three caps per model:
+`{"qwen3": {"autoTokens": 300000}, "sglang/qwen3": {"reminderTokens": 0}}` — a
+model id, or `provider/model` to pin one deployment (the more specific wins);
+a name left out inherits the top-level cap, and `0` clears it for that model.
+Every `compaction.*` key is tuning a trusted project may set: a repository
+whose exchanges are unusually heavy may move them, and your own
+`settings.json` still outranks it.
+
 ## Every key
 
 Every key any settings file can carry, layered or not, generated from
@@ -849,6 +909,17 @@ project-settable.
 | `parallelToolCalls` | Agent loop | bool | `true` | P U C | `SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS` | next turn | tuning |
 | `parallelToolDeadlineSeconds` | Agent loop | int | `90` | P U C | `SUGARCRUSH_PARALLEL_TOOL_DEADLINE` | next turn | tuning |
 | `maxToolSteps` | Agent loop | int | unset | U C | — | live | spend |
+| `compaction.reminderPercent` | Context & Compaction | int | `70` | P U C | — | restart | tuning |
+| `compaction.autoPercent` | Context & Compaction | int | `85` | P U C | — | restart | tuning |
+| `compaction.blockPercent` | Context & Compaction | int | `95` | P U C | — | restart | tuning |
+| `compaction.keepRecent` | Context & Compaction | int | `10` | P U C | — | restart | tuning |
+| `compaction.summaryUserChars` | Context & Compaction | int | `80` | P U C | — | restart | tuning |
+| `compaction.summaryAssistantChars` | Context & Compaction | int | `100` | P U C | — | restart | tuning |
+| `compaction.toolOutputChars` | Context & Compaction | int | `2000` | P U C | — | restart | tuning |
+| `compaction.reminderTokens` | Context & Compaction | int | `100000` | P U C | — | restart | tuning |
+| `compaction.autoTokens` | Context & Compaction | int | `150000` | P U C | — | restart | tuning |
+| `compaction.blockTokens` | Context & Compaction | int | unset (no cap) | P U C | — | restart | tuning |
+| `compaction.modelTokenCaps` | Context & Compaction | object | `{}` | P U C | — | restart | tuning |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `SUGARCRUSH_CONTEXT_PRUNING` | next turn | tuning |
 | `permissionMode` | Permissions | enum | `default` (TUI); `bypass-permissions` (`-p`, daemon) | U C | `SUGARCRUSH_PERMISSION_MODE`, `--permission-mode` | restart | security |
@@ -966,7 +1037,7 @@ Saved is not applied: see the next section for when each key takes effect.
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `embeddingModel`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
-| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
@@ -1088,10 +1159,15 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only eight of the thirty-seven layered keys have an
+  They do not cover it: only eight of the forty-eight layered keys have an
   env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`, `connectTimeoutSeconds`).
   `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`,
+  `compaction.reminderPercent`, `compaction.autoPercent`,
+  `compaction.blockPercent`, `compaction.keepRecent`,
+  `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
+  `compaction.toolOutputChars`, `compaction.reminderTokens`,
+  `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
   `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`,
   `bashSandbox`, `testCommand`, `autoTest`, `instructions`, `disabledRules`,
   `embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,

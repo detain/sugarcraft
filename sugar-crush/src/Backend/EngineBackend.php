@@ -1084,14 +1084,21 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
     /**
      * The compaction budgets the next turn's {@see App} is built with — the
-     * configured one, else the {@see CompactorConfig::new()} defaults — with
-     * the per-model absolute caps for this backend's model applied
+     * configured one, else the one the `compaction.*` / `contextPruning.*`
+     * settings describe ({@see CompactorConfig::fromSettings()}, roadmap
+     * N-P4b; {@see CompactorConfig::new()} when none is set) — with the
+     * per-model absolute caps for this backend's model applied
      * ({@see CompactorConfig::forModel()}, roadmap 2.9). With no override
      * naming the model that is the configured instance itself.
+     *
+     * The settings fallback is what a backend nobody handed a config gets —
+     * `-p`, a server session, an embedder — so they price their turns against
+     * the same settings the TUI's `Bootstrap::chat()` hands its session.
      */
     public function compactorConfig(): CompactorConfig
     {
-        return ($this->compactorConfig ?? CompactorConfig::new())->forModel($this->model, $this->provider->name());
+        return ($this->compactorConfig ?? CompactorConfig::fromSettings(self::userConfig()))
+            ->forModel($this->model, $this->provider->name());
     }
 
     public function withMaxSteps(int $maxSteps): self

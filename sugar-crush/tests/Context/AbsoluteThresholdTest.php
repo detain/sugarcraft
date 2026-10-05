@@ -32,20 +32,54 @@ final class AbsoluteThresholdTest extends TestCase
         return [['role' => 'user', 'content' => str_repeat('a', $tokens * 4)]];
     }
 
-    public function testTheDefaultsCarryNoCapSoEveryTierIsItsPercentage(): void
+    /**
+     * N-P4b (a user decision): the reminder and automatic tiers carry their
+     * absolute caps by default — 100k and 150k — and the blocking tier, the
+     * one that refuses, does not. "Configured" stays false: a per-model
+     * override that leaves a cap out still inherits these.
+     */
+    /** The percentage-only config every tier was before 2.9 / N-P4b. */
+    private static function uncapped(): CompactorConfig
+    {
+        return new CompactorConfig(reminderTokens: null, backgroundCompactionTokens: null);
+    }
+
+    /**
+     * About $tokens estimated tokens a compaction CAN condense: the bulk in an
+     * older exchange, then ten trivial ones it keeps. An absolute tier stands
+     * down on a history whose kept part is itself over the cap (N-P4b), which
+     * a single-message history always is.
+     *
+     * @return list<array{role:string,content:string}>
+     */
+    private static function condensable(int $tokens): array
+    {
+        $history = [
+            ['role' => 'user', 'content' => str_repeat('a', $tokens * 4)],
+            ['role' => 'assistant', 'content' => 'ok'],
+        ];
+        for ($i = 0; $i < 10; $i++) {
+            $history[] = ['role' => 'user', 'content' => "q{$i}"];
+            $history[] = ['role' => 'assistant', 'content' => "a{$i}"];
+        }
+
+        return $history;
+    }
+
+    public function testTheDefaultsCapTheReminderAndAutoTiersButNotTheBlockingTier(): void
     {
         $config = CompactorConfig::new();
 
-        $this->assertNull($config->reminderTokens);
-        $this->assertNull($config->backgroundCompactionTokens);
+        $this->assertSame(100_000, $config->reminderTokens);
+        $this->assertSame(150_000, $config->backgroundCompactionTokens);
         $this->assertNull($config->foregroundBlockingTokens);
         $this->assertFalse($config->reminderTokensSet);
         $this->assertFalse($config->backgroundCompactionTokensSet);
         $this->assertFalse($config->foregroundBlockingTokensSet);
         $this->assertSame([], $config->modelTokenOverrides);
 
-        $this->assertSame(700_000, $config->reminderTokenThreshold(self::WINDOW));
-        $this->assertSame(850_000, $config->backgroundCompactionTokenThreshold(self::WINDOW));
+        $this->assertSame(100_000, $config->reminderTokenThreshold(self::WINDOW));
+        $this->assertSame(150_000, $config->backgroundCompactionTokenThreshold(self::WINDOW));
         $this->assertSame(950_000, $config->foregroundBlockingTokenThreshold(self::WINDOW));
     }
 
@@ -53,7 +87,7 @@ final class AbsoluteThresholdTest extends TestCase
     {
         // A window that does not divide evenly: the float-then-truncate form
         // every tier used before the caps must land on the same token.
-        $config = CompactorConfig::new();
+        $config = self::uncapped();
 
         foreach ([1, 7, 99_999, 131_072, 1_048_570] as $window) {
             $this->assertSame((int) ($window * 70 / 100), $config->reminderTokenThreshold($window));
@@ -74,20 +108,20 @@ final class AbsoluteThresholdTest extends TestCase
     public function testTheReminderTierFiresAtItsCapOnALargeWindow(): void
     {
         $capped = new ContextCompactor(CompactorConfig::new()->withReminderTokens(50_000));
-        $uncapped = ContextCompactor::new();
+        $uncapped = new ContextCompactor(self::uncapped());
 
-        $this->assertTrue($capped->shouldSendReminder(self::historyOf(60_000), self::WINDOW));
-        $this->assertFalse($capped->shouldSendReminder(self::historyOf(40_000), self::WINDOW));
-        $this->assertFalse($uncapped->shouldSendReminder(self::historyOf(60_000), self::WINDOW), 'without a cap 60k is far under 70% of 1M');
+        $this->assertTrue($capped->shouldSendReminder(self::condensable(60_000), self::WINDOW));
+        $this->assertFalse($capped->shouldSendReminder(self::condensable(40_000), self::WINDOW));
+        $this->assertFalse($uncapped->shouldSendReminder(self::condensable(60_000), self::WINDOW), 'without a cap 60k is far under 70% of 1M');
     }
 
     public function testTheCompactionTierFiresAtItsCapOnALargeWindow(): void
     {
         $capped = new ContextCompactor(CompactorConfig::new()->withBackgroundCompactionTokens(100_000));
 
-        $this->assertTrue($capped->shouldCompact(self::historyOf(110_000), self::WINDOW));
-        $this->assertFalse($capped->shouldCompact(self::historyOf(90_000), self::WINDOW));
-        $this->assertFalse(ContextCompactor::new()->shouldCompact(self::historyOf(110_000), self::WINDOW));
+        $this->assertTrue($capped->shouldCompact(self::condensable(110_000), self::WINDOW));
+        $this->assertFalse($capped->shouldCompact(self::condensable(90_000), self::WINDOW));
+        $this->assertFalse((new ContextCompactor(self::uncapped()))->shouldCompact(self::condensable(110_000), self::WINDOW));
     }
 
     public function testTheBlockingTierFiresAtItsCapOnALargeWindow(): void

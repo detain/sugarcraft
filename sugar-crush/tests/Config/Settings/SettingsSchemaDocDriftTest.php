@@ -126,7 +126,7 @@ final class SettingsSchemaDocDriftTest extends TestCase
     {
         $generator = SettingsDocGenerator::new();
 
-        preg_match_all('/^\| `([A-Za-z]+)` \| .+ \| (yes|\*\*no\*\*) \|$/m', $generator->layeredTable(), $rows);
+        preg_match_all('/^\| `([A-Za-z]+(?:\.[A-Za-z0-9]+)*)` \| .+ \| (yes|\*\*no\*\*) \|$/m', $generator->layeredTable(), $rows);
         self::assertEqualsCanonicalizing(LayeredSettings::LAYERED_KEYS, $rows[1]);
         foreach ($rows[1] as $i => $key) {
             self::assertSame(\in_array($key, LayeredSettings::PROJECT_TIER_KEYS, true), $rows[2][$i] === 'yes', $key);
@@ -134,7 +134,7 @@ final class SettingsSchemaDocDriftTest extends TestCase
 
         $roster = $generator->readmeLayeredRoster();
         self::assertStringStartsWith('Only these ' . SettingsDocGenerator::spell(\count(LayeredSettings::LAYERED_KEYS)) . ' keys are layered', $roster);
-        preg_match_all('/`([a-zA-Z]+)`/', $roster, $named);
+        preg_match_all('/`([a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*)`/', $roster, $named);
         self::assertEqualsCanonicalizing(LayeredSettings::LAYERED_KEYS, $named[1]);
 
         self::assertEqualsCanonicalizing(LayeredSettings::userTierOnlyKeys(), SettingsDocGenerator::userTierOnlyKeys());

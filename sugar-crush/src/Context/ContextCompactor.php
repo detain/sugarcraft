@@ -181,7 +181,39 @@ final class ContextCompactor
         $tokenCount = $this->countTokens($messages);
         $threshold = $this->config->backgroundCompactionTokenThreshold($tokenLimit);
 
-        return $tokenCount >= $threshold;
+        return $tokenCount >= $threshold
+            && !$this->absoluteTierIsFutile($messages, $tokenCount, $tokenLimit, $this->config->backgroundCompactionThreshold, $threshold);
+    }
+
+    /**
+     * Whether a tier that fired ONLY because of its absolute cap should stand
+     * down because compacting could not bring the history under that cap
+     * (roadmap N-P4b): the preserved tail alone — {@see compact()}'s own
+     * result, measured on a copy — is still at or over it.
+     *
+     * Without this, a 1M-window session whose ten kept exchanges outweigh the
+     * 150k default cap would re-compact on every prompt and get nowhere. The
+     * thrash breaker would not refuse it (the turn still goes out, and only an
+     * UNSENT turn extends the run), but every prompt would pay for a
+     * summarisation that buys nothing. Standing down instead is the backoff:
+     * the history is judged afresh on the next prompt, so the cap applies
+     * again as soon as older exchanges exist whose condensing would get under
+     * it. A history past the tier's PERCENTAGE never stands down — that is the
+     * window filling up, and the percentage tiers keep their old behaviour
+     * exactly.
+     *
+     * @param array<array{role:string,content:string}> $messages
+     */
+    private function absoluteTierIsFutile(array $messages, int $tokenCount, int $tokenLimit, int $percent, int $threshold): bool
+    {
+        if ($tokenCount >= (int) ($tokenLimit * $percent / 100)) {
+            return false;
+        }
+
+        // A copy, because compact() records its savings figure on the instance.
+        $floor = $this->countTokens((clone $this)->compact($messages));
+
+        return $floor >= $threshold;
     }
 
     /**
@@ -513,7 +545,10 @@ final class ContextCompactor
         $tokenCount = $this->countTokens($messages);
         $threshold = $this->config->reminderTokenThreshold($tokenLimit);
 
-        return $tokenCount >= $threshold;
+        // The same stand-down as the automatic tier (N-P4b): a reminder to
+        // compact that compacting could not satisfy is noise on every turn.
+        return $tokenCount >= $threshold
+            && !$this->absoluteTierIsFutile($messages, $tokenCount, $tokenLimit, $this->config->reminderThreshold, $threshold);
     }
 
     /**
