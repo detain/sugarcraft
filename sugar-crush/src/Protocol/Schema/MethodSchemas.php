@@ -267,7 +267,7 @@ final class MethodSchemas
                     'remoteRefusal' => Schema::string()->describe('Why a client may not write the key; absent when it may.'),
                 ], ['key', 'type', 'group', 'label', 'riskClass', 'applies', 'sensitive', 'writableRemotely'])),
                 'tiers' => Schema::arrayOf(Schema::object([
-                    'scope' => Schema::enum(['user', 'project']),
+                    'scope' => Schema::enum(['user', 'project', 'project-shared']),
                     'label' => Schema::string(),
                     'path' => Schema::string(),
                     'writable' => Schema::boolean(),
@@ -275,9 +275,9 @@ final class MethodSchemas
                 ], ['scope', 'label', 'writable']))->describe('The tiers a save can target, and whether each can be written now.'),
             ], ['items'])],
             'settings.get' => [
-                Schema::object(['scope' => Schema::enum(['effective', 'user', 'project'])]),
+                Schema::object(['scope' => Schema::enum(['effective', 'user', 'project', 'project-shared'])]),
                 Schema::object([
-                    'scope' => Schema::enum(['effective', 'user', 'project']),
+                    'scope' => Schema::enum(['effective', 'user', 'project', 'project-shared']),
                     'values' => Schema::map(Schema::any())->describe('Effective: key => {value, source, sourceLabel, sourcePath, shadowed, locked, lockReason}. A tier: the file\'s own object.'),
                     'files' => Schema::arrayOf(Schema::object([
                         'role' => Schema::string(),
@@ -289,7 +289,7 @@ final class MethodSchemas
             ],
             'settings.preview' => [
                 Schema::object([
-                    'scope' => Schema::enum(['user', 'project']),
+                    'scope' => Schema::enum(['user', 'project', 'project-shared']),
                     'set' => Schema::map(Schema::any()),
                     'unset' => Schema::arrayOf(Schema::string(128), 200),
                     'key' => Schema::string(128),
@@ -320,7 +320,7 @@ final class MethodSchemas
                     'reset' => Schema::boolean(),
                     'set' => Schema::map(Schema::any()),
                     'unset' => Schema::arrayOf(Schema::string(128), 200),
-                    'scope' => Schema::enum(['user', 'project']),
+                    'scope' => Schema::enum(['user', 'project', 'project-shared']),
                 ]),
                 Schema::object([
                     'key' => Schema::string(),

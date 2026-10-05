@@ -48,8 +48,8 @@ export function appliesLabel(row: Pick<SettingRow, 'applies' | 'appliesLabel'>):
  * Whether the form may edit `row` on `tier`, and the reason it may not —
  * shown beside the disabled field. In the order a user would want to hear
  * them: a key no client may write, a key the environment or a flag pins (a
- * save would be outranked), a tier that cannot be written, and a key the
- * project tier may not hold.
+ * save would be outranked), a tier that cannot be written, and a key a
+ * project tier (local or shared) may not hold.
  */
 export function editability(
   row: SettingRow,
@@ -59,7 +59,9 @@ export function editability(
   if (!row.writableRemotely) return { editable: false, reason: row.remoteRefusal ?? 'not writable over the wire' }
   if (effective?.locked) return { editable: false, reason: effective.lockReason ?? 'locked by the environment or a flag' }
   if (tier === undefined || !tier.writable) return { editable: false, reason: tier?.refusal ?? 'this tier cannot be written' }
-  if (tier.scope === 'project' && !row.projectSettable) return { editable: false, reason: 'user-tier only: a project may not set it' }
+  // Both project tiers — the local file and the committed shared one — take
+  // only the keys a project may set.
+  if (tier.scope !== 'user' && !row.projectSettable) return { editable: false, reason: 'user-tier only: a project may not set it' }
   return { editable: true, reason: null }
 }
 

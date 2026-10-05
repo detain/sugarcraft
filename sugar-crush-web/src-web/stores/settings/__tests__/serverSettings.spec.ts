@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { FakeSocket, FakeTimers, flush, helloResult } from '../../../__tests__/fakes'
 import { Backoff } from '../../../protocol/reconnect'
 import { useConnectionStore } from '../../connection'
+import { editability, type SettingRow, type TierInfo } from '../fields'
 import { useServerSettingsStore } from '../serverSettings'
 
 let sockets: FakeSocket[]
@@ -163,5 +164,21 @@ describe('server settings store', () => {
     await saving
     expect(settings.error).toContain('cannot be changed over the wire')
     expect(settings.stagedCount).toBe(1)
+  })
+
+  it('offers the committed project-shared tier, which takes only the keys a project may set (N-P5)', async () => {
+    const settings = await loaded()
+    settings.stage('parallelToolCalls', false)
+    settings.setScope('project-shared')
+    const previewing = settings.requestPreview()
+    await flush()
+    expect(sent('settings.preview')[0]?.params).toEqual({ scope: 'project-shared', set: { parallelToolCalls: false }, unset: [] })
+    answer('settings.preview', { scope: 'project-shared', path: '/p/.sugar-crush/settings.json', canSave: true, refusals: {}, changes: [], applySummary: '', notes: [], diff: '' })
+    await previewing
+
+    const shared = { scope: 'project-shared', label: 'This project (shared)', path: '/p/.sugar-crush/settings.json', writable: true } as TierInfo
+    const userOnly = { key: 'theme', type: 'enum', group: 'UI', label: 'Theme', riskClass: 'cosmetic', applies: 'live', sensitive: false, writableRemotely: true, projectSettable: false } as SettingRow
+    expect(editability(userOnly, undefined, shared)).toEqual({ editable: false, reason: 'user-tier only: a project may not set it' })
+    expect(editability({ ...userOnly, projectSettable: true }, undefined, shared)).toEqual({ editable: true, reason: null })
   })
 })

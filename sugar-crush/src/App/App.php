@@ -58,11 +58,19 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Crush\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Crush\Tui\Settings\SettingsEditor;
+use SugarCraft\Crush\Tui\Settings\SettingsFileEditedMsg;
+use SugarCraft\Crush\Tui\Settings\SettingsFileEditor;
+use SugarCraft\Crush\Tui\Settings\SettingsProfile;
+use SugarCraft\Crush\Tui\Settings\SettingsProfileMsg;
 use SugarCraft\Crush\Tui\Settings\SettingsSavedMsg;
 use SugarCraft\Crush\Tui\Settings\SettingsSavePreview;
 use SugarCraft\Crush\Config\Settings\SettingSource;
 use SugarCraft\Crush\Config\Settings\SettingsTier;
+use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingsWriter;
+use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Tui\Settings\SettingsSources;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\ZoneClickTracker;
@@ -1237,8 +1245,10 @@ final class App implements Model
             $writer->refusals($tier, $editor->set, $editor->unset),
         );
 
+        // The running turn keeps the settings it began with; the preview says
+        // so (Appendix N §4.8), and only the shell knows a turn is running.
         return $this->mutate(settingsEditor: $editor->withPreview(
-            $preview->withNotes(self::settingsShadowNotes($editor)),
+            $preview->withNotes(self::settingsShadowNotes($editor))->withTurnRunning($this->chat?->inFlight ?? false),
         ));
     }
 
@@ -2081,6 +2091,8 @@ final class App implements Model
             $msg instanceof WindowSizeMsg => $this->handleWindowSize($msg),
             $msg instanceof OpenSettingsMsg => [$this->openSettings($msg->query), null],
             $msg instanceof SettingsSavedMsg => $this->settingsSaved($msg),
+            $msg instanceof SettingsFileEditedMsg => $this->settingsFileEdited($msg),
+            $msg instanceof SettingsProfileMsg => [$this->settingsProfileDone($msg), null],
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
             $msg instanceof DockPaneMsg,
@@ -2913,7 +2925,184 @@ final class App implements Model
             return $this->grantProjectTrust();
         }
 
+        // N-P5: the profile prompt's Enter, and the file / profile keys.
+        if ($editor->profileAction() !== null && $msg->type === KeyType::Enter) {
+            return $this->runSettingsProfile();
+        }
+
+        if ($editor->isIdle()) {
+            return match ($rune) {
+                'e' => $this->editSettingsFile(),
+                'x' => [$this->mutate(settingsEditor: $editor->withProfilePrompt(SettingsEditor::PROFILE_EXPORT, $this->defaultProfilePath())), null],
+                'p' => [$this->mutate(settingsEditor: $editor->withProfilePrompt(SettingsEditor::PROFILE_IMPORT, $this->defaultProfilePath())), null],
+                default => null,
+            };
+        }
+
         return null;
+    }
+
+    /** Where the profile prompt starts: beside the file "You" saves to. */
+    private function defaultProfilePath(): string
+    {
+        return SettingsProfile::defaultPath($this->settingsWriter?->targetPath(SettingsTier::You));
+    }
+
+    /**
+     * `e` in the settings view (N-P5, "open the file in `$EDITOR`"): the
+     * highlighted file on the Files tab, else the file the chosen tier saves
+     * to, opened in the user's editor through a {@see SettingsFileEditor} Cmd
+     * (the terminal is handed over and given back). What the file holds now is
+     * read first — one small read on an explicit request, like
+     * {@see previewSettings()} — so the answer can say what the edit changed.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function editSettingsFile(): array
+    {
+        $editor = $this->settingsEditor;
+        if ($editor === null) {
+            return [$this, null];
+        }
+
+        $path = $editor->selectedFilePath();
+        if ($path === null) {
+            $writer = $this->settingsWriter;
+            if ($writer === null) {
+                return [$this->mutate(settingsEditor: $editor->withNotice('Not opened: settings cannot be saved from this session')), null];
+            }
+
+            if ($editor->tier === SettingsTier::Session) {
+                return [$this->mutate(settingsEditor: $editor->withNotice('Not opened: ' . SettingsTier::Session->label() . ' has no file — t switches the tier')), null];
+            }
+
+            $path = $writer->targetPath($editor->tier);
+            if ($path === null) {
+                return [$this->mutate(settingsEditor: $editor->withNotice('Not opened: ' . (string) $writer->tierRefusal($editor->tier))), null];
+            }
+
+            // A project tier's `.sugar-crush` may not exist yet; the writer
+            // vouched for the path, so the directory is made the way a save
+            // would make it, or the editor could not write the file.
+            $dir = \dirname($path);
+            if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
+                return [$this->mutate(settingsEditor: $editor->withNotice("Not opened: {$dir} could not be created")), null];
+            }
+        }
+
+        $before = is_file($path) ? LayeredSettings::decodedFile($path) : [];
+
+        return [$this, SettingsFileEditor::new()->cmd($path, $before)];
+    }
+
+    /**
+     * The editor `e` opened has exited: re-read the layers so the rows show
+     * what the files now say, name the settings the edit changed, and hand
+     * those to the hosted chat to apply — the same path a save takes
+     * ({@see settingsSaved()}), except that nothing staged is touched.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function settingsFileEdited(SettingsFileEditedMsg $msg): array
+    {
+        $editor = $this->settingsEditor;
+        if (!$msg->ok()) {
+            return [$editor === null ? $this : $this->mutate(settingsEditor: $editor->withNotice('Not re-read: ' . (string) $msg->error)), null];
+        }
+
+        // Read strictly: a file the edit left unparseable is said so, and
+        // nothing is applied from it.
+        $after = [];
+        $broken = false;
+        if (is_file($msg->path)) {
+            try {
+                $after = AtomicJsonFile::new($msg->path)->read();
+                $broken = $after !== [] && array_is_list($after);
+            } catch (\Throwable) {
+                $broken = true;
+            }
+        }
+
+        $changed = [];
+        foreach (array_unique([...array_keys($msg->before), ...array_keys($after)]) as $key) {
+            $key = (string) $key;
+            $was = \array_key_exists($key, $msg->before) ? $msg->before[$key] : null;
+            $now = \array_key_exists($key, $after) ? $after[$key] : null;
+            if (SettingsSchema::byKey($key) !== null && ($was !== $now || \array_key_exists($key, $msg->before) !== \array_key_exists($key, $after))) {
+                $changed[] = $key;
+            }
+        }
+
+        $app = $this;
+        if ($editor !== null) {
+            $editor = $editor->withResolved($this->settingsSources !== null
+                ? ($this->settingsSources)()
+                : SettingsSources::bestEffort($this->root));
+            $status = match (true) {
+                $broken => 'Not applied: ' . $msg->path . ' is not a JSON object now — fix it (e) before the next launch',
+                $changed === [] => 'Edited ' . $msg->path . ': no setting changed',
+                default => sprintf('Edited %s: %d setting%s changed (%s)', $msg->path, \count($changed), \count($changed) === 1 ? '' : 's', implode(', ', $changed)),
+            };
+            $app = $this->mutate(settingsEditor: $editor->withNotice($status));
+        }
+
+        if ($broken || $changed === [] || $app->chat === null) {
+            return [$app, null];
+        }
+
+        [$chat, $cmd] = $app->chat->applySettings($changed, $msg->path);
+
+        return [$app->withChat($chat), $cmd];
+    }
+
+    /**
+     * `Enter` on the profile prompt: export what this launch's files and
+     * session set ({@see SettingsProfile::values()}) to the path typed, or
+     * read the profile there to stage it. Both are Cmds — file I/O — answered
+     * with a {@see SettingsProfileMsg}.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function runSettingsProfile(): array
+    {
+        $editor = $this->settingsEditor;
+        $action = $editor?->profileAction();
+        if ($editor === null || $action === null) {
+            return [$this, null];
+        }
+
+        $path = SettingsProfile::expand((string) $editor->profilePath(), HomeDirectory::owned());
+        $editor = $editor->cancelEdit();
+        if ($path === '') {
+            return [$this->mutate(settingsEditor: $editor->withNotice('Not done: no file named')), null];
+        }
+
+        if ($action === SettingsEditor::PROFILE_EXPORT) {
+            $values = SettingsProfile::values($editor->resolved);
+
+            return [$this->mutate(settingsEditor: $editor), static function () use ($path, $values): SettingsProfileMsg {
+                try {
+                    SettingsProfile::write($path, $values);
+
+                    return SettingsProfileMsg::exported($path, $values);
+                } catch (\Throwable $e) {
+                    return SettingsProfileMsg::failed(SettingsProfileMsg::EXPORT, $path, $e->getMessage());
+                }
+            }];
+        }
+
+        return [$this->mutate(settingsEditor: $editor), static function () use ($path): SettingsProfileMsg {
+            try {
+                return SettingsProfileMsg::imported($path, SettingsProfile::read($path));
+            } catch (\Throwable $e) {
+                return SettingsProfileMsg::failed(SettingsProfileMsg::IMPORT, $path, $e->getMessage());
+            }
+        }];
+    }
+
+    private function settingsProfileDone(SettingsProfileMsg $msg): self
+    {
+        return $this->settingsEditor === null ? $this : $this->mutate(settingsEditor: $this->settingsEditor->withProfileResult($msg));
     }
 
     /**

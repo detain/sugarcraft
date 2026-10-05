@@ -420,7 +420,7 @@ it and the two tables below are generated from the code
 | `settings.get` | read |  | — | Effective values and where each came from, or one tier's file; secrets masked. |
 | `settings.preview` | admin |  | — | What a save would write — the target file's diff, when each change applies, and what blocks it — without writing. |
 | `settings.schema` | read |  | — | Every setting: type, default, help, apply mode, and whether a client may write it; and the tiers a save can target. |
-| `settings.set` | admin | yes | — | Write allowlisted settings to the user tier or a trusted project, in one write. |
+| `settings.set` | admin | yes | — | Write allowlisted settings to the user tier or a trusted project's local or shared file, in one write. |
 | `todo.get` | read |  | `sessionId` | A session's todo list, as its Todo tool last wrote it. |
 | `tool.output` | read |  | `sessionId`, `toolCallId` | A finished tool call's full output, from an offset. |
 | `workflow.list` | read |  | — | The workflows /workflow run can start. |
@@ -627,10 +627,12 @@ and [`SETTINGS.md`](SETTINGS.md) are built from — type, default, choices,
 help, when a change applies, the environment variable or flag that can lock
 it, `sensitive`, and `writableRemotely` with the reason when it is not — plus
 the tiers a save can target (your config, and a trusted project's
-`settings.local.json`) and whether each can be written now. `settings.get`
+`settings.local.json` and committed `settings.json`) and whether each can be
+written now. `settings.get`
 answers every key's effective value with its provenance — which layer won, from
 which file, which layers it shadows, and the environment or flag lock — and the
-files behind those layers (or one tier's file with `scope: "user"|"project"`).
+files behind those layers (or one tier's file with
+`scope: "user"|"project"|"project-shared"`).
 A secret never travels: a secret-typed key, any key at any depth whose name
 says it is a credential (`apiKey`, `token`, `Authorization`…), and the userinfo
 of a URL read as `"********"`.
@@ -639,8 +641,11 @@ of a URL read as `"********"`.
 tuning or narrowing — never anything that runs a command, pulls files into
 prompts, spends money, grants trust, changes permissions or the server's own
 binding, holds a secret, or is owned by a live command (`theme` is `/theme`'s,
-`provider` is `/model`'s) — and only to your config or a trusted project's
-local file, through the same writer and refusals as the TUI editor. It takes
+`provider` is `/model`'s) — and only to your config (`scope: "user"`) or a
+trusted project's local file (`"project"`) or committed shared file
+(`"project-shared"`, `.sugar-crush/settings.json`, whose preview notes that
+everyone who clones the repository and trusts it gets the values), through the
+same writer and refusals as the TUI editor. It takes
 one key (`key` + `value`, or `key` + `reset`) or a whole change set (`set` and
 `unset`), and writes all of it or none of it; a reset deletes the key rather
 than writing its default. `settings.preview` (also `admin`) answers what that
@@ -653,8 +658,8 @@ would be state every hosted session shares.
 The web UI's **Settings** page is generated from `settings.schema`: one form,
 grouped as the TUI editor groups it, each field badged with when it applies and
 showing where its value comes from. A field a client may not write, a field the
-environment or a flag locks, and — on the project tier — a key a project may
-not set are shown disabled with the reason. Changes are staged, previewed as a
+environment or a flag locks, and — on either project tier — a key a project
+may not set are shown disabled with the reason. Changes are staged, previewed as a
 diff, and saved in one write; a reset is staged the same way.
 
 ### Background sessions

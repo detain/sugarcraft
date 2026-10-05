@@ -116,6 +116,10 @@ final class SettingsWriterCensusTest extends TestCase
             'App/App.php::grantProjectTrust->grantTrust' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
             'Protocol/Methods/SettingsMethods.php::set->write' => 1,
+            // N-P5: a settings PROFILE, not a settings file — its write is
+            // AtomicJsonFile's, it names SettingsWriter only to ask which keys
+            // a tier takes, and it refuses any settings file's name.
+            'Tui/Settings/SettingsProfile.php::write->write' => 1,
         ], $sites);
     }
 
@@ -135,7 +139,10 @@ final class SettingsWriterCensusTest extends TestCase
             }
         }
 
-        self::assertSame(['Config/Settings/SettingsWriter.php'], array_keys($files));
+        // SettingsProfile writes a profile file the user names (N-P5), never a
+        // settings layer: it refuses config.json / settings.json /
+        // settings.local.json by name (SettingsFilesAndProfilesTest).
+        self::assertSame(['Config/Settings/SettingsWriter.php', 'Tui/Settings/SettingsProfile.php'], array_keys($files));
     }
 
     /**

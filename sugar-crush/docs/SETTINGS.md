@@ -1141,8 +1141,8 @@ which is the web UI's settings form. That form is generated from the same
 schema as this view and shows the same things — each field's tier, where its
 value comes from, the environment or flag lock, when a change applies, and the
 save preview — but it may write only the cosmetic, tuning and narrowing keys,
-to your config or a trusted project's local file, never to this session's
-tier.
+to your config or a trusted project's local or shared (committed) file, never
+to this session's tier.
 
 | Tier | File | Keys |
 |---|---|---|
@@ -1166,6 +1166,11 @@ unified diff of its JSON (sugar-diff), and when each change applies. A save is
 refused, with the reason, for a key the schema does not define or marks
 read-only, for a value of the wrong type or outside its range, for a
 `permissionMode` that is not a mode (the launch would refuse it), for a
+`permissionRules` list the launch would not load whole — judged by the
+launch's own parser, `Bootstrap::permissionRules()`, so a rule with no
+`pattern`, an `action` that is not `allow`, `deny` or `ask`, or a pattern the
+grammar rejects refuses the save rather than being skipped at the next launch
+(a skipped `deny` would widen what runs), for a
 `modelPrices` entry that is not `{"input": n, "output": n}` with non-negative
 numbers (an optional `cached` likewise), for a
 project-tier key a project may not set, and for the trust lists — those change
@@ -1189,11 +1194,17 @@ The keys, all plain letters (no `Ctrl+S`/`Ctrl+R`: both are already taken):
 | `Esc` with changes staged | Ask before closing: `d` discards them, `k` keeps editing, `s` previews the save |
 | `↑` / `↓` in the preview | Scroll a preview taller than the view (or `k` / `j`) |
 | `i` | Below 70 columns or 18 rows the view is a single column: show the highlighted key's details in the list's place, and back |
+| `e` | Open the file the chosen tier saves to in your editor (`$VISUAL`, else `$EDITOR`, else `vi`) — or, on the **Files** tab, the highlighted file. When the editor exits the view re-reads every layer, names the settings the edit changed and applies them as a save would; a file the edit left unparseable is said so and nothing is applied from it |
+| `x` | Export a settings profile: a path prompt (`Enter` writes it, `Esc` cancels), pre-filled with `profiles/settings-profile.json` beside your `config.json` |
+| `p` | Import a settings profile: a path prompt; `Enter` stages its settings on the chosen tier — nothing is written until `s` and `y` |
 
 What the view does not let you change says so. A key an environment variable
 or a flag sets is **locked** — read-only here, with the variable named, because
-it outranks every file a save could write. A key with no field (`permissionRules`,
-the trust lists, `layout`) says where it *is* changed. A nested map —
+it outranks every file a save could write. A key with no field (the trust
+lists, `layout`) says where it *is* changed. `permissionRules` is edited as one
+JSON list, in order — `[{"pattern": "Bash(rm *)", "action": "deny"}, …]` — and
+saved only to **You**, after the launch's own parser has accepted every rule.
+A nested map —
 `modelPrices`, `lintCommands`, `lsp`, `statusLine`, `attribution`, `extraBody`,
 `compaction.modelTokenCaps` — is edited as one JSON object. `models` edits the
 active provider's entry, and `<provider>=<model id>` edits any other's
@@ -1207,6 +1218,19 @@ several words finds the keys holding every one of them.
 The confirmed trust action adds this launch's project root to that list in your
 `config.json` (`SettingsWriter::grantTrust()`), and like every trust grant it
 applies from the next launch.
+
+A **settings profile** is the settings your files and this session set, as one
+flat JSON object — the same shape as a settings file, so it can be dropped in
+as one. An export leaves out defaults, values an environment variable or a
+flag supplied, secrets (any key the wire protocol masks), the trust lists and
+the keys the app writes itself; the file is written owner-only. An import
+stages each key the chosen tier takes; a key that is not a setting, one the
+tier refuses (`provider` and `theme` on **You**, a user-only key on a project
+tier) and a value already in force are named on the status line rather than
+staged.
+
+A save made while a turn is running says so in its preview: that turn read its
+settings when it started, so the change reaches the next turn at the earliest.
 
 Saved is not applied: see the next section for when each key takes effect.
 

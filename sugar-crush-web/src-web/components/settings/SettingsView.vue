@@ -68,6 +68,9 @@ watch(() => connection.connected, (connected) => {
         <input v-model="filter" class="filter" type="search" placeholder="Filter settings…" aria-label="Filter settings" data-testid="settings-filter">
       </div>
       <p v-if="settings.tier && !settings.tier.writable" class="muted">{{ settings.tier.refusal }}</p>
+      <p v-else-if="settings.scope === 'project-shared'" class="warn" data-testid="settings-shared-warning">
+        This project's shared settings file is committed: everyone who clones the repository and trusts it gets what you save here.
+      </p>
     </header>
 
     <p v-if="settings.error" class="error" role="alert" data-testid="settings-error">{{ settings.error }}</p>

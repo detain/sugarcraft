@@ -1920,6 +1920,45 @@ final class KeyBindingDriftTest extends TestCase
                 [$list] = $detail->update($k[0]);
                 $this->assertFalse($list->settingsEditor?->detail, 'and the same key brings the list back');
             },
+            // N-P5: `e` hands the terminal to $EDITOR (the Cmd is not run
+            // here — it would start one), `x` / `p` open the profile prompt
+            // and Enter on it runs the export or the import.
+            'settings.open-file' => function (array $k): void {
+                [$app, $cmd] = $this->settingsEditApp('max tool steps')->update($k[0]);
+                $this->assertInstanceOf(\Closure::class, $cmd, 'the editor runs as a Cmd');
+                $this->assertNull($app->settingsEditor?->status, 'nothing refused it');
+            },
+            'settings.export' => function (array $k): void {
+                $config = '';
+                $app = $this->settingsEditApp('max tool steps', config: $config);
+                file_put_contents($config, '{"maxToolSteps": 33}');
+                [$prompt] = $app->openSettings()->update($k[0]);
+                $this->assertSame(\SugarCraft\Crush\Tui\Settings\SettingsEditor::PROFILE_EXPORT, $prompt->settingsEditor?->profileAction());
+                [$done, $cmd] = $prompt->update(new KeyMsg(KeyType::Enter));
+                $this->assertInstanceOf(\Closure::class, $cmd);
+                [$after] = $done->update($cmd());
+                $path = \dirname($config) . '/profiles/settings-profile.json';
+                $this->assertSame(['maxToolSteps' => 33], json_decode((string) file_get_contents($path), true));
+                $this->assertStringStartsWith('Exported 1 setting', (string) $after->settingsEditor?->status);
+            },
+            'settings.import' => function (array $k): void {
+                $config = '';
+                $app = $this->settingsEditApp('max tool steps', config: $config);
+                @mkdir(\dirname($config) . '/profiles', 0o700, true);
+                file_put_contents(\dirname($config) . '/profiles/settings-profile.json', '{"maxToolSteps": 12}');
+                [$prompt] = $app->update($k[0]);
+                $this->assertSame(\SugarCraft\Crush\Tui\Settings\SettingsEditor::PROFILE_IMPORT, $prompt->settingsEditor?->profileAction());
+                [$done, $cmd] = $prompt->update(new KeyMsg(KeyType::Enter));
+                [$after] = $done->update($cmd());
+                $this->assertSame(['maxToolSteps' => 12], $after->settingsEditor?->set, 'the profile is staged, not written');
+                $this->assertFileDoesNotExist($config);
+            },
+            'settings.profile-go' => function (array $k): void {
+                [$prompt] = $this->settingsEditApp('max tool steps')->update(new KeyMsg(KeyType::Char, 'p'));
+                [$app, $cmd] = $prompt->update($k[0]);
+                $this->assertInstanceOf(\Closure::class, $cmd, 'the read is a Cmd');
+                $this->assertNull($app->settingsEditor?->profileAction(), 'the prompt closes');
+            },
             'settings.preview-scroll' => function (array $k): void {
                 [$previewing] = $this->settingsEditApp('max tool steps', stage: true)->update(new KeyMsg(KeyType::Char, 's'));
                 $this->assertNotNull($previewing->settingsEditor?->preview, 'fixture: the save preview is open');

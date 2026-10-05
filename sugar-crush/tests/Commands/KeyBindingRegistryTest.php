@@ -318,11 +318,15 @@ final class KeyBindingRegistryTest extends TestCase
      *
      * 127 -> 128 live (128 all) with the question-aware permission modal
      * (roadmap 5.7-2): `permission.choice`, `1…6` picks an AskUser choice.
+     *
+     * 128 -> 132 live (132 all) with the settings view's files and profiles
+     * (roadmap N-P5 remainder): `settings.open-file` (`e`), `.export` (`x`),
+     * `.import` (`p`) and `.profile-go` (`Enter` on the path prompt).
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(128, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(128, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(132, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(132, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(12, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

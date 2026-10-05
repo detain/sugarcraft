@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Config\Settings;
 
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\ContainedPath;
@@ -52,7 +53,13 @@ use SugarCraft\Crush\Support\ContainedPath;
  *    all for an untrusted (or unnamed) project;
  *  - a `modelPrices` entry that is not `{"input": n, "output": n}` with
  *    non-negative numbers (an optional `cached` likewise): the provider prices
- *    a malformed row as "unpriced", so the editor must not write one.
+ *    a malformed row as "unpriced", so the editor must not write one;
+ *  - a `permissionRules` value the launch would not load whole — judged by the
+ *    launch's own strict parser, {@see Bootstrap::permissionRules()}, with its
+ *    complaints collected instead of announced (N-P5). The launch SKIPS a bad
+ *    rule and carries on, and a skipped `deny` is a silent widening, so the
+ *    editor refuses the whole value rather than write a rule the next launch
+ *    would drop.
  *
  * A RESET DELETES THE KEY (`$unset`) rather than writing the default, so a
  * later change to the default still reaches the user. An explicit `null` is
@@ -533,13 +540,43 @@ final class SettingsWriter
             }
         }
 
-        // The strict key: the launch refuses a permissionMode it cannot parse,
-        // so the editor must never be able to write one.
+        // The strict keys: the launch refuses a permissionMode it cannot parse,
+        // and skips a permission rule it cannot, so the editor must never be
+        // able to write either.
         if ($key === 'permissionMode' && PermissionMode::tryFrom((string) $value) === null) {
             return "{$key}: '{$value}' is not a permission mode";
         }
 
+        if ($key === 'permissionRules') {
+            return self::permissionRulesRefusal($value);
+        }
+
         return null;
+    }
+
+    /**
+     * Why the launch would not load every rule of `$value`, or null. A list is
+     * required (the launch iterates a map too, but a rule's position is its
+     * precedence, and an object has none worth trusting); every entry is then
+     * judged by {@see Bootstrap::permissionRules()} itself, so the editor and
+     * the launch cannot disagree about what a valid rule is. `[]` is valid: no
+     * rules from this file.
+     */
+    private static function permissionRulesRefusal(mixed $value): ?string
+    {
+        if (!\is_array($value) || !array_is_list($value)) {
+            return 'permissionRules: expected a JSON list of {"pattern": "Tool(argument-pattern)", "action": "allow|deny|ask"} rules';
+        }
+
+        $problems = [];
+        Bootstrap::permissionRules(
+            ['permissionRules' => $value],
+            static function (string $problem) use (&$problems): void {
+                $problems[] = $problem;
+            },
+        );
+
+        return $problems[0] ?? null;
     }
 
     /**

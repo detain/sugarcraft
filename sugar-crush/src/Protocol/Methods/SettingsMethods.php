@@ -61,7 +61,10 @@ use SugarCraft\Crush\Tui\Settings\SettingsSources;
  * permission rules and mode, the server's own binding), or holds a secret.
  * Every write goes through the launch's {@see SettingsWriter} — the same door,
  * with the same tier and type refusals, as the TUI editor's and `/model`'s —
- * and only to the user tier or a trusted project's local file. The session
+ * and only to the user tier or a trusted project's local or shared (committed)
+ * file — `scope` `user`, `project` or `project-shared` (N-P5; the TUI's
+ * "This project (shared)" tier, whose preview warns that the file is
+ * committed — this preview carries the same note). The session
  * tier is not offered: in a server it would be process state shared by every
  * session the server hosts, which is not what "this session only" promises.
  */
@@ -73,6 +76,16 @@ final class SettingsMethods
     public const MAX_CHANGES = 200;
 
     private const REMOTE_RISK_CLASSES = [RiskClass::Cosmetic, RiskClass::Tuning, RiskClass::Narrowing];
+
+    /** The wire's `scope` for each tier a client may save to, in the order offered. */
+    public const WRITE_SCOPES = [
+        'user' => SettingsTier::You,
+        'project' => SettingsTier::ProjectLocal,
+        'project-shared' => SettingsTier::ProjectShared,
+    ];
+
+    /** What the preview says about a save to the committed project file. */
+    public const SHARED_NOTE = 'a committed file: everyone who clones this repository and trusts it gets these values';
 
     /**
      * A key name that holds a credential: the LAST segment ends in one of
@@ -90,7 +103,7 @@ final class SettingsMethods
         $registry->add(MethodSpec::new('settings.schema', Scope::Read, 'Every setting: type, default, help, apply mode, and whether a client may write it; and the tiers a save can target.', self::schema(...)));
         $registry->add(MethodSpec::new('settings.get', Scope::Read, 'Effective values and where each came from, or one tier\'s file; secrets masked.', self::get(...)));
         $registry->add(MethodSpec::new('settings.preview', Scope::Admin, 'What a save would write — the target file\'s diff, when each change applies, and what blocks it — without writing.', self::preview(...)));
-        $registry->add(MethodSpec::new('settings.set', Scope::Admin, 'Write allowlisted settings to the user tier or a trusted project, in one write.', self::set(...), true));
+        $registry->add(MethodSpec::new('settings.set', Scope::Admin, 'Write allowlisted settings to the user tier or a trusted project\'s local or shared file, in one write.', self::set(...), true));
     }
 
     /** Whether a client may write $definition over the wire. */
@@ -191,7 +204,7 @@ final class SettingsMethods
 
         $writer = $call->server->hub()->workspace()->service(SettingsWriter::class);
         $tiers = [];
-        foreach (['user' => SettingsTier::You, 'project' => SettingsTier::ProjectLocal] as $scope => $tier) {
+        foreach (self::WRITE_SCOPES as $scope => $tier) {
             $refusal = $writer instanceof SettingsWriter ? $writer->tierRefusal($tier) : 'this server has no settings writer';
             $tiers[] = \array_filter([
                 'scope' => $scope,
@@ -208,7 +221,7 @@ final class SettingsMethods
     /** @return array<string, mixed> */
     private static function get(CallContext $call, Params $params): array
     {
-        $scope = $params->enum('scope', ['effective', 'user', 'project'], 'effective');
+        $scope = $params->enum('scope', ['effective', ...\array_keys(self::WRITE_SCOPES)], 'effective');
         if ($scope !== 'effective') {
             $tier = self::tier($scope);
             $values = self::masked(self::current(self::writer($call), $tier));
@@ -244,7 +257,7 @@ final class SettingsMethods
     /** @return array<string, mixed> */
     private static function preview(CallContext $call, Params $params): array
     {
-        $scope = $params->enum('scope', ['user', 'project'], 'user');
+        $scope = $params->enum('scope', \array_keys(self::WRITE_SCOPES), 'user');
         $tier = self::tier($scope);
         [$set, $unset] = self::changeSet($params);
         $writer = self::writer($call);
@@ -296,7 +309,7 @@ final class SettingsMethods
             'refusals' => $refusals === [] ? new \stdClass() : $refusals,
             'changes' => $changes,
             'applySummary' => $preview->applySummary(),
-            'notes' => self::shadowNotes(self::sources($call), $tier, $set),
+            'notes' => [...($tier === SettingsTier::ProjectShared ? [self::SHARED_NOTE] : []), ...self::shadowNotes(self::sources($call), $tier, $set)],
             'diff' => $preview->diff()->hunkText(),
         ];
     }
@@ -304,7 +317,7 @@ final class SettingsMethods
     /** @return array<string, mixed> */
     private static function set(CallContext $call, Params $params): array
     {
-        $scope = $params->enum('scope', ['user', 'project'], 'user');
+        $scope = $params->enum('scope', \array_keys(self::WRITE_SCOPES), 'user');
         [$set, $unset] = self::changeSet($params);
 
         $forbidden = [];
@@ -467,7 +480,7 @@ final class SettingsMethods
 
     private static function tier(string $scope): SettingsTier
     {
-        return $scope === 'user' ? SettingsTier::You : SettingsTier::ProjectLocal;
+        return self::WRITE_SCOPES[$scope] ?? SettingsTier::You;
     }
 
     private static function credentialName(string $key): bool

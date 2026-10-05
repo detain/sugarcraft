@@ -26,10 +26,14 @@ use SugarCraft\Forms\Field\Select;
  * model can be chosen for a provider before switching to it. A complex MAP key
  * (`modelPrices`, `lintCommands`, `statusLine`, …; N-P5) → an {@see Input}
  * holding the whole map as one JSON object, parsed back and refused unless it
- * is one. Read-only and hidden keys, `permissionRules` (whose strict parser is
- * the launch's own) and the trust grants get no inline field ({@see field()}
- * answers null): those are edited by hand or through their own confirmed
- * action.
+ * is one. `permissionRules` (N-P5) → an {@see Input} holding the ordered rule
+ * list as one JSON array, parsed back and refused unless it is one; whether
+ * each rule is one the launch loads is the writer's call, made by the
+ * launch's own strict parser (`Bootstrap::permissionRules()`), so a value the
+ * view stages is judged by exactly the code that will read it. Read-only and
+ * hidden keys and the trust grants get no inline field ({@see field()}
+ * answers null): those are written by the app itself or through their own
+ * confirmed action.
  *
  * Validation stays the writer's ({@see \SugarCraft\Crush\Config\Settings\SettingsWriter::refusal()})
  * so a value is judged by one set of rules wherever it comes from; this class
@@ -102,6 +106,13 @@ final class SettingsFieldFactory
                 ->withValue(\is_array($current) && $current !== [] ? self::text($definition, $current) : '{}');
         }
 
+        if (self::jsonList($definition)) {
+            return Input::new($definition->key)
+                ->withTitle($title)
+                ->withDescription('One JSON list, first match wins: [{"pattern": "Bash(rm *)", "action": "deny"}, …]. ' . $definition->help)
+                ->withValue(\is_array($current) ? (string) json_encode(array_values($current), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) : '[]');
+        }
+
         $input = Input::new($definition->key)
             ->withTitle($title)
             ->withDescription($definition->type === SettingType::StringList ? 'Comma-separated.' : $definition->help)
@@ -113,7 +124,8 @@ final class SettingsFieldFactory
     /** Whether the key gets an inline field at all (the provider is checked separately for `models`). */
     public static function editable(SettingDefinition $definition): bool
     {
-        return (\in_array($definition->ui, [UiEditability::Easy, UiEditability::List], true) || self::jsonMap($definition))
+        return (\in_array($definition->ui, [UiEditability::Easy, UiEditability::List], true)
+            || self::jsonMap($definition) || self::jsonList($definition))
             && $definition->applyMode !== ApplyMode::Frozen;
     }
 
@@ -131,7 +143,6 @@ final class SettingsFieldFactory
             $definition->applyMode === ApplyMode::Frozen
                 => $definition->label . ' is set by hand in your config.json; it applies from the next launch',
             $definition->ui === UiEditability::ReadOnly => $definition->label . ' is written by the app itself, not edited here',
-            $definition->key === 'permissionRules' => $definition->label . ' is edited by hand in your settings.json or config.json (/permissions lists them)',
             default => $definition->label . ' is edited by hand in your config.json',
         };
     }
@@ -140,6 +151,15 @@ final class SettingsFieldFactory
     private static function jsonMap(SettingDefinition $definition): bool
     {
         return $definition->ui === UiEditability::Complex && $definition->type === SettingType::Map;
+    }
+
+    /**
+     * A complex value that is an ordered list (`permissionRules`, the one
+     * `Complex` key of type `Json`): edited as one JSON array.
+     */
+    private static function jsonList(SettingDefinition $definition): bool
+    {
+        return $definition->ui === UiEditability::Complex && $definition->type === SettingType::Json;
     }
 
     /**
@@ -187,6 +207,15 @@ final class SettingsFieldFactory
             // reset does not state better: the reset removes the key.
             if ($decoded === []) {
                 throw new \InvalidArgumentException("{$definition->label} is empty; press r to reset it instead");
+            }
+
+            return $decoded;
+        }
+
+        if (self::jsonList($definition)) {
+            $decoded = json_decode($text === '' ? '[]' : $text, true);
+            if (!\is_array($decoded) || !array_is_list($decoded)) {
+                throw new \InvalidArgumentException("{$definition->label} needs one JSON list, e.g. [{\"pattern\": \"Bash\", \"action\": \"ask\"}]");
             }
 
             return $decoded;

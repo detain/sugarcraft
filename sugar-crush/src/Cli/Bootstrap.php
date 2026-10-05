@@ -6888,10 +6888,19 @@ final class Bootstrap
      * stderr side as well, so the count is now one apiece. That is a change to
      * stderr, and it is the fix, not a side effect.
      *
+     * PUBLIC, AND THE REPORT IS INJECTABLE, so the settings view's writer
+     * judges a `permissionRules` value with THIS parser rather than a copy
+     * ({@see \SugarCraft\Crush\Config\Settings\SettingsWriter}'s type check,
+     * roadmap N-P5): it passes `$report` to collect each complaint instead of
+     * announcing it, and refuses the save on the first. A value the writer
+     * accepts is therefore one the next launch loads every rule of — the
+     * editor can never write a rule this method would skip.
+     *
      * @param array<string, mixed> $config the already-read user config
+     * @param ?\Closure(string): void $report where each complaint goes; null = both channels
      * @return list<PermissionRule>
      */
-    private static function permissionRules(array $config): array
+    public static function permissionRules(array $config, ?\Closure $report = null): array
     {
         // ABSENT AND EXPLICITLY NULL ARE DIFFERENT THINGS HERE, and they were
         // not before: `?? null` collapsed them, so `"permissionRules": null`
@@ -6907,18 +6916,24 @@ final class Bootstrap
 
         $raw = $config[self::PERMISSION_RULES_CONFIG_KEY];
         if ($raw === null) {
-            self::warnPermissionConfigInTranscript(
-                self::PERMISSION_RULES_CONFIG_KEY . ' is present but null rather than a list of rules; '
-                . 'no rules were loaded',
-            );
+            $complaint = self::PERMISSION_RULES_CONFIG_KEY . ' is present but null rather than a list of rules; '
+                . 'no rules were loaded';
+            if ($report !== null) {
+                $report($complaint);
+            } else {
+                self::warnPermissionConfigInTranscript($complaint);
+            }
 
             return [];
         }
 
         if (!is_array($raw)) {
-            self::warnPermissionConfigInTranscript(
-                self::PERMISSION_RULES_CONFIG_KEY . ' is not a list of rules; no rules were loaded',
-            );
+            $complaint = self::PERMISSION_RULES_CONFIG_KEY . ' is not a list of rules; no rules were loaded';
+            if ($report !== null) {
+                $report($complaint);
+            } else {
+                self::warnPermissionConfigInTranscript($complaint);
+            }
 
             return [];
         }
@@ -6926,9 +6941,12 @@ final class Bootstrap
         $rules = [];
         foreach ($raw as $index => $entry) {
             if (!is_array($entry) || !is_string($entry['pattern'] ?? null)) {
-                self::warnPermissionConfigInTranscript(
-                    self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] has no string 'pattern'; rule skipped",
-                );
+                $complaint = self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] has no string 'pattern'; rule skipped";
+                if ($report !== null) {
+                    $report($complaint);
+                } else {
+                    self::warnPermissionConfigInTranscript($complaint);
+                }
                 continue;
             }
 
@@ -6936,10 +6954,13 @@ final class Bootstrap
                 ? PermissionAction::tryFrom($entry['action'])
                 : null;
             if ($action === null) {
-                self::warnPermissionConfigInTranscript(
-                    self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') has no valid 'action' "
-                    . "(expected allow, deny or ask); rule skipped rather than coerced",
-                );
+                $complaint = self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') has no valid 'action' "
+                    . "(expected allow, deny or ask); rule skipped rather than coerced";
+                if ($report !== null) {
+                    $report($complaint);
+                } else {
+                    self::warnPermissionConfigInTranscript($complaint);
+                }
                 continue;
             }
 
@@ -6963,11 +6984,14 @@ final class Bootstrap
             // that produces it.
             $rejection = PermissionRule::patternRejectionReason($entry['pattern']);
             if ($rejection !== null) {
-                self::warnPermissionConfigInTranscript(
-                    self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') {$rejection}, so it is "
+                $complaint = self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') {$rejection}, so it is "
                     . 'not a Tool or Tool(argument-pattern) pattern; rule skipped rather than loaded as a pattern '
-                    . 'that would match nothing',
-                );
+                    . 'that would match nothing';
+                if ($report !== null) {
+                    $report($complaint);
+                } else {
+                    self::warnPermissionConfigInTranscript($complaint);
+                }
                 continue;
             }
 

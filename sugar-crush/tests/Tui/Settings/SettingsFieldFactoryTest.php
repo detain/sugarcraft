@@ -43,13 +43,42 @@ final class SettingsFieldFactoryTest extends TestCase
         self::assertInstanceOf(Input::class, SettingsFieldFactory::field(self::def('disabledTools'), ['WebSearch'], $options));
     }
 
-    public function testReadOnlyTrustAndStrictlyParsedKeysGetNoInlineField(): void
+    public function testReadOnlyAndTrustKeysGetNoInlineField(): void
     {
         $options = OptionsProvider::new();
 
-        foreach (['permissionRules', 'layout', 'trustedProjectSettings', 'claudeMcpBinary', 'claudeMcpEnv'] as $key) {
+        foreach (['layout', 'trustedProjectSettings', 'claudeMcpBinary', 'claudeMcpEnv'] as $key) {
             self::assertNull(SettingsFieldFactory::field(self::def($key), null, $options), $key);
             self::assertNotNull(SettingsFieldFactory::whyNotEditable(self::def($key)), $key);
+        }
+    }
+
+    /**
+     * N-P5: `permissionRules` is edited as one JSON list, in order, and only a
+     * list comes back; whether each rule loads is the writer's call (the
+     * launch's own parser), so a list of bad rules still parses here.
+     */
+    public function testPermissionRulesAreEditedAsOneJsonList(): void
+    {
+        $options = OptionsProvider::new();
+        $rules = [['pattern' => 'Bash(rm *)', 'action' => 'deny'], ['pattern' => 'Read', 'action' => 'allow']];
+
+        self::assertNull(SettingsFieldFactory::whyNotEditable(self::def('permissionRules')));
+        $field = SettingsFieldFactory::field(self::def('permissionRules'), $rules, $options);
+        self::assertInstanceOf(Input::class, $field);
+        self::assertSame('[{"pattern":"Bash(rm *)","action":"deny"},{"pattern":"Read","action":"allow"}]', $field->value());
+        self::assertSame('[]', SettingsFieldFactory::field(self::def('permissionRules'), null, $options)?->value());
+
+        self::assertSame($rules, SettingsFieldFactory::value(self::def('permissionRules'), Input::new('permissionRules')->withValue((string) $field->value())));
+        self::assertSame([], SettingsFieldFactory::value(self::def('permissionRules'), Input::new('permissionRules')->withValue('')));
+
+        foreach (['{"a": 1}', 'not json', '"Bash"', '3'] as $text) {
+            try {
+                SettingsFieldFactory::value(self::def('permissionRules'), Input::new('permissionRules')->withValue($text));
+                self::fail("{$text} was taken for a rule list");
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('JSON list', $e->getMessage());
+            }
         }
     }
 
@@ -185,11 +214,11 @@ final class SettingsFieldFactoryTest extends TestCase
 
     public function testAKeyWithNoInlineFieldSaysSo(): void
     {
-        $editor = SettingsEditor::open(SettingsSources::fromLaunch(null, null, null, null, []), 'permission rules')->beginEdit();
+        $editor = SettingsEditor::open(SettingsSources::fromLaunch(null, null, null, null, []), 'trusted project settings')->beginEdit();
 
         self::assertNull($editor->editing);
-        self::assertSame(SettingsFieldFactory::whyNotEditable(self::def('permissionRules')), $editor->status);
-        self::assertStringContainsString('edited by hand', (string) $editor->status, 'it says where the key IS changed');
+        self::assertSame(SettingsFieldFactory::whyNotEditable(self::def('trustedProjectSettings')), $editor->status);
+        self::assertStringContainsString('config.json', (string) $editor->status, 'it says where the key IS changed');
     }
 
     public function testTheModelEntryFollowsTheResolvedProvider(): void

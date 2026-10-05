@@ -18,6 +18,7 @@ use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Forms\Field;
+use SugarCraft\Forms\Field\Input;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -42,6 +43,13 @@ use SugarCraft\Sprinkles\Style;
  * need the writer (`s`, `y`) are the shell's, because the writer is. Labels
  * are literal English (D7): the schema's `labelKey`/`helpKey` are kept for
  * i18n, which arrives later.
+ *
+ * FILES AND PROFILES (N-P5). `e` opens a settings file in `$EDITOR` — the
+ * highlighted one on the Files tab, else the file the chosen tier saves to —
+ * and the view re-reads the layers when the editor exits. `x` exports a
+ * settings profile ({@see SettingsProfile}) and `p` imports one into the edit
+ * set, each after a path prompt ({@see PROFILE_EXPORT}, {@see PROFILE_IMPORT}).
+ * All three are the shell's keys, because each is I/O.
  *
  * POLISH (N-P5). Below {@see SINGLE_COLUMN_COLS} columns or
  * {@see SINGLE_COLUMN_ROWS} rows the view is ONE column: the list fills the
@@ -71,6 +79,13 @@ final class SettingsEditor
 
     /** {@see $confirm}: grant this project the highlighted trust list (the confirmed trust action). */
     public const CONFIRM_TRUST = 'trust';
+
+    /**
+     * The path prompts' field keys (N-P5): export the profile to, or import it
+     * from, the path typed. `Enter` on either is the shell's, which does the I/O.
+     */
+    public const PROFILE_EXPORT = 'profile:export';
+    public const PROFILE_IMPORT = 'profile:import';
 
     /** The last tab: the files the layers come from, not a schema category. */
     public const FILES_TAB = 'Files';
@@ -319,6 +334,88 @@ final class SettingsEditor
         return $this->confirm === self::CONFIRM_TRUST && $selected instanceof SettingDefinition && self::isTrustKey($selected)
             ? $selected->key
             : null;
+    }
+
+    /**
+     * Open the path prompt for a profile export or import
+     * ({@see PROFILE_EXPORT} / {@see PROFILE_IMPORT}), pre-filled with `$path`.
+     */
+    public function withProfilePrompt(string $action, string $path): self
+    {
+        $export = $action === self::PROFILE_EXPORT;
+        $field = Input::new($export ? self::PROFILE_EXPORT : self::PROFILE_IMPORT)
+            ->withTitle($export ? 'Export a settings profile to' : 'Import a settings profile from')
+            ->withDescription($export
+                ? 'The settings your files and this session set, as one JSON object. Secrets and trust grants are left out.'
+                : 'Its settings are staged on ' . $this->tier->label() . '; s previews the save.')
+            ->withValue($path);
+        [$focused] = $field->focus();
+
+        return $this->withEditing($focused, null);
+    }
+
+    /** The profile prompt that is open ({@see PROFILE_EXPORT} or {@see PROFILE_IMPORT}), or null. */
+    public function profileAction(): ?string
+    {
+        $key = $this->editing?->key();
+
+        return $key === self::PROFILE_EXPORT || $key === self::PROFILE_IMPORT ? $key : null;
+    }
+
+    /** The path typed into the open profile prompt, or null when none is open. */
+    public function profilePath(): ?string
+    {
+        return $this->profileAction() === null ? null : trim((string) $this->editing?->value());
+    }
+
+    /**
+     * A profile export or import finished. An import STAGES what the chosen
+     * tier may take ({@see SettingsProfile::staged()}) — nothing is written
+     * until the save — and says what it left out.
+     */
+    public function withProfileResult(SettingsProfileMsg $msg): self
+    {
+        if (!$msg->ok()) {
+            return $this->mutate(['status' => 'Not ' . ($msg->action === SettingsProfileMsg::EXPORT ? 'exported' : 'imported') . ': ' . $msg->error]);
+        }
+
+        if ($msg->action === SettingsProfileMsg::EXPORT) {
+            $count = \count($msg->values);
+
+            return $this->mutate(['status' => sprintf('Exported %d setting%s to %s', $count, $count === 1 ? '' : 's', $msg->path)]);
+        }
+
+        ['set' => $set, 'skipped' => $skipped, 'same' => $same] = SettingsProfile::staged($msg->values, $this->resolved, $this->tier);
+        $next = $this->edited($this->tier, array_merge($this->set, $set), array_values(array_diff($this->unset, array_keys($set))));
+        $parts = [sprintf('Staged %d setting%s from %s', \count($set), \count($set) === 1 ? '' : 's', $msg->path)];
+        if ($same !== []) {
+            $parts[] = \count($same) . ' already in force';
+        }
+        if ($skipped !== []) {
+            $parts[] = \count($skipped) . ' skipped (' . array_values($skipped)[0] . (\count($skipped) > 1 ? ', …' : '') . ')';
+        }
+        if ($set !== []) {
+            $parts[] = 's previews the save';
+        }
+
+        return $next->mutate(['status' => ($skipped !== [] ? self::WARN : '') . implode(' · ', $parts)]);
+    }
+
+    /** A one-line status from the shell (an editor that exited, a file re-read). */
+    public function withNotice(string $status): self
+    {
+        return $this->mutate(['status' => $status]);
+    }
+
+    /**
+     * The file `e` opens: the highlighted one on the Files tab, else null —
+     * the shell then opens the file the chosen tier saves to.
+     */
+    public function selectedFilePath(): ?string
+    {
+        $selected = $this->selected();
+
+        return $selected instanceof SettingsFile && str_starts_with($selected->path, '/') ? $selected->path : null;
     }
 
     /** Whether the view is between questions: no search, edit, preview or confirmation open. */
@@ -984,7 +1081,11 @@ final class SettingsEditor
         }
 
         if ($this->editing !== null) {
-            return ['Enter stage', 'Esc cancel'];
+            return match ($this->profileAction()) {
+                self::PROFILE_EXPORT => ['Enter export', 'Esc cancel'],
+                self::PROFILE_IMPORT => ['Enter import', 'Esc cancel'],
+                default => ['Enter stage', 'Esc cancel'],
+            };
         }
 
         if ($this->preview !== null) {
@@ -1014,6 +1115,9 @@ final class SettingsEditor
         if ($this->hasChanges()) {
             $hints[] = 's save';
         }
+
+        $hints[] = $selected instanceof SettingsFile ? 'e open in editor' : 'e edit file';
+        $hints[] = 'x/p profile';
 
         // While a search filters the list, ←/→ do nothing and Esc clears it.
         return $this->query !== ''

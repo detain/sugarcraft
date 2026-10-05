@@ -53,6 +53,11 @@ final class SettingsSavePreview
         public readonly array $notes = [],
         /** @var array<string, mixed> the file's object before the save, for the change list */
         private readonly array $was = [],
+        /**
+         * Whether a turn was running when the preview was built — passed by
+         * the shell, which holds the chat ({@see \SugarCraft\Crush\App\App::previewSettings()}).
+         */
+        public readonly bool $turnRunning = false,
     ) {
     }
 
@@ -83,7 +88,17 @@ final class SettingsSavePreview
      */
     public function withNotes(array $notes): self
     {
-        return new self($this->tier, $this->path, $this->before, $this->after, $this->set, $this->unset, $this->refusals, array_values($notes), $this->was);
+        return new self($this->tier, $this->path, $this->before, $this->after, $this->set, $this->unset, $this->refusals, array_values($notes), $this->was, $this->turnRunning);
+    }
+
+    /**
+     * The same preview, saying (or not) that a turn is running: that turn
+     * read its settings when it started, so the save reaches the next one at
+     * the earliest (Appendix N §4.8).
+     */
+    public function withTurnRunning(bool $running): self
+    {
+        return new self($this->tier, $this->path, $this->before, $this->after, $this->set, $this->unset, $this->refusals, $this->notes, $this->was, $running);
     }
 
     /** A preview that cannot proceed, e.g. the target file is unreadable. */
@@ -131,11 +146,14 @@ final class SettingsSavePreview
 
     /**
      * The preview, one styled line per entry, each at most `$width` cells.
+     * The running-turn line shows when the preview was built mid-turn
+     * ({@see withTurnRunning()}) or `$turnRunning` says so.
      *
      * @return list<string>
      */
     public function lines(Theme $theme, int $width, bool $turnRunning = false): array
     {
+        $turnRunning = $turnRunning || $this->turnRunning;
         $width = max(1, $width);
         $muted = Style::new()->foreground($theme->shellMuted);
         $head = Style::new()->foreground($theme->shellPrimary)->bold();

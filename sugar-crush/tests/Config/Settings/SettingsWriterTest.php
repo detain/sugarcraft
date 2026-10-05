@@ -377,6 +377,54 @@ final class SettingsWriterTest extends TestCase
         $this->userWriter()->write(SettingsTier::You, ['modelPrices' => $prices]);
     }
 
+    // ── permissionRules (N-P5) ──────────────────────────────────────────
+
+    /** What the editor writes, the next launch loads whole — judged by the launch's own parser. */
+    public function testPermissionRulesTheLaunchLoadsWholeAreWritten(): void
+    {
+        $rules = [['pattern' => 'Bash(rm *)', 'action' => 'deny'], ['pattern' => 'Read', 'action' => 'allow']];
+
+        self::assertNull($this->userWriter()->refusal(SettingsTier::You, 'permissionRules', $rules));
+        self::assertNull($this->userWriter()->refusal(SettingsTier::You, 'permissionRules', []), 'no rules is a valid value');
+        $this->userWriter()->write(SettingsTier::You, ['permissionRules' => $rules]);
+        self::assertSame($rules, $this->config()['permissionRules']);
+
+        $complaints = [];
+        $loaded = Bootstrap::permissionRules($this->config(), static function (string $c) use (&$complaints): void {
+            $complaints[] = $c;
+        });
+        self::assertCount(2, $loaded);
+        self::assertSame([], $complaints);
+    }
+
+    /** @return iterable<string, array{0: mixed, 1: string}> */
+    public static function malformedPermissionRules(): iterable
+    {
+        yield 'an object, not a list' => [['a' => ['pattern' => 'Bash', 'action' => 'deny']], 'expected a JSON list'];
+        yield 'a string' => ['Bash', 'expected a JSON list'];
+        yield 'an entry with no pattern' => [[['action' => 'deny']], "has no string 'pattern'"];
+        yield 'an action that is not one' => [[['pattern' => 'Bash', 'action' => 'block']], "has no valid 'action'"];
+        yield 'a pattern the grammar rejects' => [[['pattern' => 'Bash(rm *', 'action' => 'deny']], 'rule skipped'];
+        yield 'one bad rule among good ones' => [[['pattern' => 'Read', 'action' => 'allow'], ['pattern' => '', 'action' => 'deny']], 'permissionRules[1]'];
+    }
+
+    /** A value the launch would skip any part of is refused whole: a skipped deny is a silent widening. */
+    #[DataProvider('malformedPermissionRules')]
+    public function testPermissionRulesTheLaunchWouldSkipAreRefusedBeforeWriting(mixed $rules, string $reason): void
+    {
+        $refusal = (string) $this->userWriter()->refusal(SettingsTier::You, 'permissionRules', $rules);
+        self::assertStringStartsWith('permissionRules', $refusal);
+        self::assertStringContainsString($reason, $refusal);
+
+        try {
+            $this->userWriter()->write(SettingsTier::You, ['permissionRules' => $rules]);
+            self::fail('expected a refusal');
+        } catch (\InvalidArgumentException) {
+        }
+
+        self::assertFileDoesNotExist($this->configPath);
+    }
+
     // ── trust ───────────────────────────────────────────────────────────
 
     public function testATrustGrantAppendsTheCanonicalRootOnTheUserTierOnly(): void
