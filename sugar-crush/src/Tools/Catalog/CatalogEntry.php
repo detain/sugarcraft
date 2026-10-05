@@ -9,7 +9,9 @@ namespace SugarCraft\Crush\Tools\Catalog;
  *
  * `externallyWired` marks a tool the catalog classifies but does not build:
  * `Bootstrap::tools()` appends it after the `allowedTools` / `disabledTools`
- * filter, and only when the launch holds what it needs.
+ * filter, and only when the launch holds what it needs. `onLaunch` false marks
+ * one no launch carries at all — it reaches only the runs that are handed it
+ * (the shared-board tools a parallel `Task` batch's members get).
  */
 final readonly class CatalogEntry
 {
@@ -23,6 +25,7 @@ final readonly class CatalogEntry
         public int $position,
         public string $gloss = '',
         public bool $externallyWired = false,
+        public bool $onLaunch = true,
     ) {
     }
 

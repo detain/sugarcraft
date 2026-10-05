@@ -83,6 +83,7 @@ final class ToolDocGenerator
     {
         $built = \count(ToolCatalog::built());
         $wired = \count(ToolCatalog::entries());
+        $launched = \count(ToolCatalog::onLaunch());
 
         // `[\w-]+`, not `\w+`: past twenty a spelled count is hyphenated
         // (`twenty-one`), and a `\w+` anchor stops matching the very figure
@@ -96,7 +97,7 @@ final class ToolDocGenerator
             [self::SETTINGS, '/never reaches the merge — all ([\w-]+) tools survive/', $built],
             [self::ARCHITECTURE, '/holds \*\*([\w-]+)\*\* concrete `Tool` classes/', $wired],
             [self::ARCHITECTURE, '/Tools\\\\\*\s+(\d+) built-ins \+ MCP bridges/', $wired],
-            [self::ARCHITECTURE, '/`Bootstrap::tools\(\)` ships all ([\w-]+) —/', $wired],
+            [self::ARCHITECTURE, '/`Bootstrap::tools\(\)` ships ([\w-]+) of them —/', $launched],
             [self::ARCHITECTURE, '/\*\*([\w-]+) is the count of \*wired\* tools/', $wired],
             [self::ARCHITECTURE, '/saying "([\w-]+) working tools"/', $wired],
             [self::ARCHITECTURE, '/"([\w-]+) tools" means wired built-ins/', $wired],
@@ -122,9 +123,14 @@ final class ToolDocGenerator
         }
 
         $built = \count(ToolCatalog::built());
+        // The entry WITHOUT a gloss goes last: the prose after the block
+        // finishes its sentence ("… joins the set only when …").
+        $wired = ToolCatalog::externallyWired();
+        usort($wired, static fn (CatalogEntry $a, CatalogEntry $b): int => ($a->gloss === '') <=> ($b->gloss === ''));
         $external = array_map(
-            static fn (CatalogEntry $e): string => '`' . $e->fileName() . '`, whose runtime name `' . $e->name . '`',
-            ToolCatalog::externallyWired(),
+            static fn (CatalogEntry $e): string => '`' . $e->fileName() . '`, whose runtime name `' . $e->name . '`'
+                . ($e->gloss === '' ? '' : ' ' . $e->gloss),
+            $wired,
         );
 
         $text = self::joined($items, ', ', ', and ') . '. These are **runtime tool names**, the same spelling the '
@@ -134,7 +140,7 @@ final class ToolDocGenerator
             . ucfirst(SettingsDocGenerator::spell($built)) . ' classes ship on every launch, and `Bootstrap::tools()` '
             . 'ships all ' . SettingsDocGenerator::spell($built);
 
-        return $external === [] ? $text : $text . '; `src/Tools/BuiltIn/` also holds ' . implode(' and ', $external);
+        return $external === [] ? $text : $text . '; `src/Tools/BuiltIn/` also holds ' . self::joined($external, ', ', ', and ');
     }
 
     /** The README `allowedTools: ["Bash"]` sentence's list of what it deletes. */

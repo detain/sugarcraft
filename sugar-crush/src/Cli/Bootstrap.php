@@ -5583,6 +5583,14 @@ final class Bootstrap
             $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\AutoTestHook($testRunner, $testEdits));
         }
 
+        // Shared-board notices (roadmap 4.5): a member of a parallel Task
+        // batch hears of its peers' posts on its next tool result. On every
+        // launch, because the chain is shared by every run of the session and
+        // the hook itself tells a member's run from the rest (it is inert
+        // outside a batch). Ahead of the hook files, for the lint hook's
+        // reason: a file entry must not be able to take its event+name.
+        $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\BoardNoticeHook());
+
         foreach (self::hookFiles($root) as $path) {
             try {
                 $hooks->loadEntries(self::hookFileEntries($path), $path);

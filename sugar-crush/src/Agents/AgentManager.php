@@ -1809,6 +1809,16 @@ final class AgentManager
             return null;
         }
 
+        // A tool no launch carries (roadmap 4.5: the shared board of a
+        // parallel Task batch) is handed to the run by the harness, not
+        // chosen by the preset, so the `tools` grant — a list of what the
+        // session offers — cannot name it and does not narrow it. The
+        // denylist above still can: `disallowedTools: [BoardPost]` keeps a
+        // preset off the board.
+        if (\SugarCraft\Crush\Tools\Catalog\ToolCatalog::isMemberOnly($toolCall->name)) {
+            return null;
+        }
+
         foreach ($declarations as $declaration) {
             if ((new PermissionRule((string) $declaration, PermissionAction::Allow))->matches($toolCall, true, $root)) {
                 return null;

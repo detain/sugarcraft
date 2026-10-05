@@ -194,7 +194,7 @@ use SugarCraft\Crush\Usage;
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
  * carries across the fork.
  */
-final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, StreamsActivity, \SugarCraft\Crush\Tools\RelaysPermissionAsks, \SugarCraft\Crush\Tools\TakesToolCallId
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, \SugarCraft\Crush\Tools\SharesBoard, StreamsActivity, \SugarCraft\Crush\Tools\RelaysPermissionAsks, \SugarCraft\Crush\Tools\TakesToolCallId
 {
     /**
      * Step cap for a preset that declares no `maxTurns`. 200 since
@@ -290,6 +290,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * @param \SugarCraft\Crush\Agents\WorktreeManager|null $worktreeManager
      *        where an `isolation: worktree` run gets its git worktree (roadmap
      *        4.9, {@see withWorktreeManager()}); null refuses such a run
+     * @param \SugarCraft\Crush\Agents\Board\Board|null $board the member's view of
+     *        its parallel batch's shared board (roadmap 4.5, {@see withBoard()});
+     *        set only on the copy a batch member runs
      */
     public function __construct(
         private ?AgentManager $agentManager = null,
@@ -310,6 +313,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         private ?string $delegationScope = null,
         private ?string $slotRoot = null,
         private ?\SugarCraft\Crush\Agents\WorktreeManager $worktreeManager = null,
+        private ?\SugarCraft\Crush\Agents\Board\Board $board = null,
     ) {}
 
     /**
@@ -446,6 +450,88 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     public function withSiblingSpend(SiblingSpendLedger $ledger): self
     {
         return $this->mutate(['siblingSpend' => $ledger]);
+    }
+
+    /**
+     * The participant this call becomes on its batch's shared board (roadmap
+     * 4.5): the agent it names and its short description. Null for a call
+     * that will run in the background — it hands off and returns before its
+     * peers start, so a peer could only ever post to it unheard — and for
+     * one that names no agent, which is refused before it runs.
+     *
+     * Mirrors the background decision {@see execute()} makes: the call's own
+     * `background` wins, else the agent's preset.
+     *
+     * @param array<string, mixed> $args
+     */
+    public function boardMember(array $args): ?\SugarCraft\Crush\Agents\Board\BoardMember
+    {
+        $agent = $args['agent'] ?? $args['subagent_type'] ?? null;
+        if (!\is_string($agent) || trim($agent) === '') {
+            return null;
+        }
+        $agent = trim($agent);
+
+        $background = \is_bool($args['background'] ?? null)
+            ? $args['background']
+            : ($this->agentManager?->get($agent)?->background ?? false);
+        if ($background && $this->backgroundSupervisor !== null && $this->engine !== null && $this->delegationDepth === 0) {
+            return null;
+        }
+
+        $task = \is_string($args['description'] ?? null) ? trim($args['description']) : '';
+
+        return \SugarCraft\Crush\Agents\Board\BoardMember::new($agent, self::snippet($task, self::TASK_SNIPPET_BYTES));
+    }
+
+    /**
+     * The copy {@see \SugarCraft\Crush\Runtime::executeConcurrently()} runs
+     * as one member of a parallel batch that shares a board (roadmap 4.5):
+     * its run is offered `BoardRead` and `BoardPost` over $board (this
+     * member's view), and the board's news reaches it as a notice on its next
+     * tool result. The board's tools are the harness's, not the preset's: a
+     * `tools:` list does not narrow them, but a `disallowedTools:` entry
+     * naming one keeps the run from it.
+     */
+    public function withBoard(\SugarCraft\Crush\Agents\Board\Board $board): self
+    {
+        return $this->mutate(['board' => $board]);
+    }
+
+    /**
+     * The run's tools with the board's two added — each unless the preset's
+     * denylist names it ({@see AgentManager::grantRefusalFor()}) — and the
+     * seat binding the board to this
+     * process for as long as the run holds it ({@see \SugarCraft\Crush\Agents\Board\ActiveBoard}).
+     * A run that is not a batch member, or cannot read its board, binds none,
+     * which also keeps a nested run from consuming its delegator's notices.
+     *
+     * @param list<Tool> $tools
+     *
+     * @return array{0: list<Tool>, 1: \SugarCraft\Crush\Agents\Board\ActiveBoardSeat}
+     */
+    private function joinBoard(array $tools, AgentManager $manager, SubAgent $subAgent): array
+    {
+        $board = $this->board;
+        if ($board !== null) {
+            $joined = [];
+            foreach ([BoardReadTool::NAME => BoardReadTool::new()->withBoard($board), BoardPostTool::NAME => BoardPostTool::new()->withBoard($board)] as $name => $tool) {
+                try {
+                    $refused = $manager->grantRefusalFor(new \SugarCraft\Crush\ToolCall($name, []), $subAgent);
+                } catch (\RuntimeException) {
+                    $refused = 'an unreadable declaration';
+                }
+                if ($refused === null) {
+                    $tools[] = $tool;
+                    $joined[$name] = true;
+                }
+            }
+            if (!isset($joined[BoardReadTool::NAME])) {
+                $board = null;
+            }
+        }
+
+        return [$tools, \SugarCraft\Crush\Agents\Board\ActiveBoard::enter($board)];
     }
 
     public function subAgentEmitter(): ?\Closure
@@ -1455,6 +1541,11 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             $record('▶ resumed by the user', ActivityItem::text('▶ resumed by the user'));
             $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'resumed', 'outcome' => 'resumed by the user', 'error' => null]);
         };
+
+        // Roadmap 4.5: a member of a parallel batch joins the batch's board.
+        // $boardSeat is never read again: it is a local so that the binding
+        // lives exactly as long as this run, as $seat does above.
+        [$tools, $boardSeat] = $this->joinBoard($tools, $manager, $subAgent);
 
         try {
             $turn = $engine

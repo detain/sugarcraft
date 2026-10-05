@@ -194,9 +194,17 @@ final class BinSugarcrushWiringTest extends TestCase
         // {@see BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES} for why it had to exist
         // and how narrow it is kept. `array_values` because `array_diff`
         // preserves keys and `assertSame` compares them.
+        // And minus the tools no launch carries (roadmap 4.5's shared-board
+        // pair, which TaskTool hands to a parallel batch's members): the
+        // catalog declares them `onLaunch: false`, and they must be absent.
+        $memberOnly = array_map(
+            static fn (\SugarCraft\Crush\Tools\Catalog\CatalogEntry $e): string => $e->class,
+            array_values(array_filter(\SugarCraft\Crush\Tools\Catalog\ToolCatalog::entries(), static fn (\SugarCraft\Crush\Tools\Catalog\CatalogEntry $e): bool => !$e->onLaunch)),
+        );
         $expected = array_values(array_diff(
             BuiltInToolCorpus::classNames(),
             BuiltInToolCorpus::dynamicToolClasses(),
+            $memberOnly,
         ));
         $wired = array_keys($byClass);
         sort($wired);
@@ -238,7 +246,7 @@ final class BinSugarcrushWiringTest extends TestCase
 
         // DH-TOOLS: and the launch set is exactly the catalog — a new tool joins
         // by declaring itself, not by editing this list.
-        $catalogued = \SugarCraft\Crush\Tools\Catalog\ToolCatalog::names();
+        $catalogued = array_map(static fn (\SugarCraft\Crush\Tools\Catalog\CatalogEntry $e): string => $e->name, \SugarCraft\Crush\Tools\Catalog\ToolCatalog::onLaunch());
         sort($catalogued);
         $this->assertSame($catalogued, $names);
 

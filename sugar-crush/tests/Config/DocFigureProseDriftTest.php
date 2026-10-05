@@ -2126,7 +2126,7 @@ final class DocFigureProseDriftTest extends TestCase
             ];
         }
         ksort($live);
-        self::assertCount(13, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
+        self::assertCount(14, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
 
         self::assertSame(
             1,
@@ -2207,7 +2207,14 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit diagnostics, registered by `Bootstrap::(\w+)\(\)`\s*when a language server is configured under `lsp` and started, right after the\s*post-edit lint and ahead of the hook files/', $bullets, $diagnosticsRow), 'the post-edit diagnostics bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.F)');
         self::assertSame(1, preg_match('/`(\w+)` — the auto-commit of each edit, registered by `Bootstrap::(\w+)\(\)`\s*when `autoCommit` is `edit`, after the post-edit diagnostics and ahead of the\s*hook files/', $bullets, $commitRow), 'the auto-commit bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.G)');
         self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — auto-test reflection, registered by `Bootstrap::(\w+)\(\)`\s*when `autoTest` is on and `testCommand` is set, after the auto-commit and ahead of the\s*hook files/', $bullets, $testRow), 'the auto-test bullet no longer names its two classes, its Bootstrap seam and its place in the chain (step 3.H)');
-        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1], $diagnosticsRow[1], $commitRow[1], $testRow[1], $testRow[2]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertSame(1, preg_match('/`(\w+)` — shared-board notices, registered by `Bootstrap::(\w+)\(\)`\s*on every launch, after the hooks above and ahead of the hook files/', $bullets, $boardRow), 'the board-notice bullet no longer names its class, its Bootstrap seam and its place in the chain (step 4.5)');
+        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1], $guardRow[1], $guardRow[2], $grantRow[1], $lintRow[1], $diagnosticsRow[1], $commitRow[1], $testRow[1], $testRow[2], $boardRow[1]], 'the bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertSame(HookEvent::PostToolUse->value, $live[$boardRow[1]]['event'], "the board-notice bullet says {$boardRow[1]} rides PostToolUse — its event() moved");
+        $boardSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $boardRow[2], 12000);
+        $boardAt = strpos($boardSeam, 'Hooks\\BuiltIn\\' . $boardRow[1] . '(');
+        self::assertIsInt($boardAt, "Bootstrap::{$boardRow[2]}() no longer constructs {$boardRow[1]} — the bullet names the wrong seam");
+        self::assertGreaterThan((int) strpos($boardSeam, 'Hooks\\BuiltIn\\AutoTestHook('), $boardAt, 'the board notices are no longer registered after the hooks above them, as the bullet says');
+        self::assertLessThan((int) strpos($boardSeam, 'loadEntries('), $boardAt, 'the board notices are no longer registered ahead of the hook files, as the bullet says');
         self::assertSame(HookEvent::Stop->value, $live[$testRow[1]]['event'], "the auto-test bullet names {$testRow[1]} first as the hook that runs the tests — it no longer fires on Stop");
         self::assertSame(HookEvent::PostToolUse->value, $live[$testRow[2]]['event'], "the auto-test bullet names {$testRow[2]} as the edit half — it no longer fires on PostToolUse");
         $testSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $testRow[3], 9000);
@@ -2239,7 +2246,7 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertStringContainsString('register(new ' . $guardClass . '(', $guardSeam, "EngineBackend::{$guardRow[3]}() no longer registers {$guardClass} — the bullet names the wrong seam");
         }
         self::assertTrue(method_exists(Bootstrap::class, $gateRow[2]), "Bootstrap::{$gateRow[2]}() no longer exists — the bullet names the wrong seam");
-        $hooksBody = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $gateRow[2], 6000);
+        $hooksBody = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $gateRow[2], 9000);
         foreach (['registerBuiltIns()', 'loadEntries(', 'new ' . $gateRow[1] . '('] as $needle) {
             self::assertStringContainsString($needle, $hooksBody, "Bootstrap::{$gateRow[2]}() no longer contains {$needle} — the ordering and gate claims lost their referent");
         }
@@ -2831,7 +2838,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($tableEnd);
         $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
         preg_match_all('/\| `([^`]+)` \| `([^`]+)`/', $segment, $rows, \PREG_SET_ORDER);
-        self::assertCount(11, $rows, 'the sessions table no longer has its eleven directory/class rows');
+        self::assertCount(12, $rows, 'the sessions table no longer has its twelve directory/class rows');
         $orderedDirs = [
             '~/.sugar-crush/session.db',
             '~/.sugar-crush/session.db',
@@ -2842,6 +2849,7 @@ final class DocFigureProseDriftTest extends TestCase
             '<root>/.sugar-crush/worktrees/',
             '~/.sugar-crush/subagents/',
             '~/.sugar-crush/mailboxes/',
+            '<tmp>/sc_runtime_tool_<id>.board',
             '<workflowsPath>/.running/',
             '<tmp>/sugar_crush_bg_<uid>_index/',
         ];
@@ -2864,6 +2872,13 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame('mailboxes', \SugarCraft\Crush\Agents\Live\AgentInbox::DIR_NAME, 'the agent mailbox directory no longer spells mailboxes — table cell drifted');
         self::assertStringContainsString('\\dirname($logs) . \'/\' . self::DIR_NAME', self::sourceOf('Agents/Live/AgentInbox.php'), 'AgentInbox no longer keeps its mailboxes beside the transcript logs under ~/.sugar-crush — table cell drifted');
         self::assertStringContainsString("'/inbox.jsonl'", self::sourceOf('Agents/Mailbox.php'), 'a mailbox is no longer <agent>/inbox.jsonl — table cell drifted');
+        self::assertSame(
+            'sc_runtime_tool_<id>.board',
+            \SugarCraft\Crush\Support\ToolIpcFiles::RUNTIME_PREFIX . '<id>.' . \SugarCraft\Crush\Agents\Board\Board::EXTENSION,
+            'a batch board is no longer an sc_runtime_tool_<id>.board file — table cell drifted',
+        );
+        self::assertStringContainsString('ToolIpcFiles::reserve(ToolIpcFiles::RUNTIME_PREFIX, self::EXTENSION)', self::sourceOf('Agents/Board/Board.php'), 'a board is no longer reserved in the system temp dir under the runtime prefix the sweep reaps — table row drifted');
+        self::assertStringContainsString('Board::create(', self::bodyExcerpt(self::sourceOf('Runtime.php'), 'executeConcurrently', 40000), 'executeConcurrently() no longer creates the batch board — the row\'s "created before the batch forks" lost its referent');
         self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Crush\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
         self::assertSame(
             'sugar_crush_bg_<uid>_index',
@@ -5262,6 +5277,7 @@ final class DocFigureProseDriftTest extends TestCase
         foreach (['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'] as $i => $unit) {
             $wordNumbers['twenty-' . $unit] = 21 + $i;
         }
+        $wordNumbers['thirty'] = 30;
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));

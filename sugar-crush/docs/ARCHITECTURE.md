@@ -28,7 +28,7 @@ bin/sugarcrush                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              23 built-ins + MCP bridges
+                                         ├─ Tools\*              25 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
@@ -812,14 +812,16 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **twenty-three** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `AskUserTool`, `Bash`, `Compress`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `Read`, `Recall`, `RepoMapTool`, `SkillTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships all twenty-three —
+`src/Tools/BuiltIn/` holds **twenty-five** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `Compress`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `Read`, `Recall`, `RepoMapTool`, `SkillTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships twenty-three of them —
 `Task` last, gated on the launch holding an `AgentManager` — plus one
-`McpToolBridge` per advertised MCP tool.
+`McpToolBridge` per advertised MCP tool. The other two, `BoardReadTool` and
+`BoardPostTool`, are on no launch: `TaskTool` hands them, bound to the batch's
+shared board, to the runs of a parallel `Task` batch's members (roadmap 4.5).
 
-Domain matters here: **twenty-three is the count of *wired* tools, not of *usable*
+Domain matters here: **twenty-five is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable on every launch but answers every call with a "no
 language server configured" error until the user lists a server under the `lsp`
-setting. A figure saying "twenty-three working tools" would be the wrong claim.
+setting. A figure saying "twenty-five working tools" would be the wrong claim.
 
 Those servers are started once, at launch, by `LSP\LspLauncher` through
 `Bootstrap::lspClient()` (memoised per process and root, stopped at exit like
@@ -957,6 +959,7 @@ completion can legitimately run for tens of minutes.
 | `<root>/.sugar-crush/worktrees/` | `Agents\WorktreeManager` | one git worktree per `isolation: worktree` run (`Task`, `/bg`), `<run id>/` on branch `agent-<run id>-<time>`, and `.registry.json` (branch, start commit, named); a tree that holds no work is removed with its branch when its run ends, one with work is kept; the directory ignores itself (`.gitignore`) |
 | `~/.sugar-crush/subagents/` | `Agents\Live\SubAgentTranscriptLog` | one JSONL transcript per delegated run, `<session>/<agent>.jsonl`; a session's directory goes once the store no longer has the session (`AgentManager::pruneSessionArtifacts()`, on every launch that prunes) |
 | `~/.sugar-crush/mailboxes/` | `Agents\Live\AgentInbox` | messages to a running delegated run, `<session>/<agent>/inbox.jsonl`, read at its step boundaries; a message from the user carries the launch key's HMAC; swept with its session, as `subagents/` is |
+| `<tmp>/sc_runtime_tool_<id>.board` | `Agents\Board\Board` | one parallel `Task` batch's shared board: the posts its members make with `BoardPost`, one JSON line each, in a 0600 file created before the batch forks (when two or more members can join) and removed when the batch is over; a file a killed process leaves goes with the batch's other `sc_runtime_tool_` files in the next launch's one-hour sweep |
 | `<workflowsPath>/.running/` | `Workflows\WorkflowEngine` | pause files |
 | `<tmp>/sugar_crush_bg_<uid>_index/` | `Sessions\BackgroundSupervisor` | one record per running background session (`/bg`, `/fork`, background `Task`), so a restart re-adopts its daemon and the host adopts one its turn child spawned |
 
@@ -1211,7 +1214,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
-4. **A count carries its domain.** "Twenty-three tools" means wired built-ins.
+4. **A count carries its domain.** "Twenty-five tools" means wired built-ins.
    "Twelve skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are

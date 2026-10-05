@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\Catalog;
 
+use SugarCraft\Crush\Tools\BuiltIn\BoardPostTool;
+use SugarCraft\Crush\Tools\BuiltIn\BoardReadTool;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\Tool;
 
@@ -35,10 +37,18 @@ final class ToolCatalog
      * the class because `TaskTool.php` is owned by another work stream this
      * wave; moving it onto the class is a one-line follow-up.
      *
-     * @var array<class-string<Tool>, array{name: string, permission: ToolPermissionClass}>
+     * `BoardRead` and `BoardPost` (roadmap 4.5) are never on a launch at all:
+     * `TaskTool` adds them, bound to the batch's board, to the run of a member
+     * of a parallel `Task` batch. They are classified here so the gate judges
+     * a member's calls to them by their class (read; no-ask), not as unknown
+     * names it would put to the user.
+     *
+     * @var array<class-string<Tool>, array{name: string, permission: ToolPermissionClass, gloss?: string, onLaunch?: bool}>
      */
     private const EXTERNALLY_WIRED = [
         TaskTool::class => ['name' => TaskTool::NAME, 'permission' => ToolPermissionClass::Write],
+        BoardReadTool::class => ['name' => BoardReadTool::NAME, 'permission' => ToolPermissionClass::Read, 'gloss' => 'is offered only to the members of a parallel `Task` batch, to read the board they share', 'onLaunch' => false],
+        BoardPostTool::class => ['name' => BoardPostTool::NAME, 'permission' => ToolPermissionClass::NoAsk, 'gloss' => 'is offered only to the members of a parallel `Task` batch, to post to the board they share', 'onLaunch' => false],
     ];
 
     /** Externally wired tools sort after every catalog-built position. */
@@ -79,6 +89,33 @@ final class ToolCatalog
     public static function externallyWired(): array
     {
         return array_values(array_filter(self::entries(), static fn (CatalogEntry $e): bool => $e->externallyWired));
+    }
+
+    /**
+     * The tools a launch can carry: every entry but the ones only a delegated
+     * run is ever handed ({@see CatalogEntry::$onLaunch}).
+     *
+     * @return list<CatalogEntry>
+     */
+    public static function onLaunch(): array
+    {
+        return array_values(array_filter(self::entries(), static fn (CatalogEntry $e): bool => $e->onLaunch));
+    }
+
+    /**
+     * Whether $name is a built-in no launch carries — one the harness hands
+     * to a delegated run itself ({@see CatalogEntry::$onLaunch}), which a
+     * preset's `tools` grant therefore cannot name and does not narrow.
+     */
+    public static function isMemberOnly(string $name): bool
+    {
+        foreach (self::entries() as $entry) {
+            if ($entry->name === $name) {
+                return !$entry->onLaunch;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -174,7 +211,9 @@ final class ToolCatalog
                     $declared['name'],
                     $declared['permission'],
                     self::EXTERNAL_POSITION_BASE + \count($external),
+                    $declared['gloss'] ?? '',
                     externallyWired: true,
+                    onLaunch: $declared['onLaunch'] ?? true,
                 );
 
                 continue;

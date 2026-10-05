@@ -2357,6 +2357,30 @@ final class Runtime
             }
             $jobs[$index]['ledger'] = $ledger->forMember((string) $index);
         }
+
+        // SHARED BOARD (roadmap 4.5). Members that are whole delegated runs
+        // can talk to each other while they work: one board per batch, made
+        // here — before the fan-out, the WHOLE-GROUP rule again — once at
+        // least two members would join it, and each member runs the copy of
+        // its tool that holds its own view. It needs no teardown here: the
+        // board goes with the last view of it in this process, when this
+        // generator is done (Agents\Board\BoardLease).
+        $boardSeats = [];
+        foreach ($jobs as $index => $job) {
+            if ($job['settled'] || !$job['tool'] instanceof \SugarCraft\Crush\Tools\SharesBoard) {
+                continue;
+            }
+            $member = $job['tool']->boardMember($job['args']);
+            if ($member !== null) {
+                $boardSeats[$index] = $member;
+            }
+        }
+        $board = \count($boardSeats) >= 2 ? \SugarCraft\Crush\Agents\Board\Board::create(array_values($boardSeats)) : null;
+        if ($board !== null) {
+            foreach (array_keys($boardSeats) as $n => $index) {
+                $jobs[$index]['tool'] = $jobs[$index]['tool']->withBoard($board->forMember($board->roster()[$n]->id));
+            }
+        }
         // @endregion ledger
 
         try {

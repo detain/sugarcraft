@@ -335,6 +335,36 @@ parent's `Task` call is waiting on it — and then it goes on by itself. A
 `control` line claiming to be the user's carries the same HMAC check as any
 user message; a forged one is dropped and logged.
 
+### The shared board
+
+Sub-agents the model starts **in one message** run side by side, and they can
+talk to each other while they work. When two or more `Task` calls of one batch
+run in the foreground, the batch gets one shared board (`Agents\Board\Board`)
+and each member's run is offered two more tools:
+
+- **`BoardPost`** posts a short message (at most 4,096 bytes) to one peer, by
+  the id the board's roster gives it (`<agent>-<n>`, n its place in the batch,
+  e.g. `coder-1`), or to `ALL`. Its `kind` is `INFO`, `ASK`, `RESULT`, `HOLD`
+  or `VETO`, and `reply_to` names the post it answers.
+- **`BoardRead`** returns the roster and the posts after a cursor (`since`),
+  and names the cursor for the next read.
+
+Nobody is woken or stopped by a post. A member hears of posts for it on its
+next tool result, as one `<shared-agent-board-notice>` note however many
+arrived (`BoardNoticeHook`, see [`HOOKS.md`](HOOKS.md#the-built-in-hooks)),
+and reads them when it judges them relevant. `HOLD` and `VETO` are advice,
+not locks. Peer posts are framed as untrusted data: no post is a user
+instruction or an approval.
+
+The board is the batch's alone: it is made before the batch starts, removed
+when the batch is over, and never seen by the session's own agent, which still
+gets each member's report as that member's `Task` result. The two tools are
+the harness's, not the preset's, so a `tools:` list neither has to name them
+nor keeps them out (every built-in agent declares one). `disallowedTools`
+does: `disallowedTools: [BoardPost]` leaves a member reading only, and a
+member denied `BoardRead` hears no notices either. A background run is never
+a member, and neither is a run a member delegates to in turn.
+
 ---
 
 ## What you can actually do with a preset today
@@ -342,7 +372,7 @@ user message; a forged one is dropped and logged.
 Be precise about this, because "agent preset" reads like "the model can spawn
 one":
 
-- **`Task` delegates.** `Bootstrap::tools()` ships twenty-three
+- **`Task` delegates.** sugar-crush ships twenty-five
   built-in tools and one of them — `Task` — is exactly the delegation seam:
   it hands a bounded task to a sub-agent named from the session's agent
   roster and returns that worker's final text. With no session

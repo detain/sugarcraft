@@ -261,6 +261,7 @@ sugar-crush/tests/Cli/RefusalStderrSurfaceTest.php	1.108	4
 sugar-crush/tests/Chat/LiveStepWiringTest.php	1.100	3
 sugar-crush/tests/Chat/ColdResumeFinishedAgentTest.php	1.100	4
 sugar-crush/tests/Lint/TestRunnerTest.php	1.100	13
+sugar-crush/tests/Runtime/ParallelBoardNoticeTest.php	1.100	7
 sugar-crush/tests/Cli/ProjectTierRefusalInventoryTest.php	1.095	15
 sugar-crush/tests/Chat/SessionStartHookWireTest.php	1.095	14
 sugar-crush/tests/Integration/UsageWiringTest.php	1.085	43
@@ -507,6 +508,7 @@ sugar-crush/tests/Server/BackpressureTest.php	0.150	5
 sugar-crush/tests/Tui/TodoPaneTest.php	0.150	6
 sugar-crush/tests/Chat/GoalCommandTest.php	0.150	16
 sugar-crush/tests/Tools/BuiltIn/AskUserToolTest.php	0.150	18
+sugar-crush/tests/Agents/Board/BoardTest.php	0.150	20
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23
@@ -657,6 +659,7 @@ sugar-crush/tests/Context/Pruning/Strategies/SupersededWriteInputStrategyTest.ph
 sugar-crush/tests/Context/Pruning/Strategies/ErroredInputStrategyTest.php	0.060	2
 sugar-crush/tests/Agents/Live/AgentInboxTest.php	0.060	9
 sugar-crush/tests/Context/Compaction/ReinjectionPlanTest.php	0.060	12
+sugar-crush/tests/Tools/BoardToolsTest.php	0.060	9
 sugar-crush/tests/Permissions/PermissionGateTest.php	0.059	165
 sugar-crush/tests/SessionTest.php	0.059	18
 sugar-crush/tests/Context/ProjectMemoryWriterTest.php	0.058	10

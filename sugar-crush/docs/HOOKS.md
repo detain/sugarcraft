@@ -893,7 +893,7 @@ it runs only once the rest of the chain has permitted that output — see
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
-Ten more exist and are **not** registered by default:
+Eleven more exist and are **not** registered by default:
 
 - `PermissionGateHook` — registered by `Bootstrap::hooks()` when a gate exists,
   which is every CLI launch. It is what makes the six-mode gate reachable from
@@ -935,6 +935,17 @@ Ten more exist and are **not** registered by default:
 - `AutoTestHook` and `AutoTestEditHook` — auto-test reflection, registered by `Bootstrap::hooks()`
   when `autoTest` is on and `testCommand` is set, after the auto-commit and ahead of the
   hook files. See [Auto-test](#auto-test).
+- `BoardNoticeHook` — shared-board notices, registered by `Bootstrap::hooks()`
+  on every launch, after the hooks above and ahead of the hook files. It is
+  inert outside a parallel `Task` batch. Inside one, when a peer has posted
+  something for a member (to its id, or to `ALL`) since the member was last
+  told, the member's next tool result gets one
+  `<shared-agent-board-notice>` note (`PostToolUse`, as `additionalContext`),
+  however many posts arrived; a `BoardRead` result never does, since reading
+  counts as being told. It tells a member's run from the rest through
+  `Agents\Board\ActiveBoard`, which `TaskTool` binds for the length of a
+  member's run in the member's own process. See
+  [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#the-shared-board).
 
 One more is turn-scoped and lives outside `src/Hooks/BuiltIn/`:
 `Context\Pruning\CompressPreviewHook`, which `EngineBackend::runTurn()`

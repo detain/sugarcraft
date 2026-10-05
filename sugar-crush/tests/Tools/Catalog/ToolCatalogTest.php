@@ -9,6 +9,8 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulePathNudge;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tools\BuiltIn\BoardPostTool;
+use SugarCraft\Crush\Tools\BuiltIn\BoardReadTool;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
@@ -89,9 +91,33 @@ final class ToolCatalogTest extends TestCase
 
     public function testTaskIsClassifiedButNotBuilt(): void
     {
-        self::assertSame([TaskTool::class], array_map(static fn (CatalogEntry $e): string => $e->class, ToolCatalog::externallyWired()));
+        self::assertSame(
+            [BoardPostTool::class, BoardReadTool::class, TaskTool::class],
+            array_map(static fn (CatalogEntry $e): string => $e->class, ToolCatalog::externallyWired()),
+        );
         self::assertSame(ToolPermissionClass::Write, ToolCatalog::permissionOf(TaskTool::NAME));
         self::assertNotContains(TaskTool::NAME, array_map(static fn (Tool $t): string => $t->name(), ToolCatalog::build(self::context(sys_get_temp_dir()))));
+    }
+
+    /**
+     * Roadmap 4.5: the shared-board tools are classified (so the gate judges
+     * a batch member's calls by class) but on no launch at all — only a
+     * member's run is handed them.
+     */
+    public function testTheBoardToolsAreClassifiedButOnNoLaunch(): void
+    {
+        self::assertSame(ToolPermissionClass::Read, ToolCatalog::permissionOf(BoardReadTool::NAME));
+        self::assertSame(ToolPermissionClass::NoAsk, ToolCatalog::permissionOf(BoardPostTool::NAME));
+
+        $launched = array_map(static fn (CatalogEntry $e): string => $e->name, ToolCatalog::onLaunch());
+        self::assertNotContains(BoardReadTool::NAME, $launched);
+        self::assertNotContains(BoardPostTool::NAME, $launched);
+        self::assertContains(TaskTool::NAME, $launched);
+        self::assertCount(\count(ToolCatalog::entries()) - 2, $launched);
+
+        $built = array_map(static fn (Tool $t): string => $t->name(), ToolCatalog::build(self::context(sys_get_temp_dir())));
+        self::assertNotContains(BoardReadTool::NAME, $built);
+        self::assertNotContains(BoardPostTool::NAME, $built);
     }
 
     /**
