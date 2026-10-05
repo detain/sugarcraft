@@ -410,6 +410,33 @@ final class BashPermissionPromptTest extends TestCase
     // (c) a leading in-project `cd <dir> &&` is a no-op for "always"
     // =====================================================================
 
+    /**
+     * User decision 2026-10-11: `a` on a pipe remembers each part, and a
+     * later question of ANOTHER shape made of the same parts is answered
+     * without the modal — while one with a part nobody granted comes up.
+     */
+    public function testAlwaysOnAPipeAnswersALaterLineOfAnotherShape(): void
+    {
+        $root = $this->project();
+        [$asking, , $inbox] = $this->asking(self::bash('npm test 2>&1 | tail -20', 'Test'), root: $root);
+
+        self::assertSame('Bash(npm test *), Bash(tail *)', $asking->permissionAlwaysScope());
+        self::assertStringContainsString('always allow Bash(npm test *), Bash(tail *) (this session)', self::plain($asking));
+        [$granted] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
+        self::assertStringContainsString('Allowed Bash(npm test *), Bash(tail *) for this session', $granted->history[\count($granted->history) - 1]->content);
+
+        $later = self::pendingAsk('l1', self::bash("cd {$root} && npm test -- --filter x | tail -5 && npm test", 'again'));
+        $inbox[] = [self::GENERATION, new PermissionAsked($later)];
+        [$granted] = $granted->update(new ToolEventPumpMsg());
+        self::assertNull($granted->pendingPermission(), 'the same parts in another shape were asked about again');
+        self::assertSame(PermissionReply::Once, $later->resolution()?->reply);
+
+        $other = self::pendingAsk('l2', self::bash('npm test && rm -rf build', 'clean'));
+        $inbox[] = [self::GENERATION, new PermissionAsked($other)];
+        [$prompted] = $granted->update(new ToolEventPumpMsg());
+        self::assertSame($other, $prompted->pendingPermission()?->pendingAsk, 'a part nobody granted still asks');
+    }
+
     public function testAlwaysOnAnInProjectCdNamesAndRemembersTheRemaindersPattern(): void
     {
         $root = $this->project();

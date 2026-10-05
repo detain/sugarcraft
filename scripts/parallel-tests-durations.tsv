@@ -142,7 +142,7 @@ sugar-crush/tests/Host/SessionHostTest.php	2.800	12
 sugar-crush/tests/Chat/AutomaticCompactionModelSummaryTest.php	2.777	37
 sugar-crush/tests/Tui/TextSelectionCandyMouseTest.php	2.680	4
 sugar-crush/tests/Acp/AcpPromptStreamTest.php	2.600	9
-sugar-crush/tests/Permissions/BashPermissionPromptTest.php	2.600	15
+sugar-crush/tests/Permissions/BashPermissionPromptTest.php	2.600	21
 sugar-crush/tests/Support/NonBlockingVocabularyTest.php	2.569	25
 sugar-crush/tests/Integration/ParallelDeadlineExemptionTest.php	2.542	1
 sugar-crush/tests/Tools/CapturedProcessDeadlineTest.php	2.539	5
