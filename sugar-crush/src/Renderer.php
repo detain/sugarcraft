@@ -342,9 +342,13 @@ final class Renderer
     /**
      * Fixed head of a finished tool row, ahead of the model-chosen tool name.
      * Named because {@see renderToolResults()} subtracts its width from the row
-     * budget and a boundary spelled twice is a boundary that drifts.
+     * budget and a boundary spelled twice is a boundary that drifts. The word
+     * is translated, so the head is built per call and measured by width.
      */
-    private const TOOL_ROW_PREFIX = '🔧 tool: ';
+    public static function toolRowPrefix(): string
+    {
+        return '🔧 ' . Lang::t('tui.tool.row_label') . ' ';
+    }
 
     /** Below this many columns an argument hint is dropped, not truncated. */
     private const SLASH_MENU_MIN_HINT_COLS = 4;
@@ -544,11 +548,11 @@ final class Renderer
      * still read "allow always" would make the confirm look like a bug.
      */
     private const PERMISSION_OPTIONS = [
-        ['y', 'allow once'],
-        ['a', 'allow calls like this one (this session) — asks first'],
-        ['n / Esc', 'reject'],
-        ['r', 'reject with a note the agent reads'],
-        ['x', 'reject and stop the turn'],
+        ['y', 'tui.permission.allow_once'],
+        ['a', 'tui.permission.always_scope'],
+        ['n / Esc', 'tui.permission.reject'],
+        ['r', 'tui.permission.reject_with_note'],
+        ['x', 'tui.permission.reject_and_stop'],
     ];
 
     /**
@@ -557,8 +561,8 @@ final class Renderer
      * The note itself is typed into the draft box and painted above these.
      */
     private const PERMISSION_NOTE_OPTIONS = [
-        ['Enter', 'reject with this note'],
-        ['Esc', 'back to the question (text kept)'],
+        ['Enter', 'tui.permission.send_note'],
+        ['Esc', 'tui.permission.back_to_question'],
     ];
 
     /**
@@ -572,8 +576,8 @@ final class Renderer
      * constants exists to prevent.
      */
     private const PERMISSION_CONFIRM_OPTIONS = [
-        ['y', 'yes — remember it for this session'],
-        ['n / Esc', 'no — back to the question'],
+        ['y', 'tui.permission.confirm_yes'],
+        ['n / Esc', 'tui.permission.confirm_no'],
     ];
 
     /**
@@ -586,8 +590,8 @@ final class Renderer
      * happening" half).
      */
     private const PERMISSION_DISARMED_OPTIONS = [
-        ['Enter', 'listen for an answer again'],
-        ['Esc', 'reject (always live)'],
+        ['Enter', 'tui.permission.rearm'],
+        ['Esc', 'tui.permission.reject_live'],
     ];
 
     /**
@@ -598,7 +602,7 @@ final class Renderer
      * paints instead of by a hand-copied literal that can drift out from under
      * it - the treatment {@see KEY_HELP_OVER_PROMPT} already gets.
      */
-    public const PERMISSION_DISARMED_NOTICE = 'keys ignored — this prompt is no longer listening';
+    public const PERMISSION_DISARMED_NOTICE = 'tui.permission.disarmed';
 
     /**
      * Rows/characters {@see collapseToolOutput()} keeps of a tool body before
@@ -640,7 +644,10 @@ final class Renderer
     private const INVOCATION_COMMAND_MAX_LINES = 200;
 
     /** Trailer {@see renderInput()} paints after a grayed suggestion. */
-    private const SUGGESTION_ACCEPT_HINT = '  (→ to accept)';
+    private static function suggestionAcceptHint(): string
+    {
+        return '  ' . Lang::t('tui.input.accept_suggestion');
+    }
 
     /** Fewest suggestion columns worth keeping the accept hint for. */
     private const SUGGESTION_MIN_COLS = 12;
@@ -661,7 +668,7 @@ final class Renderer
      * head-anchored bound freezes the paint, every later frame repeating the
      * same leading text while the model keeps thinking.
      */
-    public const THINKING_LIVE_TRAILER = '… %d of %d lines shown';
+    public const THINKING_LIVE_TRAILER = 'tui.chat.thinking_trailer';
 
     /**
      * {@see Chat::expanded()} key of the in-flight thought once the reply has
@@ -677,7 +684,7 @@ final class Renderer
      * {@see TOOL_CALL_ZONE_PREFIX} click zone sharing {@see Chat::expanded()}
      * with tool rows, so one click mechanism opens both.
      */
-    private const THOUGHT_ROW_LABEL = '💭 Thought';
+    private const THOUGHT_ROW_LABEL = 'tui.chat.thought';
 
     /**
      * Rows of wrapped trace the live thinking block may paint before it
@@ -1198,7 +1205,7 @@ final class Renderer
      * This cue fires on any terminal under five rows, whatever its width, so
      * the shorter forms are reached.
      */
-    private const KEY_HELP_TOO_SMALL = 'keys: window too small · ? closes';
+    private const KEY_HELP_TOO_SMALL = 'tui.key_help.too_small';
 
     /**
      * {@see KEY_HELP_TOO_SMALL} and its shorter forms, widest first. Each
@@ -1207,9 +1214,9 @@ final class Renderer
      */
     private const KEY_HELP_TOO_SMALL_FORMS = [
         self::KEY_HELP_TOO_SMALL,
-        '? closes · window too small',
-        '? closes · too small',
-        '? closes',
+        'tui.key_help.too_small_2',
+        'tui.key_help.too_small_3',
+        'tui.key_help.closes',
     ];
 
     /**
@@ -1235,21 +1242,19 @@ final class Renderer
      * Its width is a COLUMN count, not a byte count: `strlen` reads this cue
      * as 36 where `Width::of()` reads 35.
      *
-     * NOT run through `Lang::t()`, and deliberately noted rather than fixed:
-     * `grep -rl 'Lang::t' src/` finds no PHP file in this lib, so hardcoded
-     * English is a lib-wide deviation from the project rule rather than one
-     * introduced here, and starting an i18n migration from one status-bar string
-     * is not the shape of that fix. A translated cue still cannot overflow the
-     * row, because {@see fitStatusBar()} measures the rendered string.
+     * Lang keys (audit 15b-14), like every form below: the forms are
+     * resolved per frame ({@see translated()}) and fitted by display width,
+     * so a translated cue still cannot overflow the row — {@see fitStatusBar()}
+     * measures the rendered string.
      */
-    private const KEY_HELP_OVER_PROMPT = 'keys: ? closes · permission waiting';
+    private const KEY_HELP_OVER_PROMPT = 'tui.key_help.over_prompt';
 
     /** {@see KEY_HELP_OVER_PROMPT} and its shorter forms, widest first, as {@see KEY_HELP_TOO_SMALL_FORMS}. */
     private const KEY_HELP_OVER_PROMPT_FORMS = [
         self::KEY_HELP_OVER_PROMPT,
-        '? closes · permission waiting',
-        '? closes · waiting',
-        '? closes',
+        'tui.key_help.over_prompt_2',
+        'tui.key_help.over_prompt_3',
+        'tui.key_help.closes',
     ];
 
     /**
@@ -1259,10 +1264,21 @@ final class Renderer
      * says that the marker would otherwise lose once it scrolls away.
      */
     private const READ_ONLY_MARKER_FORMS = [
-        'read-only: /branch to fork · ',
-        'read-only · ',
-        'RO · ',
+        'tui.status.read_only_long',
+        'tui.status.read_only',
+        'tui.status.read_only_short',
     ];
+
+    /**
+     * Lang keys resolved in order, for the form lists above.
+     *
+     * @param list<string> $keys
+     * @return list<string>
+     */
+    private static function translated(array $keys): array
+    {
+        return array_map(static fn (string $key): string => Lang::t($key), $keys);
+    }
 
     /**
      * The narrowest room the model segment ({@see modelIndicator()}) is
@@ -1670,9 +1686,9 @@ final class Renderer
             $ask = $request?->pendingAsk;
             $asker = $ask === null ? null : \SugarCraft\Crush\Permissions\AskOrigin::locate($ask, $chat->history, $chat->agentLive());
             if ($request !== null && $asker !== null && $asker->id === $openView['id']) {
-                $waiting = Style::new()->foreground($theme->userLabel)->bold()->render('⏳ waiting on you: ')
+                $waiting = Style::new()->foreground($theme->userLabel)->bold()->render('⏳ ' . Lang::t('tui.agent_view.waiting_on_you') . ' ')
                     . Style::new()->foreground($theme->systemLabel)->render(
-                        self::permissionVisibleOneLine(Message::describeToolCall($request->toolCall)) . ' — answer it in the permission prompt',
+                        Lang::t('tui.agent_view.answer_in_prompt', ['call' => self::permissionVisibleOneLine(Message::describeToolCall($request->toolCall))]),
                     );
                 $body = $body === '' ? $waiting : $body . "\n\n" . $waiting;
             }
@@ -1718,7 +1734,7 @@ final class Renderer
             // Visible in the chat window itself, not just the status bar -
             // a spinner-only status line is easy to miss; this sits right
             // where the reply is about to appear.
-            $thinking = Style::new()->foreground($theme->assistantLabel)->render('⠴ assistant is thinking…');
+            $thinking = Style::new()->foreground($theme->assistantLabel)->render('⠴ ' . Lang::t('tui.chat.assistant_thinking'));
             $body = $body === '' ? $thinking : $body . "\n\n" . $thinking;
         }
         // Everything above wrote into $body; this is the single choke point
@@ -2148,7 +2164,7 @@ final class Renderer
         // user who cannot see the reference needs to know, then the cut.
         if ($chat->keyHelp() !== null && self::keyHelpGeometry($chat) === null) {
             return self::fitStatusBar(
-                self::firstFitting(self::KEY_HELP_TOO_SMALL_FORMS, $chat->cols()),
+                self::firstFitting(self::translated(self::KEY_HELP_TOO_SMALL_FORMS), $chat->cols()),
                 $chat->cols(),
             );
         }
@@ -2159,7 +2175,7 @@ final class Renderer
         // messages on one un-wrappable line would not fit anyway.
         if ($chat->keyHelp() !== null && $chat->pendingPermission() !== null) {
             return self::fitStatusBar(
-                self::firstFitting(self::KEY_HELP_OVER_PROMPT_FORMS, $chat->cols()),
+                self::firstFitting(self::translated(self::KEY_HELP_OVER_PROMPT_FORMS), $chat->cols()),
                 $chat->cols(),
             );
         }
@@ -2228,7 +2244,7 @@ final class Renderer
         // {@see \SugarCraft\Crush\Tests\Chat\InFlightInputQueueTest::testTheQueueSegmentNeverWidensTheBarPastTheTerminal()}.
         $queued = count($chat->queuedPrompts());
         if ($queued > 0) {
-            $segment = sprintf(' · %d queued', $queued);
+            $segment = ' · ' . Lang::t('tui.status.queued', ['count' => $queued]);
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
             if ($floor <= $cols) {
                 $processing .= $segment;
@@ -2240,7 +2256,7 @@ final class Renderer
         // fit rule so it can never be the piece that widens the bar.
         $selection = Chat::textSelection();
         if ($selection !== null && $selection->settled) {
-            $segment = sprintf(' · ✓ copied %d chars', $selection->copiedChars);
+            $segment = ' · ✓ ' . Lang::t('tui.status.copied', ['count' => $selection->copiedChars]);
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
             if ($floor <= $cols) {
                 $processing .= $segment;
@@ -2421,8 +2437,8 @@ final class Renderer
     public static function modeBadgeForms(\SugarCraft\Crush\Permissions\PermissionMode $mode): array
     {
         return $mode === \SugarCraft\Crush\Permissions\PermissionMode::Plan
-            ? ['plan mode (Alt+M to leave) · ', 'plan mode · ', 'plan · ']
-            : [$mode->value . ' mode · ', $mode->value . ' · '];
+            ? [Lang::t('tui.status.mode_plan_leave') . ' · ', Lang::t('tui.status.mode_plan') . ' · ', Lang::t('tui.status.mode_plan_short') . ' · ']
+            : [Lang::t('tui.status.mode', ['mode' => $mode->value]) . ' · ', $mode->value . ' · '];
     }
 
     /**
@@ -2441,7 +2457,7 @@ final class Renderer
             + Width::of(self::contextIndicator($chat, 0))
             + Width::of(self::stripZoneMarkers(self::fitProcessingHint($chat, 0)));
 
-        return self::firstFitting(self::READ_ONLY_MARKER_FORMS, $chat->cols() - $restFloor);
+        return self::firstFitting(array_map(static fn (string $form): string => $form . ' · ', self::translated(self::READ_ONLY_MARKER_FORMS)), $chat->cols() - $restFloor);
     }
 
     /**
@@ -2521,30 +2537,40 @@ final class Renderer
     {
         $step = $chat->liveStep();
         if ($chat->inFlight && $chat->stopRequested()) {
-            $after = $step !== null ? ' after step ' . $step->step : '';
-            $forms = ['⠴ stopping' . $after . ' · Esc to cancel now', '⠴ stopping' . $after, '⠴ stopping…', '⠴'];
+            $stopping = $step !== null ? Lang::t('tui.status.stopping_after_step', ['step' => $step->step]) : Lang::t('tui.status.stopping');
+            $forms = [
+                '⠴ ' . $stopping . ' · ' . Lang::t('tui.status.esc_cancel_now'),
+                '⠴ ' . $stopping,
+                '⠴ ' . Lang::t('tui.status.stopping_ellipsis'),
+                '⠴',
+            ];
         } elseif ($chat->inFlight && $step !== null) {
-            $tag = 'step ' . $step->step;
+            $tag = Lang::t('tui.status.step', ['step' => $step->step]);
             if ($step->pressure?->isOverBudget() === true) {
-                $tag .= ' · ctx ' . $step->pressure->percentOfWindow() . '%';
+                $tag .= ' · ' . Lang::t('tui.status.step_ctx', ['percent' => $step->pressure->percentOfWindow()]);
             }
             $forms = [
-                '⠴ ' . $tag . ' · thinking… · Esc to stop, Esc Esc to cancel',
-                '⠴ ' . $tag . ' · Esc to stop, Esc Esc to cancel',
-                '⠴ ' . $tag . ' · Esc Esc to cancel',
+                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.thinking') . ' · ' . Lang::t('tui.status.esc_stop_or_cancel'),
+                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.esc_stop_or_cancel'),
+                '⠴ ' . $tag . ' · ' . Lang::t('tui.status.esc_esc_cancel'),
                 '⠴ ' . $tag,
                 '⠴',
             ];
         } elseif ($chat->inFlight) {
-            $forms = ['⠴ thinking… · Esc Esc to cancel', '⠴ Esc Esc to cancel', '⠴ thinking…', '⠴'];
-        } else {
-            $menu = self::markPane(Pane::Menu, 'Ctrl+P menu');
             $forms = [
-                'Enter to send · ' . $menu . ' · /exit or ^C to quit',
-                $menu . ' · /exit or ^C to quit',
-                $menu . ' · ^C to quit',
+                '⠴ ' . Lang::t('tui.status.thinking') . ' · ' . Lang::t('tui.status.esc_esc_cancel'),
+                '⠴ ' . Lang::t('tui.status.esc_esc_cancel'),
+                '⠴ ' . Lang::t('tui.status.thinking'),
+                '⠴',
+            ];
+        } else {
+            $menu = self::markPane(Pane::Menu, Lang::t('tui.status.menu'));
+            $forms = [
+                Lang::t('tui.status.enter_to_send') . ' · ' . $menu . ' · ' . Lang::t('tui.status.exit_or_quit'),
+                $menu . ' · ' . Lang::t('tui.status.exit_or_quit'),
+                $menu . ' · ' . Lang::t('tui.status.quit'),
                 $menu,
-                self::markPane(Pane::Menu, '^P menu'),
+                self::markPane(Pane::Menu, Lang::t('tui.status.menu_short')),
             ];
         }
 
@@ -2735,7 +2761,7 @@ final class Renderer
         $forms = $cap === null
             ? [$spent]
             : [
-                $spent . ' of $' . number_format($cap, 4, '.', '') . ' cap',
+                Lang::t('tui.status.spend_of_cap', ['spent' => $spent, 'cap' => '$' . number_format($cap, 4, '.', '')]),
                 $spent . '/$' . number_format($cap, 4, '.', ''),
                 $spent,
             ];
@@ -2875,8 +2901,8 @@ final class Renderer
 
         $ageText = self::formatCacheAge($age);
         $forms = [
-            $read . '% cache · ' . $ageText,
-            $read . '% cache',
+            Lang::t('tui.status.cache_age', ['percent' => $read, 'age' => $ageText]),
+            Lang::t('tui.status.cache', ['percent' => $read]),
         ];
 
         foreach ($forms as $form) {
@@ -2958,16 +2984,17 @@ final class Renderer
         $freed = $chat->contextLedgerView()?->freedTokens() ?? 0;
         $pruned = $freed > 0 ? '−' . self::formatTokenCount($freed) : '';
 
+        $figures = ['used' => $used, 'limit' => $limit, 'percent' => $percent, 'pruned' => $pruned];
         $forms = $pruned === '' ? [
-            "~{$used} / {$limit} context ({$percent}%)",
+            Lang::t('tui.status.context_full', $figures),
             "~{$used}/{$limit} ({$percent}%)",
-            "{$percent}% context",
+            Lang::t('tui.status.context_percent', $figures),
         ] : [
-            "~{$used} / {$limit} context ({$percent}%, {$pruned} pruned)",
-            "~{$used}/{$limit} ({$percent}% {$pruned} pruned)",
+            Lang::t('tui.status.context_full_pruned', $figures),
+            Lang::t('tui.status.context_compact_pruned', $figures),
             "~{$used}/{$limit} ({$percent}%)",
             "{$percent}% ({$pruned})",
-            "{$percent}% context",
+            Lang::t('tui.status.context_percent', $figures),
         ];
         foreach ($forms as $form) {
             if (Width::of($form) <= $room) {
@@ -3031,7 +3058,7 @@ final class Renderer
         // far back the window is — when the full "of how many" readout would
         // not fit. Losing the readout entirely on a narrow terminal would
         // leave no clue at all that the newest output is off-screen.
-        return ["↑ {$offset}/{$max} scrolled · ", "↑{$offset} "];
+        return ['↑ ' . Lang::t('tui.status.scrolled', ['offset' => $offset, 'max' => $max]) . ' · ', "↑{$offset} "];
     }
 
     /**
@@ -3939,7 +3966,7 @@ final class Renderer
         $sections = $ledger === null ? [] : self::compressedSectionStarts($history, $ledger);
         $history = array_filter($history, static fn(Message $msg): bool => $msg->userVisible);
         if ($history === []) {
-            return '_(empty conversation — type a question and press Enter)_';
+            return '_(' . Lang::t('tui.chat.empty_conversation') . ')_';
         }
         // The one argument this call used to omit, and the whole reason a
         // 200-column reply rendered as a 200-column ROW in a 100-column
@@ -3950,8 +3977,8 @@ final class Renderer
         // Built once per frame, not once per turn: the labels depend only on
         // the theme, and styling them per turn was a fixed cost on every row
         // of a long transcript (audit 15b-10).
-        $userLabel = Style::new()->foreground($theme->userLabel)->bold()->render('user>');
-        $assistantLabel = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
+        $userLabel = Style::new()->foreground($theme->userLabel)->bold()->render(Lang::t('tui.chat.user_label'));
+        $assistantLabel = Style::new()->foreground($theme->assistantLabel)->bold()->render(Lang::t('tui.chat.assistant_label'));
         // Roadmap 1.B-3: compaction hides the rows it condensed from the model
         // and leaves them here, with a boundary row where they end
         // ({@see Chat::COMPACTION_BOUNDARY}). The boundary is painted as a rule
@@ -3965,12 +3992,12 @@ final class Renderer
                 $lastBoundary = $key;
             }
         }
-        $condensedUserLabel = self::dim($theme)->render('user>');
-        $condensedAssistantLabel = self::dim($theme)->render('assistant');
+        $condensedUserLabel = self::dim($theme)->render(Lang::t('tui.chat.user_label'));
+        $condensedAssistantLabel = self::dim($theme)->render(Lang::t('tui.chat.assistant_label'));
         // The rule is one row clipped to the pane, never wrapped: it marks a
         // place, and a second row would be a row it does not own.
         $boundaryRule = self::dim($theme)->render(Width::truncate(
-            '── context compacted · the model reads a summary of the turns above '
+            '── ' . Lang::t('tui.chat.compaction_boundary') . ' '
                 . str_repeat('─', max(0, $width)),
             max(1, $width),
         ));
@@ -4017,8 +4044,8 @@ final class Renderer
                     . self::attachmentChip($msg, $theme, $width),
                 Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $width, $condensed ? $condensedAssistantLabel : $assistantLabel, $expanded),
                 Role::System    => $msg->uiOnly
-                    ? self::notice($theme)->render(self::NOTICE_ROW_LABEL . self::untrusted($msg->content))
-                    : self::dim($theme)->render("system: " . self::untrusted($msg->content)),
+                    ? self::notice($theme)->render(Lang::t(self::NOTICE_ROW_LABEL) . ' ' . self::untrusted($msg->content))
+                    : self::dim($theme)->render(Lang::t('tui.chat.system_label') . ' ' . self::untrusted($msg->content)),
             };
         }
         return implode("\n\n", $blocks);
@@ -4079,13 +4106,12 @@ final class Renderer
     private static function compressedSectionRow(\SugarCraft\Crush\Context\Pruning\CompressionBlock $block, Theme $theme, int $width): string
     {
         return self::dim($theme)->render(Width::truncate(
-            sprintf(
-                '▣ Compressed %s · %s · −%s +%s',
-                $block->label(),
-                self::oneLine((string) $block->topic),
-                \SugarCraft\Crush\Util\TokenCount::compact($block->compressedTokens),
-                \SugarCraft\Crush\Util\TokenCount::compact($block->summaryTokens),
-            ),
+            '▣ ' . Lang::t('tui.chat.compressed_section', [
+                'label' => $block->label(),
+                'topic' => self::oneLine((string) $block->topic),
+                'removed' => \SugarCraft\Crush\Util\TokenCount::compact($block->compressedTokens),
+                'added' => \SugarCraft\Crush\Util\TokenCount::compact($block->summaryTokens),
+            ]),
             max(1, $width),
         ));
     }
@@ -4337,21 +4363,21 @@ final class Renderer
         $isExpanded = ($expanded[$key] ?? false) === true;
         $faint = self::dim($theme);
 
-        $head = self::dim($theme)->italic()->render(self::THOUGHT_ROW_LABEL);
+        $head = self::dim($theme)->italic()->render('💭 ' . Lang::t(self::THOUGHT_ROW_LABEL));
         self::$toolRowHeads[] = $head;
         self::recordToolCallZone($key, $head);
 
         $count = count($lines);
-        $size = $count . ' line' . ($count === 1 ? '' : 's');
+        $size = Lang::t($count === 1 ? 'tui.chat.line_one' : 'tui.chat.lines', ['count' => $count]);
         // The chord is offered on the collapsed row Ctrl+O actually opens, and
         // only there: it reaches the newest thought alone, so promising it on
         // an older row would be a hint that does nothing.
         $clicks = Chat::mouseClicksEnabled();
         $ctrlO = !$isExpanded && $key === self::$ctrlOThoughtKey;
         $hint = match (true) {
-            $isExpanded => $clicks ? ' · click to collapse' : '',
-            $ctrlO      => $clicks ? ' · click or ctrl+o to expand' : ' · ctrl+o to expand',
-            default     => $clicks ? ' · click to expand' : '',
+            $isExpanded => $clicks ? ' · ' . Lang::t('tui.chat.click_collapse') : '',
+            $ctrlO      => ' · ' . Lang::t($clicks ? 'tui.chat.click_or_ctrl_o_expand' : 'tui.chat.ctrl_o_expand'),
+            default     => $clicks ? ' · ' . Lang::t('tui.chat.click_expand') : '',
         };
         $row = $head . $faint->render(($isExpanded ? ' ▾ ' : ' ▸ ') . $size . $hint);
 
@@ -4393,9 +4419,9 @@ final class Renderer
         }
 
         $faint = self::dim($theme);
-        $marker = self::dim($theme)->italic()->render('💭 Thinking…');
+        $marker = self::dim($theme)->italic()->render('💭 ' . Lang::t('tui.chat.thinking_live'));
         if (count($kept) < $total) {
-            $marker .= $faint->render(' ' . sprintf(self::THINKING_LIVE_TRAILER, count($kept), $total));
+            $marker .= $faint->render(' ' . Lang::t(self::THINKING_LIVE_TRAILER, ['shown' => count($kept), 'total' => $total]));
         }
 
         return $marker . "\n" . implode("\n", array_map(
@@ -4435,7 +4461,7 @@ final class Renderer
             return null;
         }
 
-        return $entry->kind === \SugarCraft\Crush\Context\Pruning\PruneKind::Distilled ? '⊟ distilled' : '⊟ pruned';
+        return '⊟ ' . Lang::t($entry->kind === \SugarCraft\Crush\Context\Pruning\PruneKind::Distilled ? 'tui.tool.distilled' : 'tui.tool.pruned');
     }
 
     /**
@@ -4518,10 +4544,10 @@ final class Renderer
             $denied = Chat::isDeniedResult($result);
             $stopped = $denied || Chat::isInterruptedResult($result);
             $status = match (true) {
-                $denied            => Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ denied'),
-                $stopped           => Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ interrupted'),
-                $result->isError() => Style::new()->foreground($theme->systemLabel)->bold()->render('✗ error'),
-                default            => Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
+                $denied            => Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ ' . Lang::t('tui.tool.denied')),
+                $stopped           => Style::new()->foreground($theme->systemLabel)->bold()->strikethrough()->render('⊘ ' . Lang::t('tui.tool.interrupted')),
+                $result->isError() => Style::new()->foreground($theme->systemLabel)->bold()->render('✗ ' . Lang::t('tui.tool.error')),
+                default            => Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ' . Lang::t('tui.tool.ok')),
             };
             // Roadmap 3.B-3: the model is no longer sent this output — the
             // ledger replaced it with a placeholder, or with the model's own
@@ -4558,9 +4584,10 @@ final class Renderer
             // assertion still passes and the row has lost the only thing on it
             // naming the tool. Pinned by
             // PaneWidthInvariantTest::testTheNarrowestToolRowKeepsAtLeastOneCellOfItsName().
-            $labelRoom = $width - Width::of(self::TOOL_ROW_PREFIX) - Width::of($status) - 1;
+            $prefix = self::toolRowPrefix();
+            $labelRoom = $width - Width::of($prefix) - Width::of($status) - 1;
             $name = Width::truncate(self::oneLine($result->name), max(1, $labelRoom));
-            $head = self::dim($theme)->strikethrough($stopped)->render(self::TOOL_ROW_PREFIX . $name);
+            $head = self::dim($theme)->strikethrough($stopped)->render($prefix . $name);
             $label = $head . ' ' . $status;
             // Recorded for the LAYOUT question, before and regardless of
             // whether this row can also become a click zone: fitToPane() has to
@@ -4741,7 +4768,7 @@ final class Renderer
             ? ''
             : self::oneLine($result->imageProtocol) . ' ';
 
-        $text = Width::truncate('🖼 ' . $dimensions . $protocol . 'image hidden (ctrl+o)', max(1, $width));
+        $text = Width::truncate('🖼 ' . $dimensions . $protocol . Lang::t('tui.tool.image_hidden'), max(1, $width));
 
         return self::dim($theme)->render($text);
     }
@@ -4811,7 +4838,7 @@ final class Renderer
                 $hit = ['ok' => true, 'body' => $mosaic->render(ImageSource::fromString($bytes), $cols, $rows)];
             } catch (\Throwable $e) {
                 $hit = ['ok' => false, 'body' => self::dim($theme)
-                    ->render('🖼 image unavailable: ' . self::oneLine($e->getMessage()))];
+                    ->render('🖼 ' . Lang::t('tui.tool.image_unavailable', ['error' => self::oneLine($e->getMessage())]))];
             }
 
             self::$imageCache[$key] = $hit;
@@ -4879,13 +4906,13 @@ final class Renderer
         }
 
         return $collapsed['output'] . "\n"
-            . self::dim($theme)->render('… output truncated (ctrl+o to expand)');
+            . self::dim($theme)->render(Lang::t('tui.tool.output_truncated'));
     }
 
     /** The faint "N lines hidden" row that stands in for a collapsed body. */
     private static function hiddenBodyHint(int $count, Theme $theme): string
     {
-        return self::dim($theme)->render("… {$count} line" . ($count === 1 ? '' : 's') . ' hidden (ctrl+o)');
+        return self::dim($theme)->render(Lang::t($count === 1 ? 'tui.tool.hidden_line' : 'tui.tool.hidden_lines', ['count' => $count]));
     }
 
     /**
@@ -5048,7 +5075,7 @@ final class Renderer
         }
 
         if ($overflow > 0) {
-            $trailer = Width::truncate("… {$overflow} more diff line" . ($overflow === 1 ? '' : 's'), $body);
+            $trailer = Width::truncate(Lang::t($overflow === 1 ? 'tui.tool.more_diff_line' : 'tui.tool.more_diff_lines', ['count' => $overflow]), $body);
             $painted[] = $gutterStyle->render($gutter->blank . $trailer);
         }
 
@@ -5083,7 +5110,7 @@ final class Renderer
      * The label a UI-only {@see Message::notice()} row opens with, in place of
      * the `system: ` an agent-visible system row carries - see {@see notice()}.
      */
-    private const NOTICE_ROW_LABEL = 'notice: ';
+    private const NOTICE_ROW_LABEL = 'tui.chat.notice_label';
 
     /**
      * The style of a UI-only system row - a queued or refused prompt, a
@@ -5160,7 +5187,7 @@ final class Renderer
         $runs = $agents === null ? [] : $agents->forCall((string) $msg->pendingToolCallId);
         $queued = $runs !== [] && array_filter($runs, static fn ($run): bool => !$run->isQueued()) === [];
         $spinner = Style::new()->foreground($theme->assistantLabel)->render($queued ? '◌' : '⠴');
-        $running = $spinner . ' ' . self::dim($theme)->render(($queued ? 'queued: ' : 'running: ') . self::oneLine($msg->content));
+        $running = $spinner . ' ' . self::dim($theme)->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
         $running .= self::agentLines($runs, $theme, $width, $agents);
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
@@ -5214,15 +5241,17 @@ final class Renderer
         // batch that still has a run going — the newest such call in the
         // registry's arrival order. Gone once the batch has finished.
         if ($running && !$settled && $runs !== [] && self::lastRunningCall($agents) === $runs[0]->parentCallId) {
-            $hint = Chat::mouseClicksEnabled() ? self::AGENT_BATCH_HINT . self::AGENT_BATCH_HINT_CLICK : self::AGENT_BATCH_HINT;
+            $hint = Chat::mouseClicksEnabled()
+                ? Lang::t(self::AGENT_BATCH_HINT) . ' · ' . Lang::t(self::AGENT_BATCH_HINT_CLICK)
+                : Lang::t(self::AGENT_BATCH_HINT);
             $lines .= "\n" . self::dim($theme)->render(Width::truncate('    ' . $hint, $width));
         }
 
         return $lines;
     }
 
-    /** The batch hint under a running Task batch (Appendix P §4.1). */
-    public const AGENT_BATCH_HINT = 'alt+↓ agents';
+    /** Lang key of the batch hint under a running Task batch (Appendix P §4.1). */
+    public const AGENT_BATCH_HINT = 'tui.agent.batch_hint';
 
     /**
      * Click-zone prefix of a Task row's live agent line (roadmap P-C2):
@@ -5232,8 +5261,8 @@ final class Renderer
      */
     public const AGENT_LINE_ZONE_PREFIX = 'agent-line:';
 
-    /** Its second half, said only while clicks are on. */
-    public const AGENT_BATCH_HINT_CLICK = ' · click a task to open it';
+    /** Lang key of its second half, said (after ` · `) only while clicks are on. */
+    public const AGENT_BATCH_HINT_CLICK = 'tui.agent.batch_hint_click';
 
     /**
      * The parent call id of the newest delegated run still going, or null.
@@ -5380,7 +5409,7 @@ final class Renderer
         $hidden = count($lines) - $maxLines;
         if ($hidden > 0) {
             $lines = array_slice($lines, 0, $maxLines);
-            $lines[] = "… {$hidden} more line" . ($hidden === 1 ? '' : 's');
+            $lines[] = Lang::t($hidden === 1 ? 'tui.tool.more_line' : 'tui.tool.more_lines', ['count' => $hidden]);
         }
 
         return $lines;
@@ -5694,7 +5723,7 @@ final class Renderer
         /** @var array<int, string> $rows row index => the content line it produced */
         $rows = [];
         if ($results === []) {
-            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render('No matches');
+            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(Lang::t('palette.no_matches'));
         } else {
             $highlighter = new Highlighter();
             // Underlined as well as recoloured: the selected row is already
@@ -5728,12 +5757,12 @@ final class Renderer
         }
 
         $title = match ($palette->mode) {
-            'providers' => ' switch model ',
+            'providers' => ' ' . Lang::t('palette.title.providers') . ' ',
             // A provider name is a config key: no control or private-use rune
             // reaches the border title.
-            'models' => ' switch model: ' . (string) preg_replace('/\p{C}+/u', '', (string) $palette->provider) . ' ',
-            'themes' => ' switch theme ',
-            default => ' command palette ',
+            'models' => ' ' . Lang::t('palette.title.models', ['provider' => (string) preg_replace('/\p{C}+/u', '', (string) $palette->provider)]) . ' ',
+            'themes' => ' ' . Lang::t('palette.title.themes') . ' ',
+            default => ' ' . Lang::t('palette.title.commands') . ' ',
         };
 
         $box = Style::new()
@@ -6081,14 +6110,14 @@ final class Renderer
                 // last thing standing, the scroll clause last so a narrow box
                 // spends it first.
                 self::$keyHelpMaxOffset > 0
-                    ? 'Esc closes · ? closes and types "?" · ↑↓ PgUp/PgDn wheel scroll'
-                    : 'Esc closes · ? closes and types "?"',
+                    ? Lang::t('tui.key_help.footer_scroll')
+                    : Lang::t('tui.key_help.footer'),
                 $width,
             ));
         }
 
         return Style::new()
-            ->border(Border::rounded()->withTitle(' keyboard shortcuts '))
+            ->border(Border::rounded()->withTitle(' ' . Lang::t('tui.key_help.title') . ' '))
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->width($width)
@@ -6187,8 +6216,8 @@ final class Renderer
                     // so the user knows what the `y` they are about to press
                     // covers; a question that cannot be remembered says so.
                     $alwaysScope === null
-                        ? 'This question is asked every time, so this allows the call once. Allow it?'
-                        : 'Always allow ' . self::permissionVisibleOneLine($alwaysScope) . ' for the rest of this session?',
+                        ? Lang::t('tui.permission.confirm_question_once')
+                        : Lang::t('tui.permission.confirm_question', ['scope' => self::permissionVisibleOneLine($alwaysScope)]),
                     $inner,
                 ),
             );
@@ -6201,37 +6230,38 @@ final class Renderer
         if ($stage === PermissionPromptStage::WritingNote) {
             $note = trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($chat->inputBuf)));
             $lead = match ($question) {
-                \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME => 'Your answer: ',
-                \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME => 'What should change? ',
-                default => 'Why are you refusing? ',
-            };
+                \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME => Lang::t('tui.permission.lead_answer'),
+                \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME => Lang::t('tui.permission.lead_feedback'),
+                default => Lang::t('tui.permission.lead_refusal'),
+            } . ' ';
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
-                self::wrapPermissionText($lead . ($note === '' ? '(type a note)' : $note), $inner),
+                self::wrapPermissionText($lead . ($note === '' ? Lang::t('tui.permission.type_a_note') : $note), $inner),
             );
         }
 
         if ($stage === PermissionPromptStage::Disarmed) {
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->systemLabel)->bold()->render(
-                self::wrapPermissionText(self::PERMISSION_DISARMED_NOTICE, $inner),
+                self::wrapPermissionText(Lang::t(self::PERMISSION_DISARMED_NOTICE), $inner),
             );
         }
 
         $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope);
 
         $lines[] = '';
-        foreach ($options as [$keys, $label]) {
+        foreach ($options as $option) {
+            [$keys, $label] = $option;
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render($keys)
                 . ' ' . Style::new()->foreground($theme->systemLabel)->faint()
-                    ->render(self::wrapPermissionText($label, max(1, $inner - Width::string($keys) - 1)));
+                    ->render(self::wrapPermissionText(Lang::t($label, $option[2] ?? []), max(1, $inner - Width::string($keys) - 1)));
         }
 
         return Style::new()
             ->border(Border::rounded()->withTitle(match ($question) {
-                \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME => ' the agent asks ',
-                \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME => ' approve the plan ',
-                default => ' permission required ',
+                \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME => ' ' . Lang::t('tui.permission.title_ask') . ' ',
+                \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME => ' ' . Lang::t('tui.permission.title_plan') . ' ',
+                default => ' ' . Lang::t('tui.permission.title') . ' ',
             }))
             ->borderForeground($theme->border)
             ->padding(1, 2)
@@ -6254,9 +6284,12 @@ final class Renderer
      * `this exact command` — and, for a question that cannot be remembered
      * (null), says that `a` counts as once.
      *
+     * Each label is a `lang/en.php` key; a third element carries its
+     * placeholders.
+     *
      * @param list<string> $choices
      *
-     * @return list<array{0: string, 1: string}>
+     * @return list<array{0: string, 1: string, 2?: array<string, int|string>}>
      */
     private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices, ?string $alwaysScope = null): array
     {
@@ -6265,38 +6298,38 @@ final class Renderer
 
         return match ($stage) {
             PermissionPromptStage::ConfirmingAlways => $alwaysScope === null
-                ? [['y', 'yes — allow it once'], self::PERMISSION_CONFIRM_OPTIONS[1]]
+                ? [['y', 'tui.permission.confirm_yes_once'], self::PERMISSION_CONFIRM_OPTIONS[1]]
                 : self::PERMISSION_CONFIRM_OPTIONS,
             PermissionPromptStage::Disarmed => self::PERMISSION_DISARMED_OPTIONS,
             PermissionPromptStage::WritingNote => match ($question) {
-                $askUser => [['Enter', 'send this answer'], self::PERMISSION_NOTE_OPTIONS[1]],
-                $planExit => [['Enter', 'send this feedback; plan mode stays on'], self::PERMISSION_NOTE_OPTIONS[1]],
+                $askUser => [['Enter', 'tui.permission.send_answer'], self::PERMISSION_NOTE_OPTIONS[1]],
+                $planExit => [['Enter', 'tui.permission.send_feedback'], self::PERMISSION_NOTE_OPTIONS[1]],
                 default => self::PERMISSION_NOTE_OPTIONS,
             },
             PermissionPromptStage::Armed => match (true) {
                 $question === $planExit => [
-                    ['y', 'approve the plan; plan mode ends with this turn'],
-                    ['r', 'send feedback, keep planning'],
-                    ['n / Esc', 'refuse the plan'],
-                    ['x', 'refuse and stop the turn'],
+                    ['y', 'tui.permission.plan_approve'],
+                    ['r', 'tui.permission.plan_feedback'],
+                    ['n / Esc', 'tui.permission.plan_refuse'],
+                    ['x', 'tui.permission.plan_refuse_stop'],
                 ],
                 $question === $askUser && $choices !== [] => [
-                    [\count($choices) === 1 ? '1' : '1–' . \count($choices), 'pick that choice'],
-                    ['y', 'choice 1 (recommended)'],
-                    ['r', 'answer in your own words'],
-                    ['n / Esc', 'decline the question'],
-                    ['x', 'decline and stop the turn'],
+                    [\count($choices) === 1 ? '1' : '1–' . \count($choices), 'tui.permission.ask_pick'],
+                    ['y', 'tui.permission.ask_recommended'],
+                    ['r', 'tui.permission.ask_own_words'],
+                    ['n / Esc', 'tui.permission.ask_decline'],
+                    ['x', 'tui.permission.ask_decline_stop'],
                 ],
                 $question === $askUser => [
-                    ['y', 'yes'],
-                    ['n / Esc', 'no / decline'],
-                    ['r', 'answer in your own words'],
-                    ['x', 'decline and stop the turn'],
+                    ['y', 'tui.permission.ask_yes'],
+                    ['n / Esc', 'tui.permission.ask_no'],
+                    ['r', 'tui.permission.ask_own_words'],
+                    ['x', 'tui.permission.ask_decline_stop'],
                 ],
                 default => array_map(
-                    static fn (array $row): array => $row[0] !== 'a' ? $row : ['a', $alwaysScope === null
-                        ? 'allow once — this question is asked every time'
-                        : 'always allow ' . self::permissionVisibleOneLine($alwaysScope) . ' (this session) — asks first'],
+                    static fn (array $row): array => $row[0] !== 'a' ? $row : ($alwaysScope === null
+                        ? ['a', 'tui.permission.always_once']
+                        : ['a', 'tui.permission.always_scope', ['scope' => self::permissionVisibleOneLine($alwaysScope)]]),
                     self::PERMISSION_OPTIONS,
                 ),
             },
@@ -6689,7 +6722,7 @@ final class Renderer
         if (count($rows) > self::PERMISSION_PROMPT_MAX_ROWS) {
             $hidden = count($rows) - self::PERMISSION_PROMPT_MAX_ROWS;
             $rows = array_slice($rows, 0, self::PERMISSION_PROMPT_MAX_ROWS);
-            $rows[] = "… {$hidden} more lines";
+            $rows[] = Lang::t('tui.tool.more_lines', ['count' => $hidden]);
         }
 
         return implode("\n", $rows);
@@ -6904,7 +6937,7 @@ final class Renderer
         $composer = self::$agentView;
         if ($composer !== null && $chat->inputBuf === '') {
             $ghost = Width::truncate(
-                self::oneLine('message ' . self::untrusted((string) ($composer['composer'] ?? $composer['name'])) . '…'),
+                self::oneLine(Lang::t('tui.input.message_agent', ['name' => self::untrusted((string) ($composer['composer'] ?? $composer['name']))])),
                 max(0, $textWidth - Width::of($cursor)),
             );
             if (trim($ghost) !== '') {
@@ -6915,9 +6948,10 @@ final class Renderer
         if ($suggestion !== null) {
             $ghost = self::oneLine($suggestion);
             $room = $textWidth - Width::of($cursor);
-            $hint = Width::of($ghost) + Width::of(self::SUGGESTION_ACCEPT_HINT) <= $room
-                || $room - Width::of(self::SUGGESTION_ACCEPT_HINT) >= self::SUGGESTION_MIN_COLS
-                ? self::SUGGESTION_ACCEPT_HINT
+            $accept = self::suggestionAcceptHint();
+            $hint = Width::of($ghost) + Width::of($accept) <= $room
+                || $room - Width::of($accept) >= self::SUGGESTION_MIN_COLS
+                ? $accept
                 : '';
             $ghost = Width::truncate($ghost, max(0, $room - Width::of($hint)));
             if (trim($ghost) !== '') {
@@ -6941,11 +6975,11 @@ final class Renderer
         return $titleRow === '' ? $box : $titleRow . "\n" . $box;
     }
 
-    /** The inline title editor's label ({@see renderTitleEditorRow()}). */
-    private const TITLE_EDITOR_LABEL = '✎ Session title: ';
+    /** Lang key of the inline title editor's label ({@see renderTitleEditorRow()}). */
+    private const TITLE_EDITOR_LABEL = 'tui.title_editor.label';
 
-    /** Its key hint, the first thing dropped when the row runs out of room. */
-    private const TITLE_EDITOR_HINT = '  ↵ save · esc cancel · empty = auto';
+    /** Lang key of its key hint, the first thing dropped when the row runs out of room. */
+    private const TITLE_EDITOR_HINT = 'tui.title_editor.hint';
 
     /**
      * The inline session-title editor (roadmap P-A4) as ONE row above the
@@ -6962,8 +6996,8 @@ final class Renderer
         }
 
         $cols = max(1, $chat->cols());
-        $label = self::TITLE_EDITOR_LABEL;
-        $hint = self::TITLE_EDITOR_HINT;
+        $label = '✎ ' . Lang::t(self::TITLE_EDITOR_LABEL) . ' ';
+        $hint = '  ' . Lang::t(self::TITLE_EDITOR_HINT);
         if (Width::of($label) + Width::of($hint) + 12 > $cols) {
             $hint = '';
         }

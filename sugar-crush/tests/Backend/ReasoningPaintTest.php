@@ -20,6 +20,7 @@ use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\ReasoningDelta;
 use SugarCraft\Crush\Events\ToolStarted;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Role;
@@ -577,7 +578,7 @@ final class ReasoningPaintTest extends TestCase
         $this->assertStringNotContainsString('TAILMARKER', $early, 'known-negative: the marker must be absent from the accumulation without it');
         $this->assertNotSame($early, $later, 'the live thought froze once it outgrew the viewport');
         $this->assertMatchesRegularExpression(
-            '/' . str_replace(['%d', '…'], ['\\d+', '…'], preg_quote(Renderer::THINKING_LIVE_TRAILER, '/')) . '/u',
+            '/' . str_replace(['\\{shown\\}', '\\{total\\}'], ['\\d+', '\\d+'], preg_quote(Lang::t(Renderer::THINKING_LIVE_TRAILER), '/')) . '/u',
             $this->plain($later),
             'the bounded live paint must say how much of the trace it shows',
         );

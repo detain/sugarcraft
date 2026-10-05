@@ -251,15 +251,15 @@ final class AgentViewTest extends TestCase
     {
         $frame = Ansi::strip(Renderer::render($this->app()->chat ?? self::fail('no chat')));
 
-        $this->assertSame(1, substr_count($frame, Renderer::AGENT_BATCH_HINT), 'once per batch');
+        $this->assertSame(1, substr_count($frame, Lang::t(Renderer::AGENT_BATCH_HINT)), 'once per batch');
         $lines = explode("\n", $frame);
         $at = 0;
         foreach ($lines as $index => $line) {
-            if (str_contains($line, Renderer::AGENT_BATCH_HINT)) {
+            if (str_contains($line, Lang::t(Renderer::AGENT_BATCH_HINT))) {
                 $at = $index;
             }
         }
-        $this->assertStringContainsString(Renderer::AGENT_BATCH_HINT_CLICK, $lines[$at], 'clicks are on, so it says so');
+        $this->assertStringContainsString(Lang::t(Renderer::AGENT_BATCH_HINT_CLICK), $lines[$at], 'clicks are on, so it says so');
         $this->assertStringContainsString('└', $lines[$at - 1], 'right under the batch\'s last live line');
         $this->assertStringContainsString('└', $lines[$at - 2], 'which follows the first');
     }

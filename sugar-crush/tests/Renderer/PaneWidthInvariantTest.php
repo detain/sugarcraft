@@ -1561,12 +1561,12 @@ final class PaneWidthInvariantTest extends TestCase
     }
 
     /**
-     * `Renderer::TOOL_ROW_PREFIX`, read off the class rather than restated, so
+     * `Renderer::toolRowPrefix()`, read off the class rather than restated, so
      * the arithmetic these tests derive cannot drift from the renderer's.
      */
     private static function toolRowPrefix(): string
     {
-        return (string) (new \ReflectionClassConstant(Renderer::class, 'TOOL_ROW_PREFIX'))->getValue();
+        return Renderer::toolRowPrefix();
     }
 
     /**

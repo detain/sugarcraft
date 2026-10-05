@@ -13,6 +13,7 @@ use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -1662,7 +1663,7 @@ final class RendererTest extends TestCase
         $out = Renderer::render($disarmed);
 
         $this->assertStringContainsString('permission required', $out, 'the question is still on screen');
-        $this->assertStringContainsString(Renderer::PERMISSION_DISARMED_NOTICE, $out);
+        $this->assertStringContainsString(Lang::t(Renderer::PERMISSION_DISARMED_NOTICE), $out);
         $this->assertStringContainsString('Enter', $out, 'and the key that makes the answers live again');
         $this->assertStringContainsString('listen for an answer again', $out);
         $this->assertStringNotContainsString(
