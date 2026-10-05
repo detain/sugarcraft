@@ -112,6 +112,14 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withHelp('Least time between two dream passes for one project; each pass is a billed, read-only turn.')
                 ->withReaderSymbol(DreamPass::class . '::interval')
                 ->withReadBy('`DreamPass::call()` → `interval()`, as a turn settles'),
+            SettingDefinition::new(DreamPass::SETTING_PROPOSE_SKILLS, SettingType::Bool, false)
+                ->withCategory(SettingCategory::MemoryRules)
+                ->withRiskClass(RiskClass::Prompt)
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withLabel('Dream pass: propose skills')
+                ->withHelp('Let the dream pass propose skills as drafts in ~/.sugar-crush/skills-proposed; none is live until you /skills accept it.')
+                ->withReaderSymbol(DreamPass::class . '::proposesSkills')
+                ->withReadBy('`DreamPass::call()` → `proposesSkills()`, as a turn settles'),
             SettingDefinition::new('instructions', SettingType::StringList, [])
                 ->withCategory(SettingCategory::MemoryRules)
                 ->withRiskClass(RiskClass::Prompt)

@@ -101,7 +101,13 @@ final readonly class ConsolidationPlan
         return $this->mutations() === [];
     }
 
-    private static function extractObject(string $reply): ?string
+    /**
+     * The first `{` to the last `}` of $reply once a `<think>` block is
+     * peeled off, or null — the JSON object a consolidation or dream answer
+     * carries. Public for {@see \SugarCraft\Crush\Skills\SkillProposal::fromReply()},
+     * which reads the dream answer's `skills` list out of the same object.
+     */
+    public static function extractObject(string $reply): ?string
     {
         $text = preg_replace('#<think>.*?</think>#is', '', $reply) ?? $reply;
         $start = strpos($text, '{');

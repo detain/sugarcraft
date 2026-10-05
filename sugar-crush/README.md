@@ -436,8 +436,8 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/exit` (`/quit`) `/fork` `/goal` `/grind` `/handoff` `/help` `/init` `/keys`
 `/layout` `/mcp` `/memory` `/model` `/newrule` `/notices` `/pane` `/permissions`
 `/pruning` `/recompress` `/redo` `/rename` `/rewind` `/rules` `/sessions`
-`/settings` (`/config`) `/share` `/sweep` `/theme` `/undo` `/websearch`
-`/workflow`.
+`/settings` (`/config`) `/share` `/skills` `/sweep` `/theme` `/undo`
+`/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no

@@ -584,6 +584,40 @@ or setting the variable brings the skill back on the next launch. A skill
 handed to the registry by code rather than read from a SKILL.md gets the same
 check, and its reason is on `SkillRegistry::unavailable()`.
 
+## Proposed skills
+
+The [dream pass](MEMORY.md#dream-pass) may **propose** a skill, but never write
+or edit a live one. Proposals are off unless `"memory.dreamProposeSkills": true`
+is in `~/.sugar-crush/config.json`; with it on, a pass that sees a procedure
+repeated across the compaction journal may write up to three drafts to
+`~/.sugar-crush/skills-proposed/<name>/SKILL.md`. That directory is not a skill
+tier — no loader walks it, so a draft is never listed to the model, matched or
+invoked. How a draft is checked on the way in (sanitised name, redacted
+secrets, size caps, owner-only modes) is in
+[MEMORY.md](MEMORY.md#dream-pass).
+
+A draft becomes a skill only when you say so, with `/skills`
+(`Host\Commands\SkillsHostCommand`):
+
+| Command | What it does |
+|---|---|
+| `/skills` or `/skills proposed` | Lists the waiting drafts: name, size, date and description (or why it does not load). |
+| `/skills accept <name>` | Validates the draft with the skill loader — frontmatter through `SkillLoader::loadSkillManifest()`, the whole file through `Skill::fromFile()` — then writes it to `~/.sugar-crush/skills/<name>/SKILL.md` and deletes the draft. Refused when a live skill of that name exists in any native tier (`SkillLoader::loadAllManifests()`) or its user-tier directory exists, unless you add `--replace`, which rewrites only that directory's `SKILL.md` (a built-in or project skill of the name is then shadowed by yours, the usual user-beats-project order). |
+| `/skills reject <name>` | Deletes the draft. |
+
+`<name>` must already be a draft name (lower-case letters, digits and dashes),
+so `../x` or an absolute path is refused, never resolved. An accepted skill is
+read from the next launch, like any other file in the user tier. You can edit a
+draft by hand before accepting it.
+
+**Only you can promote.** `/skills accept` is a slash command — typed in the
+TUI, or sent by a protocol client as `command.exec` — and no tool calls
+`ProposedSkills::accept()`; the dream pass's own turn has only read-only tools.
+An agent's `Write`, `Edit` or `Bash` touching `.sugar-crush/skills-proposed`
+is asked about in every permission mode, the same as one touching
+`.sugar-crush/skills` ([PERMISSIONS.md](PERMISSIONS.md)), so a draft the agent
+planted cannot pass for one the dream proposed.
+
 ## See also
 
 - [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md) — the sibling format, and the

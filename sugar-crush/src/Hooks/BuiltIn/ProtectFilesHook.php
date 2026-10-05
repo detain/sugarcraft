@@ -213,6 +213,11 @@ final readonly class ProtectFilesHook implements HookInterface
      *    them, the `.git/hooks/` argument above. The directory name itself is
      *    matched (`(?![\w.-])`, not a trailing `/`), so `mv x
      *    .sugar-crush/skills` is asked about as well as a write inside it.
+     *  - `.sugar-crush/skills-proposed` — the dream pass's skill drafts
+     *    (roadmap 5.4-3). A draft is not live, but `/skills accept` makes it
+     *    live on the user's word, so a draft the agent planted would ride on
+     *    the trust the user gives a dream proposal; promotion stays a user
+     *    action only if the drafts are not the agent's to write either.
      *  - `.claude/` and `.opencode/` `skills`, `agents` and `commands` (and
      *    opencode's singular `agent`/`command`) — sugar-crush imports skills
      *    and agent presets from both trees, so a write there is a write to
@@ -239,6 +244,7 @@ final readonly class ProtectFilesHook implements HookInterface
         '#(^|/)\.sugar-crush/settings(?:\.local)?\.json(?![\w.-])#',
         '#(?<![\w.-])\.mcp\.json(?![\w.-])#',
         '#(^|/)\.sugar-crush/(?:skills|commands|rules|workflows)(?![\w.-])#',
+        '#(^|/)\.sugar-crush/skills-proposed(?![\w.-])#',
         '#(^|/)\.(?:claude|opencode)/(?:skills|agents?|commands?)(?![\w.-])#',
     ];
 

@@ -12,6 +12,8 @@ use SugarCraft\Crush\DreamPassCompletedMsg;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Skills\ProposedSkills;
+use SugarCraft\Crush\Skills\SkillProposal;
 use SugarCraft\Crush\Support\AtomicFileWriter;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 
@@ -57,6 +59,17 @@ use function React\Promise\resolve;
  * output or loop limit, or answers no JSON leaves the cursor where it was,
  * so those entries are shown again next time.
  *
+ * SKILLS ARE ONLY EVER PROPOSED, AND ONLY WHEN ASKED. The pass is limited to
+ * memory notes and never edits a live skill. With the user-tier
+ * {@see SETTING_PROPOSE_SKILLS} on (it is off by default), the prompt also
+ * invites a `skills` list, and each entry is written by
+ * {@see ProposedSkills::propose()} as a draft under
+ * `~/.sugar-crush/skills-proposed/` — sanitised, redacted, size-capped,
+ * owner-only, never under a live skills directory — announced in the pass's
+ * one display-only notice. Only the user's `/skills accept <name>` makes a
+ * draft live; no tool reaches it. With the setting off, a `skills` list in
+ * the answer is ignored.
+ *
  * THROTTLED AND NEVER ON THE UI'S CRITICAL PATH. {@see call()} runs inside
  * `update()` and does one stat and one small state-file read: at most one pass
  * per project per {@see INTERVAL_SECONDS} across every session and process,
@@ -81,6 +94,15 @@ final class DreamPass
 
     /** The shortest gap the setting may ask for: a pass is a billed turn. */
     public const MIN_INTERVAL_SECONDS = 60;
+
+    /**
+     * The user-tier settings key that lets a pass propose skills as drafts
+     * ({@see ProposedSkills}); off unless it is exactly `true`.
+     */
+    public const SETTING_PROPOSE_SKILLS = 'memory.dreamProposeSkills';
+
+    /** The skip reason a proposal {@see ProposedSkills::propose()} refused is counted under. */
+    public const SKIP_SKILL_PROPOSAL = 'skill_proposal_refused';
 
     /** Nanobot's `max_entries`: the most journal entries one pass reads. */
     public const MAX_ENTRIES = 20;
@@ -125,6 +147,13 @@ Answer with ONE JSON object and nothing else:
 op is add, update or delete. scope is "project" for facts about this repository, "user" only for the user's own preferences that hold in every project. type is pattern, convention, decision or preference. Skip reasons: duplicate, transient, unsupported, secret, too_specific, in_progress, policy_belongs_in_docs, out_of_scope, self_referential. At most 16 operations. An empty "operations" list is the normal answer when memory is already current.
 PROMPT;
 
+    /** Appended to {@see PROMPT} only while {@see SETTING_PROPOSE_SKILLS} is on. */
+    private const PROPOSE_PROMPT = <<<'PROMPT'
+Skill proposals are switched on. When the journal shows the same multi-step procedure carried out again and again (a release checklist, a migration recipe, a debugging routine), you may also propose it as a skill: a reusable instruction file that the user reviews before it is ever used. Add a "skills" list to the same JSON object:
+{"operations":[],"skills":[{"name":"short-kebab-name","description":"One sentence saying when to use the skill.","body":"Markdown instructions, the steps in order."}]}
+At most 3 proposals, only for procedures the journal shows were repeated, never for a one-off task, and never containing secrets. A proposal is a draft and nothing more: it cannot edit or replace an existing skill. An absent or empty "skills" list is the normal answer.
+PROMPT;
+
     /**
      * @param \Closure(): int $clock
      * @param \Closure(EngineBackend, list<Message>): PromiseInterface $runner
@@ -135,6 +164,8 @@ PROMPT;
         private readonly ?int $interval,
         private readonly \Closure $clock,
         private readonly \Closure $runner,
+        private readonly ?bool $proposeSkills = null,
+        private readonly ?ProposedSkills $drafts = null,
     ) {
     }
 
@@ -181,6 +212,46 @@ PROMPT;
         $value = $config[self::SETTING_INTERVAL] ?? null;
 
         return \is_int($value) && $value >= self::MIN_INTERVAL_SECONDS ? $value : self::INTERVAL_SECONDS;
+    }
+
+    /**
+     * The same pass with skill proposals pinned on or off, whatever
+     * {@see SETTING_PROPOSE_SKILLS} says.
+     */
+    public function withProposeSkills(bool $on): self
+    {
+        return $this->mutate(['proposeSkills' => $on]);
+    }
+
+    /** The same pass writing its skill drafts to $drafts instead of the owned home's store. */
+    public function withProposedSkills(ProposedSkills $drafts): self
+    {
+        return $this->mutate(['drafts' => $drafts]);
+    }
+
+    /**
+     * Whether this pass may propose skills: the value {@see withProposeSkills()}
+     * pinned, else whether the {@see SETTING_PROPOSE_SKILLS} setting is exactly
+     * `true`. A key no project may set (it is not layered), read from the
+     * user's own `config.json`.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`)
+     */
+    public function proposesSkills(?array $config = null): bool
+    {
+        if ($this->proposeSkills !== null) {
+            return $this->proposeSkills;
+        }
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+
+        return ($config[self::SETTING_PROPOSE_SKILLS] ?? false) === true;
     }
 
     /**
@@ -253,7 +324,12 @@ PROMPT;
             return null;
         }
 
-        return function () use ($backend, $home, $journal, $sessionId): PromiseInterface {
+        // Resolved once, here, so the prompt that invites proposals and the
+        // settle that writes them can never disagree about the setting: the
+        // factory runs as a copy of this pass with the answer pinned.
+        $pass = $this->withProposeSkills($this->proposesSkills());
+
+        return (function () use ($backend, $home, $journal, $sessionId): PromiseInterface {
             try {
                 $size = self::sizeOf($journal);
                 [$entries, $start, $rest] = $this->pending($journal, $this->readState($home));
@@ -283,7 +359,7 @@ PROMPT;
                     error: $e->getMessage(),
                 ),
             );
-        };
+        })->bindTo($pass);
     }
 
     /**
@@ -333,7 +409,8 @@ PROMPT;
         }
 
         return [Message::user(
-            self::PROMPT . "\n\nCompaction journal (" . \count($entries) . " entries, oldest first):\n<compaction-journal>\n"
+            self::PROMPT . ($this->proposesSkills() ? "\n\n" . self::PROPOSE_PROMPT : '')
+            . "\n\nCompaction journal (" . \count($entries) . " entries, oldest first):\n<compaction-journal>\n"
             . self::fenced(implode("\n\n", $blocks)) . "\n</compaction-journal>",
         )];
     }
@@ -408,6 +485,12 @@ PROMPT;
 
         $outcome = AutoMemoryConsolidator::new($this->writer)->apply(self::tagged($plan), $reply->usage, $sessionId);
 
+        [$proposed, $refused] = $this->propose($reply);
+        $skipped = $outcome->skipped;
+        if ($refused > 0) {
+            $skipped[self::SKIP_SKILL_PROPOSAL] = ($skipped[self::SKIP_SKILL_PROPOSAL] ?? 0) + $refused;
+        }
+
         $commit = null;
         if ($history !== null && $outcome->changed()) {
             [$commit, $failed] = self::record($history, self::subject($outcome, \count($entries)));
@@ -429,7 +512,7 @@ PROMPT;
             $outcome->saved,
             $outcome->updated,
             $outcome->deleted,
-            $outcome->skipped,
+            $skipped,
             \count($entries),
             $completed && $entries !== [],
             $commit,
@@ -437,7 +520,34 @@ PROMPT;
             $sessionId,
             null,
             $warning,
+            $proposed,
         );
+    }
+
+    /**
+     * Write the answer's skill proposals as drafts — only while
+     * {@see proposesSkills()}; with it off the list is ignored.
+     *
+     * @return array{0: list<string>, 1: int} the draft names written, and how many proposals were refused
+     */
+    private function propose(Message $reply): array
+    {
+        if (!$this->proposesSkills()) {
+            return [[], 0];
+        }
+
+        $drafts = $this->drafts ?? ProposedSkills::new();
+        $written = [];
+        $refused = 0;
+        foreach (SkillProposal::fromReply($reply->content) as $proposal) {
+            try {
+                $written[] = $drafts->propose($proposal);
+            } catch (\Throwable) {
+                $refused++;
+            }
+        }
+
+        return [$written, $refused];
     }
 
     /**
@@ -445,8 +555,15 @@ PROMPT;
      */
     public static function notice(DreamPassCompletedMsg $msg): ?string
     {
+        $proposed = $msg->proposed === [] ? null : sprintf(
+            'Dream pass proposed %d %s for review (%s) in `~/%s` — `/skills proposed` lists them, `/skills accept <name>` makes one live, `/skills reject <name>` deletes it.',
+            \count($msg->proposed),
+            \count($msg->proposed) === 1 ? 'skill' : 'skills',
+            implode(', ', array_map(static fn(string $name): string => '`' . $name . '`', $msg->proposed)),
+            ProposedSkills::SUBDIR,
+        );
         if (!$msg->changed()) {
-            return null;
+            return $proposed;
         }
 
         $parts = [];
@@ -461,6 +578,8 @@ PROMPT;
             . ' (tagged `' . AutoMemoryConsolidator::TAG . '`) — `/memory list` shows them'
             . ($msg->commit !== null ? ', `/memory log` the commit (`' . $msg->commit . '`)' : '')
             . '; set `' . AutoMemoryConsolidator::ENV_DISABLE . '=1` to turn it off.';
+
+        $notice = $proposed === null ? $notice : $notice . ' ' . $proposed;
 
         return $msg->warning === null ? $notice : $notice . ' ' . $msg->warning;
     }
@@ -617,6 +736,8 @@ PROMPT;
             'interval' => $this->interval,
             'clock' => $this->clock,
             'runner' => $this->runner,
+            'proposeSkills' => $this->proposeSkills,
+            'drafts' => $this->drafts,
         ], $changes));
     }
 }

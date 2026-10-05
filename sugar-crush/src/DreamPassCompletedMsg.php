@@ -17,7 +17,8 @@ use SugarCraft\Core\Msg;
  * process as the turn's promise settled. What is left for {@see Chat::update()}
  * is the bookkeeping every provider call on the user's key gets: account
  * $usage whatever the outcome, and one display-only notice when a note was
- * saved, changed or removed. A pass that changed nothing says nothing.
+ * saved, changed or removed, or a skill draft was proposed. A pass that did
+ * neither says nothing.
  */
 final class DreamPassCompletedMsg implements Msg
 {
@@ -33,6 +34,8 @@ final class DreamPassCompletedMsg implements Msg
      * @param ?string            $sessionId the session whose settled turn scheduled the pass
      * @param ?string            $error    why the turn failed, or null when it answered
      * @param ?string            $warning  why the memory history could not record the pass, or null
+     * @param list<string>       $proposed names of the skill drafts written to `~/.sugar-crush/skills-proposed`
+     *                                     (only with `memory.dreamProposeSkills` on; never a live skill)
      */
     public function __construct(
         public readonly array $saved = [],
@@ -46,6 +49,7 @@ final class DreamPassCompletedMsg implements Msg
         public readonly ?string $sessionId = null,
         public readonly ?string $error = null,
         public readonly ?string $warning = null,
+        public readonly array $proposed = [],
     ) {}
 
     /** Whether the pass changed any note. */

@@ -686,6 +686,14 @@ final class ReadPathCensusTest extends TestCase
                 . 'type and age; nothing is read, and a directory holding anything but regular '
                 . 'files and sockets is left whole',
         ],
+        // Roadmap 5.4-3's propose mode: the dream pass's skill drafts.
+        'Skills/ProposedSkills.php|scandir' => [
+            'NAMES_ONLY — `/skills proposed` lists the owned home\'s drafts tree; only names that '
+                . 'are already sanitised draft names, as real (non-link) directories holding a '
+                . 'non-link SKILL.md, are read on, through Skill::fromFile()\'s bounded reader',
+            'NAMES_ONLY — removing one draft directory: entries are unlinked, a link is never '
+                . 'followed, and only a real subdirectory is descended',
+        ],
         // Audit 15d-27 routed the four skill reads (Skill::fromFile(), the
         // manifest head, the body, the asset) through one size-bounded reader;
         // the PATHS are still bounded where they always were, in the loader.

@@ -649,6 +649,29 @@ step, output or loop limit, or answered no JSON leaves them to be shown again.
 A pass that changed a note says so in one display-only transcript line; one
 that changed nothing says nothing.
 
+**Skills: proposed, never edited.** The dream pass is limited to memory notes
+and never touches a live skill. With `"memory.dreamProposeSkills": true` in
+`~/.sugar-crush/config.json` (off by default, and not a key a project's
+settings can set), the prompt also invites a `skills` list for procedures the
+journal shows were repeated — at most 3 per pass, each
+`{"name", "description", "body"}`. Each one is written by
+`Skills\ProposedSkills::propose()` as a **draft**,
+`~/.sugar-crush/skills-proposed/<name>/SKILL.md`, never under a live skills
+directory: the name is sanitised to lower-case letters, digits and dashes (at
+most 64 characters, so it can never be a path), secrets are redacted with the
+same `SecretRedactor` the notes use, the description is one line of at most
+300 characters and the body at most 16,384 bytes (refused, not cut), the file
+must parse back as a skill, the directory is created 0700 and the file 0600,
+and a draft already waiting under that name is never overwritten. A refused
+proposal is counted as a `skill_proposal_refused` skip. The drafts live
+outside the memory directory, so the memory history does not record them. The
+pass's one display-only notice names the drafts it wrote; `/skills proposed`
+lists them, `/skills accept <name>` makes one live and `/skills reject <name>`
+deletes it ([SKILLS.md](SKILLS.md#proposed-skills)). Promotion is your action
+only: no tool reaches it, and an agent's write into `skills-proposed/` is asked
+about like a write into `skills/` ([PERMISSIONS.md](PERMISSIONS.md)). With the
+setting off, a `skills` list in the answer is ignored.
+
 ---
 
 ## Instruction files
@@ -752,6 +775,7 @@ transcript notice the first time it happens.
 ├── cache/embeddings.sqlite  memory-recall vectors (derived; safe to delete)
 ├── agents/*.md        agent presets            → AGENTS_AUTHORING.md
 ├── skills/*/SKILL.md  skills                   → SKILLS.md
+├── skills-proposed/*/SKILL.md  the dream pass's skill drafts → SKILLS.md
 ├── commands/*.md      custom slash commands    → COMMANDS.md
 ├── workflows/         *.php and *.yaml          → WORKFLOWS.md
 ├── hooks.yaml         hooks                     → HOOKS.md

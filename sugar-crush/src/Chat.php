@@ -12619,6 +12619,18 @@ final class Chat implements Model
     }
 
     /**
+     * `/skills` — list, accept or reject the skill drafts the dream pass
+     * proposed (roadmap 5.4-3, {@see \SugarCraft\Crush\Host\Commands\SkillsHostCommand}):
+     * the one path by which a draft becomes a live skill, and a user's.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleSkillsCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\SkillsHostCommand(), $inputText);
+    }
+
+    /**
      * One caller-supplied value, made safe to be PART OF A REPORT LINE — see
      * {@see \SugarCraft\Crush\Host\Commands\PermissionsCommand::reportField()},
      * where the `/permissions` report moved (roadmap O-2h). Kept here because

@@ -1255,8 +1255,8 @@ the default on every path. Now:
 `Read`, `Grep`, `Glob` and `Lsp` cannot write, so they skip the write-only
 policy patterns (`.sugar-crush/hooks.yaml`, `config.json` and `agents/`, plus
 `.git/hooks/` and `.git/info/`, which are denied; and the always-asked rest —
-`settings.json`, `settings.local.json`, the `skills/`, `commands/`, `rules/`
-and `workflows/` directories, `.mcp.json`, and the `.claude/` / `.opencode/`
+`settings.json`, `settings.local.json`, the `skills/`, `skills-proposed/`,
+`commands/`, `rules/` and `workflows/` directories, `.mcp.json`, and the `.claude/` / `.opencode/`
 skill, agent and command trees); `Bash`, the write tools and MCP tools get the full list — so
 `cat .git/hooks/pre-commit` in `Bash` is refused, and `cat .mcp.json` asks,
 where `Read` of either file is not. The asked rows are a hook's `ask()`, put to
