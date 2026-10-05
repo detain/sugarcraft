@@ -497,10 +497,11 @@ rules underneath are `TaskList`'s:
   teammate's behalf. Nothing is taken back on its own — a teammate on a long
   task may still be working.
 
-A teammate needs `Team` in its grant to claim for itself. A preset that
-declares no `tools:` has it; the six built-in definitions do not, so with
-those the lead claims on the teammate's behalf and completes the task from its
-report. The launch's `AgentManager` holds a `TeamManager` over the same store,
+Every teammate can claim for itself: `Team` rides along with any `tools:`
+grant whenever the session offers it — the six built-in definitions included —
+because it writes only the team's own board and mailbox, never the project. A
+preset keeps its agent off the board with `disallowedTools: [Team]`; then the
+lead claims on its behalf and completes the task from its report. The launch's `AgentManager` holds a `TeamManager` over the same store,
 `~/.sugar-crush/teams` (a registry plus one task database and mailbox per
 team), and the registry on disk is what every process shares.
 `add`, `complete` and a `claim` with no task named raise `TaskCreated`,

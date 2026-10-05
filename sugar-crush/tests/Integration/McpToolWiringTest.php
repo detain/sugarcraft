@@ -1094,9 +1094,14 @@ final class McpToolWiringTest extends TestCase
         // :598 request and the E644/E660 batch resolver call.
         $granted = (new \ReflectionMethod('SugarCraft\Crush\Agents\AgentManager', 'resolveGrantedTools'))
             ->invoke($manager, $agent);
+        // Roadmap 4.6-2: the harness's coordination tools (Team) ride along
+        // with every grant; they are not what this pin is about.
         $this->assertSame(
             ['mcp__alpha__ping'],
-            array_map(static fn(\SugarCraft\Crush\Tools\Tool $t): string => $t->name(), $granted ?? []),
+            array_values(array_diff(
+                array_map(static fn(\SugarCraft\Crush\Tools\Tool $t): string => $t->name(), $granted ?? []),
+                \SugarCraft\Crush\Agents\AgentManager::COORDINATION_TOOLS,
+            )),
             'the production path must advertise the allowed server only; beta is narrowed away exactly where the provider request is built',
         );
     }

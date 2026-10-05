@@ -144,7 +144,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             . 'conditional on nothing having changed since. `message` sends `text` from `teammate` to `to`; `inbox` '
             . 'returns `teammate`\'s unread messages. To staff a team, start each teammate with Task and '
             . '`background: true`, telling it the team id, its teammate name, and to repeat claim → work → '
-            . 'complete until claim finds nothing; a teammate whose agent is not granted Team reports back instead, '
+            . 'complete until claim finds nothing; a teammate whose preset disallows Team reports back instead, '
             . 'and you complete its task. Dependencies cannot form a cycle, and a task whose claimant\'s session '
             . 'died is put back to pending on the next list or claim.';
     }

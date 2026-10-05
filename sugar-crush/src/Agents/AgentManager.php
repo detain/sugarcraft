@@ -23,6 +23,31 @@ use SugarCraft\Crush\Tools\Tool;
 final class AgentManager
 {
     /**
+     * Tools every declared `tools` grant carries whenever the session offers
+     * them (roadmap 4.6-2): `Team`, the task board a background teammate is
+     * told to work through — claim, complete, repeat.
+     *
+     * WHY A GRANT DOES NOT NARROW IT. A grant lists what an agent may do to
+     * the world; `Team` writes only the harness's own coordination state (the
+     * board and mailbox under `~/.sugar-crush/teams`), never the project. Left
+     * to the grant, every agent that declared one — the six built-in
+     * definitions among them — could only report back and leave its lead to
+     * do the bookkeeping, which is the shape teams exist to remove. So it
+     * rides along with any grant ({@see resolveGrantedTools()}) and is
+     * admitted per call ({@see grantRefusalFor()}), the way a parallel batch's
+     * board is ({@see \SugarCraft\Crush\Tools\Catalog\ToolCatalog::isMemberOnly()}).
+     *
+     * STILL REMOVABLE, AND ONLY ADDED WHEN OFFERED. A preset's
+     * `disallowedTools: [Team]` keeps its agent off the board, and a session
+     * whose registry has no `Team` (the operator disabled it, or an embedder
+     * never built one) adds nothing — a coordination tool is not a grant a
+     * run can be refused for lacking.
+     *
+     * @var list<string>
+     */
+    public const COORDINATION_TOOLS = [\SugarCraft\Crush\Tools\BuiltIn\TeamTool::NAME];
+
+    /**
      * How many FINISHED (complete, failed, stopped) sub-agents this manager
      * keeps once they have settled — audit AG-3.
      *
@@ -1499,7 +1524,7 @@ final class AgentManager
                 }
             }
 
-            if (!$hit) {
+            if (!$hit && !\in_array($tool->name(), self::COORDINATION_TOOLS, true)) {
                 continue;
             }
 
@@ -1822,6 +1847,12 @@ final class AgentManager
         // denylist above still can: `disallowedTools: [BoardPost]` keeps a
         // preset off the board.
         if (\SugarCraft\Crush\Tools\Catalog\ToolCatalog::isMemberOnly($toolCall->name)) {
+            return null;
+        }
+
+        // A coordination tool rides along with every grant — see
+        // COORDINATION_TOOLS; the denylist above still removes it.
+        if (\in_array($toolCall->name, self::COORDINATION_TOOLS, true)) {
             return null;
         }
 

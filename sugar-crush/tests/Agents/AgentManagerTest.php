@@ -2788,6 +2788,60 @@ final class AgentManagerTest extends TestCase
         return $captured;
     }
 
+    // -------------------------------------------------------------------------
+    // Roadmap 4.6-2: `Team` rides along with every declared grant.
+    // -------------------------------------------------------------------------
+
+    public function testEveryDeclaredGrantCarriesTeamWhenTheSessionOffersIt(): void
+    {
+        // The built-in reviewer's own declaration, which names no Team.
+        $grant = \SugarCraft\Crush\Agents\AgentDefinition::reviewer()->defaultTools;
+        self::assertNotContains('Team', $grant);
+
+        $request = $this->captureSubAgentRequest($grant, $this->fakeRegistry('Bash', 'Read', 'Team', 'Grep', 'Edit'));
+
+        $this->assertSame(['Bash', 'Read', 'Team', 'Grep'], self::toolNames($request->tools), 'registry order, Team included, Edit still narrowed out');
+    }
+
+    public function testASessionWithoutTeamAddsNothingAndRefusesNothing(): void
+    {
+        $request = $this->captureSubAgentRequest(['Read'], $this->fakeRegistry('Read', 'Bash'));
+
+        $this->assertSame(['Read'], self::toolNames($request->tools));
+    }
+
+    public function testADenylistKeepsAnAgentOffTheBoard(): void
+    {
+        $request = $this->captureSubAgentRequestWithDenylist(['Read'], ['Team'], $this->fakeRegistry('Read', 'Team'));
+
+        $this->assertSame(['Read'], self::toolNames($request->tools));
+    }
+
+    public function testATeamCallIsAdmittedPerCallUnlessDenied(): void
+    {
+        $manager = new AgentManager($this->provider, $this->skillRegistry);
+        $manager->register(\SugarCraft\Crush\Agents\Agent::fromDefinition(\SugarCraft\Crush\Agents\AgentDefinition::architect(), 'anthropic', 'm'));
+        $architect = $manager->createSubAgent('architect', 'design it');
+
+        $this->assertNull($manager->grantRefusalFor(new \SugarCraft\Crush\ToolCall('Team', ['action' => 'list']), $architect));
+        $this->assertNotNull($manager->grantRefusalFor(new \SugarCraft\Crush\ToolCall('Bash', ['command' => 'ls']), $architect), 'every other name is still held to the grant');
+
+        $denying = new AgentManager($this->provider, $this->skillRegistry);
+        $denying->register(new Agent(
+            name: 'solo',
+            description: 'solo',
+            prompt: 'p',
+            model: 'm',
+            provider: 'anthropic',
+            tools: ['Read'],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: ['Team'],
+        ));
+        $this->assertNotNull($denying->grantRefusalFor(new \SugarCraft\Crush\ToolCall('Team', ['action' => 'list']), $denying->createSubAgent('solo', 'x')));
+    }
+
     public function testTheDenylistShrinksTheResolvedRoster(): void
     {
         $request = $this->captureSubAgentRequestWithDenylist(

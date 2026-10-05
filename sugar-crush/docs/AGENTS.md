@@ -153,9 +153,9 @@ teammates and the `lead`.
   marked overdue on `list`, and the lead may `release` it.
 
 Teams live under `~/.sugar-crush/teams/` (a registry, and one SQLite task list
-and mailbox per team), shared by every process. A teammate needs `Team` in its
-grant to claim for itself; a preset with no `tools:` list has it, the six
-built-ins do not, so with those the lead claims on the teammate's behalf. The
+and mailbox per team), shared by every process. Every teammate has `Team`,
+whatever its `tools:` grant — the six built-ins included — unless its preset
+lists it in `disallowedTools`, in which case the lead claims on its behalf. The
 team hook events (`TaskCreated`, `TaskCompleted`, `TeammateIdle`) fire through
 the launch's hook chain — see [`HOOKS.md`](HOOKS.md#the-team-events).
 
