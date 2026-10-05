@@ -16,8 +16,13 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  *     query's letters cannot be collected across the two — with the matcher the
  *     "/" popup and the Ctrl+P palette use, in full-query mode: `cmpct` finds
  *     "compaction", and the best hits rank first;
- *  2. then a plain case-insensitive SUBSTRING over the enum values and the help
- *     sentence, for the keys whose name does not say what they do.
+ *  2. then a plain case-insensitive SUBSTRING pass, for the keys whose name
+ *     does not say what they do: over the label, the key, the help sentence,
+ *     the enum values, the category, and the environment variable and flag
+ *     that override the key (N-P5) — so `SUGARCRUSH_MODEL` or `--model` finds
+ *     the setting it locks. A query of several words matches a key holding
+ *     EVERY word, in any order and in any of those fields: `tool timeout`
+ *     finds the timeouts of the tools, not every key with either word.
  *
  * The help text is not fuzzy-matched on purpose: a full-query alignment over a
  * sentence matches almost any short query somewhere in it, and a search that
@@ -66,12 +71,37 @@ final class SettingsSearch
                 continue;
             }
 
-            $text = implode(' ', [...array_map('strval', $definition->enumValues), $definition->help]);
-            if (mb_stripos($text, $query) !== false) {
+            if (self::holdsEveryTerm(self::haystack($definition), $query)) {
                 $found[$definition->key] = $definition;
             }
         }
 
         return array_values($found);
+    }
+
+    /** Everything the substring pass looks in, as one string. */
+    private static function haystack(SettingDefinition $definition): string
+    {
+        return implode(' ', [
+            $definition->label,
+            $definition->key,
+            $definition->help,
+            ...array_map('strval', $definition->enumValues),
+            $definition->category->label(),
+            (string) $definition->envVar,
+            (string) $definition->cliFlag,
+        ]);
+    }
+
+    private static function holdsEveryTerm(string $haystack, string $query): bool
+    {
+        $terms = preg_split('/\s+/u', $query, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($terms as $term) {
+            if (mb_stripos($haystack, $term) === false) {
+                return false;
+            }
+        }
+
+        return $terms !== [];
     }
 }

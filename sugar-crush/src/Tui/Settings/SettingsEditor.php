@@ -13,6 +13,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingSource;
 use SugarCraft\Crush\Config\Settings\SettingsTier;
+use SugarCraft\Crush\Config\Settings\SettingsWriter;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
@@ -42,6 +43,16 @@ use SugarCraft\Sprinkles\Style;
  * are literal English (D7): the schema's `labelKey`/`helpKey` are kept for
  * i18n, which arrives later.
  *
+ * POLISH (N-P5). Below {@see SINGLE_COLUMN_COLS} columns or
+ * {@see SINGLE_COLUMN_ROWS} rows the view is ONE column: the list fills the
+ * body and `i` swaps it for the highlighted key's details (and back). A locked
+ * key (an environment variable or a flag sets it) is read-only here, and says
+ * which; a key with no field says where it IS changed. A staged change the
+ * chosen tier would refuse is marked `✗` on its row and named on the status
+ * line as soon as it is staged or the tier changes, not first at the save
+ * preview — which scrolls (`↑`/`↓`) when it is taller than the body. The
+ * footer's key hints follow the highlighted row and are cut to the width.
+ *
  * HELD BY THE SHELL ({@see \SugarCraft\Crush\App\App::$settingsEditor}), not by
  * `Chat`: it writes no history and sends nothing to the model, which is also
  * why it may be open while a turn runs. Pure TEA-style state — {@see update()}
@@ -66,6 +77,17 @@ final class SettingsEditor
 
     /** Inner width from which the detail column sits beside the list. */
     private const DETAIL_BESIDE_COLS = 90;
+
+    /**
+     * Below this many columns, or {@see SINGLE_COLUMN_ROWS} rows, the view is
+     * a single column and `i` toggles the details in the list's place
+     * (Appendix N §4.7 "Layout").
+     */
+    public const SINGLE_COLUMN_COLS = 70;
+    public const SINGLE_COLUMN_ROWS = 18;
+
+    /** A status line that warns rather than reports; painted in the warning colour. */
+    private const WARN = '! ';
 
     /** Rows one wheel notch moves the highlight — the transcript's own step. */
     private const WHEEL_ROWS = 3;
@@ -94,6 +116,10 @@ final class SettingsEditor
          * question is answered or abandoned, never carried along.
          */
         public readonly ?string $confirm = null,
+        /** Single-column layout: the details are shown in the list's place (`i`). */
+        public readonly bool $detail = false,
+        /** The first save-preview line in view, when the preview is taller than the body. */
+        public readonly int $previewOffset = 0,
     ) {
     }
 
@@ -157,9 +183,14 @@ final class SettingsEditor
             return $this;
         }
 
+        $locked = $this->lockedStatus($selected);
+        if ($locked !== null) {
+            return $this->withStatus($locked);
+        }
+
         $field = SettingsFieldFactory::field($selected, $this->currentValue($selected), $this->sources->options, $this->activeProvider());
         if ($field === null) {
-            return $this->withStatus($selected->label . ' is not edited here');
+            return $this->withStatus(SettingsFieldFactory::whyNotEditable($selected) ?? $selected->label . ' is not edited here');
         }
 
         [$focused] = $field->focus();
@@ -206,12 +237,78 @@ final class SettingsEditor
         return $this->editing === null ? $this : $this->withEditing(null, $this->status);
     }
 
-    /** Stage a reset of the highlighted setting; a files row or an empty list stays as it is. */
+    /**
+     * Stage a reset of the highlighted setting; a files row or an empty list
+     * stays as it is, and a locked key says what locks it.
+     */
     public function resetSelected(): self
     {
         $selected = $this->selected();
+        if (!$selected instanceof SettingDefinition) {
+            return $this;
+        }
 
-        return $selected instanceof SettingDefinition ? $this->stageReset($selected->key) : $this;
+        return $this->lockedStatus($selected) !== null
+            ? $this->withStatus((string) $this->lockedStatus($selected))
+            : $this->stageReset($selected->key);
+    }
+
+    /**
+     * Why a key cannot be changed from this view while this launch runs, or
+     * null: an environment variable or a flag sets it, and outranks every file
+     * a save could write (design §4.1: "an env or flag lock makes the field
+     * read-only, with the variable named").
+     */
+    private function lockedStatus(SettingDefinition $definition): ?string
+    {
+        $resolved = $this->resolvedFor($definition);
+
+        return $resolved->locked
+            ? self::WARN . $definition->label . ' is locked: ' . PaneLabel::of((string) $resolved->lockReason) . ' — unset it to change this here'
+            : null;
+    }
+
+    /**
+     * What the view should warn about a tier and an edit set before any save:
+     * the staged keys that tier refuses ({@see SettingsWriter::keyRefusal()}),
+     * then — on a project tier — a project this launch knows to be missing or
+     * untrusted. Null when there is nothing to say.
+     *
+     * @param array<string, mixed> $set
+     * @param list<string> $unset
+     */
+    private function tierWarning(SettingsTier $tier, array $set, array $unset): ?string
+    {
+        $refused = [];
+        foreach ([...array_map('strval', array_keys($set)), ...$unset] as $key) {
+            $reason = SettingsWriter::keyRefusal($tier, $key);
+            if ($reason !== null) {
+                $refused[] = $reason;
+            }
+        }
+
+        if ($refused !== []) {
+            $more = \count($refused) > 1 ? sprintf(' (+%d more)', \count($refused) - 1) : '';
+
+            return self::WARN . $refused[0] . $more . ' — t switches the tier';
+        }
+
+        if (!$tier->isProject()) {
+            return null;
+        }
+
+        return match (true) {
+            $this->sources->root === null => self::WARN . 'No project is open, so there is no project file to save to',
+            $this->sources->projectTrusted === false
+                => self::WARN . 'This project is not trusted, so a save here is refused — Enter on Trusted project settings grants it',
+            default => null,
+        };
+    }
+
+    /** Whether the tier this view saves to would refuse a staged `$key`. */
+    private function refusedHere(string $key): bool
+    {
+        return SettingsWriter::keyRefusal($this->tier, $key) !== null;
     }
 
     /** The trust list the confirmed trust action would grant, while that question is up. */
@@ -233,7 +330,7 @@ final class SettingsEditor
     /** Ask (or with null, stop asking) one of the CONFIRM_* questions. */
     public function withConfirm(?string $confirm): self
     {
-        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, $this->status, $this->editing, $confirm);
+        return $this->mutate(['confirm' => $confirm, 'editing' => $this->editing]);
     }
 
     /** A trust list: written only through the confirmed trust action, never staged. */
@@ -257,18 +354,18 @@ final class SettingsEditor
 
     private function withEditing(?Field $field, ?string $status): self
     {
-        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, $status, $field);
+        return $this->mutate(['status' => $status, 'editing' => $field]);
     }
 
     private function withStatus(string $status): self
     {
-        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, $status, $this->editing);
+        return $this->mutate(['status' => $status, 'editing' => $this->editing]);
     }
 
-    /** Show (or, with null, close) the save preview. */
+    /** Show (or, with null, close) the save preview, scrolled to its top. */
     public function withPreview(?SettingsSavePreview $preview): self
     {
-        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $preview, $this->status);
+        return $this->mutate(['preview' => $preview, 'previewOffset' => 0]);
     }
 
     /**
@@ -280,13 +377,19 @@ final class SettingsEditor
      */
     private function edited(SettingsTier $tier, array $set, array $unset): self
     {
-        return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $tier, $set, $unset, null, null);
+        return $this->mutate([
+            'tier' => $tier,
+            'set' => $set,
+            'unset' => $unset,
+            'preview' => null,
+            'status' => $this->tierWarning($tier, $set, $unset),
+        ]);
     }
 
     /** Values re-resolved after a save, so the rows show what the files now say. */
     public function withResolved(SettingsSources $sources): self
     {
-        return new self($sources, $sources->resolver->resolveAll(), $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, $this->status);
+        return $this->mutate(['sources' => $sources, 'resolved' => $sources->resolver->resolveAll()]);
     }
 
     /**
@@ -297,7 +400,7 @@ final class SettingsEditor
     public function withSaved(SettingsSavedMsg $msg): self
     {
         if (!$msg->ok()) {
-            return new self($this->sources, $this->resolved, $this->tab, $this->cursor, $this->query, $this->searching, $this->tier, $this->set, $this->unset, $this->preview, 'Not saved: ' . $msg->error);
+            return $this->mutate(['status' => 'Not saved: ' . $msg->error]);
         }
 
         $set = $this->set;
@@ -308,19 +411,12 @@ final class SettingsEditor
         $count = \count($msg->changed);
         $status = sprintf('Saved %d setting%s to %s', $count, $count === 1 ? '' : 's', (string) $msg->path);
 
-        return new self(
-            $this->sources,
-            $this->resolved,
-            $this->tab,
-            $this->cursor,
-            $this->query,
-            $this->searching,
-            $this->tier,
-            $set,
-            array_values(array_diff($this->unset, $msg->changed)),
-            null,
-            $status,
-        );
+        return $this->mutate([
+            'set' => $set,
+            'unset' => array_values(array_diff($this->unset, $msg->changed)),
+            'preview' => null,
+            'status' => $status,
+        ]);
     }
 
     // ── what is listed ──────────────────────────────────────────────────
@@ -423,14 +519,20 @@ final class SettingsEditor
             };
         }
 
-        // The save preview: `y`/Enter saves (the shell's), Esc/`n` goes back.
+        // The save preview: `y`/Enter saves (the shell's), Esc/`n` goes back,
+        // `↑`/`↓` (or `k`/`j`) scroll a preview taller than the body.
         if ($this->preview !== null) {
-            return $msg->type === KeyType::Escape || $plainRune === 'n' ? $this->withPreview(null) : $this;
+            return match (true) {
+                $msg->type === KeyType::Escape, $plainRune === 'n' => $this->withPreview(null),
+                $msg->type === KeyType::Up, $plainRune === 'k' => $this->scrollPreview(-1),
+                $msg->type === KeyType::Down, $plainRune === 'j' => $this->scrollPreview(1),
+                default => $this,
+            };
         }
 
         if ($msg->type === KeyType::Escape) {
             if ($this->searching || $this->query !== '') {
-                return $this->mutate(query: '', searching: false, cursor: 0);
+                return $this->mutate(['query' => '', 'searching' => false, 'cursor' => 0]);
             }
 
             // Closing would throw the edit set away, so it asks first.
@@ -448,12 +550,12 @@ final class SettingsEditor
         if ($msg->type === KeyType::Backspace) {
             return $this->query === ''
                 ? $this
-                : $this->mutate(query: mb_substr($this->query, 0, -1), cursor: 0);
+                : $this->mutate(['query' => mb_substr($this->query, 0, -1), 'cursor' => 0]);
         }
 
         if ($this->searching) {
             if ($msg->type === KeyType::Enter) {
-                return $this->mutate(searching: false);
+                return $this->mutate(['searching' => false]);
             }
 
             if ($msg->type === KeyType::Space) {
@@ -488,13 +590,14 @@ final class SettingsEditor
         }
 
         return match ($msg->rune) {
-            '/' => $this->mutate(searching: true),
+            '/' => $this->mutate(['searching' => true]),
             'k' => $this->move(-1),
             'j' => $this->move(1),
             'h' => $this->switchTab(-1),
             'l' => $this->switchTab(1),
             'r' => $this->resetSelected(),
             't' => $this->withTier($this->tier->next()),
+            'i' => $this->mutate(['detail' => !$this->detail]),
             default => $this,
         };
     }
@@ -506,14 +609,14 @@ final class SettingsEditor
             $tab = (int) substr($zoneId, \strlen(self::TAB_ZONE));
 
             return $tab >= 0 && $tab < \count($this->tabLabels())
-                ? $this->mutate(tab: $tab, cursor: 0, query: '', searching: false)
+                ? $this->mutate(['tab' => $tab, 'cursor' => 0, 'query' => '', 'searching' => false])
                 : $this;
         }
 
         if (str_starts_with($zoneId, self::ROW_ZONE)) {
             $row = (int) substr($zoneId, \strlen(self::ROW_ZONE));
 
-            return $row >= 0 && $row < \count($this->rows()) ? $this->mutate(cursor: $row) : $this;
+            return $row >= 0 && $row < \count($this->rows()) ? $this->mutate(['cursor' => $row]) : $this;
         }
 
         return $this;
@@ -544,9 +647,7 @@ final class SettingsEditor
         $muted = Style::new()->foreground($theme->shellMuted);
         $w = $g['inner'];
 
-        $title = $this->hasChanges()
-            ? sprintf(' ⚙ settings · %d unsaved · %s ', \count($this->set) + \count($this->unset), $this->tier->label())
-            : ' ⚙ settings · nothing staged ';
+        $title = $this->title($cols - 3);
         $topFill = max(0, $cols - 3 - Width::string($title));
         $lines = [$border->render('╭─' . $title . str_repeat('─', $topFill) . '╮')];
 
@@ -559,7 +660,7 @@ final class SettingsEditor
         $body = $this->bodyLines($theme, $g);
         if ($this->preview !== null) {
             // The preview takes the body's rows, exactly as many.
-            $body = array_pad(\array_slice($this->preview->lines($theme, $w), 0, \count($body)), \count($body), '');
+            $body = $this->previewLines($theme, $w, \count($body));
         } elseif ($this->editing !== null) {
             $body = array_pad(\array_slice(explode("\n", $this->editing->view()), 0, \count($body)), \count($body), '');
         } elseif ($this->confirm !== null) {
@@ -571,8 +672,12 @@ final class SettingsEditor
         }
         $inner[] = $muted->render(str_repeat('─', $w));
         $inner[] = $this->status !== null
-            ? Style::new()->foreground(str_starts_with($this->status, 'Not saved') ? $theme->shellError : $theme->shellSuccess)->render($this->status)
-            : $muted->render($this->footer());
+            ? Style::new()->foreground(match (true) {
+                str_starts_with($this->status, 'Not ') => $theme->shellError,
+                str_starts_with($this->status, self::WARN) => $theme->shellWarning,
+                default => $theme->shellSuccess,
+            })->render(Width::truncate($this->status, $w))
+            : $muted->render(self::hints($this->footer($g), $w));
 
         foreach ($inner as $line) {
             $lines[] = $border->render('│') . ' ' . self::cell($line, $w) . ' ' . $border->render('│');
@@ -606,7 +711,12 @@ final class SettingsEditor
             }
         }
 
-        $count = \count($this->rows());
+        // Rows are clickable only while the list is what the body shows: not
+        // under a preview, a field or a question, and not while the
+        // single-column view shows the details in the list's place.
+        $listShown = $this->preview === null && $this->editing === null && $this->confirm === null
+            && !($g['single'] && $this->detail);
+        $count = $listShown ? \count($this->rows()) : 0;
         for ($r = 0; $r < $g['listRows']; $r++) {
             $index = $g['offset'] + $r;
             if ($index >= $count) {
@@ -623,7 +733,12 @@ final class SettingsEditor
      * Where everything sits for a `$cols`×`$rows` view, or null when the box
      * cannot be drawn at all.
      *
-     * @return ?array{inner: int, listWidth: int, detailWidth: int, listRows: int, detailRows: int, offset: int, tabLine: string, tabSpans: list<array{0: int, 1: int, 2: int}>}
+     * Three layouts: the details BESIDE the list (wide), BELOW it (tall
+     * enough), or a SINGLE column below {@see SINGLE_COLUMN_COLS} ×
+     * {@see SINGLE_COLUMN_ROWS} — or wherever neither fits — where `i` shows
+     * the details in the list's place.
+     *
+     * @return ?array{inner: int, listWidth: int, detailWidth: int, listRows: int, detailRows: int, beside: bool, single: bool, offset: int, tabLine: string, tabSpans: list<array{0: int, 1: int, 2: int}>}
      */
     private function geometry(Theme $theme, int $cols, int $rows): ?array
     {
@@ -634,13 +749,16 @@ final class SettingsEditor
             return null;
         }
 
-        $beside = $inner >= self::DETAIL_BESIDE_COLS;
+        $roomy = $cols >= self::SINGLE_COLUMN_COLS && $rows >= self::SINGLE_COLUMN_ROWS;
+        $beside = $roomy && $inner >= self::DETAIL_BESIDE_COLS;
+        $below = $roomy && !$beside && $body >= 12;
+        $single = !$beside && !$below;
         $detailWidth = $beside ? min(48, intdiv($inner, 3)) : $inner;
         $listWidth = $beside ? $inner - $detailWidth - 3 : $inner;
 
         $detailRows = 0;
         $listRows = $body;
-        if (!$beside && $body >= 12) {
+        if ($below) {
             $detailRows = min(10, intdiv($body, 2));
             $listRows = $body - $detailRows - 1;
         }
@@ -655,6 +773,7 @@ final class SettingsEditor
             'listRows' => $listRows,
             'detailRows' => $beside ? $body : $detailRows,
             'beside' => $beside,
+            'single' => $single,
             'offset' => $offset,
             'tabLine' => $tabLine,
             'tabSpans' => $tabSpans,
@@ -667,6 +786,10 @@ final class SettingsEditor
      */
     private function bodyLines(Theme $theme, array $g): array
     {
+        if ($g['single'] && $this->detail) {
+            return array_pad($this->detailLines($theme, $g['inner'], $g['listRows']), $g['listRows'], '');
+        }
+
         $list = $this->listLines($theme, $g['listWidth'], $g['listRows'], $g['offset']);
         $detail = $g['detailWidth'] > 0 ? $this->detailLines($theme, $g['detailWidth'], $g['detailRows']) : [];
 
@@ -699,10 +822,15 @@ final class SettingsEditor
 
         if ($all === []) {
             $empty = $this->query !== ''
-                ? 'No setting matches "' . $this->query . '".'
+                ? 'No setting matches "' . $this->query . '". Backspace edits the search, Esc clears it.'
                 : 'Nothing in this category.';
 
-            return array_pad([$muted->render(Width::truncate($empty, $width))], $rows, '');
+            $wrapped = array_map(
+                static fn (string $line): string => $muted->render(Width::truncate($line, $width)),
+                explode("\n", Width::wrap($empty, max(1, $width))),
+            );
+
+            return array_pad(\array_slice($wrapped, 0, $rows), $rows, '');
         }
 
         $lines = [];
@@ -738,9 +866,13 @@ final class SettingsEditor
 
         $staged = \array_key_exists($definition->key, $this->set);
         $reset = \in_array($definition->key, $this->unset, true);
+        // A staged change the chosen tier would refuse is marked ✗, not •, so
+        // it is seen on its row before the preview refuses it.
+        $refused = ($staged || $reset) && $this->refusedHere($definition->key);
+        $mark = $refused ? '✗ ' : '• ';
         $value = match (true) {
-            $staged => '• ' . SettingsDetailPanel::value($definition, $this->set[$definition->key]),
-            $reset => '• reset to default',
+            $staged => $mark . SettingsDetailPanel::value($definition, $this->set[$definition->key]),
+            $reset => $mark . 'reset to default',
             default => SettingsDetailPanel::value($definition, $resolved->value),
         };
 
@@ -748,6 +880,7 @@ final class SettingsEditor
         $line = ($selected ? $label->render('▸ ') : '  ')
             . $label->render(self::pad($definition->label, $labelW)) . ' '
             . Style::new()->foreground(match (true) {
+                $refused => $theme->shellError,
                 $staged || $reset => $theme->shellWarning,
                 $resolved->isDefault() => $theme->shellMuted,
                 default => $theme->shellForeground,
@@ -827,16 +960,135 @@ final class SettingsEditor
             . Style::new()->foreground($theme->shellMuted)->render($hint);
     }
 
-    private function footer(): string
+    /**
+     * The key hints for what is on screen, most useful first: the keys that
+     * act on the highlighted row lead, and a key that would do nothing there
+     * (`Enter` on a locked key, `r` on a file, `s` with nothing staged) is not
+     * offered. {@see hints()} cuts the list to the width.
+     *
+     * @param array<string, mixed> $g
+     * @return list<string>
+     */
+    private function footer(array $g): array
     {
-        return match (true) {
-            $this->searching => 'type to filter · Enter keep matches · ↑↓ move · Esc clear',
-            $this->confirm === self::CONFIRM_TRUST => 'y trust this project · n cancel',
-            $this->confirm === self::CONFIRM_DISCARD => 'd discard · k keep editing · s save',
-            $this->editing !== null => 'Enter stage · Esc cancel',
-            $this->preview !== null => 'y save · n back',
-            default => '↑↓ move · ←→ category · / search · Enter edit · r reset · t tier · s save · Esc close',
-        };
+        if ($this->searching) {
+            return ['type to filter', 'Enter keep matches', '↑↓ move', 'Esc clear'];
+        }
+
+        if ($this->confirm === self::CONFIRM_TRUST) {
+            return ['y trust this project', 'n cancel'];
+        }
+
+        if ($this->confirm === self::CONFIRM_DISCARD) {
+            return ['d discard', 'k keep editing', 's save'];
+        }
+
+        if ($this->editing !== null) {
+            return ['Enter stage', 'Esc cancel'];
+        }
+
+        if ($this->preview !== null) {
+            return ['y save', 'n back', '↑↓ scroll'];
+        }
+
+        $hints = [];
+        $selected = $this->selected();
+        if ($g['single']) {
+            $hints[] = $this->detail ? 'i list' : 'i details';
+        }
+
+        if ($selected instanceof SettingDefinition) {
+            $resolved = $this->resolvedFor($selected);
+            if ($resolved->locked) {
+                $hints[] = 'locked (' . PaneLabel::of((string) $resolved->lockReason) . ')';
+            } elseif (self::isTrustKey($selected)) {
+                $hints[] = 'Enter trust this project';
+            } elseif (SettingsFieldFactory::editable($selected)) {
+                $hints[] = 'Enter edit';
+                $hints[] = 'r reset';
+            } else {
+                $hints[] = 'Enter why not';
+            }
+        }
+
+        if ($this->hasChanges()) {
+            $hints[] = 's save';
+        }
+
+        // While a search filters the list, ←/→ do nothing and Esc clears it.
+        return $this->query !== ''
+            ? [...$hints, 't tier', '↑↓ move', 'Backspace edit search', 'Esc clear search']
+            : [...$hints, 't tier', '/ search', '↑↓ move', '←→ category', 'Esc close'];
+    }
+
+    /**
+     * Hints joined with ` · `, as many as fit in `$width` cells — the last
+     * one (closing or going back) is kept whenever anything fits at all.
+     *
+     * @param list<string> $hints
+     */
+    private static function hints(array $hints, int $width): string
+    {
+        $all = implode(' · ', $hints);
+        if (Width::string($all) <= $width || $hints === []) {
+            return Width::truncate($all, $width);
+        }
+
+        $last = (string) array_pop($hints);
+        $kept = [];
+        foreach ($hints as $hint) {
+            if (Width::string(implode(' · ', [...$kept, $hint, $last])) > $width) {
+                break;
+            }
+
+            $kept[] = $hint;
+        }
+
+        return Width::truncate(implode(' · ', [...$kept, $last]), $width);
+    }
+
+    /**
+     * The title bar's text in at most `$width` cells: the tier's full label
+     * when it fits, its short one when it does not.
+     */
+    private function title(int $width): string
+    {
+        if (!$this->hasChanges()) {
+            return Width::truncate(' ⚙ settings · nothing staged ', max(0, $width));
+        }
+
+        $count = \count($this->set) + \count($this->unset);
+        $full = sprintf(' ⚙ settings · %d unsaved · %s ', $count, $this->tier->label());
+        if (Width::string($full) <= $width) {
+            return $full;
+        }
+
+        return Width::truncate(sprintf(' ⚙ %d unsaved · %s ', $count, $this->tier->shortLabel()), max(0, $width));
+    }
+
+    /**
+     * The save preview in exactly `$rows` lines. A preview taller than that
+     * shows `$rows - 1` of its lines from {@see $previewOffset} and, last,
+     * where it is and that `↑`/`↓` scroll it.
+     *
+     * @return list<string>
+     */
+    private function previewLines(Theme $theme, int $width, int $rows): array
+    {
+        $all = $this->preview?->lines($theme, $width) ?? [];
+        if (\count($all) <= $rows || $rows < 2) {
+            return array_pad(\array_slice($all, 0, $rows), $rows, '');
+        }
+
+        $window = $rows - 1;
+        $offset = max(0, min($this->previewOffset, \count($all) - $window));
+        $lines = \array_slice($all, $offset, $window);
+        $lines[] = Style::new()->foreground($theme->shellMuted)->render(Width::truncate(
+            sprintf('lines %d–%d of %d · ↑↓ scroll', $offset + 1, $offset + $window, \count($all)),
+            $width,
+        ));
+
+        return $lines;
     }
 
     /**
@@ -898,7 +1150,7 @@ final class SettingsEditor
         // which would eat the space between two words as it is typed.
         $clean = $text === ' ' ? ' ' : PaneLabel::of($text);
 
-        return $clean === '' ? $this : $this->mutate(query: $this->query . $clean, cursor: 0);
+        return $clean === '' ? $this : $this->mutate(['query' => $this->query . $clean, 'cursor' => 0]);
     }
 
     private function move(int $delta, bool $wrap = true): self
@@ -911,7 +1163,24 @@ final class SettingsEditor
         $next = $this->cursor + $delta;
         $next = $wrap ? (($next % $count) + $count) % $count : max(0, min($count - 1, $next));
 
-        return $this->mutate(cursor: $next);
+        // A status line is about the row it was said on; moving retires it.
+        return $this->mutate(['cursor' => $next, 'status' => null]);
+    }
+
+    /** Move the save preview by `$delta` lines, never past its first or last line. */
+    private function scrollPreview(int $delta): self
+    {
+        if ($this->preview === null) {
+            return $this;
+        }
+
+        // The line count does not depend on the width or the theme: one line per entry.
+        $last = max(0, \count($this->preview->lines(Theme::default(), 80)) - 1);
+
+        return $this->mutate([
+            'preview' => $this->preview,
+            'previewOffset' => max(0, min($last, $this->previewOffset + $delta)),
+        ]);
     }
 
     private function switchTab(int $delta): self
@@ -922,28 +1191,35 @@ final class SettingsEditor
 
         $count = \count($this->tabLabels());
 
-        return $this->mutate(tab: (($this->tab + $delta) % $count + $count) % $count, cursor: 0);
+        return $this->mutate(['tab' => (($this->tab + $delta) % $count + $count) % $count, 'cursor' => 0, 'status' => null]);
     }
 
-    private function mutate(
-        ?int $tab = null,
-        ?int $cursor = null,
-        ?string $query = null,
-        ?bool $searching = null,
-    ): self {
-        return new self(
-            $this->sources,
-            $this->resolved,
-            $tab ?? $this->tab,
-            $cursor ?? $this->cursor,
-            $query ?? $this->query,
-            $searching ?? $this->searching,
-            $this->tier,
-            $this->set,
-            $this->unset,
-            $this->preview,
-            $this->status,
-        );
+    /**
+     * A copy with `$changes` applied (named by constructor parameter). An open
+     * field and an open question are NOT carried unless named: every change
+     * of state other than the ones that keep them answers or abandons them.
+     *
+     * @param array<string, mixed> $changes
+     */
+    private function mutate(array $changes): self
+    {
+        return new self(...($changes + [
+            'sources' => $this->sources,
+            'resolved' => $this->resolved,
+            'tab' => $this->tab,
+            'cursor' => $this->cursor,
+            'query' => $this->query,
+            'searching' => $this->searching,
+            'tier' => $this->tier,
+            'set' => $this->set,
+            'unset' => $this->unset,
+            'preview' => $this->preview,
+            'status' => $this->status,
+            'editing' => null,
+            'confirm' => null,
+            'detail' => $this->detail,
+            'previewOffset' => $this->previewOffset,
+        ]));
     }
 
     /** Plain text cut or padded to exactly `$width` cells. */

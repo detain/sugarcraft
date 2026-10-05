@@ -43,6 +43,15 @@ final class SettingsSources
         public readonly SettingsResolver $resolver,
         public readonly array $files,
         public readonly OptionsProvider $options,
+        /** The launch's project root, or null when there is none. */
+        public readonly ?string $root = null,
+        /**
+         * The launch's trust answer for {@see $root}, passed through untouched
+         * (null = not told). The view only REPORTS it — it warns, when a
+         * project tier is picked, that a save there will be refused; the
+         * writer is what refuses.
+         */
+        public readonly ?bool $projectTrusted = null,
     ) {
     }
 
@@ -131,7 +140,13 @@ final class SettingsSources
             }
         }
 
-        return new self($resolver, $files, $options ?? OptionsProvider::new());
+        return new self(
+            $resolver,
+            $files,
+            $options ?? OptionsProvider::new(),
+            $root === null || $root === '' ? null : $root,
+            $projectTrusted,
+        );
     }
 
     /**

@@ -43,12 +43,43 @@ final class SettingsFieldFactoryTest extends TestCase
         self::assertInstanceOf(Input::class, SettingsFieldFactory::field(self::def('disabledTools'), ['WebSearch'], $options));
     }
 
-    public function testComplexReadOnlyAndTrustKeysGetNoInlineField(): void
+    public function testReadOnlyTrustAndStrictlyParsedKeysGetNoInlineField(): void
     {
         $options = OptionsProvider::new();
 
-        foreach (['permissionRules', 'layout', 'statusLine', 'trustedProjectSettings', 'claudeMcpBinary'] as $key) {
+        foreach (['permissionRules', 'layout', 'trustedProjectSettings', 'claudeMcpBinary', 'claudeMcpEnv'] as $key) {
             self::assertNull(SettingsFieldFactory::field(self::def($key), null, $options), $key);
+            self::assertNotNull(SettingsFieldFactory::whyNotEditable(self::def($key)), $key);
+        }
+    }
+
+    /** N-P5: a complex map is edited as one JSON object, and only an object comes back. */
+    public function testAComplexMapIsEditedAsOneJsonObject(): void
+    {
+        $options = OptionsProvider::new();
+        $prices = ['gpt-x' => ['input' => 3, 'output' => 15]];
+
+        foreach (['modelPrices', 'statusLine', 'lintCommands', 'lsp', 'attribution', 'extraBody', 'compaction.modelTokenCaps'] as $key) {
+            self::assertInstanceOf(Input::class, SettingsFieldFactory::field(self::def($key), null, $options), $key);
+            self::assertNull(SettingsFieldFactory::whyNotEditable(self::def($key)), $key);
+        }
+
+        $field = SettingsFieldFactory::field(self::def('modelPrices'), $prices, $options);
+        self::assertSame('{"gpt-x":{"input":3,"output":15}}', $field?->value());
+        self::assertSame(
+            ['gpt-x' => ['input' => 3, 'output' => 15], 'gpt-y' => ['input' => 1, 'output' => 2]],
+            SettingsFieldFactory::value(self::def('modelPrices'), Input::new('modelPrices')->withValue(
+                '{"gpt-x":{"input":3,"output":15},"gpt-y":{"input":1,"output":2}}',
+            )),
+        );
+
+        foreach (['[1, 2]', 'not json', '{}', '"text"'] as $text) {
+            try {
+                SettingsFieldFactory::value(self::def('modelPrices'), Input::new('modelPrices')->withValue($text));
+                self::fail("{$text} was taken for a map");
+            } catch (\InvalidArgumentException) {
+                self::addToAssertionCount(1);
+            }
         }
     }
 
@@ -84,7 +115,33 @@ final class SettingsFieldFactoryTest extends TestCase
         self::assertSame('gpt-4o', $field->value());
         self::assertSame(['openai' => 'gpt-5', 'sglang' => 'qwen'], SettingsFieldFactory::value(self::def('models'), $field->withValue('gpt-5'), $current, 'openai'));
         self::assertSame(['sglang' => 'qwen'], SettingsFieldFactory::value(self::def('models'), $field->withValue(''), $current, 'openai'), 'empty = provider default');
-        self::assertNull(SettingsFieldFactory::field(self::def('models'), $current, OptionsProvider::new()), 'no provider, no entry to edit');
+    }
+
+    /** N-P5: `<provider>=<model id>` reaches any provider's entry, active or not. */
+    public function testTheModelFieldNamesAnyProviderWithProviderEqualsModel(): void
+    {
+        $current = ['openai' => 'gpt-4o', 'sglang' => 'qwen'];
+        $models = self::def('models');
+        $field = SettingsFieldFactory::field($models, $current, OptionsProvider::new(), 'openai');
+
+        self::assertSame(
+            ['openai' => 'gpt-4o', 'sglang' => 'qwen3'],
+            SettingsFieldFactory::value($models, $field->withValue('sglang=qwen3'), $current, 'openai'),
+        );
+        self::assertSame(
+            ['openai' => 'gpt-4o', 'sglang' => 'qwen', 'anthropic' => 'claude-x'],
+            SettingsFieldFactory::value($models, $field->withValue('anthropic = claude-x'), $current, 'openai'),
+        );
+        self::assertSame(['openai' => 'gpt-4o'], SettingsFieldFactory::value($models, $field->withValue('sglang='), $current, 'openai'), '<provider>= clears it');
+
+        // With no provider resolved there is no "active" entry: the field
+        // opens empty and asks for the provider by name.
+        $unnamed = SettingsFieldFactory::field($models, $current, OptionsProvider::new());
+        self::assertInstanceOf(Input::class, $unnamed);
+        self::assertSame('', $unnamed->value());
+        self::assertSame(['openai' => 'gpt-5', 'sglang' => 'qwen'], SettingsFieldFactory::value($models, $unnamed->withValue('openai=gpt-5'), $current));
+        $this->expectException(\InvalidArgumentException::class);
+        SettingsFieldFactory::value($models, $unnamed->withValue('gpt-5'), $current);
     }
 
     public function testOptionsComeFromTheDefinitionThenItsSource(): void
@@ -131,7 +188,8 @@ final class SettingsFieldFactoryTest extends TestCase
         $editor = SettingsEditor::open(SettingsSources::fromLaunch(null, null, null, null, []), 'permission rules')->beginEdit();
 
         self::assertNull($editor->editing);
-        self::assertSame('Permission rules is not edited here', $editor->status);
+        self::assertSame(SettingsFieldFactory::whyNotEditable(self::def('permissionRules')), $editor->status);
+        self::assertStringContainsString('edited by hand', (string) $editor->status, 'it says where the key IS changed');
     }
 
     public function testTheModelEntryFollowsTheResolvedProvider(): void

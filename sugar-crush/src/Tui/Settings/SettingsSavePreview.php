@@ -25,6 +25,11 @@ use SugarCraft\Sprinkles\Style;
  * needs a relaunch, and — because the running turn read its settings when it
  * started — a save made mid-turn applies from the next turn at the earliest.
  *
+ * Above the diff, one line per change names the key, the value the file holds
+ * now and the one it will hold, and when it applies (N-P5) — the diff shows the
+ * file, the change list shows the settings. A save to the COMMITTED project
+ * file says so, because everyone who clones the repository inherits it.
+ *
  * Pure data and rendering: the file was read by whoever built it
  * ({@see \SugarCraft\Crush\App\App::previewSettings()}), so {@see lines()} does
  * no I/O.
@@ -46,6 +51,8 @@ final class SettingsSavePreview
         public readonly array $unset,
         public readonly array $refusals,
         public readonly array $notes = [],
+        /** @var array<string, mixed> the file's object before the save, for the change list */
+        private readonly array $was = [],
     ) {
     }
 
@@ -65,7 +72,7 @@ final class SettingsSavePreview
         array $unset = [],
         array $refusals = [],
     ): self {
-        return new self($tier, $path, self::json($before), self::json($after), $set, array_values($unset), $refusals);
+        return new self($tier, $path, self::json($before), self::json($after), $set, array_values($unset), $refusals, [], $before);
     }
 
     /**
@@ -76,7 +83,7 @@ final class SettingsSavePreview
      */
     public function withNotes(array $notes): self
     {
-        return new self($this->tier, $this->path, $this->before, $this->after, $this->set, $this->unset, $this->refusals, array_values($notes));
+        return new self($this->tier, $this->path, $this->before, $this->after, $this->set, $this->unset, $this->refusals, array_values($notes), $this->was);
     }
 
     /** A preview that cannot proceed, e.g. the target file is unreadable. */
@@ -150,6 +157,17 @@ final class SettingsSavePreview
         }
 
         $lines[] = '';
+        foreach ($this->changeLines() as $change) {
+            $lines[] = $text->render($fit($change));
+        }
+
+        if ($this->tier === SettingsTier::ProjectShared) {
+            $lines[] = Style::new()->foreground($theme->shellWarning)->render($fit(
+                '! A committed file: everyone who clones this repository and trusts it gets these values.',
+            ));
+        }
+
+        $lines[] = '';
         $diff = $this->diff();
         if ($diff->isEmpty()) {
             $lines[] = $muted->render($fit('No change to the file.'));
@@ -182,6 +200,36 @@ final class SettingsSavePreview
         }
 
         return $lines;
+    }
+
+    /**
+     * One line per changed key: `key: what the file says → what it will say  [applies]`.
+     *
+     * @return list<string>
+     */
+    public function changeLines(): array
+    {
+        $lines = [];
+        foreach ($this->changed() as $key) {
+            $definition = SettingsSchema::byKey($key);
+            $was = \array_key_exists($key, $this->was) ? $this->shown($key, $this->was[$key]) : '(not in this file)';
+            $now = \array_key_exists($key, $this->set) ? $this->shown($key, $this->set[$key]) : '(removed: a lower layer or the default)';
+            $badge = ($definition?->applyMode ?? ApplyMode::Restart)->badge();
+            $lines[] = "{$key}: {$was} → {$now}  [{$badge}]";
+        }
+
+        return $lines;
+    }
+
+    /** A value as one short cell of text, secrets hidden ({@see SettingsDetailPanel::value()}). */
+    private function shown(string $key, mixed $value): string
+    {
+        $definition = SettingsSchema::byKey($key);
+        $text = $definition === null
+            ? (string) json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE)
+            : SettingsDetailPanel::value($definition, $value);
+
+        return Width::truncate($text, 40);
     }
 
     /** @param array<string, mixed> $data */

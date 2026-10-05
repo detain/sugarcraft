@@ -342,6 +342,7 @@ sugar-crush/tests/Tools/IgnoreRulesBacktrackingTest.php	0.564	112
 sugar-crush/tests/Agents/TaskListHooksTest.php	0.555	10
 sugar-crush/tests/Commands/SlashDispatchTest.php	0.550	18
 sugar-crush/tests/Tui/MenuBarCompactStripTest.php	0.550	6
+sugar-crush/tests/Tui/Settings/SettingsEditorNarrowTest.php	0.550	7
 sugar-crush/tests/Providers/RuntimeUsageFoldTest.php	0.541	6
 sugar-crush/tests/Providers/RetrySettingsTest.php	0.520	22
 sugar-crush/tests/Tools/BashPromptGuidanceTest.php	0.517	7
@@ -373,6 +374,7 @@ sugar-crush/tests/Tui/SessionPickerActionsTest.php	0.450	22
 sugar-crush/tests/Server/TokenReloadTest.php	0.450	2
 sugar-crush/tests/Agents/SubagentSettingsTest.php	0.450	15
 sugar-crush/tests/Tools/BuiltIn/PlanExitToolTest.php	0.450	17
+sugar-crush/tests/Tui/Settings/SettingsEditorPolishTest.php	0.450	11
 sugar-crush/tests/Support/ForkedChildTest.php	0.449	2
 sugar-crush/tests/Workspace/ShadowGarbageCollectorTest.php	0.448	3
 sugar-crush/tests/Backend/EngineBackendHeartbeatThreadingTest.php	0.445	4
@@ -578,7 +580,7 @@ sugar-crush/tests/Tools/BuiltIn/EditMultiEditTest.php	0.100	9
 sugar-crush/tests/Tui/SessionPickerFilterTest.php	0.100	15
 sugar-crush/tests/Commands/SettingsCommandTest.php	0.100	9
 sugar-crush/tests/Cli/PersistedModelResolutionTest.php	0.100	8
-sugar-crush/tests/Config/Settings/SettingsWriterTest.php	0.100	34
+sugar-crush/tests/Config/Settings/SettingsWriterTest.php	0.100	46
 sugar-crush/tests/Memory/SecretRedactorTest.php	0.100	21
 sugar-crush/tests/Memory/ConsolidationPlanTest.php	0.100	8
 sugar-crush/tests/Providers/SglangContinueFinalMessageTest.php	0.100	5
@@ -611,7 +613,7 @@ sugar-crush/tests/Tools/BashGitGuidanceSettingTest.php	0.080	9
 sugar-crush/tests/Chat/EditorCommandTest.php	0.080	8
 sugar-crush/tests/Context/MemoryIndexInjectionTest.php	0.080	9
 sugar-crush/tests/Permissions/MemoryToolClassificationTest.php	0.080	34
-sugar-crush/tests/Tui/Settings/SettingsFieldFactoryTest.php	0.080	10
+sugar-crush/tests/Tui/Settings/SettingsFieldFactoryTest.php	0.080	12
 sugar-crush/tests/Cli/SubagentModelSettingTest.php	0.080	2
 sugar-crush/tests/Permissions/ExecReviewerTest.php	0.080	20
 sugar-crush/tests/Providers/BedrockModelIdTest.php	0.079	30

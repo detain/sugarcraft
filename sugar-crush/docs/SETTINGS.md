@@ -1069,9 +1069,15 @@ tier.
 |---|---|---|
 | **You** (default) | `config.json` — `Bootstrap::userConfigPath()`, so `--config` moves it — through `Bootstrap::writeUserConfig()`, the one writer that file already has | every editable key except `provider` and `theme`, whose live commands (`/model`, `/theme`) are their writers |
 | **This project (local)** | `<root>/.sugar-crush/settings.local.json` | the project-settable keys only, and only for a project you already trust |
+| **This project (shared)** | `<root>/.sugar-crush/settings.json` — the **committed** file, so the preview warns that everyone who clones the repository and trusts it gets the value; one step below the local file, which still outranks it | the same keys, under the same trust gate, as the local file |
 | **This session only** | nothing — the values live in memory, above every file, until the process exits | the keys that apply without a restart (listed under the next section's table); never `provider`, which `/model` switches |
 
-`settings.json` is never written. A save to **You** outranks it, so the value
+A project tier writes a file that does not exist yet (and its `.sugar-crush`
+directory) as readily as one that does, but never through a link: the file
+must be one the merge would read back, so a `.sugar-crush` that is a symlink,
+or a settings file that is one, is refused rather than written through.
+
+Your `settings.json` is never written. A save to **You** outranks it, so the value
 sticks; the preview says when your `settings.json` is the value it overrides,
 and — for a project-tier save — when one of your own files, the environment or
 a flag still outranks the file being written.
@@ -1081,6 +1087,8 @@ unified diff of its JSON (sugar-diff), and when each change applies. A save is
 refused, with the reason, for a key the schema does not define or marks
 read-only, for a value of the wrong type or outside its range, for a
 `permissionMode` that is not a mode (the launch would refuse it), for a
+`modelPrices` entry that is not `{"input": n, "output": n}` with non-negative
+numbers (an optional `cached` likewise), for a
 project-tier key a project may not set, and for the trust lists — those change
 only through the confirmed trust action, on your `config.json` alone, and like
 every trust grant they apply from the next launch. **A reset deletes the key**
@@ -1100,6 +1108,22 @@ The keys, all plain letters (no `Ctrl+S`/`Ctrl+R`: both are already taken):
 | `y` / `Enter` | In the preview: write it. `n` / `Esc` goes back with everything still staged |
 | `Enter` on a `trustedProject*` list | Ask whether to trust this project for it; `y` runs the confirmed trust action, `n` cancels |
 | `Esc` with changes staged | Ask before closing: `d` discards them, `k` keeps editing, `s` previews the save |
+| `↑` / `↓` in the preview | Scroll a preview taller than the view (or `k` / `j`) |
+| `i` | Below 70 columns or 18 rows the view is a single column: show the highlighted key's details in the list's place, and back |
+
+What the view does not let you change says so. A key an environment variable
+or a flag sets is **locked** — read-only here, with the variable named, because
+it outranks every file a save could write. A key with no field (`permissionRules`,
+the trust lists, `layout`) says where it *is* changed. A nested map —
+`modelPrices`, `lintCommands`, `lsp`, `statusLine`, `attribution`, `extraBody`,
+`compaction.modelTokenCaps` — is edited as one JSON object. `models` edits the
+active provider's entry, and `<provider>=<model id>` edits any other's
+(`<provider>=` clears it). A staged change the chosen tier would refuse is
+marked `✗` on its row and named on the status line as soon as it is staged or
+the tier changes. The preview lists each change — the value the file holds now,
+the one it will hold, and when it applies — above the diff. The search also
+matches the environment variable and flag that override a key, and a query of
+several words finds the keys holding every one of them.
 
 The confirmed trust action adds this launch's project root to that list in your
 `config.json` (`SettingsWriter::grantTrust()`), and like every trust grant it

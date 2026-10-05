@@ -240,8 +240,8 @@ key:
 |---|------|--------------|-----------|
 | 4 | `~/.sugar-crush/config.json` | you, and the CLI itself — Ctrl+P and `/theme` write `theme` here, `/model` writes `provider`, and the settings view's save writes the keys it changes (never `provider` or `theme`) | everything |
 | 3 | `~/.sugar-crush/settings.json` | you, by hand | the project's two |
-| 2 | `<project>/.sugar-crush/settings.local.json` | whoever wrote the repository (`.gitignore`d **by convention**, which is not a trust signal — see below) | the shared project file |
-| 1 | `<project>/.sugar-crush/settings.json` | whoever wrote the repository | nothing |
+| 2 | `<project>/.sugar-crush/settings.local.json` | whoever wrote the repository (`.gitignore`d **by convention**, which is not a trust signal — see below), or you, through the settings view's **This project (local)** tier once you trust the project | the shared project file |
+| 1 | `<project>/.sugar-crush/settings.json` | whoever wrote the repository, or you, through the settings view's **This project (shared)** tier once you trust the project — it is committed, so everyone who clones the repository (and trusts it) gets what you save there | nothing |
 
 Two things about that order are deliberate and the reverse of what most editors
 do. **Your files beat the project's**, because a project file arrived with a
@@ -264,12 +264,16 @@ cannot tell whether the sentence is about them.)
 > `provider` lands there. The sentence still earns its place because the
 > ranking genuinely is surprising and still needs explaining; only its reason
 > was wrong. `config.json` keeps working indefinitely, and there is nothing to
-> migrate *to*: `settings.json` is never written.
+> migrate *to*: your `~/.sugar-crush/settings.json` is never written.
 
-**Above all four sits the session tier.** The settings view (`/settings`, `t`
-to pick the tier) can save a change **for this session only**: nothing is
-written to disk, the value outranks every file until the process exits, and
-the environment and flags still outrank it. A turn's forked child and the Task
+The settings view (`/settings`, `t` to pick the tier) writes either project
+file only for a project you already trust, and only the keys a project file may
+set; the save preview names the file and, for the shared one, warns that it is
+committed.
+
+**Above all four sits the session tier.** The settings view can save a change
+**for this session only**: nothing is written to disk, the value outranks every
+file until the process exits, and the environment and flags still outrank it. A turn's forked child and the Task
 sub-agents it runs inherit it; a `/bg` daemon is a separate process and starts
 from the files alone. Only keys that take effect without a restart can be set
 there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) lists

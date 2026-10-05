@@ -276,6 +276,107 @@ final class SettingsWriterTest extends TestCase
         self::assertNull($this->userWriter()->withProject($this->root, true)->targetPath(SettingsTier::ProjectLocal));
     }
 
+    // ── the project-shared tier (N-P5) ──────────────────────────────────
+
+    public function testATrustedProjectGetsItsCommittedFileUnderTheLocalRules(): void
+    {
+        file_put_contents($this->root . '/' . LayeredSettings::SHARED_PATH, (string) json_encode(['theme' => 'nord']));
+        $writer = $this->userWriter()->withProject($this->root, true);
+
+        $path = $writer->write(SettingsTier::ProjectShared, ['parallelToolCalls' => false], ['theme']);
+
+        self::assertSame($this->root . '/' . LayeredSettings::SHARED_PATH, $path);
+        self::assertSame(['parallelToolCalls' => false], json_decode((string) file_get_contents($path), true));
+        self::assertFileDoesNotExist($this->root . '/' . LayeredSettings::LOCAL_PATH, 'the local file is not this tier');
+        self::assertFileDoesNotExist($this->configPath);
+        self::assertSame(false, LayeredSettings::projectLayer($this->root, true)['parallelToolCalls'], 'and the merge reads it back');
+    }
+
+    public function testTheLocalFileStillOutranksASharedSave(): void
+    {
+        $writer = $this->userWriter()->withProject($this->root, true);
+        $writer->write(SettingsTier::ProjectLocal, ['parallelToolCalls' => true]);
+        $writer->write(SettingsTier::ProjectShared, ['parallelToolCalls' => false]);
+
+        self::assertTrue(LayeredSettings::projectLayer($this->root, true)['parallelToolCalls']);
+        self::assertTrue(
+            SettingsTier::ProjectLocal->source()->precedence() > SettingsTier::ProjectShared->source()->precedence(),
+            'which is what the preview warns about',
+        );
+    }
+
+    public function testTheSharedTierRefusesWhatTheLocalTierRefuses(): void
+    {
+        $writer = $this->userWriter()->withProject($this->root, true);
+        foreach (self::refusedOnTheProjectTier() as $label => [$key, $value]) {
+            self::assertNotNull($writer->refusal(SettingsTier::ProjectShared, $key, $value), $label);
+            self::assertSame(
+                SettingsWriter::keyRefusal(SettingsTier::ProjectLocal, $key),
+                SettingsWriter::keyRefusal(SettingsTier::ProjectShared, $key),
+                $label,
+            );
+        }
+
+        $untrusted = $this->userWriter()->withProject($this->root, false);
+        self::assertNull($untrusted->targetPath(SettingsTier::ProjectShared));
+        self::assertNotNull($untrusted->tierRefusal(SettingsTier::ProjectShared));
+        self::assertNotNull($this->userWriter()->tierRefusal(SettingsTier::ProjectShared), 'no project, no tier');
+        $this->expectException(\InvalidArgumentException::class);
+        $untrusted->write(SettingsTier::ProjectShared, ['parallelToolCalls' => false]);
+    }
+
+    public function testASymlinkedSettingsDirectoryIsNotASharedTierEither(): void
+    {
+        $this->removeDirectory($this->root . '/.sugar-crush');
+        mkdir($this->dir . '/elsewhere', 0700);
+        symlink($this->dir . '/elsewhere', $this->root . '/.sugar-crush');
+
+        self::assertNull($this->userWriter()->withProject($this->root, true)->targetPath(SettingsTier::ProjectShared));
+    }
+
+    public function testKeyRefusalIsTheSchemaHalfOfRefusal(): void
+    {
+        $writer = $this->userWriter()->withProject($this->root, true);
+        foreach (SettingsTier::cases() as $tier) {
+            foreach (['maxToolSteps', 'provider', 'theme', 'trustedProjectHooks', 'layout', 'parallelToolCalls', 'nope'] as $key) {
+                $static = SettingsWriter::keyRefusal($tier, $key);
+                if ($static !== null) {
+                    self::assertSame($static, $writer->refusal($tier, $key, true), "{$tier->name} {$key}");
+                }
+            }
+        }
+    }
+
+    // ── modelPrices (N-P5) ──────────────────────────────────────────────
+
+    public function testAWellFormedPriceTableIsWritten(): void
+    {
+        $prices = ['gpt-x' => ['input' => 3, 'output' => 15], 'local' => ['input' => 0, 'output' => 0.5, 'cached' => 0]];
+
+        self::assertNull($this->userWriter()->refusal(SettingsTier::You, 'modelPrices', $prices));
+        $this->userWriter()->write(SettingsTier::You, ['modelPrices' => $prices]);
+        self::assertSame($prices, $this->config()['modelPrices']);
+    }
+
+    /** @return iterable<string, array{0: mixed}> */
+    public static function malformedPrices(): iterable
+    {
+        yield 'a rate missing' => [['gpt-x' => ['input' => 3]]];
+        yield 'a rate as text' => [['gpt-x' => ['input' => '3', 'output' => 15]]];
+        yield 'a negative rate' => [['gpt-x' => ['input' => -1, 'output' => 15]]];
+        yield 'an unknown rate' => [['gpt-x' => ['input' => 1, 'output' => 2, 'outptu' => 3]]];
+        yield 'an entry that is not an object' => [['gpt-x' => 3]];
+        yield 'an entry that is a list' => [['gpt-x' => [1, 2]]];
+    }
+
+    #[DataProvider('malformedPrices')]
+    public function testAMalformedPriceTableIsRefusedBeforeItIsWritten(mixed $prices): void
+    {
+        self::assertStringStartsWith('modelPrices: ', (string) $this->userWriter()->refusal(SettingsTier::You, 'modelPrices', $prices));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->userWriter()->write(SettingsTier::You, ['modelPrices' => $prices]);
+    }
+
     // ── trust ───────────────────────────────────────────────────────────
 
     public function testATrustGrantAppendsTheCanonicalRootOnTheUserTierOnly(): void

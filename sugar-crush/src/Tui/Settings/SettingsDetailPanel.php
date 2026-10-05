@@ -44,18 +44,11 @@ final class SettingsDetailPanel
      */
     public static function lines(SettingDefinition $definition, ResolvedSetting $resolved, int $width): array
     {
+        // Provenance first, the prose after it (N-P5): a short terminal shows
+        // only the panel's top rows, and "what is it, where did it come from,
+        // what locks it" is the answer the panel exists for.
         $out = [['', $definition->label], ['key', $definition->key]];
-
-        $help = Width::wrap(PaneLabel::of($definition->help), max(8, $width));
-        foreach (explode("\n", $help) as $line) {
-            $out[] = ['', $line];
-        }
-
-        $out[] = ['', ''];
         $out[] = ['value', self::value($definition, $resolved->value)];
-        $out[] = ['default', $definition->defaultText !== null
-            ? PaneLabel::of(str_replace('`', '', $definition->defaultText))
-            : self::value($definition, $definition->default)];
         $out[] = ['source', self::sourceLabel($resolved->source)];
         if ($resolved->sourcePath !== null) {
             $out[] = [self::CONTINUED, PaneLabel::of($resolved->sourcePath)];
@@ -72,6 +65,16 @@ final class SettingsDetailPanel
             $out[] = ['locked', PaneLabel::of((string) $resolved->lockReason) . ' — unset it to change this here'];
         }
 
+        $out[] = ['', ''];
+        $help = Width::wrap(PaneLabel::of($definition->help), max(8, $width));
+        foreach (explode("\n", $help) as $line) {
+            $out[] = ['', $line];
+        }
+
+        $out[] = ['', ''];
+        $out[] = ['default', $definition->defaultText !== null
+            ? PaneLabel::of(str_replace('`', '', $definition->defaultText))
+            : self::value($definition, $definition->default)];
         $out[] = ['applies', $definition->applyMode->badge()];
         $out[] = ['set in', self::tiers($definition)];
         if ($definition->envVar !== null) {

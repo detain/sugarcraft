@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Config\Settings;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Support\ContainedPath;
 
 /**
  * The settings editor's write door (roadmap N-P2, Appendix N §4.4) — a SEPARATE
@@ -16,7 +17,7 @@ use SugarCraft\Crush\Permissions\PermissionMode;
  * and itself censused by
  * {@see \SugarCraft\Crush\Tests\Config\Settings\SettingsWriterCensusTest}.
  *
- * THREE TIERS ({@see SettingsTier}):
+ * FOUR TIERS ({@see SettingsTier}):
  *
  *  - YOU writes the user's `config.json` through the injected `$userConfigDoor`,
  *    which the launch wires to `Bootstrap::writeUserConfig()` — the one writer
@@ -28,6 +29,10 @@ use SugarCraft\Crush\Permissions\PermissionMode;
  *    project-settable keys, and only for a project the operator already trusts
  *    — {@see LayeredSettings::projectLocalPath()} answers with the file the
  *    merge would read back, or null.
+ *  - PROJECT-SHARED (N-P5) writes the committed `<root>/.sugar-crush/settings.json`
+ *    under exactly the project-local rules — same keys, same trust gate, the
+ *    same walk ({@see LayeredSettings::projectFiles()}) for the path — so the
+ *    two project files differ in precedence and audience only.
  *  - SESSION writes nothing to disk: the change set lands in
  *    {@see SessionSettings}, which `Bootstrap::mergedConfig()` lays over every
  *    file for the rest of this process (roadmap N-P3). Only a layered key that
@@ -43,8 +48,11 @@ use SugarCraft\Crush\Permissions\PermissionMode;
  *  - the trust and grant keys (apply mode Frozen): those change only through
  *    {@see grantTrust()} / {@see revokeTrust()}, the confirmed action;
  *  - a value of the wrong type, or one a definition's validators reject;
- *  - on the project tier, any key a project may not set, and any write at all
- *    for an untrusted (or unnamed) project.
+ *  - on either project tier, any key a project may not set, and any write at
+ *    all for an untrusted (or unnamed) project;
+ *  - a `modelPrices` entry that is not `{"input": n, "output": n}` with
+ *    non-negative numbers (an optional `cached` likewise): the provider prices
+ *    a malformed row as "unpriced", so the editor must not write one.
  *
  * A RESET DELETES THE KEY (`$unset`) rather than writing the default, so a
  * later change to the default still reaches the user. An explicit `null` is
@@ -70,6 +78,9 @@ final class SettingsWriter
      * `models` is `{"<provider>": "<model id>"}` (decision D9).
      */
     private const STRING_MAP_KEYS = ['models'];
+
+    /** The rates a `modelPrices` entry may carry, and whether each is required. */
+    private const PRICE_RATES = ['input' => true, 'output' => true, 'cached' => false];
 
     /**
      * @param \Closure(array<string, mixed>, list<string>): void $userConfigDoor
@@ -107,11 +118,76 @@ final class SettingsWriter
     {
         return match ($tier) {
             SettingsTier::You => $this->userConfigPath,
-            SettingsTier::ProjectLocal => $this->projectRoot === null
-                ? null
-                : LayeredSettings::projectLocalPath($this->projectRoot, $this->projectTrusted),
+            SettingsTier::ProjectLocal => $this->projectFilePath(
+                LayeredSettings::LOCAL_PATH,
+                $this->projectRoot === null ? null : LayeredSettings::projectLocalPath($this->projectRoot, $this->projectTrusted),
+            ),
+            SettingsTier::ProjectShared => $this->projectFilePath(LayeredSettings::SHARED_PATH, $this->walkedSharedPath()),
             SettingsTier::Session => null,
         };
+    }
+
+    /**
+     * The project file `$relative` names, for a trusted project, or null.
+     *
+     * A file that EXISTS is answered from the same walk the merge reads
+     * through (`$walked`: {@see LayeredSettings::projectLocalPath()} or
+     * {@see LayeredSettings::projectFiles()}, the trust gate and both
+     * containment boundaries), so a save can only reach the file the merge
+     * would read back — never one reached through a symlink out of the
+     * project. That walk resolves real paths, so it cannot vouch for a file
+     * that does not exist yet; before N-P5 that meant the editor could only
+     * write a project file someone had already created by hand, and said
+     * "not trusted" when it refused the first. A MISSING file is therefore
+     * answered here, conservatively: the path itself must not exist (not even
+     * as a dangling link), and `.sugar-crush` must be a real directory inside
+     * the project — or absent, to be created by the write. Once written, the
+     * file passes the walk's containment check like any other.
+     */
+    private function projectFilePath(string $relative, ?string $walked): ?string
+    {
+        $root = $this->projectRoot;
+        if ($root === null || !$this->projectTrusted) {
+            return null;
+        }
+
+        $path = rtrim($root, '/') . '/' . $relative;
+        if ($walked === $path && file_exists($path)) {
+            return $path;
+        }
+
+        if (file_exists($path) || is_link($path)) {
+            // It exists and the walk did not vouch for it: refused.
+            return null;
+        }
+
+        $dir = \dirname($path);
+        if (is_link($dir)) {
+            return null;
+        }
+
+        if (!file_exists($dir)) {
+            // Created by the write; nothing on the way can redirect it.
+            return is_dir($root) && !is_link(rtrim($root, '/')) ? $path : null;
+        }
+
+        return is_dir($dir) && ContainedPath::below($dir, $root) ? $path : null;
+    }
+
+    /** The committed project file as the merge's walk names it, or null. */
+    private function walkedSharedPath(): ?string
+    {
+        if ($this->projectRoot === null) {
+            return null;
+        }
+
+        foreach (array_keys(LayeredSettings::projectFiles($this->projectRoot, $this->projectTrusted)) as $path) {
+            if (str_ends_with((string) $path, '/' . LayeredSettings::SHARED_PATH)) {
+                return (string) $path;
+            }
+        }
+
+        return null;
     }
 
     /** Why a tier cannot be written at all, or null when it can. */
@@ -121,9 +197,11 @@ final class SettingsWriter
             return null;
         }
 
-        return $this->projectRoot === null
-            ? 'no project is open, so there is no project settings file to write'
-            : 'project settings are ignored until you trust this project (' . LayeredSettings::PROJECT_SETTINGS_TRUST_KEY . ')';
+        return match (true) {
+            $this->projectRoot === null => 'no project is open, so there is no project settings file to write',
+            !$this->projectTrusted => 'project settings are ignored until you trust this project (' . LayeredSettings::PROJECT_SETTINGS_TRUST_KEY . ')',
+            default => "the project's " . LayeredSettings::dir() . ' is a link, or leads outside the project, so its settings file is not written through it',
+        };
     }
 
     /**
@@ -390,8 +468,24 @@ final class SettingsWriter
      */
     private function writableDefinition(SettingsTier $tier, string $key, ?string &$reason = null): ?SettingDefinition
     {
+        $reason = self::keyRefusal($tier, $key);
+
+        return $reason === null ? SettingsSchema::byKey($key) : null;
+    }
+
+    /**
+     * Why `$tier` never takes `$key`, whatever its value and whoever writes —
+     * or null when it may. Static, because it depends on the schema alone:
+     * the settings view asks it as soon as a change is staged, so a key the
+     * chosen tier would refuse is flagged on its row long before the save
+     * preview ({@see refusal()} adds the value checks and the tier's own
+     * availability on top).
+     */
+    public static function keyRefusal(SettingsTier $tier, string $key): ?string
+    {
         $definition = SettingsSchema::byKey($key);
-        $reason = match (true) {
+
+        return match (true) {
             $definition === null => "{$key} is not a setting",
             $definition->ui === UiEditability::ReadOnly, $definition->ui === UiEditability::Hidden
                 => "{$key} is not edited here",
@@ -399,13 +493,11 @@ final class SettingsWriter
                 => "{$key} is a trust grant; it changes only through the confirmed trust action",
             $tier === SettingsTier::You && isset(self::LIVE_COMMAND_KEYS[$key])
                 => "{$key} is saved by " . self::LIVE_COMMAND_KEYS[$key] . ', which also applies it now',
-            $tier === SettingsTier::ProjectLocal && !($definition->layered && $definition->projectSettable)
+            $tier->isProject() && !($definition->layered && $definition->projectSettable)
                 => "{$key} may not be set by a project file",
             $tier === SettingsTier::Session => self::sessionRefusal($definition),
             default => null,
         };
-
-        return $reason === null ? $definition : null;
     }
 
     private static function typeRefusal(SettingDefinition $definition, mixed $value): ?string
@@ -434,10 +526,64 @@ final class SettingsWriter
             }
         }
 
+        if ($key === 'modelPrices') {
+            $priceRefusal = self::priceRefusal($value);
+            if ($priceRefusal !== null) {
+                return "{$key}: {$priceRefusal}";
+            }
+        }
+
         // The strict key: the launch refuses a permissionMode it cannot parse,
         // so the editor must never be able to write one.
         if ($key === 'permissionMode' && PermissionMode::tryFrom((string) $value) === null) {
             return "{$key}: '{$value}' is not a permission mode";
+        }
+
+        return null;
+    }
+
+    /**
+     * What is wrong with a `modelPrices` map, or null: every entry names a
+     * model and carries non-negative `input` and `output` rates (USD per 1M
+     * tokens), plus an optional `cached` one, and nothing else — the shape
+     * the providers price from, where a missing or non-numeric rate makes the
+     * model unpriced rather than priced wrongly.
+     *
+     * @param array<array-key, mixed> $value
+     */
+    private static function priceRefusal(array $value): ?string
+    {
+        foreach ($value as $model => $entry) {
+            // A digits-only model id arrives as an int key; it is still a name.
+            $model = (string) $model;
+            if (trim($model) === '') {
+                return 'every entry must be keyed by a model id';
+            }
+
+            if (!\is_array($entry) || ($entry !== [] && array_is_list($entry))) {
+                return "{$model} must be an object of rates, e.g. {\"input\": 3, \"output\": 15}";
+            }
+
+            foreach (array_keys($entry) as $rate) {
+                if (!\array_key_exists((string) $rate, self::PRICE_RATES)) {
+                    return "{$model}: '{$rate}' is not a rate (input, output, cached)";
+                }
+            }
+
+            foreach (self::PRICE_RATES as $rate => $required) {
+                if (!\array_key_exists($rate, $entry)) {
+                    if ($required) {
+                        return "{$model} needs an '{$rate}' rate";
+                    }
+
+                    continue;
+                }
+
+                $n = $entry[$rate];
+                if (!(\is_int($n) || \is_float($n)) || $n < 0 || !is_finite((float) $n)) {
+                    return "{$model}: '{$rate}' must be a number of US dollars per 1M tokens, 0 or more";
+                }
+            }
         }
 
         return null;
