@@ -15,6 +15,29 @@ export interface Admission {
   queueId?: string
 }
 
+/** A background (/bg) session; never its output. */
+export interface BackgroundSession {
+  bgId: string
+  name: string
+  task: string
+  status: "pending" | "running" | "streaming" | "stalled" | "completed" | "failed" | "stopped" | "timed_out"
+  agent?: string
+  model?: string
+  tags?: string[]
+  workingDirectory?: string
+  createdAt: string
+  completedAt?: string | null
+  tokensUsed?: number
+  costUsd?: number
+  error?: string | null
+  /** bg.output reads the output itself, from an offset. */
+  outputBytes: number
+  /** The stored session a /fork session continues; null for /bg. */
+  forkedSessionId?: string | null
+  /** Re-adopted at boot from an earlier server or TUI. */
+  adopted: boolean
+}
+
 export interface Error {
   code: number
   message: string
@@ -35,6 +58,8 @@ export interface EventEnvelope {
   turnId?: string
   durable: boolean
   data: Record<string, unknown>
+  /** Set by the serve gateway on an event relayed from another project root's workspace host (roadmap O-7). */
+  root?: string
 }
 
 export interface MemoryEntry {
@@ -101,6 +126,8 @@ export interface SessionSummary {
   status: "closed" | "idle" | "busy" | "waiting_permission"
   permissionMode?: PermissionMode | null
   spentUsd?: number | null
+  /** Set by the serve gateway on a session another project root's workspace host answered for (roadmap O-7). */
+  root?: string
 }
 
 export type Subscription = {
@@ -149,11 +176,31 @@ export interface Methods {
       items: Record<string, unknown>[]
     }
   }
-  /** The background sessions this server supervises. */
+  /** Send a settled background session's result into a session as a prompt. */
+  "bg.inject": {
+    params: {
+      sessionId: SessionId
+      bgId: string
+      delivery?: "queue" | "steer" | "interrupt"
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      bgId: string
+      sessionId: SessionId
+      admitted: "started" | "queued" | "steered" | "pending"
+      turnId?: string
+      messageId?: string
+      steerId?: string
+      queuePosition?: number
+      queueId?: string
+    }
+  }
+  /** The background sessions this server supervises, running and settled. */
   "bg.list": {
     params: Record<string, unknown>
     result: {
-      items: Record<string, unknown>[]
+      items: BackgroundSession[]
     }
   }
   /** A background session's output from an offset. */
@@ -170,6 +217,17 @@ export interface Methods {
       total: number
       status: string
     }
+  }
+  /** Start a background session on a task, as /bg does. */
+  "bg.spawn": {
+    params: {
+      task: string
+      agent?: string
+      name?: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: BackgroundSession
   }
   /** Stop a background session. */
   "bg.stop": {
@@ -476,6 +534,8 @@ export interface Methods {
     params: {
       name?: string
       permissionMode?: PermissionMode
+      /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */
+      root?: string
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
     }
@@ -538,6 +598,8 @@ export interface Methods {
       limit?: number
       cursor?: SessionId
       query?: string
+      /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */
+      root?: string
     }
     result: {
       items: SessionSummary[]
@@ -682,6 +744,44 @@ export interface Methods {
       more: boolean
     }
   }
+  /** Stop a workspace host; refused while one of its turns runs, unless force. */
+  "workspace.close": {
+    params: {
+      root: string
+      force?: boolean
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      closed: boolean
+    }
+  }
+  /** The project roots this server serves: its own, and each running workspace host. */
+  "workspace.list": {
+    params: Record<string, unknown>
+    result: {
+      items: ({
+        root: string
+        primary: boolean
+        running: boolean
+        pid?: number | null
+      })[]
+    }
+  }
+  /** Start the workspace host for another project root, or find it running. */
+  "workspace.open": {
+    params: {
+      root: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      root: string
+      primary: boolean
+      running: boolean
+      pid?: number | null
+    }
+  }
 }
 
 export type MethodName = keyof Methods
@@ -692,8 +792,10 @@ export type MethodResult<M extends MethodName> = Methods[M]['result']
 export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "agents.list": "read",
   "agents.subtree": "read",
+  "bg.inject": "write",
   "bg.list": "read",
   "bg.output": "read",
+  "bg.spawn": "write",
   "bg.stop": "write",
   "client.viewing": "read",
   "command.exec": "write",
@@ -733,10 +835,15 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "settings.set": "admin",
   "todo.get": "read",
   "tool.output": "read",
+  "workspace.close": "write",
+  "workspace.list": "read",
+  "workspace.open": "write",
 }
 
 /** The methods that accept an `idempotencyKey`. */
 export const IDEMPOTENT_METHODS: readonly MethodName[] = [
+  "bg.inject",
+  "bg.spawn",
   "bg.stop",
   "command.exec",
   "memory.add",
@@ -754,6 +861,8 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "session.send",
   "session.setMode",
   "settings.set",
+  "workspace.close",
+  "workspace.open",
 ]
 
 /** Every event type: the shape of its `data`. */
@@ -779,6 +888,16 @@ export interface Events {
   "assistant.narration": {
     partId: string
     tail: string
+  }
+  /** A background session settled; bg.output reads its answer, bg.inject sends it to a session. */
+  "bg.completed": BackgroundSession
+  /** A background session started, or one an earlier server or TUI left running was re-adopted. */
+  "bg.started": BackgroundSession
+  /** A background session's status changed (running, stalled, …). */
+  "bg.status": {
+    bgId: string
+    status: string
+    previous: string
   }
   /** The history was compacted before a turn. */
   "compaction.completed": {
@@ -950,6 +1069,9 @@ export const EVENT_KINDS: { readonly [E in EventName]: { readonly durable: boole
   "assistant.completed": { durable: true, scope: "session" },
   "assistant.delta": { durable: false, scope: "session" },
   "assistant.narration": { durable: false, scope: "session" },
+  "bg.completed": { durable: false, scope: "server" },
+  "bg.started": { durable: false, scope: "server" },
+  "bg.status": { durable: false, scope: "server" },
   "compaction.completed": { durable: true, scope: "session" },
   "message.created": { durable: true, scope: "session" },
   "permission.requested": { durable: true, scope: "session" },
