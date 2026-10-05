@@ -554,6 +554,36 @@ changed or removed a note, one display-only line says so in the transcript
 (`/memory list` shows the notes, tagged `auto-memory`); a run that saved
 nothing says nothing.
 
+## Memory flush before compaction
+
+Right before the engine compacts a turn — the step summary it writes when a
+request is still over its step budget after the prune (roadmap 2.4-1) — it
+gives the model one silent step to save what should outlive the session
+(roadmap 2.11, after OpenClaw's pre-compaction flush;
+`Context\Compaction\MemoryFlush`). A compaction summary keeps what the next
+step needs; a preference, a correction, a decision and why it was taken is
+exactly what it drops, and this is the last moment the model can still read
+it.
+
+- **One step, only the `Memory` tool.** The request is the one the model was
+  last sent plus one instruction row — same system prompt, same tools — so its
+  prefix is already cached. Every tool stays advertised, but on the flush's own
+  copy of the hook chain any call other than `Memory` is refused, and every
+  permission question is answered no: nobody is asked anything during a step
+  nobody sees. The instruction asks for durable facts only, never task
+  progress, and says that saving nothing is a fine answer.
+- **Silent.** The step's request, reply and tool rows never join the
+  conversation or the transcript; what remains is the notes the `Memory` tool
+  wrote (`/memory list` shows them). Its cost is billed like any step.
+- **Once per compaction cycle.** It runs only when the summary is about to be
+  attempted (not past the spend cap, not when a `PreCompact` hook refuses) and
+  not again until that summary has landed, so a summary that fails and is
+  retried on a later step does not flush twice. A failed flush costs the
+  compaction nothing.
+- **Where it runs.** On every engine turn that carries the `Memory` tool, a
+  delegated sub-agent's included. `/compact` and the automatic 85% tier, which
+  summarise on the host rather than inside a turn, do not flush yet.
+
 ## Dream pass
 
 Every so often, sugar-crush reads the compaction journal (see

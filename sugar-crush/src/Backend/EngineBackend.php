@@ -1923,6 +1923,40 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         if (($this->spendCapUsd === null || $spentSoFarUsd() < $this->spendCapUsd)
                             && $preCompact('auto', '') === null
                         ) {
+                            // Roadmap 2.11: the memory flush — one silent step,
+                            // only the Memory tool may run, in which the model
+                            // saves what should outlive the session before the
+                            // summary drops the rows it would read it from. Once
+                            // per compaction cycle: keyed by the block this
+                            // summary would replace, so a summary that fails and
+                            // is retried a step later does not flush again. On
+                            // its own copy of the chain (a fresh loop guard, so
+                            // the turn's repeat counts never see it); a failed
+                            // flush costs the summary nothing.
+                            $flushCycle = (string) ($contextLedger->activeBlock()?->id ?? 0);
+                            if (($memoryFlushedFor ?? null) !== $flushCycle
+                                && \SugarCraft\Crush\Context\Compaction\MemoryFlush::available($app->tools)
+                            ) {
+                                $memoryFlushedFor = $flushCycle;
+                                try {
+                                    $flushHooks = $this->resolveHookManager(ToolCallLoopGuard::new());
+                                    $flushHooks->register(\SugarCraft\Crush\Context\Compaction\MemoryFlush::new());
+                                    \SugarCraft\Crush\Context\Compaction\MemoryFlush::run(
+                                        $this->newRuntime(
+                                            $flushHooks,
+                                            self::parallelToolCallsEnabled($userConfig),
+                                            self::parallelToolDeadlineSeconds($userConfig),
+                                            self::maxOutputTokens($userConfig),
+                                        )->withTurnContextPersisted(),
+                                        $app,
+                                        $billSummary,
+                                        $summaryLiveness,
+                                        $onHeartbeat,
+                                    );
+                                } catch (\Throwable) {
+                                    // Best effort: the compaction goes ahead.
+                                }
+                            }
                             $block = \SugarCraft\Crush\Context\Compaction\StepSummarizer::summarise(
                                 $runtime,
                                 $app,
