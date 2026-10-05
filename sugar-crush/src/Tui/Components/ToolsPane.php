@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
@@ -84,11 +85,11 @@ final class ToolsPane
         $lines = [];
         $keys = [];
         if ($entries === []) {
-            $lines[] = $muted->render('(tool history empty)');
+            $lines[] = $muted->render(Lang::t('tui.tools.empty'));
             $keys[] = null;
         } else {
             if ($offset > 0) {
-                $lines[] = $muted->render(Width::truncate('↑ ' . $offset . ' newer', $inner));
+                $lines[] = $muted->render(Width::truncate(Lang::t('tui.tools.newer', ['count' => $offset]), $inner));
                 $keys[] = null;
             }
             foreach ($entries as [$label, $color, $key, $detail]) {
@@ -114,7 +115,7 @@ final class ToolsPane
         $body = implode("\n", $lines);
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Tools->icon() . ' tools '))
+            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Tools->icon() . ' ' . Lang::t('tui.pane.title.tools') . ' '))
             ->padding(0, 1)
             ->width($width);
 
@@ -152,10 +153,10 @@ final class ToolsPane
             $lines[] = '│ ' . PaneLabel::of($line);
         }
         if (count($out) > self::DETAIL_OUTPUT_LINES) {
-            $lines[] = '… +' . (count($out) - self::DETAIL_OUTPUT_LINES) . ' lines';
+            $lines[] = Lang::t('tui.tools.more_lines', ['count' => count($out) - self::DETAIL_OUTPUT_LINES]);
         }
 
-        return $lines === [] ? ['(no output)'] : $lines;
+        return $lines === [] ? [Lang::t('tui.tools.no_output')] : $lines;
     }
 
     /**

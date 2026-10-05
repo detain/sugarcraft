@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Focus\FocusRing;
 use SugarCraft\Layout\Dock\Side;
 
@@ -241,16 +242,16 @@ enum Pane: string
     public function label(): string
     {
         return match ($this) {
-            self::Chat => 'Chat',
-            self::Input => 'Input',
-            self::Skills => 'Skills',
-            self::Agents => 'Agents',
-            self::Files => 'Files',
-            self::Tools => 'Tools',
-            self::Settings => 'Settings',
-            self::Todo => 'Todo',
-            self::Help => 'Help',
-            self::Menu => 'Menu',
+            self::Chat => Lang::t('tui.pane.label.chat'),
+            self::Input => Lang::t('tui.pane.label.input'),
+            self::Skills => Lang::t('tui.pane.label.skills'),
+            self::Agents => Lang::t('tui.pane.label.agents'),
+            self::Files => Lang::t('tui.pane.label.files'),
+            self::Tools => Lang::t('tui.pane.label.tools'),
+            self::Settings => Lang::t('tui.pane.label.settings'),
+            self::Todo => Lang::t('tui.pane.label.todo'),
+            self::Help => Lang::t('tui.pane.label.help'),
+            self::Menu => Lang::t('tui.pane.label.menu'),
         };
     }
 }

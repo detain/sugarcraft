@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
@@ -38,7 +39,7 @@ final class FilesPane
 
         if ($files === []) {
             $body = Style::new()->foreground($theme->shellMuted)
-                ->render('(no files attached)');
+                ->render(Lang::t('tui.files.empty'));
         } else {
             $lines = [];
             foreach ($files as $file) {
@@ -53,7 +54,7 @@ final class FilesPane
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Files->icon() . ' files '))
+            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Files->icon() . ' ' . Lang::t('tui.pane.title.files') . ' '))
             ->padding(0, 1)
             ->width($width);
 

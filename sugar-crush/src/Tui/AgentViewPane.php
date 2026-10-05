@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Theme;
@@ -137,10 +138,10 @@ final class AgentViewPane
         if ($agents === []) {
             $body = Style::new()
                 ->foreground($theme->shellMuted)
-                ->render('(no active agents)');
+                ->render(Lang::t('tui.agents.none_active'));
 
             return Style::new()
-                ->border(Border::rounded()->withTitle(' agents '))
+                ->border(Border::rounded()->withTitle(' ' . Lang::t('tui.pane.title.agents') . ' '))
                 ->padding(0, 1)
                 ->width($width)
                 ->render($body);
@@ -176,7 +177,7 @@ final class AgentViewPane
             // an escape it may cut in half.
             $dot    = Style::new()->foreground($statusColor)->render("\u{25CF}");
             $name   = self::stripEscapes($agent->name);
-            $status = self::stripEscapes($agent->status);
+            $status = self::stripEscapes(AgentStatusBar::statusLabel($agent->status));
 
             // Right-side (elapsed + usage).
             $rightSection = $agent->elapsedDisplay() . '  ' . $agent->usageDisplay();
@@ -319,7 +320,7 @@ final class AgentViewPane
         $body = implode("\n", $rows);
 
         return Style::new()
-            ->border(Border::rounded()->withTitle(' agents '))
+            ->border(Border::rounded()->withTitle(' ' . Lang::t('tui.pane.title.agents') . ' '))
             ->padding(0, 1)
             ->width($width)
             ->render($body);

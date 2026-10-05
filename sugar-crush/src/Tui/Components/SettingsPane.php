@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
@@ -53,14 +54,14 @@ final class SettingsPane
      * the real `/settings` {@see \SugarCraft\Crush\Commands\CommandRegistry}
      * row.
      */
-    private const FOOTER = 'Enter or /settings: all settings';
+    private const FOOTER = 'tui.settings_pane.footer';
 
     /**
      * Placeholder for a value this App genuinely has no answer for, kept
      * distinct from a real value so the pane never reads as if a default had
      * been configured.
      */
-    private const UNKNOWN = '(none)';
+    private const UNKNOWN = 'tui.settings_pane.unknown';
 
     /**
      * The live configuration as ordered label/value pairs.
@@ -84,18 +85,21 @@ final class SettingsPane
         // without one (a test, an embedder), and the process directory is
         // then the honest answer.
         $root = $a->root ?? getcwd();
+        $unknown = Lang::t(self::UNKNOWN);
+        $on = Lang::t('tui.settings_pane.on');
+        $off = Lang::t('tui.settings_pane.off');
 
         return [
-            ['Provider', $a->provider->name()],
+            [Lang::t('tui.settings_pane.provider'), $a->provider->name()],
             // The served model when the provider talks to one other than
             // the configured id (audit 15b-35); see Renderer::modelLabel().
-            ['Model', \SugarCraft\Crush\Tui\Renderer::modelLabel($a)],
-            ['Theme', $chat?->theme()->name ?? self::UNKNOWN],
-            ['Root', $root === false ? self::UNKNOWN : $root],
-            ['Session', $a->sessionId ?? $chat?->currentSessionId() ?? self::UNKNOWN],
-            ['Mouse', Chat::mouseMode()->value],
-            ['Mouse clicks', Chat::mouseClicksEnabled() ? 'on' : 'off'],
-            ['Streaming', $chat === null ? self::UNKNOWN : ($chat->isStreaming() ? 'on' : 'off')],
+            [Lang::t('tui.settings_pane.model'), \SugarCraft\Crush\Tui\Renderer::modelLabel($a)],
+            [Lang::t('tui.settings_pane.theme'), $chat?->theme()->name ?? $unknown],
+            [Lang::t('tui.settings_pane.root'), $root === false ? $unknown : $root],
+            [Lang::t('tui.settings_pane.session'), $a->sessionId ?? $chat?->currentSessionId() ?? $unknown],
+            [Lang::t('tui.settings_pane.mouse'), Chat::mouseMode()->value],
+            [Lang::t('tui.settings_pane.mouse_clicks'), Chat::mouseClicksEnabled() ? $on : $off],
+            [Lang::t('tui.settings_pane.streaming'), $chat === null ? $unknown : ($chat->isStreaming() ? $on : $off)],
         ];
     }
 
@@ -127,10 +131,10 @@ final class SettingsPane
                 max(1, $inner - self::VALUE_INDENT),
             ));
         }
-        $lines[] = $labelStyle->render(Width::truncate(self::FOOTER, $inner));
+        $lines[] = $labelStyle->render(Width::truncate(Lang::t(self::FOOTER), $inner));
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' ' . Pane::Settings->icon() . ' settings '))
+            ->border(Border::rounded()->withTitle(' ' . Pane::Settings->icon() . ' ' . Lang::t('tui.pane.title.settings') . ' '))
             ->padding(0, 1)
             ->width($width);
 

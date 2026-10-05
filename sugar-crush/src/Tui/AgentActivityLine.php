@@ -10,6 +10,7 @@ use SugarCraft\Crush\Agents\Live\ActivityItem;
 use SugarCraft\Crush\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Crush\Agents\Live\AgentLiveState;
 use SugarCraft\Crush\Events\SubAgentActivity;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Crush\Util\TokenCount;
@@ -75,19 +76,19 @@ final class AgentActivityLine
         // Display order; each carries its drop rank (lowest goes first).
         $segments = [];
         if ($state->toolCount > 0) {
-            $segments[] = [2, $state->toolCount === 1 ? '1 tool' : $state->toolCount . ' tools'];
+            $segments[] = [2, $state->toolCount === 1 ? Lang::t('tui.agent.tool_one') : Lang::t('tui.agent.tools', ['count' => $state->toolCount])];
         }
         if ($elapsed !== null) {
             $segments[] = [3, self::clock($elapsed)];
         }
         if ($state->tokens() > 0) {
-            $segments[] = [1, TokenCount::compact($state->tokens()) . ' tok'];
+            $segments[] = [1, Lang::t('tui.agent.tokens', ['count' => TokenCount::compact($state->tokens())])];
         }
         if ($state->costUsd > 0.0) {
             $segments[] = [0, self::cost($state->costUsd)];
         }
         if ($state->isFinished() && $state->outcome !== SubAgentActivity::OUTCOME_COMPLETE && $state->resumeId !== null) {
-            $segments[] = [4, 'resumable'];
+            $segments[] = [4, Lang::t('tui.agent.resumable')];
         }
 
         $head = self::PREFIX . $glyph . ' ';
@@ -166,11 +167,13 @@ final class AgentActivityLine
     {
         if ($state->isFinished()) {
             return match ($state->outcome) {
-                SubAgentActivity::OUTCOME_COMPLETE => 'done',
-                SubAgentActivity::OUTCOME_CANCELLED => 'cancelled',
-                SubAgentActivity::OUTCOME_EMPTY => 'stopped without a report',
-                SubAgentActivity::OUTCOME_BACKGROUNDED => 'moved to the background',
-                default => 'failed' . (($error = self::reason($state)) === '' ? '' : ': ' . $error),
+                SubAgentActivity::OUTCOME_COMPLETE => Lang::t('tui.agent.outcome.done'),
+                SubAgentActivity::OUTCOME_CANCELLED => Lang::t('tui.agent.outcome.cancelled'),
+                SubAgentActivity::OUTCOME_EMPTY => Lang::t('tui.agent.outcome.empty'),
+                SubAgentActivity::OUTCOME_BACKGROUNDED => Lang::t('tui.agent.outcome.moved_to_background'),
+                default => ($error = self::reason($state)) === ''
+                    ? Lang::t('tui.agent.outcome.failed')
+                    : Lang::t('tui.agent.outcome.failed_because', ['reason' => $error]),
             };
         }
 
@@ -181,14 +184,14 @@ final class AgentActivityLine
 
         $latest = $state->latest;
         if ($latest === null) {
-            return 'starting…';
+            return Lang::t('tui.agent.starting');
         }
 
         return match ($latest->type) {
             ActivityItem::TOOL_FINISHED => ($latest->ok ? '✓ ' : '✗ ') . self::call($latest->tool, $state->latestSummary),
-            ActivityItem::THINKING => 'thinking…',
-            ActivityItem::TEXT => ($prose = PaneLabel::safe($latest->delta)) === '' ? 'writing…' : '"' . $prose . '"',
-            default => 'starting…',
+            ActivityItem::THINKING => Lang::t('tui.agent.thinking'),
+            ActivityItem::TEXT => ($prose = PaneLabel::safe($latest->delta)) === '' ? Lang::t('tui.agent.writing') : '"' . $prose . '"',
+            default => Lang::t('tui.agent.starting'),
         };
     }
 

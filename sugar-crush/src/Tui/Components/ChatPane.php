@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
@@ -120,7 +121,7 @@ final class ChatPane
             $images = $view->images;
         } elseif ($messages === []) {
             $body = Style::new()->foreground($theme->shellMuted)
-                ->render('Welcome to SugarCrush! Start typing to chat...');
+                ->render(Lang::t('tui.chat.welcome'));
         } else {
             $lines = [];
             foreach ($messages as $msg) {
@@ -130,7 +131,7 @@ final class ChatPane
         }
 
         $st = Style::new()
-            ->border(Border::normal()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Chat->icon() . ' chat '))
+            ->border(Border::normal()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Chat->icon() . ' ' . Lang::t('tui.pane.title.chat') . ' '))
             ->padding(0, 1)
             ->width($width);
 

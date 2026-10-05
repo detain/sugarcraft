@@ -1658,8 +1658,8 @@ final class Renderer
             if ($body === '' && $openView['attach'] === null) {
                 $body = self::dim($theme)->render(
                     $openView['transcript'] || $openView['state']?->isFinished() === false
-                        ? \SugarCraft\Crush\Tui\AgentViewHeader::WAITING
-                        : \SugarCraft\Crush\Tui\AgentViewHeader::NO_TRANSCRIPT,
+                        ? Lang::t(\SugarCraft\Crush\Tui\AgentViewHeader::WAITING)
+                        : Lang::t(\SugarCraft\Crush\Tui\AgentViewHeader::NO_TRANSCRIPT),
                 );
             }
             // P-E2: a question this run is waiting on shows in its own view

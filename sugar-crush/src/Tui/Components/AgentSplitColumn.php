@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentOutputPane;
@@ -117,7 +118,7 @@ final class AgentSplitColumn
             return self::stack(array_map(self::runState(...), $runs), $theme, $width, $rows);
         }
 
-        $marker = Style::new()->foreground($theme->shellMuted)->render('  ↑ ' . $skip . ' earlier agent(s)');
+        $marker = Style::new()->foreground($theme->shellMuted)->render('  ' . Lang::t('tui.agents.earlier', ['count' => $skip]));
         $rest = self::stack(array_map(self::runState(...), array_slice($runs, $skip)), $theme, $width, max(1, $rows - 1));
 
         return self::clip($marker . "\n" . $rest, $width, $rows);
@@ -170,7 +171,7 @@ final class AgentSplitColumn
         if ($hidden > 0 && $used < $rows) {
             $tiles[] = Style::new()
                 ->foreground($theme->shellMuted)
-                ->render('  + ' . $hidden . ' more agent(s)…');
+                ->render('  ' . Lang::t('tui.agents.more_agents', ['count' => $hidden]));
         }
 
         return self::clip(implode("\n", $tiles), $width, $rows);

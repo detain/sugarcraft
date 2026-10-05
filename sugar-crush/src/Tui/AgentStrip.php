@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Crush\Agents\Live\AgentLiveState;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Mouse\Mark;
@@ -52,14 +53,16 @@ final class AgentStrip
     /** How long a finished run stays on the strip. */
     public const LINGER_SECONDS = 30.0;
 
-    public const LABEL = 'agents: ';
+    /** Lang key of the strip's leading label. */
+    public const LABEL = 'tui.agent_strip.label';
 
     public const SEPARATOR = ' · ';
 
-    public const HINT = '   (alt+↓)';
+    /** Lang key of the hint while the strip does not hold the keyboard. */
+    public const HINT = 'tui.agent_strip.hint';
 
-    /** The hint while the strip holds the keyboard. */
-    public const FOCUSED_HINT = '   (←/→ · enter · c · x · esc)';
+    /** Lang key of the hint while the strip holds the keyboard. */
+    public const FOCUSED_HINT = 'tui.agent_strip.focused_hint';
 
     /** Widest a run's name may be on the strip, in cells. */
     public const NAME_COLS = 20;
@@ -135,14 +138,14 @@ final class AgentStrip
         foreach ($items as $state) {
             $name = PaneLabel::safe($state->name);
             if ($name === '') {
-                $name = 'agent';
+                $name = Lang::t('tui.agent.unnamed');
             }
             [$glyph] = AgentActivityLine::glyph($state, $theme, $spinnerFrame);
             $labels[] = $glyph . ' ' . Width::truncate($name, self::NAME_COLS);
         }
 
         $focusIndex = self::indexOf($items, $focused);
-        $hint = $focusIndex >= 0 ? self::FOCUSED_HINT : self::HINT;
+        $hint = '   ' . Lang::t($focusIndex >= 0 ? self::FOCUSED_HINT : self::HINT);
 
         // Start where the focused item stays visible: the window opens at it
         // when it would not otherwise fit.
@@ -157,11 +160,11 @@ final class AgentStrip
         if ($shown === 0) {
             // Not even one item: the label and the count, cut to the row.
             return Style::new()->foreground($theme->systemLabel)
-                ->render(Width::truncate(self::LABEL . '+' . count($items), $width));
+                ->render(Width::truncate(Lang::t(self::LABEL) . ' +' . count($items), $width));
         }
 
         $dim = Style::new()->foreground($theme->systemLabel);
-        $row = $dim->render(self::LABEL);
+        $row = $dim->render(Lang::t(self::LABEL) . ' ');
         for ($i = $start; $i < $start + $shown; $i++) {
             if ($i > $start) {
                 $row .= $dim->render(self::SEPARATOR);
@@ -170,13 +173,19 @@ final class AgentStrip
         }
         $hidden = count($items) - $shown;
         if ($hidden > 0) {
-            $row .= $dim->render(self::SEPARATOR . '+' . $hidden . ' more');
+            $row .= $dim->render(self::more($hidden));
         }
         if ($tail !== '') {
             $row .= $dim->render($tail);
         }
 
         return $row;
+    }
+
+    /** The `· +N more` trailer for runs that did not fit, separator included. */
+    private static function more(int $count): string
+    {
+        return self::SEPARATOR . Lang::t('tui.agent_strip.more', ['count' => $count]);
     }
 
     /**
@@ -189,11 +198,11 @@ final class AgentStrip
     {
         $total = count($labels);
         $shown = 0;
-        $used = Width::string(self::LABEL);
+        $used = Width::string(Lang::t(self::LABEL) . ' ');
         for ($i = $start; $i < $total; $i++) {
             $add = ($shown > 0 ? Width::string(self::SEPARATOR) : 0) + Width::string($labels[$i]);
             $left = $total - ($shown + 1);
-            $more = $left > 0 ? Width::string(self::SEPARATOR . '+' . $left . ' more') : 0;
+            $more = $left > 0 ? Width::string(self::more($left)) : 0;
             if ($used + $add + $more > $width) {
                 break;
             }
@@ -211,12 +220,12 @@ final class AgentStrip
      */
     private static function fits(array $labels, int $from, int $to, int $width, int $after): bool
     {
-        $used = Width::string(self::LABEL);
+        $used = Width::string(Lang::t(self::LABEL) . ' ');
         for ($i = $from; $i <= $to; $i++) {
             $used += ($i > $from ? Width::string(self::SEPARATOR) : 0) + Width::string($labels[$i]);
         }
         if ($after > 0) {
-            $used += Width::string(self::SEPARATOR . '+' . $after . ' more');
+            $used += Width::string(self::more($after));
         }
 
         return $used <= $width;

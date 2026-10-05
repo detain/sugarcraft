@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui\Components;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Host\TurnRunner;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Todo\TodoList;
 use SugarCraft\Crush\Todo\TodoReminder;
 use SugarCraft\Crush\Todo\TodoStatus;
@@ -39,8 +40,8 @@ final class TodoPane
     /** Cells the border (2) plus the horizontal padding (2) cost per row. */
     private const CHROME_COLS = 4;
 
-    /** Shown while the session has no list. */
-    public const EMPTY_TEXT = '(no todo list yet)';
+    /** Lang key of the text shown while the session has no list. */
+    public const EMPTY_TEXT = 'tui.todo.empty';
 
     public static function render(App $a, int $width, int $rows): string
     {
@@ -49,11 +50,11 @@ final class TodoPane
         $labelWidth = max(1, $width - self::CHROME_COLS);
         $todos = self::todos($a);
 
-        $title = ' ' . Pane::Todo->icon() . ' todo ';
+        $title = ' ' . Pane::Todo->icon() . ' ' . Lang::t('tui.pane.title.todo') . ' ';
         if ($todos->isEmpty()) {
-            $body = Style::new()->foreground($theme->shellMuted)->render(Width::truncate(self::EMPTY_TEXT, $labelWidth));
+            $body = Style::new()->foreground($theme->shellMuted)->render(Width::truncate(Lang::t(self::EMPTY_TEXT), $labelWidth));
         } else {
-            $title = ' ' . Pane::Todo->icon() . ' todo ' . $todos->countOf(TodoStatus::Completed) . '/' . $todos->count() . ' ';
+            $title = ' ' . Pane::Todo->icon() . ' ' . Lang::t('tui.pane.title.todo') . ' ' . $todos->countOf(TodoStatus::Completed) . '/' . $todos->count() . ' ';
             $items = $todos->items();
 
             // Keep the item being worked on in view on a list longer than

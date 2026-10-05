@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Sessions\BackgroundSession;
 use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 use SugarCraft\Crush\Tui\AgentDisplayState;
@@ -96,10 +97,10 @@ final class AgentDashboardPane
      * {@see group()} returns.
      */
     private const GROUP_LABELS = [
-        'working'     => 'Working',
-        'needs-input' => 'Needs input',
-        'ready'       => 'Ready',
-        'completed'   => 'Completed',
+        'working'     => 'tui.dashboard.group.working',
+        'needs-input' => 'tui.dashboard.group.needs_input',
+        'ready'       => 'tui.dashboard.group.ready',
+        'completed'   => 'tui.dashboard.group.completed',
     ];
 
     /**
@@ -308,7 +309,7 @@ final class AgentDashboardPane
             $lines[] = Style::new()
                 ->bold()
                 ->foreground(AgentViewPane::statusColor($members[0][1]->status, $theme))
-                ->render(self::GROUP_LABELS[$groupId] . ' (' . count($members) . ')');
+                ->render(Lang::t(self::GROUP_LABELS[$groupId]) . ' (' . count($members) . ')');
 
             foreach ($members as [$index, $entry]) {
                 $lines[] = self::row($index, $entry, $a->selectedAgentIndex === $index, $inner, $theme);
@@ -418,7 +419,7 @@ final class AgentDashboardPane
             $line .= Style::new()
                 ->foreground($theme->shellWarning)
                 ->bold()
-                ->render("  \u{26A0} stalled");
+                ->render("  \u{26A0} " . Lang::t('tui.agents.stalled'));
         }
 
         return Width::string($line) > $inner ? Width::truncateAnsi($line, $inner) : $line;
@@ -441,7 +442,7 @@ final class AgentDashboardPane
         $hidden = count($lines) - count($kept);
         $trailer = Style::new()
             ->foreground($theme->shellMuted)
-            ->render('… ' . $hidden . ' more');
+            ->render(Lang::t('tui.agents.more_hidden', ['count' => $hidden]));
 
         $kept[] = Width::string($trailer) > $inner ? Width::truncateAnsi($trailer, $inner) : $trailer;
 
@@ -460,7 +461,7 @@ final class AgentDashboardPane
         // `$inner + AgentViewPane::CHROME_WIDTH` cells wide too. That is why
         // one subtraction in render() covers both of this pane's paths.
         $style = Style::new()
-            ->border(Border::rounded()->withTitle(' agents '))
+            ->border(Border::rounded()->withTitle(' ' . Lang::t('tui.pane.title.agents') . ' '))
             ->padding(0, 1)
             ->width($inner);
 

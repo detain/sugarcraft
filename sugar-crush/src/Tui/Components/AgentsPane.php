@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
@@ -66,7 +67,7 @@ final class AgentsPane
         $maxOffset = max(0, count($entries) - 1);
 
         if ($entries === []) {
-            $body = $muted->render('(no active agents)');
+            $body = $muted->render(Lang::t('tui.agents.none_active'));
             $keys[] = null;
         } else {
             // Same row-truncation idiom the dashboard applies at its own
@@ -77,7 +78,7 @@ final class AgentsPane
             $offset = min($a->paneScroll(self::SCROLL_ID), max(0, count($entries) - 1));
             $lines = [];
             if ($offset > 0) {
-                $lines[] = $muted->render(Width::truncate('↑ ' . $offset . ' more', $inner));
+                $lines[] = $muted->render(Width::truncate(Lang::t('tui.pane.scrolled_more', ['count' => $offset]), $inner));
                 $keys[] = null;
             }
 
@@ -98,7 +99,7 @@ final class AgentsPane
                 if ($entry->key === null || !$a->isAgentExpanded($entry->key)) {
                     continue;
                 }
-                $detail = $entry->outputBuffer === [] ? ['(no activity yet)'] : array_slice($entry->outputBuffer, -self::DETAIL_LINES);
+                $detail = $entry->outputBuffer === [] ? [Lang::t('tui.agents.no_activity')] : array_slice($entry->outputBuffer, -self::DETAIL_LINES);
                 foreach ($detail as $text) {
                     if (count($lines) >= $budget - 1) {
                         break;
@@ -110,14 +111,14 @@ final class AgentsPane
 
             $hidden = count($entries) - $offset - $shown;
             if ($hidden > 0) {
-                $lines[] = $muted->render('… +' . $hidden . ' more');
+                $lines[] = $muted->render(Lang::t('tui.pane.more_below', ['count' => $hidden]));
                 $keys[] = null;
             }
             $body = implode("\n", $lines);
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Agents->icon() . ' agents '))
+            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Agents->icon() . ' ' . Lang::t('tui.pane.title.agents') . ' '))
             ->padding(0, 1)
             ->width($width);
 

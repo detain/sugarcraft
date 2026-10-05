@@ -23,6 +23,7 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\CloseAgentViewMsg;
 use SugarCraft\Crush\Events\SubAgentActivity;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\OpenAgentViewMsg;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -238,7 +239,7 @@ final class AgentViewTest extends TestCase
         $frame = self::plain($attached);
         $this->assertStringContainsString('main ▸ stage-1', $frame);
         $this->assertStringContainsString('stage-1', $frame);
-        $this->assertStringNotContainsString(AgentViewHeader::NO_TRANSCRIPT, $frame, 'its live pane, not an empty view');
+        $this->assertStringNotContainsString(Lang::t(AgentViewHeader::NO_TRANSCRIPT), $frame, 'its live pane, not an empty view');
 
         // Esc from the dashboard while attached detaches the view too.
         [$dash] = $attached->withPane(Pane::Agents)->update(new KeyMsg(KeyType::Escape));

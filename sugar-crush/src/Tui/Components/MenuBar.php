@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Commands\CommandRegistry;
@@ -281,7 +282,7 @@ final class MenuBar
         }
 
         $current = Style::new()->foreground($theme->shellWarning)
-            ->render(($density === self::DENSITY_TERSE ? '' : 'Currently: ') . $a->pane->label());
+            ->render($density === self::DENSITY_TERSE ? $a->pane->label() : Lang::t('tui.menu.currently', ['pane' => $a->pane->label()]));
 
         return $tabs . ' ' . $current;
     }
@@ -520,7 +521,7 @@ final class MenuBar
         /** @var list<string> $labels menus() yields display labels already */
         $labels = array_values(array_map(static fn(mixed $i): string => (string) $i, $menus[$name]));
         if ($labels === []) {
-            $labels = ['(empty)'];
+            $labels = [Lang::t('tui.menu.empty')];
         }
 
         $inner = max(array_map(static fn(string $l): int => Width::string($l), $labels));

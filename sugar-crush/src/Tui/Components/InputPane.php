@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
@@ -18,10 +19,10 @@ final class InputPane
 
         $theme = $a->theme();
         $placeholder = Style::new()->foreground($theme->shellMuted)
-            ->render('Type your message... (Enter to send, Ctrl+G for group)');
+            ->render(Lang::t('tui.input.placeholder'));
 
         $st = Style::new()
-            ->border(Border::normal()->withTitle(' input '))
+            ->border(Border::normal()->withTitle(' ' . Lang::t('tui.pane.title.input') . ' '))
             ->padding(0, 1)
             ->width($width);
 

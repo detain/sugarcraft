@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Theme;
 
@@ -108,7 +109,27 @@ final class AgentStatusBar
      */
     private static function bracket(string $status): string
     {
-        return '[' . $status . ']';
+        return '[' . self::statusLabel($status) . ']';
+    }
+
+    /**
+     * The on-screen word for an operational status. The status itself stays
+     * the canonical English id {@see STATUS_TOKEN} and {@see statusColor()}
+     * key on; only what the row says is translated. An id this map does not
+     * know is shown as it came.
+     */
+    public static function statusLabel(string $status): string
+    {
+        return match (strtolower(trim($status))) {
+            'working' => Lang::t('tui.agent.status.working'),
+            'waiting' => Lang::t('tui.agent.status.waiting'),
+            'streaming' => Lang::t('tui.agent.status.streaming'),
+            'pending' => Lang::t('tui.agent.status.pending'),
+            'failed' => Lang::t('tui.agent.status.failed'),
+            'completed' => Lang::t('tui.agent.status.completed'),
+            'stopped' => Lang::t('tui.agent.status.stopped'),
+            default => $status,
+        };
     }
 
     /**

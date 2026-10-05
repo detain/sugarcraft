@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
@@ -60,9 +61,9 @@ final class SkillsPane
                     ));
             }
             $body = implode("\n", $lines);
-            $title = ' ' . \SugarCraft\Crush\Tui\Pane::Skills->icon() . ' select a skill ';
+            $title = ' ' . \SugarCraft\Crush\Tui\Pane::Skills->icon() . ' ' . Lang::t('tui.skills.select_title') . ' ';
         } else {
-            $title = ' ' . \SugarCraft\Crush\Tui\Pane::Skills->icon() . ' skills ';
+            $title = ' ' . \SugarCraft\Crush\Tui\Pane::Skills->icon() . ' ' . Lang::t('tui.pane.title.skills') . ' ';
             $enabled = $a->enabledSkills;
 
             if ($enabled !== []) {
@@ -83,7 +84,7 @@ final class SkillsPane
 
                 if ($available === []) {
                     $body = Style::new()->foreground($theme->shellMuted)
-                        ->render('(no skills enabled)');
+                        ->render(Lang::t('tui.skills.none_enabled'));
                 } else {
                     $lines = [];
                     foreach ($available as $skill) {

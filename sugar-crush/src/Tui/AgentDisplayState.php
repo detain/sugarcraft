@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Util\TokenCount;
 
 /**
@@ -82,9 +83,9 @@ class AgentDisplayState
      */
     public function usageDisplay(): string
     {
-        $tok = TokenCount::compact($this->tokensUsed) . ' tok';
+        $tok = Lang::t('tui.agent.tokens', ['count' => TokenCount::compact($this->tokensUsed)]);
         if ($this->contextTokens > 0) {
-            $tok .= ' · ' . TokenCount::compact($this->contextTokens) . ' ctx';
+            $tok .= ' · ' . Lang::t('tui.agent.context_tokens', ['count' => TokenCount::compact($this->contextTokens)]);
         }
 
         // No dollar figure when nothing was billed: a backend with no pricing

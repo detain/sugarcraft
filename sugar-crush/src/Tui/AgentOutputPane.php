@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Theme;
@@ -69,7 +70,7 @@ final class AgentOutputPane
         // "● name  [status]  model  tok | $cost  ⚠ stalled"
         $dot     = Style::new()->foreground($agentColor)->render("\u{25CF}");
         $name    = Style::new()->bold()->foreground($agentColor)->render($state->name);
-        $status  = Style::new()->foreground($agentColor)->render('[' . $state->status . ']');
+        $status  = Style::new()->foreground($agentColor)->render('[' . AgentStatusBar::statusLabel($state->status) . ']');
         $model   = Style::new()->foreground($theme->shellInfo)->render($state->model);
         $usage   = Style::new()->foreground($theme->shellMuted)->render($state->usageDisplay());
         $header  = "{$dot} {$name} {$status}  {$model}  {$usage}";
@@ -78,7 +79,7 @@ final class AgentOutputPane
             $stallIndicator = Style::new()
                 ->foreground($stallColor)
                 ->bold()
-                ->render('  ⚠ stalled');
+                ->render('  ⚠ ' . Lang::t('tui.agents.stalled'));
             $header .= $stallIndicator;
         }
 
@@ -118,7 +119,7 @@ final class AgentOutputPane
         if ($hidden > 0) {
             $bodyLines[] = Style::new()
                 ->foreground($theme->shellMuted)
-                ->render('  + ' . $hidden . ' more line(s)…');
+                ->render('  ' . Lang::t('tui.agent.more_lines', ['count' => $hidden]));
         }
 
         $body = implode("\n", $bodyLines);
@@ -163,10 +164,10 @@ final class AgentOutputPane
         // Footer: line count when buffer exceeds visible area.
         $footerParts = [];
         if (count($lines) > $outputRows) {
-            $footerParts[] = 'lines: ' . count($lines);
+            $footerParts[] = Lang::t('tui.agent.line_count', ['count' => count($lines)]);
         }
         if (count($lines) > 0) {
-            $footerParts[] = 'showing last ' . count($visibleLines);
+            $footerParts[] = Lang::t('tui.agent.showing_last', ['count' => count($visibleLines)]);
         }
         $footerLine = '';
         if ($footerParts !== []) {

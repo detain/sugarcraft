@@ -10,6 +10,7 @@ use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Host\TurnRunner;
 use SugarCraft\Crush\Host\WorkspaceContext;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Todo\TodoItem;
@@ -34,7 +35,7 @@ final class TodoPaneTest extends TestCase
         $plain = self::plain(TodoPane::render(self::app([]), 30, 8));
 
         $this->assertStringContainsString(Pane::Todo->icon() . ' todo', $plain);
-        $this->assertStringContainsString(TodoPane::EMPTY_TEXT, $plain);
+        $this->assertStringContainsString(Lang::t(TodoPane::EMPTY_TEXT), $plain);
     }
 
     public function testTheListComesFromTheTranscriptsNewestCopy(): void

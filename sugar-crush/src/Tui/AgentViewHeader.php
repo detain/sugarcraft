@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Agents\Live\AgentLiveState;
 use SugarCraft\Crush\Events\SubAgentActivity;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Crush\Util\TokenCount;
@@ -46,20 +47,21 @@ final class AgentViewHeader
     /** The prefix of the header's own navigation zones ({@see BACK_ZONE}). */
     public const NAV_ZONE_PREFIX = 'agent-nav:';
 
-    public const CRUMB = 'main';
+    /** Lang key of the breadcrumb back to the parent transcript. */
+    public const CRUMB = 'tui.agent_view.crumb';
 
     public const ARROW = ' ▸ ';
 
     public const SEPARATOR = ' · ';
 
-    /** The key that leaves the view, said on the row itself. */
-    public const HINT = 'esc back';
+    /** Lang key of the key that leaves the view, said on the row itself. */
+    public const HINT = 'tui.agent_view.hint';
 
-    /** What the view shows for a worker that wrote no transcript of its own. */
-    public const NO_TRANSCRIPT = 'No transcript was recorded for this run — live transcripts need ext-pcntl and a saved session.';
+    /** Lang key of what the view shows for a worker that wrote no transcript of its own. */
+    public const NO_TRANSCRIPT = 'tui.agent_view.no_transcript';
 
-    /** What it shows before the run's log has its first line. */
-    public const WAITING = 'Waiting for the agent\'s first step…';
+    /** Lang key of what it shows before the run's log has its first line. */
+    public const WAITING = 'tui.agent_view.waiting';
 
     /** The same charset {@see Mark} accepts for an id. */
     private const ZONE_ID_CHARSET = '/\A[A-Za-z0-9._:-]+\z/';
@@ -94,12 +96,12 @@ final class AgentViewHeader
 
         $name = PaneLabel::safe($name);
         if ($name === '') {
-            $name = 'agent';
+            $name = Lang::t('tui.agent.unnamed');
         }
 
         $at = $state === null ? -1 : array_search($state->id, $siblings, true);
         $at = \is_int($at) ? $at : -1;
-        $counter = \count($siblings) > 1 && $at >= 0 ? sprintf('‹ %d of %d ›', $at + 1, \count($siblings)) : '';
+        $counter = \count($siblings) > 1 && $at >= 0 ? '‹ ' . Lang::t('tui.agent_view.counter', ['at' => $at + 1, 'count' => \count($siblings)]) . ' ›' : '';
 
         $status = '';
         $glyph = '';
@@ -110,22 +112,25 @@ final class AgentViewHeader
             $status = self::statusWord($state);
             // Display order; each carries its drop rank (lowest goes first).
             if ($state->maxSteps > 0 || $state->step > 0) {
-                $figures[] = [1, $state->maxSteps > 0 ? "step {$state->step}/{$state->maxSteps}" : "step {$state->step}"];
+                $figures[] = [1, $state->maxSteps > 0
+                    ? Lang::t('tui.agent_view.step_of', ['step' => $state->step, 'max' => $state->maxSteps])
+                    : Lang::t('tui.agent_view.step', ['step' => $state->step])];
             }
             $elapsed = $state->elapsed($now);
             if ($elapsed !== null) {
                 $figures[] = [3, self::clock($elapsed)];
             }
             if ($state->tokens() > 0) {
-                $figures[] = [2, TokenCount::compact($state->tokens()) . ' tok'];
+                $figures[] = [2, Lang::t('tui.agent.tokens', ['count' => TokenCount::compact($state->tokens())])];
             }
             if ($state->costUsd > 0.0) {
                 $figures[] = [0, sprintf('$%.4f', $state->costUsd)];
             }
         }
 
-        $hint = self::HINT;
-        $crumb = self::CRUMB . self::ARROW;
+        $hint = Lang::t(self::HINT);
+        $crumbText = Lang::t(self::CRUMB);
+        $crumb = $crumbText . self::ARROW;
         $layout = static function (array $figures, string $hint, string $counter) use ($crumb, $glyph, $status): int {
             $cells = Width::string($crumb);
             if ($counter !== '') {
@@ -171,14 +176,14 @@ final class AgentViewHeader
         $room = $width - $layout($figures, $hint, $counter);
         if ($room < 1) {
             // Too narrow for the crumb and one cell of name: the plain row, cut.
-            return Width::truncate(self::CRUMB . self::ARROW . $name, $width);
+            return Width::truncate($crumbText . self::ARROW . $name, $width);
         }
         if (Width::string($name) > $room) {
             $name = Width::truncate($name, $room);
         }
 
         $dim = Style::new()->foreground($theme->systemLabel);
-        $crumbPainted = Style::new()->foreground($theme->assistantLabel)->underline()->render(self::CRUMB);
+        $crumbPainted = Style::new()->foreground($theme->assistantLabel)->underline()->render($crumbText);
         if ($zones) {
             $crumbPainted = Mark::zone(self::BACK_ZONE, $crumbPainted);
         }
@@ -207,18 +212,18 @@ final class AgentViewHeader
     public static function statusWord(AgentLiveState $state): string
     {
         if ($state->isQueued()) {
-            return 'queued';
+            return Lang::t('tui.agent.queued');
         }
         if (!$state->isFinished()) {
-            return 'running';
+            return Lang::t('tui.agent.running');
         }
 
         return match ($state->outcome) {
-            SubAgentActivity::OUTCOME_COMPLETE => 'done',
-            SubAgentActivity::OUTCOME_CANCELLED => 'cancelled',
-            SubAgentActivity::OUTCOME_EMPTY => 'stopped without a report',
-            SubAgentActivity::OUTCOME_BACKGROUNDED => 'in the background',
-            default => 'failed',
+            SubAgentActivity::OUTCOME_COMPLETE => Lang::t('tui.agent.outcome.done'),
+            SubAgentActivity::OUTCOME_CANCELLED => Lang::t('tui.agent.outcome.cancelled'),
+            SubAgentActivity::OUTCOME_EMPTY => Lang::t('tui.agent.outcome.empty'),
+            SubAgentActivity::OUTCOME_BACKGROUNDED => Lang::t('tui.agent.outcome.in_background'),
+            default => Lang::t('tui.agent.outcome.failed'),
         };
     }
 
