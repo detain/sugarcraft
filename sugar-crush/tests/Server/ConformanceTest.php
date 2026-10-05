@@ -420,6 +420,32 @@ final class ConformanceTest extends TestCase
         );
     }
 
+    public function testATodoCallIsBroadcastAsTodoUpdatedAndTodoGetFollowsIt(): void
+    {
+        $client = $this->fixture->client();
+        $sessionId = $this->fixture->session($client);
+        $client->call('session.subscribe', ['sessionId' => $sessionId]);
+        $this->fixture->run();
+        $client->call('session.send', ['sessionId' => $sessionId, 'text' => 'plan it']);
+
+        $list = \SugarCraft\Crush\Todo\TodoList::fromToolArguments(['todos' => [
+            ['content' => 'write the parser', 'status' => 'in_progress'],
+            ['content' => 'test it', 'status' => 'pending'],
+        ]]);
+        $this->fixture->backend->emit(new ToolStarted('td1', 'Todo', ['todos' => $list->toArray()]));
+        $this->fixture->backend->emit(new ToolFinished('td1', 'Todo', new EngineToolResult('td1', \SugarCraft\Crush\Tools\BuiltIn\Todo::UPDATED . "\n\n" . $list->render())));
+        $this->fixture->run(0.08);
+        $this->fixture->backend->settle(Message::assistant('planned'));
+        $this->fixture->run();
+
+        $events = $client->events('todo.updated');
+        self::assertCount(1, $events);
+        self::assertTrue($events[0]['durable']);
+        self::assertIsInt($events[0]['seq']);
+        self::assertSame(['toolCallId' => 'td1', 'items' => $list->toArray()], $events[0]['data']);
+        self::assertSame(['items' => $list->toArray()], $client->call('todo.get', ['sessionId' => $sessionId]));
+    }
+
     public function testRequestsPastTheBurstAreRateLimited(): void
     {
         $client = $this->fixture->client();

@@ -65,6 +65,7 @@ final class EventType
         SessionEvent::SUBAGENT_PROGRESS => [false, self::SCOPE_SESSION, 'A delegated sub-agent made progress.'],
         SessionEvent::SUBAGENT_FINISHED => [true, self::SCOPE_SESSION, 'A delegated sub-agent finished.'],
         SessionEvent::USAGE_UPDATED => [true, self::SCOPE_SESSION, 'Token and cost usage changed.'],
+        SessionEvent::TODO_UPDATED => [true, self::SCOPE_SESSION, 'A Todo call rewrote the session\'s todo list; carries the whole list.'],
         SessionEvent::SPEND_CAP_BREACHED => [true, self::SCOPE_SESSION, 'The session spend cap stopped the turn.'],
         SessionEvent::COMPACTION_COMPLETED => [true, self::SCOPE_SESSION, 'The history was compacted before a turn.'],
         self::SESSION_CREATED => [false, self::SCOPE_SERVER, 'A session was created.'],

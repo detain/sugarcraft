@@ -146,6 +146,13 @@ final class EventSchemas
                 'after' => Schema::integer(0),
                 'savedPct' => Schema::number(0),
             ], ['kind', 'before', 'after']),
+            E::TODO_UPDATED => Schema::object([
+                'toolCallId' => Schema::string(),
+                'items' => Schema::arrayOf(Schema::object([
+                    'content' => Schema::string(),
+                    'status' => Schema::enum(\SugarCraft\Crush\Todo\TodoStatus::values()),
+                ], ['content', 'status'])),
+            ], ['items']),
             BackgroundEvents::STARTED => Schema::ref(D::BACKGROUND_SESSION),
             BackgroundEvents::STATUS => Schema::object([
                 'bgId' => Schema::string(),

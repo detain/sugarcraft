@@ -470,6 +470,7 @@ one re-reads what it describes (`session.list`, `permission.pending`).
 | `subagent.finished` | session | durable | A delegated sub-agent finished. |
 | `subagent.progress` | session | live | A delegated sub-agent made progress. |
 | `subagent.started` | session | durable | A delegated sub-agent started. |
+| `todo.updated` | session | durable | A Todo call rewrote the session's todo list; carries the whole list. |
 | `tool.finished` | session | durable | A tool call finished (content capped; tool.output has the rest). |
 | `tool.started` | session | durable | A tool call started. |
 | `turn.completed` | session | durable | A turn ended, with its stopReason. |

@@ -719,7 +719,8 @@ final class TurnRunner
      * the turn's session's list and saved — or null for any other event: a
      * different tool, a call that failed (the list did not change), a result
      * a hook replaced so it no longer carries the rendering, or a turn this
-     * runner did not start.
+     * runner did not start. An applied list is also recorded as the session's
+     * durable `todo.updated` event.
      */
     public function observeTodo(?CancellationToken $turn, ToolFinished $event): ?TodoUpdated
     {
@@ -733,8 +734,19 @@ final class TurnRunner
         }
 
         $this->saveTodos($state['transcripts'], $state['sessionId'], $todos);
+        $updated = new TodoUpdated($event->toolCallId, $todos, $state['sessionId']);
 
-        return new TodoUpdated($event->toolCallId, $todos, $state['sessionId']);
+        // Roadmap 3.C (with O-6c): the new list is broadcast as the durable
+        // `todo.updated`, so a web client's todo panel follows the turn live
+        // and a reconnecting one replays the latest list. Recorded as the
+        // frame arrives — ahead of the call's own `tool.finished`, which the
+        // host records when it folds the row.
+        $this->record($state, SessionEvent::new(SessionEvent::TODO_UPDATED, [
+            'toolCallId' => $updated->toolCallId,
+            'items' => $todos->toArray(),
+        ], $state['sessionId'], $state['turnId']));
+
+        return $updated;
     }
 
     // ── what the caller folded ─────────────────────────────────────────

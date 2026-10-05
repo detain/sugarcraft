@@ -3700,6 +3700,45 @@
                 ]
             }
         },
+        "todo.updated": {
+            "description": "A Todo call rewrote the session's todo list; carries the whole list.",
+            "durable": true,
+            "scope": "session",
+            "data": {
+                "type": "object",
+                "properties": {
+                    "toolCallId": {
+                        "type": "string"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "content": {
+                                    "type": "string"
+                                },
+                                "status": {
+                                    "enum": [
+                                        "pending",
+                                        "in_progress",
+                                        "completed",
+                                        "cancelled"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "content",
+                                "status"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            }
+        },
         "tool.finished": {
             "description": "A tool call finished (content capped; tool.output has the rest).",
             "durable": true,

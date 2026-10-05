@@ -57,6 +57,7 @@ final class SessionEvent
     public const TURN_DEQUEUED = 'turn.dequeued';
     public const TURN_STEERED = 'turn.steered';
     public const COMPACTION_COMPLETED = 'compaction.completed';
+    public const TODO_UPDATED = 'todo.updated';
 
     /**
      * The types Appendix O §6.5 marks durable (D) among those this package
@@ -80,6 +81,7 @@ final class SessionEvent
         self::TURN_DEQUEUED,
         self::TURN_STEERED,
         self::COMPACTION_COMPLETED,
+        self::TODO_UPDATED,
     ];
 
     /** `turn.completed`'s `stopReason` values (Appendix O §6.5). */

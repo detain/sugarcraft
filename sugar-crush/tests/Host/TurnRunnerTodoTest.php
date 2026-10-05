@@ -79,6 +79,42 @@ final class TurnRunnerTodoTest extends TestCase
         $this->assertTrue(TurnRunner::new()->todos($transcripts, 's')->equals(self::list()), 'a fresh runner reads it back');
     }
 
+    public function testAnAppliedListIsBroadcastAsADurableTodoUpdatedEvent(): void
+    {
+        [, $transcripts] = $this->store();
+        $runner = TurnRunner::new();
+        $heard = [];
+        $runner->listen(static function (\SugarCraft\Crush\Host\SessionEvent $event) use (&$heard): void {
+            $heard[] = $event;
+        });
+
+        $this->runTurn($runner, $transcripts, 's', [self::todoCall('t1', self::list()->toArray()), new CompleteResponse(content: 'planned')]);
+
+        $todo = array_values(array_filter($heard, static fn ($e): bool => $e->type === \SugarCraft\Crush\Host\SessionEvent::TODO_UPDATED));
+        $this->assertCount(1, $todo, 'one event per applied list');
+        $this->assertTrue($todo[0]->isDurable());
+        $this->assertNotNull($todo[0]->seq, 'logged before it was heard, so a reconnecting client replays it');
+        $this->assertSame('s', $todo[0]->sessionId);
+        $this->assertNotNull($todo[0]->turnId);
+        $this->assertSame(['toolCallId' => 't1', 'items' => self::list()->toArray()], $todo[0]->data);
+        $logged = $transcripts->events()?->since('s', 0) ?? [];
+        $this->assertContains(\SugarCraft\Crush\Host\SessionEvent::TODO_UPDATED, array_column($logged, 'type'));
+    }
+
+    public function testARefusedTodoCallIsNotBroadcast(): void
+    {
+        $runner = TurnRunner::new();
+        $heard = [];
+        $runner->listen(static function (\SugarCraft\Crush\Host\SessionEvent $event) use (&$heard): void {
+            $heard[] = $event->type;
+        });
+
+        $twoActive = [['content' => 'a', 'status' => 'in_progress'], ['content' => 'b', 'status' => 'in_progress']];
+        $this->runTurn($runner, null, null, [self::todoCall('t1', $twoActive), new CompleteResponse(content: 'oops')]);
+
+        $this->assertNotContains(\SugarCraft\Crush\Host\SessionEvent::TODO_UPDATED, $heard);
+    }
+
     public function testWithoutAStoreTheRunnerHoldsEachSessionsList(): void
     {
         $runner = TurnRunner::new();
