@@ -608,10 +608,11 @@ final class CommandLoader
 
     private static function debugRefusalsRequested(): bool
     {
-        $value = getenv(self::DEBUG_REFUSALS_ENV);
-
-        // Same flag-variable convention every other SUGARCRUSH_* switch uses:
-        // unset, empty and `0` all read as off.
-        return $value !== false && $value !== '' && $value !== '0';
+        // The variable decides when it says anything (`0` off, anything else
+        // on); unset or empty leaves it to the `debug.commands` setting.
+        return \SugarCraft\Crush\Config\Settings\DebugFlags::requested(
+            getenv(self::DEBUG_REFUSALS_ENV),
+            \SugarCraft\Crush\Config\Settings\DebugFlags::COMMANDS,
+        );
     }
 }

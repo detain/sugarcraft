@@ -7,13 +7,17 @@ namespace SugarCraft\Crush\Tests\Config\Settings;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Commands\CommandLoader;
+use SugarCraft\Crush\Config\Settings\DebugFlags;
 use SugarCraft\Crush\Config\Settings\SessionSettings;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\UiSettings;
+use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Permissions\PermissionDecision;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\SafetyClassifier;
+use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\Tui\TerminalBackground;
@@ -238,6 +242,48 @@ final class OperatorSettingsTest extends TestCase
             self::assertFalse(Bootstrap::mcpDisabled(), 'and has no word that turns it back on');
         } finally {
             putenv($was === false ? Bootstrap::MCP_DISABLE_ENV : Bootstrap::MCP_DISABLE_ENV . '=' . $was);
+        }
+    }
+
+    // ── the debug flags ─────────────────────────────────────────────────
+
+    public function testADebugFlagIsTheSettingUnlessTheVariableSaysAnything(): void
+    {
+        self::assertFalse(DebugFlags::requested(false, DebugFlags::SKILLS), 'off by default');
+
+        $this->writeConfig([DebugFlags::SKILLS => true]);
+        self::assertTrue(DebugFlags::requested(false, DebugFlags::SKILLS));
+        self::assertTrue(DebugFlags::requested('', DebugFlags::SKILLS), 'an empty variable is unset');
+        self::assertFalse(DebugFlags::requested('0', DebugFlags::SKILLS), 'a 0 variable wins');
+        self::assertFalse(DebugFlags::requested(false, DebugFlags::RULES), 'each flag is its own key');
+        self::assertTrue(DebugFlags::requested('1', DebugFlags::RULES));
+    }
+
+    public function testEveryLoaderReadsItsFlagThroughTheSetting(): void
+    {
+        $vars = [SkillLoader::DEBUG_SKIPS_ENV, CommandLoader::DEBUG_REFUSALS_ENV, RuleLoader::DEBUG_RULES_REFUSALS_ENV];
+        $was = array_map(static fn (string $v): string|false => getenv($v), $vars);
+        foreach ($vars as $v) {
+            putenv($v);
+        }
+        try {
+            $this->writeConfig([DebugFlags::SKILLS => true, DebugFlags::COMMANDS => true, DebugFlags::RULES => true]);
+            foreach ([
+                [SkillLoader::class, 'debugSkipsRequested'],
+                [CommandLoader::class, 'debugRefusalsRequested'],
+                [RuleLoader::class, 'debugRefusalsRequested'],
+            ] as [$class, $method]) {
+                self::assertTrue((new \ReflectionMethod($class, $method))->invoke(null), "{$class} follows its debug.* setting");
+                self::assertSame($class . '::' . $method, SettingsSchema::byKey(match ($class) {
+                    SkillLoader::class => DebugFlags::SKILLS,
+                    CommandLoader::class => DebugFlags::COMMANDS,
+                    default => DebugFlags::RULES,
+                })?->readerSymbol);
+            }
+        } finally {
+            foreach ($vars as $i => $v) {
+                putenv($was[$i] === false ? $v : $v . '=' . $was[$i]);
+            }
         }
     }
 

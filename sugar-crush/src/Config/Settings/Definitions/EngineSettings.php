@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Config\Settings\Definitions;
 
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\Settings\ApplyMode;
+use SugarCraft\Crush\Config\Settings\DebugFlags;
 use SugarCraft\Crush\Config\Settings\RiskClass;
 use SugarCraft\Crush\Config\Settings\SettingCategory;
 use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\Validator\ThresholdOrderValidator;
+use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Providers\CustomProvider;
 use SugarCraft\Crush\Providers\TransientFailure;
+use SugarCraft\Crush\Skills\SkillLoader;
 
 /**
  * The "Advanced" category's keys: the engine's watchdog, retry and transport
@@ -117,6 +121,40 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withHelp('Sampling temperature the `custom` provider sends when a request names none.')
                 ->withReaderSymbol(CustomProvider::class . '::temperature')
                 ->withReadBy('`CustomProvider::complete()`, `completeStream()` → `temperature()`'),
+            // Roadmap N-P4g: the `debug.*` flags, the persistent spelling of
+            // the SUGARCRUSH_DEBUG_* switches ({@see DebugFlags}). Off by
+            // default — each writes to stderr under the TUI's alternate screen
+            // — and user tier only: a diagnostic switch is the operator's.
+            SettingDefinition::new(DebugFlags::SKILLS, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Advanced)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnvVar(SkillLoader::DEBUG_SKIPS_ENV)
+                ->withLabel('Debug: skill loading')
+                ->withHelp('Put each skipped skill file and refused skills directory on stderr, not only the launch\'s one-line count.')
+                ->withReaderSymbol(SkillLoader::class . '::debugSkipsRequested')
+                ->withReadBy('`SkillLoader` (each skip, at launch) → `debugSkipsRequested()` → `DebugFlags::requested()`'),
+            SettingDefinition::new(DebugFlags::COMMANDS, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Advanced)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnvVar(CommandLoader::DEBUG_REFUSALS_ENV)
+                ->withLabel('Debug: command loading')
+                ->withHelp('Put each refused custom-command directory or file on stderr, not only the launch\'s one-line count.')
+                ->withReaderSymbol(CommandLoader::class . '::debugRefusalsRequested')
+                ->withReadBy('`CommandLoader::report()` → `debugRefusalsRequested()` → `DebugFlags::requested()`'),
+            SettingDefinition::new(DebugFlags::RULES, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Advanced)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnvVar(RuleLoader::DEBUG_RULES_REFUSALS_ENV)
+                ->withLabel('Debug: rule loading')
+                ->withHelp('Put each refused rules directory or file on stderr.')
+                ->withReaderSymbol(RuleLoader::class . '::debugRefusalsRequested')
+                ->withReadBy('`RuleLoader::report()` → `debugRefusalsRequested()` → `DebugFlags::requested()`'),
         ];
     }
 }

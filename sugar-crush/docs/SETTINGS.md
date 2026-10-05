@@ -277,10 +277,13 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `connectTimeoutSeconds` | `HttpClientDefaults::connectTimeoutSeconds()`, when a provider client is built | yes |
 | `providerRetryAttempts` | `Runtime::runStreaming()`, `runBatch()`, `AgentManager::executeSubAgent()` → `TransientFailure::maxAttempts()` | yes |
 | `providerRetryBaseBackoffMs` | `TransientFailure::backoff()` → `baseBackoffMicroseconds()` | yes |
+| `debug.skills` | `SkillLoader` (each skip, at launch) → `debugSkipsRequested()` → `DebugFlags::requested()` | **no** |
+| `debug.commands` | `CommandLoader::report()` → `debugRefusalsRequested()` → `DebugFlags::requested()` | **no** |
+| `debug.rules` | `RuleLoader::report()` → `debugRefusalsRequested()` → `DebugFlags::requested()` | **no** |
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and one, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and four, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -1111,6 +1114,9 @@ project-settable.
 | `providerRetryAttempts` | Advanced | int | `3` | P U C | — | next turn | tuning |
 | `providerRetryBaseBackoffMs` | Advanced | int | `500` | P U C | — | next turn | tuning |
 | `temperature` | Advanced | number | unset (`0.7`) | C | — | next turn | tuning |
+| `debug.skills` | Advanced | bool | `false` | U C | `SUGARCRUSH_DEBUG_SKILLS` | restart | cosmetic |
+| `debug.commands` | Advanced | bool | `false` | U C | `SUGARCRUSH_DEBUG_COMMANDS` | restart | cosmetic |
+| `debug.rules` | Advanced | bool | `false` | U C | `SUGARCRUSH_DEBUG_RULES` | restart | cosmetic |
 <!-- settings:end -->
 
 ## Saving from the settings view
@@ -1204,7 +1210,7 @@ Saved is not applied: see the next section for when each key takes effect.
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
-| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `maxCostUsd`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `maxCostUsd`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
@@ -1345,14 +1351,14 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only fifteen of the one hundred and one layered keys have
-  an env override (`provider`, `models`, `titleModel`, `summaryModel`,
+  They do not cover it: only eighteen of the one hundred and four layered keys
+  have an env override (`provider`, `models`, `titleModel`, `summaryModel`,
   `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`,
   `webSearchEndpoint`, `terminalBackground`, `mouse`, `mouseClicks`,
-  `sessionRetentionDays`, `mcp.enabled`, `connectTimeoutSeconds`).
-  `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`,
-  `compaction.reminderPercent`, `compaction.autoPercent`,
-  `compaction.blockPercent`, `compaction.keepRecent`,
+  `sessionRetentionDays`, `mcp.enabled`, `connectTimeoutSeconds`, `debug.skills`,
+  `debug.commands`, `debug.rules`). `maxOutputTokens`, `modelPrices`, `extraBody`,
+  `thinkingBudget`, `maxToolSteps`, `compaction.reminderPercent`,
+  `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
   `compaction.toolOutputChars`, `compaction.reminderTokens`,
   `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,

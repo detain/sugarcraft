@@ -574,6 +574,9 @@ final class LayeredSettings
         'connectTimeoutSeconds',
         'providerRetryAttempts',
         'providerRetryBaseBackoffMs',
+        'debug.skills',
+        'debug.commands',
+        'debug.rules',
         // settings:layered-keys:end
     ];
 
