@@ -6233,10 +6233,10 @@ final class Renderer
                 \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME => Lang::t('tui.permission.lead_answer'),
                 \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME => Lang::t('tui.permission.lead_feedback'),
                 default => Lang::t('tui.permission.lead_refusal'),
-            } . ' ';
+            };
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
-                self::wrapPermissionText($lead . ($note === '' ? Lang::t('tui.permission.type_a_note') : $note), $inner),
+                self::wrapPermissionText($lead . ' ' . ($note === '' ? Lang::t('tui.permission.type_a_note') : $note), $inner),
             );
         }
 
