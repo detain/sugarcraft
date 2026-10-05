@@ -5305,6 +5305,10 @@ final class Renderer
      * Other values are clipped to {@see INVOCATION_VALUE_MAX_LINES} lines,
      * because they are where a whole file body travels (`Write`'s `content`,
      * `Edit`'s strings) and the diff below already shows that change.
+     * `ApplyPatch`'s `patch` goes further (roadmap 3.I-3): once the call
+     * landed, the result's per-file diff IS the patch, applied, so the patch
+     * text is left out rather than shown twice; a refused patch keeps it,
+     * since then it is the only record of what was asked.
      *
      * Model-authored, so every line is {@see untrusted()}-scrubbed and has its
      * tabs expanded before it reaches the frame.
@@ -5313,6 +5317,9 @@ final class Renderer
     {
         $args = $result->arguments;
         unset($args['description']);
+        if ($result->name === \SugarCraft\Crush\Tools\BuiltIn\ApplyPatch::NAME && $result->hasDiff()) {
+            unset($args['patch']);
+        }
         if ($args === []) {
             return '';
         }

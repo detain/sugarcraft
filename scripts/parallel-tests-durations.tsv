@@ -208,6 +208,7 @@ sugar-crush/tests/Backend/CancelSoftStopsAtBoundaryTest.php	1.500	4
 sugar-crush/tests/Chat/AutoCommitTurnTest.php	1.500	4
 sugar-crush/tests/Protocol/ProtocolSchemaDriftTest.php	1.500	7
 sugar-crush/tests/Tools/ToolCapSettingsTest.php	1.500	28
+sugar-crush/tests/Tools/BuiltIn/ApplyPatchTest.php	1.500	15
 sugar-crush/tests/Cli/BootstrapLaunchFormatConstantsTest.php	1.495	18
 sugar-crush/tests/BaseSystemPromptTest.php	1.486	28
 sugar-crush/tests/Workspace/WorkspaceCheckpointerTest.php	1.479	15
@@ -621,6 +622,7 @@ sugar-crush/tests/Context/Pruning/PathKeyedPruningTest.php	0.070	5
 sugar-crush/tests/Providers/FallbackProviderTest.php	0.070	20
 sugar-crush/tests/Cli/SessionEndHookTest.php	0.070	4
 sugar-crush/tests/Context/Sections/PlanModeSectionTest.php	0.070	4
+sugar-crush/tests/Permissions/ApplyPatchPermissionTest.php	0.070	6
 sugar-crush/tests/Hooks/RuntimeHookInputEncodingTest.php	0.069	6
 sugar-crush/tests/Backend/PendingAskTest.php	0.069	13
 sugar-crush/tests/Providers/ProviderFactoryTest.php	0.067	100
@@ -683,6 +685,7 @@ sugar-crush/tests/Config/ServerProtocolDocumentationDriftTest.php	0.050	5
 sugar-crush/tests/Tools/BuiltIn/PruneToolTest.php	0.050	8
 sugar-crush/tests/Renderer/PruneBadgeTest.php	0.050	2
 sugar-crush/tests/Tools/BuiltIn/TodoToolTest.php	0.050	15
+sugar-crush/tests/Tools/Edit/PatchParserTest.php	0.050	16
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5

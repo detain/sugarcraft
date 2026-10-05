@@ -889,7 +889,7 @@ it runs only once the rest of the chain has permitted that output — see
 
 | Hook | Event | What it does |
 |---|---|---|
-| `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files; asks for the rest — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
+| `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|ApplyPatch\|Read\|Grep\|Glob\|Lsp\|mcp__.*)$` | denies secret and policy files; asks for the rest — see [below](#what-protect-files-covers) and [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
 | `AuditHook` | `PostToolUse`, matcher `.*` | appends every call — and every refused or withheld one, see [below](#what-the-audit-log-records) — to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
@@ -1211,6 +1211,7 @@ the default on every path. Now:
 |---|---|
 | `Bash` | the raw `command` **and** its quote-removed words and redirection targets (`Permissions\ShellWords`), so `cat '.env'`, `cat .e''nv` and `cat < .git/"config"` are denied like their plain spellings |
 | `Read`, `Edit`, `Write` | `file_path`, as given and canonicalised (symlinks resolved) |
+| `ApplyPatch` | every path the patch adds, updates, moves to or deletes, each as given and canonicalised — one protected file among ten refuses the whole call; a patch that does not parse is matched as its raw text |
 | `Grep` | `path` (canonicalised) and `include` — not `pattern`, which is the text searched for |
 | `Glob` | `path` (canonicalised) and `pattern` — `**/.env*` is refused; a `**/*` listing that happens to include `.env` is not, because naming a file is not reading it |
 | `Lsp` | `path`, canonicalised |
@@ -1221,7 +1222,7 @@ policy patterns (`.sugar-crush/hooks.yaml`, `config.json` and `agents/`, plus
 `.git/hooks/` and `.git/info/`, which are denied; and the always-asked rest —
 `settings.json`, `settings.local.json`, the `skills/`, `commands/`, `rules/`
 and `workflows/` directories, `.mcp.json`, and the `.claude/` / `.opencode/`
-skill, agent and command trees); `Bash` and MCP tools get the full list — so
+skill, agent and command trees); `Bash`, the write tools and MCP tools get the full list — so
 `cat .git/hooks/pre-commit` in `Bash` is refused, and `cat .mcp.json` asks,
 where `Read` of either file is not. The asked rows are a hook's `ask()`, put to
 you in every permission mode; a deny-class match in the same call wins.

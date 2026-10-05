@@ -666,11 +666,12 @@ final class Runtime
      * so the name belongs here rather than on the read-only list, where the
      * direct-call scanner would see nothing and pass for the wrong reason.
      * `Workflow` (roadmap 4.10-2) joined on the same judgement: its stage
-     * agents run the session's write tools.
+     * agents run the session's write tools. `ApplyPatch` (roadmap 3.I-3) is
+     * `Edit` and `Write` across several files at once.
      *
      * @var list<string>
      */
-    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'Edit', 'Write', 'Task', 'Workflow'];
+    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

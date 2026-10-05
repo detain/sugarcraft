@@ -730,6 +730,9 @@ final class ReadPathCensusTest extends TestCase
         'Support/ToolIpcFiles.php|glob' => [
             'SELF_LOCATED — sweeps this package\'s own IPC prefixes, uid-checked per entry',
         ],
+        'Tools/BuiltIn/ApplyPatch.php|file_get_contents' => [
+            'PATH_JAIL — every Update/Delete path is resolved through PathJail (or the worktree jail) before the read',
+        ],
         'Tools/BuiltIn/Edit.php|file_get_contents' => [
             'PATH_JAIL — the model\'s path, resolved through PathJail before the read',
         ],

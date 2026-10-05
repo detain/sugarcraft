@@ -42,7 +42,7 @@ final class ProtectFilesHookTest extends TestCase
     {
         $hook = new ProtectFilesHook();
 
-        $this->assertSame('^(Bash|Edit|Write|Read|Grep|Glob|Lsp|mcp__.*)$', $hook->matcher());
+        $this->assertSame('^(Bash|Edit|Write|ApplyPatch|Read|Grep|Glob|Lsp|mcp__.*)$', $hook->matcher());
     }
 
     // =========================================================================

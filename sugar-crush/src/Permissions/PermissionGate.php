@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Permissions;
 
 use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tools\BuiltIn\ApplyPatch;
 use SugarCraft\Crush\Tools\Catalog\ToolCatalog;
+use SugarCraft\Crush\Tools\Edit\PatchParser;
 use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
 use SugarCraft\Crush\Tools\McpToolBridge;
 
@@ -24,7 +26,8 @@ use SugarCraft\Crush\Tools\McpToolBridge;
  *
  * Four modes are implemented here (P2B.S2 + P2B.S3):
  * - Default:     reads silently; writes/networking (WebFetch included) Ask
- * - AcceptEdits: `Edit`/`Write` inside the project root and the create-only
+ * - AcceptEdits: `Edit`/`Write` inside the project root, an `ApplyPatch`
+ *                whose every path is, and the create-only
  *                shell primitives (`mkdir`/`touch`/`rmdir`) on contained
  *                paths auto-Allow; everything else — `rm`/`mv`/`cp`, WebFetch,
  *                protected and out-of-root paths — Ask (audit F-P4)
@@ -32,7 +35,8 @@ use SugarCraft\Crush\Tools\McpToolBridge;
  *                Markdown plan directly under {@see PLANS_DIR} Allow (roadmap
  *                5.7-1); every other `Bash` and every other write Deny
  * - Auto:        everything runs gated by SafetyClassifier (Bash by command,
- *                Edit/Write by path, WebFetch by what its URL carries), and
+ *                Edit/Write by path, ApplyPatch by its worst path, WebFetch
+ *                by what its URL carries), and
  *                `mcp__*` Asks unless its trusted server declared it
  *                read-only ({@see isReadOnlyMcpTool()}); 3-strike / 20-total
  *                circuit breaker
@@ -585,6 +589,16 @@ final class PermissionGate
                 : PermissionDecision::Ask;
         }
 
+        // Roadmap 3.I-3: a patch is granted only when EVERY path it adds,
+        // changes, moves to or deletes would be — one path outside or
+        // protected asks for the whole call, and so does a patch that does
+        // not parse (the tool will refuse it; nothing is lost by asking).
+        if ($call->name === ApplyPatch::NAME) {
+            return self::patchScope($call, $projectRoot) === WritePathScope::INSIDE
+                ? PermissionDecision::Allow
+                : PermissionDecision::Ask;
+        }
+
         // Create-only shell primitives (mkdir, touch, rmdir) on contained paths
         if ($this->isScopedWriteTool($call)) {
             return PermissionDecision::Allow;
@@ -600,6 +614,47 @@ final class PermissionGate
      * pins that against the schemas).
      */
     private const EDIT_TOOLS = ['Edit', 'Write'];
+
+    /**
+     * The worst {@see WritePathScope} among every path an `ApplyPatch` call
+     * touches: OUTSIDE over PROTECTED over INSIDE. A patch that does not parse
+     * names no provable path, so it is OUTSIDE — fail closed, as an absent
+     * `file_path` is for `Edit`.
+     */
+    private static function patchScope(ToolCall $call, ?string $projectRoot): string
+    {
+        $paths = PatchParser::paths($call->arguments['patch'] ?? null);
+        if ($paths === null || $paths === []) {
+            return WritePathScope::OUTSIDE;
+        }
+
+        $worst = WritePathScope::INSIDE;
+        foreach ($paths as $path) {
+            $scope = WritePathScope::of($path, $projectRoot);
+            if ($scope === WritePathScope::OUTSIDE) {
+                return WritePathScope::OUTSIDE;
+            }
+            if ($scope === WritePathScope::PROTECTED) {
+                $worst = WritePathScope::PROTECTED;
+            }
+        }
+
+        return $worst;
+    }
+
+    /**
+     * {@see SafetyClassifier}'s write categories for an `ApplyPatch` call,
+     * judged over every path ({@see patchScope()}) the way the classifier
+     * judges `Edit`'s one `file_path`.
+     */
+    private static function patchCategory(ToolCall $call, ?string $projectRoot): ?string
+    {
+        return match (self::patchScope($call, $projectRoot)) {
+            WritePathScope::INSIDE => null,
+            WritePathScope::PROTECTED => SafetyClassifier::CATEGORY_PROTECTED_PATH_WRITE,
+            default => SafetyClassifier::CATEGORY_OUTSIDE_ROOT_WRITE,
+        };
+    }
 
     /**
      * Auto: everything runs gated by SafetyClassifier; circuit breaker triggers Ask after
@@ -639,7 +694,11 @@ final class PermissionGate
             return $this->isReadOnlyTool($call) ? PermissionDecision::Allow : PermissionDecision::Ask;
         }
 
-        $category = $this->classifier->classify($call, $projectRoot);
+        // A patch writes several paths, and the classifier reads one
+        // `file_path`; the gate judges every path itself (roadmap 3.I-3).
+        $category = $call->name === ApplyPatch::NAME
+            ? self::patchCategory($call, $projectRoot)
+            : $this->classifier->classify($call, $projectRoot);
 
         // Action is safe — reset counters and allow
         if ($category === null) {
@@ -728,6 +787,15 @@ final class PermissionGate
         if (in_array($call->name, self::EDIT_TOOLS, true) && $argumentsKnown
             && self::isPlanFile($call->arguments['file_path'] ?? null, $projectRoot)) {
             return PermissionDecision::Allow;
+        }
+
+        // A patch every path of which is a plan file is the same one write.
+        if ($call->name === ApplyPatch::NAME && $argumentsKnown) {
+            $paths = PatchParser::paths($call->arguments['patch'] ?? null);
+            if ($paths !== null && $paths !== []
+                && array_filter($paths, static fn (string $p): bool => !self::isPlanFile($p, $projectRoot)) === []) {
+                return PermissionDecision::Allow;
+            }
         }
 
         if ($call->name === 'Bash') {

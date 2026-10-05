@@ -515,7 +515,7 @@ reason each stays out:
   `keywords:` / `description` triggers into its `Rule` object, and only the first is consulted.
   The `paths:` half shipped (P6.S5b): the splice in `Runtime::systemPromptSections()` skips every
   rule `RulePathNudge::isPathScoped()` claims, and `Bootstrap` wires `RulePathNudge` into Read,
-  Edit, Write, Glob and Grep, which deliver the rule in their tool output on the first touch of a
+  Edit, Write, ApplyPatch, Glob and Grep, which deliver the rule in their tool output on the first touch of a
   matching file. The nudge re-walks the rules on every consult, so a scoped rule added or edited
   mid-session is delivered too. The other two are not applied: `KeywordTrigger` and
   `IntentTrigger` have no consumer in `src/`, so a `keywords:`- or `description:`-only rule
@@ -540,7 +540,7 @@ How each user-facing surface reaches the model, and where it does not reach:
   (slots 6 and 8), except `paths:`-scoped ones, which enter tool output (next bullet).
 - **Triggers.** Built per rule; only `paths:` is applied. A `paths:`-scoped rule leaves the
   system prompt and reaches the model through `RulePathNudge`, inside the `<system-reminder>`
-  block that Read, Edit, Write, Glob and Grep append to their output when they touch a matching
+  block that Read, Edit, Write, ApplyPatch, Glob and Grep append to their output when they touch a matching
   file. `KeywordTrigger` and `IntentTrigger` have no consumer in `src/` — see the register above.
   The listing-and-selection trigger family for *skills* does ship: slot 11 exists so discovered
   skills are auto-triggerable through the `Skill` tool.

@@ -84,20 +84,23 @@ final class ToolDocGenerator
         $built = \count(ToolCatalog::built());
         $wired = \count(ToolCatalog::entries());
 
+        // `[\w-]+`, not `\w+`: past twenty a spelled count is hyphenated
+        // (`twenty-one`), and a `\w+` anchor stops matching the very figure
+        // it has just written.
         return [
-            [self::README, '/out of the (\w+) built-in tools the project tier can filter/', $built],
-            [self::README, '/names none of the (\w+) it removes/', $built - 1],
-            [self::README, '/all (\w+) filterable tools survive/', $built],
-            [self::SETTINGS, '/reaches the merge at all, and all (\w+) tools survive/', $built],
-            [self::SETTINGS, '/names none of the (\w+) tools it\s+removes/', $built - 1],
-            [self::SETTINGS, '/never reaches the merge — all (\w+) tools survive/', $built],
-            [self::ARCHITECTURE, '/holds \*\*(\w+)\*\* concrete `Tool` classes/', $wired],
+            [self::README, '/out of the ([\w-]+) built-in tools the project tier can filter/', $built],
+            [self::README, '/names none of the ([\w-]+) it removes/', $built - 1],
+            [self::README, '/all ([\w-]+) filterable tools survive/', $built],
+            [self::SETTINGS, '/reaches the merge at all, and all ([\w-]+) tools survive/', $built],
+            [self::SETTINGS, '/names none of the ([\w-]+) tools it\s+removes/', $built - 1],
+            [self::SETTINGS, '/never reaches the merge — all ([\w-]+) tools survive/', $built],
+            [self::ARCHITECTURE, '/holds \*\*([\w-]+)\*\* concrete `Tool` classes/', $wired],
             [self::ARCHITECTURE, '/Tools\\\\\*\s+(\d+) built-ins \+ MCP bridges/', $wired],
-            [self::ARCHITECTURE, '/`Bootstrap::tools\(\)` ships all (\w+) —/', $wired],
-            [self::ARCHITECTURE, '/\*\*(\w+) is the count of \*wired\* tools/', $wired],
-            [self::ARCHITECTURE, '/saying "(\w+) working tools"/', $wired],
-            [self::ARCHITECTURE, '/"(\w+) tools" means wired built-ins/', $wired],
-            [self::AGENTS_AUTHORING, '/ships (\w+)\s+built-in tools and one of them/', $wired],
+            [self::ARCHITECTURE, '/`Bootstrap::tools\(\)` ships all ([\w-]+) —/', $wired],
+            [self::ARCHITECTURE, '/\*\*([\w-]+) is the count of \*wired\* tools/', $wired],
+            [self::ARCHITECTURE, '/saying "([\w-]+) working tools"/', $wired],
+            [self::ARCHITECTURE, '/"([\w-]+) tools" means wired built-ins/', $wired],
+            [self::AGENTS_AUTHORING, '/ships ([\w-]+)\s+built-in tools and one of them/', $wired],
         ];
     }
 

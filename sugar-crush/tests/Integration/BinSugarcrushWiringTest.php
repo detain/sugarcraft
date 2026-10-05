@@ -17,6 +17,7 @@ use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
+use SugarCraft\Crush\Tools\BuiltIn\ApplyPatch;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
@@ -343,10 +344,10 @@ final class BinSugarcrushWiringTest extends TestCase
      * and fails HERE until someone adds it, which is exactly the moment to
      * decide whether it should have had the pair at all.
      */
-    public function testTheLoaderCarryingToolRosterIsExactlyTheFiveToolsThatDeclareIt(): void
+    public function testTheLoaderCarryingToolRosterIsExactlyTheSixToolsThatDeclareIt(): void
     {
         $this->assertSame(
-            [Edit::class, Glob::class, Grep::class, Read::class, Write::class],
+            [ApplyPatch::class, Edit::class, Glob::class, Grep::class, Read::class, Write::class],
             $this->loaderCarryingToolClasses(),
             'A tool gained or lost an $instructionLoader property. Widen or narrow this list '
             . 'deliberately — every other loader/nudge assertion in this file is derived from it.',

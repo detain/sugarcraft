@@ -5257,8 +5257,11 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsInt($end, 'no rule closes the section — the bullet window this arm reads became the page tail');
         $segment = self::markdownProse(substr($raw, $start, $end - $start));
 
-        self::assertSame(1, preg_match('/ships (\w+) built-in tools and one of them — `Task` — is exactly the delegation seam/', $segment, $word), 'the Task bullet no longer spells its built-in count beside the delegation sentence');
+        self::assertSame(1, preg_match('/ships ([\w-]+) built-in tools and one of them — `Task` — is exactly the delegation seam/', $segment, $word), 'the Task bullet no longer spells its built-in count beside the delegation sentence');
         $wordNumbers = ['ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20];
+        foreach (['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'] as $i => $unit) {
+            $wordNumbers['twenty-' . $unit] = 21 + $i;
+        }
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));
@@ -5271,7 +5274,7 @@ final class DocFigureProseDriftTest extends TestCase
         // spelled count from its own text and requires both to equal the
         // scandir, so neither page can drift alone again.
         $architecture = self::markdownProse((string) file_get_contents($root . '/docs/ARCHITECTURE.md'));
-        self::assertSame(1, preg_match('/holds \*\*(\w+)\*\* concrete `Tool` classes/', $architecture, $archWord), 'the ARCHITECTURE Tools sentence no longer spells its directory count beside the class list — re-anchor this agreement leg');
+        self::assertSame(1, preg_match('/holds \*\*([\w-]+)\*\* concrete `Tool` classes/', $architecture, $archWord), 'the ARCHITECTURE Tools sentence no longer spells its directory count beside the class list — re-anchor this agreement leg');
         self::assertArrayHasKey($archWord[1], $wordNumbers, "the ARCHITECTURE spelled count '{$archWord[1]}' is outside the pinned word map — extend it deliberately");
         self::assertSame($wordNumbers[$archWord[1]], count($files), 'ARCHITECTURE spelled a count the built-in directory no longer holds — flip the page and the census together');
         self::assertSame($wordNumbers[$word[1]], $wordNumbers[$archWord[1]], 'AGENTS_AUTHORING and ARCHITECTURE count src/Tools/BuiltIn/ differently — the two pages drifted apart');
@@ -6438,7 +6441,7 @@ final class DocFigureProseDriftTest extends TestCase
 
             self::assertGreaterThan(
                 0,
-                preg_match_all('/(?:wires `RulePathNudge` into|block that) ((?:[A-Z][a-z]+, )*[A-Z][a-z]+ and [A-Z][a-z]+)/', $prose, $toolLists),
+                preg_match_all('/(?:wires `RulePathNudge` into|block that) ((?:[A-Z][A-Za-z]+, )*[A-Z][A-Za-z]+ and [A-Z][A-Za-z]+)/', $prose, $toolLists),
                 "{$page} no longer names the tools RulePathNudge is wired into",
             );
             foreach ($toolLists[1] as $list) {

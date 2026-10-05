@@ -11,6 +11,7 @@ use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Permissions\ShellWords;
 use SugarCraft\Crush\Tools\Catalog\ToolCatalog;
 use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
+use SugarCraft\Crush\Tools\Edit\PatchParser;
 
 final readonly class ProtectFilesHook implements HookInterface
 {
@@ -323,6 +324,8 @@ final readonly class ProtectFilesHook implements HookInterface
      *    reading it.
      *  - `mcp__*`: an MCP server's semantics are opaque here — a filesystem
      *    server's `read_file {"path": ".env"}` is a Read by another name.
+     *  - `ApplyPatch` (roadmap 3.I-3): writes as `Edit`/`Write` do, to every
+     *    path its patch names.
      *
      * Matched case-insensitively ({@see \SugarCraft\Crush\Hooks\HookConfig::pattern()}
      * adds `i`), so `bash`/`grep` spellings are caught as before. WebFetch,
@@ -331,7 +334,7 @@ final readonly class ProtectFilesHook implements HookInterface
      */
     public function matcher(): string
     {
-        return '^(Bash|Edit|Write|Read|Grep|Glob|Lsp|mcp__.*)$';
+        return '^(Bash|Edit|Write|ApplyPatch|Read|Grep|Glob|Lsp|mcp__.*)$';
     }
 
     /**
@@ -451,6 +454,11 @@ final readonly class ProtectFilesHook implements HookInterface
      *    secret files; this half refuses the call that NAMES one.
      *  - `Glob`: `path` (canonicalised) and `pattern`.
      *  - `Lsp`: `path`, canonicalised.
+     *  - `ApplyPatch`: EVERY path the patch adds, updates, moves to or deletes
+     *    ({@see PatchParser::paths()}), each as given and canonicalised, so one
+     *    protected file among ten ordinary ones refuses the call. A patch that
+     *    does not parse is matched as its raw text — the tool will refuse it
+     *    anyway, and an unreadable patch naming `.env` is not waved through.
      *  - anything else (`mcp__*`): every string leaf of the DECODED arguments,
      *    at any depth, plus the shell spellings of each. Not the raw JSON
      *    `toolInput`: `json_encode()` escapes `/` as `\/`, so `.git/config`
@@ -472,6 +480,8 @@ final readonly class ProtectFilesHook implements HookInterface
             'Grep' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['include'] ?? null)],
             'Glob' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['pattern'] ?? null)],
             'Lsp' => self::pathSpellings($args['path'] ?? null),
+            // ucfirst(strtolower()) above spells `ApplyPatch` this way.
+            'Applypatch' => self::patchSpellings($args['patch'] ?? null),
             default => self::leafSpellings($args),
         };
     }
@@ -522,6 +532,27 @@ final readonly class ProtectFilesHook implements HookInterface
                 array_push($spellings, ...self::shellSpellings($leaf));
             }
         });
+
+        return $spellings === [] ? [''] : array_values(array_unique($spellings));
+    }
+
+    /**
+     * Every path of an `ApplyPatch` patch, as {@see pathSpellings()} spells
+     * each, or the raw patch when it does not parse.
+     *
+     * @return list<string>
+     */
+    private static function patchSpellings(mixed $patch): array
+    {
+        $paths = PatchParser::paths($patch);
+        if ($paths === null) {
+            return \is_string($patch) && $patch !== '' ? [$patch] : [''];
+        }
+
+        $spellings = [];
+        foreach ($paths as $path) {
+            array_push($spellings, ...self::pathSpellings($path));
+        }
 
         return $spellings === [] ? [''] : array_values(array_unique($spellings));
     }

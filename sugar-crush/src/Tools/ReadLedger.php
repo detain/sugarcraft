@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools;
 
+use SugarCraft\Crush\Tools\BuiltIn\ApplyPatch;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\Write;
@@ -29,9 +30,10 @@ use SugarCraft\Crush\Tools\Catalog\ToolBuildContext;
  * WHAT IS RECORDED, AND WHEN.
  *  - {@see Read} records the file it paged, hashing the very bytes its
  *    line-count pass read ({@see observe()}).
- *  - {@see Edit} and {@see Write} record the bytes they wrote
- *    ({@see record()}), so the model's own change never reads as somebody
- *    else's on its next call.
+ *  - {@see Edit}, {@see Write} and {@see ApplyPatch} record the bytes they
+ *    wrote ({@see record()}), so the model's own change never reads as
+ *    somebody else's on its next call; a file ApplyPatch deleted or moved
+ *    away is dropped ({@see forget()}).
  * A file the model never read has no entry and is never refused: staleness
  * is about a picture going out of date, not a read-before-write rule.
  *
@@ -118,7 +120,7 @@ final class ReadLedger
     public static function in(iterable $tools): ?self
     {
         foreach ($tools as $tool) {
-            if (($tool instanceof Read || $tool instanceof Edit || $tool instanceof Write) && $tool->readLedger() !== null) {
+            if (($tool instanceof Read || $tool instanceof Edit || $tool instanceof Write || $tool instanceof ApplyPatch) && $tool->readLedger() !== null) {
                 return $tool->readLedger();
             }
         }
@@ -151,6 +153,15 @@ final class ReadLedger
         }
         $hash = $bytes !== null ? hash(self::ALGO, $bytes) : self::hashFile($key, (int) $stat['size']);
         $this->put($key, ['mtime' => (int) $stat['mtime'], 'size' => (int) $stat['size'], 'ino' => (int) $stat['ino'], 'hash' => $hash, 'at' => microtime(true)]);
+    }
+
+    /**
+     * Drop $path: the model itself deleted or moved it ({@see ApplyPatch}), so
+     * its absence is not a change somebody else made behind its back.
+     */
+    public function forget(string $path): void
+    {
+        unset($this->entries[self::key($path)], $this->entries[$path]);
     }
 
     /** Whether the model has seen $path this session. */

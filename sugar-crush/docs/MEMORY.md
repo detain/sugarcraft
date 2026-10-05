@@ -670,8 +670,8 @@ An alias is only another candidate name: it passes the same containment gate,
 size ceiling, UTF-8 scrub, `@import` expansion and dedup set as `CLAUDE.md`. A
 `.clinerules` *directory* (Cline's folder form) is not read.
 
-`Bootstrap::tools()` threads **one** loader into `Read`, `Edit`, `Glob`, `Grep`
-and `Write` so the engine's root reads and the tools' on-touch reads share one
+`Bootstrap::tools()` threads **one** loader into `Read`, `Edit`, `Glob`, `Grep`,
+`Write` and `ApplyPatch` so the engine's root reads and the tools' on-touch reads share one
 dedup map. Handing them separate loaders would emit the same bytes twice.
 
 Every one of those reads, and every `@import`, is scrubbed to valid UTF-8 as it
