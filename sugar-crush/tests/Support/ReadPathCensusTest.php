@@ -337,6 +337,11 @@ final class ReadPathCensusTest extends TestCase
                 . '~/.sugar-crush, deliberately NOT dirname(userConfigPath()) and so not '
                 . 'relocatable by --config',
         ],
+        'Context/Compaction/ReinjectionPlan.php|file_get_contents' => [
+            'CONTAINED — renderFiles() (roadmap 2.6): a file the conversation\'s Read/Edit/Write calls '
+                . 'touched, re-read after a compaction only when ContainedPath::below() holds it under the '
+                . 'project root; size-capped, never binary',
+        ],
         'Context/ImportResolver.php|file_get_contents' => [
             'CALLER_SUPPLIED — an `@file` import, judged by the $boundaryCheck callback the caller '
                 . 'supplies (InstructionFileLoader passes one built on ContainedPath)',
@@ -535,6 +540,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'from a hand-written one; never returned or rendered',
             'SELF_LOCATED — a scope index this store wrote',
             'SELF_LOCATED — an entry this store wrote',
+        ],
+        'Protocol/Methods/AgentsMethods.php|fopen' => [
+            'CALLER_SUPPLIED — `agents.transcript` (roadmap O-6c): a sub-agent transcript log, opened only '
+                . 'after SubAgentTranscriptLog::isLogPath() held the announced path under the transcript root, '
+                . 'or the path forRun() builds there; read in bounded pages',
         ],
         'Protocol/Methods/FilesMethods.php|file_get_contents' => [
             'PATH_JAIL — `files.read` (roadmap O-3b): a path a server client named, resolved through '

@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Support;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Support\PrivateRetainedDir;
 use SugarCraft\Crush\Support\ToolOutputSpill;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Tools\ToolResult;
 
 /**
@@ -20,6 +21,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  */
 final class ToolOutputSpillTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $sandbox;
 
     protected function setUp(): void
@@ -247,15 +250,13 @@ final class ToolOutputSpillTest extends TestCase
         self::assertSame($medium, ToolOutputSpill::forModel($medium, 'Bash', [], 'sess', $window, 30), 'under 30% of the window');
         self::assertNotSame($medium, ToolOutputSpill::forModel($medium, 'Bash', [], 'sess', $window, 5), 'over 5% of it: previewed');
 
-        $home = sys_get_temp_dir() . '/sc_spill_share_' . bin2hex(random_bytes(4));
-        $prior = getenv('HOME');
+        $home = $this->useHomeSandbox(sys_get_temp_dir() . '/sc_spill_share_' . bin2hex(random_bytes(4)));
         mkdir($home . '/.sugar-crush', 0o700, true);
         file_put_contents($home . '/.sugar-crush/config.json', json_encode([\SugarCraft\Crush\Tools\ToolLimits::SPILL_WINDOW_PERCENT_KEY => 5]));
-        putenv('HOME=' . $home);
         try {
             self::assertNotSame($medium, ToolOutputSpill::forModel($medium, 'Bash', [], 'sess', $window), 'the saved 5% applies');
         } finally {
-            $prior === false ? putenv('HOME') : putenv('HOME=' . $prior);
+            $this->restoreHomeSandbox();
             @unlink($home . '/.sugar-crush/config.json');
             @rmdir($home . '/.sugar-crush');
             @rmdir($home);

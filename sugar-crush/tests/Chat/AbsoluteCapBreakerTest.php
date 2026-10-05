@@ -28,11 +28,11 @@ use SugarCraft\Crush\Message;
  */
 final class AbsoluteCapBreakerTest extends TestCase
 {
-    private const MILLION = 1_000_000;
+    private const ONE_M_WINDOW = 1_000_000;
 
     public function testAnOversizedKeptTailNeverTripsTheBreaker(): void
     {
-        $main = self::backend(self::MILLION);
+        $main = self::backend(self::ONE_M_WINDOW);
         $summarizer = self::summarizer();
         $chat = new Chat(
             history: self::heavyTail(),
@@ -61,7 +61,7 @@ final class AbsoluteCapBreakerTest extends TestCase
      */
     public function testAMillionTokenSessionCompactsAtTheCap(): void
     {
-        $main = self::backend(self::MILLION);
+        $main = self::backend(self::ONE_M_WINDOW);
         $summarizer = self::summarizer();
         $chat = new Chat(
             history: self::condensable(),

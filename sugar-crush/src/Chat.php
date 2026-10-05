@@ -10749,6 +10749,29 @@ final class Chat implements Model
     }
 
     /**
+     * `queueMode: interrupt` (roadmap N-P4g): stop the running turn at its
+     * next step boundary — and the call running now, as the first `Esc`
+     * does (roadmap 1.C-4) — then send $text as the next turn. The text is
+     * queued, so the turn's own settle releases it; a turn that reports no
+     * steps cannot stop softly and simply runs on with the message queued.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function interruptWithPrompt(string $text): array
+    {
+        if ($this->liveStep() !== null) {
+            $this->inFlightCancellation?->cancelSoft();
+            foreach ($this->history as $message) {
+                if ($message->pendingToolCallId !== null) {
+                    $this->inFlightCancellation?->cancelTool($message->pendingToolCallId);
+                }
+            }
+        }
+
+        return $this->enqueuePrompt($text);
+    }
+
+    /**
      * Hold a prompt the user sent while a turn was running, to be dispatched by
      * {@see releaseQueuedPrompts()} when that turn ends.
      *
@@ -10774,29 +10797,6 @@ final class Chat implements Model
      *
      * @return array{0:self,1:?\Closure}
      */
-    /**
-     * `queueMode: interrupt` (roadmap N-P4g): stop the running turn at its
-     * next step boundary — and the call running now, as the first `Esc`
-     * does (roadmap 1.C-4) — then send $text as the next turn. The text is
-     * queued, so the turn's own settle releases it; a turn that reports no
-     * steps cannot stop softly and simply runs on with the message queued.
-     *
-     * @return array{0: self, 1: ?\Closure}
-     */
-    private function interruptWithPrompt(string $text): array
-    {
-        if ($this->liveStep() !== null) {
-            $this->inFlightCancellation?->cancelSoft();
-            foreach ($this->history as $message) {
-                if ($message->pendingToolCallId !== null) {
-                    $this->inFlightCancellation?->cancelTool($message->pendingToolCallId);
-                }
-            }
-        }
-
-        return $this->enqueuePrompt($text);
-    }
-
     private function enqueuePrompt(string $text): array
     {
         $queue = [...$this->queuedPrompts, $text];

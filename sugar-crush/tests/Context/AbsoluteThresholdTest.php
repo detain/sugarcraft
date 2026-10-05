@@ -32,12 +32,6 @@ final class AbsoluteThresholdTest extends TestCase
         return [['role' => 'user', 'content' => str_repeat('a', $tokens * 4)]];
     }
 
-    /**
-     * N-P4b (a user decision): the reminder and automatic tiers carry their
-     * absolute caps by default — 100k and 150k — and the blocking tier, the
-     * one that refuses, does not. "Configured" stays false: a per-model
-     * override that leaves a cap out still inherits these.
-     */
     /** The percentage-only config every tier was before 2.9 / N-P4b. */
     private static function uncapped(): CompactorConfig
     {
@@ -66,6 +60,12 @@ final class AbsoluteThresholdTest extends TestCase
         return $history;
     }
 
+    /**
+     * N-P4b (a user decision): the reminder and automatic tiers carry their
+     * absolute caps by default — 100k and 150k — and the blocking tier, the
+     * one that refuses, does not. "Configured" stays false: a per-model
+     * override that leaves a cap out still inherits these.
+     */
     public function testTheDefaultsCapTheReminderAndAutoTiersButNotTheBlockingTier(): void
     {
         $config = CompactorConfig::new();

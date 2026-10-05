@@ -8,12 +8,15 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\ScriptHook;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * @see HookConfig
  */
 final class HookConfigTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $tempDir;
 
     protected function setUp(): void
@@ -654,15 +657,13 @@ YAML;
             $this->assertSame(ScriptHook::DEFAULT_TIMEOUT_SECONDS, ScriptHook::defaultTimeoutSeconds([ScriptHook::DEFAULT_TIMEOUT_SETTING => $refused]), var_export($refused, true));
         }
 
-        $home = $this->tempDir . '/home';
-        $prior = getenv('HOME');
+        $home = $this->useHomeSandbox($this->tempDir . '/home');
         mkdir($home . '/.sugar-crush', 0o700, true);
         file_put_contents($home . '/.sugar-crush/config.json', json_encode([ScriptHook::DEFAULT_TIMEOUT_SETTING => 20]));
-        putenv('HOME=' . $home);
         try {
             $result = HookConfig::parse("hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n    - name: h\n      command: 'h.sh'\n      timeout: 5\n");
         } finally {
-            $prior === false ? putenv('HOME') : putenv('HOME=' . $prior);
+            $this->restoreHomeSandbox();
             unlink($home . '/.sugar-crush/config.json');
             rmdir($home . '/.sugar-crush');
             rmdir($home);

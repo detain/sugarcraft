@@ -31,7 +31,7 @@ final class PlanModePlansDirExceptionTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->root !== '' && is_dir($this->root)) {
-            exec('rm -rf ' . escapeshellarg($this->root));
+            exec('rm -rf ' . escapeshellarg($this->root) . ' 2>&1');
         }
     }
 
@@ -107,7 +107,7 @@ final class PlanModePlansDirExceptionTest extends TestCase
                 $gate->evaluate(new ToolCall('Write', ['file_path' => '.sugar-crush/plans/retry.md']), $this->root),
             );
         } finally {
-            exec('rm -rf ' . escapeshellarg($outside));
+            exec('rm -rf ' . escapeshellarg($outside) . ' 2>&1');
         }
     }
 

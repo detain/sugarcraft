@@ -49,7 +49,7 @@ final class AgentViewShowsChildAskTest extends TestCase
     use \SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
     private const GENERATION = 3;
-    private const COLS = 120;
+    private const ASK_VIEW_COLS = 120;
     private const ROWS = 60;
 
     protected function setUp(): void
@@ -168,7 +168,7 @@ final class AgentViewShowsChildAskTest extends TestCase
         [$asking] = $chat->update(new ToolEventPumpMsg());
         [$app] = App::new($this->createMock(ProviderInterface::class), 'm')
             ->withChat($asking)
-            ->update(new WindowSizeMsg(self::COLS, self::ROWS));
+            ->update(new WindowSizeMsg(self::ASK_VIEW_COLS, self::ROWS));
 
         $inView = self::plain($app->openAgentView('run-2'));
         $this->assertStringContainsString('⏳ waiting on you: Bash(command: "rm -rf build") — answer it', $inView);
@@ -228,7 +228,7 @@ final class AgentViewShowsChildAskTest extends TestCase
             inFlight: true,
             generation: self::GENERATION,
             liveToolEvents: $inbox,
-        ))->withSize(self::COLS, self::ROWS);
+        ))->withSize(self::ASK_VIEW_COLS, self::ROWS);
 
         $tasks = ['run-1' => 'map the login flow', 'run-2' => 'look at the session layer'];
         foreach ($runs as $id) {

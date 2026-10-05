@@ -219,7 +219,7 @@ final class SubagentSettingsTest extends TestCase
 
             public function description(): string
             {
-                return 'answers';
+                return 'answers probed';
             }
 
             public function inputSchema(): array

@@ -127,6 +127,16 @@ final class ForkedChildReaperAdoptionTest extends TestCase
                 . 'nothing can ever reap, which is a lie about what the ledger is for.',
         ],
 
+        'Runtime/AgentHardCancelTest.php::execute' => [
+            'count' => 1,
+            'reason' =>
+                'The stub Task\'s grandchild (P-E1): forked inside the parallel member the '
+                . 'Runtime forked, to prove the member\'s SIGTERM stop reaches the run\'s own '
+                . 'children. That member leaves through ForkedChild::exitNow() without ever '
+                . 'running tearDown(), and execute() waitpid()s the grandchild itself before it '
+                . 'reports - a ledger entry there would name a pid nothing can reap.',
+        ],
+
         'Support/ReapsForkedChildrenTraitTest.php::forkSleeper' => [
             'count' => 1,
             'reason' =>

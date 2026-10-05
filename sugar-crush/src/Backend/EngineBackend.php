@@ -1110,12 +1110,6 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
-     * The same engine, delivering $inbox's messages into its turns at each
-     * step boundary — see {@see $turnInbox}. Bound by
-     * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} on the run it
-     * delegates; null takes it off.
-     */
-    /**
      * Roadmap 4.7-2 (Zed's sub-agent context guard): once a request this
      * backend's turn SENT used $percent of the context window or more, the
      * model is told once to wrap up or hand off; a request at
@@ -1128,6 +1122,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         return $this->mutate(['wrapUpAtPercent' => max(0, min(100, $percent))]);
     }
 
+    /**
+     * The same engine, delivering $inbox's messages into its turns at each
+     * step boundary — see {@see $turnInbox}. Bound by
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} on the run it
+     * delegates; null takes it off.
+     */
     public function withTurnInbox(?TurnInbox $inbox): self
     {
         return $this->mutate(['turnInbox' => $inbox]);

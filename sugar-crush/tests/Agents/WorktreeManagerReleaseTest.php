@@ -49,7 +49,7 @@ final class WorktreeManagerReleaseTest extends TestCase
             putenv($value === false ? $name : $name . '=' . $value);
         }
         if (isset($this->root) && is_dir($this->root)) {
-            exec('rm -rf ' . escapeshellarg($this->root));
+            exec('rm -rf ' . escapeshellarg($this->root) . ' 2>&1');
         }
     }
 

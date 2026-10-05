@@ -11,6 +11,7 @@ use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Context\Utf8Scrub;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Util\TokenEstimate;
@@ -405,7 +406,7 @@ final readonly class ReinjectionPlan
         $base = $root ?? (getcwd() ?: '.');
         $realRoot = realpath($base);
         $plansDir = $realRoot === false ? false : realpath($realRoot . '/' . \SugarCraft\Crush\Permissions\PermissionGate::PLANS_DIR);
-        if ($realRoot === false || $plansDir === false || !str_starts_with($plansDir, rtrim($realRoot, '/') . '/')) {
+        if ($realRoot === false || $plansDir === false || !ContainedPath::below($plansDir, $realRoot)) {
             return [null, $this->files];
         }
 
@@ -436,7 +437,6 @@ final readonly class ReinjectionPlan
         if ($realRoot === false) {
             return [[], []];
         }
-        $prefix = rtrim($realRoot, '/') . '/';
 
         $inlined = [];
         $referenced = [];
@@ -446,7 +446,7 @@ final readonly class ReinjectionPlan
             }
             $real = realpath(str_starts_with($path, '/') ? $path : $base . '/' . $path);
             // Gone, not a file, or outside the project: not re-read.
-            if ($real === false || !is_file($real) || !is_readable($real) || !str_starts_with($real, $prefix)) {
+            if ($real === false || !is_file($real) || !is_readable($real) || !ContainedPath::below($real, $realRoot)) {
                 continue;
             }
 

@@ -180,6 +180,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Commands/CommandLoader.php' => 2,
         'Commands/CommandSpec.php' => 1,
         'Config/LayeredSettings.php' => 2,
+        'Context/Compaction/ReinjectionPlan.php' => 2,
         'Context/InstructionFileLoader.php' => 7,
         'Context/ProjectMemoryWriter.php' => 1,
         'Context/RepoMapBlock.php' => 3,
@@ -340,7 +341,7 @@ final class ContainedPathInventoryTest extends TestCase
     {
         $words = [
             'ELEVEN' => 11, 'TWELVE' => 12, 'THIRTEEN' => 13, 'FOURTEEN' => 14,
-            'FIFTEEN' => 15, 'SIXTEEN' => 16, 'SEVENTEEN' => 17, 'EIGHTEEN' => 18, 'NINETEEN' => 19,
+            'FIFTEEN' => 15, 'SIXTEEN' => 16, 'SEVENTEEN' => 17, 'EIGHTEEN' => 18, 'NINETEEN' => 19, 'TWENTY' => 20,
             'TWENTY-SEVEN' => 27, 'TWENTY-EIGHT' => 28, 'TWENTY-NINE' => 29,
             'THIRTY' => 30, 'THIRTY-ONE' => 31, 'THIRTY-TWO' => 32,
             'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34, 'THIRTY-FIVE' => 35,
