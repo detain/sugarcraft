@@ -5066,7 +5066,7 @@ final class DocFigureProseDriftTest extends TestCase
         $seenExemptions = [];
 
         $pages = array_values(array_filter(scandir($root . '/docs') ?: [], static fn(string $f): bool => str_ends_with($f, '.md')));
-        self::assertCount(14, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+        self::assertCount(16, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
         $patterns = [
             '/[A-Za-z0-9_\/\\\\.\-]+\.php:[0-9]+(?:-[0-9]+)?/',
