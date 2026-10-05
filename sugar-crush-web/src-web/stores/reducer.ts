@@ -345,8 +345,20 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
     }
 
     case 'assistant.narration': {
+      // A narrated pane's tail (O-6a): it replaces the live text. With its
+      // byte `offset`, the deltas that follow once the pane is in front
+      // continue it exactly; a tail no newer than what is held is stale.
       const { data } = envelope as unknown as Ev<'assistant.narration'>
-      state.live = { partId: data.partId, bytes: 0, text: data.tail, gap: true }
+      if (typeof data.offset !== 'number') {
+        state.live = { partId: data.partId, bytes: 0, text: data.tail, gap: true }
+        break
+      }
+      const current = state.live !== null && state.live.partId === data.partId ? state.live : null
+      const end = data.offset + utf8Length(data.tail)
+      if (current !== null && end <= current.bytes) break
+      const start = current !== null ? current.bytes - utf8Length(current.text) : null
+      const continues = current !== null && !current.gap && start !== null && data.offset <= start
+      state.live = { partId: data.partId, bytes: end, text: data.tail, gap: data.offset > 0 && !continues }
       break
     }
 

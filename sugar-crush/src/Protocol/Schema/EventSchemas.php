@@ -89,7 +89,11 @@ final class EventSchemas
             ], ['stopReason']),
             E::ASSISTANT_DELTA => $delta,
             E::REASONING_DELTA => $delta,
-            EventType::ASSISTANT_NARRATION => Schema::object(['partId' => Schema::string(), 'tail' => Schema::string(4096)], ['partId', 'tail']),
+            EventType::ASSISTANT_NARRATION => Schema::object([
+                'partId' => Schema::string(),
+                'tail' => Schema::string(4096),
+                'offset' => Schema::integer(0)->describe('Byte offset into the part where the tail starts; the next delta continues at offset + its byte length.'),
+            ], ['partId', 'tail']),
             E::ASSISTANT_COMPLETED => Schema::object([
                 ...$row,
                 'content' => Schema::string(),
@@ -152,6 +156,13 @@ final class EventSchemas
             EventType::SESSION_CREATED => $summary,
             EventType::SESSION_UPDATED => $summary,
             EventType::SESSION_DELETED => Schema::object(['id' => Schema::ref(D::SESSION_ID)], ['id']),
+            EventType::PERMISSION_ASKED => D::all()[D::PENDING_ASK]->with(['sessionId' => Schema::ref(D::SESSION_ID)], ['sessionId']),
+            EventType::PERMISSION_SETTLED => Schema::object([
+                'sessionId' => Schema::ref(D::SESSION_ID),
+                'askId' => Schema::string(),
+                'reply' => Schema::enum(['once', 'always', 'reject']),
+                'cancelled' => Schema::boolean(),
+            ], ['sessionId', 'askId']),
             EventType::SERVER_TICK => Schema::object(['now' => Schema::integer(0), 'turnsRunning' => Schema::integer(0)], ['now', 'turnsRunning']),
             EventType::SERVER_SHUTDOWN => Schema::object(['reason' => Schema::string(), 'graceSeconds' => Schema::number(0)], ['reason', 'graceSeconds']),
             EventType::SERVER_OVERFLOW => Schema::object([

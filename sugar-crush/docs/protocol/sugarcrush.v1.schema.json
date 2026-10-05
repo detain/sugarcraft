@@ -943,11 +943,27 @@
                                 "type": "null"
                             }
                         ]
+                    },
+                    "narrate": {
+                        "type": "boolean",
+                        "description": "Narrate every followed session that is not in front, instead of streaming it."
                     }
                 }
             },
             "result": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                    "narrated": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/$defs/SessionId"
+                        },
+                        "description": "The followed sessions this client now hears as narration."
+                    }
+                },
+                "required": [
+                    "narrated"
+                ]
             }
         },
         "command.exec": {
@@ -2908,6 +2924,11 @@
                     "tail": {
                         "type": "string",
                         "maxLength": 4096
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Byte offset into the part where the tail starts; the next delta continues at offset + its byte length."
                     }
                 },
                 "required": [
@@ -3025,6 +3046,67 @@
                 ]
             }
         },
+        "permission.asked": {
+            "description": "A question was put in an open session: permission.requested with its sessionId, for every client, following the session or not.",
+            "durable": false,
+            "scope": "server",
+            "data": {
+                "type": "object",
+                "properties": {
+                    "askId": {
+                        "type": "string",
+                        "maxLength": 16
+                    },
+                    "toolCallId": {
+                        "type": "string"
+                    },
+                    "tool": {
+                        "type": "string"
+                    },
+                    "arguments": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "`gate`, or `hook:<names>`"
+                    },
+                    "mode": {
+                        "type": "string"
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {
+                            "enum": [
+                                "once",
+                                "always",
+                                "reject"
+                            ]
+                        }
+                    },
+                    "alwaysScope": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    }
+                },
+                "required": [
+                    "askId",
+                    "toolCallId",
+                    "tool",
+                    "arguments",
+                    "options",
+                    "sessionId"
+                ]
+            }
+        },
         "permission.requested": {
             "description": "A tool call is waiting for an answer (permission.respond).",
             "durable": true,
@@ -3058,6 +3140,36 @@
                     }
                 },
                 "required": [
+                    "askId"
+                ]
+            }
+        },
+        "permission.settled": {
+            "description": "A question of an open session was answered or cancelled (permission.resolved, for every client).",
+            "durable": false,
+            "scope": "server",
+            "data": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "askId": {
+                        "type": "string"
+                    },
+                    "reply": {
+                        "enum": [
+                            "once",
+                            "always",
+                            "reject"
+                        ]
+                    },
+                    "cancelled": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "sessionId",
                     "askId"
                 ]
             }
@@ -3199,7 +3311,7 @@
             }
         },
         "session.updated": {
-            "description": "A session was renamed or its mode changed.",
+            "description": "A session was renamed, its mode changed, or its status changed (idle, busy, waiting_permission).",
             "durable": false,
             "scope": "server",
             "data": {

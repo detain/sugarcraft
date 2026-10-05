@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouterHistory } from 'vue-router'
+import PaneGrid from './components/grid/PaneGrid.vue'
 import DashboardView from './views/DashboardView.vue'
 import LoginView from './views/LoginView.vue'
 import SessionView from './views/SessionView.vue'
@@ -6,6 +7,7 @@ import SessionView from './views/SessionView.vue'
 export const routes: RouteRecordRaw[] = [
   { path: '/', name: 'dashboard', component: DashboardView },
   { path: '/s/:id', name: 'session', component: SessionView, props: true },
+  { path: '/grid', name: 'grid', component: PaneGrid },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
 ]

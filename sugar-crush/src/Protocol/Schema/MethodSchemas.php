@@ -115,8 +115,11 @@ final class MethodSchemas
                 Schema::object([
                     'sessionIds' => Schema::arrayOf(Schema::ref(D::SESSION_ID), 50),
                     'foreground' => Schema::ref(D::SESSION_ID)->nullable(),
+                    'narrate' => Schema::boolean()->describe('Narrate every followed session that is not in front, instead of streaming it.'),
                 ]),
-                $empty,
+                Schema::object([
+                    'narrated' => Schema::arrayOf(Schema::ref(D::SESSION_ID))->describe('The followed sessions this client now hears as narration.'),
+                ], ['narrated']),
             ],
 
             'session.list' => [

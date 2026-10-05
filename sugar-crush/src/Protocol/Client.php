@@ -36,6 +36,8 @@ final class Client
 
     private ?string $foreground = null;
 
+    private bool $narrateBackground = false;
+
     private float $budget = self::RATE_BURST;
 
     private float $refilledAt;
@@ -114,14 +116,18 @@ final class Client
     }
 
     /**
-     * What the client says it is showing (`client.viewing`).
+     * What the client says it is showing (`client.viewing`), and whether the
+     * sessions it follows but does not have in front should be narrated
+     * rather than streamed (a multi-pane grid: one tile in focus, the rest
+     * glanced at — Appendix O §7.4).
      *
      * @param list<string> $sessionIds
      */
-    public function view(array $sessionIds, ?string $foreground): void
+    public function view(array $sessionIds, ?string $foreground, bool $narrateBackground = false): void
     {
         $this->viewing = $sessionIds;
         $this->foreground = $foreground;
+        $this->narrateBackground = $narrateBackground;
     }
 
     /** @return list<string> */
@@ -142,6 +148,22 @@ final class Client
         }
 
         return $this->viewing === [] || \in_array($sessionId, $this->viewing, true);
+    }
+
+    /** Whether this client asked for its background subscriptions to be narrated. */
+    public function narratesBackground(): bool
+    {
+        return $this->narrateBackground;
+    }
+
+    /**
+     * Whether $sessionId should reach this client as narration because the
+     * client asked so (`client.viewing` with `narrate`) and it is not in
+     * front. The soft watermark's own downgrade is the feed's to add.
+     */
+    public function wantsNarration(string $sessionId): bool
+    {
+        return $this->narrateBackground && !$this->isForeground($sessionId);
     }
 
     /**

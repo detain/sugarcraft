@@ -37,8 +37,21 @@ use SugarCraft\Crush\Permissions\PermissionReply;
  *
  * Also here: the per-question answer timeout (`server.askTimeoutSeconds`),
  * a delta's `partId` / `offset` (so a client can spot a dropped one), the
- * narration tail for narration subscriptions, and the live sub-agent tree
- * (`agents.subtree`).
+ * narration tail, and the live sub-agent tree (`agents.subtree`).
+ *
+ * NARRATION (Appendix O §6.9, roadmap O-6a). A subscriber hears an
+ * `assistant.narration` tail at most every 2 s instead of the deltas when it
+ * subscribed with `mode: "narration"`, when it said (`client.viewing` with
+ * `narrate`) that the session is a glanced-at pane rather than the one in
+ * front, or when its outbox is past the soft watermark and the session is not
+ * in front. The tail names the byte `offset` it starts at, so a pane brought
+ * to the front is handed the tail at once ({@see catchUp()}) and the deltas
+ * that follow continue it without a gap.
+ *
+ * EVERY EVENT IS ALSO OFFERED TO THE SERVER ($onHeard), which turns the few
+ * that matter beyond the session's own followers — a question put, a
+ * question settled, a status change — into server-scope events every client
+ * hears at once (the cross-session approvals drawer, the sidebar).
  *
  * MUTABLE ON PURPOSE: the live state of one session's fan-out.
  */
@@ -87,6 +100,8 @@ final class SessionFeed
 
     private string $narrationTail = '';
 
+    private ?string $narrationTurnId = null;
+
     private float $narratedAt = 0.0;
 
     private bool $hearing = false;
@@ -94,11 +109,15 @@ final class SessionFeed
     /** @var list<SessionEvent> events heard while one was being handled */
     private array $deferred = [];
 
+    /**
+     * @param (\Closure(SessionEvent): void)|null $onHeard
+     */
     private function __construct(
         private readonly SessionHost $host,
         private readonly LoopInterface $loop,
         private readonly float $askTimeoutSeconds,
         private readonly \Closure $clock,
+        private readonly ?\Closure $onHeard,
     ) {
         $this->status = $host->isBusy() ? self::STATUS_BUSY : self::STATUS_IDLE;
     }
@@ -108,10 +127,11 @@ final class SessionFeed
      *
      * @param float $askTimeoutSeconds 0 waits for an answer forever (§6.7)
      * @param (\Closure(): float)|null $clock
+     * @param (\Closure(SessionEvent): void)|null $onHeard told every event once its subscribers have it
      */
-    public static function attach(SessionHost $host, LoopInterface $loop, float $askTimeoutSeconds = 0.0, ?\Closure $clock = null): self
+    public static function attach(SessionHost $host, LoopInterface $loop, float $askTimeoutSeconds = 0.0, ?\Closure $clock = null, ?\Closure $onHeard = null): self
     {
-        $feed = new self($host, $loop, \max(0.0, $askTimeoutSeconds), $clock ?? static fn (): float => \microtime(true));
+        $feed = new self($host, $loop, \max(0.0, $askTimeoutSeconds), $clock ?? static fn (): float => \microtime(true), $onHeard);
         $feed->detach = $host->onEvent($feed->hear(...));
 
         return $feed;
@@ -155,6 +175,31 @@ final class SessionFeed
     public function subscriberCount(): int
     {
         return \count($this->subscribers);
+    }
+
+    /** Whether $client follows this session and hears it as narration right now. */
+    public function isNarratedFor(Client $client): bool
+    {
+        return isset($this->subscribers[$client->id()]) && $this->narrates($client->id());
+    }
+
+    /**
+     * Hand $client the reply streamed so far — its tail, at the byte offset it
+     * starts — now, unthrottled. Called when a pane comes to the front: the
+     * deltas that follow continue exactly where the tail ends.
+     *
+     * @return bool whether there was anything to hand
+     */
+    public function catchUp(Client $client): bool
+    {
+        $subscriber = $this->subscribers[$client->id()] ?? null;
+        $envelope = $this->narration();
+        if ($subscriber === null || !$subscriber['live'] || $envelope === null) {
+            return false;
+        }
+        $client->outbox()->pushEphemeral($envelope->notification());
+
+        return true;
     }
 
     /**
@@ -342,8 +387,11 @@ final class SessionFeed
         $this->hearing = true;
         try {
             $this->handle($event);
+            $this->offer($event);
             while ($this->deferred !== []) {
-                $this->handle(\array_shift($this->deferred));
+                $deferred = \array_shift($this->deferred);
+                $this->handle($deferred);
+                $this->offer($deferred);
             }
         } catch (\Throwable) {
             // A fan-out fault must never cost the session its listener; the
@@ -382,6 +430,20 @@ final class SessionFeed
         $this->derive($event);
     }
 
+    /** Offer $event to the server, which may tell every client about it. */
+    private function offer(SessionEvent $event): void
+    {
+        if ($this->onHeard === null) {
+            return;
+        }
+        try {
+            ($this->onHeard)($event);
+        } catch (\Throwable) {
+            // A broadcast fault is the server's; the session's own followers
+            // already have the event.
+        }
+    }
+
     /** The status, queue, timers and side tables an event implies. */
     private function derive(SessionEvent $event): void
     {
@@ -389,6 +451,7 @@ final class SessionFeed
             case SessionEvent::TURN_STARTED:
                 $this->offsets = [];
                 $this->narrationTail = '';
+                $this->narrationTurnId = $event->turnId;
                 $this->reconcileQueue();
                 $this->setStatus(self::STATUS_BUSY);
                 break;
@@ -438,6 +501,10 @@ final class SessionFeed
                 break;
 
             case SessionEvent::ASSISTANT_COMPLETED:
+            case SessionEvent::TOOL_STARTED:
+                // A client freezes the text streamed so far into a row at a
+                // tool call and lands the reply as one: the next tail starts
+                // after either, never repeating what is already a row.
                 $this->narrationTail = '';
                 break;
         }
@@ -496,21 +563,42 @@ final class SessionFeed
     private function narrate(string $text, ?string $turnId): void
     {
         $this->narrationTail = \substr($this->narrationTail . $text, -self::NARRATION_TAIL_BYTES);
+        $this->narrationTurnId = $turnId ?? $this->narrationTurnId;
         $now = ($this->clock)();
         if ($now - $this->narratedAt < self::NARRATION_INTERVAL_SECONDS) {
             return;
         }
         $this->narratedAt = $now;
-        $tail = \mb_strcut($this->narrationTail, 0, self::NARRATION_TAIL_BYTES, 'UTF-8');
-        $envelope = EventEnvelope::ephemeral($this->sessionId(), EventType::ASSISTANT_NARRATION, [
-            'partId' => ($turnId ?? 'turn') . ':text',
-            'tail' => $tail,
-        ], $turnId);
+        $envelope = $this->narration();
+        if ($envelope === null) {
+            return;
+        }
         foreach (\array_keys($this->subscribers) as $clientId) {
             if ($this->subscribers[$clientId]['live'] && $this->narrates($clientId)) {
                 $this->subscribers[$clientId]['client']->outbox()->pushEphemeral($envelope->notification(), $this->sessionId() . '|narration');
             }
         }
+    }
+
+    /**
+     * The tail as an `assistant.narration`: at most {@see NARRATION_TAIL_BYTES},
+     * starting on a character boundary, with the byte `offset` into the part
+     * where it starts. Null when nothing has streamed since the last row.
+     */
+    private function narration(): ?EventEnvelope
+    {
+        // The byte cut may have split a character: drop its continuation bytes.
+        $tail = (string) \preg_replace('/^[\x80-\xBF]+/', '', $this->narrationTail);
+        if ($tail === '') {
+            return null;
+        }
+        $turnId = $this->narrationTurnId;
+
+        return EventEnvelope::ephemeral($this->sessionId(), EventType::ASSISTANT_NARRATION, [
+            'partId' => ($turnId ?? 'turn') . ':text',
+            'tail' => $tail,
+            'offset' => \max(0, ($this->offsets[SessionEvent::ASSISTANT_DELTA] ?? 0) - \strlen($tail)),
+        ], $turnId);
     }
 
     private function announce(string $type, array $data): void
@@ -526,6 +614,7 @@ final class SessionFeed
         $subscriber = $this->subscribers[$clientId];
 
         return $subscriber['mode'] === self::MODE_NARRATION
+            || $subscriber['client']->wantsNarration($this->sessionId())
             || ($subscriber['client']->outbox()->isAboveSoft() && !$subscriber['client']->isForeground($this->sessionId()));
     }
 

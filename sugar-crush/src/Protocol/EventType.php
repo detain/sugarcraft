@@ -17,7 +17,8 @@ use SugarCraft\Crush\Host\SessionEvent;
  * reconnecting client replays. EPHEMERAL ones (deltas, ticks) are live only
  * and never carry a seq. Server-scope events carry `sessionId: null` and no
  * seq either: there is no server log to replay, so a client that missed one
- * re-reads the state it describes (`session.list` for the `session.*` trio).
+ * re-reads the state it describes (`session.list` for the `session.*` trio,
+ * `permission.pending` for `permission.asked` / `permission.settled`).
  *
  * `server.hello`'s `features.events` and the generated schema both come from
  * {@see CATALOGUE}; {@see SessionEvent::DURABLE_TYPES} is the host's own copy
@@ -31,6 +32,8 @@ final class EventType
     public const SESSION_CREATED = 'session.created';
     public const SESSION_UPDATED = 'session.updated';
     public const SESSION_DELETED = 'session.deleted';
+    public const PERMISSION_ASKED = 'permission.asked';
+    public const PERMISSION_SETTLED = 'permission.settled';
     public const ASSISTANT_NARRATION = 'assistant.narration';
     public const SERVER_TICK = 'server.tick';
     public const SERVER_SHUTDOWN = 'server.shutdown';
@@ -65,8 +68,10 @@ final class EventType
         SessionEvent::SPEND_CAP_BREACHED => [true, self::SCOPE_SESSION, 'The session spend cap stopped the turn.'],
         SessionEvent::COMPACTION_COMPLETED => [true, self::SCOPE_SESSION, 'The history was compacted before a turn.'],
         self::SESSION_CREATED => [false, self::SCOPE_SERVER, 'A session was created.'],
-        self::SESSION_UPDATED => [false, self::SCOPE_SERVER, 'A session was renamed or its mode changed.'],
+        self::SESSION_UPDATED => [false, self::SCOPE_SERVER, 'A session was renamed, its mode changed, or its status changed (idle, busy, waiting_permission).'],
         self::SESSION_DELETED => [false, self::SCOPE_SERVER, 'A session was deleted.'],
+        self::PERMISSION_ASKED => [false, self::SCOPE_SERVER, 'A question was put in an open session: permission.requested with its sessionId, for every client, following the session or not.'],
+        self::PERMISSION_SETTLED => [false, self::SCOPE_SERVER, 'A question of an open session was answered or cancelled (permission.resolved, for every client).'],
         BackgroundEvents::STARTED => [false, self::SCOPE_SERVER, 'A background session started, or one an earlier server or TUI left running was re-adopted.'],
         BackgroundEvents::STATUS => [false, self::SCOPE_SERVER, 'A background session\'s status changed (running, stalled, …).'],
         BackgroundEvents::COMPLETED => [false, self::SCOPE_SERVER, 'A background session settled; bg.output reads its answer, bg.inject sends it to a session.'],

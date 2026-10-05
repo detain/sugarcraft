@@ -1,15 +1,38 @@
+<script lang="ts">
+// Syntax colouring is its own chunk, fetched the first time a reply holds a
+// fenced block with a language — never part of the first page load.
+let highlighter: Promise<typeof import('../lib/highlight')> | null = null
+</script>
+
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUpdated, ref } from 'vue'
 import { renderMarkdown } from '../lib/markdown'
 
 const props = defineProps<{ text: string }>()
 // Sanitised by renderMarkdown (DOMPurify) before it reaches v-html.
 const html = computed(() => renderMarkdown(props.text))
+const root = ref<HTMLElement | null>(null)
+
+async function colour(): Promise<void> {
+  const element = root.value
+  if (element === null || element.querySelector('pre > code[class*="language-"]') === null) return
+  try {
+    highlighter ??= import('../lib/highlight')
+    const { highlightIn } = await highlighter
+    if (root.value === element) highlightIn(element)
+  } catch {
+    // An unloadable chunk (a deploy mid-session) leaves the code plain.
+    highlighter = null
+  }
+}
+
+onMounted(colour)
+onUpdated(colour)
 </script>
 
 <template>
   <!-- eslint-disable-next-line vue/no-v-html -->
-  <div class="markdown" v-html="html" />
+  <div ref="root" class="markdown" v-html="html" />
 </template>
 
 <style scoped>
@@ -58,6 +81,35 @@ const html = computed(() => renderMarkdown(props.text))
 .markdown :deep(pre code) {
   background: none;
   padding: 0;
+}
+.markdown :deep(.hl-comment) {
+  color: var(--muted);
+  font-style: italic;
+}
+.markdown :deep(.hl-string) {
+  color: var(--ok);
+}
+.markdown :deep(.hl-number),
+.markdown :deep(.hl-literal) {
+  color: var(--warn);
+}
+.markdown :deep(.hl-keyword),
+.markdown :deep(.hl-tag) {
+  color: var(--accent);
+}
+.markdown :deep(.hl-variable),
+.markdown :deep(.hl-attr),
+.markdown :deep(.hl-key) {
+  color: var(--error);
+}
+.markdown :deep(.hl-meta) {
+  color: var(--muted);
+}
+.markdown :deep(.hl-add) {
+  background: var(--diff-add);
+}
+.markdown :deep(.hl-del) {
+  background: var(--diff-del);
 }
 .markdown :deep(a) {
   color: var(--accent);

@@ -58,9 +58,21 @@ documents the protocol and the UI).
 - **Sessions sidebar**: newest first, filter, status, and a badge for every
   question a session is waiting on (also in the tab title, and as an opt-in
   desktop notification).
+- **Tabs and a grid**: every session opened stays a tab (Alt+1…9 picks one;
+  each shows its status and open questions). The grid tiles the open tabs, up
+  to 3×3, each live — status, step, spend, the last few events, its questions
+  and a line to prompt or steer it. The focused tile streams in full; the
+  others are narrated by the server (a tail every 2 s) and catch up at once
+  when focused. The layout is remembered per browser.
+- **Approvals drawer** (the ⚠ count in the top bar): every question open in
+  any session of the server, oldest first, grouped by session and answerable
+  in place. A question arrives the moment it is put, whether or not this page
+  follows its session; opt-in desktop notifications also say when a turn
+  finishes out of sight.
 - **Transcript**: virtualised (`@tanstack/vue-virtual`); replies stream in as
   Markdown (`markdown-it`, raw HTML off, then DOMPurify — model and tool text
-  are untrusted); reasoning folds; a tool card per call with its arguments,
+  are untrusted), fenced code coloured by a small highlighter loaded on first
+  use; reasoning folds; a tool card per call with its arguments,
   output (the full text on request when the event was capped) and diff.
 - **Permission cards**: once / always (this session) / reject / reject & stop,
   `y` `a` `n` on a focused card. The first answer from any client wins.

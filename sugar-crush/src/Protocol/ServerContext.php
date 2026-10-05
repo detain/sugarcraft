@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Protocol;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use SugarCraft\Crush\Host\BackgroundEvents;
+use SugarCraft\Crush\Host\SessionEvent;
 use SugarCraft\Crush\Host\SessionHost;
 use SugarCraft\Crush\Host\SessionHub;
 use SugarCraft\Crush\Server\ServerConfig;
@@ -22,6 +23,15 @@ use SugarCraft\Crush\Session\EnhancedSessionStore;
  * a {@see SessionHost} itself: {@see host()} opens one through the hub, which
  * holds the same flock lock a TUI takes, so a session open in a terminal is
  * refused here (`conflict` / `session_locked`) rather than written by two.
+ *
+ * WHAT EVERY CLIENT HEARS AT ONCE (roadmap O-6a). A session's own events
+ * reach only the clients following it, but three things matter to every
+ * client — the sidebar's status dots, the approvals drawer, the tab title —
+ * so a feed offers each event it hears here ({@see heard()}): a question put
+ * becomes a server-scope `permission.asked`, its settling `permission.settled`,
+ * and a status change a `session.updated` carrying the session's summary.
+ * A client watching one session learns of a question in another the moment
+ * it is put, not at the next `server.tick`.
  *
  * MUTABLE ON PURPOSE: the live registry of one server's clients and feeds.
  */
@@ -247,7 +257,80 @@ final class ServerContext
             $host->setPermissionMode($this->config->permissionMode);
         }
 
-        return $this->feeds[$sessionId] = SessionFeed::attach($host, $this->loop, $this->config->askTimeoutSeconds, $this->clock);
+        return $this->feeds[$sessionId] = SessionFeed::attach(
+            $host,
+            $this->loop,
+            $this->config->askTimeoutSeconds,
+            $this->clock,
+            fn (SessionEvent $event) => $this->heard($sessionId, $event),
+        );
+    }
+
+    /**
+     * A session as `session.list` and the `session.*` events describe it.
+     *
+     * @param array<string, mixed> $row a `sessions` row
+     * @return array<string, mixed>
+     */
+    public function summary(array $row): array
+    {
+        $id = (string) ($row['id'] ?? '');
+        $host = $this->hub->get($id);
+
+        return [
+            'id' => $id,
+            'name' => $row['name'] ?? null,
+            'provider' => $row['provider'] ?? null,
+            'model' => $row['model'] ?? null,
+            'kind' => $row['kind'] ?? null,
+            'parentId' => $row['parent_id'] ?? null,
+            'createdAt' => $row['created_at'] ?? null,
+            'updatedAt' => $row['last_activity'] ?? ($row['updated_at'] ?? null),
+            'turns' => isset($row['turns']) ? (int) $row['turns'] : null,
+            'preview' => $row['last_preview'] ?? null,
+            'open' => $host !== null,
+            'status' => $host === null ? 'closed' : $this->feedFor($host)->status(),
+            'permissionMode' => $host?->permissionMode()?->value,
+            'spentUsd' => $host?->spentUsd(),
+        ];
+    }
+
+    /**
+     * The summary of $sessionId, read from the store (a bare row when it keeps none).
+     *
+     * @return array<string, mixed>
+     */
+    public function summaryOf(string $sessionId): array
+    {
+        $row = $this->hub->workspace()->sessionStore?->getSession($sessionId) ?? ['id' => $sessionId];
+
+        return $this->summary($row);
+    }
+
+    /**
+     * One event a session's feed heard, made server-scope when every client
+     * should know of it — whether or not it follows the session.
+     */
+    private function heard(string $sessionId, SessionEvent $event): void
+    {
+        switch ($event->type) {
+            case SessionEvent::PERMISSION_REQUESTED:
+                $this->broadcast(EventEnvelope::server(EventType::PERMISSION_ASKED, ['sessionId' => $sessionId, ...$event->data]));
+                break;
+
+            case SessionEvent::PERMISSION_RESOLVED:
+                $this->broadcast(EventEnvelope::server(EventType::PERMISSION_SETTLED, \array_filter([
+                    'sessionId' => $sessionId,
+                    'askId' => $event->data['askId'] ?? null,
+                    'reply' => $event->data['reply'] ?? null,
+                    'cancelled' => $event->data['cancelled'] ?? null,
+                ], static fn (mixed $value): bool => $value !== null)));
+                break;
+
+            case SessionEvent::SESSION_STATUS:
+                $this->broadcast(EventEnvelope::server(EventType::SESSION_UPDATED, $this->summaryOf($sessionId)));
+                break;
+        }
     }
 
     /** The feed of an open session, without opening anything. */
@@ -256,6 +339,23 @@ final class ServerContext
         $host = $this->hub->get($sessionId);
 
         return $host === null ? null : $this->feedFor($host);
+    }
+
+    /**
+     * The feeds $client follows, without opening or attaching anything.
+     *
+     * @return list<SessionFeed>
+     */
+    public function followedBy(Client $client): array
+    {
+        $followed = [];
+        foreach ($this->feeds as $feed) {
+            if ($feed->isSubscribed($client)) {
+                $followed[] = $feed;
+            }
+        }
+
+        return $followed;
     }
 
     /** Forget $sessionId's feed (its host was closed). */

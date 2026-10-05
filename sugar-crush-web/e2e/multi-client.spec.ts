@@ -40,8 +40,9 @@ test('a question in a session this tab is not viewing still shows in the sidebar
   await send(tab, '::tool Bash {"command":"echo background"}')
   await expect(tab.getByTestId('permission-card')).toBeVisible()
 
-  // permission.pending refreshes on every server.tick (15 s) — or at once on a reconnect.
-  await expect(page.locator(`[data-testid="session-link"][data-session-id="${background}"] [data-testid="ask-badge"]`)).toHaveText('1', { timeout: 40_000 })
+  // The server-scope permission.asked reaches every client at once — no
+  // waiting for the next 15 s server.tick.
+  await expect(page.locator(`[data-testid="session-link"][data-session-id="${background}"] [data-testid="ask-badge"]`)).toHaveText('1', { timeout: 10_000 })
   await tab.getByTestId('ask-reject').click()
   await elsewhere.close()
 })

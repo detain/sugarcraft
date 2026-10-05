@@ -70,25 +70,7 @@ final class SessionMethods
      */
     public static function summary(CallContext $call, array $row): array
     {
-        $id = (string) ($row['id'] ?? '');
-        $host = $call->server->hub()->get($id);
-
-        return [
-            'id' => $id,
-            'name' => $row['name'] ?? null,
-            'provider' => $row['provider'] ?? null,
-            'model' => $row['model'] ?? null,
-            'kind' => $row['kind'] ?? null,
-            'parentId' => $row['parent_id'] ?? null,
-            'createdAt' => $row['created_at'] ?? null,
-            'updatedAt' => $row['last_activity'] ?? ($row['updated_at'] ?? null),
-            'turns' => isset($row['turns']) ? (int) $row['turns'] : null,
-            'preview' => $row['last_preview'] ?? null,
-            'open' => $host !== null,
-            'status' => $host === null ? 'closed' : $call->server->feedFor($host)->status(),
-            'permissionMode' => $host?->permissionMode()?->value,
-            'spentUsd' => $host?->spentUsd(),
-        ];
+        return $call->server->summary($row);
     }
 
     /** @return array<string, mixed> */
@@ -310,9 +292,7 @@ final class SessionMethods
      */
     private static function announce(CallContext $call, string $sessionId, string $type): array
     {
-        $store = $call->server->hub()->workspace()->sessionStore;
-        $row = $store?->getSession($sessionId) ?? ['id' => $sessionId];
-        $summary = self::summary($call, $row);
+        $summary = $call->server->summaryOf($sessionId);
         $call->server->broadcast(EventEnvelope::server($type, $summary));
 
         return $summary;

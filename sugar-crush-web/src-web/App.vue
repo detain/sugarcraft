@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
+import ApprovalsButton from './components/approvals/ApprovalsButton.vue'
+import ApprovalsDrawer from './components/approvals/ApprovalsDrawer.vue'
+import { useAttention } from './components/approvals/attention'
 import ConnectionBanner from './components/ConnectionBanner.vue'
+import SessionTabs from './components/grid/SessionTabs.vue'
 import SessionSidebar from './components/SessionSidebar.vue'
 import { SIGN_IN_CODE } from './keys'
 import { AuthError } from './protocol/auth'
-import { useApprovalsStore } from './stores/approvals'
 import { useConnectionStore } from './stores/connection'
 import { useLayoutStore } from './stores/layout'
 import { useSessionsStore } from './stores/sessions'
@@ -14,7 +17,6 @@ import { useSettingsStore } from './stores/settings'
 const connection = useConnectionStore()
 // Created up front so they hear the first handshake and every event after it.
 useSessionsStore()
-const approvals = useApprovalsStore()
 const layout = useLayoutStore()
 const settings = useSettingsStore()
 const route = useRoute()
@@ -29,16 +31,9 @@ watch(() => connection.status, (status) => {
   if (status === 'signed-out' && !onLogin.value) void router.push({ name: 'login' })
 })
 
-// The attention model: the tab title counts the open questions.
-watch(() => approvals.total, (total) => {
-  document.title = total > 0 ? `(${total}) SugarCrush` : 'SugarCrush'
-}, { immediate: true })
-
-const stopNotifying = approvals.onNew((ask) => {
-  if (!settings.notify || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
-  if (!document.hidden && ask.sessionId === activeId.value) return
-  new Notification(`${ask.tool} is waiting for an answer`, { body: ask.reason ?? '', tag: ask.askId })
-})
+// The attention model: the tab title, and desktop notifications for questions
+// and finished turns out of sight.
+const stopAttention = useAttention()
 
 function onPageHide(): void {
   connection.stop()
@@ -66,7 +61,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('pagehide', onPageHide)
   window.removeEventListener('pageshow', onPageShow)
-  stopNotifying()
+  stopAttention()
 })
 
 async function signOut(): Promise<void> {
@@ -82,6 +77,7 @@ async function signOut(): Promise<void> {
       <span class="brand">&#9670; SugarCrush</span>
       <span v-if="connection.hello?.server.root" class="root" :title="connection.hello.server.root">{{ connection.hello.server.root }}</span>
       <span class="spacer" />
+      <ApprovalsButton v-if="!onLogin" />
       <span class="status" :data-status="connection.status" data-testid="connection-status">{{ connection.statusLabel }}<template v-if="rtt"> · {{ rtt }}</template></span>
       <button type="button" class="link opt" :title="`Theme: ${settings.theme}`" @click="settings.cycleTheme()">theme: {{ settings.theme }}</button>
       <button v-if="!settings.notify" type="button" class="link opt" title="Desktop notifications for questions" @click="settings.enableNotifications()">notify</button>
@@ -91,9 +87,11 @@ async function signOut(): Promise<void> {
     <div class="body">
       <SessionSidebar v-if="!onLogin" class="side" :active-id="activeId" />
       <main class="content">
+        <SessionTabs v-if="!onLogin" />
         <RouterView />
       </main>
     </div>
+    <ApprovalsDrawer v-if="!onLogin" />
   </div>
 </template>
 
@@ -162,7 +160,7 @@ async function signOut(): Promise<void> {
   display: flex;
   flex-direction: column;
 }
-.content > :deep(*) {
+.content > :deep(*:not(.tabs-strip)) {
   flex: 1;
 }
 @media (max-width: 760px) {

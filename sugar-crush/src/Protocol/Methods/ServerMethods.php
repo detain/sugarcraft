@@ -191,11 +191,43 @@ final class ServerMethods
         return ['accepted' => $accepted];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * What the client shows (Appendix O §4.5, §6.9). With `narrate`, every
+     * session it follows but does not have in front is heard as narration —
+     * the multi-pane grid's glanced-at tiles — and a session that comes to the
+     * front is handed the reply streamed so far at once, so its deltas pick up
+     * without a gap.
+     *
+     * @return array<string, mixed>
+     */
     private static function viewing(CallContext $call, Params $params): array
     {
-        $call->client->view($params->strings('sessionIds', SessionFeed::MAX_SUBSCRIBERS), $params->optionalString('foreground', 64));
+        $narrate = $params->raw('narrate');
+        if ($narrate !== null && !\is_bool($narrate)) {
+            throw RpcError::invalidParams('narrate must be true or false');
+        }
 
-        return [];
+        $feeds = $call->server->followedBy($call->client);
+        $before = [];
+        foreach ($feeds as $feed) {
+            $before[$feed->sessionId()] = $feed->isNarratedFor($call->client);
+        }
+
+        $call->client->view(
+            $params->strings('sessionIds', SessionFeed::MAX_SUBSCRIBERS),
+            $params->optionalString('foreground', 64),
+            $narrate === true,
+        );
+
+        $narrated = [];
+        foreach ($feeds as $feed) {
+            if ($feed->isNarratedFor($call->client)) {
+                $narrated[] = $feed->sessionId();
+            } elseif ($before[$feed->sessionId()]) {
+                $feed->catchUp($call->client);
+            }
+        }
+
+        return ['narrated' => $narrated];
     }
 }
