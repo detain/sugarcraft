@@ -175,6 +175,15 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * warning-free when the warnings went to stderr and were dropped — a
      * false claim is worse than the terse sentence it replaced.
      *
+     * The tool-preference and one-command-per-call sentences are about the
+     * user's keyboard, not taste: Read/Grep/Glob are read-class tools that run
+     * without an approval prompt, while a shell line is let through unasked
+     * only when {@see \SugarCraft\Crush\Permissions\ReadOnlyCommands} can prove
+     * every part of it read-only — a `cd <root> &&` prefix, a `python3 -c`
+     * slice or a long chain with one unprovable link costs the user a prompt.
+     * Replayed against a user's logged asks (2026-10-11), most of them were
+     * exactly such lines.
+     *
      * The byte figure is READ OFF $maxOutputBytes rather than written out,
      * because a caller that raised or disabled the cap would otherwise be
      * advertising a number that is not its own.
@@ -197,8 +206,14 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             . 'while writing to stderr has that stderr replaced by a one-line marker, not '
             . 'included — so append 2>&1 yourself when the warnings are what you are after. '
             . $bound . ' '
-            . 'Prefer Read/Grep/Glob for reading and searching files; reach for this for '
-            . 'build, test and git work, and for anything those tools cannot do. '
+            . $this->startsIn() . ' '
+            . 'Use this for build, test and git work and for what no other tool can do; use '
+            . 'Read to read a file (its offset and limit take a slice) and Grep and Glob to '
+            . 'search and list, rather than cat, head, tail, grep, rg, find, ls, sed or awk '
+            . 'here — those tools run without an approval prompt, and a shell line '
+            . 'that cannot be proven read-only stops to ask the user. Give each call one '
+            . 'simple command, not a long && chain or a for loop over files, and send '
+            . 'independent commands as separate calls in one batch. '
             . 'Commands run detached from any controlling terminal with interactive '
             . 'prompts disabled: sudo, ssh, git credentials and pagers fail fast and '
             . 'say so on stderr. A command that needs a human at a keyboard cannot '
@@ -216,6 +231,28 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 $this->maxTimeoutSeconds,
             )
             . ($this->sandbox === null ? '' : ' ' . $this->sandbox->describe($this->writableRoot()));
+    }
+
+    /**
+     * Where every call starts, stated because the model's habit is to open a
+     * line with `cd <project root> &&` — a no-op that costs the user an
+     * approval prompt whenever the rest of the line is not read-only.
+     * TRUE BY CONSTRUCTION, and conditional exactly as {@see execute()} is:
+     * with a root (or a worktree jail) the command runs after
+     * {@see ProcessContainment::cdGuard()} on a line of its own, so it starts
+     * in that directory or does not run at all; with neither it inherits this
+     * process's working directory, and the sentence says that instead.
+     */
+    private function startsIn(): string
+    {
+        if ($this->worktreeJail !== null) {
+            return 'Every call starts in your worktree\'s root, so never begin a command with a `cd` to it.';
+        }
+        if ($this->root !== null) {
+            return 'Every call starts in the project root, so never begin a command with `cd <project root> &&`.';
+        }
+
+        return 'Every call starts in this process\'s working directory.';
     }
 
     /**

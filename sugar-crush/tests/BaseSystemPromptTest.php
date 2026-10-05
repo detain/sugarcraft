@@ -318,8 +318,8 @@ final class BaseSystemPromptTest extends TestCase
         // from the managerless Bootstrap::tools() the $real list is built
         // from — the F1 batching sentence names it in prose, so it lives here
         // until the tool lands in that roster on its own.
-        'AI', 'Act', 'Acting', 'Before', 'Delegating', 'If', 'Keep', 'Never', 'Reach',
-        'Security', 'Skip', 'SugarCrush', 'Task', 'That', 'They', 'Tone', 'Tool',
+        'AI', 'Act', 'Acting', 'Before', 'Delegating', 'Give', 'If', 'Keep', 'Never', 'Reach',
+        'Security', 'Skip', 'SugarCrush', 'Task', 'That', 'They', 'Those', 'Tone', 'Tool',
         'Treat', 'When', 'You',
     ];
 
@@ -950,8 +950,12 @@ final class BaseSystemPromptTest extends TestCase
         // insertion of 369 B (the mandatory memory-recall paragraph plus its
         // blank line) at the end of the standing memory instructions; every
         // byte before and after it is identical.
+        // MEASURED 2026-10-11 (Bash permission prompts): 10,678 -> 11,377,
+        // one pure insertion of 699 B at offset 3,256 - the "Keep Bash for
+        // what only a shell can do" paragraph plus its blank line, closing
+        // "# Tool use"; head and tail byte-identical.
         self::assertSame(
-            10678,
+            11377,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',

@@ -96,6 +96,36 @@ final class BuiltInToolTest extends TestCase
         $this->assertStringStartsWith('Execute a bash command', $tool->description());
     }
 
+    /**
+     * The description tells the model where every call starts so it stops
+     * opening lines with `cd <project root> &&` (a no-op that costs the user
+     * an approval prompt) — and the claim is only worth making while it is
+     * TRUE, so the same test runs `pwd` from somewhere else and reads the
+     * root back. Without a root the sentence must not promise one.
+     */
+    public function testBashDescriptionSaysWhereEveryCallStartsAndItIsTrue(): void
+    {
+        $root = (string) realpath(sys_get_temp_dir());
+        $rooted = new Bash($root);
+        $this->assertStringContainsString(
+            'Every call starts in the project root, so never begin a command with `cd <project root> &&`.',
+            $rooted->description(),
+        );
+        $this->assertStringContainsString('rather than cat, head, tail, grep, rg, find, ls, sed or awk', $rooted->description());
+        $this->assertStringContainsString('not a long && chain or a for loop', $rooted->description());
+
+        $cwd = (string) getcwd();
+        try {
+            chdir('/');
+            $this->assertSame($root, trim($rooted->execute(['command' => 'pwd', 'description' => 'Print cwd'])->content()));
+        } finally {
+            chdir($cwd);
+        }
+
+        $this->assertStringContainsString("Every call starts in this process's working directory.", (new Bash())->description());
+        $this->assertStringNotContainsString('project root', (new Bash())->description());
+    }
+
     public function testEditToolHasCorrectNameAndDescription(): void
     {
         $tool = new Edit();

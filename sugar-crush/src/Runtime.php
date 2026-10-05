@@ -5231,6 +5231,18 @@ final class Runtime
         //     A green suite pins behaviour, never intent: hence the final
         //     sentence drawing the code/feature line rather than the clause
         //     promising verification makes a change right.
+        //   - Shell discipline (user decision 2026-10-11): the paragraph
+        //     after the skills clause steers reads AWAY from Bash because
+        //     Read/Grep/Glob/Lsp/RepoMap are ToolPermissionClass::Read and run
+        //     unasked, while {@see \SugarCraft\Crush\Permissions\ReadOnlyCommands}
+        //     lets a shell line through only when it proves every part of it
+        //     read-only — replaying a user's 32 logged asks, 24 still prompted,
+        //     mostly `cd <root> &&` chains and `python3 -c` slices. "Already
+        //     starts there" is Bash::execute()'s ProcessContainment::cdGuard()
+        //     prefix; it holds whenever the tool has a root, which every
+        //     catalog build passes (ToolBuildContext::$root is non-null). A
+        //     configured `Ask` rule on Read is the edge where "without an
+        //     approval prompt" stops being true.
         // Deliberately NOT claimed here: that the model can elect the
         // permission-gated path itself. HookResult::ask()/settleAsk() are
         // applied TO a call by the runtime; there is no tool the model can
@@ -5289,6 +5301,18 @@ final class Runtime
             entry is a one-line summary — invoke the `Skill` tool by name to
             load the full instructions, and use it when a listed skill
             plainly fits.
+
+            Keep Bash for what only a shell can do: builds, tests, git, the
+            project's own scripts. Read a file, or a slice of one through Read's
+            offset and limit, rather than `cat`, `head`, `tail`, `sed -n`, `awk`,
+            `python -c` or a `for` loop; search with Grep, list with Glob, and ask
+            Lsp or RepoMap for symbols and structure, rather than `grep`, `rg`,
+            `find` or `ls`. Those run without an approval prompt, while a shell line
+            that cannot be proven read-only stops and waits for the user. Give each
+            Bash call one simple command rather than a long `&&` chain, send
+            independent ones as separate calls in one batch, and never open a
+            command with `cd` to the project root — every Bash call already starts
+            there.
 
             # Acting vs. asking
             Act on local, reversible work without asking first: editing a file in
