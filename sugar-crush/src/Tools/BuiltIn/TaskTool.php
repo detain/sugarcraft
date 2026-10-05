@@ -1177,9 +1177,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $childDepth = $this->delegationDepth + 1;
         $nestedEmitter = $this->subAgentEmitter ?? static function (SubAgentActivity $activity): void {
         };
+        // Roadmap 4.4: the one other engine-bound tool a run keeps is the
+        // reply half of messaging — `SendMessage`, when the preset grants it
+        // (or inherits everything), re-bound to speak as THIS run, so its
+        // `to: "parent"` reaches whoever delegated it and its own `to` reaches
+        // only the runs it delegates in turn. `Subagents` and
+        // `InterruptAgent` stay with the session's agent: a delegating run
+        // waits on its nested runs, so it has no running child to manage.
         $tools = [];
         foreach ($granted ?? $engine->tools() as $tool) {
-            if (!$tool instanceof DelegatesToEngine) {
+            if ($tool instanceof SendMessageTool) {
+                $tools[] = $tool->asChildOf($subAgent->id, $this->parentAgentId ?? SendMessageTool::MAIN, $scope);
+            } elseif (!$tool instanceof DelegatesToEngine) {
                 $tools[] = $tool;
             } elseif ($tool instanceof self && $childDepth < $this->maxDelegationDepth) {
                 $tools[] = $tool->nestedFor($childDepth, $subAgent->id, $nestedEmitter, $scope)
@@ -1251,9 +1260,29 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             new \SugarCraft\Crush\Hooks\BuiltIn\SubAgentGrantHook($manager, $subAgent, $modeGate),
         );
 
+        // Roadmap 4.4: followups `SendMessage` kept for the conversation's
+        // next run (AgentRunCards::takeFollowups()) — this one, when it
+        // continues it. They lead the new instruction, each framed by sender
+        // like a mailbox message, inside the ONE user turn the resume adds.
+        $followups = [];
+        if ($suspension !== null && $scope !== null) {
+            foreach (\SugarCraft\Crush\Agents\Live\AgentRunCards::takeFollowups($scope, $suspension['id']) as $followup) {
+                try {
+                    $followups[] = \SugarCraft\Crush\Backend\MailboxTurnInbox::frame(
+                        \SugarCraft\Crush\Agents\Live\AgentMessage::new($followup['from'], $followup['text'], \SugarCraft\Crush\Agents\Live\MessageMode::Followup),
+                    );
+                } catch (\InvalidArgumentException) {
+                    // A card line no message could carry: dropped, as the
+                    // mailbox drops a malformed one.
+                }
+            }
+        }
+
         if ($suspension !== null) {
             // The saved transcript already opens with the preset's system turn.
-            $messages = [...$suspension['transcript'], new UserMessage($subAgent->task)];
+            $messages = [...$suspension['transcript'], new UserMessage(
+                $followups === [] ? $subAgent->task : implode("\n\n", [...$followups, $subAgent->task]),
+            )];
         } else {
             $messages = trim($systemPrompt) === '' ? [] : [new SystemMessage($systemPrompt)];
             $messages[] = new UserMessage($subAgent->task);
@@ -1519,6 +1548,29 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             }
         };
 
+        // Roadmap 4.4: the run's card — how the messaging tools find it from
+        // whatever process asks (AgentRunCards). Kept under the session the
+        // seats count against, which is where its parent looks; its mailbox
+        // is wherever $agentInbox put it. A background daemon's run was
+        // started as `bg_<its session>`, and the parent knows it by that
+        // session's id. No mailbox, nothing to address: no card.
+        $cardScope = $agentInbox === null ? null : $scope;
+        if ($cardScope !== null && $parentSessionId !== null) {
+            \SugarCraft\Crush\Agents\Live\AgentRunCards::recordRun($cardScope, [
+                'runId' => $subAgent->id,
+                'agent' => $agentName,
+                'description' => $description,
+                'task' => self::snippet($subAgent->task, self::TASK_SNIPPET_BYTES),
+                'parent' => $this->parentAgentId ?? SendMessageTool::MAIN,
+                'inboxSession' => $parentSessionId,
+                'background' => $toolCallId === 'bg_' . $parentSessionId ? $parentSessionId : '',
+                'status' => \SugarCraft\Crush\Agents\Live\AgentRunCards::STATUS_RUNNING,
+                'resumeId' => $suspension['id'] ?? '',
+                'startedAt' => (int) floor(microtime(true) * 1000),
+                'pid' => (int) getmypid(),
+            ]);
+        }
+
         if ($emit !== null) {
             $emit($frame(SubAgentActivity::OP_STARTED, [
                 'task' => self::snippet($subAgent->task, self::TASK_SNIPPET_BYTES),
@@ -1532,13 +1584,25 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // story of what it got through — rather than going blank on the
         // dashboard at exactly the moment a human looks.
         $finish = function (string $status, string $report, ?string $error, string $outcome, ?string $resumeId) use (
-            $subAgent, $emit, $foldThink, $frame, $flushLog, $log,
+            $subAgent, $emit, $foldThink, $frame, $flushLog, $log, $cardScope,
         ): void {
             $foldThink();
             // The log is complete BEFORE the finished frame leaves: the
             // parent reads it into the child session the moment it lands.
             $flushLog();
             $log?->status($status, $outcome, $error);
+            // Roadmap 4.4: settled on its card before anyone is told, so a
+            // `Subagents wait` that wakes on the frame reads the outcome.
+            if ($cardScope !== null) {
+                \SugarCraft\Crush\Agents\Live\AgentRunCards::updateRun($cardScope, $subAgent->id, static function (array $card) use ($outcome, $error, $resumeId): array {
+                    return [
+                        'status' => $outcome,
+                        'error' => $error ?? '',
+                        'resumeId' => $resumeId ?? $card['resumeId'],
+                        'finishedAt' => (int) floor(microtime(true) * 1000),
+                    ] + $card;
+                });
+            }
             // Report wins; without one the trail IS the row's story.
             $this->settle($subAgent, $status, $report !== '' ? $report : $subAgent->output, $error);
             if ($emit === null) {

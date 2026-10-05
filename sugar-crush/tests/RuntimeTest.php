@@ -3888,12 +3888,14 @@ DOC;
         // so it is still read-only HERE, but an outbound fetch whose URL the
         // model composes is not safe to run unasked, so the gate no longer
         // lists it. `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`,
-        // `AskUser` and `PlanExit` diverge because the gate classes them
-        // no-ask, not read: each touches only harness-owned state (`Recall`
-        // reads the session's own rows, `Team` writes the per-user team store,
-        // and the last two only put a question to the user).
+        // `AskUser`, `PlanExit`, `SendMessage`, `Subagents` and
+        // `InterruptAgent` diverge because the gate classes them no-ask, not
+        // read: each touches only harness-owned state (`Recall` reads the
+        // session's own rows, `Team` writes the per-user team store, `AskUser`
+        // and `PlanExit` only put a question to the user, and the messaging
+        // three write the sub-agent mailboxes and run cards).
         $this->assertSame(
-            ['AskUser', 'Compress', 'Memory', 'PlanExit', 'Prune', 'Recall', 'Skill', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
+            ['AskUser', 'Compress', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'Skill', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
@@ -4096,8 +4098,13 @@ DOC;
         // in the checkout. `AskUser` and `PlanExit` (roadmap 5.7-2) write
         // nothing: they put a question to the user and return the answer
         // (`PlanExit` reads the plan file; the host applies an approved
-        // plan's mode switch).
-        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit'];
+        // plan's mode switch). `SendMessage`, `Subagents` and `InterruptAgent`
+        // (roadmap 4.4) write only mailbox lines and run cards
+        // (AgentInbox/AgentRunCards, under the home directory). The one
+        // tree-writing reach is by proxy, as `Lsp`'s is: `SendMessage`
+        // continuing a FINISHED sub-agent runs the session's `Task`, and only
+        // where the gate would allow that `Task` call outright.
+        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent'];
     }
 
     /**

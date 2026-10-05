@@ -365,6 +365,51 @@ does: `disallowedTools: [BoardPost]` leaves a member reading only, and a
 member denied `BoardRead` hears no notices either. A background run is never
 a member, and neither is a run a member delegates to in turn.
 
+### Messages between agents
+
+The **model** has the same reach through three no-ask tools (the mailbox and
+the run records they write are harness state, never the project):
+
+- **`SendMessage`** `{to, text, mode}` messages a sub-agent the agent
+  launched, named by the run id, background `agent_id` or resume id that
+  `Task` or `Subagents list` gave it. To a **running** sub-agent a `steer`
+  (the default) or `note` goes into its mailbox as `from: parent` and is read
+  at its next step boundary; a `followup` is kept for the conversation's next
+  run and leads the instruction of whichever `Task` call resumes it. A
+  **finished** sub-agent (a background one whose daemon has exited included)
+  is continued: the message becomes the `prompt` of a `Task` call with its
+  `resume` id, run through the session's own `Task` tool, and the new report
+  is the result. That path never bypasses `Task`'s approval: it runs only
+  where the session's permission gate would allow the equivalent `Task` call
+  outright, and is otherwise refused with the `Task` call to make instead, so
+  the user is asked.
+- **`Subagents`** `{action: list|wait|cancel}` lists what the agent launched
+  (id, agent, status — `running`, `lost` for a run whose process is gone
+  without a report, or how it ended — background `agent_id`, resume id),
+  `wait`s up to `timeout_seconds` (default 30, at most 300; `0` is a
+  snapshot) for a named or any running sub-agent to finish or send a
+  message, and `cancel`s by sending the run a `control` `cancel` line: it
+  stops at its next tool or step, resumable.
+- **`InterruptAgent`** `{to, text}` sends a running sub-agent an `interrupt`:
+  the rest of its current step is skipped and it reads the text first.
+
+A sub-agent granted `SendMessage` (one with no `tools:` list inherits it)
+keeps it as its **reply** tool: `Task` re-binds it to speak as that run, and
+`to: "parent"` reaches whoever delegated it — a delegating sub-agent at its
+next step boundary, the session's agent the next time it calls `Subagents
+list` or `wait`, which hand each reply out once, fenced as
+`<subagent-message from="…">` and labelled a worker's report that approves
+nothing. `Subagents` and `InterruptAgent` stay with the session's agent: a
+delegating sub-agent is waiting on its nested runs while they work. Messages
+go only between an agent and the sub-agents it launched, never to a sibling
+(OpenClaw's hub-and-spoke rule).
+
+The tools find runs through a record each run keeps beside its mailbox,
+`~/.sugar-crush/mailboxes/<session>/<run>/card.json` (written by the process
+running it when it starts, settled with its outcome and resume id when it
+finishes, swept with the mailboxes). A background agent's record is under the
+session that started it; its mailbox is under its daemon's session.
+
 ---
 
 ## What you can actually do with a preset today
@@ -372,7 +417,7 @@ a member, and neither is a run a member delegates to in turn.
 Be precise about this, because "agent preset" reads like "the model can spawn
 one":
 
-- **`Task` delegates.** sugar-crush ships twenty-five
+- **`Task` delegates.** sugar-crush ships twenty-eight
   built-in tools and one of them — `Task` — is exactly the delegation seam:
   it hands a bounded task to a sub-agent named from the session's agent
   roster and returns that worker's final text. With no session

@@ -169,6 +169,17 @@ final class ReadPathCensusTest extends TestCase
         'Agents/ForeignAgentPresetRegistry.php|file_get_contents' => [
             'CONTAINED — the foreign preset body, behind the same pair',
         ],
+        'Agents/Live/AgentRunCards.php|file_get_contents' => [
+            'SELF_LOCATED — a run card under ~/.sugar-crush/mailboxes/<session>/<run>/, found by the glob over '
+                . 'the session directory this class names; every field is shape-checked as untrusted',
+            'SELF_LOCATED — the same card, re-read under its lock to rewrite it',
+        ],
+        'Agents/Live/AgentRunCards.php|fopen' => [
+            'SELF_LOCATED — the card\'s sibling `.lock`, opened only to flock() it, nothing is read',
+        ],
+        'Agents/Live/AgentRunCards.php|glob' => [
+            'NAMES_ONLY — lists one session\'s run directories under ~/.sugar-crush/mailboxes for their card.json',
+        ],
         'Agents/Live/AgentTranscriptTail.php|fopen' => [
             'CALLER_SUPPLIED — a sub-agent transcript log; AgentManager::recordChildSession() opens one only after SubAgentTranscriptLog::isLogPath() held it under the transcript root',
         ],
