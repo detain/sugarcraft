@@ -25,7 +25,9 @@ namespace SugarCraft\Crush\Backend;
  * natural boundary — a forked engine turn finishes the step's tools and makes
  * no further provider call. A holder that has no boundary to stop at simply
  * ignores the soft flag; a later hard cancel always wins. {@see cancelTool()}
- * (roadmap 1.C-4b) is narrower still: stop one running call by its id.
+ * (roadmap 1.C-4b) is narrower still: stop one running call by its id, and
+ * {@see cancelAgent()} (roadmap P-E1) is the Agent View's hard stop of one
+ * delegated run: SIGTERM to its process, SIGKILL if it has not gone 2 s later.
  *
  * STEERING (roadmap 1.C-3) rides the same per-turn handle: {@see steer()}
  * queues a message the user typed while the turn runs, the forked turn's
@@ -54,6 +56,12 @@ final class CancellationToken
 
     /** @var array<string, true> every call id ever asked to stop, so each goes down once */
     private array $toolCancelled = [];
+
+    /** @var list<array{agentId: string, callId: string}> runs asked to hard-stop, not yet taken */
+    private array $agentCancels = [];
+
+    /** @var array<string, true> every agent id ever asked to hard-stop */
+    private array $agentCancelled = [];
 
     /** @var array<string, int> steerId => the step it was delivered at */
     private array $acknowledged = [];
@@ -135,6 +143,45 @@ final class CancellationToken
     public function isToolCancelled(string $callId): bool
     {
         return isset($this->toolCancelled[$callId]);
+    }
+
+    /**
+     * Hard-stop ONE delegated run (roadmap P-E1, `agent_cancel{agentId,
+     * callId}`): $agentId is the run, $callId the Task call of this turn it
+     * runs under. A forked engine turn's parent takes it with
+     * {@see takeAgentCancels()} on its cancel tick and sends it down; the
+     * turn child SIGTERMs that member's process (SIGKILL after two seconds)
+     * or, for a lone Task in its own process, stops it at its next boundary.
+     * Each run is queued once, however often it is asked.
+     */
+    public function cancelAgent(string $agentId, string $callId): void
+    {
+        if ($agentId === '' || $callId === '' || isset($this->agentCancelled[$agentId])) {
+            return;
+        }
+
+        $this->agentCancelled[$agentId] = true;
+        $this->agentCancels[] = ['agentId' => $agentId, 'callId' => $callId];
+    }
+
+    /**
+     * The runs {@see cancelAgent()} queued since the last call, oldest first,
+     * each handed out once.
+     *
+     * @return list<array{agentId: string, callId: string}>
+     */
+    public function takeAgentCancels(): array
+    {
+        $requests = $this->agentCancels;
+        $this->agentCancels = [];
+
+        return $requests;
+    }
+
+    /** Whether {@see cancelAgent()} was ever called for $agentId. */
+    public function isAgentCancelled(string $agentId): bool
+    {
+        return isset($this->agentCancelled[$agentId]);
     }
 
     /**

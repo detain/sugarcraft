@@ -67,7 +67,12 @@ final class AgentShellCommandsTest extends TestCase
         $this->assertStringContainsString('again within 3 s', (string) $asked->status);
 
         [$stopped] = $asked->consumeShellCmd(new CancelAgentCmd($row));
-        $this->assertSame(['call_2'], $this->token->takeToolCancels(), 'the second stops the run\'s Task call now');
+        $this->assertSame([], $this->token->takeToolCancels(), 'the hard stop is not Esc\'s cancel_tool');
+        $this->assertSame(
+            [['agentId' => 'run-2', 'callId' => 'call_2']],
+            $this->token->takeAgentCancels(),
+            'the second press is the run\'s hard stop (P-E1 agent_cancel)',
+        );
         $this->assertNull($stopped->agentCancelArmed, 'and the arm is spent');
     }
 

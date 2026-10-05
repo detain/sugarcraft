@@ -24,7 +24,8 @@ use SugarCraft\Core\Msg;
  *   follow-up run that continues its conversation ({@see Host\AgentResume}).
  * - {@see CANCEL}: soft cancel — a `cancel` control the run reads at its next
  *   tool or step, so it stops resumable. {@see STOP} is the hard second
- *   press: the turn's own `cancel_tool` for the run's Task call.
+ *   press (roadmap P-E1): `agent_cancel{agentId, callId}` on the turn that
+ *   holds the run's Task call — SIGTERM, then SIGKILL two seconds later.
  * - {@see PAUSE} / {@see RESUME}: hold a running run at its next step
  *   boundary (for ten minutes at most, see
  *   {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}) and let it go again.

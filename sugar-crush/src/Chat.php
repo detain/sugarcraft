@@ -9945,9 +9945,13 @@ final class Chat implements Model
      *   ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}). It is the one
      *   route that reaches every run alike — a lone Task in the turn's child,
      *   a parallel member in its own process, a detached follow-up.
-     * - stop: the hard second press — the turn's own `cancel_tool` for the
-     *   run's Task call (as the agents strip's `c` does), plus the soft
-     *   cancel for a run no call of this turn holds.
+     * - stop: the hard second press (roadmap P-E1) — `agent_cancel{agentId,
+     *   callId}` on the turn that holds the run's Task call: the turn child
+     *   SIGTERMs a parallel member (it stops resumable at its next tool or
+     *   step) and SIGKILLs its tree if it is still there two seconds later;
+     *   a lone Task, which runs in the turn's own process, stops at its next
+     *   boundary. The soft cancel goes too, and is all a run no call of this
+     *   turn holds (a nested or detached one) can get.
      * - resume on a FINISHED run continues it ({@see followUpAgent()}).
      * - open-session: the run's stored child session becomes the session on
      *   screen, a normal one to type into — refused mid-turn, as every
@@ -10002,8 +10006,14 @@ final class Chat implements Model
                 continue;
             }
 
-            if ($msg->verb === AgentControlMsg::STOP) {
-                [$chat] = $chat->route(new CancelAgentRunMsg($state->parentCallId));
+            if ($msg->verb === AgentControlMsg::STOP && $chat->inFlight && $state->parentCallId !== '') {
+                foreach ($chat->history as $message) {
+                    if ($message->pendingToolCallId === $state->parentCallId) {
+                        $chat->inFlightCancellation?->cancelAgent($id, $state->parentCallId);
+
+                        break;
+                    }
+                }
             }
             if ($inbox === null) {
                 $problems[] = sprintf('%s cannot be reached: this session keeps no agent mailboxes', $state->name);

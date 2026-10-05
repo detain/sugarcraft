@@ -134,6 +134,7 @@ sugar-crush/tests/Context/EnvironmentBlockTest.php	3.044	49
 sugar-crush/tests/Tools/TaskNestingDepthCapTest.php	3.000	6
 sugar-crush/tests/Memory/MemoryStoreTest.php	2.959	67
 sugar-crush/tests/LSP/LspExchangeLockTest.php	2.936	15
+sugar-crush/tests/Runtime/AgentHardCancelTest.php	2.928	7
 sugar-crush/tests/Tools/BuiltIn/AtomicEditWriteTest.php	2.885	21
 sugar-crush/tests/Host/SessionHostTest.php	2.800	10
 sugar-crush/tests/Chat/AutomaticCompactionModelSummaryTest.php	2.777	37

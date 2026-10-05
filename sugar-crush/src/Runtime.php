@@ -2452,6 +2452,12 @@ final class Runtime
                     if ($asks !== null && $tool instanceof \SugarCraft\Crush\Tools\RelaysPermissionAsks) {
                         $tool = $tool->withPermissionApprover($asks->childApprover());
                     }
+                    // P-E1: a delegated run takes the Agent View's hard stop
+                    // (SIGTERM) as a request to stop resumable at its next
+                    // tool or step; the reap loop kills it if it does not.
+                    if ($tool instanceof StreamsActivity) {
+                        \SugarCraft\Crush\Support\AgentCancelRequests::armGracefulStop($job['call']->id());
+                    }
                     $this->runToolInChild($file, $tool, $job['call'], $job['args']);
                 }
 
@@ -2510,13 +2516,81 @@ final class Runtime
                     }
                 }
 
+                // P-E1: the Agent View's hard stop of one delegated run
+                // (`agent_cancel{agentId, callId}`) — the escalation of the
+                // soft cancel the run has not acted on. The member is asked
+                // first (SIGTERM to it and everything it started; it stops
+                // resumable at its next tool or step and its own result is
+                // released), and its tree is SIGKILLed only if it is still
+                // there after the grace. A member still queued for a slot is
+                // never started. Siblings and the turn go on.
+                foreach ($jobs as $index => $job) {
+                    if ($job['settled']) {
+                        // Gone on the SIGTERM itself (no pcntl handler, or it
+                        // came before the member armed one): no payload, and
+                        // the honest result is the hard stop, not a crash.
+                        if (isset($job['terminatedAt']) && $job['result'] === null
+                            && ($job['file'] === null || !is_file((string) $job['file']))) {
+                            if ($job['file'] !== null) {
+                                ToolIpcFiles::discard((string) $job['file']);
+                                $jobs[$index]['file'] = null;
+                            }
+                            $jobs[$index]['result'] = new ToolResult(
+                                toolCallId: $job['call']->id(),
+                                content: \SugarCraft\Crush\Support\AgentCancelRequests::STOPPED,
+                                isError: true,
+                            );
+                        }
+
+                        continue;
+                    }
+                    if (\SugarCraft\Crush\Support\AgentCancelRequests::forCall($job['call']->id()) === null) {
+                        continue;
+                    }
+                    if ($job['pid'] !== null && !isset($job['terminatedAt'])) {
+                        \SugarCraft\Crush\Support\AgentCancelRequests::terminate($job['pid']);
+                        $jobs[$index]['terminatedAt'] = microtime(true);
+                        $jobs[$index]['cancelled'] = true;
+                        $jobs[$index]['cancelReason'] = \SugarCraft\Crush\Support\AgentCancelRequests::STOPPED;
+
+                        continue;
+                    }
+                    if ($job['pid'] !== null) {
+                        if (microtime(true) - $job['terminatedAt'] < \SugarCraft\Crush\Support\AgentCancelRequests::GRACE_SECONDS) {
+                            continue;
+                        }
+                        ProcessContainment::killTree($job['pid']);
+                        self::reapKilled($job['pid']);
+                    } elseif (!($job['queued'] ?? false)) {
+                        continue;
+                    }
+                    if ($job['file'] !== null) {
+                        ToolIpcFiles::discard((string) $job['file']);
+                        $jobs[$index]['file'] = null;
+                    }
+                    $reason = $job['pid'] !== null
+                        ? \SugarCraft\Crush\Support\AgentCancelRequests::KILLED
+                        : \SugarCraft\Crush\Support\AgentCancelRequests::NEVER_STARTED;
+                    $jobs[$index]['queued'] = false;
+                    $jobs[$index]['settled'] = true;
+                    $jobs[$index]['cancelled'] = true;
+                    $jobs[$index]['cancelReason'] = $reason;
+                    $jobs[$index]['result'] = new ToolResult(
+                        toolCallId: $job['call']->id(),
+                        content: $reason,
+                        isError: true,
+                    );
+                }
+
                 // 1.C-4b: Esc stopped one running call (`cancel_tool{callId}`).
                 // Only that member goes — its process tree killed, exactly as
                 // the deadline would — and it settles as cancelled; a member
                 // still queued for a slot is never started. Its siblings and
-                // the turn go on.
+                // the turn go on. A member the hard stop above already holds
+                // is left to it, so its grace is not cut short.
                 foreach ($jobs as $index => $job) {
-                    if ($job['settled'] || !\SugarCraft\Crush\Support\ToolCancelRequests::isRequested($job['call']->id())) {
+                    if ($job['settled'] || !\SugarCraft\Crush\Support\ToolCancelRequests::isRequested($job['call']->id())
+                        || \SugarCraft\Crush\Support\AgentCancelRequests::forCall($job['call']->id()) !== null) {
                         continue;
                     }
                     if ($job['pid'] !== null) {
@@ -2607,7 +2681,7 @@ final class Runtime
                                             ? \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_FAILED
                                             : \SugarCraft\Crush\Events\SubAgentActivity::OUTCOME_COMPLETE),
                                     error: ($jobs[$next]['cancelled'] ?? false)
-                                        ? \SugarCraft\Crush\Support\ToolCancelRequests::CANCELLED
+                                        ? ($jobs[$next]['cancelReason'] ?? \SugarCraft\Crush\Support\ToolCancelRequests::CANCELLED)
                                         : ($failed ? 'the sub-agent\'s process exited before it reported how the run ended' : null),
                                 ));
                             }

@@ -194,7 +194,7 @@ final class ForkChannelAskRoundTripTest extends TestCase
     public function testTheFrameVocabularyIsD1(): void
     {
         self::assertSame(['ask', 'steer_ack', 'usage', 'step'], ChildChannel::TO_PARENT);
-        self::assertSame(['ask_reply', 'steer', 'cancel_soft', 'cancel_tool'], ChildChannel::TO_CHILD);
+        self::assertSame(['ask_reply', 'steer', 'cancel_soft', 'cancel_tool', 'agent_cancel'], ChildChannel::TO_CHILD);
     }
 
     /**

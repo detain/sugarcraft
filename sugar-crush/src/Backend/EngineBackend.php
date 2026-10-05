@@ -3808,6 +3808,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             foreach ($cancellation->takeToolCancels() as $callId) {
                 $sendToChild(['kind' => ChildChannel::CANCEL_TOOL, 'callId' => $callId]);
             }
+            // P-E1: each delegated run the user hard-stopped from the Agent
+            // View, as `agent_cancel` — SIGTERM, then SIGKILL, in the child.
+            foreach ($cancellation->takeAgentCancels() as $request) {
+                $sendToChild(['kind' => ChildChannel::AGENT_CANCEL] + $request);
+            }
             if (!$softCancelSent && $cancellation->isSoftCancelled()) {
                 $softCancelSent = true;
                 $sendToChild(['kind' => ChildChannel::CANCEL_SOFT]);
@@ -4471,8 +4476,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // 1.C-4b: `cancel_tool{callId}` stops one running call. The
             // code that can stop it — the concurrent reap loop, a lone Task's
             // progress hook — asks by call id; this is where it learns.
+            // P-E1: `agent_cancel{agentId, callId}` hard-stops one delegated
+            // run. The reap loop asks AgentCancelRequests for a concurrent
+            // member (SIGTERM, SIGKILL after the grace); the call id also
+            // joins the tool cancels, so a lone Task — which runs in this
+            // process and cannot be signalled — stops at its next boundary.
+            \SugarCraft\Crush\Support\AgentCancelRequests::listen(
+                static fn (): array => $channel->takeAgentCancels(),
+            );
             \SugarCraft\Crush\Support\ToolCancelRequests::listen(
-                static fn (): array => $channel->takeToolCancels(),
+                static fn (): array => [
+                    ...$channel->takeToolCancels(),
+                    ...\SugarCraft\Crush\Support\AgentCancelRequests::takeNewCallIds(),
+                ],
             );
             // complete()'s body, inlined so the loop gets the channel's two
             // per-step hooks: complete() is the frozen Backend contract

@@ -32,6 +32,7 @@ use SugarCraft\Crush\Tools\ToolCall;
  * | parent→child  | `steer`       | `steerId`, `text`                                         |
  * | parent→child  | `cancel_soft` | —                                                         |
  * | parent→child  | `cancel_tool` | `callId`                                                  |
+ * | parent→child  | `agent_cancel` | `agentId`, `callId`                                      |
  * | child→parent  | `steer_ack`   | `steerId`, `step`                                         |
  * | child→parent  | `usage`       | `step`, `usage`                                           |
  * | child→parent  | `step`        | `step`, `maxSteps`                                        |
@@ -50,7 +51,12 @@ use SugarCraft\Crush\Tools\ToolCall;
  * call: the turn child reads it through {@see takeToolCancels()} (behind
  * {@see \SugarCraft\Crush\Support\ToolCancelRequests}), kills a concurrent
  * member's process or stops a lone Task at its next boundary, and the call
- * settles as cancelled while the turn goes on to its boundary.
+ * settles as cancelled while the turn goes on to its boundary. An
+ * `agent_cancel{agentId, callId}` (P-E1) is the Agent View's hard stop of
+ * one delegated run: read through {@see takeAgentCancels()} (behind
+ * {@see \SugarCraft\Crush\Support\AgentCancelRequests}), it SIGTERMs a
+ * concurrent member — SIGKILL two seconds later if it has not gone — and
+ * stops a lone Task at its next boundary.
  *
  * ## No deadline in the child
  *
@@ -87,6 +93,7 @@ final class ChildChannel
     public const STEER_ACK = 'steer_ack';
     public const CANCEL_SOFT = 'cancel_soft';
     public const CANCEL_TOOL = 'cancel_tool';
+    public const AGENT_CANCEL = 'agent_cancel';
     public const USAGE = 'usage';
     public const STEP = 'step';
 
@@ -94,7 +101,7 @@ final class ChildChannel
     public const TO_PARENT = [self::ASK, self::STEER_ACK, self::USAGE, self::STEP];
 
     /** The D1 kinds the parent writes. */
-    public const TO_CHILD = [self::ASK_REPLY, self::STEER, self::CANCEL_SOFT, self::CANCEL_TOOL];
+    public const TO_CHILD = [self::ASK_REPLY, self::STEER, self::CANCEL_SOFT, self::CANCEL_TOOL, self::AGENT_CANCEL];
 
     /** A reply's `note` and a cancellation's reason are clipped to this many bytes (§5.1). */
     public const MAX_NOTE_BYTES = 2048;
@@ -131,7 +138,7 @@ final class ChildChannel
     /** @var list<array{steerId: string, text: string}> */
     private array $steers = [];
 
-    /** @var list<array<string, mixed>> buffered `cancel_soft` / `cancel_tool` frames */
+    /** @var list<array<string, mixed>> buffered `cancel_soft` / `cancel_tool` / `agent_cancel` frames */
     private array $controls = [];
 
     /** Latched once a `cancel_soft` has been read: a soft cancel is never withdrawn. */
@@ -322,7 +329,8 @@ final class ChildChannel
     }
 
     /**
-     * Buffered `cancel_soft` / `cancel_tool` frames, each handed out once.
+     * Buffered `cancel_soft` / `cancel_tool` / `agent_cancel` frames, each
+     * handed out once.
      *
      * @return list<array<string, mixed>>
      */
@@ -399,6 +407,42 @@ final class ChildChannel
         $this->controls = $kept;
 
         return $ids;
+    }
+
+    /**
+     * The delegated runs the parent has asked to hard-stop
+     * (`agent_cancel{agentId, callId}`, roadmap P-E1), each handed out once,
+     * in arrival order. Polls without blocking first and takes only the
+     * `agent_cancel` frames, leaving every other control where it is.
+     *
+     * Always empty in a process that does not own the socket.
+     *
+     * @return list<array{agentId: string, callId: string}>
+     */
+    public function takeAgentCancels(): array
+    {
+        if ((int) getmypid() !== $this->ownerPid) {
+            return [];
+        }
+
+        $this->poll();
+        $requests = [];
+        $kept = [];
+        foreach ($this->controls as $control) {
+            if (($control['kind'] ?? null) !== self::AGENT_CANCEL) {
+                $kept[] = $control;
+
+                continue;
+            }
+            $agentId = $control['agentId'] ?? null;
+            $callId = $control['callId'] ?? null;
+            if (is_string($agentId) && $agentId !== '' && is_string($callId) && $callId !== '') {
+                $requests[] = ['agentId' => $agentId, 'callId' => $callId];
+            }
+        }
+        $this->controls = $kept;
+
+        return $requests;
     }
 
     /**
@@ -525,7 +569,7 @@ final class ChildChannel
             return;
         }
 
-        if ($kind === self::CANCEL_SOFT || $kind === self::CANCEL_TOOL) {
+        if ($kind === self::CANCEL_SOFT || $kind === self::CANCEL_TOOL || $kind === self::AGENT_CANCEL) {
             $this->controls[] = $frame;
         }
     }

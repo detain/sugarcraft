@@ -326,6 +326,7 @@ big-endian length plus a `serialize()`d array, decoded with
 | parent → child | `steer` | `steerId`, `text`: a message the user sent mid-turn (`CancellationToken::steer()`), drained at the next step boundary by `Backend\SocketSteerInbox` and appended as a `[steering] …` user row; once one is waiting, the step's unstarted sequential calls are answered `Skipped to process an incoming message.` |
 | child → parent | `steer_ack` | `steerId`, `step`: where the steer landed (`CancellationToken::acknowledgedSteers()`) |
 | parent → child | `cancel_tool` | `callId`: stop that running call now (`CancellationToken::cancelTool()`); sent ahead of the same Escape's `cancel_soft` |
+| parent → child | `agent_cancel` | `agentId`, `callId`: hard-stop that delegated run (`CancellationToken::cancelAgent()`), the Agent View's second cancel press |
 
 - `askId` is the first 16 hex digits of a hash over `{toolCallId, tool, args}`.
   The parent hands each question to `$onEvent` as an `Events\PermissionAsked`
@@ -372,6 +373,24 @@ big-endian length plus a `serialize()`d array, decoded with
   (`Support\ToolCallCancelled`), cancelled and resumable. A sequential tool run
   in the turn child itself has no stop point and runs to its end, after which
   the soft cancel ends the turn.
+- **Agent hard cancel (P-E1).** In the Agent View (or the agent dashboard) a
+  second cancel of the same run within 3 s escalates the soft mailbox cancel:
+  Chat calls `CancellationToken::cancelAgent()` for a run
+  whose `Task` call this turn holds, and the parent's cancel poll writes one
+  `agent_cancel{agentId, callId}`. In the child,
+  `ChildChannel::takeAgentCancels()` feeds `Support\AgentCancelRequests`
+  (answers only in the turn child). The concurrent reap loop sends SIGTERM to
+  that member and everything it started (never the turn's own process group).
+  The member armed `AgentCancelRequests::armGracefulStop()` right after its
+  fork, so for it SIGTERM is a request: its `Task` run stops at its next tool
+  start or provider step, cancelled and resumable, and its own result is
+  released. A member still there 2 s later has its tree SIGKILLed and settles
+  as `Stopped by the user (hard cancel from the Agent View): …`; one still
+  queued for a delegation slot is never started. The call id also joins
+  `ToolCancelRequests`, so a lone `Task`, which runs in the turn child and
+  cannot be signalled, stops at its next boundary as Esc stops it. A run that
+  no call of this turn holds (a nested run, a detached follow-up) gets the soft
+  cancel only.
 
 **The `subagent` frame (version 2).** `Events\SubAgentActivity::toArray()` is
 the one wire shape for a delegated run's beats; the fork frame, the relay

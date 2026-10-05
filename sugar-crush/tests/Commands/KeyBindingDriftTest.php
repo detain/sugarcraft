@@ -1534,7 +1534,12 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame([], $token->takeToolCancels(), 'softly: the turn\'s call is left alone');
 
                 $asked->update($k[0]);
-                $this->assertSame(['call_2'], $token->takeToolCancels(), 'a second press stops it at once');
+                $this->assertSame([], $token->takeToolCancels());
+                $this->assertSame(
+                    [['agentId' => 'run-2', 'callId' => 'call_2']],
+                    $token->takeAgentCancels(),
+                    'a second press hard-stops it (P-E1 agent_cancel)',
+                );
             },
             'agents.resume' => function (array $k): void {
                 [$app, $session] = $this->dashboardOn($this->stripApp(), 'run-2');
