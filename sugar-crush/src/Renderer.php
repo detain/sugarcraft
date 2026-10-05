@@ -609,6 +609,18 @@ final class Renderer
         return \SugarCraft\Crush\Config\Settings\UiSettings::int('toolOutputPreviewLines');
     }
 
+    /**
+     * Whether a settled tool call's output is shown in full until the user
+     * collapses it: the `expandToolOutput` setting (roadmap N-P4g, default
+     * off — hide-on-success, crush_feat.md §1 E5). {@see Chat::expanded()}
+     * then records only the calls that differ from it, so a `false` entry is
+     * a call the user closed. Thoughts keep their own collapsed default.
+     */
+    public static function toolOutputExpandedByDefault(): bool
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::bool('expandToolOutput');
+    }
+
     private const TOOL_OUTPUT_MAX_CHARS = 2000;
 
     /**
@@ -4549,7 +4561,7 @@ final class Renderer
             $row = $label . self::toolCallSuffix($result, $theme, $width, Width::of($label));
             $rawBody = $result->isError() ? ($result->error ?? '') : $result->result;
             $key = $result->id ?? $result->name;
-            $isExpanded = ($expanded[$key] ?? false) === true;
+            $isExpanded = ($expanded[$key] ?? self::toolOutputExpandedByDefault()) === true;
             // §8 E5: the same key Ctrl+O toggles, so a click and the keystroke
             // drive one expansion mechanism rather than two.
             // The HEAD, not the whole label: the row is located by

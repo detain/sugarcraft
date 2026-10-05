@@ -51,6 +51,7 @@ final class UiSettings
         'paletteMru',
         'diffPreviewRows',
         'toolOutputPreviewLines',
+        'expandToolOutput',
         'sessions.autoTitle',
         'promptSuggestions',
         'promptSuggestionHistory',

@@ -97,7 +97,9 @@ final class ToolsPane
                 }
                 $lines[] = Style::new()->foreground($color)->render(Width::truncate($label, $inner));
                 $keys[] = $key;
-                if ($key === null || !isset($expanded[$key])) {
+                // `=== true`: under `expandToolOutput` a `false` entry is a
+                // call the user closed (Chat::isToolOutputExpanded()).
+                if ($key === null || ($expanded[$key] ?? false) !== true) {
                     continue;
                 }
                 foreach ($detail as $line) {

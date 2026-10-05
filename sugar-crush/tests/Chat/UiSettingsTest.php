@@ -190,6 +190,28 @@ final class UiSettingsTest extends TestCase
         self::assertSame(MouseMode::CellMotion, Chat::mouseMode(), 'the save dropped the held value');
     }
 
+    public function testExpandToolOutputOpensSettledCallsAndCtrlOClosesThemAgain(): void
+    {
+        $chat = new Chat(history: [
+            Message::user('go'),
+            Message::assistant('')->withToolResults([\SugarCraft\Crush\ToolResult::ok('grep', "alpha\nBODY-LINE", 'call_1')]),
+        ], rows: 30, cols: 100);
+
+        self::assertFalse($chat->isToolOutputExpanded('call_1'), 'collapsed by default');
+        self::assertStringNotContainsString('BODY-LINE', \SugarCraft\Core\Util\Ansi::strip(Renderer::render($chat)));
+
+        $this->writeConfig(['expandToolOutput' => true]);
+        self::assertTrue($chat->isToolOutputExpanded('call_1'));
+        self::assertStringContainsString('BODY-LINE', \SugarCraft\Core\Util\Ansi::strip(Renderer::render($chat)), 'the transcript paints it in full');
+        self::assertFalse($chat->isToolOutputExpanded('thought.0123456789abcdef'), 'a thought keeps its own default');
+
+        $closed = $chat->toggleToolOutput('call_1');
+        self::assertFalse($closed->isToolOutputExpanded('call_1'));
+        self::assertSame(['call_1' => false], $closed->expanded(), 'only the deviation is recorded');
+        self::assertStringNotContainsString('BODY-LINE', \SugarCraft\Core\Util\Ansi::strip(Renderer::render($closed)));
+        self::assertSame([], $closed->toggleToolOutput('call_1')->expanded());
+    }
+
     public function testTheWheelStepIsTheSetting(): void
     {
         $this->writeConfig(['scrollWheelLines' => 5]);

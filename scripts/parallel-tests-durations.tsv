@@ -405,7 +405,7 @@ sugar-crush/tests/Backend/InTurnCompressionTest.php	0.400	5
 sugar-crush/tests/Chat/CompressCommandsTest.php	0.400	5
 sugar-crush/tests/Backend/CompactSelfPreviewTest.php	0.400	5
 sugar-crush/tests/App/AgentShellCommandsTest.php	0.400	15
-sugar-crush/tests/Chat/UiSettingsTest.php	0.400	20
+sugar-crush/tests/Chat/UiSettingsTest.php	0.400	21
 sugar-crush/tests/Tools/BuiltIn/EditTest.php	0.398	15
 sugar-crush/tests/Cli/BootstrapClaudeMcpGrantTest.php	0.394	10
 sugar-crush/tests/Config/TrustKeyDocumentationDriftTest.php	0.394	12

@@ -248,6 +248,16 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp('Recent messages (each clipped to 2000 characters) the prompt-suggestion call is shown.')
                 ->withReaderSymbol(TitleService::class . '::promptSuggestionHistory')
                 ->withReadBy('`TitleService::suggestionCall()` → `promptSuggestionHistory()`'),
+            SettingDefinition::new('expandToolOutput', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel('Expand tool output')
+                ->withHelp('Show each finished tool call\'s output in full in the transcript; Ctrl+O or a click still collapses one.')
+                ->withReaderSymbol(Renderer::class . '::toolOutputExpandedByDefault')
+                ->withReadBy('`Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()`'),
             SettingDefinition::new('maxCheckpoints', SettingType::Int, EnhancedSessionStore::MAX_CHECKPOINTS_PER_SESSION)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Tuning)

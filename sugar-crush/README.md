@@ -976,7 +976,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these one hundred and seven keys are layered — `provider`, `models`,
+Only these one hundred and eight keys are layered — `provider`, `models`,
 `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`,
 `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1006,7 +1006,7 @@ Only these one hundred and seven keys are layered — `provider`, `models`,
 `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
 `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
 `sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
-`promptSuggestionHistory`, `maxCheckpoints`, `lintCommands`,
+`promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `lintCommands`,
 `disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
 `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
 `debug.commands`, `debug.rules`.

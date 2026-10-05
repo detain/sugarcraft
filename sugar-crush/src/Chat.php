@@ -9314,11 +9314,38 @@ final class Chat implements Model
     }
 
     /**
-     * True when $id's tool output is currently expanded.
+     * True when $id's tool output is currently expanded: its entry in the
+     * expanded map, else the default — collapsed, or expanded for a tool call
+     * under the `expandToolOutput` setting ({@see expandedByDefault()}).
      */
     public function isToolOutputExpanded(string $id): bool
     {
-        return ($this->expanded[$id] ?? false) === true;
+        return ($this->expanded[$id] ?? self::expandedByDefault($id)) === true;
+    }
+
+    /**
+     * What `$id` shows with no entry in the expanded map: a thought is
+     * collapsed, a tool call follows `expandToolOutput` (roadmap N-P4g).
+     */
+    private static function expandedByDefault(string $id): bool
+    {
+        return !str_starts_with($id, 'thought.') && Renderer::toolOutputExpandedByDefault();
+    }
+
+    /**
+     * Record that `$id` is `$open`: an entry only when that differs from the
+     * default, so the map stays the size of what the user changed — `true`
+     * for a call opened, `false` for one closed under `expandToolOutput`.
+     *
+     * @param array<string, bool> $expanded
+     */
+    private static function recordExpansion(array &$expanded, string $id, bool $open): void
+    {
+        if ($open === self::expandedByDefault($id)) {
+            unset($expanded[$id]);
+        } else {
+            $expanded[$id] = $open;
+        }
     }
 
     /**
@@ -9331,11 +9358,7 @@ final class Chat implements Model
     public function toggleToolOutput(string $id): self
     {
         $expanded = $this->expanded;
-        if (($expanded[$id] ?? false) === true) {
-            unset($expanded[$id]);
-        } else {
-            $expanded[$id] = true;
-        }
+        self::recordExpansion($expanded, $id, !$this->isToolOutputExpanded($id));
 
         return $this->mutate(['expanded' => $expanded]);
     }
@@ -9593,11 +9616,7 @@ final class Chat implements Model
         $expand = !$this->isToolOutputExpanded($ids[0]);
         $expanded = $this->expanded;
         foreach ($ids as $id) {
-            if ($expand) {
-                $expanded[$id] = true;
-            } else {
-                unset($expanded[$id]);
-            }
+            self::recordExpansion($expanded, $id, $expand);
         }
 
         return [$this->mutate(['expanded' => $expanded]), null];
