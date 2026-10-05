@@ -13,6 +13,7 @@ import { useConnectionStore } from './stores/connection'
 import { useLayoutStore } from './stores/layout'
 import { useSessionsStore } from './stores/sessions'
 import { useSettingsStore } from './stores/settings'
+import SessionTools from './components/panels/SessionTools.vue'
 
 const connection = useConnectionStore()
 // Created up front so they hear the first handshake and every event after it.
@@ -85,6 +86,7 @@ async function signOut(): Promise<void> {
       <button v-if="connection.status !== 'signed-out'" type="button" class="link" @click="signOut">sign out</button>
     </header>
     <ConnectionBanner />
+    <SessionTools v-if="!onLogin" :active-id="activeId" />
     <div class="body">
       <SessionSidebar v-if="!onLogin" class="side" :active-id="activeId" />
       <main class="content">

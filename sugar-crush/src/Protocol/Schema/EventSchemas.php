@@ -43,14 +43,37 @@ final class EventSchemas
             'partId' => Schema::string(),
             'offset' => Schema::integer(0)->describe('Byte offset into the part; a gap means a delta was dropped.'),
         ], ['text', 'partId', 'offset']);
+        // The P-B v2 beat ({@see \SugarCraft\Crush\Events\SubAgentActivity::toArray()}).
         $subagent = Schema::object([
+            'v' => Schema::integer(1),
             'id' => Schema::string(),
             'op' => Schema::string(),
             'name' => Schema::string()->nullable(),
-            'task' => Schema::string()->nullable(),
-            'parentCallId' => Schema::string()->nullable(),
+            'task' => Schema::string()->nullable()->describe('The delegated prompt; carried on started only.'),
+            'seq' => Schema::integer(0),
             'tail' => Schema::any(),
+            'tokens' => Schema::integer(0),
+            'cost' => Schema::number(0),
+            'lines' => Schema::integer(0),
+            'model' => Schema::string(),
+            'context' => Schema::integer(0),
+            'calls' => Schema::arrayOf(Schema::object([
+                'id' => Schema::string(),
+                'label' => Schema::string(),
+                'state' => Schema::string(),
+                'at' => Schema::integer(),
+            ], ['id', 'label', 'state'])),
+            'parentCallId' => Schema::string()->nullable(),
+            'parentAgentId' => Schema::string()->nullable(),
+            'description' => Schema::string(),
+            'items' => Schema::arrayOf(Schema::map(Schema::any())),
+            'stats' => Schema::map(Schema::number()),
             'outcome' => Schema::any(),
+            'error' => Schema::string()->nullable(),
+            'resumeId' => Schema::string()->nullable(),
+            'transcriptLog' => Schema::string()->nullable(),
+            'parentSessionId' => Schema::string()->nullable(),
+            'childSessionId' => Schema::string()->nullable(),
         ], ['id', 'op']);
         $summary = Schema::ref(D::SESSION_SUMMARY);
 

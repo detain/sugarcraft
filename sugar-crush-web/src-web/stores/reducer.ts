@@ -1,5 +1,6 @@
 import type { EventEnvelope, Events, PendingAsk, PermissionMode, QueueEntry, SessionSnapshot, Usage } from '../protocol/generated'
 import { utf8Length } from '../protocol/jsonrpc'
+import { keepStarted } from './agents/tree'
 
 /**
  * The session reducer (Appendix O §7.5): what one session's events do to its
@@ -515,7 +516,8 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
     case 'subagent.progress':
     case 'subagent.finished': {
       const { data } = envelope as unknown as Ev<'subagent.started'>
-      state.subagents[data.id] = { ...state.subagents[data.id], ...data }
+      // Only `started` names the task: a later beat must not blank it.
+      state.subagents[data.id] = keepStarted(state.subagents[data.id], data as SubAgent)
       break
     }
 

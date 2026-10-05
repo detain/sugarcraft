@@ -101,6 +101,7 @@ sugar-crush/tests/Renderer/ImageRenderingTest.php	3.849	8
 sugar-crush/tests/Cli/BootstrapTest.php	3.835	27
 sugar-crush/tests/Support/FixtureLifetimeCensusTest.php	3.827	3
 sugar-crush/tests/Backend/TaskSpendPropagationTest.php	3.813	12
+sugar-crush/tests/Server/AgentsWorkflowMethodsTest.php	3.800	7
 sugar-crush/tests/Backend/EngineBackendTeardownKillsToolTreeTest.php	3.775	2
 sugar-crush/tests/MCP/ClaudeCodeMcpClientForkSafetyTest.php	3.718	3
 sugar-crush/tests/Host/SessionHostCommandsTest.php	3.700	14

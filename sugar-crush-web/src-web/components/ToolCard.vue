@@ -3,6 +3,9 @@ import { computed, ref } from 'vue'
 import { diffStats, parseUnifiedDiff } from '../lib/diff'
 import { duration, keyArgument } from '../lib/format'
 import type { SubAgent, ToolItem } from '../stores/reducer'
+import { usePanelsStore } from '../stores/agents/panels'
+import { buildTree, foldRuns, startedBy } from '../stores/agents/tree'
+import SubAgentTree from './agents/SubAgentTree.vue'
 import DiffView from './DiffView.vue'
 import ReasoningFold from './ReasoningFold.vue'
 
@@ -29,6 +32,17 @@ const icon = computed(() => {
   }
 })
 const argsJson = computed(() => JSON.stringify(props.item.arguments, null, 2))
+// The runs this call delegated to, live, with what they delegated in turn
+// (roadmap O-6c); a row opens the run's agent view in the side panels.
+const agentTree = computed(() =>
+  props.subagents && props.subagents.length > 0
+    ? buildTree(Object.values(foldRuns(props.subagents)), (run) => startedBy(run, props.item))
+    : [],
+)
+
+function openAgent(id: string): void {
+  usePanelsStore().openAgent(id)
+}
 </script>
 
 <template>
@@ -50,12 +64,8 @@ const argsJson = computed(() => JSON.stringify(props.item.arguments, null, 2))
       <DiffView v-if="item.diff" :diff="item.diff" />
       <pre v-if="item.content !== undefined && item.content !== ''" class="output" data-testid="tool-output">{{ item.content }}</pre>
       <button v-if="item.truncated" type="button" class="more" @click="emit('loadFull', item)">Load the full output</button>
-      <ul v-if="subagents && subagents.length > 0" class="agents">
-        <li v-for="agent in subagents" :key="agent.id">
-          <strong>{{ agent.name ?? agent.id }}</strong> · {{ agent.op }}<span v-if="agent.task"> · {{ agent.task }}</span>
-        </li>
-      </ul>
     </div>
+    <SubAgentTree v-if="agentTree.length > 0" class="agents" :nodes="agentTree" compact @open="openAgent" />
   </article>
 </template>
 
@@ -161,8 +171,7 @@ pre {
   justify-self: start;
 }
 .agents {
-  margin: 0;
-  padding-left: 1.2rem;
+  margin: 0 0.6rem 0.6rem;
   font-size: 0.875rem;
 }
 @keyframes spin {

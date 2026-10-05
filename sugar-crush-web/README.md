@@ -82,6 +82,16 @@ documents the protocol and the UI).
   permission mode (changeable).
 - **Reconnects** after 0.5 s doubling to 15 s (±30 % jitter) with a fresh
   ticket, resuming every followed session from its gap-free `seq` cursor.
+- **Side panels** (roadmap O-6c; the *panels* button): **Agents** — the
+  session's delegated runs as a live tree, also under each `Task` card, each
+  opening into an agent view with the run's own transcript, a box to message it
+  (or continue it once finished) and pause / resume / cancel; **Todo** — the
+  agent's todo list, live; **Background** — `/bg` sessions with output, stop
+  and *send to this session*; **Workflows** — run one, and the session's
+  `/workflow` and `Workflow` tool runs; **Memory** — notes per scope, search,
+  add, edit, delete.
+- **Command palette** (Ctrl+K / ⌘K): sessions, slash commands, panels, new
+  session, theme.
 
 ## Developing the UI
 

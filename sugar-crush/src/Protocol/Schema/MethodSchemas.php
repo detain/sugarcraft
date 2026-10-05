@@ -53,6 +53,22 @@ final class MethodSchemas
             'pid' => Schema::integer()->nullable(),
         ], ['root', 'primary', 'running']);
 
+        $agentId = Schema::string(128)->describe('A delegated run\'s id, as its `subagent.*` events name it.');
+        $agentSent = Schema::object([
+            'agentId' => Schema::string(),
+            'status' => Schema::enum(['queued', 'resuming'])->describe('queued: in the running run\'s mailbox, read at its next step; resuming: a finished run is being continued.'),
+            'msgId' => Schema::string(),
+        ], ['agentId', 'status']);
+        $commandRun = Schema::object([
+            'rows' => Schema::arrayOf(Schema::object([
+                'role' => Schema::string(),
+                'content' => Schema::string(),
+                'uiOnly' => Schema::boolean(),
+            ], ['role', 'content', 'uiOnly'])),
+            'effects' => Schema::arrayOf(Schema::string()),
+        ], ['rows', 'effects'], open: false);
+        $workflowStatus = Schema::object(['workflowId' => Schema::string(), 'status' => Schema::enum(\array_map(static fn (\SugarCraft\Crush\Workflows\WorkflowStatus $s): string => $s->value, \SugarCraft\Crush\Workflows\WorkflowStatus::cases()))], ['workflowId', 'status']);
+
         $schemas = [
             'server.hello' => [
                 Schema::object([
@@ -336,7 +352,47 @@ final class MethodSchemas
                 'permissionMode' => Schema::ref(D::PERMISSION_MODE),
                 'active' => Schema::boolean(),
             ], ['name']))],
-            'agents.subtree' => [$sessionOnly, $items(Schema::map(Schema::any())->describe('A sub-agent\'s latest `subagent.*` event data.'))],
+            'agents.subtree' => [$sessionOnly, $items(Schema::map(Schema::any())->describe('A delegated run\'s latest `subagent.*` event data, from the session\'s log and the live feed.'))],
+            'agents.transcript' => [
+                Schema::object([...$sid, 'agentId' => $agentId, 'offset' => Schema::integer(0), 'limit' => Schema::integer(1024, 65_536)], ['sessionId', 'agentId']),
+                Schema::object([
+                    'agentId' => Schema::string(),
+                    'offset' => Schema::integer(0)->describe('Where the next page starts: just past the last whole line read.'),
+                    'items' => Schema::arrayOf(Schema::object([
+                        't' => Schema::enum(\SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::TYPES),
+                        'ts' => Schema::integer(0),
+                        'text' => Schema::string(),
+                        'callId' => Schema::string(),
+                        'tool' => Schema::string(),
+                        'args' => Schema::map(Schema::any()),
+                        'ok' => Schema::boolean(),
+                        'content' => Schema::string(),
+                        'truncated' => Schema::boolean(),
+                        'status' => Schema::string(),
+                        'outcome' => Schema::string(),
+                        'error' => Schema::string(),
+                        'from' => Schema::string(),
+                        'mode' => Schema::string(),
+                        'msgId' => Schema::string(),
+                        'step' => Schema::integer(0),
+                    ], ['t'])),
+                    'more' => Schema::boolean(),
+                    'finished' => Schema::boolean(),
+                ], ['agentId', 'offset', 'items', 'more', 'finished']),
+            ],
+            'agents.message' => [
+                Schema::object([...$sid, 'agentId' => $agentId, 'text' => Schema::string(65_536)], ['sessionId', 'agentId', 'text']),
+                $agentSent,
+            ],
+            'agents.control' => [
+                Schema::object([
+                    ...$sid,
+                    'agentId' => $agentId,
+                    'verb' => Schema::enum(\SugarCraft\Crush\Agents\Live\AgentInbox::CONTROL_VERBS),
+                    'text' => Schema::string(65_536)->describe('What a resumed FINISHED run is told; the default asks it to continue.'),
+                ], ['sessionId', 'agentId', 'verb']),
+                $agentSent,
+            ],
 
             'bg.list' => [$empty, $items(Schema::ref(D::BACKGROUND_SESSION))],
             'bg.spawn' => [
@@ -364,6 +420,27 @@ final class MethodSchemas
                 Schema::object(['bgId' => Schema::string(128)], ['bgId']),
                 Schema::object(['bgId' => Schema::string(), 'outcome' => Schema::string()], ['bgId', 'outcome']),
             ],
+
+            'workflow.list' => [$empty, Schema::object([
+                'available' => Schema::boolean(),
+                'items' => Schema::arrayOf(Schema::object(['name' => Schema::string()], ['name'])),
+            ], ['available', 'items'])],
+            'workflow.run' => [
+                Schema::object([...$sid, 'name' => Schema::string(128), 'vars' => Schema::map(Schema::any())->describe('Context values for the run; each a string, number or boolean with no whitespace.')], ['sessionId', 'name']),
+                $commandRun,
+            ],
+            'workflow.pause' => [Schema::object(['workflowId' => Schema::string(256)], ['workflowId']), $workflowStatus],
+            'workflow.resume' => [Schema::object([...$sid, 'workflowId' => Schema::string(256)], ['sessionId', 'workflowId']), $commandRun],
+            'workflow.status' => [Schema::object(['workflowId' => Schema::string(256)], ['workflowId']), $workflowStatus],
+            'workflow.runs' => [$sessionOnly, $items(Schema::object([
+                'source' => Schema::enum(['command', 'tool']),
+                'name' => Schema::string(),
+                'status' => Schema::string(),
+                'running' => Schema::boolean(),
+                'workflowId' => Schema::string(),
+                'toolCallId' => Schema::string(),
+                'report' => Schema::string(),
+            ], ['source', 'name', 'status', 'running']))],
 
             'workspace.list' => [$empty, $items($workspace)],
             'workspace.open' => [Schema::object(['root' => Schema::string(4096)], ['root']), $workspace],

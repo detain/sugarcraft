@@ -623,6 +623,68 @@
         }
     },
     "methods": {
+        "agents.control": {
+            "description": "Cancel, pause or resume a delegated run.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "description": "A delegated run's id, as its `subagent.*` events name it."
+                    },
+                    "verb": {
+                        "enum": [
+                            "cancel",
+                            "pause",
+                            "resume"
+                        ]
+                    },
+                    "text": {
+                        "type": "string",
+                        "maxLength": 65536,
+                        "description": "What a resumed FINISHED run is told; the default asks it to continue."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "agentId",
+                    "verb"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "agentId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "enum": [
+                            "queued",
+                            "resuming"
+                        ],
+                        "description": "queued: in the running run's mailbox, read at its next step; resuming: a finished run is being continued."
+                    },
+                    "msgId": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agentId",
+                    "status"
+                ]
+            }
+        },
         "agents.list": {
             "description": "The agents a turn can delegate to.",
             "scope": "read",
@@ -668,6 +730,60 @@
                 ]
             }
         },
+        "agents.message": {
+            "description": "Message a delegated run: into its mailbox while it runs, as a follow-up once it finished.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "description": "A delegated run's id, as its `subagent.*` events name it."
+                    },
+                    "text": {
+                        "type": "string",
+                        "maxLength": 65536
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "agentId",
+                    "text"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "agentId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "enum": [
+                            "queued",
+                            "resuming"
+                        ],
+                        "description": "queued: in the running run's mailbox, read at its next step; resuming: a finished run is being continued."
+                    },
+                    "msgId": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "agentId",
+                    "status"
+                ]
+            }
+        },
         "agents.subtree": {
             "description": "The sub-agents a session's turns have delegated to, with their latest activity.",
             "scope": "read",
@@ -691,12 +807,139 @@
                         "items": {
                             "type": "object",
                             "additionalProperties": {},
-                            "description": "A sub-agent's latest `subagent.*` event data."
+                            "description": "A delegated run's latest `subagent.*` event data, from the session's log and the live feed."
                         }
                     }
                 },
                 "required": [
                     "items"
+                ]
+            }
+        },
+        "agents.transcript": {
+            "description": "A delegated run's own transcript, read from a byte offset.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "description": "A delegated run's id, as its `subagent.*` events name it."
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1024,
+                        "maximum": 65536
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "agentId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "agentId": {
+                        "type": "string"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Where the next page starts: just past the last whole line read."
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "t": {
+                                    "enum": [
+                                        "user",
+                                        "assistant",
+                                        "tool_call",
+                                        "tool_result",
+                                        "thinking",
+                                        "inbox",
+                                        "status"
+                                    ]
+                                },
+                                "ts": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "text": {
+                                    "type": "string"
+                                },
+                                "callId": {
+                                    "type": "string"
+                                },
+                                "tool": {
+                                    "type": "string"
+                                },
+                                "args": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "ok": {
+                                    "type": "boolean"
+                                },
+                                "content": {
+                                    "type": "string"
+                                },
+                                "truncated": {
+                                    "type": "boolean"
+                                },
+                                "status": {
+                                    "type": "string"
+                                },
+                                "outcome": {
+                                    "type": "string"
+                                },
+                                "error": {
+                                    "type": "string"
+                                },
+                                "from": {
+                                    "type": "string"
+                                },
+                                "mode": {
+                                    "type": "string"
+                                },
+                                "msgId": {
+                                    "type": "string"
+                                },
+                                "step": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            },
+                            "required": [
+                                "t"
+                            ]
+                        }
+                    },
+                    "more": {
+                        "type": "boolean"
+                    },
+                    "finished": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "agentId",
+                    "offset",
+                    "items",
+                    "more",
+                    "finished"
                 ]
             }
         },
@@ -2954,6 +3197,322 @@
                 ]
             }
         },
+        "workflow.list": {
+            "description": "The workflows /workflow run can start.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object"
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "available": {
+                        "type": "boolean"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "name"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "available",
+                    "items"
+                ]
+            }
+        },
+        "workflow.pause": {
+            "description": "Pause a workflow run before its next stage.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "workflowId": {
+                        "type": "string",
+                        "maxLength": 256
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "workflowId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "workflowId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "enum": [
+                            "draft",
+                            "pending",
+                            "running",
+                            "paused",
+                            "resuming",
+                            "completed",
+                            "failed",
+                            "cancelled"
+                        ]
+                    }
+                },
+                "required": [
+                    "workflowId",
+                    "status"
+                ]
+            }
+        },
+        "workflow.resume": {
+            "description": "Resume a paused workflow run in a session.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "workflowId": {
+                        "type": "string",
+                        "maxLength": 256
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "workflowId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "role": {
+                                    "type": "string"
+                                },
+                                "content": {
+                                    "type": "string"
+                                },
+                                "uiOnly": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "role",
+                                "content",
+                                "uiOnly"
+                            ]
+                        }
+                    },
+                    "effects": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "rows",
+                    "effects"
+                ],
+                "additionalProperties": false
+            }
+        },
+        "workflow.run": {
+            "description": "Run a workflow in a session, as /workflow run does: it occupies the session's turn.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "vars": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "description": "Context values for the run; each a string, number or boolean with no whitespace."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "name"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "role": {
+                                    "type": "string"
+                                },
+                                "content": {
+                                    "type": "string"
+                                },
+                                "uiOnly": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "role",
+                                "content",
+                                "uiOnly"
+                            ]
+                        }
+                    },
+                    "effects": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "rows",
+                    "effects"
+                ],
+                "additionalProperties": false
+            }
+        },
+        "workflow.runs": {
+            "description": "The workflow runs a session's transcript holds: /workflow reports and Workflow tool calls.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    }
+                },
+                "required": [
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "source": {
+                                    "enum": [
+                                        "command",
+                                        "tool"
+                                    ]
+                                },
+                                "name": {
+                                    "type": "string"
+                                },
+                                "status": {
+                                    "type": "string"
+                                },
+                                "running": {
+                                    "type": "boolean"
+                                },
+                                "workflowId": {
+                                    "type": "string"
+                                },
+                                "toolCallId": {
+                                    "type": "string"
+                                },
+                                "report": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "source",
+                                "name",
+                                "status",
+                                "running"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            }
+        },
+        "workflow.status": {
+            "description": "A workflow run's status.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "workflowId": {
+                        "type": "string",
+                        "maxLength": 256
+                    }
+                },
+                "required": [
+                    "workflowId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "workflowId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "enum": [
+                            "draft",
+                            "pending",
+                            "running",
+                            "paused",
+                            "resuming",
+                            "completed",
+                            "failed",
+                            "cancelled"
+                        ]
+                    }
+                },
+                "required": [
+                    "workflowId",
+                    "status"
+                ]
+            }
+        },
         "workspace.close": {
             "description": "Stop a workspace host; refused while one of its turns runs, unless force.",
             "scope": "write",
@@ -3587,6 +4146,10 @@
             "data": {
                 "type": "object",
                 "properties": {
+                    "v": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
                     "id": {
                         "type": "string"
                     },
@@ -3603,7 +4166,57 @@
                         "type": [
                             "string",
                             "null"
-                        ]
+                        ],
+                        "description": "The delegated prompt; carried on started only."
+                    },
+                    "seq": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "tail": {},
+                    "tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "cost": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "lines": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "context": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "calls": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string"
+                                },
+                                "label": {
+                                    "type": "string"
+                                },
+                                "state": {
+                                    "type": "string"
+                                },
+                                "at": {
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "label",
+                                "state"
+                            ]
+                        }
                     },
                     "parentCallId": {
                         "type": [
@@ -3611,8 +4224,59 @@
                             "null"
                         ]
                     },
-                    "tail": {},
-                    "outcome": {}
+                    "parentAgentId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    },
+                    "stats": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number"
+                        }
+                    },
+                    "outcome": {},
+                    "error": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "resumeId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "transcriptLog": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "parentSessionId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "childSessionId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
                 },
                 "required": [
                     "id",
@@ -3627,6 +4291,10 @@
             "data": {
                 "type": "object",
                 "properties": {
+                    "v": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
                     "id": {
                         "type": "string"
                     },
@@ -3643,7 +4311,57 @@
                         "type": [
                             "string",
                             "null"
-                        ]
+                        ],
+                        "description": "The delegated prompt; carried on started only."
+                    },
+                    "seq": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "tail": {},
+                    "tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "cost": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "lines": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "context": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "calls": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string"
+                                },
+                                "label": {
+                                    "type": "string"
+                                },
+                                "state": {
+                                    "type": "string"
+                                },
+                                "at": {
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "label",
+                                "state"
+                            ]
+                        }
                     },
                     "parentCallId": {
                         "type": [
@@ -3651,8 +4369,59 @@
                             "null"
                         ]
                     },
-                    "tail": {},
-                    "outcome": {}
+                    "parentAgentId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    },
+                    "stats": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number"
+                        }
+                    },
+                    "outcome": {},
+                    "error": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "resumeId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "transcriptLog": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "parentSessionId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "childSessionId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
                 },
                 "required": [
                     "id",
@@ -3667,6 +4436,10 @@
             "data": {
                 "type": "object",
                 "properties": {
+                    "v": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
                     "id": {
                         "type": "string"
                     },
@@ -3683,7 +4456,57 @@
                         "type": [
                             "string",
                             "null"
-                        ]
+                        ],
+                        "description": "The delegated prompt; carried on started only."
+                    },
+                    "seq": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "tail": {},
+                    "tokens": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "cost": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "lines": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "context": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "calls": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string"
+                                },
+                                "label": {
+                                    "type": "string"
+                                },
+                                "state": {
+                                    "type": "string"
+                                },
+                                "at": {
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "label",
+                                "state"
+                            ]
+                        }
                     },
                     "parentCallId": {
                         "type": [
@@ -3691,8 +4514,59 @@
                             "null"
                         ]
                     },
-                    "tail": {},
-                    "outcome": {}
+                    "parentAgentId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    },
+                    "stats": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number"
+                        }
+                    },
+                    "outcome": {},
+                    "error": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "resumeId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "transcriptLog": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "parentSessionId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "childSessionId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
                 },
                 "required": [
                     "id",

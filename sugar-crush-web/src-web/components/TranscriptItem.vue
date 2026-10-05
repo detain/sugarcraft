@@ -8,10 +8,13 @@ import ToolCard from './ToolCard.vue'
 const props = defineProps<{ item: TranscriptItem; subagents?: Record<string, SubAgent> }>()
 const emit = defineEmits<{ loadFull: [item: ToolItem] }>()
 
+// Every run, when this call started one: the card grows the tree below its
+// own runs, so a run they delegated to (another call id) hangs under them.
 const agents = computed(() => {
   const item = props.item
   if (item.kind !== 'tool' || !props.subagents) return []
-  return Object.values(props.subagents).filter((agent) => agent.parentCallId === item.toolCallId)
+  const all = Object.values(props.subagents)
+  return item.name === 'Task' || all.some((agent) => agent.parentCallId === item.toolCallId) ? all : []
 })
 </script>
 
