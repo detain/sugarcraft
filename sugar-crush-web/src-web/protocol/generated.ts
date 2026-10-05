@@ -78,7 +78,7 @@ export interface PendingAsk {
   tool: string
   arguments: Record<string, unknown>
   reason?: string
-  /** `gate`, or `hook:<names>` */
+  /** `gate`, `hook:<names>`, or `tool:<name>` for a question the call puts itself (`AskUser`, `PlanExit`) */
   source?: string
   mode?: string
   options: ("once" | "always" | "reject")[]
@@ -159,13 +159,13 @@ export interface Usage {
 
 /** Every method: its params and its result. */
 export interface Methods {
-  /** Cancel, pause or resume a delegated run. */
+  /** Cancel, pause, resume or background a delegated run. */
   "agents.control": {
     params: {
       sessionId: SessionId
       /** A delegated run's id, as its `subagent.*` events name it. */
       agentId: string
-      verb: "cancel" | "pause" | "resume"
+      verb: "cancel" | "pause" | "resume" | "background"
       /** What a resumed FINISHED run is told; the default asks it to continue. */
       text?: string
       /** A retry with the same key gets the original answer (5 min). */
@@ -547,6 +547,8 @@ export interface Methods {
       }
       defaults: {
         permissionMode?: PermissionMode
+        /** The delivery a client should offer first for a prompt sent while a turn runs: the `queueMode` setting, `steer` unless set. A `session.send` that names none still queues. */
+        delivery?: "queue" | "steer" | "interrupt"
       }
       resumed: Record<string, Subscription | {
         error: string
@@ -751,10 +753,10 @@ export interface Methods {
   /** Effective values and where each came from, or one tier's file; secrets masked. */
   "settings.get": {
     params: {
-      scope?: "effective" | "user" | "project"
+      scope?: "effective" | "user" | "project" | "project-shared"
     }
     result: {
-      scope: "effective" | "user" | "project"
+      scope: "effective" | "user" | "project" | "project-shared"
       /** Effective: key => {value, source, sourceLabel, sourcePath, shadowed, locked, lockReason}. A tier: the file's own object. */
       values: Record<string, unknown>
       /** Effective only: the files behind the layers, and whether each was read. */
@@ -769,7 +771,7 @@ export interface Methods {
   /** What a save would write — the target file's diff, when each change applies, and what blocks it — without writing. */
   "settings.preview": {
     params: {
-      scope?: "user" | "project"
+      scope?: "user" | "project" | "project-shared"
       set?: Record<string, unknown>
       unset?: string[]
       key?: string
@@ -828,7 +830,7 @@ export interface Methods {
       })[]
       /** The tiers a save can target, and whether each can be written now. */
       tiers?: ({
-        scope: "user" | "project"
+        scope: "user" | "project" | "project-shared"
         label: string
         path?: string
         writable: boolean
@@ -836,7 +838,7 @@ export interface Methods {
       })[]
     }
   }
-  /** Write allowlisted settings to the user tier or a trusted project, in one write. */
+  /** Write allowlisted settings to the user tier or a trusted project's local or shared file, in one write. */
   "settings.set": {
     params: {
       key?: string
@@ -844,7 +846,7 @@ export interface Methods {
       reset?: boolean
       set?: Record<string, unknown>
       unset?: string[]
-      scope?: "user" | "project"
+      scope?: "user" | "project" | "project-shared"
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
     }
@@ -1166,7 +1168,7 @@ export interface Events {
     tool: string
     arguments: Record<string, unknown>
     reason?: string
-    /** `gate`, or `hook:<names>` */
+    /** `gate`, `hook:<names>`, or `tool:<name>` for a question the call puts itself (`AskUser`, `PlanExit`) */
     source?: string
     mode?: string
     options: ("once" | "always" | "reject")[]
