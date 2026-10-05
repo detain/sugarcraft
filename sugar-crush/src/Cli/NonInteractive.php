@@ -14,6 +14,8 @@ use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\ToolRefusal;
+use SugarCraft\Crush\Tools\BuiltIn\AskUserTool;
+use SugarCraft\Crush\Tools\BuiltIn\PlanExitTool;
 
 /**
  * The `-p "<prompt>"` / `run "<prompt>"` one-shot, non-interactive CLI path.
@@ -149,6 +151,12 @@ final class NonInteractive
     private const MAX_STDIN_BYTES = 10 * 1024 * 1024;
 
     /**
+     * Why a `-p` run puts no question to anyone (roadmap 5.7-2): what the
+     * model reads when it calls `AskUser` or `PlanExit` here.
+     */
+    public const NO_INTERACTIVE_USER = 'this is a non-interactive `-p` run, which asks nobody anything';
+
+    /**
      * Run one prompt to completion and print the result.
      *
      * $backend can be supplied directly — used by tests to avoid depending on
@@ -223,6 +231,8 @@ final class NonInteractive
             // directory refused wholesale for resolving out of the checkout.
             Bootstrap::reportProjectTierRefusals();
         }
+
+        $backend = self::withoutInteractiveUser($backend);
 
         // Audit 15b-15 residual: `@` mentions resolve from the typed prompt
         // against the same root the TUI's Chat uses (`--root`, else the cwd)
@@ -352,6 +362,37 @@ final class NonInteractive
         }
 
         return self::EXIT_OK;
+    }
+
+    /**
+     * $backend with the model's own questions closed (roadmap 5.7-2): every
+     * `AskUser` fails closed with a "no interactive user" result and every
+     * `PlanExit` is refused, so plan mode is never left in a `-p` run.
+     *
+     * Applied whatever approver the run carries. At a terminal
+     * {@see HeadlessPermissionPrompt} can take a `y`/`n` for a permission
+     * question, but an `AskUser` answer is words and a plan approval needs
+     * the plan in front of someone, so neither is put to stderr: the model is
+     * told nobody can answer and decides for itself, saying what it assumed.
+     * A backend that is not an engine has no tools to close.
+     */
+    public static function withoutInteractiveUser(Backend $backend): Backend
+    {
+        if (!$backend instanceof \SugarCraft\Crush\Backend\EngineBackend) {
+            return $backend;
+        }
+
+        $closed = false;
+        $tools = [];
+        foreach ($backend->tools() as $key => $tool) {
+            if ($tool instanceof AskUserTool || $tool instanceof PlanExitTool) {
+                $tool = $tool->withoutInteractiveUser(self::NO_INTERACTIVE_USER);
+                $closed = true;
+            }
+            $tools[$key] = $tool;
+        }
+
+        return $closed ? $backend->withTools($tools) : $backend;
     }
 
     /**

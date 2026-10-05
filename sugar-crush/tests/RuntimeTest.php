@@ -3887,12 +3887,13 @@ DOC;
         // `WebFetch` joined the divergence in audit F-P6: it moves no file,
         // so it is still read-only HERE, but an outbound fetch whose URL the
         // model composes is not safe to run unasked, so the gate no longer
-        // lists it. `Memory`, `Prune`, `Todo`, `Compress`, `Recall` and `Team`
-        // diverge because the gate classes them no-ask, not read: each touches
-        // only harness-owned state (`Recall` reads the session's own rows,
-        // `Team` writes the per-user team store).
+        // lists it. `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`,
+        // `AskUser` and `PlanExit` diverge because the gate classes them
+        // no-ask, not read: each touches only harness-owned state (`Recall`
+        // reads the session's own rows, `Team` writes the per-user team store,
+        // and the last two only put a question to the user).
         $this->assertSame(
-            ['Compress', 'Memory', 'Prune', 'Recall', 'Skill', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
+            ['AskUser', 'Compress', 'Memory', 'PlanExit', 'Prune', 'Recall', 'Skill', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
@@ -4092,8 +4093,11 @@ DOC;
         // nothing either: it returns rows the turn already holds. `Team`
         // (roadmap 4.6-2) writes only the per-user team store — task boards
         // and mailboxes, through TeamManager/TaskList/Mailbox — never a file
-        // in the checkout.
-        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team'];
+        // in the checkout. `AskUser` and `PlanExit` (roadmap 5.7-2) write
+        // nothing: they put a question to the user and return the answer
+        // (`PlanExit` reads the plan file; the host applies an approved
+        // plan's mode switch).
+        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit'];
     }
 
     /**

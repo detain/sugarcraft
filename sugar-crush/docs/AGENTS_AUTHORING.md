@@ -342,7 +342,7 @@ user message; a forged one is dropped and logged.
 Be precise about this, because "agent preset" reads like "the model can spawn
 one":
 
-- **`Task` delegates.** `Bootstrap::tools()` ships twenty-one
+- **`Task` delegates.** `Bootstrap::tools()` ships twenty-three
   built-in tools and one of them — `Task` — is exactly the delegation seam:
   it hands a bounded task to a sub-agent named from the session's agent
   roster and returns that worker's final text. With no session

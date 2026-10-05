@@ -28,7 +28,7 @@ bin/sugarcrush                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              21 built-ins + MCP bridges
+                                         ├─ Tools\*              23 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
@@ -812,14 +812,14 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **twenty-one** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `Bash`, `Compress`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `MemoryTool`, `Prune`, `Read`, `Recall`, `RepoMapTool`, `SkillTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships all twenty-one —
+`src/Tools/BuiltIn/` holds **twenty-three** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `AskUserTool`, `Bash`, `Compress`, `Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `Read`, `Recall`, `RepoMapTool`, `SkillTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships all twenty-three —
 `Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool.
 
-Domain matters here: **twenty-one is the count of *wired* tools, not of *usable*
+Domain matters here: **twenty-three is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable on every launch but answers every call with a "no
 language server configured" error until the user lists a server under the `lsp`
-setting. A figure saying "twenty-one working tools" would be the wrong claim.
+setting. A figure saying "twenty-three working tools" would be the wrong claim.
 
 Those servers are started once, at launch, by `LSP\LspLauncher` through
 `Bootstrap::lspClient()` (memoised per process and root, stopped at exit like
@@ -1211,7 +1211,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
-4. **A count carries its domain.** "Twenty-one tools" means wired built-ins.
+4. **A count carries its domain.** "Twenty-three tools" means wired built-ins.
    "Twelve skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are

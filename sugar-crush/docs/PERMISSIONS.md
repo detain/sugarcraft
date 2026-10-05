@@ -119,7 +119,7 @@ Three name classes drive the evaluators. Each built-in tool declares its class i
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Lsp`, `RepoMap`
 - **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `Task`, and anything starting `mcp__`
-- **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`
+- **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor` and `Skill`.
 <!-- tools:classes:end -->
@@ -648,6 +648,32 @@ situations, not two:
   on stdin would fight the render loop for keystrokes. A plain
   `completeAsync()` caller (one that never promised to answer) gets the same
   refusal from the turn child.
+
+**The model's own questions: `AskUser` and `PlanExit`.** `AskUser` puts one
+question to you, with up to six choices, the recommended one first. `PlanExit`
+puts the plan the model wrote to `.sugar-crush/plans/` up for approval, and is
+plan mode's way out. Both are `no-ask` to the gate: the call is itself the
+question, so a gate `Ask` in front of it would ask you twice, and both must run
+under `plan`, the mode they exist for. A `Deny` rule still turns either off.
+Each puts its question to the turn's approver, the one a gate `Ask` reaches, and
+reads the modal's keys as an answer:
+
+- `y` takes the first choice (`yes` when there are none), or approves the plan.
+  An approved plan ends plan mode when the turn ends, switching back to the mode
+  plan was entered from (`default` when the session started in plan).
+- `r` and a note is your answer in your own words (a choice's number picks that
+  choice). For a plan, the note is feedback the model revises the plan against.
+- `n` declines the question, or refuses the plan.
+
+Neither is asked where nobody can answer. In a `-p` run
+(`NonInteractive::withoutInteractiveUser()`), under `dont-ask`, or in a turn
+with no approver bound, `AskUser` returns a result telling the model to decide
+and state its assumption, and `PlanExit` refuses and leaves plan mode on.
+`PlanExit` also refuses outside plan mode. Both are withheld from `Task`
+sub-agents and workflow stages, so a sub-agent cannot interrupt you directly.
+**Not wired yet:** the engine does not hand its approver to these two tools, so
+today every call takes the no-approver branch, and `Alt+M` is still how plan
+mode ends.
 
 And any caller that holds no prompt at all must not turn "would
 have asked" into "no" — `PermissionGate::refuses()` answers `true` only for

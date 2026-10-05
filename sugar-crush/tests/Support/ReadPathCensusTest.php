@@ -745,6 +745,10 @@ final class ReadPathCensusTest extends TestCase
         'Tools/BuiltIn/Grep.php|glob' => [
             'PATH_JAIL — probes for excluded directories under the jailed search root',
         ],
+        'Tools/BuiltIn/PlanExitTool.php|file_get_contents' => [
+            'PATH_JAIL — the model\'s plan file, resolved through PathJail and read only when it is a `.md` '
+                . 'directly in `.sugar-crush/plans` (roadmap 5.7-2)',
+        ],
         'Tools/BuiltIn/Read.php|fopen' => [
             'PATH_JAIL — the read tool\'s one arm, streaming every read a page at a time (0.11)',
         ],
