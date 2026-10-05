@@ -202,9 +202,53 @@ final class AgentShellCommandsTest extends TestCase
         $this->assertSame($this->session, $refused->chat?->currentSessionId(), 'and the session on screen is unchanged');
     }
 
+    /**
+     * Roadmap P-E3: `Ctrl+X b` asks the run on screen — and only it — to
+     * move to the background, says so on the status line, and leaves the
+     * turn running: the run's own Task call is what returns early.
+     */
+    public function testCtrlXBAsksTheRunOnScreenToMoveToTheBackground(): void
+    {
+        $app = $this->app()->openAgentView('run-2');
+
+        [$asked] = $app->update(self::ctrlX())[0]->update(new KeyMsg(KeyType::Char, 'b'));
+
+        $this->assertSame(['background'], $this->controls('run-2'));
+        $this->assertSame([], $this->controls('run-1'));
+        $this->assertSame([], $this->controls('run-3'));
+        $this->assertStringContainsString('Moving explore to the background at its next step', (string) $asked->status);
+        $this->assertTrue($asked->chat?->inFlight, 'the turn goes on');
+        $this->assertSame('run-2', $asked->agentViewTarget, 'and the view stays on the run');
+    }
+
+    public function testAFinishedRunCannotBeMovedToTheBackground(): void
+    {
+        $app = $this->app(finishedThird: true)->openAgentView('run-3');
+
+        [$refused] = $app->update(self::ctrlX())[0]->update(new KeyMsg(KeyType::Char, 'b'));
+
+        $this->assertSame([], $this->controls('run-3'), 'nothing is sent');
+        $history = $refused->chat?->history ?? [];
+        $this->assertStringContainsString('explore has already finished, so there is nothing to move to the background', $history[array_key_last($history)]->content);
+        $this->assertStringNotContainsString('Moving', (string) $refused->status, 'the status line promises nothing');
+    }
+
+    public function testANestedRunCannotBeMovedToTheBackground(): void
+    {
+        $app = $this->app();
+        $nested = new SubAgentActivity(SubAgentActivity::OP_STARTED, 'run-n', 'explore', 'a sub-task', 1, '', parentCallId: 'call_n', parentAgentId: 'run-1');
+        $app->chat?->agentLive()->apply($nested);
+
+        [$after] = $app->deliverAgentControl(new AgentControlMsg(AgentControlMsg::BACKGROUND, ['run-n']));
+
+        $this->assertSame([], $this->controls('run-n'), 'nothing is sent');
+        $history = $after->chat?->history ?? [];
+        $this->assertStringContainsString('explore is a nested run; only a run this conversation delegated can move to the background', $history[array_key_last($history)]->content);
+    }
+
     public function testEveryControlVerbIsKnownAndOnlyThose(): void
     {
-        $this->assertSame(['message', 'cancel', 'stop', 'pause', 'resume', 'open-session'], AgentControlMsg::VERBS);
+        $this->assertSame(['message', 'cancel', 'stop', 'pause', 'resume', 'open-session', 'background'], AgentControlMsg::VERBS);
         $this->expectException(\InvalidArgumentException::class);
         new AgentControlMsg('explode', ['run-1']);
     }

@@ -1112,8 +1112,10 @@ final class KeyHelpTest extends TestCase
         // formerly dormant `shell.group-input` and `agents.cancel/.resume/
         // .stop-all`, and four `Ctrl+X` chords — 146 lines, 113 -> 121,
         // fitting at 100x151. Plan mode's `Alt+M` (5.7-1, `chat.plan-mode`):
-        // 147 lines, 121 -> 122, fitting at 100x152.
-        foreach ([[100, 30, 122], [100, 152, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // 147 lines, 121 -> 122, fitting at 100x152. Background promotion
+        // (P-E3) put the last dormant row live, `agentview.background`
+        // (`Ctrl+X b`): 148 lines, 122 -> 123, fitting at 100x153.
+        foreach ([[100, 30, 123], [100, 153, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1177,8 +1179,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 152 rows, not 80: the list is 147 content lines now (124 live
-            // rows, 12 headers, 11 separators; 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
+            // 153 rows, not 80: the list is 148 content lines now (125 live
+            // rows, 12 headers, 11 separators; 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
             // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
@@ -1187,7 +1189,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 152))),
+                Width::of($this->footer($this->chat('', $cols, 153))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }
@@ -1310,6 +1312,14 @@ final class KeyHelpTest extends TestCase
                 $binding->id . ' has no effect yet and must not be promised',
             );
         }
+
+        // The last dormant row went live with roadmap P-E3, and a live row
+        // IS promised — so the scan above reads the whole reference.
+        $this->assertStringContainsString(
+            (string) KeyBindingRegistry::byId('agentview.background')?->description,
+            $seen,
+            'agentview.background is live, so the reference lists it',
+        );
     }
 
     public function testContextHeadingsAreShown(): void

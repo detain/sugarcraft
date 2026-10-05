@@ -198,6 +198,7 @@ sugar-crush/tests/Workflows/WorkflowIdentifierTest.php	1.695	10
 sugar-crush/tests/Tools/ToolPromptGuidanceTest.php	1.633	6
 sugar-crush/tests/Session/ContextLedgerPersistenceTest.php	1.600	7
 sugar-crush/tests/Hooks/BuiltIn/AutoCommitHookTest.php	1.600	5
+sugar-crush/tests/Tools/TaskToolPromoteToBackgroundTest.php	1.600	3
 sugar-crush/tests/App/DockDragBytePathTest.php	1.567	14
 sugar-crush/tests/Cli/BootstrapConfigPathOverrideTest.php	1.560	17
 sugar-crush/tests/Backend/AwaitPromiseDiagnosticArmTest.php	1.536	11
@@ -387,7 +388,7 @@ sugar-crush/tests/Backend/LiveLedgerFrameTest.php	0.400	9
 sugar-crush/tests/Backend/InTurnCompressionTest.php	0.400	5
 sugar-crush/tests/Chat/CompressCommandsTest.php	0.400	5
 sugar-crush/tests/Backend/CompactSelfPreviewTest.php	0.400	5
-sugar-crush/tests/App/AgentShellCommandsTest.php	0.400	12
+sugar-crush/tests/App/AgentShellCommandsTest.php	0.400	15
 sugar-crush/tests/Chat/UiSettingsTest.php	0.400	20
 sugar-crush/tests/Tools/BuiltIn/EditTest.php	0.398	15
 sugar-crush/tests/Cli/BootstrapClaudeMcpGrantTest.php	0.394	10

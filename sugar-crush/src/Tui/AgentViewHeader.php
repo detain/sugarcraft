@@ -217,6 +217,7 @@ final class AgentViewHeader
             SubAgentActivity::OUTCOME_COMPLETE => 'done',
             SubAgentActivity::OUTCOME_CANCELLED => 'cancelled',
             SubAgentActivity::OUTCOME_EMPTY => 'stopped without a report',
+            SubAgentActivity::OUTCOME_BACKGROUNDED => 'in the background',
             default => 'failed',
         };
     }

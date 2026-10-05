@@ -32,6 +32,11 @@ use SugarCraft\Core\Msg;
  *   RESUME on a finished run continues it with "Continue." (or $text).
  * - {@see OPEN_SESSION}: make the run's stored child session the session on
  *   screen — the "fork the agent into a full session" escape hatch.
+ * - {@see BACKGROUND}: promote a running foreground run to a background
+ *   session (roadmap P-E3) — it stops at its next tool or step, resumable,
+ *   and a background session continues the same conversation, so the
+ *   delegating `Task` call returns at once and the parent turn goes on; the
+ *   session's result is announced when it settles, like any background run.
  */
 final readonly class AgentControlMsg implements Msg
 {
@@ -41,9 +46,10 @@ final readonly class AgentControlMsg implements Msg
     public const PAUSE = 'pause';
     public const RESUME = 'resume';
     public const OPEN_SESSION = 'open-session';
+    public const BACKGROUND = 'background';
 
     /** Every verb, in the order the class doc lists them. */
-    public const VERBS = [self::MESSAGE, self::CANCEL, self::STOP, self::PAUSE, self::RESUME, self::OPEN_SESSION];
+    public const VERBS = [self::MESSAGE, self::CANCEL, self::STOP, self::PAUSE, self::RESUME, self::OPEN_SESSION, self::BACKGROUND];
 
     /**
      * @param list<string> $agentIds the runs it is for

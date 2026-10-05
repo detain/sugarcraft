@@ -926,35 +926,11 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      */
     private function startInBackground(string $toolCallId, string $agentName, string $prompt, array $args, string $resumeId, float $startedAt): ToolResult
     {
-        $agent = $this->agentManager?->get($agentName);
-        $engine = $this->engine;
-        $supervisor = $this->backgroundSupervisor;
-        if ($agent === null || $engine === null || $supervisor === null) {
-            return $this->refusal($toolCallId, 'a background run needs the session\'s agent roster, engine and background supervisor');
-        }
-
         $description = is_string($args['description'] ?? null) ? trim($args['description']) : '';
-        $delegation = array_filter([
-            'agent' => $agentName,
-            'description' => $description,
-            'model' => is_string($args['model'] ?? null) ? trim($args['model']) : '',
-            'resume' => $resumeId,
-            'permissionMode' => $engine->permissionGate()?->mode()->value ?? '',
-            'scope' => $this->delegationScope ?? $engine->sessionId() ?? '',
-        ], static fn (string $value): bool => $value !== '');
+        $model = is_string($args['model'] ?? null) ? trim($args['model']) : '';
 
         try {
-            $session = $supervisor->spawnSession(
-                name: ($description !== '' ? $description : self::snippet($prompt, 60)) . ' (@' . $agentName . ')',
-                // The daemon starts on the model this session is on now; the
-                // agent's own model (or the call's) is chosen over it there,
-                // exactly as in the foreground (4.1-1).
-                agent: trim($engine->model()) === '' ? $agent : $agent->withModel($engine->model()),
-                task: $prompt,
-                workingDirectory: $this->backgroundDirectory !== '' ? $this->backgroundDirectory : (getcwd() ?: '.'),
-                tags: ['task', \SugarCraft\Crush\Sessions\BackgroundSupervisor::AGENT_TAG_PREFIX . $agentName],
-                delegation: $delegation,
-            );
+            $session = $this->spawnDelegation($agentName, $prompt, $description, $model, $resumeId);
         } catch (\Throwable $e) {
             return $this->refusal($toolCallId, sprintf(
                 'agent "%s" could not be started in the background (%s); run it in the foreground instead (omit `background`)',
@@ -966,17 +942,148 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         return new ToolResult(
             toolCallId: $toolCallId,
             content: (string) json_encode(['agent_id' => $session->id, 'status' => 'running'], JSON_UNESCAPED_SLASHES)
-                . "\n\n" . sprintf(
-                    'Sub-agent "%s" is running in the background as %s. DO NOT sleep or poll for it, and do not call'
-                    . ' Task again to check on it: when it finishes, its status, report and stats (runtime, tokens,'
-                    . ' cost and the resume id that continues it) arrive in this conversation as a new message, and'
-                    . ' a turn starts for it if none is running. Carry on with other work meanwhile, or end your turn'
-                    . ' if there is none.',
-                    $agentName,
-                    $session->id,
-                ),
+                . "\n\n" . self::backgroundNote($agentName, $session->id),
             isError: false,
             durationMs: self::elapsedMs($startedAt),
+        );
+    }
+
+    /**
+     * What a run the user moved to the background is told when its
+     * background session takes the conversation up again (roadmap P-E3).
+     */
+    private const BACKGROUND_CONTINUE_TEXT = 'The user moved this run to the background; your task has not changed.'
+        . ' Continue where you left off, and end with your report.';
+
+    /**
+     * Hand a run the user moved to the background (roadmap P-E3, `Ctrl+X b`
+     * in the Agent View) to a background session, and answer the delegating
+     * call at once — so the parent turn goes on instead of waiting for it.
+     *
+     * The run has already stopped at a step boundary and been saved
+     * ($resumeId, $resume); the session resumes that saved conversation
+     * through this tool in its own process exactly as `Task(background:
+     * true, resume: …)` would ({@see startInBackground()}), so the preset's
+     * grants, model and step cap still hold, and the host adopts the session
+     * and announces its result when it settles (4.3-2). The foreground leg
+     * ends with a `backgrounded` finished frame naming the session.
+     *
+     * A run that could not be saved, or a session that could not be
+     * started, is reported the way a cancelled run is — stopped, with what
+     * resumes it.
+     *
+     * @param \Closure(string, string, ?string, string, ?string): void $finish the run's settle-and-announce
+     */
+    private function moveToBackground(
+        string $toolCallId,
+        string $agentName,
+        string $description,
+        string $model,
+        string $task,
+        ?string $resumeId,
+        string $resume,
+        int $steps,
+        float $startedAt,
+        ?Usage $spent,
+        \Closure $finish,
+        string $notes,
+    ): ToolResult {
+        $stopped = sprintf('sub-agent "%s" was stopped to move it to the background', $agentName);
+        $session = null;
+        $why = null;
+        if ($resumeId === null) {
+            $why = $stopped . ', but it could not be saved for a background session to continue';
+        } else {
+            try {
+                $session = $this->spawnDelegation(
+                    $agentName,
+                    self::BACKGROUND_CONTINUE_TEXT,
+                    $description !== '' ? $description : self::snippet($task, 60),
+                    $model,
+                    $resumeId,
+                );
+            } catch (\Throwable $e) {
+                $why = sprintf('%s, but no background session could be started (%s)', $stopped, $e->getMessage());
+            }
+        }
+        if ($session === null) {
+            $finish(SubAgent::STATUS_STOPPED, '', $why, SubAgentActivity::OUTCOME_CANCELLED, $resumeId);
+
+            return $this->refusal($toolCallId, $why . '. ' . $resume . $notes, self::elapsedMs($startedAt), $spent);
+        }
+
+        $after = sprintf('after %d step%s', $steps, $steps === 1 ? '' : 's');
+        $finish(
+            SubAgent::STATUS_COMPLETE,
+            sprintf('moved to the background by the user %s; it goes on as background session %s', $after, $session->id),
+            null,
+            SubAgentActivity::OUTCOME_BACKGROUNDED,
+            $resumeId,
+        );
+
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: (string) json_encode(['agent_id' => $session->id, 'status' => 'running', 'background' => true], JSON_UNESCAPED_SLASHES)
+                . "\n\n" . sprintf(
+                    'The user moved this sub-agent to the background %s, so this call returns now; the run goes on'
+                    . ' in the same conversation. ',
+                    $after,
+                ) . self::backgroundNote($agentName, $session->id) . $notes,
+            isError: false,
+            durationMs: self::elapsedMs($startedAt),
+            usage: $spent,
+        );
+    }
+
+    /**
+     * Spawn the background session that runs $agentName on $prompt — or, with
+     * $resumeId, continues that saved run with $prompt — through this tool in
+     * the session daemon ({@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner}).
+     *
+     * @throws \Throwable when the session cannot be started
+     */
+    private function spawnDelegation(string $agentName, string $prompt, string $description, string $model, string $resumeId): \SugarCraft\Crush\Sessions\BackgroundSession
+    {
+        $agent = $this->agentManager?->get($agentName);
+        $engine = $this->engine;
+        $supervisor = $this->backgroundSupervisor;
+        if ($agent === null || $engine === null || $supervisor === null) {
+            throw new \LogicException('a background run needs the session\'s agent roster, engine and background supervisor');
+        }
+
+        $delegation = array_filter([
+            'agent' => $agentName,
+            'description' => $description,
+            'model' => $model,
+            'resume' => $resumeId,
+            'permissionMode' => $engine->permissionGate()?->mode()->value ?? '',
+            'scope' => $this->delegationScope ?? $engine->sessionId() ?? '',
+        ], static fn (string $value): bool => $value !== '');
+
+        return $supervisor->spawnSession(
+            name: ($description !== '' ? $description : self::snippet($prompt, 60)) . ' (@' . $agentName . ')',
+            // The daemon starts on the model this session is on now; the
+            // agent's own model (or the call's) is chosen over it there,
+            // exactly as in the foreground (4.1-1).
+            agent: trim($engine->model()) === '' ? $agent : $agent->withModel($engine->model()),
+            task: $prompt,
+            workingDirectory: $this->backgroundDirectory !== '' ? $this->backgroundDirectory : (getcwd() ?: '.'),
+            tags: ['task', \SugarCraft\Crush\Sessions\BackgroundSupervisor::AGENT_TAG_PREFIX . $agentName],
+            delegation: $delegation,
+        );
+    }
+
+    /** The model's instructions for a delegation now running as background session $id. */
+    private static function backgroundNote(string $agentName, string $id): string
+    {
+        return sprintf(
+            'Sub-agent "%s" is running in the background as %s. DO NOT sleep or poll for it, and do not call'
+            . ' Task again to check on it: when it finishes, its status, report and stats (runtime, tokens,'
+            . ' cost and the resume id that continues it) arrive in this conversation as a new message, and'
+            . ' a turn starts for it if none is running. Carry on with other work meanwhile, or end your turn'
+            . ' if there is none.',
+            $agentName,
+            $id,
         );
     }
     // @endregion execute
@@ -1461,7 +1568,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // to throw or to wait: a soft cancel at the next tool start or step,
         // as Esc's cancel_tool does, so the run stops resumable; a pause at
         // the next step boundary, so the step it is in finishes first.
-        $control = ['cancel' => false, 'paused' => false, 'size' => -1, 'probedAt' => null];
+        $control = ['cancel' => false, 'paused' => false, 'background' => false, 'size' => -1, 'probedAt' => null];
         $controlClock = $this->activityClock ?? static fn (): float => microtime(true);
         $runId = $subAgent->id;
         $readControls = static function (bool $force) use ($agentInbox, $runId, &$control, $controlClock, $log): void {
@@ -1496,6 +1603,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     'cancel' => $control['cancel'] = true,
                     'pause' => $control['paused'] = true,
                     'resume' => $control['paused'] = false,
+                    \SugarCraft\Crush\Agents\Live\AgentInbox::BACKGROUND_VERB => $control['background'] = true,
                     default => null,
                 };
             }
@@ -1505,13 +1613,32 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // ten minutes, feeding the parent's no-progress watchdog a heartbeat
         // every slice, and then the run goes on by itself.
         $pauseCapSeconds = 600.0;
+        // P-E3: `background` (Ctrl+X b) stops the run where a soft cancel
+        // would, and the failure boundary below hands the saved run to a
+        // background session — only for a run the main conversation
+        // delegated, on a launch that can start one; any other run is told
+        // so on its line and goes on here.
+        $canBackground = $this->backgroundSupervisor !== null && $this->engine !== null && $this->delegationDepth === 0;
+        $promoteIfAsked = static function () use (&$control, $canBackground, $record, $log): void {
+            if (!$control['background']) {
+                return;
+            }
+            $control['background'] = false;
+            if ($canBackground) {
+                throw new \SugarCraft\Crush\Support\RunPromotedToBackground();
+            }
+            $why = 'cannot move to the background: only a run the main conversation delegated can, on a launch that starts background sessions';
+            $record('⧗ ' . $why, ActivityItem::text('⧗ ' . $why));
+            $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'inbox', 'outcome' => 'stayed in the foreground', 'error' => $why]);
+        };
         $stopIfControlled = static function (bool $stepBoundary) use (
-            &$control, $readControls, $controlClock, $pauseCapSeconds, $record, $log, $orphanGuard, $onHeartbeat,
+            &$control, $readControls, $controlClock, $pauseCapSeconds, $record, $log, $orphanGuard, $onHeartbeat, $promoteIfAsked,
         ): void {
             $readControls(true);
             if ($control['cancel']) {
                 throw new \SugarCraft\Crush\Support\ToolCallCancelled();
             }
+            $promoteIfAsked();
             if (!$stepBoundary || !$control['paused']) {
                 return;
             }
@@ -1537,6 +1664,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 if ($control['cancel']) {
                     throw new \SugarCraft\Crush\Support\ToolCallCancelled();
                 }
+                $promoteIfAsked();
             }
             $record('▶ resumed by the user', ActivityItem::text('▶ resumed by the user'));
             $log?->append(SubAgentTranscriptLog::T_STATUS, ['status' => 'resumed', 'outcome' => 'resumed by the user', 'error' => null]);
@@ -1675,6 +1803,31 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             // resumed run's earlier, already-billed steps are not counted twice.
             $spent = self::spentSince($failure->transcript, count($messages));
             self::bill($subAgent, $spent, $baseTokens, $baseCost);
+            // P-E3: the user moved the run to the background. Saved like a
+            // cancelled run, then continued by a background session.
+            if ($failure->getPrevious() instanceof \SugarCraft\Crush\Support\RunPromotedToBackground) {
+                [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
+                $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger, $keptWorktree);
+                // The log is complete before the session can append to it.
+                $foldThink();
+                $flushLog();
+                $inboxTrailer = $turnInbox?->trailer() ?? '';
+
+                return $this->moveToBackground(
+                    $toolCallId,
+                    $agentName,
+                    $description,
+                    $requestedModel,
+                    $subAgent->task,
+                    $resumeId,
+                    $resume,
+                    $stats['step'],
+                    $startedAt,
+                    $spent,
+                    $finish,
+                    ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote,
+                );
+            }
             $cancelled = $failure->getPrevious() instanceof \SugarCraft\Crush\Support\ToolCallCancelled;
             $why = $cancelled
                 ? sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc')

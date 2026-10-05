@@ -538,7 +538,7 @@ final class KeyBindingDriftTest extends TestCase
      * `chat.cancel` is that row: "Esc Esc … twice, quickly" is two presses one
      * after the other, and rewriting the label as `Esc / Esc` would read as two
      * ways to do it while its observation kept passing unchanged. The Agent
-     * View's four live `Ctrl+X <letter>` chords (P-D3) are the same shape: a
+     * View's five `Ctrl+X <letter>` chords (P-D3, P-E3) are the same shape: a
      * leader, then the letter — and each observation presses the two keys
      * in that order and asserts the leader went down first.
      *
@@ -556,7 +556,7 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         $this->assertSame(
-            ['chat.cancel', 'agentview.cancel', 'agentview.pause', 'agentview.stop-all', 'agentview.open-session'],
+            ['chat.cancel', 'agentview.cancel', 'agentview.pause', 'agentview.stop-all', 'agentview.open-session', 'agentview.background'],
             $sequences,
             'chord() cannot tell a sequence from a choice, so the set of rows written as a sequence is '
             . 'held here explicitly',
@@ -1667,6 +1667,21 @@ final class KeyBindingDriftTest extends TestCase
                 [$opened] = $app->update($k[0])[0]->update($k[1]);
                 $this->assertNull($opened->agentViewTarget, 'the view gave way');
                 $this->assertSame($child, $opened->chat?->currentSessionId(), 'to the agent\'s session, a normal one to type into');
+            },
+            // P-E3: the run is asked to move to the background — the one
+            // control its Task call answers by returning at once; the turn
+            // and the composer are untouched.
+            'agentview.background' => function (array $k): void {
+                $session = 'drift-x-' . bin2hex(random_bytes(4));
+                $app = $this->composing($this->stripApp(), $session, '')->openAgentView('run-2');
+                [$leader] = $app->update($k[0]);
+                $this->assertTrue($leader->agentViewLeader, 'the first key is the leader');
+                [$after] = $leader->update($k[1]);
+                $this->assertFalse($after->agentViewLeader);
+                $this->assertSame(['background'], $this->controls($session, 'run-2'));
+                $this->assertSame([], $this->controls($session, 'run-1'), 'only the run on screen');
+                $this->assertTrue($after->chat?->inFlight, 'the turn goes on');
+                $this->assertSame('', $after->chat?->inputBuf, 'no letter was typed');
             },
             // P-D2: the box is the open run's composer. Mid-turn on purpose:
             // the same Enter in the main view would steer the parent's turn.

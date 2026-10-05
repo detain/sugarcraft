@@ -10044,6 +10044,12 @@ final class Chat implements Model
      *   boundary. The soft cancel goes too, and is all a run no call of this
      *   turn holds (a nested or detached one) can get.
      * - resume on a FINISHED run continues it ({@see followUpAgent()}).
+     * - background (roadmap P-E3, `Ctrl+X b`): a `background` control line.
+     *   The run stops at its next tool or step, saved, and a background
+     *   session continues the same conversation; the run's Task call
+     *   returns at once with the session's id, so the turn goes on, and the
+     *   host announces the session's result when it settles (4.3-2). A
+     *   finished or nested run is refused here.
      * - open-session: the run's stored child session becomes the session on
      *   screen, a normal one to type into — refused mid-turn, as every
      *   session switch is.
@@ -10093,7 +10099,18 @@ final class Chat implements Model
                 continue;
             }
             if ($state->isFinished()) {
-                // Nothing left to cancel, pause or stop.
+                // Nothing left to cancel, pause or stop — nor to move.
+                if ($msg->verb === AgentControlMsg::BACKGROUND) {
+                    $problems[] = sprintf('%s has already finished, so there is nothing to move to the background', $state->name);
+                }
+
+                continue;
+            }
+            // P-E3: a nested run's Task call belongs to the run that made it,
+            // so only a run this conversation delegated can be handed on.
+            if ($msg->verb === AgentControlMsg::BACKGROUND && $state->parentAgentId !== null && $state->parentAgentId !== '') {
+                $problems[] = sprintf('%s is a nested run; only a run this conversation delegated can move to the background', $state->name);
+
                 continue;
             }
 
@@ -10115,6 +10132,7 @@ final class Chat implements Model
                 $inbox->control($id, match ($msg->verb) {
                     AgentControlMsg::PAUSE => 'pause',
                     AgentControlMsg::RESUME => 'resume',
+                    AgentControlMsg::BACKGROUND => \SugarCraft\Crush\Agents\Live\AgentInbox::BACKGROUND_VERB,
                     default => 'cancel',
                 });
             } catch (\Throwable $e) {

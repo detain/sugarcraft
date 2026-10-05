@@ -48,8 +48,19 @@ final class AgentInbox
 
     private const AGENT_ID_PATTERN = '/^[A-Za-z0-9._-]{1,128}$/';
 
-    /** The verbs {@see control()} sends (roadmap P-D3 acts on them). */
+    /**
+     * The verbs every surface may send (roadmap P-D3 acts on them) — the web
+     * protocol's `agent.control` enum is derived from this list.
+     */
     public const CONTROL_VERBS = ['cancel', 'pause', 'resume'];
+
+    /**
+     * Promote the running run to a background session (roadmap P-E3,
+     * `Ctrl+X b` in the Agent View). {@see control()} sends it like the
+     * others, but it is kept out of {@see CONTROL_VERBS}: that list is the
+     * web protocol's wire enum, and the web client does not offer it yet.
+     */
+    public const BACKGROUND_VERB = 'background';
 
     private static ?string $launchKey = null;
 
@@ -142,7 +153,8 @@ final class AgentInbox
     }
 
     /**
-     * Send agent $agentId a harness verb ({@see CONTROL_VERBS}) as a
+     * Send agent $agentId a harness verb ({@see CONTROL_VERBS}, or
+     * {@see BACKGROUND_VERB}) as a
      * {@see MessageMode::Control} message. The agent's run reads it with
      * {@see takeControls()}, never as conversation text.
      *
@@ -150,8 +162,9 @@ final class AgentInbox
      */
     public function control(string $agentId, string $verb, string $from = AgentMessage::FROM_USER): AgentMessage
     {
-        if (!\in_array($verb, self::CONTROL_VERBS, true)) {
-            throw new \InvalidArgumentException(sprintf('"%s" is not an agent control verb (%s)', $verb, implode(', ', self::CONTROL_VERBS)));
+        $verbs = [...self::CONTROL_VERBS, self::BACKGROUND_VERB];
+        if (!\in_array($verb, $verbs, true)) {
+            throw new \InvalidArgumentException(sprintf('"%s" is not an agent control verb (%s)', $verb, implode(', ', $verbs)));
         }
 
         return $this->send($agentId, AgentMessage::new($from, $verb, MessageMode::Control));

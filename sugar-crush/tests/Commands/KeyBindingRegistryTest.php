@@ -67,8 +67,8 @@ final class KeyBindingRegistryTest extends TestCase
 
     public function testDormantRowsCarryAReasonAndAreKeptOutOfTheReference(): void
     {
-        $dormant = KeyBindingRegistry::dormant();
-        $this->assertNotSame([], $dormant, 'the inert chords are documented, not dropped');
+        // None is dormant since P-E3; the contract still holds for the next.
+        $dormant = [...KeyBindingRegistry::dormant(), KeyBinding::new('x.waiting', 'Ctrl+X z', 'd', 'c', dormantReason: 'waits')];
 
         foreach ($dormant as $binding) {
             $this->assertNotSame('', (string) $binding->dormantReason, $binding->id);
@@ -309,12 +309,15 @@ final class KeyBindingRegistryTest extends TestCase
      *
      * 123 -> 124 live (124 -> 125 all) with plan mode's toggle (roadmap
      * 5.7-1, decision D8): `chat.plan-mode`, `Alt+M`.
+     *
+     * 124 -> 125 live (125 all) and 1 -> 0 dormant with background
+     * promotion (roadmap P-E3): `agentview.background`, `Ctrl+X b`.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
         $this->assertCount(125, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(124, KeyBindingRegistry::live(), 'update the docblocks that state this count');
-        $this->assertCount(1, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
+        $this->assertCount(125, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(12, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
@@ -347,17 +350,20 @@ final class KeyBindingRegistryTest extends TestCase
     }
 
     /**
-     * The one dormant row left, `agentview.background` (`Ctrl+X b`, waiting
-     * for roadmap 4.3), routes NOTHING: a two-key sequence has no
-     * single-rune tail, so it cannot feed a derived rune set — the view's
+     * The last dormant row, `agentview.background` (`Ctrl+X b`), is live
+     * since roadmap P-E3, after the agent dashboard's `c`/`r`/`s` went live
+     * with P-D3 — and going live changed no routing: a two-key sequence has
+     * no single-rune tail, so it feeds no derived rune set; the view's
      * `Ctrl+X` leader claims the `b` whether or not this table declares it.
-     * The agent dashboard's `c`/`r`/`s`, dormant until P-D3, are live.
      */
-    public function testTheDormantRowRoutesNothing(): void
+    public function testNoRowIsDormantAndTheBackgroundChordRoutesNothing(): void
     {
-        $dormant = KeyBindingRegistry::dormant();
-        $this->assertSame(['agentview.background'], array_map(static fn(KeyBinding $b): string => $b->id, $dormant));
-        $this->assertNull($dormant[0]->ctrlRune(), 'it would feed a derived rune set, so its dormant reason is wrong');
+        $this->assertSame([], KeyBindingRegistry::dormant());
+
+        $background = KeyBindingRegistry::byId('agentview.background');
+        $this->assertNotNull($background);
+        $this->assertTrue($background->isLive());
+        $this->assertNull($background->ctrlRune(), 'a sequence feeds no derived rune set');
 
         foreach (['agents.cancel', 'agents.resume', 'agents.stop-all'] as $id) {
             $this->assertTrue(KeyBindingRegistry::byId($id)?->isLive(), "{$id} is live since P-D3");

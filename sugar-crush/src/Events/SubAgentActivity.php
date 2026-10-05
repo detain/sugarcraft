@@ -82,8 +82,14 @@ final readonly class SubAgentActivity
     public const OUTCOME_FAILED = 'failed';
     public const OUTCOME_CANCELLED = 'cancelled';
     public const OUTCOME_EMPTY = 'empty';
+    /**
+     * The user moved the run to a background session (roadmap P-E3): its
+     * foreground leg ended at a step boundary and a background session goes
+     * on with the same conversation — the frame's $tail names it.
+     */
+    public const OUTCOME_BACKGROUNDED = 'backgrounded';
 
-    public const OUTCOMES = [self::OUTCOME_COMPLETE, self::OUTCOME_FAILED, self::OUTCOME_CANCELLED, self::OUTCOME_EMPTY];
+    public const OUTCOMES = [self::OUTCOME_COMPLETE, self::OUTCOME_FAILED, self::OUTCOME_CANCELLED, self::OUTCOME_EMPTY, self::OUTCOME_BACKGROUNDED];
 
     /** Items one frame may carry; a decoder keeps the newest this many. */
     public const MAX_ITEMS = 32;

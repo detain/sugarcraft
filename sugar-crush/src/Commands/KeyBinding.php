@@ -31,22 +31,16 @@ final class KeyBinding
          * so advertising it would promise something the app does not do.
          *
          * The row stays declared either way — a dormant seam is documented in
-         * this repo, not deleted — but only ONE of the four dormant rows is
-         * kept for a routing reason, so the rationale is per-row rather than
-         * universal:
+         * this repo, not deleted — and the reason is per-row, because whether
+         * dropping the row would change routing differs from chord to chord
+         * (a bare `Ctrl+<rune>` row feeds {@see KeyBindingRegistry::shellCtrlRunes()},
+         * a two-key sequence or a letter in a pane's own context feeds no
+         * derived set at all).
          *
-         * - `shell.group-input` (`Ctrl+G`) is a row this registry ROUTES: it
-         *   is in the set {@see KeyBindingRegistry::shellCtrlRunes()} hands
-         *   {@see \SugarCraft\Crush\Tui\KeyboardHandler}, so dropping it would
-         *   stop the shell claiming the chord and `Ctrl+G` would regress into
-         *   typing a literal "g" into the input box.
-         * - the three `agents.*` rows are bare letters in
-         *   {@see KeyBindingRegistry::CONTEXT_AGENTS}, a context
-         *   `KeyBindingRegistry::ctrlRunesOf()` never reads, and
-         *   `KeyboardHandler::handleAgentViewKey()` claims `c`/`r`/`s`
-         *   whether or not they are declared here. Dropping them would change
-         *   no routing at all. They stay because this is the one place that
-         *   records which claimed chord is waiting on which missing consumer.
+         * No row is dormant today: the last one, the Agent View's `Ctrl+X b`
+         * (`agentview.background`), went live with roadmap P-E3, after
+         * `Ctrl+G` and the agent dashboard's `c`/`r`/`s` did with P-D3. The
+         * field stays for the next chord that is claimed before it is wired.
          */
         public readonly ?string $dormantReason = null,
         /**

@@ -154,6 +154,7 @@ final class AgentActivityLine
             SubAgentActivity::OUTCOME_COMPLETE => ['✓', $theme->shellSuccess],
             SubAgentActivity::OUTCOME_CANCELLED => ['⏹', $theme->shellWarning],
             SubAgentActivity::OUTCOME_EMPTY => ['⏸', $theme->shellWarning],
+            SubAgentActivity::OUTCOME_BACKGROUNDED => ['⧗', $theme->assistantLabel],
             default => ['✗', $theme->shellError],
         };
     }
@@ -168,6 +169,7 @@ final class AgentActivityLine
                 SubAgentActivity::OUTCOME_COMPLETE => 'done',
                 SubAgentActivity::OUTCOME_CANCELLED => 'cancelled',
                 SubAgentActivity::OUTCOME_EMPTY => 'stopped without a report',
+                SubAgentActivity::OUTCOME_BACKGROUNDED => 'moved to the background',
                 default => 'failed' . (($error = self::reason($state)) === '' ? '' : ': ' . $error),
             };
         }

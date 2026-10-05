@@ -701,15 +701,9 @@ final class KeyBindingRegistry
             KeyBinding::new('agentview.pause', 'Ctrl+X p', 'Pause this agent, or let it go on', $c),
             KeyBinding::new('agentview.stop-all', 'Ctrl+X s', 'Stop every running agent', $c),
             KeyBinding::new('agentview.open-session', 'Ctrl+X o', 'Open this agent as a session', $c),
-            KeyBinding::new(
-                'agentview.background',
-                'Ctrl+X b',
-                'Send this agent to the background',
-                $c,
-                dormantReason: 'Promoting a running Task to the background needs roadmap 4.3 (P-E3): '
-                    . 'the chord is claimed — so the `b` is not typed into the composer — but '
-                    . 'nothing hands the run to the BackgroundSupervisor yet.',
-            ),
+            // P-E3: the run stops at its next tool or step and a background
+            // session continues it; its Task call returns at once.
+            KeyBinding::new('agentview.background', 'Ctrl+X b', 'Send this agent to the background', $c),
             KeyBinding::new('agentview.next', 'Alt+N', 'Open the next agent of the same batch', $c),
             KeyBinding::new('agentview.prev', 'Alt+P', 'Open the previous agent of the same batch', $c),
         ];

@@ -906,8 +906,8 @@ final class KeyboardHandler
      */
     private function handleOpenAgentViewKey(string $key, App $app): ?array
     {
-        // P-D3's chords (Appendix P §5.5). The leader is consumed whatever
-        // follows it; `b` (background) is claimed but waits for roadmap 4.3.
+        // P-D3's chords (Appendix P §5.5), and P-E3's `b`. The leader is
+        // consumed whatever follows it.
         if ($app->agentViewLeader) {
             $app = $app->withAgentViewLeader(false);
             $target = (string) $app->agentViewTarget;
@@ -920,6 +920,15 @@ final class KeyboardHandler
                 )],
                 's' => [$app, new StopAllAgentsCmd()],
                 'o' => [$app, new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::OPEN_SESSION, [$target])],
+                // P-E3: the run hands itself to a background session at its
+                // next tool or step, and its Task call returns at once. A run
+                // that cannot go is refused by the chat, in a notice row.
+                'b' => [
+                    ($run = $app->chat?->agentLive()->get($target)) === null || $run->isFinished() || (string) $run->parentAgentId !== ''
+                        ? $app
+                        : $app->withStatus(sprintf('Moving %s to the background at its next step — the turn goes on without it.', $run->name)),
+                    new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::BACKGROUND, [$target]),
+                ],
                 default => [$app, null],
             };
         }
