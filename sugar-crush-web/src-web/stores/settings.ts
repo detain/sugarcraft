@@ -8,7 +8,7 @@ export type ThemeChoice = 'auto' | 'dark' | 'light'
  * This viewer's UI preferences: the theme and opt-in desktop notifications
  * for questions that arrive while the tab is in the background. The
  * server's own settings (`settings.schema` / `settings.get`) are a separate,
- * schema-driven form that lands with O-6b.
+ * schema-driven form: `stores/settings/serverSettings.ts`.
  */
 export const useSettingsStore = defineStore('settings', () => {
   const theme = ref<ThemeChoice>(readJson<ThemeChoice>('theme', 'auto'))

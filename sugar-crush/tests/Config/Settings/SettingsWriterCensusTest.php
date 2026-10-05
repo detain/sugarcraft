@@ -23,7 +23,12 @@ use PHPUnit\Framework\TestCase;
  *    for `/model` and `app()` hands on to the settings editor;
  *  - the project-local file a writer may publish to is asked for only by the
  *    writer, and the writer is the only `Config/Settings` class that touches
- *    `AtomicJsonFile`.
+ *    `AtomicJsonFile`;
+ *  - who SAVES through the writer (`write()`, `grantTrust()`, `revokeTrust()`):
+ *    the settings view's save and its trust action (`App`), `/model`'s model
+ *    choice (`ModelChoice::persist()`), and the server's `settings.set`
+ *    (`SettingsMethods::set()`, the web UI's settings form — roadmap O-6b).
+ *    `docs/SETTINGS.md` "Saving from the settings view" names the same three.
  *
  * A new caller of any of these reds here by EXISTING, which is the point: a
  * fifth door into `config.json` has to be written down, with its docs.
@@ -55,6 +60,63 @@ final class SettingsWriterCensusTest extends TestCase
             ['Config/Settings/SettingsWriter.php::targetPath' => 1],
             $this->callSites('projectLocalPath', '::'),
         );
+    }
+
+    /**
+     * The writer's producers. A token walk cannot type a receiver, so this is
+     * scoped to the files that NAME `SettingsWriter` (a producer has to get a
+     * writer from somewhere typed), and counts the writer's three saving
+     * methods called through `->` there; the writer's own file is left out (its
+     * `write()` calls `AtomicJsonFile`'s).
+     */
+    public function testTheWriterIsSavedThroughOnlyByItsKnownProducers(): void
+    {
+        $sites = [];
+        foreach ($this->sourceFiles() as $relative => $path) {
+            if ($relative === 'Config/Settings/SettingsWriter.php') {
+                continue;
+            }
+
+            $tokens = $this->codeTokens($path);
+            $namesWriter = false;
+            foreach ($tokens as $token) {
+                if (\is_array($token) && \in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+                    && ($token[1] === 'SettingsWriter' || str_ends_with($token[1], '\\SettingsWriter'))) {
+                    $namesWriter = true;
+                    break;
+                }
+            }
+            if (!$namesWriter) {
+                continue;
+            }
+
+            $function = '';
+            foreach ($tokens as $i => $token) {
+                if (!\is_array($token)) {
+                    continue;
+                }
+                if ($token[0] === T_FUNCTION && isset($tokens[$i + 1]) && \is_array($tokens[$i + 1]) && $tokens[$i + 1][0] === T_STRING) {
+                    $function = $tokens[$i + 1][1];
+                    continue;
+                }
+                if ($token[0] === T_STRING && \in_array($token[1], ['write', 'grantTrust', 'revokeTrust'], true)
+                    && isset($tokens[$i - 1], $tokens[$i + 1]) && \is_array($tokens[$i - 1])
+                    && \in_array($tokens[$i - 1][0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)
+                    && $tokens[$i + 1] === '(') {
+                    $key = $relative . '::' . $function . '->' . $token[1];
+                    $sites[$key] = ($sites[$key] ?? 0) + 1;
+                }
+            }
+        }
+
+        ksort($sites);
+
+        self::assertSame([
+            'App/App.php::confirmSettingsSave->write' => 1,
+            'App/App.php::grantProjectTrust->grantTrust' => 1,
+            'Config/Settings/ModelChoice.php::persist->write' => 1,
+            'Protocol/Methods/SettingsMethods.php::set->write' => 1,
+        ], $sites);
     }
 
     public function testOnlyTheWriterTouchesAtomicJsonFileAmongTheSettingsClasses(): void

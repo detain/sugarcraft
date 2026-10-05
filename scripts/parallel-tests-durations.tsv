@@ -145,7 +145,7 @@ sugar-crush/tests/Session/TranscriptSchemaV2MigrationTest.php	2.500	10
 sugar-crush/tests/Chat/ChildSessionCreatedOnFinishTest.php	2.500	5
 sugar-crush/tests/Context/GlobDialectDifferentialTest.php	2.497	13
 sugar-crush/tests/Workflows/WorkflowAgentResultsTest.php	2.494	13
-sugar-crush/tests/Config/Settings/SettingsWriterCensusTest.php	2.430	4
+sugar-crush/tests/Config/Settings/SettingsWriterCensusTest.php	2.430	5
 sugar-crush/tests/Tools/BuiltIn/UnifiedDiffBoundedMemoryTest.php	2.416	5
 sugar-crush/tests/Backend/EngineBackendParallelConfigTest.php	2.415	29
 sugar-crush/tests/Runtime/RejectionFeedbackReachesModelTest.php	2.400	9
@@ -214,6 +214,7 @@ sugar-crush/tests/Chat/RewindDraftHistoryTest.php	1.459	6
 sugar-crush/tests/App/AppSkillDispatchTest.php	1.445	20
 sugar-crush/tests/Integration/WorkflowResumptionTest.php	1.432	9
 sugar-crush/tests/Workflows/StageArgumentScopedGrantTest.php	1.418	6
+sugar-crush/tests/Server/SettingsRemoteAllowlistTest.php	1.400	7
 sugar-crush/tests/Session/DebouncedTranscriptPersistenceTest.php	1.389	8
 sugar-crush/tests/Agents/AgentWorkerPoolCancelTreeTest.php	1.372	3
 sugar-crush/tests/Integration/ForeignSkillWiringTest.php	1.371	9

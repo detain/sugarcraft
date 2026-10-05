@@ -79,6 +79,7 @@ async function signOut(): Promise<void> {
       <span class="spacer" />
       <ApprovalsButton v-if="!onLogin" />
       <span class="status" :data-status="connection.status" data-testid="connection-status">{{ connection.statusLabel }}<template v-if="rtt"> · {{ rtt }}</template></span>
+      <RouterLink v-if="!onLogin" :to="{ name: 'settings' }" class="nav" data-testid="settings-link">settings</RouterLink>
       <button type="button" class="link opt" :title="`Theme: ${settings.theme}`" @click="settings.cycleTheme()">theme: {{ settings.theme }}</button>
       <button v-if="!settings.notify" type="button" class="link opt" title="Desktop notifications for questions" @click="settings.enableNotifications()">notify</button>
       <button v-if="connection.status !== 'signed-out'" type="button" class="link" @click="signOut">sign out</button>
@@ -139,6 +140,15 @@ async function signOut(): Promise<void> {
 .status[data-status='reconnecting'],
 .status[data-status='signed-out'] {
   color: var(--warn);
+}
+.nav {
+  font-size: 0.875rem;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav.router-link-active {
+  text-decoration: underline;
 }
 .menu {
   display: none;

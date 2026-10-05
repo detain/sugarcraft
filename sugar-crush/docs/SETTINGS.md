@@ -72,8 +72,10 @@ manifest, and the door is `App`'s own `onLayoutChange` hook rather than
 Chat's. The settings view's save is a door of its own too — `SettingsWriter`,
 see [Saving from the settings view](#saving-from-the-settings-view) — and it
 writes the keys the view changed, never `provider` or `theme`; `/model
-<provider> <model>` writes `models` through the same writer. Everything else
-in it, including `trustedProjectSettings`, you hand-author.
+<provider> <model>` writes `models` through the same writer, and so does the
+server's `settings.set` — the web UI's settings form — for the keys a client
+may write (see [Settings over the wire](SERVER.md#settings-over-the-wire)).
+Everything else in it, including `trustedProjectSettings`, you hand-author.
 
 Two orderings on that table are deliberate and both cost something:
 
@@ -903,7 +905,14 @@ The settings view (`/settings`) holds an edit set — values staged against a
 tier — and saves it through `Config\Settings\SettingsWriter`, a write door of
 its own. It is **not** `Chat`'s config-change door, so that door still carries
 exactly `provider` and `theme`; `SettingsWriterCensusTest` pins who may write
-`config.json` at all.
+`config.json` at all, and who saves through the writer: this view (its save and
+its trust action), `/model`'s model choice, and the server's `settings.set`,
+which is the web UI's settings form. That form is generated from the same
+schema as this view and shows the same things — each field's tier, where its
+value comes from, the environment or flag lock, when a change applies, and the
+save preview — but it may write only the cosmetic, tuning and narrowing keys,
+to your config or a trusted project's local file, never to this session's
+tier.
 
 | Tier | File | Keys |
 |---|---|---|

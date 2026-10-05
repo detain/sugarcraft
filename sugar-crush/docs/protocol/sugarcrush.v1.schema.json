@@ -2472,7 +2472,35 @@
                     },
                     "values": {
                         "type": "object",
-                        "additionalProperties": {}
+                        "additionalProperties": {},
+                        "description": "Effective: key => {value, source, sourceLabel, sourcePath, shadowed, locked, lockReason}. A tier: the file's own object."
+                    },
+                    "files": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "role": {
+                                    "type": "string"
+                                },
+                                "path": {
+                                    "type": "string"
+                                },
+                                "status": {
+                                    "type": "string"
+                                },
+                                "note": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "role",
+                                "path",
+                                "status",
+                                "note"
+                            ]
+                        },
+                        "description": "Effective only: the files behind the layers, and whether each was read."
                     }
                 },
                 "required": [
@@ -2481,8 +2509,121 @@
                 ]
             }
         },
+        "settings.preview": {
+            "description": "What a save would write — the target file's diff, when each change applies, and what blocks it — without writing.",
+            "scope": "admin",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "scope": {
+                        "enum": [
+                            "user",
+                            "project"
+                        ]
+                    },
+                    "set": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "unset": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 128
+                        },
+                        "maxItems": 200
+                    },
+                    "key": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "value": {},
+                    "reset": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "scope": {
+                        "type": "string"
+                    },
+                    "path": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "canSave": {
+                        "type": "boolean"
+                    },
+                    "refusals": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "key (`*` for the tier) => why the save is refused"
+                    },
+                    "changes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "key": {
+                                    "type": "string"
+                                },
+                                "action": {
+                                    "enum": [
+                                        "set",
+                                        "reset"
+                                    ]
+                                },
+                                "value": {},
+                                "applies": {
+                                    "type": "string"
+                                },
+                                "appliesLabel": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "key",
+                                "action",
+                                "applies",
+                                "appliesLabel"
+                            ]
+                        }
+                    },
+                    "applySummary": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "diff": {
+                        "type": "string",
+                        "description": "The target file's JSON, before and after, as unified-diff hunks; secrets masked."
+                    }
+                },
+                "required": [
+                    "scope",
+                    "path",
+                    "canSave",
+                    "refusals",
+                    "changes",
+                    "applySummary",
+                    "notes",
+                    "diff"
+                ]
+            }
+        },
         "settings.schema": {
-            "description": "Every setting: type, default, help, and whether a client may write it.",
+            "description": "Every setting: type, default, help, apply mode, and whether a client may write it; and the tiers a save can target.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -2503,6 +2644,9 @@
                                     "type": "string"
                                 },
                                 "default": {},
+                                "defaultText": {
+                                    "type": "string"
+                                },
                                 "group": {
                                     "type": "string"
                                 },
@@ -2516,6 +2660,13 @@
                                     "type": "array",
                                     "items": {}
                                 },
+                                "options": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "description": "The choices a pick-one field offers (the enum, or the launch's list: themes, providers…)."
+                                },
                                 "min": {
                                     "type": "number"
                                 },
@@ -2526,16 +2677,47 @@
                                     "type": "string"
                                 },
                                 "applies": {
+                                    "enum": [
+                                        "live",
+                                        "next-turn",
+                                        "restart",
+                                        "frozen"
+                                    ]
+                                },
+                                "appliesLabel": {
                                     "type": "string"
+                                },
+                                "ui": {
+                                    "enum": [
+                                        "easy",
+                                        "list",
+                                        "complex",
+                                        "read-only",
+                                        "hidden"
+                                    ]
+                                },
+                                "layered": {
+                                    "type": "boolean"
                                 },
                                 "projectSettable": {
                                     "type": "boolean"
+                                },
+                                "envVar": {
+                                    "type": "string",
+                                    "description": "The environment variable that, when set, locks the key."
+                                },
+                                "cliFlag": {
+                                    "type": "string"
                                 },
                                 "sensitive": {
                                     "type": "boolean"
                                 },
                                 "writableRemotely": {
                                     "type": "boolean"
+                                },
+                                "remoteRefusal": {
+                                    "type": "string",
+                                    "description": "Why a client may not write the key; absent when it may."
                                 }
                             },
                             "required": [
@@ -2549,6 +2731,38 @@
                                 "writableRemotely"
                             ]
                         }
+                    },
+                    "tiers": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "scope": {
+                                    "enum": [
+                                        "user",
+                                        "project"
+                                    ]
+                                },
+                                "label": {
+                                    "type": "string"
+                                },
+                                "path": {
+                                    "type": "string"
+                                },
+                                "writable": {
+                                    "type": "boolean"
+                                },
+                                "refusal": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "scope",
+                                "label",
+                                "writable"
+                            ]
+                        },
+                        "description": "The tiers a save can target, and whether each can be written now."
                     }
                 },
                 "required": [
@@ -2557,7 +2771,7 @@
             }
         },
         "settings.set": {
-            "description": "Write an allowlisted setting to the user tier or a trusted project.",
+            "description": "Write allowlisted settings to the user tier or a trusted project, in one write.",
             "scope": "admin",
             "idempotent": true,
             "params": {
@@ -2568,24 +2782,33 @@
                         "maxLength": 128
                     },
                     "value": {},
+                    "reset": {
+                        "type": "boolean"
+                    },
+                    "set": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    },
+                    "unset": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "maxLength": 128
+                        },
+                        "maxItems": 200
+                    },
                     "scope": {
                         "enum": [
                             "user",
                             "project"
                         ]
                     },
-                    "reset": {
-                        "type": "boolean"
-                    },
                     "idempotencyKey": {
                         "type": "string",
                         "maxLength": 64,
                         "description": "A retry with the same key gets the original answer (5 min)."
                     }
-                },
-                "required": [
-                    "key"
-                ]
+                }
             },
             "result": {
                 "type": "object",
@@ -2601,12 +2824,24 @@
                     },
                     "applies": {
                         "type": "string"
+                    },
+                    "changed": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "appliesByKey": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
                     }
                 },
                 "required": [
-                    "key",
                     "scope",
-                    "written"
+                    "written",
+                    "changed"
                 ]
             }
         },
