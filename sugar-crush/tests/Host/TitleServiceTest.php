@@ -26,6 +26,62 @@ use SugarCraft\Crush\Usage;
  */
 final class TitleServiceTest extends TestCase
 {
+    use \SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+
+    /**
+     * N-P4g: the three settings behind the side-calls — `sessions.autoTitle`,
+     * `promptSuggestions` and `promptSuggestionHistory` — read on use.
+     */
+    public function testTheSideCallsFollowTheirSettings(): void
+    {
+        $home = sys_get_temp_dir() . '/crush-title-settings-' . bin2hex(random_bytes(6));
+        mkdir($home . '/.sugar-crush', 0o700, true);
+        $this->useHomeSandbox($home);
+        $write = static function (array $values) use ($home): void {
+            file_put_contents($home . '/.sugar-crush/config.json', json_encode($values, JSON_THROW_ON_ERROR));
+            \SugarCraft\Crush\Config\Settings\UiSettings::forget();
+        };
+        $write([]);
+        try {
+            $store = self::store('s1');
+            $titler = self::recorder('Named');
+            $first = [Message::user('the login redirect loops')];
+            $settled = [];
+            for ($i = 1; $i <= 10; $i++) {
+                $settled[] = Message::user("q{$i}");
+                $settled[] = Message::assistant("a{$i}");
+            }
+
+            self::assertTrue(TitleService::autoTitleEnabled());
+            self::assertTrue(TitleService::promptSuggestionsEnabled());
+            self::assertSame(TitleService::PROMPT_SUGGESTION_HISTORY, TitleService::promptSuggestionHistory());
+
+            $write(['sessions.autoTitle' => false]);
+            self::assertNull(TitleService::new()->titleCall($titler, $store, 's1', null, $first), 'no automatic title');
+            self::assertNotNull(TitleService::new()->regenerateCall($titler, $store, 's1', $first), '/rename --auto still asks');
+
+            $write(['promptSuggestions' => false]);
+            self::assertNull(TitleService::new()->suggestionCall($titler, $settled, 1, 's', false));
+
+            $write(['promptSuggestionHistory' => 4]);
+            $call = TitleService::new()->suggestionCall($titler, $settled, 1, 's', false);
+            self::assertNotNull($call);
+            self::settle($call());
+            $sent = $titler->calls[count($titler->calls) - 1];
+            self::assertCount(4 + 2, $sent, 'the last four messages, between the framing and the request');
+            self::assertSame('q9', $sent[1]->content);
+
+            $write(['promptSuggestionHistory' => 0]);
+            self::assertSame(TitleService::PROMPT_SUGGESTION_HISTORY, TitleService::promptSuggestionHistory(), 'out of range is the default');
+        } finally {
+            \SugarCraft\Crush\Config\Settings\UiSettings::forget();
+            $this->restoreHomeSandbox();
+            @unlink($home . '/.sugar-crush/config.json');
+            @rmdir($home . '/.sugar-crush');
+            @rmdir($home);
+        }
+    }
+
     public function testTitleCallNamesAnUnnamedSessionAndRecordsItAsAuto(): void
     {
         $store = self::store('s1');

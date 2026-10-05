@@ -16,6 +16,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\StatusLineCommand;
+use SugarCraft\Crush\Host\TitleService;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
@@ -212,6 +213,41 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp('Each launch deletes unnamed, unpinned sessions untouched for this many days and says which; 0 (the default) keeps everything.')
                 ->withReaderSymbol(Bootstrap::class . '::sessionRetentionDays')
                 ->withReadBy('`Bootstrap::sessionStore()` at launch → `sessionRetentionDays()`'),
+            // The title model's two side-calls (roadmap N-P4g). Switching
+            // either off only saves calls, so a project may (Narrowing); how
+            // much history a suggestion is shown is input tokens on every
+            // turn, so that one is the operator's alone.
+            SettingDefinition::new(TitleService::AUTO_TITLE_SETTING, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel('Auto-title sessions')
+                ->withHelp('Name each new session from its first turn with one call on the title model; off leaves it unnamed until /rename.')
+                ->withReaderSymbol(TitleService::class . '::autoTitleEnabled')
+                ->withReadBy('`Chat` turn dispatch → `TitleService::titleCall()` → `autoTitleEnabled()`'),
+            SettingDefinition::new(TitleService::PROMPT_SUGGESTIONS_SETTING, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnvVar('SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS')
+                ->withLabel('Prompt suggestions')
+                ->withHelp('After each turn, ask the title model for the message you are likely to send next and show it greyed in the empty input box (→ accepts it).')
+                ->withReaderSymbol(TitleService::class . '::promptSuggestionsEnabled')
+                ->withReadBy('`Chat` turn settle → `TitleService::suggestionCall()` → `promptSuggestionsEnabled()`'),
+            SettingDefinition::new(TitleService::PROMPT_SUGGESTION_HISTORY_SETTING, SettingType::Int, TitleService::PROMPT_SUGGESTION_HISTORY)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(1, 100)
+                ->withLabel('Prompt suggestion history')
+                ->withHelp('Recent messages (each clipped to 2000 characters) the prompt-suggestion call is shown.')
+                ->withReaderSymbol(TitleService::class . '::promptSuggestionHistory')
+                ->withReadBy('`TitleService::suggestionCall()` → `promptSuggestionHistory()`'),
             SettingDefinition::new('maxCheckpoints', SettingType::Int, EnhancedSessionStore::MAX_CHECKPOINTS_PER_SESSION)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Tuning)

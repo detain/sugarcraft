@@ -83,8 +83,17 @@ final class TitleService
     /** The model's "nothing to suggest" answer; {@see sanitizeSuggestion()} maps it to ''. */
     public const PROMPT_SUGGESTION_NONE = 'NONE';
 
-    /** Messages of recent history the suggestion call is shown. */
+    /**
+     * Messages of recent history the suggestion call is shown: the DEFAULT of
+     * the `promptSuggestionHistory` setting, which
+     * {@see promptSuggestionHistory()} resolves (roadmap N-P4g).
+     */
     public const PROMPT_SUGGESTION_HISTORY = 12;
+
+    /** The settings keys this service reads (roadmap N-P4g). */
+    public const AUTO_TITLE_SETTING = 'sessions.autoTitle';
+    public const PROMPT_SUGGESTIONS_SETTING = 'promptSuggestions';
+    public const PROMPT_SUGGESTION_HISTORY_SETTING = 'promptSuggestionHistory';
 
     /** Characters of each of those messages it is shown. */
     public const PROMPT_SUGGESTION_MESSAGE_CHARS = 2000;
@@ -158,7 +167,7 @@ final class TitleService
         ?string $currentName,
         array $history,
     ): ?\Closure {
-        if ($store === null || $sessionId === null || $currentName !== null || $titleBackend === null) {
+        if ($store === null || $sessionId === null || $currentName !== null || $titleBackend === null || !self::autoTitleEnabled()) {
             return null;
         }
 
@@ -281,7 +290,7 @@ final class TitleService
      * so it is exactly the kind of call-on-the-app's-initiative a cap exists to
      * stop — and when the last agent-visible row is not a non-empty assistant
      * reply (audit 15b-03: a guess should follow the conversation, not
-     * `/help`'s listing). Only the last {@see PROMPT_SUGGESTION_HISTORY}
+     * `/help`'s listing). Only the last {@see promptSuggestionHistory()}
      * messages go out, each clipped to {@see PROMPT_SUGGESTION_MESSAGE_CHARS}:
      * the guess needs the drift of the conversation, not every tool dump in it.
      *
@@ -303,7 +312,7 @@ final class TitleService
         if (
             $titleBackend === null
             || !$this->promptSuggestions
-            || self::envFlag('SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS')
+            || !self::promptSuggestionsEnabled()
             || $spendCapReached
         ) {
             return null;
@@ -316,7 +325,7 @@ final class TitleService
         }
 
         $tail = [];
-        foreach (array_slice($visible, -self::PROMPT_SUGGESTION_HISTORY) as $message) {
+        foreach (array_slice($visible, -self::promptSuggestionHistory()) as $message) {
             if ($message->role === Role::System) {
                 continue;
             }
@@ -400,6 +409,44 @@ final class TitleService
     }
 
     /** Set to anything but empty or `0`. */
+    /**
+     * Whether a session is titled automatically after its first turn: the
+     * `sessions.autoTitle` setting (default on). Off leaves every new session
+     * unnamed until `/rename` — which still asks the title model on demand
+     * ({@see regenerateCall()} is not gated). Read per turn through
+     * {@see \SugarCraft\Crush\Config\Settings\UiSettings}, so a save
+     * applies to the next session that would have been titled.
+     */
+    public static function autoTitleEnabled(): bool
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::bool(self::AUTO_TITLE_SETTING);
+    }
+
+    /**
+     * Whether prompt suggestions are offered at all, by the operator's word:
+     * `SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS` turns them off whatever the
+     * settings say, and the `promptSuggestions` setting (default on) turns them
+     * off without it. Neither turns them back on over the other — and a host
+     * with no input box still switches them off on top
+     * ({@see withPromptSuggestions()}).
+     */
+    public static function promptSuggestionsEnabled(): bool
+    {
+        return !self::envFlag('SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS')
+            && \SugarCraft\Crush\Config\Settings\UiSettings::bool(self::PROMPT_SUGGESTIONS_SETTING);
+    }
+
+    /**
+     * How many recent messages the suggestion call is shown: the
+     * `promptSuggestionHistory` setting, else {@see PROMPT_SUGGESTION_HISTORY}.
+     * USER TIER ONLY: every message is input tokens on the operator's title
+     * model after every turn.
+     */
+    public static function promptSuggestionHistory(): int
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::int(self::PROMPT_SUGGESTION_HISTORY_SETTING);
+    }
+
     private static function envFlag(string $name): bool
     {
         $value = getenv($name);

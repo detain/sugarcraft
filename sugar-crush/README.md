@@ -976,7 +976,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these one hundred and four keys are layered — `provider`, `models`,
+Only these one hundred and seven keys are layered — `provider`, `models`,
 `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`,
 `thinkingBudget`, `promptCache`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
@@ -1005,9 +1005,11 @@ Only these one hundred and four keys are layered — `provider`, `models`,
 `autoCommit`, `theme`, `statusLine`, `layout`, `notify`, `watchFiles`,
 `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
 `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
-`sessionRetentionDays`, `maxCheckpoints`, `lintCommands`, `disabledMcpServers`,
-`mcp.enabled`, `connectTimeoutSeconds`, `providerRetryAttempts`,
-`providerRetryBaseBackoffMs`, `debug.skills`, `debug.commands`, `debug.rules`.
+`sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
+`promptSuggestionHistory`, `maxCheckpoints`, `lintCommands`,
+`disabledMcpServers`, `mcp.enabled`, `connectTimeoutSeconds`,
+`providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
+`debug.commands`, `debug.rules`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1044,7 +1046,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, fifty-three keys are **never** taken from a project file:
+Even for a trusted project, fifty-four keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
