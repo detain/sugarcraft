@@ -283,6 +283,41 @@ compaction and `/resume`; once the model has gone six steps without seeing it
 model as a hidden reminder ending "Never redo or re-verify completed work
 because of these notes." A list with nothing left open is never re-shown.
 
+### Sending, steering and queueing
+
+`Enter` sends the draft; `Alt+Enter` (or `Shift+Enter` / `Ctrl+Enter` where
+the terminal reports them) starts a new line, and `/editor` composes a long
+prompt in `$VISUAL`/`$EDITOR`. `Up` on an empty box recalls earlier prompts,
+across sessions, and `Right` takes the greyed suggestion of what you might
+send next.
+
+While a turn is running, what you type is not lost and does not wait for you
+to cancel:
+
+- **`Enter` steers** the running turn (the default, `"queueMode": "steer"`):
+  the agent reads your message at its next step, and the step's tool calls
+  that have not started yet are skipped so it reads it before doing more. If
+  the turn ends first, the message is sent as the next prompt.
+- **`Tab` queues** the draft for after the turn instead, and queued messages
+  go out in order as each turn ends.
+- `"queueMode": "followup"` makes `Enter` queue like `Tab`;
+  `"queueMode": "interrupt"` makes it stop the turn at its next step (and the
+  call running now) and then send.
+- **`Esc`** stops the running tool and then the turn after its current step,
+  keeping the reply so far; **`Esc` `Esc`** (within `doubleEscSeconds`)
+  cancels at once.
+- Slash commands are refused mid-turn (they could rewrite the history the turn
+  is appending to), except `/btw <question>`, which asks the cheap title model
+  a side question about the conversation and keeps both out of it, and bare
+  `/exit`. A `!command` waits in the queue and runs when the turn ends.
+
+With `"notify": "bell"` (or `"osc9"` for a desktop notification) the terminal
+is told when a turn ends and when a permission question is waiting.
+`/goal <condition>` and `/grind <condition>` keep the agent working, turn after
+turn, until the title model judges the condition met from the evidence in the
+transcript (at most 10 and 50 follow-up rounds); see
+[`docs/COMMANDS.md`](docs/COMMANDS.md#the-built-in-commands).
+
 ### Attachments
 
 Mention a file with `@` and it is attached to that prompt: `explain @src/Chat.php`
@@ -372,6 +407,19 @@ The parenthesised spellings are aliases: they dispatch, but they have no
 `CommandRegistry` row of their own, so no surface advertises them. The roster is
 generated from the one-file-per-command specs under `builtin-commands/` by
 `php tools/gen-command-docs.php --write`.
+
+By task (every command, with its arguments, is in
+[`docs/COMMANDS.md`](docs/COMMANDS.md#the-built-in-commands)):
+
+| Task | Commands |
+|---|---|
+| Sessions | `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/clear` |
+| Checkpoints | `/undo`, `/redo`, `/rewind [n] [--chat\|--files\|--both]`, `/diff [n]` |
+| Context | `/context`, `/compact [--self] [focus]`, `/sweep [n]`, `/pruning [mode]`, `/compress [focus]`, `/decompress [bN]`, `/recompress [bN]` |
+| Working | `/goal <condition>`, `/grind <condition>`, `/btw <question>`, `/init [focus]`, `/editor [text]`, `/websearch <query>`, `/workflow …` |
+| Agents | `/agents [name\|run id]` |
+| Configuration | `/settings [search]`, `/model [provider [model]]`, `/theme`, `/permissions`, `/rules [name]`, `/memory …`, `/mcp …`, `/budget [amount\|off]` |
+| Interface | `/pane …`, `/layout reset`, `/keys`, `/help`, `/notices`, `/exit` |
 
 `/permissions` answers, in the transcript, what this session is actually gated
 by: the mode, the source it came from (`--permission-mode`, the env var, or the
@@ -614,118 +662,38 @@ rendered inline via candy-mosaic. Successful tool bodies are hidden by default
 its output — `$ <command>` for shell calls, `key: value` for other tools. The
 model's thinking streams in full while it thinks, then folds into a collapsed
 `💭 Thought` row once the reply (or a tool call) starts; click the row to open
-or close it (`Ctrl+O` toggles the newest one). Context usage shows as both a token count and
-a percentage, and the budget it is measured against is the **live model's own
-context window** as its provider reports it (a backend with no model behind it,
-such as the offline echo default, falls back to 100,000 estimated tokens). That
-budget also drives compaction, per turn and without an idle gate: at 70% a
-system-role reminder rides along with the turn (and, with a provider configured,
-the summaries the next tier will need are requested in the background beside
-it), at 85% older exchanges are summarized first and the rewrite is reported in
-the transcript, and at 95% the turn is refused rather than spent on a request
-the provider would reject. Each
-tier can also carry an **absolute** token cap beside its percentage, firing at
-whichever is lower, so a 1M-token window need not reach 700,000 tokens before
-the first reminder. By default the reminder is capped at 100,000 tokens and
-automatic compaction at 150,000; the 95% refusal keeps no cap, so a window up
-to about 142,000 tokens behaves exactly as the percentages say, and an
-absolute tier never refuses a prompt — when the exchanges compaction keeps are
-themselves over a cap, that tier stands down instead of compacting for
-nothing. The `compaction.*` settings change every figure, per model too
-(`compaction.modelTokenCaps`); see
-[`docs/SETTINGS.md`](docs/SETTINGS.md#compaction-thresholds). A
-refusal is not a dead end — each attempt drops the oldest preserved exchange,
-and `/clear` frees the whole context at once. Those tiers judge at submit; inside
-a turn the engine also measures every step's request before sending it — system
-prompt and tool schemas included, anchored on the provider's own count for the
-step before — against a step budget of the smaller of 80% of the window and the
-window less the output ceiling and a reserve. A request over that budget is
-pruned before it goes out: older tool output — outside the last two prompts and
-the newest 40k tokens of it, and never a `Task` or `Skill` result — is sent as
-a one-line placeholder naming the call (`[Read src/Foo.php — output pruned to save
-context; re-run the tool if you need it]`), along with superseded copies of the
-harness's own state row, but only when that frees at least 20k tokens. If the
-request is still over, the agent's own model summarises what it has already been
-sent — same system prompt and tools, so the request reuses the provider's cache,
-plus an instruction not to call tools (`SUGARCRUSH_SUMMARY_MODEL` picks another
-model) — and the summary stands in for those rows while the step in progress
-goes out whole. Your transcript keeps every output and every row. A request the
-provider still refuses as too long for its window gets the same relief at full
-strength — every older tool output becomes its placeholder, then the summary —
-and is sent once more before the turn fails. A reply the provider cuts off at
-its output limit without calling a tool is continued where it stopped, up to
-three times, and reads as one answer: the cut reply goes back as the start of
-the model's own message where the provider allows that (`sglang`, and Claude on
-`vertex` or `bedrock`), and with a request to continue elsewhere. Only a reply
-still cut off after that carries the notice that it stopped at the output
-limit. A stream that drops after the reply has started showing is continued the
-same way ("Continue where you left off") rather than restarted, so what you have
-already read stays and the rest is appended; one that drops before anything
-showed is simply retried. While the turn runs, the status
-bar names the step it is on, adds that step's context figure once the request
-is over budget, and moves the spend readout as each step is billed. On such a
-turn the first `Esc` stops it after the current step's tools finish, with its
-reply kept, and a further `Esc` cancels it at once. A message you send while it
-runs **steers** it: the agent reads it at its next step (calls of the current
-step that have not started are skipped so it does), while `Tab` queues the draft
-for after the turn instead.
+or close it (`Ctrl+O` toggles the newest one).
 
-A `Task` call gets a **live line** under its row for the sub-agent it runs —
-`└ ⠋ Grep "LoginController" routes/ · 7 tools · 0:12 · 4.1K tok` — naming
-the call the agent is in right now (or its last finished call with `✓`/`✗`,
-`thinking…`, or the newest fragment of what it is writing), its tool count,
-elapsed time, tokens and spend. Parallel `Task` calls each get their own line.
-The spinner turns while the agent works; when it ends the glyph becomes `✓`
-(done), `✗` (failed, with the reason), `⏹` (cancelled) or `⏸` (stopped without
-a report), and the line stays under the settled row. A `Task` call still
-waiting for a free delegation slot says `◌ queued:` on its row instead of
-`running:`. The line never wraps: on a narrow terminal the spend goes first,
-then the tokens, then the tool count, and the item is shortened in the middle.
-Without `ext-pcntl` the turn runs in-process, so the lines appear filled in
-when it ends rather than live (see TROUBLESHOOTING). While a batch is running,
-a faint `alt+↓ agents · click a task to open it` follows its last line.
+**Context.** The status bar shows the history against the **live model's own
+context window** as its provider reports it (a backend with no model behind
+it, such as the offline echo default, falls back to 100,000 estimated tokens),
+as a token count and a percentage, plus what pruning has taken out
+(`~81K / 131K context (62%, −52K pruned)`). That budget drives compaction at
+submit: at 70% a reminder rides along with the turn (and the summaries the next
+tier will need are requested in the background), at 85% older exchanges are
+summarized first and the rewrite is reported in the transcript, and at 95% a
+turn still over the window after compacting is refused rather than spent on a
+request the provider would reject. By default the reminder is also capped at
+100,000 tokens and automatic compaction at 150,000, whichever comes first, so a
+1M-token window need not reach 700,000 tokens before the first reminder; the
+`compaction.*` settings change every figure, per model too
+([`docs/SETTINGS.md`](docs/SETTINGS.md#compaction-thresholds)). Inside a turn,
+every step's request is measured before it is sent and, when it is over the
+step budget, older tool output is pruned to a one-line placeholder
+(`[Read src/Foo.php — output pruned to save context; re-run the tool if you need
+it]`) and then summarised by the agent's own model; a request the provider
+still rejects as too long, a reply cut off at its output limit and a stream
+that drops mid-reply are all recovered rather than failed. Your transcript
+keeps every output and every row. All of it — and the agent's own `Prune`,
+`Compress` and `Recall` tools with `/sweep`, `/pruning`, `/compress`,
+`/decompress` and `/recompress` — is in [`docs/CONTEXT.md`](docs/CONTEXT.md).
 
-A **background `Task`** (`background: true`, or an agent whose preset says
-`background: true`) gets no live line: the call returns `{"agent_id": …}` at
-once and the agent runs as a background session, exactly like `/bg` — its
-result, with its status, runtime, tokens, cost and the resume id that continues
-it, arrives as a new message when it settles, and starts a turn if none is
-running. Until then every turn's dispatch tells the model what is still out in
-an `<active-subagents>` row, so it never has to poll. The session runs under the
-stricter of its own launch's permission mode and the session's that started it,
-and a call that would ask is refused, since nobody is there to answer.
-
-**Delegation nests, within caps.** A sub-agent whose preset lists no `tools:`
-inherits `Task` too, so it can delegate in turn — up to three levels below your
-own agent; the agent at the third level gets no `Task`. A nested run reports to
-the Agents pane like any other, naming the run that delegated it as its parent. A
-session runs at most eight delegated runs at once, every level, parallel member
-and background agent counted; the call past that is refused at once with a
-reason the model reads ("do not retry this call right away"), never queued,
-because a parent waiting on its children already holds a seat. (The per-batch
-`◌ queued:` cap above still applies inside one message.)
-
-**Agent View.** A click on a live line (or `Enter` on the agents strip, or on
-the agent dashboard's peek) swaps the transcript area for **that agent's own
-transcript** — its task, every tool call with its result, its thoughts and its
-replies, drawn exactly like the main transcript and read live from the
-sub-agent's log (`~/.sugar-crush/subagents/`) while it runs. A header row stays
-pinned above it: `main ▸ explore  ‹ 1 of 3 ›  ⠋ running · step 4/50 · 0:12 ·
-4.1K tok   esc back`. `Esc` (or `Alt+↑`, or a click on `main`) goes back to the
-main transcript without counting toward an `Esc` `Esc` cancel, and `Alt+N` /
-`Alt+P` (or a click on `‹` / `›`) open the other agents of the same batch.
-While the view is open the input box is **that agent's composer** (an empty box
-reads `message explore…`): `Enter` sends the draft to the agent, idle or
-mid-turn, and the view shows it as `you → explore · … ⧗ queued` until the agent
-reads it at its next step, where its own transcript then shows it. Message a
-**finished** agent and it is continued instead — a follow-up run of the same
-conversation that streams into the view (`↻ follow-up running`, then `↩
-replied`), with one `you → explore · … (follow-up)` row left in the main
-transcript; the main model is not told. A `/command` or `!command` typed there
-still runs as a command. A finished agent reopens from its stored sub-agent session — `Enter` on a sub-agent row of
-the session picker opens it the same way — and a dashboard worker that keeps no
-transcript (a workflow stage, a background session) shows its live output pane
-instead.
+**Steps.** While the turn runs, the status bar names the step it is on, adds
+that step's context figure once the request is over budget, and moves the spend
+readout as each step is billed. On such a turn the first `Esc` stops it after
+the current step's tools finish, with its reply kept, and a further `Esc`
+cancels it at once. A message you send while it runs **steers** it (see
+[Sending, steering and queueing](#sending-steering-and-queueing)).
 
 Beside the context readout, a **spend** readout appears once the provider has
 reported something to show — dollars, and the cap if one is set. It is a
@@ -738,41 +706,47 @@ because the two are different claims and the cap is inert in that state.
 
 When you type `/compact` and a provider is configured, the older exchanges are
 summarized **by a model** rather than by the local truncate-and-placeholder
-heuristic — and so is the automatic 85% tier. That tier usually does not wait:
-the summaries were already requested in the background when the session
-crossed 70%, so at 85% they are spliced in and your prompt goes out at once.
-They are used only while they still describe the conversation — the exchanges
-they summarised must still be the oldest ones being condensed, so a `/rewind`,
-`/clear`, session switch or other compaction in between discards them — and an
-exchange that left the verbatim tail after they were requested gets the
-heuristic line. When there is no usable background summary yet, the tier parks
-the prompt you just sent until the summaries arrive. The request is the conversation's own: the same
-system prompt, tools and history the next turn would send, plus one final
-instruction not to call tools, so everything before that instruction is a prefix
-the provider has already cached. The tools are advertised but never run — the
-reply is taken before any call is dispatched — so a compaction can never raise a
-permission prompt. It runs on the conversation's own model by default, because a
-cache hit needs the same model and a bad compaction summary is permanent context
-loss; `SUGARCRUSH_SUMMARY_MODEL` (or the `summaryModel` setting) names another.
-It is still the largest single call this app makes, which is why the spend cap
-gates it. The request goes out off the render loop, so nothing freezes:
-`/compact` answers immediately that it is summarizing and the transcript compacts
-when the summaries arrive. If the call fails, or the model answers with something
-unusable, the compaction still happens on the heuristic and the transcript says
-which one did it.
-
-`/compact --self [focus]` is the other way round (Kilo's legacy form): the turn's
-own model writes the summary with its `Compress` tool — one range over the whole
-closed conversation — and **you preview it** in the permission modal before it
-applies; refusing leaves the conversation as it was. Nothing is rewritten: the
-transcript keeps every row and marks the section, the model reads the summary in
-its place, and `/decompress` takes it back. A later compression that covers it
-nests it by reference rather than summarising the summary again.
+heuristic — and so is the automatic 85% tier, which usually does not wait,
+because the summaries were already requested in the background when the
+session crossed 70%. The request is the conversation's own (same system prompt,
+tools and history, plus an instruction not to call tools), so it reuses the
+provider's cache and can never raise a permission prompt; it runs on the
+conversation's own model unless `SUGARCRUSH_SUMMARY_MODEL` (or the
+`summaryModel` setting) names another, and the spend cap gates it. It goes out
+off the render loop, so nothing freezes, and if it fails the compaction still
+happens on the heuristic and the transcript says which one did it.
+`/compact --self [focus]` instead has the turn's own model write the summary
+with its `Compress` tool, and **you preview it** in the permission modal before
+it applies. See [`docs/CONTEXT.md`](docs/CONTEXT.md#compaction-tiers-between-prompts).
 
 Sessions get a name automatically: after the first exchange a **cheap
 small-model backend** (supplied separately from the conversation backend, so
 naming never costs a second tool-capable agent turn) generates a title, which
 is what `/sessions`, the tab strip and `Ctrl+R` list.
+
+### Sub-agents and the Agent View
+
+The agent delegates with the `Task` tool: a sub-agent from the roster (six
+built-ins — `coder`, `reviewer`, `debugger`, `architect`, `tester`, `devops` —
+plus your own presets under `.sugar-crush/agents/`) gets a self-contained task,
+runs its own tool loop in its own context, and reports back one result with a
+resume id. Several `Task` calls in one message run in parallel; a sub-agent can
+delegate in turn, up to three levels down and eight runs at once per session; a
+`background: true` run returns at once and reports when it settles; and an
+`isolation: worktree` agent works in a git worktree of its own.
+
+Each `Task` row gets a **live line** for the run —
+`└ ⠋ Grep "LoginController" routes/ · 7 tools · 0:12 · 4.1K tok` — naming the
+call the agent is in right now, its tool count, elapsed time, tokens and spend,
+ending in `✓`, `✗`, `⏹` or `⏸`. `Alt+↓` focuses the **agents strip** above the
+input box, and a click on a live line (or `Enter` on the strip) opens the
+**Agent View**: that agent's own transcript, live, with the input box as its
+composer — `Enter` sends it a message it reads at its next step, or continues
+it once it has finished — and `Ctrl+X` `c`/`p`/`s`/`o` to cancel, pause, stop
+all, or open it as a session. `Esc` goes back. Finished runs are stored as
+sub-agent child sessions under the session that delegated them. Everything
+about sub-agents, teams and these controls is in
+[`docs/AGENTS.md`](docs/AGENTS.md).
 
 ## Sessions and checkpoints
 
@@ -1872,7 +1846,7 @@ $backend = (EngineBackend::new($provider, 'gpt-4o'))
   ```
 
   Paths are matched by real path, so a symlinked or trailing-slash spelling of a trusted root still matches. The match is **exact, not a subtree**: trusting `~/src` does not trust `~/src/anything` — list each repository you mean, and note that a trusted root's sibling sharing its spelling (`my-repo-evil` beside `my-repo`) is never trusted by accident. An entry must also be **absolute** (or `~/`-rooted): a relative one like `"."` is resolved fresh against the current directory on every launch, exactly as the project root is, so it would always agree and turn a per-path allowlist into "trust every repository I `cd` into". Such an entry is refused and reported rather than honoured. When a project hook file is present and *not* trusted, the launch says so on stderr — once per launch, naming the canonical absolute path to add — rather than dropping it silently. Your own `~/.sugar-crush/hooks.yaml` is never gated: you wrote it, and that premise is enforced rather than assumed — if this process cannot determine which home directory is yours (`$HOME` unset, `$USERPROFILE` unset, and no passwd entry for its uid) the launch **stops** rather than reading a hook chain or a permission policy out of a world-writable fallback directory.
-- **Permission modes** — `Permissions\*`: `PermissionGate` evaluates a tool call against one of six `PermissionMode`s (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`), with a mode-independent rm-rf circuit breaker and a fail-closed `auto` classifier when no `SafetyClassifier` is configured. It reaches the main loop as `PermissionGateHook`, registered *after* the built-ins so a narrow, specific hazard ("Bash path outside the workspace root") reports before the broad policy one ("mode `plan` does not allow Edit"). Set the mode with `$SUGARCRUSH_PERMISSION_MODE` or a `permissionMode` key in `~/.sugar-crush/config.json` (or `settings.json`, which it outranks); add `permissionRules` entries like `{"pattern": "Bash*", "action": "deny"}` for per-pattern overrides. A pattern is `Tool` or `Tool(argument-glob)`, both halves `fnmatch()` — so `Bash(rm -rf *)`, `Read(./.env)`, `Read(./secrets/*)`, `mcp__*__push`. **Argument-scoped patterns matched nothing at all before this release**: the matcher compared the tool name only, so `Deny Bash(rm -rf *)` evaluated to `allow` while the documentation said otherwise. They work now, and two things about them are worth knowing rather than discovering. **Every argument-scoped `Deny` is advisory**, shell and path alike. A shell one survives whitespace runs and a command hidden behind `&&`/`;`/`|`/newline, and does *not* survive `/bin/rm`, `$(echo rm)`, `bash -c '…'` or `find -delete`, because no pattern over shell text can. A path one survives the `./` prefix, `//` runs and `.`/`..` segments — all normalised away on both sides, so `Read(./.env)` also covers `.env`, `.//.env` and `./foo/../.env`, none of which it caught in the first cut of this feature — and a *restrictive* path pattern spelled relatively additionally reads as "at any depth", so it covers `/home/you/proj/.env` too (a permissive one does not, or `Allow Read(.env)` would grant `/etc/.env`). It does *not* survive a symlinked spelling of the same file, and nothing here touches the filesystem: resolving would make the decision depend on the process's cwd and race the tool being gated. So treat any `Tool(...)` deny as a guard rail against the model doing something by *accident*, not as containment. The boundaries that do not depend on a spelling are `plan` mode, which refuses whole tool kinds, and the path jails, which resolve. The mode-independent `rm -rf /` breaker reads like a third and is not one: unswitchable is not unevadable — it reads `arguments['command']` and tokenises it without expanding anything, so while `/bin/rm -rf /` and `rm '-rf' ~` are caught, `bash -c 'rm -rf /'` and `$(echo rm) -rf /` are past it. (Its own newline-chain hole *was* real and is fixed here: `echo hi⏎rm -rf /` was **allowed** under `bypass-permissions` while `echo hi && rm -rf /` was denied.) And an argument-scoped rule does **not** refuse a *declaration* (a workflow stage's `tools: [Bash]`), only a real call: one `Deny Bash(rm -rf *)` should not make every stage that declares `Bash` unusable. A pattern the grammar cannot parse is reported on stderr — naming the reason it actually gave, which is either an unterminated `(`, a `)` that never opened, an empty pattern, or a missing tool-name half (`(rm *)`) — and skipped rather than loaded as a rule that would match nothing. **The default depends on the path.** The **TUI starts in `default`**: reads run, and every write, shell command and network call asks through the y/n/a modal — on `Chat`'s own tool path and, through the turn's two-way frame channel, on the engine path too — with `/rewind`'s workspace checkpoints behind whatever you allowed. It used to start in `bypass-permissions`, because an ASK on the engine path could not reach the screen and an asking default would have refused every edit; that is fixed (see *Permission prompts* below). One gap remains: a `Task` sub-agent run in a **parallel** batch cannot ask yet, so its question is refused with a reason the model reads — run it alone, allow it by rule, or pick `accept-edits`/`bypass-permissions` if you delegate edits in parallel. **`-p` and background sessions start in `bypass-permissions`**: their approver asks on stderr at a terminal and *refuses* without one, so an asking default would turn an unattended CI run's first edit into a refusal. Be clear about what that costs: with no `permissionRules` configured, `bypass-permissions` is *identical* to having no gate — every destructive `rm` its circuit breaker refuses is already refused, earlier and more broadly, by `ConfirmRemoveHook`. Any mode you configure (flag, variable or key) applies on every path alike.
+- **Permission modes** — `Permissions\*`: `PermissionGate` evaluates a tool call against one of six `PermissionMode`s (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`), with a mode-independent rm-rf circuit breaker and a fail-closed `auto` classifier when no `SafetyClassifier` is configured. It reaches the main loop as `PermissionGateHook`, registered *after* the built-ins so a narrow, specific hazard ("Bash path outside the workspace root") reports before the broad policy one ("mode `plan` does not allow Edit"). Set the mode with `$SUGARCRUSH_PERMISSION_MODE` or a `permissionMode` key in `~/.sugar-crush/config.json` (or `settings.json`, which it outranks); add `permissionRules` entries like `{"pattern": "Bash*", "action": "deny"}` for per-pattern overrides. A pattern is `Tool` or `Tool(argument-glob)`, both halves `fnmatch()` — so `Bash(rm -rf *)`, `Read(./.env)`, `Read(./secrets/*)`, `mcp__*__push`. **Argument-scoped patterns matched nothing at all before this release**: the matcher compared the tool name only, so `Deny Bash(rm -rf *)` evaluated to `allow` while the documentation said otherwise. They work now, and two things about them are worth knowing rather than discovering. **Every argument-scoped `Deny` is advisory**, shell and path alike. A shell one survives whitespace runs and a command hidden behind `&&`/`;`/`|`/newline, and does *not* survive `/bin/rm`, `$(echo rm)`, `bash -c '…'` or `find -delete`, because no pattern over shell text can. A path one survives the `./` prefix, `//` runs and `.`/`..` segments — all normalised away on both sides, so `Read(./.env)` also covers `.env`, `.//.env` and `./foo/../.env`, none of which it caught in the first cut of this feature — and a *restrictive* path pattern spelled relatively additionally reads as "at any depth", so it covers `/home/you/proj/.env` too (a permissive one does not, or `Allow Read(.env)` would grant `/etc/.env`). It does *not* survive a symlinked spelling of the same file, and nothing here touches the filesystem: resolving would make the decision depend on the process's cwd and race the tool being gated. So treat any `Tool(...)` deny as a guard rail against the model doing something by *accident*, not as containment. The boundaries that do not depend on a spelling are `plan` mode, which refuses whole tool kinds, and the path jails, which resolve. The mode-independent `rm -rf /` breaker reads like a third and is not one: unswitchable is not unevadable — it reads `arguments['command']` and tokenises it without expanding anything, so while `/bin/rm -rf /` and `rm '-rf' ~` are caught, `bash -c 'rm -rf /'` and `$(echo rm) -rf /` are past it. (Its own newline-chain hole *was* real and is fixed here: `echo hi⏎rm -rf /` was **allowed** under `bypass-permissions` while `echo hi && rm -rf /` was denied.) And an argument-scoped rule does **not** refuse a *declaration* (a workflow stage's `tools: [Bash]`), only a real call: one `Deny Bash(rm -rf *)` should not make every stage that declares `Bash` unusable. A pattern the grammar cannot parse is reported on stderr — naming the reason it actually gave, which is either an unterminated `(`, a `)` that never opened, an empty pattern, or a missing tool-name half (`(rm *)`) — and skipped rather than loaded as a rule that would match nothing. **The default depends on the path.** The **TUI starts in `default`**: reads run, and every write, shell command and network call asks through the y/n/a modal — on `Chat`'s own tool path and, through the turn's two-way frame channel, on the engine path too — with `/rewind`'s workspace checkpoints behind whatever you allowed. It used to start in `bypass-permissions`, because an ASK on the engine path could not reach the screen and an asking default would have refused every edit; that is fixed (see *Permission prompts* below). A `Task` sub-agent asks through the same modal, a parallel member included: its question is relayed through the turn, one at a time, naming the agent that asked. **`-p` and background sessions start in `bypass-permissions`**: their approver asks on stderr at a terminal and *refuses* without one, so an asking default would turn an unattended CI run's first edit into a refusal. Be clear about what that costs: with no `permissionRules` configured, `bypass-permissions` is *identical* to having no gate — every destructive `rm` its circuit breaker refuses is already refused, earlier and more broadly, by `ConfirmRemoveHook`. Any mode you configure (flag, variable or key) applies on every path alike.
 
 A permission setting that is **present but unusable stops the launch** (exit 2 — see the exit-code table above) instead of falling back to the permissive default: a `~/.sugar-crush/config.json` that is unreadable, unparseable, whose top level is a JSON *list* rather than an object, or that is not a regular file at all (a directory or a dangling symlink of that name); a config directory this process cannot search (so whether a policy is configured there is unknowable); or a `permissionMode` — in either source — that names no real mode. A **hook file** is held to the same standard, for the same reason: an unreadable or unparseable `hooks.yaml`, a top level that is a YAML *list* rather than a mapping, a top-level key that is not `hooks:` (a typo'd `hook:` used to install zero guards and say nothing), a key on a hook *entry* that is not one of `name` / `matcher` / `command` / `description` / `disabled` / `timeout` (`mather:` used to fall back to the `.*` default and run the hook on every call; `enabled: false` was accepted and ignored, and so was `timeout:` back when this format had no such key — it has one now, and it is honoured), an unknown event name, a matcher that is not a valid regular expression, a `disabled` that is not `true`/`false`, a `timeout` that is not a positive *finite* number of seconds (`0`, `-1`, `.inf`, `1e400` and `.nan` are all refused rather than read as “no timeout”, and so is a `timeout:` written with no value after it), a hook with no command, or a name collision all stop the launch rather than quietly leaving the chain a guard short. `disabled: true` keeps that entry out of the chain while still validating everything else about it; a matcher may contain `/` (the delimiter is chosen to avoid whatever the pattern uses). Absence is not an error: a fresh install with no config, no hook file, and a zero-byte config all get the default. Individual malformed `permissionRules` entries are skipped (never coerced to `allow`) and reported on stderr, because the list is item-wise in a way a JSON syntax error is not; so is a `"permissionRules": null` that is *present* rather than absent, since someone who typed the key believes they configured rules. An error message also names the file the bad value came from, `settings.json` or `config.json`, rather than always naming the one the CLI writes.
 - **Skills** — `Skills\*`: frontmatter `SKILL.md` files inject prompt context, matched by keyword/path. Discovered from built-ins (`src/Skills/BuiltIn/`), `<project>/.sugar-crush/skills`, and `~/.sugar-crush/skills` (lowest to highest: **your own skill beats a project's** of the same name, and a project's beats a built-in; every shadowed skill is reported through `SkillManager::skipped()`, the launch notice and `SUGARCRUSH_DEBUG_SKILLS=1`). Ships 8 built-ins spanning language/framework conventions (`php-best-practices`, `laravel-best-practices`, `symfony-best-practices`), testing (`phpunit-master`, `testing-strategies`), `api-design`, `security-audit` and `composer-wizard`. The SugarCraft monorepo's own skills (`explore-codebase`, `worktree-workflow`, `mcp-authoring`, `matchups-sync`) live in the monorepo's project tier (`.sugar-crush/skills/` at its repository root), so they load only inside that checkout — as built-ins they were listed to every project, and one told the model to discard a dirty tree's uncommitted work. `disable-model-invocation` and `user-invocable` frontmatter flags are enforced, not decorative. `context: fork`, `allowed-tools`, `disallowed-tools`, `model` and `effort` are parsed and **not acted on** — there is no fork executor, so a `context: fork` skill behaves exactly like a `thread` one — and the launch says so: one aggregated row names every skill, agent preset, command or rule that declares an inert field or an unknown key (with a did-you-mean for a near miss such as `permisionMode`), and never refuses the file for it ([`docs/SKILLS.md`](docs/SKILLS.md#diagnostics)). Loading is **progressive**: the system prompt carries only each skill's name + description, and the model pulls the full `SKILL.md` body through the `Skill` tool when it decides one is relevant. Path-scoped skills self-announce — the first time `Read`/`Edit`/`Glob` touches a file a skill's `paths:` covers, that skill is surfaced (once per session, via one shared announce-set across the three tools). Those `paths:` globs are `fnmatch()` semantics **without `FNM_PATHNAME`**, so a single `*` crosses `/`, and `**` means zero or more directory levels **at any position, the first included** — which is a behaviour change worth knowing about if you wrote a skill against the older matcher: a leading `**` used not to claim files at the tree root and now does, so the three shipped skills scoped `**/*.php` or `**/*Test.php` (`security-audit`, `php-best-practices`, `phpunit-master`) now fire on a root-level file where they used to stay silent. [`docs/SKILLS.md`](docs/SKILLS.md) has the measured table. Skills authored for other CLIs are imported rather than ignored — `~/.claude/skills`, `<project>/.claude/skills`, `~/.config/opencode/skills` and `<project>/.opencode/skills` are all scanned, and the picker shows a provenance badge for where each one came from (symlinked skill directories are followed, which is how those trees are commonly laid out — but a link is **confined**: one in your own `~/.claude/skills` may point anywhere else in your home, while one in a cloned repository's `<project>/.claude/skills` may not leave that skills directory. That confinement is enforced on the *directory* as well as on each entry in it, and both halves are needed: an entry is judged against the skills directory's real path, so committing `.claude/skills` **itself** as a link used to relocate the boundary rather than trip it — every `SKILL.md` under the target was read, and a skill body is prompt context. The directory is therefore held inside the checkout it came from, which is the one path in the pair a repository cannot have forged; a link that stays inside the checkout (`.claude/skills -> shared/skills`) is still honoured, and a refused tree is dropped without disturbing your own or the built-ins. Be precise about what that buys, though: "inside the checkout" is not the same as "committed", since a checkout also holds untracked and gitignored files — so what is closed is a repo reading files from *outside* the tree you cloned, not every conceivable in-tree misdirection. A refused directory is named on stderr at launch rather than silently skipped. Both directory-level checks — this one and the workflow tier's — are the single predicate in `Support\ContainedPath`, which is also where the difference between them is written down: an entry resolving *onto* its boundary is fine, a directory resolving onto its trust anchor is not. The walk is also depth- and breadth-bounded, so a link to a huge tree cannot cost seconds per launch). Collisions resolve so that **nothing you did not write can re-point a name you already use**: the tier decides first — built-in < project < user, whatever the format — so a cloned repository's `.sugar-crush/skills` or `.claude/skills` copy cannot replace a skill in your `~/.sugar-crush/skills`, `~/.claude/skills` or `~/.config/opencode/skills`, because a project's skill arrives with whatever you cloned (it used to: native project skills outranked yours, audit 15d-03). Inside one tier a native skill wins over an imported one, and between the two foreign tools, opencode wins over Claude. An imported `SKILL.md` that will not parse is another tool's file and not something you can fix, so it is skipped quietly rather than logged to stderr on every launch; the launch prints **one** line saying how many were skipped, and `SUGARCRUSH_DEBUG_SKILLS=1` lists them (they are also readable from `SkillManager::skipped()` and, for the launch as a whole, `Bootstrap::skillSkips()`).
@@ -1922,14 +1896,12 @@ Below `Chat`, the session logic a server needs lives in `src/Host/`: `Host\TurnC
 
 Things that are genuinely not finished, stated plainly rather than left for you to discover:
 
-- **`toolCallParser` reaches only one of the three providers.** It is closed for `SglangProvider`, which now consults the selected parser on the streaming path as well as the batch one. `CustomProvider` and `OpenAIProvider` accept no `toolCallParser` argument at all and read only the structured `tool_calls[]` shape (streamed fragments included), so on those two a deployment launched without `--tool-call-parser` still loses every tool call, with no setting that would recover it.
-- **An ASK on the engine path is answered everywhere — with one limit.** It used to fail closed everywhere, because **nothing anywhere attached an approver**. The **one-shot `-p` path** now attaches `HeadlessPermissionPrompt`, which puts the question on **stderr** (never stdout — `--output-format json` promises exactly one JSON object there), reads the answer from stdin, and grants only on a literal `y`/`yes`; with no terminal on stdin it does not read at all and refuses, naming the tool, the mode and what to change (`--permission-mode`, or a `permissionRules` entry). The **TUI** answers through its modal: `Chat` starts every engine turn through `completeInteractive()`, the forked child puts each question up the turn's socket, and the answer goes back the same way (see *Permission prompts* above). What is still missing:
-
-  - **There is no way to type rejection feedback in the TUI yet.** The channel carries it — a reply's note reaches the model as `the user said: …` beside the refusal — but the modal has no key that opens a note.
+- **`toolCallParser` reaches only one of the three OpenAI-wire providers.** It is closed for `SglangProvider`, which now consults the selected parser on the streaming path as well as the batch one. `CustomProvider` and `OpenAIProvider` accept no `toolCallParser` argument at all and read only the structured `tool_calls[]` shape (streamed fragments included), so on those two a deployment launched without `--tool-call-parser` still loses every tool call, with no setting that would recover it.
+- **An ASK is answered on every interactive path; an unattended one is refused.** It used to fail closed everywhere, because **nothing anywhere attached an approver**. The **one-shot `-p` path** now attaches `HeadlessPermissionPrompt`, which puts the question on **stderr** (never stdout — `--output-format json` promises exactly one JSON object there), reads the answer from stdin, and grants only on a literal `y`/`yes`; with no terminal on stdin it does not read at all and refuses, naming the tool, the mode and what to change (`--permission-mode`, or a `permissionRules` entry). The **TUI** answers through its modal: `Chat` starts every engine turn through `completeInteractive()`, the forked child puts each question up the turn's socket, and the answer goes back the same way (see *Permission prompts* above), and `r` there refuses with a note the model reads as `the user said: …` beside the refusal. A background session, which has no terminal, refuses every ASK.
 
   The TUI's default mode is `default`, which asks; `-p` and background sessions keep `bypass-permissions` (see *Permission modes*).
-- **The `anthropic` provider type key is OpenAI-shaped.** It authenticates as Anthropic but posts to `chat/completions` with `supportsFunctionCalling: false`, so it cannot call tools. Use `claude-code` or `SUGARCRUSH_BACKEND_CMD` for a native Anthropic path.
-- **Agent controls reach delegated runs only, and only softly at first.** The dashboard's `c`/`r`/`s`, `Ctrl+G` and the Agent View's `Ctrl+X` chords act through each run's mailbox, which a `Task` run reads while it works — a dashboard row that is not one (a `/workflow` stage, a background session) is refused on the status line. A cancel or pause takes effect at the run's next tool or step, so a long `Bash` call finishes first; a second cancel within 3 s stops the run's `Task` call at once (a parallel member's process is killed, a lone `Task` stops at its next step), but there is no per-run kill for a detached follow-up yet. `Ctrl+X b` (send to the background) is claimed but does nothing until background `Task` runs land.
+- **The `anthropic` provider type key is not the native Messages API.** It authenticates as Anthropic but posts an OpenAI-shaped body to Anthropic's OpenAI-compatibility endpoint (`/v1/chat/completions`); tools and images work, but nothing Messages-only does (see [Providers](#providers)). Use `claude-code` or `SUGARCRUSH_BACKEND_CMD` for a native Anthropic path.
+- **Agent controls reach delegated runs only, and only softly at first.** The dashboard's `c`/`r`/`s`, `Ctrl+G` and the Agent View's `Ctrl+X` chords act through each run's mailbox, which a `Task` run reads while it works — a dashboard row that is not one (a `/workflow` stage, a background session) is refused on the status line. A cancel or pause takes effect at the run's next tool or step, so a long `Bash` call finishes first; a second cancel within 3 s stops the run's `Task` call at once (a parallel member's process gets `SIGTERM`, then `SIGKILL` after 2 s; a lone `Task` stops at its next tool or step), but a nested run or a detached follow-up gets only the soft cancel. `Ctrl+X b` (move a running `Task` to the background) is reserved and does nothing yet — start one in the background with `background: true` instead. The model itself has no tools to message, wait on or interrupt a sub-agent; see [`docs/AGENTS.md`](docs/AGENTS.md#not-yet-available).
 - **Worktree isolation covers `Task` and `/bg`, not workflow stages, and never merges.** An agent whose preset says `isolation: worktree` runs a delegation (or a `/bg`/`/fork` session) in its own git worktree under `<root>/.sugar-crush/worktrees/`, with its tools jailed there; a run that cannot be isolated is refused rather than run in your checkout. A tree that ends with work in it is kept and named in the result — merging it is yours (or the delegating model's) to do, and nothing does it automatically. A `/workflow` stage ignores the field and runs in the checkout. See [`docs/AGENTS_AUTHORING.md`](docs/AGENTS_AUTHORING.md#teams-and-worktrees).
 - **Workflow resume granularity is per whole stage.** An interrupted *parallel* sub-stage cannot be resumed with partial credit.
 - **Workflow stages run the real tool loop — on a launch with a provider.** `Bootstrap::workflowEngine()` gives the pool an `Agents\EngineExecutor` as its forked executor, and `Chat`'s constructor binds the chat's current backend into it (re-bound on a provider switch). Each stage agent — sequential, pipeline, verification or parallel — then runs through that engine's bounded loop in a forked child: same provider, hook chain, permission gate and root as the chat, narrowed to the stage's `tools:`, with `Task` withheld and a 200-step cap. With no provider, the pool keeps `ProcessExecutor`'s worker, which fails closed naming the absence, and a provider that fails to build (the chat then degrades to echo) is refused by the executor itself — echoed text is never reported as a stage's work.
@@ -2076,10 +2048,10 @@ writes `<dir>/durations.tsv`; copy it over
 `tests/Config/Support/refresh-suite-figure.php`, in the same step as the
 README headline.
 
-Coverage spans every subsystem: typed messages + attachments, all 11 built-in
+Coverage spans every subsystem: typed messages + attachments, all 20 built-in
 tools (the whole of `src/Tools/BuiltIn/`, which is exactly the built-in half of
-the array `Bootstrap::tools()` hands the engine — the array itself is longer
-whenever a trusted project's MCP servers advertise anything), all 7
+the tool set a launch hands the engine — the set itself is longer whenever a
+trusted project's MCP servers advertise anything), all 7
 `Providers\ProviderFactory` type
 keys (unit-tested with mocked transports — no live calls), the hook framework, permission-mode gating (incl. `pcntl_fork` concurrency stress tests for atomic task claiming), skills discovery + flag enforcement, sub-agents/teams/worktrees, workflow execution (sequential/parallel/pipeline/verification, PHP + YAML loading), the MCP client/servers (incl. per-agent routing enforcement), the SQLite store, token tracking, export, the TUI components, the `Runtime` orchestration (streaming accumulation, tool-result correlation, MODIFY hooks), the shell-out `CommandBackend` / `StreamingCommandBackend`, and the `EngineBackend` agentic loop (incl. the `maxSteps` guard).
 
