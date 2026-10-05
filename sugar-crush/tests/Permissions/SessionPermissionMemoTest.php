@@ -33,12 +33,22 @@ final class SessionPermissionMemoTest extends TestCase
             'inline interpreter code is exact' => ['Bash', ['command' => "php -r 'echo 1;'"], []],
             'a launcher is exact' => ['Bash', ['command' => 'bash -c ls'], []],
             'sudo is exact' => ['Bash', ['command' => 'sudo apt-get install x'], []],
-            'a chain is exact' => ['Bash', ['command' => 'git add . && git commit -m x'], []],
-            'a pipe is exact' => ['Bash', ['command' => 'ls | wc -l'], []],
+            'a chain is generalised per segment' => ['Bash', ['command' => 'git add . && git commit -m x'], ['Bash(git add * && git commit *)']],
+            'a chain of launchers is exact' => ['Bash', ['command' => 'find . -name x | xargs rm'], []],
+            'a pipe is generalised per segment' => ['Bash', ['command' => 'ls | wc -l'], ['Bash(ls * | wc *)']],
+            'the user\'s pipeline' => ['Bash', ['command' => 'sed -n 1,5p f | sort | uniq'], ['Bash(sed * | sort * | uniq *)']],
+            'a destructive segment stays literal' => ['Bash', ['command' => 'rm -f a.txt && ls'], ['Bash(rm -f a.txt && ls *)']],
+            'a fetch piped on stays literal' => ['Bash', ['command' => 'curl -s https://x.test/a | jq .b'], ['Bash(curl -s https://x.test/a | jq *)']],
+            'a writing redirection stays literal' => ['Bash', ['command' => 'sort -u a > b.txt && wc -l b.txt'], ['Bash(sort -u a > b.txt && wc *)']],
+            'a reserved word stays literal' => ['Bash', ['command' => 'for f in a b; do echo $f; done | sort'], ['Bash(for f in a b; do echo $f; done | sort *)']],
+            'a destructive command is exact' => ['Bash', ['command' => 'rm -rf build'], []],
+            'a newline is not structure' => ['Bash', ['command' => "ls\nsort"], []],
+            'a background job is not structure' => ['Bash', ['command' => 'sleep 1 & ls'], []],
             'a substitution is exact' => ['Bash', ['command' => 'echo $(id)'], []],
             'a writing redirection is exact' => ['Bash', ['command' => 'echo hi > out.txt'], []],
             'an env assignment is exact' => ['Bash', ['command' => 'FOO=1 make test'], []],
-            'glob characters are escaped' => ['Bash', ['command' => 'ls*x'], ['Bash(ls\\*x)', 'Bash(ls\\*x *)']],
+            'glob characters are escaped' => ['Bash', ['command' => 'npm run b*x'], ['Bash(npm run b\\*x)', 'Bash(npm run b\\*x *)']],
+            'an expandable program name is exact' => ['Bash', ['command' => 'ls*x'], []],
             'a path tool keeps the exact path' => ['Edit', ['file_path' => 'src/A.php', 'old_string' => 'a'], ['Edit(src/A.php)']],
             'WebFetch keeps the host' => ['WebFetch', ['url' => 'https://Example.com/docs?q=1'], ['WebFetch(domain:example.com)']],
             'a tool with no subject is the tool' => ['mcp__git__status', ['repo' => '.'], ['mcp__git__status']],
@@ -76,25 +86,25 @@ final class SessionPermissionMemoTest extends TestCase
 
     public function testAnExactGrantCoversOnlyThatCallWhateverItsKeyOrder(): void
     {
-        $memo = SessionPermissionMemo::new()->withGrant('Bash', ['command' => 'ls | wc -l', 'timeout' => 5]);
+        $memo = SessionPermissionMemo::new()->withGrant('Bash', ['command' => 'find . | xargs wc -l', 'timeout' => 5]);
 
         self::assertSame([], $memo->patterns(), 'nothing a rule could fire for');
-        self::assertTrue($memo->allows('Bash', ['timeout' => 5, 'command' => 'ls | wc -l']));
-        self::assertFalse($memo->allows('Bash', ['command' => 'ls | wc -c', 'timeout' => 5]));
+        self::assertTrue($memo->allows('Bash', ['timeout' => 5, 'command' => 'find . | xargs wc -l']));
+        self::assertFalse($memo->allows('Bash', ['command' => 'find . | xargs wc -c', 'timeout' => 5]));
     }
 
     public function testTheMemoRoundTripsThroughTheSessionGrantMapAndIgnoresOtherKeys(): void
     {
         $memo = SessionPermissionMemo::new()
             ->withGrant('Bash', ['command' => 'git log'])
-            ->withGrant('Bash', ['command' => 'ls | wc -l']);
+            ->withGrant('Bash', ['command' => 'find . | xargs wc -l']);
         $map = ['bash {"cmd":"x"}' => true, ...$memo->grants()];
 
         $back = SessionPermissionMemo::fromGrants($map);
 
         self::assertSame($memo->patterns(), $back->patterns());
         self::assertSame($memo->grants(), $back->grants(), 'the Chat-native exact key is not this class\'s');
-        self::assertTrue($back->allows('Bash', ['command' => 'ls | wc -l']));
+        self::assertTrue($back->allows('Bash', ['command' => 'find . | xargs wc -l']));
         self::assertSame([], SessionPermissionMemo::fromGrants(['rule:Bash(oops' => true, 'call:' => true])->grants(), 'malformed entries are skipped');
         self::assertTrue(SessionPermissionMemo::fromGrants([])->isEmpty());
     }
@@ -168,5 +178,55 @@ final class SessionPermissionMemoTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         (new PermissionGate(PermissionMode::Default))->withSessionRules([new PermissionRule('Bash', PermissionAction::Deny)]);
+    }
+
+    public function testAUserWrittenScopeIsRememberedOnlyWhenItCoversTheCallAndNamesTheTool(): void
+    {
+        $asked = ['command' => 'sed -n 1,5p f | sort | uniq'];
+        self::assertSame('sed * | sort * | uniq *', SessionPermissionMemo::editableScopeOf('Bash', $asked));
+
+        $memo = SessionPermissionMemo::new()->withPattern('sed * | sort | uniq', 'Bash', $asked);
+        self::assertNotNull($memo);
+        self::assertSame(['Bash(sed * | sort | uniq)'], $memo->patterns());
+        self::assertTrue($memo->allows('Bash', ['command' => 'sed s/a/b/ g | sort | uniq']));
+        self::assertFalse($memo->allows('Bash', ['command' => 'sed x | sort -u | uniq']), 'a bare segment means no arguments');
+
+        self::assertNull(SessionPermissionMemo::new()->withPattern('grep *', 'Bash', $asked), 'it must cover the call being asked about');
+        self::assertNull(SessionPermissionMemo::new()->withPattern('', 'Bash', $asked));
+        self::assertNull(SessionPermissionMemo::new()->withPattern('Bash*(sed * | sort * | uniq *)', 'Bash', $asked), 'no tool-name glob');
+        self::assertSame(
+            ['Bash(sed * | sort * | uniq *)'],
+            SessionPermissionMemo::new()->withPattern('Bash(sed * | sort * | uniq *)', 'Bash', $asked)?->patterns(),
+            'the whole pattern may be typed too',
+        );
+        self::assertSame(
+            ['Bash(rm *)'],
+            SessionPermissionMemo::new()->withPattern('rm *', 'Bash', ['command' => 'rm a.txt'])?->patterns(),
+            'broader than the suggestion, because the user wrote it',
+        );
+    }
+
+    public function testTheEditorStartsFromTheExactCommandWhenNoPatternFits(): void
+    {
+        self::assertSame('find . -name x\\* | xargs rm', SessionPermissionMemo::editableScopeOf('Bash', ['command' => 'find . -name x* | xargs rm']));
+        self::assertNull(SessionPermissionMemo::editableScopeOf('mcp__git__status', ['repo' => '.']), 'a tool with no subject has only the tool');
+    }
+
+    public function testTheGrantsAreListedOnceEachAndCanBeRevokedOneByOne(): void
+    {
+        $memo = SessionPermissionMemo::new()
+            ->withGrant('Bash', ['command' => 'git status'])
+            ->withGrant('Bash', ['command' => 'find . | xargs rm', 'description' => 'x'])
+            ->withGrant('Edit', ['file_path' => 'src/A.php']);
+
+        self::assertSame(['Bash(git status *)', 'Edit(src/A.php)', 'Bash: find . | xargs rm'], $memo->entries());
+
+        $revoked = $memo->without(1);
+        self::assertNotNull($revoked);
+        self::assertSame(['Edit(src/A.php)', 'Bash: find . | xargs rm'], $revoked->entries());
+        self::assertFalse($revoked->allows('Bash', ['command' => 'git status']), 'the bare pattern went with it');
+        self::assertSame(['Edit(src/A.php)'], $revoked->without(2)?->entries());
+        self::assertNull($memo->without(0));
+        self::assertNull($memo->without(4));
     }
 }

@@ -174,4 +174,59 @@ final class PermissionRuleAllowFailClosedTest extends TestCase
             self::decide(PermissionMode::BypassPermissions, new PermissionRule('Bash(git *)', PermissionAction::Ask), 'git log `id`'),
         );
     }
+
+    /**
+     * @return iterable<string, array{string, bool}>
+     */
+    public static function structuredPipelineCases(): iterable
+    {
+        yield 'the same pipeline, other arguments' => ['sed -n 1,5p f | sort -u | uniq -c', true];
+        yield 'a segment with no arguments' => ['sed | sort | uniq', true];
+        yield 'an inert redirection' => ['sed x f 2>/dev/null | sort | uniq', true];
+        yield 'one more stage' => ['sed x | sort | uniq | sh', false];
+        yield 'one stage fewer' => ['sed x | sort', false];
+        yield 'a different operator' => ['sed x && sort | uniq', false];
+        yield 'a semicolon instead of a pipe' => ['sed x | sort; uniq', false];
+        yield 'a newline instead of a pipe' => ["sed x | sort\nuniq", false];
+        yield 'a different program in a stage' => ['sed x | rm -rf / | uniq', false];
+        yield 'a writing redirection in a stage' => ['sed x | sort > ~/.bashrc | uniq', false];
+        yield 'a substitution' => ['sed $(id) | sort | uniq', false];
+        yield 'a background job' => ['sed x & sort | uniq', false];
+    }
+
+    /**
+     * A pattern written around operators is matched by STRUCTURE (it used to
+     * grant nothing: each command was matched against the whole pattern).
+     */
+    #[DataProvider('structuredPipelineCases')]
+    public function testAPipelineAllowMatchesTheSameShapeSegmentBySegment(string $command, bool $allowed): void
+    {
+        $rule = new PermissionRule('Bash(sed * | sort * | uniq *)', PermissionAction::Allow);
+
+        self::assertSame(
+            $allowed ? PermissionDecision::Allow : PermissionDecision::Deny,
+            self::decide(PermissionMode::DontAsk, $rule, $command),
+            $command,
+        );
+    }
+
+    public function testAChainAllowKeepsItsOperatorsAndLiteralSegments(): void
+    {
+        $rule = new PermissionRule('Bash(cd /srv && git status *)', PermissionAction::Allow);
+
+        self::assertSame(PermissionDecision::Allow, self::decide(PermissionMode::DontAsk, $rule, 'cd /srv && git status --short'));
+        self::assertSame(PermissionDecision::Allow, self::decide(PermissionMode::DontAsk, $rule, 'cd  /srv  &&  git status'));
+        self::assertSame(PermissionDecision::Deny, self::decide(PermissionMode::DontAsk, $rule, 'cd /etc && git status'));
+        self::assertSame(PermissionDecision::Deny, self::decide(PermissionMode::DontAsk, $rule, 'cd /srv || git status'));
+    }
+
+    public function testARedirectionASegmentSpellsIsGrantedOnThatSegmentOnly(): void
+    {
+        $rule = new PermissionRule('Bash(sort * > out.txt && wc *)', PermissionAction::Allow);
+
+        self::assertSame(PermissionDecision::Allow, self::decide(PermissionMode::DontAsk, $rule, 'sort -u a > out.txt && wc -l out.txt'));
+        self::assertSame(PermissionDecision::Deny, self::decide(PermissionMode::DontAsk, $rule, 'sort -u a > other.txt && wc -l out.txt'));
+        self::assertSame(PermissionDecision::Deny, self::decide(PermissionMode::DontAsk, $rule, 'sort -u a > out.txt && wc -l > x'));
+        self::assertSame(PermissionDecision::Deny, self::decide(PermissionMode::DontAsk, $rule, 'sort -u a > ~/.bashrc > out.txt && wc -l out.txt'), 'the star swallows no second target');
+    }
 }

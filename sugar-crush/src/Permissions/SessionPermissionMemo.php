@@ -18,6 +18,7 @@ use SugarCraft\Crush\ToolCall;
  * | tool                                  | grant                              |
  * |---------------------------------------|------------------------------------|
  * | `Bash`, one simple command            | its command prefix: `git status` → `Bash(git status)` + `Bash(git status *)`; `ls -la` → `Bash(ls)` + `Bash(ls *)` |
+ * | `Bash`, a pipeline or chain           | the same prefix PER SEGMENT, operators kept: `sed -n 1,5p f \| sort \| uniq` → `Bash(sed * \| sort * \| uniq *)` |
  * | `Read`/`Edit`/`Write`/`Glob`/`Grep`/`Lsp` | that exact path: `Edit(src/A.php)` |
  * | `WebFetch`                            | that host: `WebFetch(domain:example.com)` |
  * | `WebSearch`, `Skill`                  | that exact subject                 |
@@ -38,12 +39,24 @@ use SugarCraft\Crush\ToolCall;
  * `find`, `env`, …) or an interpreter handed inline code (`php -r`) gets no
  * pattern: a prefix grant on those would be a grant on everything.
  *
- * A `Bash` line that is not ONE simple command — a chain, a pipe, a
- * substitution, a redirection — gets no pattern at all either: {@see PermissionRule}'s
- * `Allow` arm demands that EVERY command in a line match one rule, so no
- * prefix rule could ever fire for it again. Those (and any call whose subject
- * cannot be read) are remembered as the EXACT call instead, which
- * {@see allows()} answers but the gate's rules never see.
+ * Commands that delete, overwrite, move or re-permission ({@see EXACT_ONLY}:
+ * `rm`, `mv`, `cp`, `chmod`, `dd`, `tee`, …) are never generalised by default
+ * either: `rm a.txt` is remembered as exactly that. The user can still grant
+ * a broader scope by writing it ({@see withPattern()}, the modal's `e`).
+ *
+ * A PIPELINE OR CHAIN (`|` `&&` `||` `;`) is generalised segment by segment
+ * ({@see compoundScope()}), its operators kept, into a pattern
+ * {@see PermissionRule}'s `Allow` arm matches by STRUCTURE: a later line is
+ * covered only when it has the same operators in the same order and each
+ * command matches its segment (`x *` covering `x` with no arguments). A
+ * segment that cannot be generalised — a launcher, inline code, a destructive
+ * command, a writing redirection, a `curl`/`wget` piped on, a `cd`, a shell
+ * reserved word — is kept literally in its place. A line with a substitution,
+ * a `${…}` expansion, a newline, a background `&` or a subshell gets no
+ * pattern, and neither does one no segment of which could be generalised:
+ * those (and any call whose subject cannot be read) are remembered as the
+ * EXACT call instead, which {@see allows()} answers but the gate's rules
+ * never see.
  *
  * THE EXACT CALL IS WHAT RUNS, NOT WHAT THE MODEL SAID ABOUT IT
  * ({@see identityArguments()}): `Bash`'s required `description` is the
@@ -100,7 +113,9 @@ final class SessionPermissionMemo
     private const LAUNCHERS = [
         'bash', 'sh', 'zsh', 'dash', 'fish', 'ksh', 'env', 'sudo', 'doas', 'su', 'xargs',
         'eval', 'exec', 'nohup', 'timeout', 'nice', 'ionice', 'watch', 'time', 'command',
-        'builtin', 'source', '.', 'find', 'awk', 'gawk', 'perl', 'ruby', 'ssh',
+        'builtin', 'source', '.', 'find', 'awk', 'gawk', 'mawk', 'nawk', 'perl', 'ruby', 'ssh',
+        'csh', 'tcsh', 'pwsh', 'lua', 'tclsh', 'osascript', 'parallel', 'stdbuf', 'unbuffer',
+        'script', 'strace', 'ltrace', 'gdb', 'chroot', 'setsid', 'flock', 'runuser', 'pkexec', 'busybox',
     ];
 
     /**
@@ -113,6 +128,28 @@ final class SessionPermissionMemo
     private const ANNOTATION_ARGUMENTS = [
         'Bash' => ['description', 'timeout'],
     ];
+
+    /**
+     * Commands that delete, overwrite, move, re-permission or signal: never
+     * generalised as a SUGGESTED grant (`rm a.txt` is remembered exactly, not
+     * as `rm *`). A user who wants the broader grant writes it with `e` in the
+     * modal ({@see withPattern()}).
+     */
+    private const EXACT_ONLY = [
+        'rm', 'rmdir', 'unlink', 'shred', 'mv', 'cp', 'ln', 'install', 'dd', 'truncate',
+        'chmod', 'chown', 'chgrp', 'chattr', 'tee', 'kill', 'killall', 'pkill', 'rsync', 'scp',
+        'mount', 'umount', 'crontab', 'reboot', 'shutdown', 'cd', 'pushd', 'popd',
+        // Reserved words head a "command" the tokeniser splits off a compound
+        // statement (`for d in …; do rm "$d"; done`): `do *` would be any command.
+        'if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'until', 'do', 'done', 'case', 'esac',
+        'select', 'function', 'coproc', '{', '}', '!', '[[', ']]', '((',
+    ];
+
+    /** Commands that fetch from the network: kept literal when their output is piped on. */
+    private const FETCHERS = ['curl', 'wget'];
+
+    /** The operators a per-segment grant may be written around ({@see compoundScope()}). */
+    private const STRUCTURE_OPERATORS = ['|', '&&', '||', ';'];
 
     /** `<tool> <subcommand>` pairs whose NEXT word picks what they do too (`npm run build`). */
     private const THIRD_WORD_PAIRS = ['npm run', 'pnpm run', 'yarn run', 'docker compose'];
@@ -203,6 +240,159 @@ final class SessionPermissionMemo
         return $merged === $this->patterns ? $this : new self($merged, $this->calls);
     }
 
+    /**
+     * Remember a scope the USER wrote (the modal's `e`) for the call being
+     * asked about, or null when it is refused: it must be a well-formed
+     * {@see PermissionRule} pattern naming exactly this tool (no tool-name
+     * glob), and it must cover the call in front of the user — so a typo
+     * cannot quietly grant something else while this call still asks. $scope
+     * is either the argument pattern alone (`sed * | sort | uniq`, wrapped as
+     * `Bash(…)`) or the whole pattern (`Bash(sed * | sort | uniq)`).
+     *
+     * Broader than a suggestion may be (`rm *`): that is the point of letting
+     * the user write it. A configured `Deny`, Plan mode and the breaker still
+     * win — a grant only ever answers an `Ask`.
+     *
+     * @param array<string, mixed> $arguments the call being asked about
+     */
+    public function withPattern(string $scope, string $tool, array $arguments, ?string $projectRoot = null): ?self
+    {
+        $pattern = self::patternFromScope($scope, $tool);
+        if ($pattern === null) {
+            return null;
+        }
+        $rule = new PermissionRule($pattern, PermissionAction::Allow);
+        if ($rule->toolNamePattern() !== $tool || self::escape($tool) !== $tool
+            || !$rule->matches(new ToolCall($tool, self::grantArguments($tool, $arguments, $projectRoot)), true, $projectRoot)) {
+            return null;
+        }
+        if (in_array($pattern, $this->patterns, true)) {
+            return $this;
+        }
+
+        return new self([...$this->patterns, $pattern], $this->calls);
+    }
+
+    /**
+     * The `Tool(…)` pattern a scope the user typed names, or null when it is
+     * empty or not well-formed.
+     */
+    public static function patternFromScope(string $scope, string $tool): ?string
+    {
+        $scope = trim((string) preg_replace('/\s+/', ' ', $scope));
+        if ($scope === '') {
+            return null;
+        }
+        $pattern = str_starts_with($scope, $tool . '(') && str_ends_with($scope, ')') ? $scope : $tool . '(' . $scope . ')';
+
+        return PermissionRule::isWellFormedPattern($pattern) ? $pattern : null;
+    }
+
+    /**
+     * What the scope editor starts from for this call: the suggested
+     * pattern's argument half (`sed * | sort * | uniq *`), or — when only the
+     * exact call would be remembered — the command (or subject) itself,
+     * escaped so it matches itself. Null for a tool with no subject argument,
+     * whose only scope is the tool.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public static function editableScopeOf(string $tool, array $arguments, ?string $projectRoot = null): ?string
+    {
+        $subjectName = PermissionRule::subjectArgumentName($tool);
+        if ($subjectName === null) {
+            return null;
+        }
+        $patterns = self::patternsFor($tool, $arguments, $projectRoot);
+        if ($patterns !== []) {
+            $rule = new PermissionRule($patterns[\count($patterns) - 1], PermissionAction::Allow);
+
+            return $rule->argumentPattern();
+        }
+        $subject = self::grantArguments($tool, $arguments, $projectRoot)[$subjectName] ?? null;
+        if (!is_string($subject) || trim($subject) === '' || str_contains($subject, "\n")) {
+            return null;
+        }
+
+        return self::escape(trim((string) preg_replace('/[ \t]+/', ' ', $subject)));
+    }
+
+    /**
+     * Every grant, in the order given, as the user reads it in
+     * `/permissions`: a pattern as written (`Bash(git status *)` — the bare
+     * `Bash(git status)` granted beside it is the same grant and is not listed
+     * twice), an exact call as `Tool: <subject>` (or its arguments as JSON).
+     *
+     * @return list<string>
+     */
+    public function entries(): array
+    {
+        return array_map(static fn (array $row): string => $row[0], $this->rows());
+    }
+
+    /**
+     * This memo without its $index-th {@see entries()} row (1-based), or null
+     * when there is no such row. A listed `Tool(p *)` takes its bare
+     * `Tool(p)` with it.
+     */
+    public function without(int $index): ?self
+    {
+        $row = $this->rows()[$index - 1] ?? null;
+        if ($row === null) {
+            return null;
+        }
+        [, $patterns, $calls] = $row;
+
+        return new self(
+            array_values(array_diff($this->patterns, $patterns)),
+            array_values(array_diff($this->calls, $calls)),
+        );
+    }
+
+    /**
+     * @return list<array{0: string, 1: list<string>, 2: list<string>}> [label, patterns, calls]
+     */
+    private function rows(): array
+    {
+        $rows = [];
+        foreach ($this->patterns as $pattern) {
+            $wide = str_ends_with($pattern, ')') ? substr($pattern, 0, -1) . ' *)' : null;
+            if ($wide !== null && in_array($wide, $this->patterns, true)) {
+                continue;
+            }
+            $bare = str_ends_with($pattern, ' *)') ? substr($pattern, 0, -3) . ')' : null;
+            $rows[] = [$pattern, $bare !== null && in_array($bare, $this->patterns, true) ? [$pattern, $bare] : [$pattern], []];
+        }
+        foreach ($this->calls as $call) {
+            $rows[] = [self::describeCall($call), [], [$call]];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * An exact-call key as one readable line: `Bash: git push` for a tool
+     * whose subject is known, else `<tool> <canonical JSON>`.
+     */
+    private static function describeCall(string $call): string
+    {
+        $space = strpos($call, ' ');
+        if ($space === false) {
+            return $call;
+        }
+        $tool = substr($call, 0, $space);
+        $arguments = json_decode(substr($call, $space + 1), true);
+        $subjectName = PermissionRule::subjectArgumentName($tool);
+        if (is_array($arguments) && $subjectName !== null && is_string($arguments[$subjectName] ?? null)) {
+            $rest = $arguments;
+            unset($rest[$subjectName]);
+
+            return $tool . ': ' . $arguments[$subjectName] . ($rest === [] ? '' : ' ' . json_encode($rest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        }
+
+        return $call;
+    }
+
     public function isEmpty(): bool
     {
         return $this->patterns === [] && $this->calls === [];
@@ -253,12 +443,13 @@ final class SessionPermissionMemo
     }
 
     /**
-     * What an "always" on this call would remember, as the user should read
-     * it before confirming: the broadest pattern granted (`Bash(git status *)`
+     * What an "always" on this call would remember, as the user reads it on
+     * the modal's `a` row: the broadest pattern granted (`Bash(git status *)`
      * — the bare `Bash(git status)` beside it only covers the same command
-     * with no arguments), or, when no pattern fits, `this exact command` /
-     * `this exact call`. A `Bash` line gets the exact form when it is a
-     * chain, a pipe, a redirection or a launcher — see the class docblock.
+     * with no arguments; `Bash(sed * | sort * | uniq *)` for a pipeline), or,
+     * when no pattern fits, `this exact command` / `this exact call`. A `Bash`
+     * line gets the exact form when it is a launcher, a destructive command, a
+     * writing redirection or a substitution — see the class docblock.
      * Computed on the {@see grantArguments()}, so a dropped leading `cd` shows:
      * `cd /repo && git status` reads `Bash(git status *)`.
      *
@@ -376,8 +567,12 @@ final class SessionPermissionMemo
 
         if ($tool === 'Bash') {
             $prefix = self::commandPrefix($subject);
+            if ($prefix !== null) {
+                return [$name . '(' . $prefix . ')', $name . '(' . $prefix . ' *)'];
+            }
+            $structure = self::compoundScope($subject);
 
-            return $prefix === null ? [] : [$name . '(' . $prefix . ')', $name . '(' . $prefix . ' *)'];
+            return $structure === null ? [] : [$name . '(' . $structure . ')'];
         }
 
         if ($tool === 'WebFetch') {
@@ -393,7 +588,8 @@ final class SessionPermissionMemo
 
     /**
      * The command prefix a `Bash` grant keeps, escaped for `fnmatch()`, or
-     * null when the line is not one plain simple command.
+     * null when the line is not one plain simple command whose program may
+     * be generalised.
      */
     private static function commandPrefix(string $command): ?string
     {
@@ -408,8 +604,110 @@ final class SessionPermissionMemo
             }
         }
 
+        return self::segmentPrefix($parsed->commands[0], $parsed->expandable[0] ?? []);
+    }
+
+    /**
+     * The pattern "always" remembers for a PIPELINE or CHAIN, generalised per
+     * segment — `sed -n 1,5p f | sort -u | uniq -c` → `sed * | sort * | uniq *`,
+     * `cd sub && git log -3` (a `cd` not stripped) → `cd sub && git log *` —
+     * or null when the line is not one (a single command, or one this cannot
+     * honestly generalise: a substitution or `${…}` anywhere, an operator
+     * other than `|` `&&` `||` `;`, a line that does not parse) or when no
+     * segment could be generalised (the exact call is the same grant, and
+     * reads as one).
+     *
+     * The operators and their order are kept, so the grant covers the same
+     * SHAPE of line and nothing else ({@see PermissionRule}'s structured
+     * `Allow` arm). Each segment keeps what {@see segmentPrefix()} keeps
+     * plus ` *` — any arguments, none included — except a segment that is
+     * written out LITERALLY instead:
+     * - a launcher, interpreter-on-inline-code or destructive command
+     *   ({@see LAUNCHERS}, {@see INTERPRETERS}, {@see EXACT_ONLY});
+     * - a `curl`/`wget` whose output is piped on (fetched data into a program);
+     * - one with a writing redirection (`> out.txt`: the target stays literal);
+     * - an environment assignment in front, a program name bash would expand,
+     *   a `cd`/`pushd`/`popd`.
+     *
+     * The result is checked against the line it came from through the same
+     * matcher that will judge later calls; a pattern that does not cover its
+     * own line (quoting this escaping cannot reproduce) is no pattern.
+     */
+    private static function compoundScope(string $command): ?string
+    {
+        $parsed = ShellWords::parse($command);
+        if (!$parsed->complete || count($parsed->commands) < 2
+            || count($parsed->commands) !== count($parsed->operators) + 1
+            || count($parsed->sources) !== count($parsed->commands)
+            || $parsed->substitutions !== [] || $parsed->parameterExpansions !== []) {
+            return null;
+        }
+        foreach ($parsed->operators as $operator) {
+            if (!in_array($operator, self::STRUCTURE_OPERATORS, true)) {
+                return null;
+            }
+        }
+
+        $writes = [];
+        foreach ($parsed->redirections as $redirection) {
+            if (!ShellWords::isInertRedirection($redirection)) {
+                $writes[$redirection['command']] = true;
+            }
+        }
+
+        $segments = [];
+        $generalised = false;
+        foreach ($parsed->commands as $index => $words) {
+            $prefix = isset($writes[$index]) ? null : self::segmentPrefix($words, $parsed->expandable[$index] ?? []);
+            $program = $words[0] ?? '';
+            if ($prefix !== null && in_array($program, self::FETCHERS, true) && ($parsed->operators[$index] ?? null) === '|') {
+                $prefix = null;
+            }
+            if ($prefix === null) {
+                $source = trim((string) preg_replace('/\s+/', ' ', $parsed->sources[$index]));
+                if ($source === '') {
+                    return null;
+                }
+                $segments[] = self::escape($source);
+                continue;
+            }
+            $segments[] = $prefix . ' *';
+            $generalised = true;
+        }
+        if (!$generalised) {
+            return null;
+        }
+
+        $pattern = $segments[0];
+        foreach ($parsed->operators as $index => $operator) {
+            $pattern .= ($operator === ';' ? '; ' : ' ' . $operator . ' ') . $segments[$index + 1];
+        }
+
+        $rule = new PermissionRule('Bash(' . $pattern . ')', PermissionAction::Allow);
+
+        return PermissionRule::isWellFormedPattern($rule->pattern) && $rule->matches(new ToolCall('Bash', ['command' => $command]))
+            ? $pattern
+            : null;
+    }
+
+    /**
+     * The words a grant keeps of ONE simple command, escaped and joined, or
+     * null when that command must be remembered exactly. See the class
+     * docblock: subcommand tools keep their subcommand, interpreters their
+     * script, and launchers, inline code, an environment assignment in front,
+     * an expandable program name and {@see EXACT_ONLY} commands keep nothing.
+     *
+     * @param list<string> $words      the command's quote-removed words
+     * @param list<bool>   $expandable parallel to $words ({@see ShellWords::$expandable})
+     */
+    private static function segmentPrefix(array $words, array $expandable): ?string
+    {
+        if (($expandable[0] ?? false) === true) {
+            // `s?d …`, `$TOOL …`: what runs is not the word written.
+            return null;
+        }
         $words = array_values(array_filter(
-            $parsed->commands[0],
+            $words,
             static fn (mixed $word): bool => is_string($word) && $word !== '',
         ));
         if ($words === [] || str_contains($words[0], '=')) {
@@ -418,7 +716,8 @@ final class SessionPermissionMemo
             return null;
         }
 
-        if (in_array($words[0], self::LAUNCHERS, true)) {
+        if (in_array($words[0], self::LAUNCHERS, true) || in_array($words[0], self::EXACT_ONLY, true)
+            || str_starts_with($words[0], 'mkfs')) {
             return null;
         }
 

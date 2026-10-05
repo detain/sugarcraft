@@ -173,17 +173,17 @@ final class LeadingCdGrantTest extends TestCase
         self::assertFalse($memo->allows('Bash', ['command' => "cd {$this->root} && git status"]), 'no root, no stripping');
     }
 
-    public function testAnOutOfProjectCdStaysAnExactGrant(): void
+    public function testAnOutOfProjectCdStaysLiteralInTheGrant(): void
     {
         $asked = ['command' => 'cd /etc && git status'];
 
-        self::assertSame([], SessionPermissionMemo::patternsFor('Bash', $asked, $this->root));
-        self::assertSame('this exact command', SessionPermissionMemo::scopeOf('Bash', $asked, $this->root));
+        self::assertSame(['Bash(cd /etc && git status *)'], SessionPermissionMemo::patternsFor('Bash', $asked, $this->root));
 
         $memo = SessionPermissionMemo::new()->withGrant('Bash', $asked, $this->root);
-        self::assertSame([], $memo->patterns());
         self::assertTrue($memo->allows('Bash', $asked + ['description' => 'again'], $this->root));
+        self::assertTrue($memo->allows('Bash', ['command' => 'cd /etc && git status --short'], $this->root));
         self::assertFalse($memo->allows('Bash', ['command' => 'git status'], $this->root));
+        self::assertFalse($memo->allows('Bash', ['command' => 'cd /tmp && git status'], $this->root), 'the cd is literal');
         self::assertFalse($memo->allows('Bash', ['command' => "cd {$this->root} && git status"], $this->root));
     }
 
@@ -191,12 +191,46 @@ final class LeadingCdGrantTest extends TestCase
     public static function exactRemainders(): array
     {
         return [
-            'a pipe' => ['git status | sh', 'git status | sh', 'git status | bash'],
-            'a further &&' => ['a && b', 'a && b', 'a && c'],
-            'a semicolon' => ['ls; pwd', 'ls; pwd', 'ls; rm x'],
-            'an or' => ['make || true', 'make || true', 'make || rm x'],
+            'a pipe of launchers' => ['find . | sh', 'find . | sh', 'find . | bash'],
+            'a further &&' => ['rm a && rm b', 'rm a && rm b', 'rm a && rm c'],
+            'a semicolon' => ['rm x; rm y', 'rm x; rm y', 'rm x; rm z'],
+            'an or' => ['rm x || rm y', 'rm x || rm y', 'rm x || rm z'],
             'a redirection' => ['echo hi > out.txt', 'echo hi > out.txt', 'echo hi > other.txt'],
         ];
+    }
+
+    /** @return array<string, array{string, string, list<string>, list<string>}> */
+    public static function segmentRemainders(): array
+    {
+        return [
+            'a pipe' => ['git status | sort', 'Bash(git status * | sort *)', ['git status -s | sort -u', 'git status | sort'], ['git status | sh', 'git status && sort', 'git push | sort']],
+            'a further &&' => ['make && make test', 'Bash(make * && make test *)', ['make -j4 && make test -v', 'make && make test'], ['make; make test', 'make && make install', 'make && rm x']],
+            'a semicolon' => ['ls; pwd', 'Bash(ls *; pwd *)', ['ls -la; pwd -P'], ['ls && pwd', 'ls; rm x']],
+            'an or' => ['make || true', 'Bash(make * || true *)', ['make -j4 || true'], ['make && true', 'make || rm x']],
+        ];
+    }
+
+    /**
+     * @param list<string> $covered
+     * @param list<string> $notCovered
+     */
+    #[DataProvider('segmentRemainders')]
+    public function testACompoundRemainderIsGeneralisedPerSegmentWithoutTheCd(string $remainder, string $pattern, array $covered, array $notCovered): void
+    {
+        $asked = ['command' => "cd {$this->root} && {$remainder}", 'description' => 'x'];
+
+        self::assertSame([$pattern], SessionPermissionMemo::patternsFor('Bash', $asked, $this->root));
+        self::assertSame($pattern, SessionPermissionMemo::scopeOf('Bash', $asked, $this->root));
+
+        $memo = SessionPermissionMemo::new()->withGrant('Bash', $asked, $this->root);
+        foreach ($covered as $later) {
+            self::assertTrue($memo->allows('Bash', ['command' => $later], $this->root), $later);
+            self::assertTrue($memo->allows('Bash', ['command' => "cd {$this->root}/sub && {$later}"], $this->root), "cd sub && {$later}");
+        }
+        foreach ($notCovered as $later) {
+            self::assertFalse($memo->allows('Bash', ['command' => $later], $this->root), $later);
+        }
+        self::assertFalse($memo->allows('Bash', ['command' => "cd /etc && {$remainder}"], $this->root), 'a cd out of the project');
     }
 
     #[DataProvider('exactRemainders')]

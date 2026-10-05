@@ -549,7 +549,14 @@ Its limits, stated because each one is real:
 - **A shell `allow` is per rule, and still a glob over arguments.**
   `Allow Bash(git *)` plus `Allow Bash(grep *)` does not grant
   `git log | grep x` — rules are first-match-wins and no single rule covers
-  both commands, so spell such a pipeline as its own rule. And `git *` grants
+  both commands, so spell such a pipeline as its own rule:
+  `Allow Bash(git log * | grep *)`. A pattern written around `|`, `&&`, `||`
+  or `;` is matched **by structure**: the line must have the same operators
+  in the same order (`a | b` is not `a && b`; a newline, `&` or subshell
+  matches none), each command must match its own segment, and a segment
+  `prog *` also covers `prog` with no arguments. A writing redirection must be
+  spelled with its target in that segment (`sort * > out.txt`), and a
+  substitution anywhere still grants nothing. And `git *` grants
   every `git` argument list, including ones that make git itself run a
   program (`git -c core.pager=…`); the fail-closed checks stop the *shell*
   from running something extra, not the granted program.
@@ -603,10 +610,24 @@ situations, not two:
   - `a` + `y` remembers a **pattern** for the rest of the session
     (`Permissions\SessionPermissionMemo`): `git status` → `Bash(git status)`
     and `Bash(git status *)`, an `Edit` → that path, a `WebFetch` → that host,
-    a tool with no subject argument (`mcp__*`, `Task`) → the tool. A chained,
-    piped, redirected or launcher (`bash -c`, `sudo`, `xargs`, `find`) `Bash`
-    line is remembered exactly — so `make && make test` covers that same line
-    again, not `make && rm -rf build`. "Exactly" is the command as it runs:
+    a tool with no subject argument (`mcp__*`, `Task`) → the tool. A
+    **pipeline or chain** is generalised **per segment**, its operators kept:
+    `sed -n 1,5p f | sort | uniq` → `Bash(sed * | sort * | uniq *)`, which
+    covers `sed x | sort -u | uniq -c` (and `sort` with no arguments) but not
+    `sed x | sort | uniq | sh`, `sed x && sort | uniq` or a line with a
+    substitution; `make && make test` → `Bash(make * && make test *)`, which
+    does not cover `make && rm -rf build`. Some segments are kept **literally**
+    in their place rather than generalised: launchers and interpreters on
+    inline code (`bash -c`, `sudo`, `env`, `xargs`, `find`, `awk`, `perl`,
+    `python3 -c`, …), destructive commands (`rm`, `mv`, `cp`, `chmod`,
+    `chown`, `dd`, `tee`, …), a `curl`/`wget` piped into something, a segment
+    with a writing redirection (`sort a > out.txt` — the target stays
+    literal), a `cd`, and a shell reserved word (`for …; do …; done`) — so
+    `rm -f a.txt && ls` remembers `Bash(rm -f a.txt && ls *)`. A simple
+    destructive command (`rm -rf build`) and a line none of whose segments can
+    be generalised (`find . | xargs rm`) are remembered exactly; so is one with
+    a substitution, a newline, a background `&` or a subshell.
+    "Exactly" is the command as it runs:
     `Bash`'s `description` (the model's caption, rewritten on every call) and
     `timeout` are not part of it, so the identical command re-run under a new
     caption is covered. A **leading `cd` into the project is a no-op** for a
@@ -617,9 +638,9 @@ situations, not two:
     derived and before a later call is checked against it — so `a` on
     `cd /repo && git status --short` remembers `Bash(git status *)`, and a
     later `git status`, `cd /repo && git status` or `cd /repo/sub && git
-    status` is covered. What follows the `cd` is judged as usual (a pipe,
-    redirection, `;`, `||` or further `&&` keeps it exact — `cd /repo && a &&
-    b` is remembered as exactly `a && b`). Anything else is not stripped: a
+    status` is covered. What follows the `cd` is judged as usual —
+    `cd /repo && git log -3 | head` remembers `Bash(git log * | head *)`.
+    Anything else is not stripped (a `cd` that stays is a literal segment): a
     `cd` out of the project (`cd /etc && …`, `cd ../.. && …`, a symlink
     pointing out), an expansion (`cd $HOME`, `cd "$(…)"`), `cd -`, bare `cd`,
     `pushd`, `cd x; …`, `cd x || …` — and with `CDPATH` set, a bare relative

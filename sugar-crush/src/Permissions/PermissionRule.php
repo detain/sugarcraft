@@ -140,10 +140,11 @@ use SugarCraft\Crush\Tools\Edit\PatchParser;
  * hardening: `fnmatch('git *', 'git log && rm -rf /')` is TRUE, because `*` is
  * greedy, so a whole-command match is not evidence that a chain is safe.
  * `Allow Bash(git *)` therefore requires `git log` AND `rm -rf /` to both match
- * `git *`, and refuses. The cost, stated because it is real: a permissive
- * pattern that itself spans a shell separator (`Allow Bash(cd x && make)`)
- * never fires, since neither segment matches it. Spell a permissive rule
- * per-segment.
+ * `git *`, and refuses. A permissive pattern that itself spans a shell
+ * separator (`Allow Bash(cd x && make *)`, `Allow Bash(sed * | sort *)`) is
+ * matched by STRUCTURE instead: the line must have the same operators in the
+ * same order, and each command must match its own segment — see
+ * {@see allowCoversShellStructure()}. (It used to never fire at all.)
  *
  * Separators were not the only thing a greedy `*` swallows (audit F-P5): a
  * command substitution, a backtick, a process substitution and an output
@@ -692,12 +693,18 @@ final class PermissionRule
      * The honest limit: this is per RULE. `Allow Bash(git *)` plus
      * `Allow Bash(grep *)` does not grant `git log | grep x`, because rules are
      * first-match-wins and no one rule covers both commands; spell such a
-     * pipeline as its own rule.
+     * pipeline as its own rule — which {@see allowCoversShellStructure()}
+     * matches segment by segment.
      */
     private static function allowCoversShellSubject(ShellWords $parsed, string $argumentPattern): bool
     {
         if (!$parsed->complete || $parsed->commands === []) {
             return false;
+        }
+
+        $structured = self::allowCoversShellStructure($parsed, $argumentPattern);
+        if ($structured !== null) {
+            return $structured;
         }
 
         $rawOnly = false;
@@ -731,6 +738,119 @@ final class PermissionRule
         }
 
         return true;
+    }
+
+    /**
+     * Control operators a STRUCTURED `Allow` pattern may be written around
+     * ({@see allowCoversShellStructure()}). A background `&`, `|&`, a newline,
+     * a subshell's parentheses and `;;` are not among them: a pattern spelling
+     * one of those is matched the per-segment way, which no such line passes.
+     */
+    private const STRUCTURE_OPERATORS = ['|', '&&', '||', ';'];
+
+    /**
+     * The `Allow` arm for a pattern that is itself a pipeline or chain —
+     * `Bash(sed * | sort * | uniq *)`, `Bash(git add * && git commit *)` —
+     * or null when the pattern is one simple command (the per-segment rule of
+     * {@see allowCoversShellSubject()} applies).
+     *
+     * Such a pattern used to grant NOTHING: every command of the line was
+     * matched against the whole pattern, and no single command can match text
+     * written around a separator. It is what "always" remembers for a
+     * compound command ({@see SessionPermissionMemo::patternsFor()}), so it is
+     * matched by STRUCTURE, failing closed:
+     *
+     * - the pattern splits ({@see ShellWords}, unquoted operators only) into
+     *   N segments joined by `|` `&&` `||` `;`, and the line must split into
+     *   exactly N commands joined by the SAME operators in the same order —
+     *   `a | b` is not `a && b`, `a; b` is not covered by `a && b`, and a
+     *   newline, `&` or subshell in the line matches no structured pattern;
+     * - a substitution or `${…}` expansion anywhere, or a writing redirection
+     *   on a command whose segment pattern does not spell that operator,
+     *   grants nothing — the refusals the per-segment rule makes;
+     * - command i must match segment i, by its source or (without a spelled
+     *   construct) its quote-removed words, and a segment written `prog *`
+     *   also matches `prog` with no arguments at all.
+     *
+     * Restrictive rules never come here: a `Deny`/`Ask` keeps its union over
+     * every reading ({@see matchesShellSubject()}).
+     */
+    private static function allowCoversShellStructure(ShellWords $parsed, string $argumentPattern): ?bool
+    {
+        $pattern = ShellWords::parse($argumentPattern);
+        if ($pattern->operators === []) {
+            return null;
+        }
+        foreach ($pattern->operators as $operator) {
+            if (!in_array($operator, self::STRUCTURE_OPERATORS, true)) {
+                return null;
+            }
+        }
+        $segments = $pattern->sources;
+        if (!$pattern->complete || \count($segments) !== \count($pattern->operators) + 1
+            || \count($pattern->commands) !== \count($segments)) {
+            return false;
+        }
+
+        if ($parsed->operators !== $pattern->operators
+            || \count($parsed->commands) !== \count($segments)
+            || \count($parsed->sources) !== \count($segments)) {
+            return false;
+        }
+
+        foreach ([...$parsed->substitutions, ...$parsed->parameterExpansions] as $opener) {
+            if (!str_contains($argumentPattern, $opener)) {
+                return false;
+            }
+        }
+
+        foreach ($segments as $index => $segment) {
+            $segment = self::collapseWhitespace($segment);
+            $rawOnly = $parsed->substitutions !== [] || $parsed->parameterExpansions !== [];
+            foreach ($parsed->redirections as $redirection) {
+                if ($redirection['command'] !== $index || ShellWords::isInertRedirection($redirection)) {
+                    continue;
+                }
+                // The operator AND its target must be spelled: `sort * > out.txt`
+                // must not let the `*` swallow a second `> ~/.bashrc`.
+                if (!str_contains($segment, $redirection['op'])
+                    || !str_contains($segment, (string) $redirection['target'])) {
+                    return false;
+                }
+                $rawOnly = true;
+            }
+
+            $readings = [self::collapseWhitespace($parsed->sources[$index])];
+            if (!$rawOnly) {
+                $readings[] = self::collapseWhitespace(implode(' ', $parsed->commands[$index]));
+            }
+            if (!self::segmentMatches($segment, $readings)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Whether one reading of a command matches one segment of a structured
+     * pattern, where `prog *` covers `prog` with no arguments too.
+     *
+     * @param list<string> $readings
+     */
+    private static function segmentMatches(string $segment, array $readings): bool
+    {
+        $bare = str_ends_with($segment, ' *') ? substr($segment, 0, -2) : null;
+        foreach ($readings as $reading) {
+            if ($reading === '') {
+                continue;
+            }
+            if (fnmatch($segment, $reading) || ($bare !== null && $bare !== '' && fnmatch($bare, $reading))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

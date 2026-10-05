@@ -63,6 +63,9 @@ final class BashPermissionPromptTest extends TestCase
 
     private const CHAIN = 'cd /home/sites/sugarcraft && ls -d */ | head -80 && echo "---GIT---" && git log --oneline -3';
 
+    /** Every segment a launcher: nothing to generalise, so `a` is the exact call. */
+    private const EXACT_CHAIN = 'find . -name "*.tmp" | xargs rm';
+
     // =====================================================================
     // (a) what the modal shows
     // =====================================================================
@@ -98,9 +101,23 @@ final class BashPermissionPromptTest extends TestCase
         self::assertStringContainsString('$ git status --short', $confirm, 'the command stays on screen while confirming');
     }
 
-    public function testAlwaysOnAChainSaysItRemembersOnlyThisExactCommand(): void
+    /**
+     * A chain is generalised SEGMENT BY SEGMENT, operators kept; the `cd`
+     * (not stripped here — no project root) stays literal.
+     */
+    public function testAlwaysOnAChainNamesThePerSegmentPattern(): void
     {
         [$asking] = $this->asking(self::bash(self::CHAIN, 'List workspace lib directories'));
+
+        $scope = 'Bash(cd /home/sites/sugarcraft && ls * | head * && echo * && git log *)';
+        self::assertSame($scope, $asking->permissionAlwaysScope());
+        self::assertStringContainsString('always allow Bash(cd /home/sites/sugarcraft &&', self::plain($asking), 'the `a` row names it (wrapped)');
+    }
+
+    /** A chain no segment of which can be generalised is remembered exactly. */
+    public function testAlwaysOnAChainOfLaunchersSaysItRemembersOnlyThisExactCommand(): void
+    {
+        [$asking] = $this->asking(self::bash(self::EXACT_CHAIN, 'Delete temp files'));
 
         self::assertSame('this exact command', $asking->permissionAlwaysScope());
         self::assertStringContainsString('always allow this exact command (this session)', self::plain($asking));
@@ -195,13 +212,13 @@ final class BashPermissionPromptTest extends TestCase
 
     public function testAnExactGrantIgnoresTheCaptionAndTheTimeout(): void
     {
-        $memo = SessionPermissionMemo::new()->withGrant('Bash', self::bash(self::CHAIN, 'first caption', 120000));
+        $memo = SessionPermissionMemo::new()->withGrant('Bash', self::bash(self::EXACT_CHAIN, 'first caption', 120000));
 
-        self::assertSame([], $memo->patterns(), 'a chain stays an exact-call grant');
-        self::assertTrue($memo->allows('Bash', self::bash(self::CHAIN, 'a different caption')));
-        self::assertTrue($memo->allows('Bash', ['command' => self::CHAIN]));
-        self::assertFalse($memo->allows('Bash', self::bash(self::CHAIN . ' && rm -rf build', 'first caption')), 'a different command is a different call');
-        self::assertFalse($memo->allows('Bash', self::bash(self::CHAIN, 'first caption') + ['interactive' => true]), 'interactive changes how it runs');
+        self::assertSame([], $memo->patterns(), 'a chain of launchers stays an exact-call grant');
+        self::assertTrue($memo->allows('Bash', self::bash(self::EXACT_CHAIN, 'a different caption')));
+        self::assertTrue($memo->allows('Bash', ['command' => self::EXACT_CHAIN]));
+        self::assertFalse($memo->allows('Bash', self::bash(self::EXACT_CHAIN . ' && rm -rf build', 'first caption')), 'a different command is a different call');
+        self::assertFalse($memo->allows('Bash', self::bash(self::EXACT_CHAIN, 'first caption') + ['interactive' => true]), 'interactive changes how it runs');
     }
 
     public function testAlwaysCoversLaterCallsOfTheSameTurnAndYCoversNothing(): void
@@ -344,10 +361,19 @@ final class BashPermissionPromptTest extends TestCase
         self::assertSame($outside, $prompted->pendingPermission()?->pendingAsk, 'a cd out of the project is part of the command');
     }
 
-    public function testAnInProjectCdBeforeAPipeIsRememberedExactlyWithoutIt(): void
+    public function testAnInProjectCdBeforeAPipeIsRememberedPerSegmentWithoutIt(): void
     {
         $root = $this->project();
         [$asking] = $this->asking(self::bash("cd {$root} && git status | sh", 'Pipe'), root: $root);
+
+        self::assertSame('Bash(git status * | sh)', $asking->permissionAlwaysScope(), 'the shell it pipes into stays literal');
+        self::assertStringContainsString('a always allow Bash(git status * | sh)', self::plain($asking));
+    }
+
+    public function testAnInProjectCdBeforeAnExactOnlyPipeIsRememberedExactlyWithoutIt(): void
+    {
+        $root = $this->project();
+        [$asking] = $this->asking(self::bash("cd {$root} && " . self::EXACT_CHAIN, 'Pipe'), root: $root);
 
         self::assertSame('this exact command without the leading cd', $asking->permissionAlwaysScope());
         self::assertStringContainsString('a always allow this exact command without the leading cd', self::plain($asking));
