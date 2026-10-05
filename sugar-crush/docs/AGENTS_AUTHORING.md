@@ -490,6 +490,12 @@ rules underneath are `TaskList`'s:
   background teammate's daemon). When that session dies mid-task, the next
   `list` or `claim` puts the task back to pending and says so.
 - A team takes at most `max_teammates` teammates working at once (default 5).
+- `create` with `auto_assign: false` makes a `claim` with no task hand out
+  nothing: every teammate claims the task it is told to, by name.
+- A claim held longer than the team's `timeout_seconds` (default 600; `0`
+  never) is marked **overdue** on `list`, and the lead may `release` it on the
+  teammate's behalf. Nothing is taken back on its own — a teammate on a long
+  task may still be working.
 
 A teammate needs `Team` in its grant to claim for itself. A preset that
 declares no `tools:` has it; the six built-in definitions do not, so with

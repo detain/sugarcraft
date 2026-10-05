@@ -258,6 +258,13 @@ final class TeamManager
             return null;
         }
 
+        // A team created with autoAssignTasks off hands nothing out: its
+        // teammates claim the task they are told to, by name. The hook above
+        // still fires — the teammate is idle either way.
+        if (!$this->autoAssigns($teamId)) {
+            return null;
+        }
+
         foreach ($taskList->getUnblockedTasks($teammateId) as $task) {
             if ($taskList->claimTask($task->id, $teammateId, null, $ownerPid)) {
                 return $task->id;
@@ -265,6 +272,42 @@ final class TeamManager
         }
 
         return null;
+    }
+
+    /**
+     * Whether {@see handleTeammateIdle()} picks the next task for an idle
+     * teammate ({@see TeamConfig::$autoAssignTasks}); a team with no config
+     * on record does, the default.
+     */
+    public function autoAssigns(string $teamId): bool
+    {
+        return $this->getTeamConfig($teamId)?->autoAssignTasks ?? true;
+    }
+
+    /**
+     * How long $task has been held past its team's claim limit
+     * ({@see TeamConfig::$defaultTimeoutSeconds}), in seconds held — or null
+     * when it is not in progress, carries no claim time, is within the limit,
+     * or the team sets no limit (0 or less).
+     *
+     * OVERDUE IS A MARK, NOT A VERDICT. Nothing is failed or taken back when
+     * the limit passes: a teammate on a long task may still be working, and
+     * its work would be lost. The `Team` tool shows the mark on `list`, and
+     * lets the lead `release` an overdue task the teammate still holds — a
+     * decision a person (or the lead) makes, with the claim time in front of
+     * them. A claimant that DIED is a different case, recovered without
+     * asking ({@see TaskList::releaseOrphanedClaims()}).
+     */
+    public function overdueSeconds(string $teamId, Task $task, ?\DateTimeImmutable $now = null): ?int
+    {
+        $limit = $this->getTeamConfig($teamId)?->defaultTimeoutSeconds ?? 0;
+        if ($limit <= 0 || $task->status !== TaskStatus::InProgress || $task->claimedAt === null) {
+            return null;
+        }
+
+        $held = ($now ?? new \DateTimeImmutable())->getTimestamp() - $task->claimedAt->getTimestamp();
+
+        return $held > $limit ? $held : null;
     }
 
     // -------------------------------------------------------------------------

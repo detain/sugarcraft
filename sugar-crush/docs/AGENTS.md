@@ -148,6 +148,9 @@ teammates and the `lead`.
 - A task claimed by a session that has died goes back to pending at the next
   `list` or `claim`.
 - A team takes at most `max_teammates` working at once (default 5).
+- `auto_assign: false` on `create` makes every claim name its task.
+- A claim held past the team's `timeout_seconds` (default 600; `0` never) is
+  marked overdue on `list`, and the lead may `release` it.
 
 Teams live under `~/.sugar-crush/teams/` (a registry, and one SQLite task list
 and mailbox per team), shared by every process. A teammate needs `Team` in its

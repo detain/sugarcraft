@@ -76,6 +76,9 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
     /** How many fresh ids `add` tries when concurrent adds keep taking the next one. */
     private const ADD_ATTEMPTS = 5;
 
+    /** Longest `timeout_seconds` a team may set: a week. */
+    private const MAX_TIMEOUT_SECONDS = 604800;
+
     /** Most unread messages one `inbox` call returns. */
     private const MAX_INBOX = 20;
 
@@ -130,12 +133,14 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
     public function description(): string
     {
         return 'Coordinate a team of background sub-agents through a shared task list. '
-            . '`create` a team (`team`, optional `max_teammates`); `add` a task (`team`, `title`, `prompt` with the '
+            . '`create` a team (`team`, optional `max_teammates`, `auto_assign`, `timeout_seconds`); `add` a task (`team`, `title`, `prompt` with the '
             . 'full instructions, optional `blocked_by` task ids); `depend` makes `task` wait on `blocked_by`; `list` '
             . 'shows every task with its status, owner, blockers and revision (or every team, without `team`). '
             . '`claim` assigns `task` (or, without one, the next task whose blockers are all completed) to '
-            . '`teammate` and returns its prompt; `complete` (with `result`) or `fail` (with `error`) ends a claimed '
-            . 'task, and `release` hands it back. Pass the `revision` you last saw to make claim/release/complete '
+            . '`teammate` and returns its prompt (a team created with `auto_assign: false` hands out nothing: name the '
+            . 'task); `complete` (with `result`) or `fail` (with `error`) ends a claimed task, and `release` hands it '
+            . 'back — the lead may also release a task held past the team\'s `timeout_seconds`, which `list` marks '
+            . 'overdue. Pass the `revision` you last saw to make claim/release/complete '
             . 'conditional on nothing having changed since. `message` sends `text` from `teammate` to `to`; `inbox` '
             . 'returns `teammate`\'s unread messages. To staff a team, start each teammate with Task and '
             . '`background: true`, telling it the team id, its teammate name, and to repeat claim → work → '
@@ -154,6 +159,8 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
                 'action' => ['type' => 'string', 'enum' => self::ACTIONS, 'description' => 'What to do'],
                 'team' => $string('Team id (letters, digits, - and _); every action but a team-less `list` needs it'),
                 'max_teammates' => ['type' => 'integer', 'description' => '`create`: most teammates working at once (default 5)'],
+                'auto_assign' => ['type' => 'boolean', 'description' => '`create`: whether `claim` with no task names the next one (default true); false makes every teammate claim by name'],
+                'timeout_seconds' => ['type' => 'integer', 'description' => '`create`: how long a claim may be held before `list` marks it overdue and the lead may release it (default 600; 0 never)'],
                 'title' => $string('`add`: one-line task title'),
                 'prompt' => $string('`add`: the complete, self-contained instructions for whoever claims the task'),
                 'task' => $string('Task id (as `add` returned it)'),
@@ -201,10 +208,10 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             return match ($action) {
                 'add' => $this->add($team, $args),
                 'depend' => $this->depend($team, $args),
-                'list' => $this->listTasks($team),
+                'list' => $this->listTasks($teams, $team),
                 'claim' => $this->claim($teams, $team, $args),
                 'complete', 'fail' => $this->finish($team, $args, $action),
-                'release' => $this->release($team, $args),
+                'release' => $this->release($teams, $team, $args),
                 'message' => $this->message($teams, $team, $args),
                 'inbox' => $this->inbox($team, $args),
             };
@@ -231,15 +238,30 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             }
             $config = $config->withMaxTeammates($max);
         }
+        if (array_key_exists('auto_assign', $args)) {
+            if (!is_bool($args['auto_assign'])) {
+                return self::error('`auto_assign` must be true or false');
+            }
+            $config = $config->withAutoAssignTasks($args['auto_assign']);
+        }
+        if (array_key_exists('timeout_seconds', $args)) {
+            $timeout = $args['timeout_seconds'];
+            if (!is_int($timeout) || $timeout < 0 || $timeout > self::MAX_TIMEOUT_SECONDS) {
+                return self::error(sprintf('`timeout_seconds` must be a whole number from 0 (never) to %d', self::MAX_TIMEOUT_SECONDS));
+            }
+            $config = $config->withDefaultTimeoutSeconds($timeout);
+        }
 
         $teams->createTeam($teamId, $teamId, self::LEAD, $config);
 
         return self::ok(sprintf(
-            'Team "%s" created (lead "%s", at most %d teammates). `add` its tasks, then start each teammate with Task'
+            'Team "%s" created (lead "%s", at most %d teammates%s%s). `add` its tasks, then start each teammate with Task'
             . ' and `background: true`.',
             $teamId,
             self::LEAD,
             $config->maxTeammates,
+            $config->autoAssignTasks ? '' : ', tasks claimed by name only',
+            $config->defaultTimeoutSeconds > 0 ? ', claims overdue after ' . self::duration($config->defaultTimeoutSeconds) : '',
         ));
     }
 
@@ -341,7 +363,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         return self::ok($lines === [] ? 'No teams. `create` one.' : "Teams:\n" . implode("\n", $lines));
     }
 
-    private function listTasks(Team $team): ToolResult
+    private function listTasks(TeamManager $teams, Team $team): ToolResult
     {
         $list = $team->getTaskList();
         $recovered = $this->recover($list);
@@ -349,7 +371,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
         $lines = [];
         foreach ($tasks as $task) {
-            $lines[] = self::describe($list, $task);
+            $lines[] = self::describe($list, $task, $teams->overdueSeconds($team->id, $task));
         }
 
         return self::ok(
@@ -390,6 +412,12 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
                 return self::ok($recovered . sprintf(
                     'Nothing claimed: a TeammateIdle hook held the next task back%s.',
                     self::hookReason($refusal),
+                ));
+            }
+            if ($claimed === null && !$teams->autoAssigns($team->id)) {
+                return self::ok($recovered . sprintf(
+                    'Team "%s" does not hand out tasks: name the `task` to claim (`list` shows the pending ones).',
+                    $team->id,
                 ));
             }
             if ($claimed === null) {
@@ -457,19 +485,30 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         ));
     }
 
-    private function release(Team $team, array $args): ToolResult
+    private function release(TeamManager $teams, Team $team, array $args): ToolResult
     {
         $list = $team->getTaskList();
         $teammate = self::str($args, 'teammate');
         $taskId = self::str($args, 'task');
-        if ($list->getTask($taskId) === null) {
+        $task = $list->getTask($taskId);
+        if ($task === null) {
             return self::error('no task "' . $taskId . '"');
         }
         $revision = self::revisionArg($args);
         if ($revision === false) {
             return self::error('`revision` must be a whole number');
         }
-        if (!$list->releaseTask($taskId, $teammate, $revision)) {
+
+        // The lead may take back a claim held past the team's limit: the
+        // overdue mark on `list` is what it decides on, and the release is
+        // still the claimant's exact claim, compare-and-swap like any other.
+        $overdue = $teams->overdueSeconds($team->id, $task);
+        $holder = $teammate;
+        if ($teammate === $team->leadAgentId && $task->assignedTo !== null && $task->assignedTo !== $teammate && $overdue !== null) {
+            $holder = $task->assignedTo;
+        }
+
+        if (!$list->releaseTask($taskId, $holder, $revision)) {
             $task = self::taskOf($list, $taskId);
 
             return self::error(sprintf(
@@ -481,7 +520,12 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             ));
         }
 
-        return self::ok(sprintf('%s is pending again (revision %d).', $taskId, (int) $list->revision($taskId)));
+        return self::ok(sprintf(
+            '%s is pending again (revision %d).%s',
+            $taskId,
+            (int) $list->revision($taskId),
+            $holder === $teammate ? '' : sprintf(' %s had held it for %s, past the team\'s limit.', $holder, self::duration((int) $overdue)),
+        ));
     }
 
     private function message(TeamManager $teams, Team $team, array $args): ToolResult
@@ -675,11 +719,14 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         return sprintf('%s changed while it was being claimed; try again', $taskId);
     }
 
-    private static function describe(TaskList $list, Task $task): string
+    private static function describe(TaskList $list, Task $task, ?int $overdueSeconds = null): string
     {
         $parts = [sprintf('%s [%s] "%s"', $task->id, $task->status->value, $task->title)];
         if ($task->assignedTo !== null) {
             $parts[] = 'owner ' . $task->assignedTo;
+        }
+        if ($overdueSeconds !== null) {
+            $parts[] = 'overdue: held ' . self::duration($overdueSeconds) . ', past the team\'s limit (the lead may `release` it)';
         }
         if ($task->dependsOn !== []) {
             $open = self::openBlockers($list, $task);
@@ -753,6 +800,16 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
     private static function taskOf(TaskList $list, string $taskId): Task
     {
         return $list->getTask($taskId) ?? throw new \RuntimeException('task ' . $taskId . ' vanished');
+    }
+
+    /** A span of seconds as the model reads it: `45s`, `12 min`, `3 h`. */
+    private static function duration(int $seconds): string
+    {
+        return match (true) {
+            $seconds < 120 => $seconds . 's',
+            $seconds < 7200 => intdiv($seconds, 60) . ' min',
+            default => intdiv($seconds, 3600) . ' h',
+        };
     }
 
     private static function oneLine(string $text): string

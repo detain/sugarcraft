@@ -208,6 +208,75 @@ final class TeamToolTest extends TestCase
         $this->ok($tool->execute(['action' => 'claim', 'team' => 'duo', 'teammate' => 'alice']));
     }
 
+    public function testATeamWithoutAutoAssignHandsOutNothingButANamedClaimWorks(): void
+    {
+        $tool = $this->tool();
+        self::assertStringContainsString(
+            'tasks claimed by name only',
+            $this->ok($tool->execute(['action' => 'create', 'team' => 'manual', 'auto_assign' => false])),
+        );
+        $tool->execute(['action' => 'add', 'team' => 'manual', 'title' => 'A', 'prompt' => 'a']);
+
+        self::assertStringContainsString(
+            'Team "manual" does not hand out tasks: name the `task` to claim',
+            $this->ok($tool->execute(['action' => 'claim', 'team' => 'manual', 'teammate' => 'alice'])),
+        );
+        self::assertSame(TaskStatus::Pending, $this->manager()->getTeam('manual')?->getTaskList()->getTask('t1')?->status);
+        self::assertStringContainsString('Claimed t1', $this->ok($tool->execute(['action' => 'claim', 'team' => 'manual', 'teammate' => 'alice', 'task' => 't1'])));
+        self::assertFalse($this->manager()->autoAssigns('manual'));
+    }
+
+    public function testAClaimHeldPastTheTeamLimitIsMarkedOverdueAndTheLeadMayReleaseIt(): void
+    {
+        $tool = $this->tool();
+        self::assertStringContainsString(
+            'claims overdue after 60s',
+            $this->ok($tool->execute(['action' => 'create', 'team' => 'alpha', 'timeout_seconds' => 60])),
+        );
+        $tool->execute(['action' => 'add', 'team' => 'alpha', 'title' => 'Slow', 'prompt' => 'Take your time.']);
+        $this->ok($tool->execute(['action' => 'claim', 'team' => 'alpha', 'teammate' => 'alice']));
+
+        // Within the limit: no mark, and the lead cannot take it back.
+        self::assertStringNotContainsString('overdue', $this->ok($tool->execute(['action' => 'list', 'team' => 'alpha'])));
+        self::assertStringContainsString('was not released', $this->err($tool->execute(['action' => 'release', 'team' => 'alpha', 'teammate' => 'lead', 'task' => 't1'])));
+
+        $this->backdateClaim('alpha', 't1', 5 * 60);
+
+        $list = $this->ok($tool->execute(['action' => 'list', 'team' => 'alpha']));
+        self::assertStringContainsString('t1 [in_progress] "Slow"; owner alice; overdue: held 5 min, past the team\'s limit', $list);
+        self::assertSame(TaskStatus::InProgress, $this->manager()->getTeam('alpha')?->getTaskList()->getTask('t1')?->status, 'overdue is a mark: nothing was taken back');
+
+        // Another teammate still cannot; the lead can.
+        self::assertStringContainsString('was not released', $this->err($tool->execute(['action' => 'release', 'team' => 'alpha', 'teammate' => 'bob', 'task' => 't1'])));
+        self::assertStringContainsString(
+            't1 is pending again (revision 2). alice had held it for 5 min, past the team\'s limit.',
+            $this->ok($tool->execute(['action' => 'release', 'team' => 'alpha', 'teammate' => 'lead', 'task' => 't1'])),
+        );
+    }
+
+    public function testATeamWithNoLimitNeverMarksAClaimOverdue(): void
+    {
+        $tool = $this->tool();
+        $this->ok($tool->execute(['action' => 'create', 'team' => 'alpha', 'timeout_seconds' => 0]));
+        $tool->execute(['action' => 'add', 'team' => 'alpha', 'title' => 'Slow', 'prompt' => 'p']);
+        $this->ok($tool->execute(['action' => 'claim', 'team' => 'alpha', 'teammate' => 'alice']));
+        $this->backdateClaim('alpha', 't1', 30 * 86400);
+
+        self::assertStringNotContainsString('overdue', $this->ok($tool->execute(['action' => 'list', 'team' => 'alpha'])));
+        $task = $this->manager()->getTeam('alpha')?->getTaskList()->getTask('t1');
+        self::assertNotNull($task);
+        self::assertNull($this->manager()->overdueSeconds('alpha', $task));
+    }
+
+    public function testCreateRefusesMalformedTeamSettings(): void
+    {
+        $tool = $this->tool();
+
+        self::assertStringContainsString('`auto_assign` must be true or false', $this->err($tool->execute(['action' => 'create', 'team' => 'a', 'auto_assign' => 'no'])));
+        self::assertStringContainsString('`timeout_seconds` must be a whole number', $this->err($tool->execute(['action' => 'create', 'team' => 'a', 'timeout_seconds' => -1])));
+        self::assertFalse($this->manager()->hasTeam('a'));
+    }
+
     public function testMessagesAreDeliveredOnceAndFramedAsTeammateWords(): void
     {
         $tool = $this->tool();
@@ -238,6 +307,17 @@ final class TeamToolTest extends TestCase
         $this->ok($tool->execute(['action' => 'add', 'team' => 'alpha', 'title' => 'Docs', 'prompt' => 'Document it.']));
 
         return $tool;
+    }
+
+    /** Move a claim's recorded time $seconds into the past, as if it had been held that long. */
+    private function backdateClaim(string $teamId, string $taskId, int $seconds): void
+    {
+        $db = new \SQLite3($this->tempDir . '/home/.sugar-crush/teams/' . $teamId . '/tasks.sqlite');
+        $stmt = $db->prepare('UPDATE tasks SET claimed_at = :at WHERE id = :id');
+        $stmt->bindValue(':at', (new \DateTimeImmutable('-' . $seconds . ' seconds'))->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
+        $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+        $stmt->execute();
+        $db->close();
     }
 
     private function tool(int $ownerPid = 4242): TeamTool
