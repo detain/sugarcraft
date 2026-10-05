@@ -226,20 +226,18 @@ Columns:
 - **Hotspot regions**: listed only where another group in the same wave also touches that file.
 - **Order**: the integration cherry-pick order for the wave.
 
-### W9 (order: a, b, c, d, e, f, g, h, i, j)
+### W9 (order: a, b, g, h, i, j)
+
+Remainders of partially landed W9 steps, for rescheduling.
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 2.6, 4.7-2 (enabled in `completeTranscript`, no TaskTool edit), 2.11 | `src/Backend/EngineBackend.php`, `src/Host/CompactionService.php`, `src/Context/TurnContextBlock.php`, `src/Tools/BuiltIn/SkillTool.php`, new `src/Context/Compaction/ReinjectionPlan.php` | EB: `runTurn` `step-top`/`after-step`, `completeTranscript`. CompactionService: `compactionChanges` flag, `scheduleParkedCompaction` | MEMORY flush section; README "The agent loop" | — | L |
-| b | 3.B-5, 4.9 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Agents/{SuspendedDelegations,SubAgent}.php`, `src/Compactor.php`, `src/Chat.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/Recall.php` | TT: `setup`, `finish`. EB: `observeCacheHealth`, `withWorktreeRoot`. Chat: `scheduleBackgroundSpawn`. BS: `tools` (WorktreeManager). **R-STATE** (worktrees) | AGENTS_AUTHORING "Teams and worktrees"; README Limitations | — | L |
-| c | O-6a | `src/Protocol/**` (narration, `client.viewing`), `sugar-crush-web/src-web/{components/grid,components/approvals,stores/layout,stores/approvals}/**` | — | SERVER.md | sugar-crush-web | L |
-| d | O-6b | new `src/Protocol/Methods/SettingsMethods.php`, `sugar-crush-web/src-web/{components/settings,stores/settings}/**` | — | SETTINGS producers (`ConfigWriteProducerDocumentationDriftTest`) | sugar-crush-web | M |
-| e | O-6c (+ 3.C remainder: broadcast `TurnRunner::observeTodo()`'s `TodoUpdated` as a `todo.updated` `SessionEvent` and protocol event) | new `src/Protocol/Methods/{Agents,Workflow,Memory}Methods.php`, `sugar-crush-web/src-web/{components/agents,components/panels,stores/agents}/**` | — | SERVER.md | sugar-crush-web | L |
-| f | P-E1, P-E2 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Chat.php`, `src/Renderer.php` | RT: `executeConcurrently` `poll` (`agent_cancel`). EB: `runCompleteInChild`. Chat: `requestPermission`/`answerPermission` (origin). RN: agent-view body | ARCHITECTURE frame table; PERMISSIONS | — | M |
-| g | 4.6-2 | `src/Agents/{TeamManager,Team}.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/TeamTool.php` | BS: `agentManager` | AGENTS_AUTHORING "Teams and worktrees" (team paragraph only; b owns the worktree paragraph) | — | M–L |
-| h | N-P4b, N-P4d | `src/Context/{CompactorConfig,IdleCompactionPolicy,MemoryBlock,ProjectMemoryWriter,RepoMapBlock,EnvironmentBlock}.php`, `src/Skills/SkillPathNudge.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/Backend/EngineBackend.php`, `src/Config/Settings/Definitions/{Compaction,Memory}.php` | RT: `memorySnapshot` + standing-rule constants. BS: `chat` (CompactorConfig), launch-notice constants. EB: `withCompactorConfig` | MEMORY caps; PROMPT_ENGINEERING; SETTINGS (generated) | — | M–L |
-| i | N-P4c, N-P4e, N-P4f | `src/Tools/Concerns/TruncatesOutput.php`, `src/Tools/BuiltIn/{Read,Glob,WebFetch,WebSearch}.php`, `src/Commands/CommandSpec.php`, `src/Hooks/ScriptHook.php`, `src/Tools/McpToolBridge.php`, `src/Agents/{EngineExecutor,AgentPoolConfig}.php`, `src/Config/Settings/Definitions/{Tools,Subagents}.php` | EB: `turnTools` (caps + Task binding; no Bootstrap edit). TT: `DEFAULT_MAX_TURNS` constant only. Chat: tool-timeout constant. `CapturesProcessOutput`: idle-ceiling constant only. BS: `agentPoolConfig` | ENVIRONMENT `SUGARCRUSH_SEARCH_ENDPOINT`; AGENTS_AUTHORING `maxTurns` | — | M–L |
-| j | 5.7-1 (D8), N-P4g | `src/Permissions/{PermissionGate,PermissionMode}.php`, `src/Runtime.php`, `src/Chat.php`, `src/Renderer.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, `src/Agents/AgentManager.php`, `src/Session/EnhancedSessionStore.php`, `src/Config/StatusLineCommand.php`, new `src/Context/Sections/PlanModeSection.php`, `src/PermissionModeToggledMsg.php`, `src/Config/Settings/Definitions/Ui.php` | RT: `systemPromptSections` (plan section). Chat: `permissionGate` toggle, UI constants, `mouseMode`. RN: status-bar badge, `DIFF_MAX_ROWS`. **R-KEYBIND** | PERMISSIONS "six modes", "Setting the mode"; README "Keys"; ENVIRONMENT (`_DISABLE_MOUSE` etc. settings-key cells) | — | L |
+| a | 2.11 remainder (the host's compactions flush too: run `Context\Compaction\MemoryFlush` before `/compact` and the automatic 85% tier, in `EngineBackend::summariseInChild()` or a backend method `Chat` calls before `summariseAsync`; once per cycle across turns through a `ContextLedger` cycle counter) | `src/Backend/EngineBackend.php`, `src/Context/Pruning/ContextLedger.php`, `src/Host/CompactionService.php` | EB: `summariseInChild`/`summaryReply` | MEMORY "Memory flush before compaction" (drop the "do not flush yet" sentence) | — | S–M |
+| b | 3.B-5 remainder (a `/context` line for the cache-break telemetry through a public `EngineBackend::cacheBreaks()` accessor; `Compactor::describe()` naming pruned targets in `Prune::receipt()`, `/sweep`'s receipt and `/context`'s pruned list) | `src/Backend/EngineBackend.php`, `src/Commands/ContextCommand.php`, `src/Context/ContextBreakdown.php`, `src/Tools/BuiltIn/Prune.php` | — | — | — | S |
+| g | 4.6-2 remainder (`TaskCreated`/`TaskCompleted`/`TeammateIdle` dispatched through a `HookDispatcher` over the launch's `HookRegistry`, handed to the catalog-built `Team` → `TeamManager` → `TaskList`; `TaskList::getConnection()` keyed by pid; `completeTask`/`failTask` revision compare-and-swap; the duplicate-id warning on a concurrent `add`; built-in teammates granted `Team`) | `src/Agents/{TaskList,TeamManager,Team,AgentManager}.php`, `src/Tools/BuiltIn/TeamTool.php`, `src/Cli/Bootstrap.php` | BS: `hooks`. **R-HOOKS** | HOOKS event table + dormancy paragraph (`DocFigureProseDriftTest::testHookEventsTableSurvivesTheLiveEnumAndDispatchSites`) | — | M |
+| h | N-P4b remainder (`Chat::applySettings()` arm rebuilding the compactor on a `compaction.*` save, then the keys apply live; `compaction.idleOfferSeconds`, `compaction.mode llm\|heuristic\|off`, the thrash breaker's `REFILL_LIMIT`), N-P4d remainder (`rules.standingMaxBytes`, `repoMap.enabled`/`repoMap.maxBytes`, `env.gitDiffAfterWrites`/`env.diffMaxBytes`, `skills.pathNudges`, `notices.transcriptLimit`, `memory.projectNoteMaxBytes` — each with its read site) | `src/Chat.php`, `src/Runtime.php`, `src/Context/{IdleCompactionPolicy,RepoMapBlock,EnvironmentBlock,ProjectMemoryWriter}.php`, `src/Skills/SkillPathNudge.php`, `src/Cli/Bootstrap.php`, `src/Config/Settings/Definitions/{ContextSettings,MemoryRuleSettings}.php` | RT: `systemPromptSections`, `repoMapSnapshot`, `environmentSnapshot`. BS: launch-notice constants | MEMORY caps; PROMPT_ENGINEERING; SETTINGS (generated) | — | M |
+| i | N-P4c remainder (the nested-instruction cap `TruncatesOutput::DEFAULT_MAX_INSTRUCTION_BYTES`; the spill capture bounds `ToolOutputSpill::CAPTURE_BYTES` / `MIN_CAP_BYTES`) | `src/Tools/Concerns/TruncatesOutput.php`, `src/Support/ToolOutputSpill.php`, `src/Config/Settings/Definitions/ToolSettings.php` | — | SETTINGS (generated) | — | S |
+| j | N-P4g remainder (`permissions.autoStrikeLimit`/`autoTotalLimit` in `PermissionSettings`; `terminalBackground`, `sessionRetentionDays`, `maxCostUsd` (rewrite README's "deliberately not persisted" `/budget` contract), `mcp.enabled`, `debug.skills\|commands\|rules\|stream`, each with its ENVIRONMENT "Settings key" cell; `sessions.autoTitle`, `expandToolOutput` and the prompt-suggestion history, which need readers) | `src/Config/Settings/Definitions/{PermissionSettings,InterfaceSettings}.php`, `src/Permissions/PermissionGate.php`, `src/Cli/Bootstrap.php`, `src/Host/TitleService.php`, skill/command/rule loaders | BS: `reportPrunedSessions`, `mcpClient`, `chat` | ENVIRONMENT settings-key cells; README `/budget` | — | M |
 
 ### W10 (order: a … j)
 
@@ -284,7 +282,7 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (47 steps)
+## 5. Step index (35 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -293,12 +291,10 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Foundations**
 
 **Context engine**
-- 2.6 M · 1.A-2, 2.5 · W9-a
-- 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
+- 2.11 remainder (host-side flush) S · 2.11 · W9-a
 
 **Safety and self-management**
-- 3.B-5 S–M · 3.B-4 · W9-b
-- 3.C remainder (`todo.updated` event) S · 3.C, O-6c · W9-e
+- 3.B-5 remainder (`/context` cache-break line, `Compactor::describe()` in receipts) S · 3.B-5 · W9-b
 - 3.C remainder (compact menu strip) S · 3.C · W10-f
 - 3.I-2 remainder (`ToolBuildContext` ledger field, Chat-native path ledger carry, README clause) S · 3.I-2 · W10-a
 - 3.I-3 M · 3.I-1, DH-TOOLS · W10-a
@@ -306,12 +302,9 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Sub-agents**
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
 - 4.5 M · RELAY · W10-c
-- 4.6-2 M–L · 4.6-1, 4.3-2, P-D1 · W9-g
-- 4.7-2 S–M · 1.C-4a · W9-a
-- 4.9 M · 4.1-1, 4.3-2 · W9-b
+- 4.6-2 remainder (TaskList hook trio, CAS, pid-keyed connection) M · 4.6-2, R-HOOKS · W9-g
 
 **Memory, codebase understanding, UX, integrations**
-- 5.7-1 M · 4.1-2, DEF-MODE, D8 · W9-j
 - 5.7-2 M · 5.7-1, 1.C-2 · W10-b
 - 5.9-1 M · — · W10-h
 - 5.9-2 M · 5.9-1, O-2g · W10-h
@@ -322,23 +315,16 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.14l S–M · O-2g · W10-f
 
 **Settings**
-- N-P4b M · N-P3, 2.1, 2.9 · W9-h
-- N-P4c M · N-P3, 0.4, 2.8 · W9-i
-- N-P4d M · N-P3, 5.1, 1.A · W9-h
-- N-P4e S · 0.3 · W9-i
-- N-P4f S–M · N-P3, 4.1, 4.7-3 · W9-i
-- N-P4g M · N-P3, DEF-MODE · W9-j
+- N-P4b remainder (live apply, deferred keys) S–M · N-P4b · W9-h
+- N-P4c remainder (instruction cap, spill capture bounds) S · N-P4c · W9-i
+- N-P4d remainder (standing rules, repo map, env, nudges, notices, project notes) M · N-P4d · W9-h
+- N-P4g remainder (breaker limits, env-backed keys, keys without readers) M · N-P4g · W9-j
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-E1 S–M · P-D3, RELAY · W9-f
-- P-E2 S · 1.C-5, P-C2 · W9-f
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-6a L · O-5b · W9-c
-- O-6b M · O-5b, N-P2 · W9-d
-- O-6c L · O-5b, P-B2, 4.3-2, 3.C · W9-e
 
 **Deferred and live checks**
 - 15b-14-1 S · — · W10-i

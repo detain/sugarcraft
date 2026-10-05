@@ -29,12 +29,8 @@
 
 # Part I — Key findings
 
-1. **Agent self-pruning stops at the parent.** The model can `Prune` its finished tool outputs and `Compress` a closed range into a summary (3.B-3, 3.B-4), but a sub-agent cannot prune its own run and pruned content cannot be recalled. Fix: 3.B-5 (Appendix D §13.2).
-2. **Sub-agents are partly closed off.**
-   - Preset `isolation` is inert (4.9).
-   - The model has no messaging tools (4.4).
-   - `TeamManager` is dormant (4.6-2).
-3. **Requested features still open:** the `sugar-crush-web` multi-session UI (O-6), the agent view's hard cancel, approval relay and board (P-E), and the remaining constants promoted to settings (N-P4b–g, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
+1. **Sub-agents are partly closed off.** The model has no messaging tools (4.4), and the team task hooks (`TaskCreated`, `TaskCompleted`, `TeammateIdle`) never fire (4.6-2 remainder).
+2. **Requested features still open:** the agent view's background attach (P-E3), the shared board (4.5), and the remaining constants promoted to settings (the N-P4b/c/d/g remainders, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
 
 ---
 
@@ -44,9 +40,7 @@ Severity is the user impact on the live default path.
 
 | # | Severity | Problem | Steps |
 |---|---|---|---|
-| 1 | High | Plan mode unusable interactively: no plan-mode prompt section, no plan exit or user question over the frame channel | 5.7-1, 5.7-2 |
-| 21 | Medium | Percentage thresholds fire too late on 1M windows: the absolute caps exist but are unset by default and have no settings keys | N-P4b |
-| 23 | Medium | Preset `isolation` inert | 4.9 |
+| 1 | High | Plan mode cannot end itself: no plan exit or user question over the frame channel | 5.7-2 |
 
 ---
 
@@ -84,17 +78,16 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 2.6 | **Post-compaction re-injection**: the 5 most recently edited/read files (≤5k tokens each) or Cline's "Required Files" (≤8 files/100k chars), invoked skill bodies, fresh git snapshot, todo list, plan | M | CC Cline |
 | 2.9 | **Absolute thresholds** on by default (DCP's 50k/100k "smart zone"; on a 1M window, 70% is far past the point where quality holds) with their settings keys and a thrash-breaker that cannot refuse every prompt under a cap; an absolute term in the step-level `ContextBudget` | S | DCP |
-| 2.11 | **Memory flush before compaction**: one silent tool-enabled turn that writes durable notes to memory, once per compaction cycle | S–M | Claw |
+| 2.11 | **Memory flush before the host's compactions**: the silent Memory-only step already runs before an in-turn compaction; `/compact` and the automatic 85% tier do not flush yet, and the once-per-cycle count does not span turns | S | Claw |
 
 ## 3.x — safety net and agent self-management
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 3.A | **Workspace checkpoints**: optionally capture after each write step (`EngineBackend::runTurn`) | M | CC OC Kilo Cline Zed dsh |
-| 3.B | **Agent self-pruning tools** (the user's headline request). `Prune` and `Compress` are live (3.B-3, 3.B-4), with `/compress`, `/decompress`, `/recompress` and `/compact --self`. What remains (3.B-5): sub-agents prune their own run on an ephemeral ledger keyed by call (the delegated prompt never prunable, the ledger surviving a `SuspendedDelegations` resume), an optional `Recall` tool to bring pruned content back, cache-health telemetry after compressions, and grouping pruned targets with the dormant `Compactor`. **Full design: Appendix D §13.2.** | S–M | DCP |
-| 3.C | Todo list for the web: a `todo.updated` event (with O-6c); a compact menu strip below ~101 columns | S | 8 reports |
+| 3.B | **Agent self-pruning tools** (the user's headline request). `Prune` and `Compress` are live (3.B-3, 3.B-4), with `/compress`, `/decompress`, `/recompress` and `/compact --self`. What remains (3.B-5): a `/context` line for the cache-break telemetry, and `Compactor::describe()` naming the pruned targets in `Prune`'s and `/sweep`'s receipts and `/context`'s pruned list. **Full design: Appendix D §13.2.** | S | DCP |
+| 3.C | Todo list: a compact menu strip below ~101 columns | S | 8 reports |
 | 3.I | Optional `ApplyPatch`, refusing a stale file through the session read ledger like `Edit` | M | OC Kilo Cline Zed Claw nano dsh |
 
 ## 4.x — sub-agents and orchestration
@@ -104,17 +97,15 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 | 4.3 | **Background Task** settle: a settled result is injected via steer when a turn is running (it waits for the turn's end today), and the announce stats line carries the resume id | S | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
-| 4.6 | **Teams**: construct `TeamManager` (`AgentManager::setTeamManager`), `team_*` tools on `TaskList` (claim/complete/dependencies); make `GroupInputCmd`/`CancelAgentCmd`/`ResumeAgentCmd`/`StopAllAgentsCmd` real | L | CC Cline dsh |
-| 4.7 | Stop a child at 80–90% of its window with "wrap up or hand off" (Zed) | S–M | Zed |
+| 4.6 | **Teams**: the `Team` tool is live; `TaskCreated`/`TaskCompleted`/`TeammateIdle` dispatched from `TaskList`, a revision compare-and-swap on complete/fail, a pid-keyed SQLite connection, and `Team` granted to the built-in teammates remain | M | CC Cline dsh |
 | 4.8 | Sub-agents as stored child sessions: navigable in the tab strip, typable into, promotable to background (opencode Ctrl+B) | L | OC |
-| 4.9 | Worktree isolation for `isolation: worktree` presets and `/bg` (wire `WorktreeManager`, `withWorktreeRoot`, `BashEscapeDenyHook`) | M | CC Claw |
 
 ## 5.x — memory, codebase understanding, UX, integrations
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 5.4 | **Dream pass over skills**: the dream pass edits memory notes only; letting it edit skills waits on a user decision (an unattended `SKILL.md` writer persists injected text) | S–M | nano |
-| 5.7 | **Plan mode** made real: plan-mode prompt section, plans-dir write exception (the command guard exists), `PlanExit` + `ask_user` tools over the 1.C channel, `Alt+M` toggle (Shift+Tab is pane-prev), superseding "agent changed" reminder | M | OC Kilo Cline dsh |
+| 5.7 | **Plan mode**: `PlanExit` + `ask_user` tools over the 1.C channel | M | OC Kilo Cline dsh |
 | 5.9 | **ACP mode** (`sugarcrush acp`): stdio JSON-RPC so Zed, JetBrains and Neovim can host sugar-crush; reuse `McpMessage` framing | L | Zed |
 | 5.11 | LLM exec reviewer / smart-approve for `auto` mode (title backend, JSON verdict, untrusted transcript; the 3-strike breaker exists); security findings force Ask even in auto | M | Goose Claw dsh OH |
 | 5.14 | Small UX: `/handoff` (new session seeded with a summary); `/newrule`; watch-files `AI!` comments; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
@@ -238,14 +229,11 @@ Keep sugar-crush's richer `<env>` and repo map; only move the volatile parts out
 
 **Behaviour that should become settings.**
 
-The report lists **about 45 hard-coded constants**, each with file:line and a proposed key, type, default and tier. The main ones still hard-coded:
-- the compaction thresholds 70/85/95 and keep-10;
-- the 64 KiB and 1 MiB output caps;
-- the memory caps of 40 index entries, 4 KiB and 512 B;
-- the private WebSearch default host;
-- sub-agent max turns.
-
-It adds **about 30 future knobs** that the Part III roadmap will create: Bash timeout, doom-loop thresholds, steering mode, `contextPruning.*`, `autoCommit`, `lintCommands`, `testCommand`, sub-agent model and concurrency, and notifications.
+The report lists **about 45 hard-coded constants**, each with file:line and a proposed key, type, default and tier. The ones still hard-coded:
+- the standing-rule budget, the repo-map switch and size, the environment block's diff caps, skill path nudges, the launch-notice limit and the project-note cap (N-P4d);
+- the nested-instruction cap and the spill capture bounds (N-P4c);
+- the auto-mode breaker limits, the terminal background, session retention, the spend cap, the MCP switch and the `debug.*` flags (N-P4g);
+- live apply of the `compaction.*` keys, the idle-compaction offer and the summary mode (N-P4b).
 
 **Recommended design:**
 - **The `SettingsSchema` registry** (`SettingDefinition` rows, `src/Config/Settings/`) drives the editor form, and `LayeredSettings`' tier rosters are derived from it.
@@ -277,15 +265,13 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 
 ## V.3 `sugar-crush-web` (Appendix O §7)
 
-**What exists:** the composer package `sugarcraft/sugar-crush-web` (Vite + Vue 3 + TypeScript + Pinia + vue-router), a one-class PHP shim (`SugarCraft\CrushWeb\Assets::distPath`) and a **committed `dist/`** that the Node CI job (`web.yml`) checks against the source. `sugarcrush serve` serves it on the same port, so PHP users need no Node. The single-session UI is live:
+**What exists:** the composer package `sugarcraft/sugar-crush-web` (Vite + Vue 3 + TypeScript + Pinia + vue-router), a one-class PHP shim (`SugarCraft\CrushWeb\Assets::distPath`) and a **committed `dist/`** that the Node CI job (`web.yml`) checks against the source. `sugarcrush serve` serves it on the same port, so PHP users need no Node. The multi-session UI is live:
 - protocol types generated from `docs/protocol/sugarcrush.v1.schema.json` (`npm run gen:protocol`), a client that reconnects with backoff 0.5 s→15 s with jitter and resumes from its seq cursor;
 - a sessions sidebar, a virtualised transcript with markdown and reasoning folds, tool cards with diffs, permission cards, a composer with queue / steer / interrupt, and a status bar with context, spend, model and permission mode;
+- tabs and a tiled grid of live sessions (unfocused tiles narrated by the server), and a cross-session approvals drawer with browser notifications;
+- a settings form generated from the server's `SettingsSchema`, with provenance, locks, apply-mode badges and a diff preview before saving;
+- a sub-agent tree with an agent view, todo, background, workflow and memory panels, and a command palette;
 - vitest, plus Playwright end-to-end tests against a real `serve` on the offline `EchoProvider`, whose `::tool <Name> <json>` prompts drive real tool calls.
-
-**Still to build** (O-6, phase 6 of O §9):
-- tabs **and** a tiled multi-pane grid for watching several sessions at once, and a **cross-session approvals drawer** with browser notifications (O-6a);
-- a **settings form generated from the server's settings schema** — the same `SettingsSchema` as V.1, so the TUI and the web share one source of truth (O-6b);
-- a sub-agent tree, background tasks, workflows, a memory panel and a command palette (O-6c).
 
 ## V.4 Sessions, live agent lines, agent view and direct chat (Appendix P)
 
@@ -294,8 +280,8 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
   This is how opencode and Claude Code show running agents.
 
 **Agent view and direct chat.**
-- **What exists:** the read-only view. Clicking an agent line, Enter on a strip item or `/agent <id|name>` swaps the main transcript area for that agent's live transcript, tailed from the **per-agent JSONL transcript log written by the agent's own process**; Esc leaves it. The input box is that agent's composer, sending through the signed `AgentInbox` drained at the sub-agent's step boundaries; soft cancel, pause, stop-all, broadcast and "open as session" are live.
-- **Still to build:** hard cancel (SIGTERM via the turn child, P-E1); a draft per target; `Ctrl+X Enter` to send a result to the main chat and `Ctrl+Enter` to interrupt; the broadcast audience in the view's header and footer; a paused state on the live line; the view following a cold-resumed run's new id.
+- **What exists:** the read-only view. Clicking an agent line, Enter on a strip item or `/agent <id|name>` swaps the main transcript area for that agent's live transcript, tailed from the **per-agent JSONL transcript log written by the agent's own process**; Esc leaves it. The input box is that agent's composer, sending through the signed `AgentInbox` drained at the sub-agent's step boundaries; soft cancel, a hard cancel on a second press (SIGTERM, then SIGKILL), pause, stop-all, broadcast and "open as session" are live, and a sub-agent's permission question names the run that asked.
+- **Still to build:** a draft per target; `Ctrl+X Enter` to send a result to the main chat and `Ctrl+Enter` to interrupt; the broadcast audience in the view's header and footer; a paused state on the live line; the view following a cold-resumed run's new id.
 - **Finished agents**' child sessions (`kind='subagent'`, `parent_id`) become viewable and cold-resumable.
 - **Web compatibility:** every DTO serialises to the same event envelope the server mode uses (`agent.spawned`, `agent.activity`, `agent.status`, `agent.message`), so the web UI gets the same features.
 
@@ -304,13 +290,12 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 - **B — live lines (M).**
 - **C — read-only agent view (M).**
 - **D — direct chat and controls (M–L).**
-- **E — hard cancel, approval relay and background (L):** needs 1.C, 4.3 and server mode.
+- **E — background (M):** `Ctrl+X b` sends a running agent to the background (P-E3).
 
 ## V.5 How the new features fit the Part III roadmap
 
 These features are scheduled in Appendix R together with Part III:
-- The multi-session web (W9) builds on the protocol and the single-session UI.
-- The agent view's remaining controls (P-E) run W9–W10.
+- The agent view's remaining control (P-E3) runs in W10.
 
 ---
 
@@ -9321,20 +9306,18 @@ Columns:
 - **Hotspot regions**: listed only where another group in the same wave also touches that file.
 - **Order**: the integration cherry-pick order for the wave.
 
-#### W9 (order: a, b, c, d, e, f, g, h, i, j)
+#### W9 (order: a, b, g, h, i, j)
+
+Remainders of partially landed W9 steps, for rescheduling.
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 2.6, 4.7-2 (enabled in `completeTranscript`, no TaskTool edit), 2.11 | `src/Backend/EngineBackend.php`, `src/Host/CompactionService.php`, `src/Context/TurnContextBlock.php`, `src/Tools/BuiltIn/SkillTool.php`, new `src/Context/Compaction/ReinjectionPlan.php` | EB: `runTurn` `step-top`/`after-step`, `completeTranscript`. CompactionService: `compactionChanges` flag, `scheduleParkedCompaction` | MEMORY flush section; README "The agent loop" | — | L |
-| b | 3.B-5, 4.9 | `src/Tools/BuiltIn/TaskTool.php`, `src/Backend/EngineBackend.php`, `src/Agents/{SuspendedDelegations,SubAgent}.php`, `src/Compactor.php`, `src/Chat.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/Recall.php` | TT: `setup`, `finish`. EB: `observeCacheHealth`, `withWorktreeRoot`. Chat: `scheduleBackgroundSpawn`. BS: `tools` (WorktreeManager). **R-STATE** (worktrees) | AGENTS_AUTHORING "Teams and worktrees"; README Limitations | — | L |
-| c | O-6a | `src/Protocol/**` (narration, `client.viewing`), `sugar-crush-web/src-web/{components/grid,components/approvals,stores/layout,stores/approvals}/**` | — | SERVER.md | sugar-crush-web | L |
-| d | O-6b | new `src/Protocol/Methods/SettingsMethods.php`, `sugar-crush-web/src-web/{components/settings,stores/settings}/**` | — | SETTINGS producers (`ConfigWriteProducerDocumentationDriftTest`) | sugar-crush-web | M |
-| e | O-6c (+ 3.C remainder: broadcast `TurnRunner::observeTodo()`'s `TodoUpdated` as a `todo.updated` `SessionEvent` and protocol event) | new `src/Protocol/Methods/{Agents,Workflow,Memory}Methods.php`, `sugar-crush-web/src-web/{components/agents,components/panels,stores/agents}/**` | — | SERVER.md | sugar-crush-web | L |
-| f | P-E1, P-E2 | `src/Runtime.php`, `src/Backend/EngineBackend.php`, `src/Chat.php`, `src/Renderer.php` | RT: `executeConcurrently` `poll` (`agent_cancel`). EB: `runCompleteInChild`. Chat: `requestPermission`/`answerPermission` (origin). RN: agent-view body | ARCHITECTURE frame table; PERMISSIONS | — | M |
-| g | 4.6-2 | `src/Agents/{TeamManager,Team}.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/TeamTool.php` | BS: `agentManager` | AGENTS_AUTHORING "Teams and worktrees" (team paragraph only; b owns the worktree paragraph) | — | M–L |
-| h | N-P4b, N-P4d | `src/Context/{CompactorConfig,IdleCompactionPolicy,MemoryBlock,ProjectMemoryWriter,RepoMapBlock,EnvironmentBlock}.php`, `src/Skills/SkillPathNudge.php`, `src/Runtime.php`, `src/Cli/Bootstrap.php`, `src/Backend/EngineBackend.php`, `src/Config/Settings/Definitions/{Compaction,Memory}.php` | RT: `memorySnapshot` + standing-rule constants. BS: `chat` (CompactorConfig), launch-notice constants. EB: `withCompactorConfig` | MEMORY caps; PROMPT_ENGINEERING; SETTINGS (generated) | — | M–L |
-| i | N-P4c, N-P4e, N-P4f | `src/Tools/Concerns/TruncatesOutput.php`, `src/Tools/BuiltIn/{Read,Glob,WebFetch,WebSearch}.php`, `src/Commands/CommandSpec.php`, `src/Hooks/ScriptHook.php`, `src/Tools/McpToolBridge.php`, `src/Agents/{EngineExecutor,AgentPoolConfig}.php`, `src/Config/Settings/Definitions/{Tools,Subagents}.php` | EB: `turnTools` (caps + Task binding; no Bootstrap edit). TT: `DEFAULT_MAX_TURNS` constant only. Chat: tool-timeout constant. `CapturesProcessOutput`: idle-ceiling constant only. BS: `agentPoolConfig` | ENVIRONMENT `SUGARCRUSH_SEARCH_ENDPOINT`; AGENTS_AUTHORING `maxTurns` | — | M–L |
-| j | 5.7-1 (D8), N-P4g | `src/Permissions/{PermissionGate,PermissionMode}.php`, `src/Runtime.php`, `src/Chat.php`, `src/Renderer.php`, `src/Commands/KeyBindingRegistry.php`, `src/Tui/KeyboardHandler.php`, `src/Agents/AgentManager.php`, `src/Session/EnhancedSessionStore.php`, `src/Config/StatusLineCommand.php`, new `src/Context/Sections/PlanModeSection.php`, `src/PermissionModeToggledMsg.php`, `src/Config/Settings/Definitions/Ui.php` | RT: `systemPromptSections` (plan section). Chat: `permissionGate` toggle, UI constants, `mouseMode`. RN: status-bar badge, `DIFF_MAX_ROWS`. **R-KEYBIND** | PERMISSIONS "six modes", "Setting the mode"; README "Keys"; ENVIRONMENT (`_DISABLE_MOUSE` etc. settings-key cells) | — | L |
+| a | 2.11 remainder (the host's compactions flush too: run `Context\Compaction\MemoryFlush` before `/compact` and the automatic 85% tier, in `EngineBackend::summariseInChild()` or a backend method `Chat` calls before `summariseAsync`; once per cycle across turns through a `ContextLedger` cycle counter) | `src/Backend/EngineBackend.php`, `src/Context/Pruning/ContextLedger.php`, `src/Host/CompactionService.php` | EB: `summariseInChild`/`summaryReply` | MEMORY "Memory flush before compaction" (drop the "do not flush yet" sentence) | — | S–M |
+| b | 3.B-5 remainder (a `/context` line for the cache-break telemetry through a public `EngineBackend::cacheBreaks()` accessor; `Compactor::describe()` naming pruned targets in `Prune::receipt()`, `/sweep`'s receipt and `/context`'s pruned list) | `src/Backend/EngineBackend.php`, `src/Commands/ContextCommand.php`, `src/Context/ContextBreakdown.php`, `src/Tools/BuiltIn/Prune.php` | — | — | — | S |
+| g | 4.6-2 remainder (`TaskCreated`/`TaskCompleted`/`TeammateIdle` dispatched through a `HookDispatcher` over the launch's `HookRegistry`, handed to the catalog-built `Team` → `TeamManager` → `TaskList`; `TaskList::getConnection()` keyed by pid; `completeTask`/`failTask` revision compare-and-swap; the duplicate-id warning on a concurrent `add`; built-in teammates granted `Team`) | `src/Agents/{TaskList,TeamManager,Team,AgentManager}.php`, `src/Tools/BuiltIn/TeamTool.php`, `src/Cli/Bootstrap.php` | BS: `hooks`. **R-HOOKS** | HOOKS event table + dormancy paragraph (`DocFigureProseDriftTest::testHookEventsTableSurvivesTheLiveEnumAndDispatchSites`) | — | M |
+| h | N-P4b remainder (`Chat::applySettings()` arm rebuilding the compactor on a `compaction.*` save, then the keys apply live; `compaction.idleOfferSeconds`, `compaction.mode llm\|heuristic\|off`, the thrash breaker's `REFILL_LIMIT`), N-P4d remainder (`rules.standingMaxBytes`, `repoMap.enabled`/`repoMap.maxBytes`, `env.gitDiffAfterWrites`/`env.diffMaxBytes`, `skills.pathNudges`, `notices.transcriptLimit`, `memory.projectNoteMaxBytes` — each with its read site) | `src/Chat.php`, `src/Runtime.php`, `src/Context/{IdleCompactionPolicy,RepoMapBlock,EnvironmentBlock,ProjectMemoryWriter}.php`, `src/Skills/SkillPathNudge.php`, `src/Cli/Bootstrap.php`, `src/Config/Settings/Definitions/{ContextSettings,MemoryRuleSettings}.php` | RT: `systemPromptSections`, `repoMapSnapshot`, `environmentSnapshot`. BS: launch-notice constants | MEMORY caps; PROMPT_ENGINEERING; SETTINGS (generated) | — | M |
+| i | N-P4c remainder (the nested-instruction cap `TruncatesOutput::DEFAULT_MAX_INSTRUCTION_BYTES`; the spill capture bounds `ToolOutputSpill::CAPTURE_BYTES` / `MIN_CAP_BYTES`) | `src/Tools/Concerns/TruncatesOutput.php`, `src/Support/ToolOutputSpill.php`, `src/Config/Settings/Definitions/ToolSettings.php` | — | SETTINGS (generated) | — | S |
+| j | N-P4g remainder (`permissions.autoStrikeLimit`/`autoTotalLimit` in `PermissionSettings`; `terminalBackground`, `sessionRetentionDays`, `maxCostUsd` (rewrite README's "deliberately not persisted" `/budget` contract), `mcp.enabled`, `debug.skills\|commands\|rules\|stream`, each with its ENVIRONMENT "Settings key" cell; `sessions.autoTitle`, `expandToolOutput` and the prompt-suggestion history, which need readers) | `src/Config/Settings/Definitions/{PermissionSettings,InterfaceSettings}.php`, `src/Permissions/PermissionGate.php`, `src/Cli/Bootstrap.php`, `src/Host/TitleService.php`, skill/command/rule loaders | BS: `reportPrunedSessions`, `mcpClient`, `chat` | ENVIRONMENT settings-key cells; README `/budget` | — | M |
 
 #### W10 (order: a … j)
 
@@ -9379,7 +9362,7 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-### 5. Step index (47 steps)
+### 5. Step index (35 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -9388,12 +9371,10 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Foundations**
 
 **Context engine**
-- 2.6 M · 1.A-2, 2.5 · W9-a
-- 2.11 S–M · 5.1-2, 2.4-1, 2.12 · W9-a
+- 2.11 remainder (host-side flush) S · 2.11 · W9-a
 
 **Safety and self-management**
-- 3.B-5 S–M · 3.B-4 · W9-b
-- 3.C remainder (`todo.updated` event) S · 3.C, O-6c · W9-e
+- 3.B-5 remainder (`/context` cache-break line, `Compactor::describe()` in receipts) S · 3.B-5 · W9-b
 - 3.C remainder (compact menu strip) S · 3.C · W10-f
 - 3.I-2 remainder (`ToolBuildContext` ledger field, Chat-native path ledger carry, README clause) S · 3.I-2 · W10-a
 - 3.I-3 M · 3.I-1, DH-TOOLS · W10-a
@@ -9401,12 +9382,9 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Sub-agents**
 - 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
 - 4.5 M · RELAY · W10-c
-- 4.6-2 M–L · 4.6-1, 4.3-2, P-D1 · W9-g
-- 4.7-2 S–M · 1.C-4a · W9-a
-- 4.9 M · 4.1-1, 4.3-2 · W9-b
+- 4.6-2 remainder (TaskList hook trio, CAS, pid-keyed connection) M · 4.6-2, R-HOOKS · W9-g
 
 **Memory, codebase understanding, UX, integrations**
-- 5.7-1 M · 4.1-2, DEF-MODE, D8 · W9-j
 - 5.7-2 M · 5.7-1, 1.C-2 · W10-b
 - 5.9-1 M · — · W10-h
 - 5.9-2 M · 5.9-1, O-2g · W10-h
@@ -9417,23 +9395,16 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - 5.14l S–M · O-2g · W10-f
 
 **Settings**
-- N-P4b M · N-P3, 2.1, 2.9 · W9-h
-- N-P4c M · N-P3, 0.4, 2.8 · W9-i
-- N-P4d M · N-P3, 5.1, 1.A · W9-h
-- N-P4e S · 0.3 · W9-i
-- N-P4f S–M · N-P3, 4.1, 4.7-3 · W9-i
-- N-P4g M · N-P3, DEF-MODE · W9-j
+- N-P4b remainder (live apply, deferred keys) S–M · N-P4b · W9-h
+- N-P4c remainder (instruction cap, spill capture bounds) S · N-P4c · W9-i
+- N-P4d remainder (standing rules, repo map, env, nudges, notices, project notes) M · N-P4d · W9-h
+- N-P4g remainder (breaker limits, env-backed keys, keys without readers) M · N-P4g · W9-j
 - N-P5 S · N-P1, N-P2, N-P3 · W10-g
 
 **Sessions and agent view**
-- P-E1 S–M · P-D3, RELAY · W9-f
-- P-E2 S · 1.C-5, P-C2 · W9-f
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-6a L · O-5b · W9-c
-- O-6b M · O-5b, N-P2 · W9-d
-- O-6c L · O-5b, P-B2, 4.3-2, 3.C · W9-e
 
 **Deferred and live checks**
 - 15b-14-1 S · — · W10-i

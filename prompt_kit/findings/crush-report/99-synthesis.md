@@ -29,12 +29,8 @@
 
 # Part I — Key findings
 
-1. **Agent self-pruning stops at the parent.** The model can `Prune` its finished tool outputs and `Compress` a closed range into a summary (3.B-3, 3.B-4), but a sub-agent cannot prune its own run and pruned content cannot be recalled. Fix: 3.B-5 (Appendix D §13.2).
-2. **Sub-agents are partly closed off.**
-   - Preset `isolation` is inert (4.9).
-   - The model has no messaging tools (4.4).
-   - `TeamManager` is dormant (4.6-2).
-3. **Requested features still open:** the `sugar-crush-web` multi-session UI (O-6), the agent view's hard cancel, approval relay and board (P-E), and the remaining constants promoted to settings (N-P4b–g, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
+1. **Sub-agents are partly closed off.** The model has no messaging tools (4.4), and the team task hooks (`TaskCreated`, `TaskCompleted`, `TeammateIdle`) never fire (4.6-2 remainder).
+2. **Requested features still open:** the agent view's background attach (P-E3), the shared board (4.5), and the remaining constants promoted to settings (the N-P4b/c/d/g remainders, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
 
 ---
 
@@ -44,9 +40,7 @@ Severity is the user impact on the live default path.
 
 | # | Severity | Problem | Steps |
 |---|---|---|---|
-| 1 | High | Plan mode unusable interactively: no plan-mode prompt section, no plan exit or user question over the frame channel | 5.7-1, 5.7-2 |
-| 21 | Medium | Percentage thresholds fire too late on 1M windows: the absolute caps exist but are unset by default and have no settings keys | N-P4b |
-| 23 | Medium | Preset `isolation` inert | 4.9 |
+| 1 | High | Plan mode cannot end itself: no plan exit or user question over the frame channel | 5.7-2 |
 
 ---
 
@@ -84,17 +78,16 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 2.6 | **Post-compaction re-injection**: the 5 most recently edited/read files (≤5k tokens each) or Cline's "Required Files" (≤8 files/100k chars), invoked skill bodies, fresh git snapshot, todo list, plan | M | CC Cline |
 | 2.9 | **Absolute thresholds** on by default (DCP's 50k/100k "smart zone"; on a 1M window, 70% is far past the point where quality holds) with their settings keys and a thrash-breaker that cannot refuse every prompt under a cap; an absolute term in the step-level `ContextBudget` | S | DCP |
-| 2.11 | **Memory flush before compaction**: one silent tool-enabled turn that writes durable notes to memory, once per compaction cycle | S–M | Claw |
+| 2.11 | **Memory flush before the host's compactions**: the silent Memory-only step already runs before an in-turn compaction; `/compact` and the automatic 85% tier do not flush yet, and the once-per-cycle count does not span turns | S | Claw |
 
 ## 3.x — safety net and agent self-management
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 3.A | **Workspace checkpoints**: optionally capture after each write step (`EngineBackend::runTurn`) | M | CC OC Kilo Cline Zed dsh |
-| 3.B | **Agent self-pruning tools** (the user's headline request). `Prune` and `Compress` are live (3.B-3, 3.B-4), with `/compress`, `/decompress`, `/recompress` and `/compact --self`. What remains (3.B-5): sub-agents prune their own run on an ephemeral ledger keyed by call (the delegated prompt never prunable, the ledger surviving a `SuspendedDelegations` resume), an optional `Recall` tool to bring pruned content back, cache-health telemetry after compressions, and grouping pruned targets with the dormant `Compactor`. **Full design: Appendix D §13.2.** | S–M | DCP |
-| 3.C | Todo list for the web: a `todo.updated` event (with O-6c); a compact menu strip below ~101 columns | S | 8 reports |
+| 3.B | **Agent self-pruning tools** (the user's headline request). `Prune` and `Compress` are live (3.B-3, 3.B-4), with `/compress`, `/decompress`, `/recompress` and `/compact --self`. What remains (3.B-5): a `/context` line for the cache-break telemetry, and `Compactor::describe()` naming the pruned targets in `Prune`'s and `/sweep`'s receipts and `/context`'s pruned list. **Full design: Appendix D §13.2.** | S | DCP |
+| 3.C | Todo list: a compact menu strip below ~101 columns | S | 8 reports |
 | 3.I | Optional `ApplyPatch`, refusing a stale file through the session read ledger like `Edit` | M | OC Kilo Cline Zed Claw nano dsh |
 
 ## 4.x — sub-agents and orchestration
@@ -104,17 +97,15 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 | 4.3 | **Background Task** settle: a settled result is injected via steer when a turn is running (it waits for the turn's end today), and the announce stats line carries the resume id | S | Claw nano dsh Goose Kilo OC |
 | 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
 | 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
-| 4.6 | **Teams**: construct `TeamManager` (`AgentManager::setTeamManager`), `team_*` tools on `TaskList` (claim/complete/dependencies); make `GroupInputCmd`/`CancelAgentCmd`/`ResumeAgentCmd`/`StopAllAgentsCmd` real | L | CC Cline dsh |
-| 4.7 | Stop a child at 80–90% of its window with "wrap up or hand off" (Zed) | S–M | Zed |
+| 4.6 | **Teams**: the `Team` tool is live; `TaskCreated`/`TaskCompleted`/`TeammateIdle` dispatched from `TaskList`, a revision compare-and-swap on complete/fail, a pid-keyed SQLite connection, and `Team` granted to the built-in teammates remain | M | CC Cline dsh |
 | 4.8 | Sub-agents as stored child sessions: navigable in the tab strip, typable into, promotable to background (opencode Ctrl+B) | L | OC |
-| 4.9 | Worktree isolation for `isolation: worktree` presets and `/bg` (wire `WorktreeManager`, `withWorktreeRoot`, `BashEscapeDenyHook`) | M | CC Claw |
 
 ## 5.x — memory, codebase understanding, UX, integrations
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 5.4 | **Dream pass over skills**: the dream pass edits memory notes only; letting it edit skills waits on a user decision (an unattended `SKILL.md` writer persists injected text) | S–M | nano |
-| 5.7 | **Plan mode** made real: plan-mode prompt section, plans-dir write exception (the command guard exists), `PlanExit` + `ask_user` tools over the 1.C channel, `Alt+M` toggle (Shift+Tab is pane-prev), superseding "agent changed" reminder | M | OC Kilo Cline dsh |
+| 5.7 | **Plan mode**: `PlanExit` + `ask_user` tools over the 1.C channel | M | OC Kilo Cline dsh |
 | 5.9 | **ACP mode** (`sugarcrush acp`): stdio JSON-RPC so Zed, JetBrains and Neovim can host sugar-crush; reuse `McpMessage` framing | L | Zed |
 | 5.11 | LLM exec reviewer / smart-approve for `auto` mode (title backend, JSON verdict, untrusted transcript; the 3-strike breaker exists); security findings force Ask even in auto | M | Goose Claw dsh OH |
 | 5.14 | Small UX: `/handoff` (new session seeded with a summary); `/newrule`; watch-files `AI!` comments; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
@@ -238,14 +229,11 @@ Keep sugar-crush's richer `<env>` and repo map; only move the volatile parts out
 
 **Behaviour that should become settings.**
 
-The report lists **about 45 hard-coded constants**, each with file:line and a proposed key, type, default and tier. The main ones still hard-coded:
-- the compaction thresholds 70/85/95 and keep-10;
-- the 64 KiB and 1 MiB output caps;
-- the memory caps of 40 index entries, 4 KiB and 512 B;
-- the private WebSearch default host;
-- sub-agent max turns.
-
-It adds **about 30 future knobs** that the Part III roadmap will create: Bash timeout, doom-loop thresholds, steering mode, `contextPruning.*`, `autoCommit`, `lintCommands`, `testCommand`, sub-agent model and concurrency, and notifications.
+The report lists **about 45 hard-coded constants**, each with file:line and a proposed key, type, default and tier. The ones still hard-coded:
+- the standing-rule budget, the repo-map switch and size, the environment block's diff caps, skill path nudges, the launch-notice limit and the project-note cap (N-P4d);
+- the nested-instruction cap and the spill capture bounds (N-P4c);
+- the auto-mode breaker limits, the terminal background, session retention, the spend cap, the MCP switch and the `debug.*` flags (N-P4g);
+- live apply of the `compaction.*` keys, the idle-compaction offer and the summary mode (N-P4b).
 
 **Recommended design:**
 - **The `SettingsSchema` registry** (`SettingDefinition` rows, `src/Config/Settings/`) drives the editor form, and `LayeredSettings`' tier rosters are derived from it.
@@ -277,15 +265,13 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 
 ## V.3 `sugar-crush-web` (Appendix O §7)
 
-**What exists:** the composer package `sugarcraft/sugar-crush-web` (Vite + Vue 3 + TypeScript + Pinia + vue-router), a one-class PHP shim (`SugarCraft\CrushWeb\Assets::distPath`) and a **committed `dist/`** that the Node CI job (`web.yml`) checks against the source. `sugarcrush serve` serves it on the same port, so PHP users need no Node. The single-session UI is live:
+**What exists:** the composer package `sugarcraft/sugar-crush-web` (Vite + Vue 3 + TypeScript + Pinia + vue-router), a one-class PHP shim (`SugarCraft\CrushWeb\Assets::distPath`) and a **committed `dist/`** that the Node CI job (`web.yml`) checks against the source. `sugarcrush serve` serves it on the same port, so PHP users need no Node. The multi-session UI is live:
 - protocol types generated from `docs/protocol/sugarcrush.v1.schema.json` (`npm run gen:protocol`), a client that reconnects with backoff 0.5 s→15 s with jitter and resumes from its seq cursor;
 - a sessions sidebar, a virtualised transcript with markdown and reasoning folds, tool cards with diffs, permission cards, a composer with queue / steer / interrupt, and a status bar with context, spend, model and permission mode;
+- tabs and a tiled grid of live sessions (unfocused tiles narrated by the server), and a cross-session approvals drawer with browser notifications;
+- a settings form generated from the server's `SettingsSchema`, with provenance, locks, apply-mode badges and a diff preview before saving;
+- a sub-agent tree with an agent view, todo, background, workflow and memory panels, and a command palette;
 - vitest, plus Playwright end-to-end tests against a real `serve` on the offline `EchoProvider`, whose `::tool <Name> <json>` prompts drive real tool calls.
-
-**Still to build** (O-6, phase 6 of O §9):
-- tabs **and** a tiled multi-pane grid for watching several sessions at once, and a **cross-session approvals drawer** with browser notifications (O-6a);
-- a **settings form generated from the server's settings schema** — the same `SettingsSchema` as V.1, so the TUI and the web share one source of truth (O-6b);
-- a sub-agent tree, background tasks, workflows, a memory panel and a command palette (O-6c).
 
 ## V.4 Sessions, live agent lines, agent view and direct chat (Appendix P)
 
@@ -294,8 +280,8 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
   This is how opencode and Claude Code show running agents.
 
 **Agent view and direct chat.**
-- **What exists:** the read-only view. Clicking an agent line, Enter on a strip item or `/agent <id|name>` swaps the main transcript area for that agent's live transcript, tailed from the **per-agent JSONL transcript log written by the agent's own process**; Esc leaves it. The input box is that agent's composer, sending through the signed `AgentInbox` drained at the sub-agent's step boundaries; soft cancel, pause, stop-all, broadcast and "open as session" are live.
-- **Still to build:** hard cancel (SIGTERM via the turn child, P-E1); a draft per target; `Ctrl+X Enter` to send a result to the main chat and `Ctrl+Enter` to interrupt; the broadcast audience in the view's header and footer; a paused state on the live line; the view following a cold-resumed run's new id.
+- **What exists:** the read-only view. Clicking an agent line, Enter on a strip item or `/agent <id|name>` swaps the main transcript area for that agent's live transcript, tailed from the **per-agent JSONL transcript log written by the agent's own process**; Esc leaves it. The input box is that agent's composer, sending through the signed `AgentInbox` drained at the sub-agent's step boundaries; soft cancel, a hard cancel on a second press (SIGTERM, then SIGKILL), pause, stop-all, broadcast and "open as session" are live, and a sub-agent's permission question names the run that asked.
+- **Still to build:** a draft per target; `Ctrl+X Enter` to send a result to the main chat and `Ctrl+Enter` to interrupt; the broadcast audience in the view's header and footer; a paused state on the live line; the view following a cold-resumed run's new id.
 - **Finished agents**' child sessions (`kind='subagent'`, `parent_id`) become viewable and cold-resumable.
 - **Web compatibility:** every DTO serialises to the same event envelope the server mode uses (`agent.spawned`, `agent.activity`, `agent.status`, `agent.message`), so the web UI gets the same features.
 
@@ -304,13 +290,12 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 - **B — live lines (M).**
 - **C — read-only agent view (M).**
 - **D — direct chat and controls (M–L).**
-- **E — hard cancel, approval relay and background (L):** needs 1.C, 4.3 and server mode.
+- **E — background (M):** `Ctrl+X b` sends a running agent to the background (P-E3).
 
 ## V.5 How the new features fit the Part III roadmap
 
 These features are scheduled in Appendix R together with Part III:
-- The multi-session web (W9) builds on the protocol and the single-session UI.
-- The agent view's remaining controls (P-E) run W9–W10.
+- The agent view's remaining control (P-E3) runs in W10.
 
 ---
 
