@@ -1041,7 +1041,19 @@ final class CompactionService
      * — on the result and on the message — so a caller holding the summaries for
      * later can tell whether they still describe the history.
      *
+     * $claimMemoryFlush (roadmap 2.11) is how the host's compactions flush the
+     * memory too: when the summary goes to the engine
+     * ({@see \SugarCraft\Crush\Backend\EngineBackend::summariseAsync()}, directly
+     * or as a {@see \SugarCraft\Crush\Backend\CacheReusingSummaryBackend}'s
+     * engine half), the `promise` asks it — when the request is SENT, so a
+     * PreCompact refusal flushes nothing — whether this compaction cycle still
+     * owes the flush. The caller answers from the session's
+     * {@see \SugarCraft\Crush\Context\Pruning\ContextLedger} and records the
+     * claim there ({@see \SugarCraft\Crush\Context\Pruning\ContextLedger::withMemoryFlushed()});
+     * this service keeps no session state. A claim that throws is a no.
+     *
      * @param ?list<Message> $conversation
+     * @param ?\Closure(): bool $claimMemoryFlush
      * @return array{id:string,count:int,fingerprint:HistoryFingerprint,promise:\Closure(string=): PromiseInterface<HistoryCompactedMsg>}|null
      */
     public function buildSummarizationRequest(
@@ -1053,6 +1065,7 @@ final class CompactionService
         string $focus = '',
         bool $background = false,
         ?array $conversation = null,
+        ?\Closure $claimMemoryFlush = null,
     ): ?array {
         if ($backend === null) {
             return null;
@@ -1114,19 +1127,38 @@ final class CompactionService
         $fingerprint = HistoryFingerprint::of($exchanges, $priorSummaries);
         $trigger = $parkedSubmission === null && !$background ? self::TRIGGER_MANUAL : self::TRIGGER_AUTO;
 
-        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback, $journal, $fingerprint, $trigger, $background): PromiseInterface {
+        $promise = static function (string $hookGuidance = '') use ($backend, $prompt, $conversation, $exchanges, $priorSummaries, $compactionId, $keys, $parkedSubmission, $cancellation, $focus, $sourceChars, $stateFallback, $journal, $fingerprint, $trigger, $background, $claimMemoryFlush): PromiseInterface {
             $steer = self::renderFocusForSummary($focus, $hookGuidance);
             if ($steer !== '') {
                 $prompt[] = Message::user($steer);
             }
 
-            $reply = $backend instanceof \SugarCraft\Crush\Backend\SummarisesWithCache
-                ? $backend->summariseAsync(
+            // Roadmap 2.11: only an engine can flush (it holds the Memory
+            // tool), and only one that is asked whether the cycle owes it.
+            $engine = $backend instanceof \SugarCraft\Crush\Backend\CacheReusingSummaryBackend ? $backend->engine() : $backend;
+            $flushMemory = false;
+            if ($engine instanceof \SugarCraft\Crush\Backend\EngineBackend && $claimMemoryFlush !== null) {
+                try {
+                    $flushMemory = $claimMemoryFlush() === true;
+                } catch (\Throwable) {
+                    $flushMemory = false;
+                }
+            }
+
+            $reply = match (true) {
+                $flushMemory && $engine instanceof \SugarCraft\Crush\Backend\EngineBackend => $engine->summariseAsync(
                     $conversation,
                     self::cacheReusingSummaryInstruction($exchanges, $priorSummaries, $steer),
                     $cancellation,
-                )
-                : $backend->completeAsync($prompt, null, $cancellation);
+                    flushMemory: true,
+                ),
+                $backend instanceof \SugarCraft\Crush\Backend\SummarisesWithCache => $backend->summariseAsync(
+                    $conversation,
+                    self::cacheReusingSummaryInstruction($exchanges, $priorSummaries, $steer),
+                    $cancellation,
+                ),
+                default => $backend->completeAsync($prompt, null, $cancellation),
+            };
 
             return $reply->then(
                 // The usage rides along so update() can bill it. A compaction

@@ -13721,6 +13721,26 @@ final class Chat implements Model
      */
     private function buildSummarizationRequest(array $probeHistory, ?string $parkedSubmission, ?CancellationToken $cancellation = null, string $focus = '', bool $background = false, ?array $conversation = null): ?array
     {
+        // Roadmap 2.11: the host's compactions flush the memory too, once per
+        // compaction cycle — claimed on the session's context ledger when the
+        // summary is sent (inside the Cmd, past any PreCompact refusal), the
+        // same count the in-turn flush reads, so neither route flushes twice.
+        $context = \SugarCraft\Crush\Host\Commands\CommandContext::new(
+            history: $this->history,
+            sessionId: $this->currentSessionId,
+            transcripts: $this->transcripts(),
+            turnRunner: $this->turnRunner(),
+        );
+        $claimMemoryFlush = static function () use ($context): bool {
+            $ledger = $context->contextLedger();
+            if (!$ledger->memoryFlushDue()) {
+                return false;
+            }
+            $context->saveContextLedger($ledger->withMemoryFlushed());
+
+            return true;
+        };
+
         $request = $this->compactionService()->buildSummarizationRequest(
             $this->summaryBackend,
             $this->compactor,
@@ -13730,6 +13750,7 @@ final class Chat implements Model
             $focus,
             $background,
             $conversation,
+            $claimMemoryFlush,
         );
         if ($request === null) {
             return null;

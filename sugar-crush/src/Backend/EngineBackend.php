@@ -1969,20 +1969,21 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                             // only the Memory tool may run, in which the model
                             // saves what should outlive the session before the
                             // summary drops the rows it would read it from. Once
-                            // per compaction cycle: keyed by the block this
-                            // summary would replace, so a summary that fails and
-                            // is retried a step later does not flush again. On
-                            // its own copy of the chain (a fresh loop guard, so
-                            // the turn's repeat counts never see it); a failed
-                            // flush costs the summary nothing.
+                            // per compaction cycle, counted on the session's
+                            // ledger (ContextLedger::memoryFlushDue()), so a
+                            // summary that fails and is retried a step — or a
+                            // turn, or a `/compact` — later does not flush
+                            // again. On its own copy of the chain (a fresh loop
+                            // guard, so the turn's repeat counts never see it);
+                            // a failed flush costs the summary nothing.
                             // Only when the summary will be asked for: a turn
                             // with nothing to condense is never sent a flush.
-                            $flushCycle = (string) ($contextLedger->activeBlock()?->id ?? 0);
-                            if (($memoryFlushedFor ?? null) !== $flushCycle
+                            if ($contextLedger->memoryFlushDue()
                                 && \SugarCraft\Crush\Context\Compaction\MemoryFlush::available($app->tools)
                                 && \SugarCraft\Crush\Context\Compaction\StepSummarizer::wouldSummarise($app, $contextLedger, $sentRows ?? count($app->messages))
                             ) {
-                                $memoryFlushedFor = $flushCycle;
+                                $contextLedger = $contextLedger->withMemoryFlushed();
+                                $app = $app->withContextLedger($contextLedger);
                                 try {
                                     $flushHooks = $this->resolveHookManager(ToolCallLoopGuard::new());
                                     $flushHooks->register(\SugarCraft\Crush\Context\Compaction\MemoryFlush::new());
@@ -4118,6 +4119,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * spend cap is the caller's to check before asking, as it was for the
      * tool-less summary backend this replaces.
      *
+     * $flushMemory (roadmap 2.11) puts the pre-compaction memory flush
+     * ({@see \SugarCraft\Crush\Context\Compaction\MemoryFlush}) in front of the
+     * summary, in the same child: one silent step over the same conversation
+     * in which only the `Memory` tool runs and every permission question is
+     * answered no — so still no prompt. Its usage is added to the reply's.
+     * Whether this compaction cycle has flushed already is the caller's to
+     * know ({@see \SugarCraft\Crush\Context\Pruning\ContextLedger::memoryFlushDue()}):
+     * the host keeps the session's ledger, this copy of the engine does not.
+     * An optional parameter beyond {@see SummarisesWithCache}'s, so no
+     * implementation of the interface has to grow it.
+     *
      * The session's prompt memo is primed, never OBSERVED: observing would
      * record this request as a turn of its own and make the next real turn
      * look like a session switch, which forgets the very layers whose bytes
@@ -4127,7 +4139,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @return PromiseInterface<Message>
      */
-    public function summariseAsync(array $history, string $instruction, ?CancellationToken $cancellation = null): PromiseInterface
+    public function summariseAsync(array $history, string $instruction, ?CancellationToken $cancellation = null, bool $flushMemory = false): PromiseInterface
     {
         $deferred = new Deferred();
         self::sweepUnreapedChildren();
@@ -4159,7 +4171,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 fclose($end);
             }
             try {
-                $deferred->resolve($this->summaryReply($history, $instruction));
+                $deferred->resolve($this->summaryReply($history, $instruction, flushMemory: $flushMemory));
             } catch (\Throwable $e) {
                 $deferred->reject($e);
             }
@@ -4176,7 +4188,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             ProcessContainment::closeOnExec($childSocket);
             stream_set_timeout($childSocket, self::CHILD_WRITE_TIMEOUT_SECONDS);
             \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::enterForkedChild($noticeSink);
-            $this->summariseInChild($childSocket, $history, $instruction);
+            $this->summariseInChild($childSocket, $history, $instruction, $flushMemory);
         }
 
         self::$unreapedChildren[$pid] = true;
@@ -4301,11 +4313,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * writing an empty `reasoning` frame for every streamed chunk and every
      * transport heartbeat (the parent's idle ceiling measures silence), then
      * the result frame in {@see settleFromResultFrame()}'s shape, then exit.
+     * A memory flush ($flushMemory, roadmap 2.11) runs here first, so its
+     * Memory writes land from the child as a turn's would, and its streamed
+     * chunks keep the same idle ceiling alive.
      *
      * @param resource      $childSocket
      * @param list<Message> $history
      */
-    private function summariseInChild($childSocket, array $history, string $instruction): never
+    private function summariseInChild($childSocket, array $history, string $instruction, bool $flushMemory = false): never
     {
         $beat = static function () use ($childSocket): void {
             self::writeFrame($childSocket, ['kind' => 'reasoning', 'text' => '']);
@@ -4313,7 +4328,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         try {
             $reply = $this->summaryReply($history, $instruction, static function (string $delta) use ($beat): void {
                 $beat();
-            }, $beat);
+            }, $beat, $flushMemory);
             $payload = [
                 'kind' => 'result',
                 'ok' => true,
@@ -4338,9 +4353,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * as a turn binds them, so the schemas are byte-for-byte a turn's), the
      * history converted by {@see toTypedMessages()}, $instruction last.
      *
+     * With $flushMemory (roadmap 2.11, the host's compactions) the
+     * pre-compaction memory flush runs first over the same App — the
+     * conversation's own model, before any summary model is applied, so its
+     * prefix is the cached one — exactly as the in-turn flush does before a
+     * step summary: its own copy of the hook chain carrying
+     * {@see \SugarCraft\Crush\Context\Compaction\MemoryFlush}, every ask
+     * refused, nothing of it in the summary request. Its usage is summed into
+     * the reply's, so the caller bills it with the summary; a failed flush
+     * costs the summary nothing.
+     *
      * @param list<Message> $history
      */
-    private function summaryReply(array $history, string $instruction, ?callable $onProgress = null, ?callable $onHeartbeat = null): Message
+    private function summaryReply(array $history, string $instruction, ?callable $onProgress = null, ?callable $onHeartbeat = null, bool $flushMemory = false): Message
     {
         $userConfig = self::userConfig();
         // Persisted turn context: the history already carries the rows the
@@ -4356,6 +4381,32 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $app = $this->sessionApp()
             ->withTools($this->turnTools(null, null, null))
             ->withMessages($this->toTypedMessages($history));
+
+        $flushUsages = [];
+        if ($flushMemory && \SugarCraft\Crush\Context\Compaction\MemoryFlush::available($app->tools)) {
+            try {
+                $flushHooks = $this->resolveHookManager(ToolCallLoopGuard::new());
+                $flushHooks->register(\SugarCraft\Crush\Context\Compaction\MemoryFlush::new());
+                \SugarCraft\Crush\Context\Compaction\MemoryFlush::run(
+                    $this->newRuntime(
+                        $flushHooks,
+                        self::parallelToolCallsEnabled($userConfig),
+                        self::parallelToolDeadlineSeconds($userConfig),
+                        self::maxOutputTokens($userConfig),
+                    )->withTurnContextPersisted(),
+                    $app,
+                    function (AssistantMessage $assistant) use (&$flushUsages): void {
+                        $flushUsages[] = $assistant->usage();
+                        $this->observeCacheHealth($assistant->usage());
+                    },
+                    $onProgress,
+                    $onHeartbeat,
+                );
+            } catch (\Throwable) {
+                // Best effort: the compaction goes ahead.
+            }
+        }
+
         if ($this->summaryModel !== null) {
             $app = $app->withModel($this->summaryModel);
         }
@@ -4378,7 +4429,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         }
 
         return Message::assistant($assistant->content())
-            ->withUsage($usage)
+            ->withUsage($flushUsages === [] ? $usage : Usage::sum([...$flushUsages, $usage]))
             ->withLengthStopped($assistant->lengthStopped());
     }
 

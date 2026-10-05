@@ -273,7 +273,9 @@ before the summary drops it (`Context\Compaction\MemoryFlush`). It runs once
 per compaction cycle, only when a summary is really about to be written, never
 past the spend cap or a `PreCompact` refusal, and nothing about it reaches the
 transcript but the notes it saved. The host-side compactions (`/compact`, the
-automatic tier) and the overflow retry below do not flush. See
+automatic tier) flush the same way before their summary, on the same
+once-per-cycle count kept on the session's context ledger; the overflow retry
+below does not flush. See
 [`MEMORY.md`](MEMORY.md#memory-flush-before-compaction).
 
 ## Recovery

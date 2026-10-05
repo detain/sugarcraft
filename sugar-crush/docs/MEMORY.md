@@ -588,12 +588,18 @@ it.
   wrote (`/memory list` shows them). Its cost is billed like any step.
 - **Once per compaction cycle.** It runs only when the summary is about to be
   attempted (not past the spend cap, not when a `PreCompact` hook refuses) and
-  not again until that summary has landed, so a summary that fails and is
-  retried on a later step does not flush twice. A failed flush costs the
-  compaction nothing.
+  not again until a compaction has landed, so a summary that fails and is
+  retried on a later step, a later turn or by `/compact` does not flush twice.
+  The cycle is counted on the session's context ledger (`ContextLedger`: a
+  step summary or a host compaction's boundary row starts the next one), so
+  the count survives across turns and a resumed session. A failed flush costs
+  the compaction nothing.
 - **Where it runs.** On every engine turn that carries the `Memory` tool, a
-  delegated sub-agent's included. `/compact` and the automatic 85% tier, which
-  summarise on the host rather than inside a turn, do not flush yet.
+  delegated sub-agent's included, and before the host's own compactions —
+  `/compact`, the automatic 85% tier and its ahead-of-need request at 70% —
+  when their summary goes to the conversation's engine
+  (`EngineBackend::summariseAsync()`): the flush runs in the same forked child
+  just before the summary, its cost added to the summary's.
 
 ## Dream pass
 

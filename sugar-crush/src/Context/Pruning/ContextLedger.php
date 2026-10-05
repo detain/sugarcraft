@@ -56,6 +56,16 @@ use SugarCraft\Crush\Messages\UserMessage;
  * NUDGES (roadmap 3.B-4, {@see NudgePolicy}) are anchored on a row's key and
  * re-rendered at that row on every later request, so a reminder never moves
  * along the tail and costs the prompt cache one row, once.
+ *
+ * THE COMPACTION CYCLE (roadmap 2.11). {@see $compactionCycle} counts the
+ * compactions that have landed in the session — a step summary the engine
+ * wrote ({@see withBlock()}) and a host compaction (`/compact`, the 85% tier),
+ * seen through the boundary row it leaves in the history
+ * ({@see syncAgainstHistory()}). {@see $memoryFlushedCycle} is the cycle the
+ * last pre-compaction memory flush ran in
+ * ({@see \SugarCraft\Crush\Context\Compaction\MemoryFlush}), so the flush runs
+ * at most once per cycle whichever route compacts, and across turns: a summary
+ * that fails and is retried a turn later finds the cycle already flushed.
  */
 final readonly class ContextLedger
 {
@@ -93,6 +103,15 @@ final readonly class ContextLedger
      * @param array<string, string>         $nudges             row key => the
      *                                                          {@see NudgePolicy}
      *                                                          kind anchored there
+     * @param int                           $compactionCycle    compactions landed
+     *                                                          so far; only grows
+     * @param int                           $compactionBoundaries host compaction
+     *                                                          boundary rows the
+     *                                                          history showed when
+     *                                                          last synced
+     * @param int|null                      $memoryFlushedCycle the cycle the last
+     *                                                          memory flush ran in,
+     *                                                          or null for none
      */
     private function __construct(
         public array $prunes,
@@ -104,6 +123,9 @@ final readonly class ContextLedger
         public ?PruningMode $mode = null,
         public PruningMode $defaultMode = PruningMode::Off,
         public array $nudges = [],
+        public int $compactionCycle = 0,
+        public int $compactionBoundaries = 0,
+        public ?int $memoryFlushedCycle = null,
     ) {
     }
 
@@ -232,7 +254,13 @@ final readonly class ContextLedger
         }
         $blocks[$block->id] = $block->withConsumedBlockIds([...$block->consumedBlockIds, ...$consumed]);
 
-        return $this->mutate(blocks: $blocks, nextBlockId: max($this->nextBlockId, $block->id + 1));
+        // A step summary is a compaction landing (roadmap 2.11): the next one
+        // is a new cycle, and may flush the memory again.
+        return $this->mutate(
+            blocks: $blocks,
+            nextBlockId: max($this->nextBlockId, $block->id + 1),
+            compactionCycle: $this->compactionCycle + 1,
+        );
     }
 
     /**
@@ -365,6 +393,44 @@ final readonly class ContextLedger
     public function effectiveMode(): PruningMode
     {
         return $this->mode ?? $this->defaultMode;
+    }
+
+    /**
+     * Whether the pre-compaction memory flush has yet to run in the current
+     * compaction cycle (roadmap 2.11) — see {@see $compactionCycle}.
+     */
+    public function memoryFlushDue(): bool
+    {
+        return $this->memoryFlushedCycle !== $this->compactionCycle;
+    }
+
+    /**
+     * This ledger with the memory flush recorded for the current cycle, so no
+     * route flushes again until the next compaction lands. Recorded when the
+     * flush is DECIDED, before it runs: a flush that fails costs the
+     * compaction nothing and is not retried in the same cycle.
+     */
+    public function withMemoryFlushed(): self
+    {
+        return $this->memoryFlushDue() ? $this->mutate(memoryFlushedCycle: $this->compactionCycle) : $this;
+    }
+
+    /**
+     * This ledger having seen $boundaries host compaction boundary rows in
+     * the history: more than last time is that many compactions landed, each
+     * a new cycle. Fewer (a `/rewind` past one) moves only the mark, never
+     * the cycle back — so the next compaction is a new cycle too.
+     */
+    private function withCompactionBoundaries(int $boundaries): self
+    {
+        if ($boundaries === $this->compactionBoundaries) {
+            return $this;
+        }
+
+        return $this->mutate(
+            compactionBoundaries: $boundaries,
+            compactionCycle: $this->compactionCycle + max(0, $boundaries - $this->compactionBoundaries),
+        );
     }
 
     /** The step summary the projection applies, or null (range blocks: {@see activeRangeBlocks()}). */
@@ -569,7 +635,10 @@ final readonly class ContextLedger
     /**
      * {@see syncAgainst()} over a session's stored rows — what the host
      * holds between turns: every call id a row makes or answers, and every
-     * stored `<turn-context>` row.
+     * stored `<turn-context>` row. It also counts the host compactions'
+     * boundary rows ({@see \SugarCraft\Crush\Host\CompactionService::isCompactionBoundary()}),
+     * which is how a `/compact` or 85% compaction that landed moves the
+     * compaction cycle ({@see withCompactionBoundaries()}).
      *
      * @param iterable<mixed> $history root {@see \SugarCraft\Crush\Message} rows; anything else is skipped
      */
@@ -577,9 +646,13 @@ final readonly class ContextLedger
     {
         $callIds = [];
         $contextRows = [];
+        $boundaries = 0;
         foreach ($history as $row) {
             if (!$row instanceof \SugarCraft\Crush\Message) {
                 continue;
+            }
+            if (\SugarCraft\Crush\Host\CompactionService::isCompactionBoundary($row)) {
+                $boundaries++;
             }
             foreach ($row->toolCalls as $call) {
                 if ($call instanceof \SugarCraft\Crush\ToolCall && $call->id !== null && $call->id !== '') {
@@ -596,7 +669,7 @@ final readonly class ContextLedger
             }
         }
 
-        return $this->syncAgainst($callIds, $contextRows);
+        return $this->syncAgainst($callIds, $contextRows)->withCompactionBoundaries($boundaries);
     }
 
     /**
@@ -639,7 +712,7 @@ final readonly class ContextLedger
         return isset($this->droppedContextRows[self::contextRowKey($content)]);
     }
 
-    /** @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>,nextBlockId:int,refs:array<string,int>,nextRef:int,mode:?string,nudges?:array<string,string>} */
+    /** @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>,nextBlockId:int,refs:array<string,int>,nextRef:int,mode:?string,nudges?:array<string,string>,compactionCycle?:int,compactionBoundaries?:int,memoryFlushedCycle?:int} */
     public function toArray(): array
     {
         return [
@@ -653,6 +726,11 @@ final readonly class ContextLedger
             // Written only when there are any, so a ledger with none keeps
             // the shape it was stored in before 3.B-4.
             ...($this->nudges === [] ? [] : ['nudges' => $this->nudges]),
+            // Roadmap 2.11, the same rule: only once a compaction landed or a
+            // flush ran, so an older ledger keeps its stored shape.
+            ...($this->compactionCycle === 0 ? [] : ['compactionCycle' => $this->compactionCycle]),
+            ...($this->compactionBoundaries === 0 ? [] : ['compactionBoundaries' => $this->compactionBoundaries]),
+            ...($this->memoryFlushedCycle === null ? [] : ['memoryFlushedCycle' => $this->memoryFlushedCycle]),
         ];
     }
 
@@ -723,7 +801,15 @@ final readonly class ContextLedger
             }
         }
 
-        return new self($ledger->prunes, $ledger->droppedContextRows, $blocks, $next, $refs, $nextRef, $mode, PruningMode::Off, $nudges);
+        // Roadmap 2.11: an unreadable count starts the cycle again at zero,
+        // which costs at most one extra flush.
+        $cycle = is_int($raw['compactionCycle'] ?? null) && $raw['compactionCycle'] >= 0 ? $raw['compactionCycle'] : 0;
+        $boundaries = is_int($raw['compactionBoundaries'] ?? null) && $raw['compactionBoundaries'] >= 0 ? $raw['compactionBoundaries'] : 0;
+        $flushed = is_int($raw['memoryFlushedCycle'] ?? null) && $raw['memoryFlushedCycle'] >= 0 && $raw['memoryFlushedCycle'] <= $cycle
+            ? $raw['memoryFlushedCycle']
+            : null;
+
+        return new self($ledger->prunes, $ledger->droppedContextRows, $blocks, $next, $refs, $nextRef, $mode, PruningMode::Off, $nudges, $cycle, $boundaries, $flushed);
     }
 
     /** A copy with the named fields replaced; every other field carried. */
