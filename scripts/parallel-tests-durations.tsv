@@ -191,8 +191,10 @@ sugar-crush/tests/Chat/SessionCommandTest.php	1.819	14
 sugar-crush/tests/MCP/McpMessageResultTypeTest.php	1.807	34
 sugar-crush/tests/PaletteClickTest.php	1.800	20
 sugar-crush/tests/Agents/Live/SoftCancelPauseTest.php	1.800	4
+sugar-crush/tests/Acp/AcpCancelTest.php	1.800	4
 sugar-crush/tests/Config/DocumentParagraphsTest.php	1.773	18
 sugar-crush/tests/Config/DocFigureProseDriftTest.php	1.767	89
+sugar-crush/tests/Acp/AcpSessionLoadTest.php	1.750	6
 sugar-crush/tests/Support/ContainedPathInventoryTest.php	1.733	49
 sugar-crush/tests/Support/HomeDirectoryPathReaderInventoryTest.php	1.721	7
 sugar-crush/tests/Cli/SessionLaunchFlagsTest.php	1.702	25

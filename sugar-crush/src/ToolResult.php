@@ -273,6 +273,99 @@ final class ToolResult
     }
 
     /**
+     * This result's diff as the before/after text of each changed region —
+     * {@see diffTextsOf()} over {@see $diff}.
+     *
+     * @return list<array{path: string, oldText: ?string, newText: string}>
+     */
+    public function diffTexts(): array
+    {
+        return self::diffTextsOf((string) $this->diff);
+    }
+
+    /**
+     * A unified diff as the before/after text of each hunk: what an editor
+     * that renders a change from its two sides (the Agent Client Protocol's
+     * `{type: "diff", path, oldText, newText}`, roadmap 5.9-2) needs, where
+     * {@see $diff} is the patch a terminal renders. Context and removed lines
+     * make `oldText`, context and added lines `newText`; a hunk that starts
+     * at `-0,0` created the file, so its `oldText` is null. The path is the
+     * `+++ b/` header's, without the `a/`/`b/` prefix.
+     *
+     * DRIVEN BY THE HUNK HEADERS' COUNTS, not by line prefixes: a removed line
+     * that reads `-- a/x` is `--- a/x` in the patch, and only the count says
+     * it is still inside the hunk. A diff that is empty or does not parse
+     * yields nothing.
+     *
+     * @return list<array{path: string, oldText: ?string, newText: string}>
+     */
+    public static function diffTextsOf(string $diff): array
+    {
+        $hunks = [];
+        $path = null;
+        $lines = explode("\n", $diff);
+        $count = \count($lines);
+        for ($i = 0; $i < $count; $i++) {
+            $line = $lines[$i];
+            if (str_starts_with($line, '--- ')) {
+                $path ??= self::diffPath(substr($line, 4));
+                continue;
+            }
+            if (str_starts_with($line, '+++ ')) {
+                $path = self::diffPath(substr($line, 4));
+                continue;
+            }
+            if ($path === null || preg_match('/^@@ -(\d+)(?:,(\d+))? \+\d+(?:,(\d+))? @@/', $line, $m) !== 1) {
+                continue;
+            }
+
+            $oldLeft = ($m[2] ?? '') === '' ? 1 : (int) $m[2];
+            $newLeft = ($m[3] ?? '') === '' ? 1 : (int) $m[3];
+            $created = $m[1] === '0' && $oldLeft === 0;
+            $old = [];
+            $new = [];
+            while (($oldLeft > 0 || $newLeft > 0) && $i + 1 < $count) {
+                $body = $lines[++$i];
+                $mark = $body === '' ? ' ' : $body[0];
+                $text = substr($body, 1);
+                if ($mark === '\\') {
+                    continue;
+                }
+                if ($mark === '-' && $oldLeft > 0) {
+                    $old[] = $text;
+                    $oldLeft--;
+                } elseif ($mark === '+' && $newLeft > 0) {
+                    $new[] = $text;
+                    $newLeft--;
+                } elseif ($mark === ' ') {
+                    $old[] = $text;
+                    $new[] = $text;
+                    $oldLeft--;
+                    $newLeft--;
+                } else {
+                    break;
+                }
+            }
+
+            $hunks[] = [
+                'path' => $path,
+                'oldText' => $created ? null : implode("\n", $old),
+                'newText' => implode("\n", $new),
+            ];
+        }
+
+        return $hunks;
+    }
+
+    /** A `---`/`+++` header's path, without its `a/`/`b/` prefix or a trailing timestamp. */
+    private static function diffPath(string $header): string
+    {
+        $path = explode("\t", $header, 2)[0];
+
+        return preg_match('#^[ab]/#', $path) === 1 ? substr($path, 2) : $path;
+    }
+
+    /**
      * Adapt this Chat-side result to the canonical engine-side
      * {@see EngineToolResult} the {@see Tools\Tool} interface, {@see Runtime}
      * and {@see \SugarCraft\Crush\Events\ToolFinished} speak (crush_feat.md

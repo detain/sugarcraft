@@ -7,10 +7,12 @@ namespace SugarCraft\Crush\Acp;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use SugarCraft\Crush\Host\SessionEvent;
+use SugarCraft\Crush\Host\SessionHost;
 use SugarCraft\Crush\Host\SessionHub;
 use SugarCraft\Crush\Host\TurnTicket;
 use SugarCraft\Crush\McpMessage;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Protocol\ErrorCode;
 use SugarCraft\Crush\Protocol\RpcError;
 use SugarCraft\Crush\Role;
@@ -27,7 +29,10 @@ use SugarCraft\Crush\Role;
  *
  * THE METHODS (client → agent): `initialize`, `authenticate` (nothing to
  * authenticate — the editor started this process as its own user),
- * `session/new`, `session/prompt` and the `session/cancel` notification. The
+ * `session/new`, `session/load` (the stored transcript replayed as updates),
+ * `session/prompt`, `session/set_mode` (the session's permission mode) and
+ * the `session/cancel` notification, which cancels the turn at once and
+ * answers its prompt `cancelled` (roadmap 5.9-2). The
  * agent → client traffic is `session/update` (message and thought chunks,
  * tool calls and their updates, the todo plan) and the
  * `session/request_permission` request ({@see AcpPermissionBridge}). The
@@ -63,6 +68,8 @@ final class AcpServer
     public const METHOD_INITIALIZE = 'initialize';
     public const METHOD_AUTHENTICATE = 'authenticate';
     public const METHOD_SESSION_NEW = 'session/new';
+    public const METHOD_SESSION_LOAD = 'session/load';
+    public const METHOD_SESSION_SET_MODE = 'session/set_mode';
     public const METHOD_SESSION_PROMPT = 'session/prompt';
     public const METHOD_SESSION_CANCEL = 'session/cancel';
     public const METHOD_SESSION_UPDATE = 'session/update';
@@ -224,6 +231,8 @@ final class AcpServer
             self::METHOD_INITIALIZE => $this->initialize($params),
             self::METHOD_AUTHENTICATE => new \stdClass(),
             self::METHOD_SESSION_NEW => $this->newSession($params),
+            self::METHOD_SESSION_LOAD => $this->loadSession($params),
+            self::METHOD_SESSION_SET_MODE => $this->setMode($params),
             self::METHOD_SESSION_PROMPT => $this->prompt($params, $id),
             default => throw RpcError::of(ErrorCode::MethodNotFound, \sprintf('method not found: %s', $method)),
         };
@@ -236,9 +245,25 @@ final class AcpServer
             return;
         }
         $session = $this->sessions[(string) ($params['sessionId'] ?? '')] ?? null;
-        // The MVP's cancel (roadmap 5.9-1): the turn stops at its next step
-        // boundary and the prompt is answered when it does.
-        $session?->host->cancelSoft();
+        if ($session === null) {
+            return;
+        }
+
+        // A HARD cancel (roadmap 5.9-2): ACP asks the agent to stop the model
+        // and its tools as soon as possible, so the turn's child is stopped
+        // now and its running rows are healed as interrupted, not left to
+        // finish the step. Its open questions are settled by the cancel; the
+        // editor answers ours `cancelled`, which then finds nothing to settle.
+        $cancelled = $session->host->cancel();
+        foreach ($this->asking as $id => $ask) {
+            if ($ask['sessionId'] === $session->sessionId()) {
+                unset($this->asking[$id]);
+            }
+        }
+        if ($cancelled && $session->isPrompting()) {
+            $session->completed(SessionEvent::STOP_CANCELLED, null);
+        }
+        $this->settle($session);
     }
 
     /**
@@ -252,7 +277,7 @@ final class AcpServer
         return [
             'protocolVersion' => self::PROTOCOL_VERSION,
             'agentCapabilities' => [
-                'loadSession' => false,
+                'loadSession' => true,
                 'promptCapabilities' => ['image' => false, 'audio' => false, 'embeddedContext' => true],
                 'mcpCapabilities' => ['http' => false, 'sse' => false],
             ],
@@ -270,7 +295,93 @@ final class AcpServer
         $hub = $this->hubFor(self::cwd($params));
         $session = $this->adopt($hub->create());
 
-        return ['sessionId' => $session->sessionId()];
+        return ['sessionId' => $session->sessionId(), 'modes' => self::modes($session->host)];
+    }
+
+    /**
+     * `session/load`: open a stored session — taking its lock, as a TUI
+     * resuming it would — and replay its transcript as the updates a live
+     * turn would have sent (what the user typed, what the agent said and
+     * thought, each tool call with its outcome), then answer.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function loadSession(array $params): array
+    {
+        $hub = $this->hubFor(self::cwd($params));
+        $id = $params['sessionId'] ?? null;
+        if (!\is_string($id) || $id === '') {
+            throw RpcError::invalidParams('sessionId must be a non-empty string');
+        }
+
+        $session = $this->sessions[$id] ?? null;
+        if ($session === null) {
+            $store = $hub->workspace()->sessionStore;
+            if ($store !== null && $store->getSession($id) === null) {
+                throw RpcError::notFound(\sprintf('no session %s', $id), 'session_not_found');
+            }
+            try {
+                $session = $this->adopt($hub->open($id));
+            } catch (\RuntimeException $e) {
+                throw RpcError::of(ErrorCode::Conflict, $e->getMessage(), 'session_locked');
+            }
+        }
+
+        foreach ($session->host->history() as $row) {
+            $this->replay($session, $row);
+        }
+
+        return ['modes' => self::modes($session->host)];
+    }
+
+    /**
+     * `session/set_mode`: run the session's next turns in another permission
+     * mode — the modes `session/new` advertised, which are the TUI's.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function setMode(array $params): \stdClass
+    {
+        $session = $this->session($params);
+        $mode = PermissionMode::tryFrom((string) ($params['modeId'] ?? ''));
+        if ($mode === null) {
+            throw RpcError::invalidParams(\sprintf('unknown mode %s', (string) ($params['modeId'] ?? '')));
+        }
+        $session->host->setPermissionMode($mode);
+
+        return new \stdClass();
+    }
+
+    /**
+     * The session's permission modes as ACP session modes: the one it runs
+     * in, and every mode it may be switched to.
+     *
+     * @return array{currentModeId: string, availableModes: list<array{id: string, name: string, description: string}>}
+     */
+    private static function modes(SessionHost $host): array
+    {
+        return [
+            'currentModeId' => ($host->permissionMode() ?? PermissionMode::Default)->value,
+            'availableModes' => array_map(static fn (PermissionMode $mode): array => [
+                'id' => $mode->value,
+                'name' => self::modeName($mode),
+                'description' => $mode->description(),
+            ], PermissionMode::cases()),
+        ];
+    }
+
+    /** A mode's name in an editor's mode picker. Default-less, as {@see PermissionMode::description()} is. */
+    private static function modeName(PermissionMode $mode): string
+    {
+        return match ($mode) {
+            PermissionMode::Default => 'Default',
+            PermissionMode::AcceptEdits => 'Accept edits',
+            PermissionMode::Plan => 'Plan',
+            PermissionMode::Auto => 'Auto',
+            PermissionMode::DontAsk => "Don't ask",
+            PermissionMode::BypassPermissions => 'Bypass permissions',
+        };
     }
 
     /**
@@ -451,7 +562,7 @@ final class AcpServer
     // ── plumbing ───────────────────────────────────────────────────────
 
     /** Track $host's session: listen to it, and remember it by id. */
-    private function adopt(\SugarCraft\Crush\Host\SessionHost $host): AcpSession
+    private function adopt(SessionHost $host): AcpSession
     {
         $session = AcpSession::new($host);
         $session->listening($host->onEvent(fn (SessionEvent $event) => $this->heard($session, $event)));

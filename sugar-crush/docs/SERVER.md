@@ -852,12 +852,14 @@ reopened in the TUI with `--resume`).
 
 | ACP | sugar-crush |
 |---|---|
-| `initialize` | protocol version `1`; `promptCapabilities.embeddedContext: true`; no auth methods |
+| `initialize` | protocol version `1`; `loadSession: true`; `promptCapabilities.embeddedContext: true`; no auth methods |
 | `authenticate` | accepted, nothing to do — the editor started this process as its own user |
 | `session/new {cwd}` | a new session in `cwd` — the project root. The first session fixes the root for the process; a session naming another directory is refused (start another `sugarcrush acp`). `mcpServers` is not used: the project's own `.mcp.json` applies, under its trust gate |
+| `session/load {sessionId, cwd}` | the stored session is opened (taking its lock, as `--resume` would) and its transcript replayed as `session/update`s — what was typed, said and thought, and each tool call with its outcome — before the answer |
 | `session/prompt` | the prompt is submitted to the session; answered with `stopReason` once the session is idle again |
-| `session/cancel` | the turn is asked to stop at its next step boundary, and the prompt is answered with the stop reason it ends on |
-| `session/update` (agent → editor) | `agent_message_chunk` ← `assistant.delta`, `agent_thought_chunk` ← `reasoning.delta`, `tool_call` ← `tool.started`, `tool_call_update` ← `tool.finished`, `plan` ← `todo.updated` |
+| `session/cancel` | the turn is cancelled at once — its child stopped, its running tool rows marked interrupted, its open permission questions settled — and the prompt answered `cancelled` |
+| `session/set_mode {modeId}` | the session's permission mode for its next turns; `session/new` and `session/load` advertise the six modes (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`) with the one in force |
+| `session/update` (agent → editor) | `agent_message_chunk` ← `assistant.delta`, `agent_thought_chunk` ← `reasoning.delta`, `tool_call` ← `tool.started`, `tool_call_update` ← `tool.finished` (an edit's change as `{type: "diff", path, oldText, newText}`, one per changed region), `plan` ← `todo.updated` |
 | `session/request_permission` (agent → editor) | every permission question a turn asks; see below |
 
 **Prompts.** Text blocks are sent as written. A linked file (`resource_link`)
@@ -896,9 +898,16 @@ agent — closes every session (a running turn is cancelled, its lock released)
 and exits `0`; so do `SIGINT` and `SIGTERM`. `acp` exits `2` for an operand or
 `--output-format json`.
 
+**Diffs.** An `Edit` or `Write` result carries a unified diff
+(`ToolResult::$diff`); `ToolResult::diffTextsOf()` turns each of its hunks into
+the before and after text of that region, which is what an ACP `diff` holds —
+so an editor shows the change in its own diff view. A region that created the
+file has a null `oldText`.
+
 What `acp` does not use: the editor's `fs/*` and `terminal/*` methods (the
 agent's own tools read and write the project, behind its own permission gate
-and checkpoints), image and audio prompt blocks, and `session/load`.
+and checkpoints), image and audio prompt blocks, and the unstable
+`session/list`, `session/resume` and config-option methods.
 
 ## Web UI
 

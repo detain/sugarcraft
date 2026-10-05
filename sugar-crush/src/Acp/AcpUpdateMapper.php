@@ -17,7 +17,8 @@ use SugarCraft\Crush\ToolResult;
  * The `update` objects this builds are ACP's, field for field:
  * `agent_message_chunk` / `agent_thought_chunk` / `user_message_chunk`
  * (`{content: ContentBlock}`), `tool_call` and `tool_call_update`
- * (`{toolCallId, title, kind, status, content, locations, rawInput}`) and
+ * (`{toolCallId, title, kind, status, content, locations, rawInput}`, an
+ * edit's content carrying `{type: "diff", path, oldText, newText}`) and
  * `plan` (`{entries: [{content, priority, status}]}`).
  *
  * TWO SOURCES, ONE SHAPE. A live turn is mapped from its {@see SessionEvent}s
@@ -272,13 +273,23 @@ final class AcpUpdateMapper
     }
 
     /**
-     * A finished call's content: its output as text.
+     * A finished call's content: each region an edit changed as an ACP
+     * `diff` (`{path, oldText, newText}`, from the result's unified diff —
+     * roadmap 5.9-2), then its output as text.
      *
      * @return list<array<string, mixed>>
      */
     private function resultContent(string $output, ?string $diff): array
     {
-        return $output === '' ? [] : [['type' => 'content', 'content' => self::text($output)]];
+        $content = [];
+        foreach (ToolResult::diffTextsOf((string) $diff) as $hunk) {
+            $content[] = ['type' => 'diff', 'path' => $this->absolute($hunk['path']), 'oldText' => $hunk['oldText'], 'newText' => $hunk['newText']];
+        }
+        if ($output !== '') {
+            $content[] = ['type' => 'content', 'content' => self::text($output)];
+        }
+
+        return $content;
     }
 
     /**
