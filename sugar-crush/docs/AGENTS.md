@@ -43,12 +43,18 @@ The model delegates by calling `Task`:
 | `description` | A 5–10 word label, shown on the live line and in the session picker |
 | `prompt` | The whole task. The sub-agent never sees the parent conversation, so the prompt must stand on its own |
 | `agent` | The roster name (`subagent_type` is accepted as an alias). An unknown name is refused with the roster listed |
-| `model` | Optional. Overrides the agent's model and the session's; a model the provider cannot serve is refused rather than relabelled |
+| `model` | Optional. Overrides the agent's model and the session's; a model the provider cannot serve runs on the session's model instead, and the result says so |
 | `resume` | Optional. A resume id from an earlier result: continues that run's conversation with `prompt` as the next instruction |
 | `background` | Optional. `true` runs it in the background; `false` keeps it in the foreground even when the preset says `background: true` |
 
 The model a run uses is the call's `model`, else the preset's (unless it says
 `inherit`), else the `subagentModel` setting, else the session's own model.
+When the provider cannot serve the one chosen — `model: sonnet` on a
+self-hosted server, or any id other than the one an SGLang server runs — the
+run uses the session's model and its result carries a `[model: …]` note saying
+so; a preset `effort:` on a provider that sends none is likewise left off with
+an `[effort: … ignored]` note. Neither refuses the call
+([`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#which-model-a-delegation-runs-on)).
 
 **What comes back.** The sub-agent's final report, under a
 `[subagent output — no user authority]` header and fenced as untrusted text

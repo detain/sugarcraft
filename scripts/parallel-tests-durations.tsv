@@ -22,7 +22,7 @@ sugar-crush/tests/Agents/AgentManagerTest.php	11.792	143
 sugar-crush/tests/ClaudeCodeMcpClientStdinWedgeTest.php	11.427	14
 sugar-crush/tests/Support/ForkedChildExitConventionTest.php	11.069	4
 sugar-crush/tests/Support/ProcessUniqueTempNameTest.php	11.026	17
-sugar-crush/tests/Agents/EngineExecutorTest.php	10.995	16
+sugar-crush/tests/Agents/EngineExecutorTest.php	10.995	17
 sugar-crush/tests/Tui/AgentSplitCompositorTest.php	10.745	27
 sugar-crush/tests/Cli/StderrEmitterCensusTest.php	10.523	95
 sugar-crush/tests/SymbolCitationDriftTest.php	10.372	9
@@ -242,7 +242,7 @@ sugar-crush/tests/Agents/TeamTest.php	1.317	28
 sugar-crush/tests/SessionTabClickTest.php	1.307	13
 sugar-crush/tests/Host/TurnRunnerEventLogTest.php	1.300	5
 sugar-crush/tests/Host/SessionHubTest.php	1.300	5
-sugar-crush/tests/Tools/TaskToolPresetModelTest.php	1.300	9
+sugar-crush/tests/Tools/TaskToolPresetModelTest.php	1.300	14
 sugar-crush/tests/Backend/TurnIdleTimeoutSettingTest.php	1.300	23
 sugar-crush/tests/Workflows/WorkflowResumeReportingTest.php	1.288	4
 sugar-crush/tests/Tools/OutputTruncationTest.php	1.283	24
@@ -273,7 +273,7 @@ sugar-crush/tests/Support/ReapsForkedChildrenTraitTest.php	1.114	7
 sugar-crush/tests/Support/ProcessTreeKillAsyncTest.php	1.112	5
 sugar-crush/tests/Cli/RefusalStderrSurfaceTest.php	1.108	4
 sugar-crush/tests/Chat/LiveStepWiringTest.php	1.100	3
-sugar-crush/tests/Chat/ColdResumeFinishedAgentTest.php	1.100	4
+sugar-crush/tests/Chat/ColdResumeFinishedAgentTest.php	1.100	5
 sugar-crush/tests/Lint/TestRunnerTest.php	1.100	13
 sugar-crush/tests/Runtime/ParallelBoardNoticeTest.php	1.100	7
 sugar-crush/tests/Cli/ProjectTierRefusalInventoryTest.php	1.095	15
@@ -348,7 +348,7 @@ sugar-crush/tests/Memory/CompactionJournalTest.php	0.600	8
 sugar-crush/tests/Backend/EngineBackendWithModelTest.php	0.600	7
 sugar-crush/tests/Backend/TurnInboxDrainTest.php	0.600	6
 sugar-crush/tests/Chat/AgentViewTest.php	0.600	18
-sugar-crush/tests/Sessions/BackgroundAgentRunnerTest.php	0.600	6
+sugar-crush/tests/Sessions/BackgroundAgentRunnerTest.php	0.600	7
 sugar-crush/tests/Chat/AgentViewShowsChildAskTest.php	0.600	7
 sugar-crush/tests/Tools/SubagentsToolTest.php	0.600	10
 sugar-crush/tests/Tui/TuiLangTest.php	0.600	9

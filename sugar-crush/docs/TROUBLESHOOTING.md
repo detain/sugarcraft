@@ -460,6 +460,15 @@ compactor must keep), so clear or start over. Moving the tiers is
   carries the partial output and a resume id.
 - **An `isolation: worktree` run is refused** — the project is not a git
   checkout, or `git worktree add` failed; the reason is in the result.
+- **It ran on a different model than its preset names** — not a refusal: a
+  preset (or `Task` call, or `subagentModel`) asked for a model this session's
+  provider cannot serve, such as `model: sonnet` copied from Claude Code onto
+  an SGLang server, so the run used the session's current model. The result
+  ends with `[model: <session model> (agent "…" asked for "sonnet", …)]` and
+  the live trail's first line says the same. Give the preset `model: inherit`
+  (or the served model's id) to drop the note. A preset `effort:` on a
+  provider other than `sglang` is ignored the same way, with an
+  `[effort: … ignored]` note.
 
 See [`AGENTS.md`](AGENTS.md).
 

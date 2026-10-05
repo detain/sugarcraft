@@ -206,7 +206,7 @@ carried onto the `Agent` row and read by nothing after that:
 | `tools`, `disallowedTools` | Live: see [How a grant is enforced](#how-a-grant-is-enforced). |
 | `skills`, `mcpServers`, `maxTurns` | Live on the delegated run. With no `maxTurns` a run stops at 200 steps; the `subagentMaxTurns` setting moves that default for `Task` delegations and workflow-stage agents alike. |
 | `model` | Live: see [Which model a delegation runs on](#which-model-a-delegation-runs-on). |
-| `effort` | Live: sent with every request of the run as its reasoning effort. |
+| `effort` | Live: sent with every request of the run as its reasoning effort (`sglang` only; ignored with a note elsewhere). |
 | `permissionMode` | Live, narrow-only: when stricter than the session's mode, a second gate judges every call ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). |
 | `memory` | **Inert.** Carried; no memory tier is selected by it. |
 | `background` | Live: runs the delegation as a background session; the call's own `background` wins (see [What you can actually do with a preset today](#what-you-can-actually-do-with-a-preset-today)). |
@@ -233,20 +233,41 @@ The provider is always the session's. The model is the first of:
 4. the session's current model, so a `/model` switch reaches an inheriting
    agent.
 
-A model the provider cannot serve is **refused**, never relabelled: an SGLang
-server serves one model, so naming another fails the call with the served name;
-and a Claude Code tier name (`sonnet`, `opus`, `haiku`) is accepted only when
-the session's own model is of that tier, because no other provider has a model
-by that name. The window and the rates the run is measured against follow the
+A model the provider cannot serve is never relabelled and never refused: the
+run goes ahead on the **session's current model** instead, and says so once —
+a line at the head of the sub-agent's live trail, and a note on the `Task`
+result the calling model reads, such as
+
+```
+[model: Qwen3.8-Flash (agent "reviewer" asked for "sonnet", a Claude Code tier name no sglang model answers to; the run used this session's model instead)]
+```
+
+That happens when the asked-for model is:
+
+- a Claude Code tier name (`sonnet`, `opus`, `haiku`) and the session's own
+  model is not of that tier — no other provider has a model by that name, so
+  on an Anthropic session of the same tier it simply resolves to the session's
+  model;
+- not the model a single-model server serves: an SGLang server runs one model,
+  so any other id falls back, whether or not the server has reported its name
+  yet;
+- not a model id at all (it contains whitespace or control characters).
+
+The decision uses only what the provider already knows (SGLang's discovered
+served model, the provider's type) — no request is made per delegation. Every
+other provider names its model per request, so an id it may not know is tried
+as asked; if that provider then rejects it, the run fails with the provider's
+own error. The window and the rates the run is measured against follow the
 model where the provider can rebind (`RebindsModel`).
 
 `effort:` is sent as each request's reasoning effort, overriding the provider's
 own per-model default for this run only. Only the `sglang` provider sends a
-reasoning effort, so a preset that declares one is refused on any other
-provider rather than run as though it were honoured. An unknown spelling —
-`effort: maximum`, or a `permissionMode:` or `isolation:` no case matches — is
-refused when the file is read, as a malformed field is, rather than falling
-back to a default.
+reasoning effort; on any other provider the run goes ahead **without** it and
+says so the same way (`[effort: high ignored (…)]`), rather than run as though
+it were honoured. An unknown spelling — `effort: maximum`, or a
+`permissionMode:` or `isolation:` no case matches — is still refused when the
+file is read, as a malformed field is, rather than falling back to a default:
+that is a typo in the preset, where a model the server lacks is not.
 
 ### How a grant is enforced
 

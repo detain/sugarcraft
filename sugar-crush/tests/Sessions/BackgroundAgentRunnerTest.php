@@ -82,6 +82,27 @@ final class BackgroundAgentRunnerTest extends TestCase
     }
 
     /**
+     * Roadmap 4.1-1, relaxed: a model the session's provider cannot serve —
+     * here a Claude Code tier name on a non-Claude session — does not fail
+     * the background run; it runs on the session's model and the buffered
+     * result (what the parent conversation reads) says so.
+     */
+    public function testAModelTheProviderCannotServeRunsOnTheSessionModelWithANote(): void
+    {
+        $probe = self::probe('Grep', '');
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'found nothing')]);
+
+        $exit = $this->runner(['agent' => 'reviewer', 'model' => 'sonnet'])
+            ->executeTask(EngineBackend::new($provider, 'Qwen/Qwen3.8-Flash-Next')->withoutHooks()->withTools([$probe]), null, $this->manager($probe, ['Grep']));
+
+        $buffer = $this->buffer();
+        $this->assertSame(0, $exit, $buffer);
+        $this->assertSame('Qwen/Qwen3.8-Flash-Next', $provider->requests[0]->model);
+        $this->assertStringContainsString('[model: Qwen/Qwen3.8-Flash-Next (this Task call asked for "sonnet", a Claude Code tier name', $buffer);
+        $this->assertStringEndsWith("[session:task:complete]\n", $buffer);
+    }
+
+    /**
      * The daemon's gate is the headless launch's (`bypass-permissions` by
      * default) and the agent's own mode does not narrow it here, so the only
      * thing that can stop the write is the delegating session's mode.

@@ -18,7 +18,8 @@ declare(strict_types=1);
  * The settings tabs come first; the rest is one block per area, each sorted
  * by key: `cli.` (the binary and its subcommands), `cmd.`/`keys.`/`settings.`
  * (the command, key-binding and settings registries), `chat.`/`host.` (the
- * session's notices, refusals and replies) and `tui.`/`palette.` (the screen).
+ * session's notices, refusals and replies), `agents.` (a delegated run's live
+ * trail) and `tui.`/`palette.` (the screen).
  */
 return [
     'settings.category.model' => 'Model & Provider',
@@ -1756,6 +1757,10 @@ TXT,
     'host.workflow.usage.run' => 'Usage: /workflow run <name> [key=val ...]',
     'host.workflow.usage.status' => 'Usage: /workflow status <workflowId>',
     // --- end chat + host (W11-c) ---
+    // --- agents: lines on a delegated run's live trail (TaskTool) ---
+    'agents.trail.effort_ignored' => 'effort: {effort} ignored ({provider} sends no reasoning effort)',
+    'agents.trail.model_fallback' => 'model: {model} ({asked} is not served here, so the run uses the session model)',
+    // --- end agents ---
     // --- tui/palette (W11-d) ---
     'palette.no_matches' => 'No matches',
     'palette.title.commands' => 'command palette',

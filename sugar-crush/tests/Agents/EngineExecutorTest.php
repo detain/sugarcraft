@@ -57,6 +57,26 @@ final class EngineExecutorTest extends TestCase
         $this->assertSame('tool', self::turns($provider->requests[1])[3][0] ?? null, 'the result was fed back');
     }
 
+    /**
+     * Roadmap 4.1-1, relaxed, workflow half: a stage always runs on the
+     * session engine's model, so a stage agent (or its request) naming a
+     * model the server does not serve — `sonnet` on an SGLang session — is
+     * never a failed stage and never reaches the wire.
+     */
+    public function testAStageNamingAModelTheServerDoesNotServeRunsOnTheSessionModel(): void
+    {
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'stage report')]);
+        $executor = new EngineExecutor(EngineBackend::new($provider, 'Qwen/Qwen3.8-Flash-Next'));
+        $stage = new SubAgent(id: 'stage-sonnet', agent: RosterAgent::named('coder')->withModel('sonnet'), task: 'check the lib');
+        $request = new CompleteRequest(model: 'sonnet', messages: [['role' => 'user', 'content' => 'check the lib']]);
+
+        $result = $executor->execute($stage, $request);
+
+        $this->assertSame(AgentStatus::Completed, $result->status);
+        $this->assertSame('stage report', $result->output);
+        $this->assertSame('Qwen/Qwen3.8-Flash-Next', $provider->requests[0]->model);
+    }
+
     public function testWithoutAStageGrantItInheritsTheEngineToolsButNeverTask(): void
     {
         $probe = self::probe();

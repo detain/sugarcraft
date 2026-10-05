@@ -105,6 +105,33 @@ final class ColdResumeFinishedAgentTest extends TestCase
         $this->assertSame(AgentResume::CONTINUE_TEXT, end($last)->content());
     }
 
+    /**
+     * Roadmap 4.1-1, relaxed: a preset model the session's provider cannot
+     * serve fails neither the first run nor its follow-up — both run on the
+     * session's model, and the follow-up's result says so again.
+     */
+    public function testAFollowUpOfARunWhosePresetModelIsNotServedRunsOnTheSessionModel(): void
+    {
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'found two bugs'),
+            new CompleteResponse(content: 'fixed both'),
+        ]);
+        [$engine, $registry] = $this->finishedRun($provider, 'resume-fallback', RosterAgent::named('coder', [], maxTurns: 5)->withModel('sonnet'));
+
+        $result = null;
+        AgentResume::new($engine)->withoutFork()
+            ->run('coder', (string) $registry->all()[0]->resumeId, 'now fix what you found')
+            ->then(static function (ToolResult $r) use (&$result): void {
+                $result = $r;
+            });
+
+        $this->assertInstanceOf(ToolResult::class, $result);
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertStringContainsString('fixed both', $result->content());
+        $this->assertSame(['m', 'm'], array_map(static fn ($r): string => $r->model, $provider->requests));
+        $this->assertStringContainsString('[model: m (agent "coder" asked for "sonnet", a Claude Code tier name', $result->content());
+    }
+
     public function testAnEngineWithoutATaskToolCannotResume(): void
     {
         $resume = AgentResume::new(EngineBackend::new(new ScriptedProvider([]), 'm'))->withoutFork();
@@ -212,10 +239,10 @@ final class ColdResumeFinishedAgentTest extends TestCase
      *
      * @return array{0: EngineBackend, 1: AgentLiveRegistry, 2: AgentManager}
      */
-    private function finishedRun(ScriptedProvider $provider, string $session): array
+    private function finishedRun(ScriptedProvider $provider, string $session, ?\SugarCraft\Crush\Agents\Agent $coder = null): array
     {
         $manager = new AgentManager(new ScriptedProvider([]), new SkillRegistry(), toolRegistry: [], toolUniverse: []);
-        $manager->register(RosterAgent::named('coder', [], maxTurns: 5));
+        $manager->register($coder ?? RosterAgent::named('coder', [], maxTurns: 5));
         $task = new TaskTool($manager, suspended: $this->store);
         $engine = EngineBackend::new($provider, 'm')->withTools([$task])->withSessionId($session);
 

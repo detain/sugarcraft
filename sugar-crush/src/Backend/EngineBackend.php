@@ -821,13 +821,39 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
     /**
      * Whether a request's {@see \SugarCraft\Crush\Providers\CompleteRequest::$reasoningEffort}
-     * reaches this backend's provider at all. Only SGLang reads it today;
-     * every other provider drops the field, so `Task` refuses a preset that
-     * declares an effort there rather than run it as if honoured.
+     * reaches this backend's provider at all. Only SGLang reads it today
+     * (bare, or as a fallback chain's primary, which every request goes to
+     * first); every other provider drops the field, so `Task` leaves a
+     * preset's effort off there and says so rather than run it as if
+     * honoured.
      */
     public function honoursReasoningEffort(): bool
     {
-        return $this->provider instanceof \SugarCraft\Crush\Providers\SglangProvider;
+        return $this->primaryProvider() instanceof \SugarCraft\Crush\Providers\SglangProvider;
+    }
+
+    /**
+     * Whether this backend's provider talks to a server that runs ONE model
+     * whatever a request names (SGLang, bare or as a fallback chain's
+     * primary), so a different model id can never be honoured on it — the
+     * request would reach the same model under a wrong label, or be refused
+     * by the server. Answered from the provider's type alone: no I/O.
+     * `Task` runs a delegation that asks for another model on the session's
+     * own model there (see {@see servedModel()} for the name it serves).
+     * Every other provider names its model per request and may accept an id
+     * no table here knows.
+     */
+    public function servesOneModel(): bool
+    {
+        return $this->primaryProvider() instanceof \SugarCraft\Crush\Providers\SglangProvider;
+    }
+
+    /** The provider every request goes to first: a fallback chain's primary, else the provider itself. */
+    private function primaryProvider(): ProviderInterface
+    {
+        return $this->provider instanceof \SugarCraft\Crush\Providers\FallbackProvider
+            ? $this->provider->primary()
+            : $this->provider;
     }
 
     /**
