@@ -1623,6 +1623,20 @@ final class Renderer
                         : \SugarCraft\Crush\Tui\AgentViewHeader::NO_TRANSCRIPT,
                 );
             }
+            // P-E2: a question this run is waiting on shows in its own view
+            // as well as in the modal over it, so the view says why the run
+            // stopped moving. Every byte of the call stays visible text, as
+            // in the modal (audit 15b-19).
+            $request = $chat->pendingPermission();
+            $ask = $request?->pendingAsk;
+            $asker = $ask === null ? null : \SugarCraft\Crush\Permissions\AskOrigin::locate($ask, $chat->history, $chat->agentLive());
+            if ($request !== null && $asker !== null && $asker->id === $openView['id']) {
+                $waiting = Style::new()->foreground($theme->userLabel)->bold()->render('⏳ waiting on you: ')
+                    . Style::new()->foreground($theme->systemLabel)->render(
+                        self::permissionVisibleOneLine(Message::describeToolCall($request->toolCall)) . ' — answer it in the permission prompt',
+                    );
+                $body = $body === '' ? $waiting : $body . "\n\n" . $waiting;
+            }
         } elseif ($chat->inFlight) {
             // E494 - the model's THINKING while the turn runs, painted above
             // the reply and below whatever has already settled.

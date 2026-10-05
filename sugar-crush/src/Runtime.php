@@ -2871,9 +2871,36 @@ final class Runtime
             if (!$asks instanceof \SugarCraft\Crush\Support\PermissionAskRelay) {
                 continue;
             }
-            foreach ($asks->takeAsks() as $askId => $question) {
+            $questions = $asks->takeAsks();
+            if ($questions === []) {
+                continue;
+            }
+            // P-E2: the question is this member's run's, and the approver
+            // it goes to (the turn's channel) writes that into the `ask`
+            // frame, so the modal and the run's Agent View can say whose it
+            // is. The run is the one under this member's Task call when its
+            // beat has been seen — replayed first, because the member sent
+            // its beats before the question, and this pass may have drained
+            // the relay a moment before they landed; the call alone otherwise.
+            self::relaySubAgentActivity([$job]);
+            $callId = $job['call']->id();
+            $origin = null;
+            $relay = $job['relay'] ?? null;
+            foreach ($relay instanceof SubAgentActivityRelay ? $relay->unfinished() : [] as $beat) {
+                if ($origin === null || $beat->parentCallId === $callId) {
+                    $origin = new \SugarCraft\Crush\Permissions\AskOrigin($beat->id, $beat->name, $callId);
+                }
+                if ($beat->parentCallId === $callId) {
+                    break;
+                }
+            }
+            $origin ??= new \SugarCraft\Crush\Permissions\AskOrigin('', '', $callId);
+            foreach ($questions as $askId => $question) {
                 try {
-                    $verdict = \SugarCraft\Crush\Permissions\ApprovalVerdict::of($onPermissionRequest($question['call'], $question['ask']));
+                    $verdict = \SugarCraft\Crush\Permissions\ApprovalVerdict::of(\SugarCraft\Crush\Permissions\AskOrigin::during(
+                        $origin,
+                        static fn (): mixed => $onPermissionRequest($question['call'], $question['ask']),
+                    ));
                 } catch (\Throwable $e) {
                     // An approver that throws has not consented.
                     $verdict = \SugarCraft\Crush\Permissions\ApprovalVerdict::reject('the approver failed: ' . $e->getMessage());

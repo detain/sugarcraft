@@ -4112,6 +4112,23 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // P-E2: a delegated run's question says whose it is, at the top of
+        // the modal — the same question also shows inline in that run's
+        // Agent View (Renderer). The main turn's own questions are untouched.
+        $origin = $msg->pendingAsk === null
+            ? null
+            : \SugarCraft\Crush\Permissions\AskOrigin::locate($msg->pendingAsk, $this->history, $this->agentLive());
+        if ($origin !== null) {
+            $label = \SugarCraft\Crush\Permissions\AskOrigin::label($origin);
+            $msg = new PermissionRequestMsg(
+                $msg->assistantMessage,
+                $msg->toolCall,
+                $msg->prompt === '' ? $label : $label . "\n" . $msg->prompt,
+                $msg->generation,
+                $msg->pendingAsk,
+            );
+        }
+
         $deferred = new Deferred();
 
         $next = $this->mutate([
@@ -4128,7 +4145,8 @@ final class Chat implements Model
         $wait = Cmd::promise(static fn(): PromiseInterface => $deferred->promise());
         // Roadmap 5.14a: the agent is now waiting on the user, which is the
         // other moment the `notify` setting rings for.
-        $notify = $this->terminalNotification('sugarcrush: waiting for approval: ' . $msg->toolCall->name);
+        $notify = $this->terminalNotification('sugarcrush: waiting for approval: ' . $msg->toolCall->name
+            . ($origin === null ? '' : ' (sub-agent ' . ($origin->name !== '' ? $origin->name : $origin->id) . ')'));
 
         return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
     }
@@ -4198,6 +4216,23 @@ final class Chat implements Model
                 $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
             }
             $ask->reply($reply, $note === '' ? null : $note);
+
+            // P-E2: a delegated run's question leaves a ui-only row saying
+            // what the user answered it, so the parent transcript — where the
+            // run's Task row is — keeps the record the modal took away.
+            $origin = \SugarCraft\Crush\Permissions\AskOrigin::locate($ask, $this->history, $this->agentLive());
+            if ($origin !== null) {
+                $cleared['history'] = [...$this->history, Message::notice(sprintf(
+                    'sub-agent %s asked to run %s: %s',
+                    $origin->name !== '' ? $origin->name : $origin->id,
+                    $ask->tool,
+                    match (true) {
+                        $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) => 'allowed for this session',
+                        $reply->permits() => 'allowed once',
+                        default => 'refused' . ($note === '' ? '' : ' (' . $note . ')'),
+                    },
+                ))];
+            }
 
             return [$this->mutate($cleared), null];
         }

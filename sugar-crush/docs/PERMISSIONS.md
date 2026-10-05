@@ -527,6 +527,16 @@ situations, not two:
     the rest of the turn. Only a member whose channel could not be opened is
     still refused, with a reason the model reads (`approval from a parallel
     sub-agent is not yet supported; run it alone or allow it by rule`).
+  - A sub-agent's question says whose it is. The modal opens with `Asked by
+    sub-agent <name> (<task>)`; the same question shows inline in that
+    agent's Agent View (`⏳ waiting on you: …`) while it is open; and your
+    answer leaves a row in the parent transcript (`sub-agent <name> asked to
+    run <tool>: allowed once`), which the parent model never sees. A parallel
+    member's question carries its run on the `ask` frame
+    (`Permissions\AskOrigin`, named by the turn's reap loop); a lone `Task`'s
+    is recognised as the one run going when it asks about a call the main turn
+    never made. With two runs going and no origin on the question, none is
+    named rather than a wrong one.
 - **`sugarcrush serve`** puts the question to every client following the
   session (`docs/SERVER.md`, *Permissions over the wire*). An engine turn
   started by `session.send` runs through the same `completeInteractive()`

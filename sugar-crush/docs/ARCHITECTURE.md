@@ -318,7 +318,7 @@ big-endian length plus a `serialize()`d array, decoded with
 | child → parent | `token`, `reasoning` | assistant text / thinking deltas (an empty `reasoning` is a heartbeat) |
 | child → parent | `started`, `finished`, `subagent`, `spend_cap` | tool and sub-agent events, in turn order |
 | child → parent | `result` | the settled reply, usage and flags, the reply's `stepId`, the turn's `transcript` rows and the session's `contextLedger` as the turn left it (absent when the turn was handed none); always the last frame |
-| child → parent | `ask` | `askId`, `toolCallId`, `tool`, `arguments` (after any hook rewrite), `reason`, `source`, `mode`, `suggestions`, `alwaysScope` |
+| child → parent | `ask` | `askId`, `toolCallId`, `tool`, `arguments` (after any hook rewrite), `reason`, `source`, `mode`, `suggestions`, `alwaysScope`; plus `origin` (`agentId`, `agentName`, `parentCallId`, `Permissions\AskOrigin`) when a parallel member's run asked |
 | parent → child | `ask_reply` | `askId`, `reply` (`once`/`always`/`reject`), `note` (≤ 2 KiB) |
 | child → parent | `step` | `step`, `maxSteps`, `context` (the step's `ContextPressure` as an array); written before each provider call |
 | child → parent | `usage` | `step`, `usage` (that response's), `turnUsage` (the turn's running total); written as each response is billed |

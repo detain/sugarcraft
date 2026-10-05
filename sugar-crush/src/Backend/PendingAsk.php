@@ -43,6 +43,10 @@ final class PendingAsk
      *                                                           (e.g. `['tool' => 'Bash']`);
      *                                                           empty when `always` is not on offer
      * @param \Closure(PermissionResolved): void     $settle
+     * @param ?\SugarCraft\Crush\Permissions\AskOrigin $origin the delegated run that asked
+     *                                                           (roadmap P-E2), when the
+     *                                                           process that put the question
+     *                                                           knew it; display only
      */
     public function __construct(
         public readonly string $askId,
@@ -55,6 +59,7 @@ final class PendingAsk
         public readonly array $suggestions,
         public readonly array $alwaysScope,
         private readonly \Closure $settle,
+        public readonly ?\SugarCraft\Crush\Permissions\AskOrigin $origin = null,
     ) {
     }
 
@@ -105,7 +110,9 @@ final class PendingAsk
                 ? [PermissionReply::Once->value, PermissionReply::Always->value, PermissionReply::Reject->value]
                 : [PermissionReply::Once->value, PermissionReply::Reject->value],
             'alwaysScope' => $gateOnly ? ['tool' => $call->name()] : [],
-        ];
+            // P-E2: which delegated run asked, when this process was told
+            // (a relayed member's question); absent for the turn's own.
+        ] + (($origin = \SugarCraft\Crush\Permissions\AskOrigin::current()) === null ? [] : ['origin' => $origin->toArray()]);
     }
 
     /**
@@ -160,6 +167,7 @@ final class PendingAsk
             $suggestions,
             $alwaysScope,
             $settle,
+            \SugarCraft\Crush\Permissions\AskOrigin::fromArray($frame['origin'] ?? null),
         );
     }
 

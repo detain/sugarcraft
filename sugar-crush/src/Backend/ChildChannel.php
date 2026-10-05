@@ -27,7 +27,7 @@ use SugarCraft\Crush\Tools\ToolCall;
  *
  * | Direction     | `kind`        | Fields                                                    |
  * |---------------|---------------|-----------------------------------------------------------|
- * | child→parent  | `ask`         | `askId`, `toolCallId`, `tool`, `arguments`, `reason`, `source`, `mode`, `suggestions`, `alwaysScope` |
+ * | child→parent  | `ask`         | `askId`, `toolCallId`, `tool`, `arguments`, `reason`, `source`, `mode`, `suggestions`, `alwaysScope`, optional `origin` (P-E2) |
  * | parent→child  | `ask_reply`   | `askId`, `reply` (`once`/`always`/`reject`), `note`       |
  * | parent→child  | `steer`       | `steerId`, `text`                                         |
  * | parent→child  | `cancel_soft` | —                                                         |
