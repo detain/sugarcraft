@@ -53,9 +53,11 @@ use SugarCraft\Crush\Util\TokenEstimate;
  * PERMISSION CLASS: no-ask. It writes only the harness's own record of what
  * the model is sent — no file, no process, nothing outside the session — and
  * everything it does is undone by re-running the pruned call. Offered only
- * where a host keeps the session's ledger and its pruning mode is `auto`
- * (`turnTools()` drops it otherwise: a sub-agent's conversation, `-p`, a
- * session set to `manual` or `off`). Never {@see \SugarCraft\Crush\Tools\ParallelSafe}:
+ * on a turn that runs over a context ledger whose pruning mode is `auto`
+ * (`turnTools()` drops it otherwise: `-p`, a session set to `manual` or
+ * `off`): a host's session ledger, or — roadmap 3.B-5 — the EPHEMERAL ledger
+ * {@see TaskTool} gives a delegated run it was granted to, private to that
+ * run and never the parent's. Never {@see \SugarCraft\Crush\Tools\ParallelSafe}:
  * the ledger lives in the turn's own process ({@see MutatesContextLedger}).
  */
 #[BuiltInTool(name: 'Prune', permission: ToolPermissionClass::NoAsk, position: 14, gloss: 'drop or distill its own finished tool outputs from what it is sent, by their `<ctx-ref r="N"/>` refs')]

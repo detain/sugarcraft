@@ -1032,9 +1032,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * block and its {@see \SugarCraft\Crush\Hooks\HookContext}s name the same
      * directory the tools {@see withTools()} received are jailed to.
      *
-     * Separate from {@see withWorktreeRoot()} on purpose: that one re-jails
-     * the tools and registers a Bash-escape guard and says nothing about what
-     * the model is told, while this one is purely the reported/gated root.
+     * Separate from {@see withWorktreeRoot()} on purpose: that one also
+     * re-jails the tools and registers a Bash-escape guard, and sets this
+     * same root as part of confining a sub-agent (roadmap 4.9), while this
+     * one is purely the reported/gated root and leaves the tools as built.
      */
     public function withRoot(?string $root): self
     {
@@ -2945,18 +2946,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * spent by then, not from this turn's starting baseline (audit B4).
      *
      * Roadmap 3.B-3: every {@see \SugarCraft\Crush\Tools\MutatesContextLedger}
-     * tool (the model's `Prune`) is bound to THE TURN'S OWN ledger — the
-     * caller's `$turnLedger` and `$turnApp` variables, taken by reference, so
-     * what the tool applies is what the turn's next request is projected
-     * through, with no copy to fold back after the step. Bound to the current
-     * pid like the heartbeat: a write from any other process would land in a
-     * copy of the turn and vanish. Offered only where a host keeps the
-     * session's ledger ({@see $contextLedger}) and its mode lets the model
-     * prune ({@see \SugarCraft\Crush\Context\Pruning\PruningMode::allowsModelPruning()}),
+     * tool (the model's `Prune`, `Compress` and `Recall`) is bound to THE
+     * TURN'S OWN ledger — the caller's `$turnLedger` and `$turnApp`
+     * variables, taken by reference, so what the tool applies is what the
+     * turn's next request is projected through, with no copy to fold back
+     * after the step. Bound to the current pid like the heartbeat: a write
+     * from any other process would land in a copy of the turn and vanish.
+     * Offered only where this engine runs over a ledger ({@see $contextLedger})
+     * whose mode lets the model prune
+     * ({@see \SugarCraft\Crush\Context\Pruning\PruningMode::allowsModelPruning()}),
      * or — `Compress` alone — on a `/compress` turn ($compressTriggered) in a
-     * `manual` session; anywhere else — a delegated run, `-p`, a session in
-     * `off`, `Prune` in `manual` — the tool is left out of the turn, so its
-     * schema is never sent.
+     * `manual` session; anywhere else — `-p`, a session in `off`, `Prune` in
+     * `manual` — the tool is left out of the turn, so its schema is never
+     * sent. That ledger is a host's session ledger or — roadmap 3.B-5 — the
+     * EPHEMERAL one {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} gives a
+     * delegated run granted a ledger tool in the `auto` mode; the engine
+     * bound below for a delegated run never carries this one.
      *
      * Roadmap N-P4c: every tool first passes through
      * {@see \SugarCraft\Crush\Tools\ToolLimits::applyTo()} with the bounds the
