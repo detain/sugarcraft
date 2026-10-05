@@ -206,6 +206,7 @@ sugar-crush/tests/Session/ContextLedgerPersistenceTest.php	1.600	7
 sugar-crush/tests/Hooks/BuiltIn/AutoCommitHookTest.php	1.600	5
 sugar-crush/tests/Tools/TaskToolPromoteToBackgroundTest.php	1.600	3
 sugar-crush/tests/Chat/HostCompactionMemoryFlushTest.php	1.600	3
+sugar-crush/tests/Chat/ChatReadLedgerCarryTest.php	1.600	6
 sugar-crush/tests/App/DockDragBytePathTest.php	1.567	14
 sugar-crush/tests/Cli/BootstrapConfigPathOverrideTest.php	1.560	17
 sugar-crush/tests/Backend/AwaitPromiseDiagnosticArmTest.php	1.536	11

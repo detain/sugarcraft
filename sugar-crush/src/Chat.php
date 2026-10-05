@@ -6821,6 +6821,43 @@ final class Chat implements Model
     }
 
     /**
+     * Name the session read ledger (roadmap 3.I-2) the tools this Chat runs
+     * record into — the {@see \SugarCraft\Crush\Tools\ReadLedger} an
+     * embedder's {@see registerTool()} callbacks' `Read`/`Edit`/`Write`/
+     * `ApplyPatch` share. Each Chat-native call runs in its own forked child
+     * ({@see forkToolCalls()}), whose copy of the ledger dies with it; with the
+     * ledger named here the child carries what it recorded home on its result
+     * payload and {@see collectToolResult()} merges it, so a file read by one
+     * call is known to the next call's staleness check.
+     *
+     * Kept off the constructor: a workspace Chat registers it as a
+     * {@see \SugarCraft\Crush\Host\WorkspaceContext::service()}, any other one
+     * binds it to the live inbox every `mutate()` clone shares by identity
+     * ({@see \SugarCraft\Crush\Tools\ReadLedger::bindTo()}) — so on a Chat
+     * with no workspace the binding is the conversation's, not this instance's.
+     */
+    public function withReadLedger(\SugarCraft\Crush\Tools\ReadLedger $ledger): self
+    {
+        if ($this->workspace !== null) {
+            return $this->mutate(['workspace' => $this->workspace->withService(\SugarCraft\Crush\Tools\ReadLedger::class, $ledger)]);
+        }
+
+        \SugarCraft\Crush\Tools\ReadLedger::bindTo($this->liveToolEvents, $ledger);
+
+        return $this->mutate([]);
+    }
+
+    /** The read ledger {@see withReadLedger()} named, or null when none was. */
+    public function readLedger(): ?\SugarCraft\Crush\Tools\ReadLedger
+    {
+        $registered = $this->workspace?->service(\SugarCraft\Crush\Tools\ReadLedger::class);
+
+        return $registered instanceof \SugarCraft\Crush\Tools\ReadLedger
+            ? $registered
+            : \SugarCraft\Crush\Tools\ReadLedger::boundTo($this->liveToolEvents);
+    }
+
+    /**
      * Run inside a forked child (or synchronously, on fork failure): invoke
      * the real tool callback and write a JSON-safe payload the parent can
      * reconstruct via {@see collectToolResult()}. `raw` is best-effort
@@ -6838,6 +6875,9 @@ final class Chat implements Model
      */
     private function storeToolResult(string $file, ToolCall $toolCall): void
     {
+        $ledger = $this->readLedger();
+        $ledgerBefore = $ledger?->toArray() ?? [];
+
         [$result, $raw, $succeeded] = $this->invokeTool($toolCall);
 
         $payload = [
@@ -6857,6 +6897,11 @@ final class Chat implements Model
                 'denial' => $result->denial?->value,
             ],
             'raw' => json_decode(json_encode($raw) ?: 'null', true),
+            // Roadmap 3.I-2: what this call's Read/Edit/Write recorded lives
+            // only in this child's copy of the ledger — carried home whether
+            // the call succeeded or failed, since a refused Edit may still
+            // have read the file ({@see collectToolResult()} merges it).
+            'readLedger' => $ledger?->recordedSince($ledgerBefore),
         ];
 
         $json = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
@@ -7096,6 +7141,10 @@ final class Chat implements Model
         if (!is_array($decoded) || !is_array($decoded['result'] ?? null)) {
             return ToolResult::error($toolCall->name, 'Tool execution timed out or produced no result', $toolCall->id);
         }
+
+        // Roadmap 3.I-2: fold the child's reads and writes into the ledger it
+        // forked from, so the next call — forked from THIS process — sees them.
+        $this->readLedger()?->merge($decoded['readLedger'] ?? null);
 
         $r = $decoded['result'];
         $result = new ToolResult(

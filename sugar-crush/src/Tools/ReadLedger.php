@@ -50,8 +50,13 @@ use SugarCraft\Crush\Tools\BuiltIn\Write;
  * {@see SESSION_STATE_KEY}), and the turn child hands the whole ledger to the
  * TUI parent on its result frame
  * ({@see \SugarCraft\Crush\Backend\EngineBackend}'s `readLedger` key), which
- * is what lets it outlive the turn that recorded it. Both payloads are plain
- * arrays, and {@see merge()} is order-independent: per path the entry
+ * is what lets it outlive the turn that recorded it. The Chat-native tool
+ * path, where an embedder's {@see \SugarCraft\Crush\Chat::registerTool()}
+ * callbacks run in one forked child per call, carries it the same way: the
+ * child puts what it recorded ({@see recordedSince()}) on its result payload
+ * and the parent merges it into the ledger
+ * {@see \SugarCraft\Crush\Chat::withReadLedger()} named. Every payload is a
+ * plain array, and {@see merge()} is order-independent: per path the entry
  * recorded LAST wins, so applying an export twice, or two children's exports
  * in either order, lands on the same ledger.
  *
@@ -93,9 +98,35 @@ final class ReadLedger
      */
     private array $entries = [];
 
+    /**
+     * Ledgers bound to an owner object's lifetime ({@see bindTo()}).
+     *
+     * @var \WeakMap<object, self>|null
+     */
+    private static ?\WeakMap $bound = null;
+
     public static function new(): self
     {
         return new self();
+    }
+
+    /**
+     * Bind $ledger to $owner for as long as $owner lives — how a
+     * {@see \SugarCraft\Crush\Chat} with no workspace keeps the ledger its
+     * embedder handed it without a constructor slot: the owner is the inbox
+     * every `mutate()` clone of one conversation shares by identity, the key
+     * {@see \SugarCraft\Crush\Host\TurnRunner::of()} uses for the same reason.
+     */
+    public static function bindTo(object $owner, self $ledger): void
+    {
+        self::$bound ??= new \WeakMap();
+        self::$bound[$owner] = $ledger;
+    }
+
+    /** The ledger {@see bindTo()} bound to $owner, or null. */
+    public static function boundTo(object $owner): ?self
+    {
+        return self::$bound[$owner] ?? null;
     }
 
     /**
@@ -260,6 +291,24 @@ final class ReadLedger
     public function toArray(): array
     {
         return $this->entries;
+    }
+
+    /**
+     * The entries recorded since $before (an earlier {@see toArray()}): every
+     * path that is new or was re-recorded — what a forked child has to carry
+     * home, since {@see merge()} of an unchanged row is a no-op anyway.
+     *
+     * @param array<string, array{mtime: int, size: int, ino: int, hash: ?string, at: float}> $before
+     *
+     * @return array<string, array{mtime: int, size: int, ino: int, hash: ?string, at: float}>
+     */
+    public function recordedSince(array $before): array
+    {
+        return array_filter(
+            $this->entries,
+            static fn (array $entry, int|string $path): bool => ($before[$path]['at'] ?? null) !== $entry['at'],
+            ARRAY_FILTER_USE_BOTH,
+        );
     }
 
     /**
