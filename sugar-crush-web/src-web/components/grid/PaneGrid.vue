@@ -6,6 +6,7 @@ import { sessionLabel } from '../approvals/attention'
 import { useConnectionStore } from '../../stores/connection'
 import { MAX_TILES, useLayoutStore } from '../../stores/layout'
 import { describe } from '../../stores/session'
+import { useNewSessionStore } from '../../stores/newSession'
 import { useSessionsStore } from '../../stores/sessions'
 
 /**
@@ -17,6 +18,7 @@ import { useSessionsStore } from '../../stores/sessions'
 const layout = useLayoutStore()
 const sessions = useSessionsStore()
 const connection = useConnectionStore()
+const newSession = useNewSessionStore()
 const router = useRouter()
 const picked = ref('')
 const error = ref<string | null>(null)
@@ -39,8 +41,8 @@ async function create(): Promise<void> {
   creating.value = true
   error.value = null
   try {
-    const summary = await sessions.create()
-    layout.focus(summary.id)
+    const summary = await newSession.start()
+    if (summary) layout.focus(summary.id)
   } catch (failure) {
     error.value = describe(failure)
   } finally {

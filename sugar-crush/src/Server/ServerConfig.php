@@ -75,6 +75,8 @@ final class ServerConfig
      * @param list<string> $trustedProxies IPs or CIDRs whose X-Forwarded-* count
      * @param list<string> $interfaceAddresses this machine's own IPs, for a wildcard bind ({@see InterfaceAddresses})
      * @param list<string> $allowedIps     client IPs/CIDRs admitted beside loopback; empty admits every address ({@see Http\ClientAddressGuard})
+     * @param bool         $dirBrowse      whether `fs.listDirs` and the browse-rooted `workspace.open` answer
+     * @param string|null  $browseRoot     the directory they are confined to (resolved by {@see \SugarCraft\Crush\Cli\Serve::config()}; null = the user's home)
      */
     private function __construct(
         public readonly string $host,
@@ -96,6 +98,8 @@ final class ServerConfig
         public readonly float $drainSeconds = self::DEFAULT_DRAIN_SECONDS,
         public readonly array $interfaceAddresses = [],
         public readonly array $allowedIps = [],
+        public readonly bool $dirBrowse = false,
+        public readonly ?string $browseRoot = null,
     ) {
     }
 
@@ -193,6 +197,15 @@ final class ServerConfig
             $config = $config->withAskTimeoutSeconds(self::secondsValue('server.askTimeoutSeconds', $userConfig['server.askTimeoutSeconds']));
         }
 
+        $dirBrowseKey = $userConfig['server.dirBrowse'] ?? false;
+        if (!\is_bool($dirBrowseKey)) {
+            throw new ServerConfigException(Lang::t('serve.dir_browse.not_bool'));
+        }
+        $browseRoot = $flags['--browse-root'] ?? $userConfig['server.browseRoot'] ?? null;
+        if ($browseRoot !== null) {
+            $config = $config->withBrowseRoot(self::stringValue('server.browseRoot', $browseRoot));
+        }
+
         $allowBypassKey = $userConfig['server.allowBypass'] ?? false;
         if (!\is_bool($allowBypassKey)) {
             throw new ServerConfigException('server.allowBypass in the user config must be true or false');
@@ -219,6 +232,7 @@ final class ServerConfig
             ->withWeb(!isset($flags['--no-web']))
             ->withAllowBypass(isset($flags['--allow-bypass']) || $allowBypassKey)
             ->withAllowRoot(isset($flags['--allow-root']))
+            ->withDirBrowse(isset($flags['--allow-dir-browse']) || $dirBrowseKey)
             ->withRoot($root);
     }
 
@@ -341,6 +355,22 @@ final class ServerConfig
         }
 
         return $this->mutate(trustedProxies: \array_values($proxies));
+    }
+
+    /**
+     * Whether a signed-in client may list directories under {@see $browseRoot}
+     * (`fs.listDirs`) and open a workspace there to start a session in — off
+     * unless `--allow-dir-browse` or `server.dirBrowse` asks for it.
+     */
+    public function withDirBrowse(bool $dirBrowse): self
+    {
+        return $this->mutate(dirBrowse: $dirBrowse);
+    }
+
+    /** The directory browsing is confined to; null = the user's home. */
+    public function withBrowseRoot(?string $browseRoot): self
+    {
+        return $this->mutate(browseRoot: $browseRoot === null || \trim($browseRoot) === '' ? null : $browseRoot);
     }
 
     public function withWebRoot(?string $webRoot): self

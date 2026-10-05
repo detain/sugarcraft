@@ -6,6 +6,7 @@ import type { SessionSummary } from '../protocol/generated'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
 import { useLayoutStore } from '../stores/layout'
+import { useNewSessionStore } from '../stores/newSession'
 import { useSessionsStore } from '../stores/sessions'
 
 const props = defineProps<{ activeId: string | null }>()
@@ -14,6 +15,7 @@ const sessions = useSessionsStore()
 const approvals = useApprovalsStore()
 const connection = useConnectionStore()
 const layout = useLayoutStore()
+const newSession = useNewSessionStore()
 const router = useRouter()
 const filter = ref('')
 const creating = ref(false)
@@ -29,6 +31,12 @@ function title(summary: SessionSummary): string {
   return summary.name || (summary.preview ? oneLine(summary.preview, 48) : summary.id)
 }
 
+/** The directory a session runs in, when it is not the server's own root. */
+function elsewhere(summary: SessionSummary): string | null {
+  if (!summary.root || summary.root === connection.hello?.server.root) return null
+  return summary.root.split('/').filter((part) => part !== '').pop() ?? summary.root
+}
+
 function open(id: string): void {
   layout.toggleSidebar(false)
   void router.push({ name: 'session', params: { id } })
@@ -38,8 +46,8 @@ async function create(): Promise<void> {
   creating.value = true
   error.value = null
   try {
-    const summary = await sessions.create()
-    open(summary.id)
+    const summary = await newSession.start()
+    if (summary) open(summary.id)
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : String(failure)
   } finally {
@@ -82,7 +90,7 @@ function onKey(event: KeyboardEvent): void {
           <span class="dot" :class="summary.status" aria-hidden="true" />
           <span class="name">{{ title(summary) }}</span>
           <span v-if="approvals.countFor(summary.id) > 0" class="badge" :title="`${approvals.countFor(summary.id)} waiting for an answer`" data-testid="ask-badge">{{ approvals.countFor(summary.id) }}</span>
-          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template></span>
+          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template></span>
         </a>
       </li>
     </ul>

@@ -11,6 +11,7 @@ use SugarCraft\Crush\Protocol\Methods\AgentsMethods;
 use SugarCraft\Crush\Protocol\Methods\BgMethods;
 use SugarCraft\Crush\Protocol\Methods\CommandMethods;
 use SugarCraft\Crush\Protocol\Methods\FilesMethods;
+use SugarCraft\Crush\Protocol\Methods\FsMethods;
 use SugarCraft\Crush\Protocol\Methods\MemoryMethods;
 use SugarCraft\Crush\Protocol\Methods\PermissionMethods;
 use SugarCraft\Crush\Protocol\Methods\ServerMethods;
@@ -133,6 +134,7 @@ final class Dispatcher implements MessageHandler
         AgentsMethods::register($registry);
         BgMethods::register($registry);
         FilesMethods::register($registry);
+        FsMethods::register($registry);
         ToolMethods::register($registry);
         TodoMethods::register($registry);
         WorkspaceMethods::register($registry);

@@ -1498,6 +1498,93 @@
                 ]
             }
         },
+        "fs.listDirs": {
+            "description": "The child directories (names only, never files) of a directory under the browse root; needs serve --allow-dir-browse.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "Absolute, `~`-relative, or relative to the browse root; omitted = the browse root."
+                    },
+                    "showHidden": {
+                        "type": "boolean",
+                        "description": "Also list dot-directories."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "root": {
+                        "type": "string",
+                        "description": "The browse root."
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "The listed directory, resolved."
+                    },
+                    "parent": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Its parent; null at the browse root."
+                    },
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "path": {
+                                    "type": "string"
+                                },
+                                "project": {
+                                    "type": "boolean",
+                                    "description": "Holds .git, composer.json, package.json or .sugar-crush."
+                                },
+                                "readable": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "name",
+                                "path",
+                                "project",
+                                "readable"
+                            ],
+                            "additionalProperties": false
+                        }
+                    },
+                    "truncated": {
+                        "type": "boolean"
+                    },
+                    "readable": {
+                        "type": "boolean",
+                        "description": "False when the directory itself could not be read (entries is then empty)."
+                    },
+                    "project": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "root",
+                    "path",
+                    "parent",
+                    "entries",
+                    "truncated",
+                    "readable",
+                    "project"
+                ],
+                "additionalProperties": false
+            }
+        },
         "memory.add": {
             "description": "Add a note.",
             "scope": "write",
@@ -1994,6 +2081,25 @@
                                 "items": {
                                     "type": "string"
                                 }
+                            },
+                            "dirBrowse": {
+                                "type": "object",
+                                "properties": {
+                                    "enabled": {
+                                        "type": "boolean"
+                                    },
+                                    "root": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "enabled",
+                                    "root"
+                                ],
+                                "description": "Whether `fs.listDirs` and a browse-rooted `workspace.open` answer (serve --allow-dir-browse), and the directory they are confined to."
                             }
                         },
                         "required": [
@@ -3635,6 +3741,10 @@
                     "root": {
                         "type": "string",
                         "maxLength": 4096
+                    },
+                    "browse": {
+                        "type": "boolean",
+                        "description": "The root was picked with `fs.listDirs`: refused unless directory browsing is on and the root is inside the browse root."
                     },
                     "idempotencyKey": {
                         "type": "string",

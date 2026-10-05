@@ -403,6 +403,34 @@ export interface Methods {
       truncated: boolean
     }
   }
+  /** The child directories (names only, never files) of a directory under the browse root; needs serve --allow-dir-browse. */
+  "fs.listDirs": {
+    params: {
+      /** Absolute, `~`-relative, or relative to the browse root; omitted = the browse root. */
+      path?: string
+      /** Also list dot-directories. */
+      showHidden?: boolean
+    }
+    result: {
+      /** The browse root. */
+      root: string
+      /** The listed directory, resolved. */
+      path: string
+      /** Its parent; null at the browse root. */
+      parent: string | null
+      entries: {
+        name: string
+        path: string
+        /** Holds .git, composer.json, package.json or .sugar-crush. */
+        project: boolean
+        readable: boolean
+      }[]
+      truncated: boolean
+      /** False when the directory itself could not be read (entries is then empty). */
+      readable: boolean
+      project: boolean
+    }
+  }
   /** Add a note. */
   "memory.add": {
     params: {
@@ -538,6 +566,11 @@ export interface Methods {
       features: {
         methods: string[]
         events: string[]
+        /** Whether `fs.listDirs` and a browse-rooted `workspace.open` answer (serve --allow-dir-browse), and the directory they are confined to. */
+        dirBrowse?: {
+          enabled: boolean
+          root: string | null
+        }
       }
       limits: Record<string, number>
       principal: {
@@ -1001,6 +1034,8 @@ export interface Methods {
   "workspace.open": {
     params: {
       root: string
+      /** The root was picked with `fs.listDirs`: refused unless directory browsing is on and the root is inside the browse root. */
+      browse?: boolean
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
     }
@@ -1035,6 +1070,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "files.changed": "read",
   "files.diff": "read",
   "files.read": "read",
+  "fs.listDirs": "read",
   "memory.add": "write",
   "memory.delete": "write",
   "memory.edit": "write",

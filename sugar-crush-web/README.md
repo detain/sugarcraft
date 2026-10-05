@@ -59,6 +59,13 @@ documents the protocol and the UI).
 - **Sessions sidebar**: newest first, filter, status, and a badge for every
   question a session is waiting on (also in the tab title, and as an opt-in
   desktop notification).
+- **New session in any project** (servers started with `serve
+  --allow-dir-browse`): New session opens a folder picker over the server's
+  browse root — breadcrumb, Up, child directories with a project badge, show
+  hidden, a path box — and starts the session in the directory chosen (a
+  workspace host of its own when it is not the server's root). Keyboard:
+  ↑/↓, Enter/→ to open, Backspace/← for up, Esc to cancel. Without the flag,
+  New session starts on the server's own root, as before.
 - **Tabs and a grid**: every session opened stays a tab (Alt+1…9 picks one;
   each shows its status and open questions). The grid tiles the open tabs, up
   to 3×3, each live — status, step, spend, the last few events, its questions

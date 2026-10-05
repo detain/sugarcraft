@@ -130,6 +130,20 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withHelp('Whether server sessions may run in bypass-permissions or dont-ask (same as --allow-bypass).')
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            SettingDefinition::new('server.dirBrowse', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withLabel('Server directory browsing')
+                ->withHelp('Let signed-in clients list directory names under server.browseRoot and start sessions there (same as --allow-dir-browse). Off by default.')
+                ->withReaderSymbol(ServerConfig::class . '::resolve')
+                ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            SettingDefinition::new('server.browseRoot', SettingType::Path)
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withLabel('Server browse root')
+                ->withHelp('The directory server.dirBrowse is confined to (same as --browse-root); unset is your home directory.')
+                ->withReaderSymbol(ServerConfig::class . '::resolve')
+                ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
         ];
     }
 }

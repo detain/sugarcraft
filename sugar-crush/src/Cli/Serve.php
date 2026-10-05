@@ -27,6 +27,8 @@ use SugarCraft\Crush\Server\ServerConfigException;
 use SugarCraft\Crush\Server\StateDir;
 use SugarCraft\Crush\Server\Workspace\Gateway;
 use SugarCraft\Crush\Support\Daemonize;
+use SugarCraft\Crush\Support\Directories\DirectoryBrowser;
+use SugarCraft\Crush\Support\Directories\DirectoryBrowserException;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
@@ -83,7 +85,7 @@ final class Serve
      * @var array<string, list<string>>
      */
     public const ACTION_FLAGS = [
-        '' => ['--allow-bypass', '--allow-remote', '--allow-root', '--allowed-host', '--allowed-ips', '--allowed-origin', '--detach', '--host', '--no-web', '--parent-pid', '--port', '--web-root'],
+        '' => ['--allow-bypass', '--allow-dir-browse', '--allow-remote', '--allow-root', '--allowed-host', '--allowed-ips', '--allowed-origin', '--browse-root', '--detach', '--host', '--no-web', '--parent-pid', '--port', '--web-root'],
         'status' => [],
         'stop' => ['--force'],
         'logs' => ['--follow', '-f'],
@@ -190,6 +192,19 @@ final class Serve
         // name them, since `0.0.0.0` is not an address a browser can open.
         if ($config->isWildcard() && $config->allowRemote) {
             $config = $config->withInterfaceAddresses(InterfaceAddresses::detect());
+        }
+        // The browse root is resolved once, here, so a typo is a startup
+        // refusal (exit 2) rather than every picker failing later.
+        if ($config->dirBrowse) {
+            $root = $config->browseRoot ?? HomeDirectory::resolved();
+            if ($root === null) {
+                throw new ServerConfigException(Lang::t('serve.browse_root.no_home'));
+            }
+            try {
+                $config = $config->withBrowseRoot((string) DirectoryBrowser::new($root)->root());
+            } catch (DirectoryBrowserException $e) {
+                throw new ServerConfigException(Lang::t('serve.browse_root.invalid', ['root' => $root, 'reason' => $e->getMessage()]));
+            }
         }
 
         return $config;
@@ -1205,6 +1220,7 @@ final class Serve
                 ? Lang::t('cli.serve.announce.web', ['dir' => $static->root()])
                 : Lang::t('cli.serve.announce.web_missing'),
             ...($config->allowedIps === [] ? [] : [Lang::t('serve.announce.allowed_ips', ['ips' => \implode(', ', $config->allowedIps)])]),
+            ...($config->dirBrowse ? [Lang::t('serve.announce.dir_browse', ['root' => (string) $config->browseRoot])] : []),
             Lang::t('cli.serve.announce.sign_in', ['url' => \implode("\n                   ", $loginUrls)]),
             $detached
                 ? Lang::t('cli.serve.announce.code_detached', $ttl)

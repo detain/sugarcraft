@@ -13,10 +13,12 @@ use SugarCraft\Crush\Protocol\ErrorCode;
 use SugarCraft\Crush\Protocol\EventEnvelope;
 use SugarCraft\Crush\Protocol\EventType;
 use SugarCraft\Crush\Protocol\JsonRpc;
+use SugarCraft\Crush\Protocol\Methods\FsMethods;
 use SugarCraft\Crush\Protocol\RpcError;
 use SugarCraft\Crush\Server\ServerConfig;
 use SugarCraft\Crush\Server\Ws\Connection;
 use SugarCraft\Crush\Server\Ws\MessageHandler;
+use SugarCraft\Crush\Support\Directories\DirectoryBrowserException;
 
 /**
  * Multi-root `serve` (roadmap O-7, Appendix O §4.1 "Phase 7"): the
@@ -34,7 +36,9 @@ use SugarCraft\Crush\Server\Ws\MessageHandler;
  * Three methods are the gateway's own, answered here:
  *
  *  - `workspace.list` → `{items: [{root, primary, running, pid}]}`;
- *  - `workspace.open {root}` → starts that root's host (or finds it running);
+ *  - `workspace.open {root, browse?}` → starts that root's host (or finds it
+ *    running); with `browse: true` (the web UI's directory picker) only while
+ *    `--allow-dir-browse` is on and inside the browse root;
  *  - `workspace.close {root, force?}` → stops it; refused while one of its
  *    turns runs, unless `force`.
  *
@@ -309,6 +313,26 @@ final class Gateway implements MessageHandler
     }
 
     /**
+     * A root picked through `fs.listDirs` (`workspace.open {root, browse:
+     * true}`): only while directory browsing is on, and only inside the
+     * browse root — the picker's own confinement, enforced here too rather
+     * than trusted to the client.
+     *
+     * @throws RpcError
+     */
+    private function browsedRoot(mixed $root): string
+    {
+        if (!\is_string($root) || \trim($root) === '' || \strlen($root) > 4096) {
+            throw RpcError::invalidParams('root must be a directory path');
+        }
+        try {
+            return FsMethods::browser($this->config)->resolve($root);
+        } catch (DirectoryBrowserException $e) {
+            throw FsMethods::refusal($e);
+        }
+    }
+
+    /**
      * Relay one request to $root's host — starting it first when it is not
      * running — and its answer back under the client's own id.
      */
@@ -400,7 +424,9 @@ final class Gateway implements MessageHandler
                 return;
             }
 
-            $root = $this->canonicalRoot($params->root ?? null);
+            $root = $method === 'workspace.open' && ($params->browse ?? false) === true
+                ? $this->browsedRoot($params->root ?? null)
+                : $this->canonicalRoot($params->root ?? null);
             if ($method === 'workspace.open') {
                 if ($root === $this->primaryRoot) {
                     $connection->send(JsonRpc::result($id, ['root' => $root, 'primary' => true, 'running' => true, 'pid' => \getmypid()]));

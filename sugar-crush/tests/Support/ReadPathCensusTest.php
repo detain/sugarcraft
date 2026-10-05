@@ -747,6 +747,10 @@ final class ReadPathCensusTest extends TestCase
                 . 'session sub-directories) after re-verifying it; no content is read, and only a regular '
                 . 'file older than the retention window is unlinked, typed by lstat() so no link is followed',
         ],
+        'Support/Directories/DirectoryBrowser.php|opendir' => [
+            'NAMES_ONLY — list() reads the child DIRECTORY names of a directory resolve() confined to the browse root '
+                . '(ContainedPath::within on the real path; each linked child re-checked); no file content is ever read',
+        ],
         'Support/ForkedChild.php|scandir' => [
             'PROCESS_DERIVED — closeInheritedServerFds() lists /proc/self/fd, this process\'s own descriptor table',
         ],

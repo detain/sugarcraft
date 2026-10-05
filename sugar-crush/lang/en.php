@@ -214,9 +214,9 @@ session; acp runs turns for an editor, until the editor disconnects):
                          the document and writes no file; the renames the
                          translation made are listed on stderr.
   serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <list>]
-        [--allowed-ips <list>] [--allowed-origin <list>] [--web-root <dir>]
-        [--no-web] [--allow-bypass] [--allow-root] [--detach]
-        [--parent-pid <pid>]
+        [--allowed-ips <list>] [--allowed-origin <list>] [--allow-dir-browse]
+        [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass]
+        [--allow-root] [--detach] [--parent-pid <pid>]
                          Run the WebSocket + HTTP server the web UI talks to,
                          in the foreground until Ctrl+C. Binds 127.0.0.1:7420
                          by default and prints a sign-in URL whose one-time
@@ -245,6 +245,12 @@ session; acp runs turns for an editor, until the editor disconnects):
                          Comma-separated extra browser origins
                          (http(s)://host[:port]) allowed beside the server's
                          own. Repeatable.
+      --allow-dir-browse Let signed-in clients pick the directory a new session
+                         starts in: they may list directory names (never
+                         files) under --browse-root. Off by default.
+      --browse-root <dir>
+                         The directory --allow-dir-browse is confined to
+                         (default your home directory).
       --web-root <dir>   Serve the web UI from <dir> instead of the installed
                          sugarcraft/sugar-crush-web package.
       --no-web           Serve the API and WebSocket only, no UI files.
@@ -715,7 +721,7 @@ TXT,
     'cli.serve.url.no_answer' => 'the server did not answer on {path}',
     'cli.serve.url.one_time_code' => '(one-time code, valid {seconds} s)',
     'cli.serve.url.token_refused' => 'the server refused this token (was it started with a different SUGARCRUSH_SERVER_TOKEN?)',
-    'cli.serve.usage' => 'Usage: sugarcrush serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-ips <ips>] [--allowed-origin <origins>] [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>] | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]',
+    'cli.serve.usage' => 'Usage: sugarcrush serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-ips <ips>] [--allowed-origin <origins>] [--allow-dir-browse] [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>] | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]',
     'cli.serve.workspace_unavailable' => 'cannot open the workspace: {error}',
     'cli.session.accepts' => 'session {action} accepts: {flags}.',
     'cli.session.ambiguous' => 'session {action} {target}: ambiguous id prefix, {count} sessions match',
@@ -2297,4 +2303,12 @@ TXT,
     'serve.ip_refused.unknown' => 'an unknown address',
     'serve.allowed_ips.invalid' => 'allowed IP "{entry}" is not an IP address or CIDR range (e.g. 192.0.2.7, 10.0.0.0/8, 2001:db8::/32)',
     'serve.announce.allowed_ips' => '  allowed IPs:     {ips} (and loopback); everyone else is refused',
+    'serve.dir_browse.not_bool' => 'server.dirBrowse in the user config must be true or false',
+    'serve.browse_root.no_home' => 'cannot determine a home directory to browse from; pass --browse-root <dir>',
+    'serve.browse_root.invalid' => 'browse root "{root}" cannot be used: {reason}',
+    'serve.announce.dir_browse' => '  dir browsing:    on, under {root} — signed-in clients can list directory names there and start sessions in them',
+    'serve.dir_browse.disabled' => 'directory browsing is disabled — start serve with --allow-dir-browse (or set server.dirBrowse)',
+    'dirs.not_found' => 'no directory at {path}',
+    'dirs.not_directory' => '{path} is not a directory',
+    'dirs.outside_root' => '{path} is outside the browse root {root}',
 ];

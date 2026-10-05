@@ -45,6 +45,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         cursor = result.nextCursor
         if (cursor === null) break
       }
+      await loadOtherRoots(next)
       byId.value = next
       loaded.value = true
     } catch (failure) {
@@ -54,7 +55,27 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
-  async function create(options: { name?: string; permissionMode?: PermissionMode } = {}): Promise<SessionSummary> {
+  /**
+   * On a server that lets clients pick a session's directory, the sessions of
+   * the other project roots it has open (its running workspace hosts) too —
+   * so a session started in a picked directory is still listed after a
+   * reload. Best effort: a root that cannot answer lists nothing.
+   */
+  async function loadOtherRoots(into: Record<string, SessionSummary>): Promise<void> {
+    if (connection.hello?.features.dirBrowse?.enabled !== true) return
+    try {
+      const workspaces = await connection.request('workspace.list', {})
+      for (const workspace of workspaces.items) {
+        if (workspace.primary || !workspace.running) continue
+        const result = await connection.request('session.list', { limit: PAGE, root: workspace.root })
+        for (const summary of result.items) into[summary.id] = { ...summary, root: summary.root ?? workspace.root }
+      }
+    } catch {
+      // The server's own sessions are listed either way.
+    }
+  }
+
+  async function create(options: { name?: string; permissionMode?: PermissionMode; root?: string } = {}): Promise<SessionSummary> {
     const summary = await connection.request('session.create', options)
     put(summary)
     return summary

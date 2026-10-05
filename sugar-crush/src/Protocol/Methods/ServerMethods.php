@@ -94,6 +94,12 @@ final class ServerMethods
             'features' => [
                 'methods' => $call->methods->names(),
                 'events' => EventType::all(),
+                // Whether the new-session directory picker may be offered:
+                // `fs.listDirs` and a browse-rooted `workspace.open` answer.
+                'dirBrowse' => [
+                    'enabled' => $config->dirBrowse && $config->browseRoot !== null,
+                    'root' => $config->dirBrowse ? $config->browseRoot : null,
+                ],
             ],
             'limits' => [
                 'maxClientFrameBytes' => ServerConfig::MAX_CLIENT_MESSAGE_BYTES,

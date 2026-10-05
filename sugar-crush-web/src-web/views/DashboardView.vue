@@ -4,12 +4,14 @@ import { useRouter } from 'vue-router'
 import { ago, oneLine } from '../lib/format'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
+import { useNewSessionStore } from '../stores/newSession'
 import { useSessionsStore } from '../stores/sessions'
 
 const version = __APP_VERSION__
 const connection = useConnectionStore()
 const sessions = useSessionsStore()
 const approvals = useApprovalsStore()
+const newSession = useNewSessionStore()
 const router = useRouter()
 const creating = ref(false)
 const error = ref<string | null>(null)
@@ -20,8 +22,8 @@ async function create(): Promise<void> {
   creating.value = true
   error.value = null
   try {
-    const summary = await sessions.create()
-    void router.push({ name: 'session', params: { id: summary.id } })
+    const summary = await newSession.start()
+    if (summary) void router.push({ name: 'session', params: { id: summary.id } })
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : String(failure)
   } finally {

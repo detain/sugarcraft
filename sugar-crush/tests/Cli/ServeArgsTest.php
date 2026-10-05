@@ -187,6 +187,7 @@ final class ServeArgsTest extends TestCase
             'allowed ip flag' => [['serve', '--allowed-ips', '1.2.3.4,example.com'], [], [], 'allowed IP "example.com" is not an IP address or CIDR range'],
             'allowed ip prefix' => [['serve'], ['SUGARCRUSH_SERVER_ALLOWED_IPS' => '10.0.0.0/40'], [], 'is not an IP address or CIDR range'],
             'allowed ip key type' => [['serve'], [], ['server.allowedIps' => [7]], 'list of strings'],
+            'dir browse key type' => [['serve'], [], ['server.dirBrowse' => 'yes'], 'server.dirBrowse in the user config must be true or false'],
             'bypass key type' => [['serve'], [], ['server.allowBypass' => 'yes'], 'must be true or false'],
             'list type' => [['serve'], [], ['server.allowedOrigins' => [1]], 'list of strings'],
         ];
@@ -263,6 +264,28 @@ final class ServeArgsTest extends TestCase
         self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--parent-pid', 'abc'])));
         self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--host', '192.0.2.1'])));
         self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--port', 'x'])));
+    }
+
+    public function testDirBrowsingIsOffUnlessAskedForAndItsRootIsResolvedAtStart(): void
+    {
+        $off = self::config(['serve', '--browse-root', '/srv']);
+        self::assertFalse($off->dirBrowse, 'a browse root alone does not turn browsing on');
+        self::assertFalse(self::config(['serve'])->dirBrowse);
+        self::assertTrue(self::config(['serve'], [], ['server.dirBrowse' => true])->dirBrowse);
+        self::assertSame('/key', self::config(['serve', '--allow-dir-browse'], [], ['server.browseRoot' => '/key'])->browseRoot);
+        self::assertSame('/flag', self::config(['serve', '--allow-dir-browse', '--browse-root', '/flag'], [], ['server.browseRoot' => '/key'])->browseRoot);
+
+        $tmp = (string) \realpath(\sys_get_temp_dir());
+        $resolved = Serve::config(self::parse(['serve', '--allow-dir-browse', '--browse-root', $tmp . '/.']), [], []);
+        self::assertSame($tmp, $resolved->browseRoot, 'canonicalised once, at start');
+
+        try {
+            Serve::config(self::parse(['serve', '--allow-dir-browse', '--browse-root', $tmp . '/no-such-dir-' . \bin2hex(\random_bytes(4))]), [], []);
+            self::fail('a missing browse root was accepted');
+        } catch (ServerConfigException $e) {
+            self::assertStringContainsString('cannot be used: no directory at', $e->getMessage());
+        }
+        self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--allow-dir-browse', '--browse-root', '/no/such/dir/anywhere'])));
     }
 
     public function testServeConfigResolvesTheRootAndTheDefaultStateDirectory(): void

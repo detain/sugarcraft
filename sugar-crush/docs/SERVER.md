@@ -50,6 +50,8 @@ Open the sign-in URL in a browser on the same machine. The code rides in the URL
 | `--allowed-host <list>` | none | Comma-separated extra host names (or `host:port`; an IPv6 address in brackets) the server answers to beside the loopback names and its own addresses — e.g. a DNS name for this machine. Repeats accumulate. |
 | `--allowed-ips <list>` | none — every address | Comma-separated client IPs or CIDR ranges (`1.2.3.4,10.0.0.0/8,2001:db8::/32`) allowed to connect. Any other client is refused `403 ip_refused` before the Host check, sign-in or any credential; loopback is always allowed. Repeats accumulate ([Remote access](#remote-access)). |
 | `--allowed-origin <list>` | none | Comma-separated extra browser origins (`http(s)://host[:port]`) accepted beside the server's own. Repeats accumulate. |
+| `--allow-dir-browse` | off | Let signed-in clients choose the directory a new session starts in: `fs.listDirs` lists directory names (never files) under `--browse-root`, and the web UI's "New session" opens a folder picker ([Choosing a new session's directory](#choosing-a-new-sessions-directory---allow-dir-browse)). |
+| `--browse-root <dir>` | your home directory | The directory `--allow-dir-browse` is confined to. Resolved at start; one that does not exist refuses startup. Has no effect without `--allow-dir-browse`. |
 | `--web-root <dir>` | the installed `sugarcraft/sugar-crush-web` build | Serve the UI from `<dir>`. |
 | `--no-web` | off | API and WebSocket only. |
 | `--allow-bypass` | off | Let sessions run in `bypass-permissions` or `dont-ask`. |
@@ -80,6 +82,8 @@ the TUI's and does not apply here.
 | `SUGARCRUSH_SERVER_PARENT_PID` | — | The parent pid to watch, like `--parent-pid`. |
 | — | `server.trustedProxies` | IPs or CIDRs whose `X-Forwarded-For` / `X-Forwarded-Proto` are believed. |
 | — | `server.allowBypass` | `true` is the same as `--allow-bypass`. |
+| — | `server.dirBrowse` | `true` is the same as `--allow-dir-browse`. |
+| — | `server.browseRoot` | The browse root, like `--browse-root`. |
 
 Every `server.*` key is read from `~/.sugar-crush/config.json` only — never from
 a project file, because a cloned repository must not be able to open a port,
@@ -95,7 +99,8 @@ modes. A non-loopback `server.host` still needs `--allow-remote` on each launch.
   --detach`), or a flag value is malformed (a port that is not `0`–`65535`, an
   origin that is not `http(s)://host[:port]`, an allowed host that is not
   `host[:port]`, an allowed IP that is not an address or CIDR range, a
-  `--parent-pid` that is not a pid);
+  `--parent-pid` that is not a pid, or — with `--allow-dir-browse` — a browse
+  root that is not a directory);
 - `--host` is not loopback and `--allow-remote` was not given;
 - the permission mode is `bypass-permissions` or `dont-ask` and neither
   `--allow-bypass` nor `server.allowBypass` permits it;
@@ -321,7 +326,10 @@ start in, and the `delivery` a client's composer should pick for a prompt sent
 while a turn runs — the `queueMode` setting, `steer` unless set, which is what
 the TUI's Enter does mid-turn; a `session.send` that names no `delivery`
 still queues), and, for each session in `resume`, how that subscription was
-resumed. Anything other than `server.hello` before it is answered `-32002`
+resumed. `features.dirBrowse` is `{enabled, root}`: whether `fs.listDirs`
+and a browse-rooted `workspace.open` answer, and the browse root (null when
+off) — what a client checks before it offers a directory picker. Anything other
+than `server.hello` before it is answered `-32002`
 (`not_initialized`) and the socket is closed with `4002`; a message over
 64 KiB before it closes the socket with `1009`. A client must ignore event
 types and fields it does not know: within protocol `1` changes are additive
@@ -397,6 +405,7 @@ it and the two tables below are generated from the code
 | `files.changed` | read |  | — | The workspace's changed and untracked files. |
 | `files.diff` | read |  | — | The workspace's uncommitted changes to tracked files, as a unified diff. |
 | `files.read` | read |  | `path` | A file under the project root, read-only and size-capped. |
+| `fs.listDirs` | read |  | — | The child directories (names only, never files) of a directory under the browse root; needs serve --allow-dir-browse. |
 | `memory.add` | write | yes | `content` | Add a note. |
 | `memory.delete` | write | yes | `id` | Delete a note. |
 | `memory.edit` | write | yes | `id`, `content` | Replace a note's text. |
@@ -797,6 +806,49 @@ closes — the gateway let go, or died — and is otherwise reaped with the usua
 TERM-then-KILL ladder over its group, its turns with it. Its output goes to
 `<state dir>/workspaces/workspace-<hash>.log`.
 
+### Choosing a new session's directory (`--allow-dir-browse`)
+
+Off by default. With `--allow-dir-browse` (or `server.dirBrowse: true`) a
+client can pick the project root a new session starts in, anywhere under the
+browse root (`--browse-root`, default your home directory):
+
+```sh
+sugarcrush serve --allow-dir-browse --browse-root ~/src
+```
+
+- **`fs.listDirs {path?, showHidden?}`** (scope `read`) lists one directory:
+  `{root, path, parent, entries: [{name, path, project, readable}], truncated,
+  readable, project}`. `path` is absolute, `~`-relative or relative to the
+  browse root (omitted: the root itself); `parent` is null at the root.
+  Entries are **child directories only** — never a file name, a size or a
+  file's content — sorted, at most 1000 (`truncated` says when more were
+  there); dot-directories only with `showHidden: true`; `project` marks one
+  holding `.git`, `composer.json`, `package.json` or `.sugar-crush`. A
+  directory this process cannot read is reported (`readable: false`), not an
+  error.
+- **Containment.** Every path is resolved (`..` collapsed, links followed) and
+  must stay inside the browse root: anything else is `-32003`
+  `outside_browse_root` — the same answer whether or not the path exists — and
+  a link inside the root that points out of it is simply not listed. A missing
+  directory is `-32004` `dir_not_found`.
+- **Starting the session.** The client opens the picked root with
+  `workspace.open {root, browse: true}` — which re-checks that browsing is on
+  and the root is inside the browse root, rather than trusting the client —
+  then `session.create {root}`. Picking the server's own root is the primary
+  workspace, so the session is the server's own; any other root runs in a
+  workspace host like any other (the eight-host cap applies).
+- **Off**, both `fs.listDirs` and `workspace.open {browse: true}` answer
+  `-32003` `dir_browse_disabled` ("start serve with --allow-dir-browse"),
+  `features.dirBrowse.enabled` is false, and the web UI's "New session" starts
+  a session on the server's own root as before.
+
+**What it exposes:** every signed-in client can see the **names of the
+directories** under the browse root (not files, not contents) and start an
+agent session — which can then read and run things — in any of them. That is
+why it is opt-in and rooted: set `--browse-root` to the directory that holds
+your projects rather than leaving it at your whole home directory.
+`sugarcrush attach` does not use it; the TUI has its own `/new` picker.
+
 ## Attaching a terminal (`sugarcrush attach`)
 
 ```sh
@@ -948,6 +1000,13 @@ in this order and names what it found on the `web UI:` startup line:
 
 Open the sign-in URL and the page signs in, connects and shows:
 
+- **New session** (sidebar, dashboard, grid, palette): on a server started
+  with `--allow-dir-browse` it opens a folder picker first — the current path
+  as a breadcrumb, **Up** to the parent (disabled at the browse root), the
+  child directories with a `project` badge, a "show hidden" toggle, a path box
+  to type or paste into, and **Start session here**; keyboard-driven (arrows,
+  Enter to open, Backspace for up, Esc to cancel). Without it, New session
+  starts one on the server's own root at once.
 - **Sessions** in a sidebar — newest activity first, a filter, a status dot,
   and a count of the questions each one is waiting on (also in the tab title,
   and as an opt-in desktop notification — for a question, or a turn that
@@ -1041,6 +1100,10 @@ report what it returned:
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer` and a `default-src 'self'` content security
   policy.
+- **Directory browsing (opt-in).** `--allow-dir-browse` shows signed-in
+  clients directory names — never files — under `--browse-root`, and lets
+  them start sessions there; off by default
+  ([Choosing a new session's directory](#choosing-a-new-sessions-directory---allow-dir-browse)).
 - **Logs** record the method, path and status of each request and WebSocket
   open/close — never a query string (a ticket rides there), a header, a body or
   a prompt.

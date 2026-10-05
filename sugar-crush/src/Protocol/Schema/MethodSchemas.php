@@ -89,6 +89,10 @@ final class MethodSchemas
                     'features' => Schema::object([
                         'methods' => Schema::arrayOf(Schema::string()),
                         'events' => Schema::arrayOf(Schema::string()),
+                        'dirBrowse' => Schema::object([
+                            'enabled' => Schema::boolean(),
+                            'root' => Schema::string()->nullable(),
+                        ], ['enabled', 'root'])->describe('Whether `fs.listDirs` and a browse-rooted `workspace.open` answer (serve --allow-dir-browse), and the directory they are confined to.'),
                     ], ['methods', 'events']),
                     'limits' => Schema::map(Schema::integer(0)),
                     'principal' => Schema::object([
@@ -446,12 +450,35 @@ final class MethodSchemas
             ], ['source', 'name', 'status', 'running']))],
 
             'workspace.list' => [$empty, $items($workspace)],
-            'workspace.open' => [Schema::object(['root' => Schema::string(4096)], ['root']), $workspace],
+            'workspace.open' => [Schema::object([
+                'root' => Schema::string(4096),
+                'browse' => Schema::boolean()->describe('The root was picked with `fs.listDirs`: refused unless directory browsing is on and the root is inside the browse root.'),
+            ], ['root']), $workspace],
             'workspace.close' => [
                 Schema::object(['root' => Schema::string(4096), 'force' => Schema::boolean()], ['root']),
                 Schema::object(['closed' => Schema::boolean()], ['closed']),
             ],
 
+            'fs.listDirs' => [
+                Schema::object([
+                    'path' => Schema::string(4096)->describe('Absolute, `~`-relative, or relative to the browse root; omitted = the browse root.'),
+                    'showHidden' => Schema::boolean()->describe('Also list dot-directories.'),
+                ]),
+                Schema::object([
+                    'root' => Schema::string()->describe('The browse root.'),
+                    'path' => Schema::string()->describe('The listed directory, resolved.'),
+                    'parent' => Schema::string()->nullable()->describe('Its parent; null at the browse root.'),
+                    'entries' => Schema::arrayOf(Schema::object([
+                        'name' => Schema::string(),
+                        'path' => Schema::string(),
+                        'project' => Schema::boolean()->describe('Holds .git, composer.json, package.json or .sugar-crush.'),
+                        'readable' => Schema::boolean(),
+                    ], ['name', 'path', 'project', 'readable'], false)),
+                    'truncated' => Schema::boolean(),
+                    'readable' => Schema::boolean()->describe('False when the directory itself could not be read (entries is then empty).'),
+                    'project' => Schema::boolean(),
+                ], ['root', 'path', 'parent', 'entries', 'truncated', 'readable', 'project'], false),
+            ],
             'files.diff' => [
                 Schema::object(['ref' => Schema::string(128)]),
                 Schema::object(['ref' => Schema::string(), 'diff' => Schema::string(), 'truncated' => Schema::boolean()], ['ref', 'diff', 'truncated']),

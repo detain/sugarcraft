@@ -33,9 +33,15 @@ export class SugarCrushServer {
     readonly scratch: string,
     readonly home: string,
     readonly repo: string,
+    /** Extra `serve` flags this server starts with. */
+    readonly serveArgs: string[] = [],
   ) {}
 
-  static async start(): Promise<SugarCrushServer> {
+  /**
+   * $prepare runs on the scratch directory before the server starts, and
+   * returns the extra `serve` flags it needs (e.g. `--allow-dir-browse`).
+   */
+  static async start(prepare: (scratch: string) => string[] = () => []): Promise<SugarCrushServer> {
     const scratch = mkdtempSync(join(process.env.E2E_TMPDIR ?? tmpdir(), 'scw-'))
     chmodSync(scratch, 0o1777)
     const home = join(scratch, 'home')
@@ -48,7 +54,7 @@ export class SugarCrushServer {
     git('add', '.')
     git('commit', '-qm', 'init')
 
-    const server = new SugarCrushServer(scratch, home, repo)
+    const server = new SugarCrushServer(scratch, home, repo, prepare(scratch))
     await server.launch(0)
     return server
   }
@@ -69,7 +75,7 @@ export class SugarCrushServer {
   private async launch(port: number): Promise<void> {
     if (!existsSync(BIN)) throw new Error(`no sugarcrush binary at ${BIN} (set SUGARCRUSH_BIN)`)
     this.stderr = ''
-    const child = spawn(PHP, [BIN, '--root', this.repo, 'serve', '--port', String(port), '--web-root', join(WEB_ROOT, 'dist')], {
+    const child = spawn(PHP, [BIN, '--root', this.repo, 'serve', '--port', String(port), '--web-root', join(WEB_ROOT, 'dist'), ...this.serveArgs], {
       env: this.env(),
       stdio: ['ignore', 'ignore', 'pipe'],
     })

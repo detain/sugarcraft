@@ -84,11 +84,13 @@ final readonly class ParsedArgs
         // verb's table; which action each belongs to is `Serve::ACTION_FLAGS`.
         'serve' => [
             '--allow-bypass' => false,
+            '--allow-dir-browse' => false,
             '--allow-remote' => false,
             '--allow-root' => false,
             '--allowed-host' => true,
             '--allowed-ips' => true,
             '--allowed-origin' => true,
+            '--browse-root' => true,
             '--detach' => false,
             '--follow' => false,
             '--force' => false,

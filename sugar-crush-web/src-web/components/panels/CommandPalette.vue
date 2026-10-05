@@ -5,6 +5,7 @@ import { oneLine } from '../../lib/format'
 import { PANEL_LABELS, PANELS, usePanelsStore } from '../../stores/agents/panels'
 import { useLayoutStore } from '../../stores/layout'
 import { describe, useSessionStore } from '../../stores/session'
+import { useNewSessionStore } from '../../stores/newSession'
 import { useSessionsStore } from '../../stores/sessions'
 import { useSettingsStore } from '../../stores/settings'
 
@@ -30,6 +31,7 @@ const panels = usePanelsStore()
 const sessions = useSessionsStore()
 const layout = useLayoutStore()
 const settings = useSettingsStore()
+const newSessionFlow = useNewSessionStore()
 const router = useRouter()
 const query = ref('')
 const selected = ref(0)
@@ -38,7 +40,7 @@ const input = ref<HTMLInputElement | null>(null)
 
 const entries = computed<Entry[]>(() => {
   const list: Entry[] = []
-  list.push({ id: 'new-session', group: 'Actions', label: 'New session', run: newSession })
+  list.push({ id: 'new-session', group: 'Actions', label: newSessionFlow.canBrowse ? 'New session…' : 'New session', hint: newSessionFlow.canBrowse ? 'choose its directory' : undefined, run: newSession })
   list.push({ id: 'theme', group: 'Actions', label: `Theme: ${settings.theme} → next`, run: () => settings.cycleTheme() })
   list.push({ id: 'panels', group: 'Actions', label: panels.open ? 'Close the panels' : 'Open the panels', run: () => panels.toggle() })
   for (const panel of PANELS) {
@@ -96,8 +98,10 @@ watch(() => panels.paletteOpen, async (open) => {
 })
 
 async function newSession(): Promise<void> {
-  const summary = await sessions.create()
-  await router.push({ name: 'session', params: { id: summary.id } })
+  // The picker is a dialog of its own: the palette gets out of its way.
+  panels.togglePalette(false)
+  const summary = await newSessionFlow.start()
+  if (summary) await router.push({ name: 'session', params: { id: summary.id } })
 }
 
 async function runCommand(name: string, argumentHint: string | null): Promise<void> {

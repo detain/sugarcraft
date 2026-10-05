@@ -5,6 +5,7 @@ import ApprovalsButton from './components/approvals/ApprovalsButton.vue'
 import ApprovalsDrawer from './components/approvals/ApprovalsDrawer.vue'
 import { useAttention } from './components/approvals/attention'
 import ConnectionBanner from './components/ConnectionBanner.vue'
+import DirectoryPicker from './components/DirectoryPicker.vue'
 import SessionTabs from './components/grid/SessionTabs.vue'
 import SessionSidebar from './components/SessionSidebar.vue'
 import { SIGN_IN_CODE } from './keys'
@@ -95,6 +96,7 @@ async function signOut(): Promise<void> {
       </main>
     </div>
     <ApprovalsDrawer v-if="!onLogin" />
+    <DirectoryPicker v-if="!onLogin" />
   </div>
 </template>
 
