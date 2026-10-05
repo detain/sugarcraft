@@ -14,6 +14,7 @@ use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\Settings\Validator\ThresholdOrderValidator;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\Pruning\PruningMode;
+use SugarCraft\Crush\Context\SymbolMapBlock;
 use SugarCraft\Crush\Providers\ProviderFactory;
 
 /**
@@ -106,6 +107,18 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withHelp('{"<model>" or "<provider>/<model>": {"reminderTokens", "autoTokens", "blockTokens"}} overriding the three caps; 0 clears one.')
                 ->withReaderSymbol(CompactorConfig::class . '::fromSettings')
                 ->withReadBy($readBy . ' → `forModel()`'),
+            // Roadmap N-P4d: the persisted form of SUGARCRUSH_DISABLE_SYMBOL_MAP.
+            // config.json only, like the env switch it mirrors; captured once
+            // per session, so it applies to the next one.
+            SettingDefinition::new(SymbolMapBlock::SETTING, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnvVar(SymbolMapBlock::SYMBOL_MAP_OPT_OUT_ENV)
+                ->withLabel('Symbol map')
+                ->withHelp('Put the ranked symbol-level repo map in the system prompt, captured once per session.')
+                ->withReaderSymbol(SymbolMapBlock::class . '::disabledBySettings')
+                ->withReadBy('`SymbolMapBlock::capture()` → `disabledBySettings()`, at the session\'s first turn'),
             SettingDefinition::new('contextWindow', SettingType::Json)
                 ->withCategory(SettingCategory::Context)
                 ->withRiskClass(RiskClass::Tuning)

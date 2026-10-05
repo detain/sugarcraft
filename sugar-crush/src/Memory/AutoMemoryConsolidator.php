@@ -60,6 +60,13 @@ final class AutoMemoryConsolidator
     /** The switch: any value other than empty or `0` turns auto-memory off. */
     public const ENV_DISABLE = 'SUGARCRUSH_DISABLE_AUTO_MEMORY';
 
+    /**
+     * The settings key (roadmap N-P4d): `false` turns auto-memory — this
+     * consolidation and the dream pass ({@see DreamPass}) — off, the
+     * persisted form of {@see ENV_DISABLE}. Default on.
+     */
+    public const SETTING = 'memory.autoConsolidate';
+
     /** Kilo's `minIntervalMs`: at most one run per project in this many seconds. */
     public const INTERVAL_SECONDS = 300;
 
@@ -430,9 +437,35 @@ PROMPT;
 
     private static function disabled(): bool
     {
-        $value = getenv(self::ENV_DISABLE);
+        return !self::enabled();
+    }
 
-        return $value !== false && $value !== '' && $value !== '0';
+    /**
+     * Whether auto-memory runs: off when {@see ENV_DISABLE} says so (the
+     * environment outranks every file), else when the {@see SETTING} key is
+     * `false`; on otherwise. Read when a turn settles, in the TUI process, so
+     * a saved change applies from the next turn. A value that is not a bool
+     * is ignored rather than read as `false`.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`)
+     */
+    public static function enabled(?array $config = null): bool
+    {
+        $value = getenv(self::ENV_DISABLE);
+        if ($value !== false && $value !== '' && $value !== '0') {
+            return false;
+        }
+
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+
+        return ($config[self::SETTING] ?? true) !== false;
     }
 
     /** The throttle file for $home's project, see the class docblock. */

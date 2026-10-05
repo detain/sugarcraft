@@ -63,6 +63,13 @@ final readonly class SymbolMapBlock implements PromptSection
      */
     public const SYMBOL_MAP_OPT_OUT_ENV = 'SUGARCRUSH_DISABLE_SYMBOL_MAP';
 
+    /**
+     * The settings key (roadmap N-P4d): `false` keeps the map out of the
+     * prompt, the persisted form of {@see SYMBOL_MAP_OPT_OUT_ENV}. Read by
+     * {@see capture()}, so it applies from the next session's capture.
+     */
+    public const SETTING = 'symbolMap.enabled';
+
     /** Bump when the rendered shape changes, so cached maps are not reused. */
     public const VERSION = 1;
 
@@ -99,6 +106,26 @@ final readonly class SymbolMapBlock implements PromptSection
         return $flag !== false && $flag !== '' && $flag !== '0';
     }
 
+    /**
+     * Whether the {@see SETTING} key turns the map off: only an explicit
+     * `false` does, so a malformed value cannot quietly drop the map.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`)
+     */
+    public static function disabledBySettings(?array $config = null): bool
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
+        return ($config[self::SETTING] ?? true) === false;
+    }
+
     /** A block that renders nothing. */
     public static function empty(string $reason = ''): self
     {
@@ -118,6 +145,10 @@ final readonly class SymbolMapBlock implements PromptSection
         float $budgetSeconds = self::EXTRACTION_BUDGET_SECONDS,
     ): self {
         try {
+            if (self::disabledBySettings()) {
+                return self::empty('turned off by the ' . self::SETTING . ' setting');
+            }
+
             $rootReal = $root === '' ? false : realpath($root);
             if ($rootReal === false || !is_dir($rootReal)) {
                 return self::empty('no project directory');

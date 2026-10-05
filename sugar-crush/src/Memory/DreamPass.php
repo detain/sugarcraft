@@ -73,6 +73,15 @@ final class DreamPass
     /** Nanobot's `intervalH = 2`: at most one pass per project in this many seconds. */
     public const INTERVAL_SECONDS = 7200;
 
+    /**
+     * The settings key overriding {@see INTERVAL_SECONDS} (roadmap N-P4d),
+     * at least {@see MIN_INTERVAL_SECONDS}. Read when a turn settles.
+     */
+    public const SETTING_INTERVAL = 'memory.dreamIntervalSeconds';
+
+    /** The shortest gap the setting may ask for: a pass is a billed turn. */
+    public const MIN_INTERVAL_SECONDS = 60;
+
     /** Nanobot's `max_entries`: the most journal entries one pass reads. */
     public const MAX_ENTRIES = 20;
 
@@ -123,7 +132,7 @@ PROMPT;
     private function __construct(
         private readonly MemoryWriter $writer,
         private readonly SecretRedactor $redactor,
-        private readonly int $interval,
+        private readonly ?int $interval,
         private readonly \Closure $clock,
         private readonly \Closure $runner,
     ) {
@@ -134,7 +143,9 @@ PROMPT;
         return new self(
             $writer,
             SecretRedactor::new(),
-            self::INTERVAL_SECONDS,
+            // Null: resolved from the settings when the pass is considered
+            // ({@see interval()}); withInterval() pins one.
+            null,
             static fn(): int => time(),
             static fn(EngineBackend $backend, array $prompt): PromiseInterface => $backend->completeAsync($prompt),
         );
@@ -144,6 +155,32 @@ PROMPT;
     public function withInterval(int $seconds): self
     {
         return $this->mutate(['interval' => max(0, $seconds)]);
+    }
+
+    /**
+     * The minimum gap between two passes for one project: the one
+     * {@see withInterval()} pinned, else the {@see SETTING_INTERVAL} setting
+     * when it is an int of at least {@see MIN_INTERVAL_SECONDS}, else
+     * {@see INTERVAL_SECONDS}.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`)
+     */
+    public function interval(?array $config = null): int
+    {
+        if ($this->interval !== null) {
+            return $this->interval;
+        }
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+        $value = $config[self::SETTING_INTERVAL] ?? null;
+
+        return \is_int($value) && $value >= self::MIN_INTERVAL_SECONDS ? $value : self::INTERVAL_SECONDS;
     }
 
     /**
@@ -206,7 +243,7 @@ PROMPT;
 
         $now = ($this->clock)();
         $at = $state['at'] ?? null;
-        if (\is_int($at) && $now - $at < $this->interval && $now >= $at) {
+        if (\is_int($at) && $now - $at < $this->interval() && $now >= $at) {
             return null;
         }
 
@@ -508,9 +545,9 @@ PROMPT;
 
     private static function disabled(): bool
     {
-        $value = getenv(AutoMemoryConsolidator::ENV_DISABLE);
-
-        return $value !== false && $value !== '' && $value !== '0';
+        // The environment switch and the `memory.autoConsolidate` setting
+        // (roadmap N-P4d), one answer for both halves of auto-memory.
+        return !AutoMemoryConsolidator::enabled();
     }
 
     private static function sizeOf(CompactionJournal $journal): ?int

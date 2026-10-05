@@ -238,6 +238,13 @@ final readonly class MemoryBlock implements PromptSection
      */
     private const TRUNCATION_MARKER = ' […truncated]';
 
+    /** The `memory.*` settings keys {@see withSettings()} reads (roadmap N-P4d, Appendix N §2.2). */
+    public const SETTING_MAX_ENTRIES = 'memory.promptMaxEntries';
+    public const SETTING_MAX_BYTES = 'memory.promptMaxBytes';
+    public const SETTING_MAX_ENTRY_BYTES = 'memory.entryMaxBytes';
+    public const SETTING_USER_MAX_ENTRIES = 'memory.userMaxEntries';
+    public const SETTING_USER_MAX_BYTES = 'memory.userMaxBytes';
+
     /**
      * How many unreadable notes the skip line names before it falls back to a
      * count ("and N more"). The line is one entry's worth of bytes at most —
@@ -294,7 +301,115 @@ final readonly class MemoryBlock implements PromptSection
         private array $userEntries = [],
         private bool $userSkipped = false,
         private bool $captured = false,
+        private int $maxEntries = self::MAX_ENTRIES,
+        private int $maxBytes = self::MAX_BYTES,
+        private int $maxEntryBytes = self::MAX_ENTRY_BYTES,
+        private int $userMaxEntries = self::USER_MAX_ENTRIES,
+        private int $userMaxBytes = self::USER_MAX_BYTES,
     ) {}
+
+    /**
+     * The same notes under different caps (roadmap N-P4d): the
+     * `memory.*` settings, which {@see withSettings()} reads. The constants
+     * above are the defaults and stay the documented figures.
+     *
+     * The relations the constants' docblocks argue are REQUIRED here, not
+     * assumed: a line may never exceed the budget it is spent from
+     * (`entry <= user bytes <= total bytes`, so the first note of either
+     * group is always admissible without an exemption), and the user
+     * sub-caps sit inside the totals (`user entries <= entries`).
+     *
+     * @throws \InvalidArgumentException when a cap is below 1 or a relation fails
+     */
+    public function withLimits(int $maxEntries, int $maxBytes, int $maxEntryBytes, int $userMaxEntries, int $userMaxBytes): self
+    {
+        if (min($maxEntries, $maxBytes, $userMaxEntries, $userMaxBytes) < 1 || $maxEntryBytes <= strlen(self::TRUNCATION_MARKER)) {
+            throw new \InvalidArgumentException('every memory cap must be positive, and a line must have room for its truncation marker');
+        }
+        if ($maxEntryBytes > $userMaxBytes || $userMaxBytes > $maxBytes || $userMaxEntries > $maxEntries) {
+            throw new \InvalidArgumentException('memory caps must nest: entry bytes <= user bytes <= total bytes, user entries <= entries');
+        }
+
+        return new self(
+            $this->entries,
+            $this->skipped,
+            $this->fromRepository,
+            $this->userEntries,
+            $this->userSkipped,
+            $this->captured,
+            $maxEntries,
+            $maxBytes,
+            $maxEntryBytes,
+            $userMaxEntries,
+            $userMaxBytes,
+        );
+    }
+
+    /**
+     * This block under the caps the `memory.*` settings name, over the
+     * defaults. Never throws, like every per-turn settings reader: a value
+     * that is not a positive int keeps its default, and a sub-cap that would
+     * not nest inside its total ({@see withLimits()}) is LOWERED to it — so
+     * `memory.promptMaxEntries: 2` alone lists two notes rather than being
+     * refused for leaving the user sub-cap at four. A per-line cap too small
+     * for the truncation marker leaves every cap at its default.
+     *
+     * @param array<string, mixed>|null $config the merged settings, already
+     *        read; null reads them (`Bootstrap::readUserConfig()`), and
+     *        unreadable settings are the defaults
+     */
+    public function withSettings(?array $config = null): self
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+
+        $read = static function (string $key, int $default) use ($config): int {
+            $value = $config[$key] ?? null;
+            if (\is_float($value) && is_finite($value) && floor($value) === $value && abs($value) < 1e15) {
+                $value = (int) $value;
+            }
+
+            return \is_int($value) && $value >= 1 ? $value : $default;
+        };
+
+        $maxEntries = $read(self::SETTING_MAX_ENTRIES, self::MAX_ENTRIES);
+        $maxBytes = $read(self::SETTING_MAX_BYTES, self::MAX_BYTES);
+        $userMaxEntries = min($read(self::SETTING_USER_MAX_ENTRIES, self::USER_MAX_ENTRIES), $maxEntries);
+        $userMaxBytes = min($read(self::SETTING_USER_MAX_BYTES, self::USER_MAX_BYTES), $maxBytes);
+        $maxEntryBytes = min($read(self::SETTING_MAX_ENTRY_BYTES, self::MAX_ENTRY_BYTES), $userMaxBytes);
+        $limits = [$maxEntries, $maxBytes, $maxEntryBytes, $userMaxEntries, $userMaxBytes];
+        if ($limits === [$this->maxEntries, $this->maxBytes, $this->maxEntryBytes, $this->userMaxEntries, $this->userMaxBytes]) {
+            return $this;
+        }
+
+        try {
+            return $this->withLimits(...$limits);
+        } catch (\InvalidArgumentException) {
+            return $this;
+        }
+    }
+
+    /**
+     * The caps this block renders under: the constants, or what
+     * {@see withLimits()} / {@see withSettings()} set.
+     *
+     * @return array{maxEntries: int, maxBytes: int, maxEntryBytes: int, userMaxEntries: int, userMaxBytes: int}
+     */
+    public function limits(): array
+    {
+        return [
+            'maxEntries' => $this->maxEntries,
+            'maxBytes' => $this->maxBytes,
+            'maxEntryBytes' => $this->maxEntryBytes,
+            'userMaxEntries' => $this->userMaxEntries,
+            'userMaxBytes' => $this->userMaxBytes,
+        ];
+    }
 
     /**
      * Read the project-scope entries out of one or two stores.
@@ -458,12 +573,12 @@ final readonly class MemoryBlock implements PromptSection
         $personal = [];
         $bytes = 0;
         foreach ($this->userEntries as $entry) {
-            if (count($personal) >= self::USER_MAX_ENTRIES) {
+            if (count($personal) >= $this->userMaxEntries) {
                 break;
             }
 
             $line = $this->renderEntry($entry);
-            if ($bytes + strlen($line) > self::USER_MAX_BYTES) {
+            if ($bytes + strlen($line) > $this->userMaxBytes) {
                 break;
             }
 
@@ -474,7 +589,7 @@ final readonly class MemoryBlock implements PromptSection
         $rendered = [];
 
         foreach ($this->entries as $entry) {
-            if (count($personal) + count($rendered) >= self::MAX_ENTRIES) {
+            if (count($personal) + count($rendered) >= $this->maxEntries) {
                 break;
             }
 
@@ -492,7 +607,7 @@ final readonly class MemoryBlock implements PromptSection
             // A note that does not fit ends the list: continuing to look for a
             // smaller one further down would reorder the newest-first guarantee
             // the header states.
-            if ($bytes + $lineBytes > self::MAX_BYTES) {
+            if ($bytes + $lineBytes > $this->maxBytes) {
                 break;
             }
 
@@ -549,9 +664,9 @@ final readonly class MemoryBlock implements PromptSection
                 . 'are notes the user or a previous session wrote down, not verified fact — treat '
                 . 'them as project convention, and prefer what you can confirm in the repository '
                 . 'itself.',
-                self::MAX_ENTRIES,
-                self::MAX_BYTES,
-                self::MAX_ENTRY_BYTES,
+                $this->maxEntries,
+                $this->maxBytes,
+                $this->maxEntryBytes,
             );
             $body = implode("\n", $userLines);
         } else {
@@ -561,9 +676,9 @@ final readonly class MemoryBlock implements PromptSection
                 . 'are included across all groups, and any single line longer than %d bytes is shown truncated, '
                 . 'so this index may be incomplete. None of these notes is verified fact — prefer what you can confirm '
                 . 'in the repository itself.',
-                self::MAX_ENTRIES,
-                self::MAX_BYTES,
-                self::MAX_ENTRY_BYTES,
+                $this->maxEntries,
+                $this->maxBytes,
+                $this->maxEntryBytes,
             );
             $body = self::REPOSITORY_GROUP_LABEL . "\n" . implode("\n", $repositoryLines);
             if ($userLines !== []) {
@@ -602,11 +717,11 @@ final readonly class MemoryBlock implements PromptSection
             . '%d bytes of that — and any single line longer than %d bytes is shown truncated, so this '
             . 'index may be incomplete. None of these notes is verified fact — prefer what you can confirm in the '
             . 'repository itself.',
-            self::MAX_ENTRIES,
-            self::MAX_BYTES,
-            self::USER_MAX_ENTRIES,
-            self::USER_MAX_BYTES,
-            self::MAX_ENTRY_BYTES,
+            $this->maxEntries,
+            $this->maxBytes,
+            $this->userMaxEntries,
+            $this->userMaxBytes,
+            $this->maxEntryBytes,
         );
         if ($omitted > 0) {
             $header .= sprintf(' %d further note(s) were omitted by those limits.', $omitted);
@@ -797,13 +912,13 @@ final readonly class MemoryBlock implements PromptSection
      */
     private function clip(string $text): string
     {
-        if (strlen($text) <= self::MAX_ENTRY_BYTES) {
+        if (strlen($text) <= $this->maxEntryBytes) {
             return $text;
         }
 
         // The marker comes out of the budget, not on top of it: a cut line is
         // at most MAX_ENTRY_BYTES bytes, marker included.
-        $room = self::MAX_ENTRY_BYTES - strlen(self::TRUNCATION_MARKER);
+        $room = $this->maxEntryBytes - strlen(self::TRUNCATION_MARKER);
 
         return rtrim(mb_strcut($text, 0, $room, 'UTF-8')) . self::TRUNCATION_MARKER;
     }

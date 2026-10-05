@@ -5501,13 +5501,19 @@ final class Runtime
     {
         // Step 1.A-1: per SESSION through the memo, keyed by root; a store-less
         // App renders nothing and needs no slot.
+        //
+        // Roadmap N-P4d: the index caps come from the `memory.*` settings
+        // (MemoryBlock::withSettings() reads them), once per Runtime — once
+        // per turn, in the turn child — and are laid over the session's
+        // captured notes rather than kept in the memo, so a saved change
+        // applies from the next turn without re-reading the store.
         return $this->memoryBlock ??= $app->memoryStore === null
             ? MemoryBlock::empty()
             : $this->sessionPromptMemo()->remember(
                 $app->sessionId,
                 'memory:' . hash('xxh128', self::projectRoot($app) . "\0" . spl_object_id($app->memoryStore)),
                 fn(): MemoryBlock => MemoryBlock::capture($app->memoryStore, $this->projectMemoryStore($app)),
-            );
+            )->withSettings();
     }
 
     /**

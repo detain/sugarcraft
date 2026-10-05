@@ -327,6 +327,16 @@ Three bounds, not two — all three are `public const` on
 | `MAX_BYTES` | 4096 | the summed **rendered index lines** — `- `, the `[type]`, the id, the preview and the `(tags: …)` suffix. Not the `<project-memory>` fence, the header sentence, the provenance group labels, the standing instructions, or the joining newlines. |
 | `MAX_ENTRY_BYTES` | 512 | one note's **whole rendered line** — the same span `MAX_BYTES` sums, for a single note. Over it, the line is **truncated with a visible ` […truncated]` marker**, not dropped. |
 
+Those values are the defaults. The `memory.promptMaxEntries`,
+`memory.promptMaxBytes` and `memory.entryMaxBytes` settings change them — with
+`memory.userMaxEntries` and `memory.userMaxBytes` for the user-scope sub-caps
+(4 notes, 1,024 bytes) — from `~/.sugar-crush/config.json` only, read by each
+turn's `Runtime` (`MemoryBlock::withSettings()`, roadmap N-P4d). The header
+sentence states whatever applies. A sub-cap that would not nest (a note's
+line within the user budget, the user budget within the total, the user notes
+within the note count) is lowered to fit, so the relations below hold whatever
+is configured.
+
 `MAX_ENTRY_BYTES` is the one that makes the other two honest, in two separate
 ways, and it is worth reading the reasons because both were bugs first.
 
@@ -512,7 +522,8 @@ text only (tool output is never shown to it). Less than 400 bytes of new
 conversation is not worth a call. It never runs without a summary backend or a
 memory store, or once `SUGARCRUSH_MAX_COST` is reached; its cost counts towards
 the spend total either way. `SUGARCRUSH_DISABLE_AUTO_MEMORY=1` turns it off
-([ENVIRONMENT](ENVIRONMENT.md)).
+([ENVIRONMENT](ENVIRONMENT.md)), and so does `"memory.autoConsolidate": false`
+in `~/.sugar-crush/config.json` (the environment wins when it is set).
 
 **Prefer saving nothing.** Every note is injected into later prompts, so the
 instructions tell the model that an empty operation list is the normal answer,
@@ -594,7 +605,8 @@ to the session's own engine, in a turn of its own: auto-memory looks at one
 conversation, the dream at the summaries of many.
 
 **When it runs.** When a turn ends in a reply and nothing queued takes its
-place, at most once every two hours per project (across every session and
+place, at most once every two hours per project (`memory.dreamIntervalSeconds`
+in `~/.sugar-crush/config.json` moves that, to no less than a minute; across every session and
 process: the time and the journal cursor live beside the home store's notes as
 `.dream-<key>.json`), and only when the journal has changed since the last
 completed pass. One pass reads at most 20 entries and 24,000 bytes of them,
@@ -602,8 +614,8 @@ oldest first, each cut to 2,000 characters and redacted again; what is left
 over waits for the next pass. It needs an engine backend (it never runs on a
 tool-less one), a memory store and a journal, and never runs once
 `SUGARCRUSH_MAX_COST` is reached; its cost counts towards the spend total.
-`SUGARCRUSH_DISABLE_AUTO_MEMORY=1` turns it off together with auto-memory
-([ENVIRONMENT](ENVIRONMENT.md)).
+`SUGARCRUSH_DISABLE_AUTO_MEMORY=1` or `"memory.autoConsolidate": false` turns it
+off together with auto-memory ([ENVIRONMENT](ENVIRONMENT.md)).
 
 **What the turn can do.** Its tool list is replaced, through
 `EngineBackend::withTools()`, by two tools that only read: `Memory` limited to

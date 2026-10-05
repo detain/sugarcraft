@@ -532,6 +532,7 @@ sugar-crush/tests/Tools/BuiltIn/GlobTest.php	0.123	68
 sugar-crush/tests/Chat/PreCompactHookTest.php	0.123	9
 sugar-crush/tests/Backend/TurnStartPruneTest.php	0.120	3
 sugar-crush/tests/Tui/RendererTest.php	0.118	23
+sugar-crush/tests/Context/MemorySettingsTest.php	0.118	18
 sugar-crush/tests/Backend/UiOnlyWireFilterTest.php	0.117	5
 sugar-crush/tests/Integration/SkillPathScopingWiringTest.php	0.117	6
 sugar-crush/tests/Skills/BuiltInSkillsTest.php	0.116	116

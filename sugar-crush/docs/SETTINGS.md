@@ -920,6 +920,7 @@ project-settable.
 | `compaction.autoTokens` | Context & Compaction | int | `150000` | P U C | — | restart | tuning |
 | `compaction.blockTokens` | Context & Compaction | int | unset (no cap) | P U C | — | restart | tuning |
 | `compaction.modelTokenCaps` | Context & Compaction | object | `{}` | P U C | — | restart | tuning |
+| `symbolMap.enabled` | Context & Compaction | bool | `true` | C | `SUGARCRUSH_DISABLE_SYMBOL_MAP` | restart | narrowing |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `SUGARCRUSH_CONTEXT_PRUNING` | next turn | tuning |
 | `permissionMode` | Permissions | enum | `default` (TUI); `bypass-permissions` (`-p`, daemon) | U C | `SUGARCRUSH_PERMISSION_MODE`, `--permission-mode` | restart | security |
@@ -934,6 +935,13 @@ project-settable.
 | `bashSandbox` | Tools | enum | `off` | U C | — | restart | security |
 | `testCommand` | Tools | string | unset | U C | — | restart | exec |
 | `autoTest` | Tools | bool | `false` | U C | — | restart | exec |
+| `memory.promptMaxEntries` | Memory & Rules | int | `40` | C | — | next turn | prompt |
+| `memory.promptMaxBytes` | Memory & Rules | int | `4096` | C | — | next turn | prompt |
+| `memory.entryMaxBytes` | Memory & Rules | int | `512` | C | — | next turn | prompt |
+| `memory.userMaxEntries` | Memory & Rules | int | `4` | C | — | next turn | prompt |
+| `memory.userMaxBytes` | Memory & Rules | int | `1024` | C | — | next turn | prompt |
+| `memory.autoConsolidate` | Memory & Rules | bool | `true` | C | `SUGARCRUSH_DISABLE_AUTO_MEMORY` | next turn | spend |
+| `memory.dreamIntervalSeconds` | Memory & Rules | int | `7200` | C | — | next turn | spend |
 | `instructions` | Memory & Rules | list | `[]` | U C | — | restart | prompt |
 | `disabledRules` | Memory & Rules | list | `[]` | U C | — | restart | prompt |
 | `embeddingModel` | Memory & Rules | string | unset | U C | — | next turn | spend |
@@ -1036,8 +1044,8 @@ Saved is not applied: see the next section for when each key takes effect.
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout` |
-| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `embeddingModel`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
-| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
+| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `symbolMap.enabled`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
