@@ -937,8 +937,10 @@ Open the sign-in URL and the page signs in, connects and shows:
   capped) and an edit's diff with line numbers. A refused call is marked with
   its reason.
 - **Permission questions** as cards with *Allow once*, *Always (this
-  session)*, *Reject* and *Reject & stop* (`y` / `a` / `n` on a focused card).
-  Every tab and client following the session shows the same question; the
+  session)*, *Reject* and *Reject & stop* (`y` / `a` / `n` on a focused card),
+  and a note field: its text goes with a rejection as feedback the agent
+  reads, and — on a question the agent asked itself (`AskUser`, `PlanExit`) —
+  with *Allow once* too, as your answer in your own words. Every tab and client following the session shows the same question; the
   first answer wins and closes it everywhere.
 - **The composer**: Enter sends, Shift+Enter is a new line. While a turn runs a
   prompt is queued by default — or steers the turn, or interrupts it — and the

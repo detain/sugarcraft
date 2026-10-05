@@ -677,6 +677,17 @@ reads the modal's keys as an answer:
 - `r` and a note is your answer in your own words (a choice's number picks that
   choice). For a plan, the note is feedback the model revises the plan against.
 - `n` declines the question, or refuses the plan.
+- `1`…`6` picks that choice of an `AskUser` question directly.
+
+The modal knows it is putting the model's own question rather than asking
+about a call: the ask's source is `tool:AskUser` or `tool:PlanExit` (a gate
+question's is `gate`, a hook's `hook:<names>`), so it is titled for the
+question, words its keys as answers and does not offer `a`. An answer in your
+own words goes back as `once` with the words as its note, and a server client
+answers the same way: `permission.respond` with `reply: "once"` and a `note`
+is an answer, which `AskUser` reads as the user's words (a bare number picks
+that choice). A note on `reject` stays feedback on a declined question or a
+refused plan.
 
 Neither is asked where nobody can answer. In a `-p` run
 (`NonInteractive::withoutInteractiveUser()`), under `dont-ask`, or in a turn

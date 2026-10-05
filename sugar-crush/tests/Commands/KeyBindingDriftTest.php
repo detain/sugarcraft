@@ -1487,6 +1487,42 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertNull($answered->pendingPermission(), 'which the same "y" now proves');
             },
 
+            // Roadmap 5.7-2: on AskUser's own question a digit answers with
+            // that choice — `once` carrying the number, which the tool reads as
+            // the pick — while on an ordinary prompt it is a non-answer.
+            'permission.choice' => function (): void {
+                $resolved = null;
+                $ask = \SugarCraft\Crush\Backend\PendingAsk::fromFrame(
+                    \SugarCraft\Crush\Backend\PendingAsk::describe(
+                        new \SugarCraft\Crush\Tools\ToolCall('call_q', 'AskUser', ['question' => 'Which?', 'options' => ['red', 'green', 'blue']]),
+                        \SugarCraft\Crush\Hooks\HookResult::ask('Which?'),
+                        'default',
+                    ),
+                    static function (\SugarCraft\Crush\Events\PermissionResolved $r) use (&$resolved): void {
+                        $resolved = $r;
+                    },
+                );
+                $this->assertNotNull($ask);
+                [$asking] = $this->chat([Message::user('pick')])->update(new PermissionRequestMsg(
+                    Message::assistant(''),
+                    new ToolCall('AskUser', ['question' => 'Which?'], 'call_q'),
+                    'Which?',
+                    null,
+                    $ask,
+                ));
+                $this->assertNotNull($asking->pendingPermission(), 'fixture: the question must be up');
+
+                [$answered] = $asking->update(new KeyMsg(KeyType::Char, '2'));
+                $this->assertNull($answered->pendingPermission());
+                $this->assertInstanceOf(\SugarCraft\Crush\Events\PermissionResolved::class, $resolved);
+                $this->assertSame(\SugarCraft\Crush\Permissions\PermissionReply::Once, $resolved->reply);
+                $this->assertSame('2', $resolved->note);
+
+                [$bash] = $this->blockedOnPermission()->update(new KeyMsg(KeyType::Char, '2'));
+                $this->assertNotNull($bash->pendingPermission(), 'a digit answers nothing on a permission prompt');
+                $this->assertSame(PermissionPromptStage::Disarmed, $bash->permissionStage());
+            },
+
             // ── Agent view ───────────────────────────────────────────────
             'agents.move' => function (array $k): void {
                 [$down] = $this->claim($k[1], $this->agentApp(1));
@@ -2717,6 +2753,10 @@ final class KeyBindingDriftTest extends TestCase
         // wrongly, not because it is the middle of the range (that would be
         // Alt+5, and nothing here needs it to be).
         'agents.slot',
+        // "1…6" — AskUser's choices, a range like the slot row above. The
+        // observation presses 2, the lowest a "take option 1" mis-wiring
+        // would answer wrongly.
+        'permission.choice',
         // Mouse gestures are not keystrokes at all.
         'mouse.wheel',
         'mouse.tab',

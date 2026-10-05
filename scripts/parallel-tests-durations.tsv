@@ -455,6 +455,7 @@ sugar-crush/tests/Cli/NonInteractiveAskUserTest.php	0.300	2
 sugar-crush/tests/Support/AiCommentWatcherTest.php	0.300	15
 sugar-crush/tests/Tools/BuiltIn/QuestionToolWiringTest.php	0.300	4
 sugar-crush/tests/Config/Settings/OperatorSettingsTest.php	0.300	16
+sugar-crush/tests/Permissions/QuestionAwareModalTest.php	0.300	11
 sugar-crush/tests/Providers/ProviderRequestResponseTest.php	0.299	46
 sugar-crush/tests/Tui/PaneDragIntegrationTest.php	0.295	21
 sugar-crush/tests/Workflows/WorkflowRetriesTest.php	0.294	10

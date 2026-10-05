@@ -73,7 +73,7 @@ describe('PermissionCard', () => {
       const wrapper = mount(PermissionCard, { props: { ask, canAnswer: true } })
       expect(wrapper.text()).toContain('git push')
       await wrapper.find(`[data-testid="${id}"]`).trigger('click')
-      expect(wrapper.emitted('answer')?.[0]).toEqual(expected)
+      expect(wrapper.emitted('answer')?.[0]).toEqual([...expected, ''])
     }
   })
 
@@ -81,7 +81,26 @@ describe('PermissionCard', () => {
     const wrapper = mount(PermissionCard, { props: { ask, canAnswer: true } })
     await wrapper.trigger('keydown', { key: 'n' })
     await wrapper.trigger('keydown', { key: 'y' })
-    expect(wrapper.emitted('answer')).toEqual([['reject', false]])
+    expect(wrapper.emitted('answer')).toEqual([['reject', false, '']])
+  })
+
+  it('sends the note with a rejection, not with an allow', async () => {
+    for (const [id, expected] of [['ask-reject', ['reject', false, 'use rg']], ['ask-once', ['once', false, '']]] as const) {
+      const wrapper = mount(PermissionCard, { props: { ask, canAnswer: true } })
+      await wrapper.find('[data-testid="ask-note"]').setValue('  use rg ')
+      await wrapper.find(`[data-testid="${id}"]`).trigger('click')
+      expect(wrapper.emitted('answer')?.[0]).toEqual(expected)
+    }
+  })
+
+  it('sends a typed answer with Allow once on a question the agent asked', async () => {
+    const question = { ...ask, tool: 'AskUser', source: 'tool:AskUser', options: ['once', 'reject'] as ('once' | 'always' | 'reject')[], alwaysScope: undefined }
+    const wrapper = mount(PermissionCard, { props: { ask: question, canAnswer: true } })
+    await wrapper.find('[data-testid="ask-note"]').setValue('teal')
+    await wrapper.find('[data-testid="ask-note"]').trigger('keydown', { key: 'n' })
+    expect(wrapper.emitted('answer')).toBeUndefined()
+    await wrapper.find('[data-testid="ask-once"]').trigger('click')
+    expect(wrapper.emitted('answer')?.[0]).toEqual(['once', false, 'teal'])
   })
 
   it('cannot answer without the approve scope', async () => {

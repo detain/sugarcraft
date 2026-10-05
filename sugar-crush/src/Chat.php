@@ -4487,8 +4487,15 @@ final class Chat implements Model
             }
             if ($msg->type === KeyType::Enter && !$msg->alt && !$msg->shift && !$msg->ctrl) {
                 $note = trim($this->inputBuf);
+                // An `AskUser` answer in the user's own words is an ANSWER, so
+                // it goes back as `once` + the words (roadmap 5.7-2) — what a
+                // server client sends too, and what the event log records.
+                // Empty, it stays a decline; `PlanExit`'s note is feedback on
+                // a plan NOT approved, so it stays a refusal.
+                $answers = $note !== ''
+                    && $this->pendingPermission?->pendingAsk?->question() === \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME;
 
-                return $this->withInputBuf('')->answerPermission(PermissionReply::Reject, $note);
+                return $this->withInputBuf('')->answerPermission($answers ? PermissionReply::Once : PermissionReply::Reject, $note);
             }
 
             return $this->delegateToInput($msg);
@@ -4542,10 +4549,24 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // A QUESTION THE MODEL PUT ITSELF (roadmap 5.7-2): `AskUser`'s choices
+        // answer by their number — a permitting reply whose note is that
+        // number, which the tool reads as the pick
+        // ({@see \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::answer()}) — and
+        // `a` is not on offer, since there is no call to allow for the session:
+        // it falls through to the arm rule below like any other non-answer.
+        $question = $this->pendingPermission?->pendingAsk?->question();
+        if ($question !== null && $isChar && preg_match('/\A[1-9]\z/', $rune) === 1) {
+            $choices = $this->pendingPermission?->pendingAsk?->choices() ?? [];
+            if ((int) $rune <= \count($choices)) {
+                return $this->answerPermission(PermissionReply::Once, $rune);
+            }
+        }
+
         // `a` no longer grants; it ASKS. The reply it leads to is the only one
         // that outlives the call being answered, so it is the only one worth a
         // second keystroke - see PermissionPromptStage::ConfirmingAlways.
-        if ($isChar && $rune === 'a') {
+        if ($isChar && $rune === 'a' && $question === null) {
             return [$this->mutate(['permissionStage' => PermissionPromptStage::ConfirmingAlways]), null];
         }
 

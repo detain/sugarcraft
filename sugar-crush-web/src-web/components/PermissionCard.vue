@@ -6,9 +6,16 @@ import type { PendingAsk } from '../protocol/generated'
 export type Reply = 'once' | 'always' | 'reject'
 
 const props = defineProps<{ ask: PendingAsk; canAnswer: boolean }>()
-const emit = defineEmits<{ answer: [reply: Reply, cascade: boolean] }>()
+const emit = defineEmits<{ answer: [reply: Reply, cascade: boolean, note: string] }>()
 
 const busy = ref(false)
+/**
+ * The note the agent reads: feedback on a rejection, or — on a question the
+ * agent put itself (`AskUser`, `PlanExit`: source `tool:<name>`) — the answer
+ * in the user's own words, which goes with Allow once as well (roadmap 5.7-2).
+ */
+const note = ref('')
+const question = computed(() => (props.ask.source ?? '').startsWith('tool:'))
 const what = computed(() => keyArgument(props.ask.arguments))
 const argsJson = computed(() => JSON.stringify(props.ask.arguments, null, 2))
 const offers = computed(() => new Set(props.ask.options))
@@ -21,12 +28,14 @@ const alwaysLabel = computed(() => {
 function answer(reply: Reply, cascade = false): void {
   if (busy.value || !props.canAnswer) return
   busy.value = true
-  emit('answer', reply, cascade)
+  const text = note.value.trim()
+  emit('answer', reply, cascade, reply === 'reject' || (reply === 'once' && question.value) ? text : '')
 }
 
 /** y / a / n answer the focused card, the TUI's keys. */
 function onKey(event: KeyboardEvent): void {
   if (event.target instanceof HTMLButtonElement && (event.key === 'Enter' || event.key === ' ')) return
+  if (event.target instanceof HTMLInputElement) return
   if (event.key === 'y') answer('once')
   else if (event.key === 'a' && offers.value.has('always')) answer('always')
   else if (event.key === 'n') answer('reject')
@@ -45,6 +54,16 @@ function onKey(event: KeyboardEvent): void {
       <summary>arguments</summary>
       <pre>{{ argsJson }}</pre>
     </details>
+    <input
+      v-model="note"
+      type="text"
+      class="note-field"
+      maxlength="2048"
+      :disabled="busy || !canAnswer"
+      :placeholder="question ? 'Your answer or feedback (optional)' : 'Note for the agent with Reject (optional)'"
+      :aria-label="question ? 'Your answer or feedback' : 'Rejection note'"
+      data-testid="ask-note"
+    />
     <div class="actions">
       <button type="button" class="primary" :disabled="busy || !canAnswer" data-testid="ask-once" @click="answer('once')">Allow once</button>
       <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always" @click="answer('always')">{{ alwaysLabel }}</button>
@@ -100,6 +119,14 @@ pre {
   font-size: 0.8125rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.note-field {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 0.5rem;
+  font: inherit;
+  font-size: 0.875rem;
 }
 .actions {
   display: flex;

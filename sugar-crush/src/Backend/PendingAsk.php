@@ -8,6 +8,8 @@ use SugarCraft\Crush\Events\PermissionResolved;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Permissions\PermissionReply;
+use SugarCraft\Crush\Tools\BuiltIn\AskUserTool;
+use SugarCraft\Crush\Tools\BuiltIn\PlanExitTool;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
@@ -33,6 +35,12 @@ use SugarCraft\Crush\Tools\ToolCall;
  */
 final class PendingAsk
 {
+    /** How {@see source()} names a question the tool put itself. */
+    public const TOOL_SOURCE_PREFIX = 'tool:';
+
+    /** The tools whose call IS a question to the user (roadmap 5.7-2). */
+    public const QUESTION_TOOLS = [AskUserTool::NAME, PlanExitTool::NAME];
+
     private ?PermissionResolved $resolution = null;
 
     /**
@@ -95,7 +103,6 @@ final class PendingAsk
     public static function describe(ToolCall $call, HookResult $ask, string $mode): array
     {
         $gateOnly = $ask->askedOnlyBy(PermissionGateHook::NAME);
-        $askers = $ask->askedBy;
 
         return [
             'kind' => ChildChannel::ASK,
@@ -104,7 +111,7 @@ final class PendingAsk
             'tool' => $call->name(),
             'arguments' => $call->arguments(),
             'reason' => $ask->message,
-            'source' => $gateOnly ? 'gate' : 'hook:' . ($askers === [] ? 'unknown' : implode(',', $askers)),
+            'source' => self::source($call, $ask),
             'mode' => $mode,
             'suggestions' => $gateOnly
                 ? [PermissionReply::Once->value, PermissionReply::Always->value, PermissionReply::Reject->value]
@@ -113,6 +120,61 @@ final class PendingAsk
             // P-E2: which delegated run asked, when this process was told
             // (a relayed member's question); absent for the turn's own.
         ] + (($origin = \SugarCraft\Crush\Permissions\AskOrigin::current()) === null ? [] : ['origin' => $origin->toArray()]);
+    }
+
+    /**
+     * Who put the question: `gate` for the permission gate alone,
+     * `hook:<names>` when hooks asked, and `tool:<name>` for an ask no hook
+     * raised — the call's own question, which is what `AskUser` and `PlanExit`
+     * put through {@see \SugarCraft\Crush\Tools\RelaysPermissionAsks}
+     * (roadmap 5.7-2). That last one used to read `hook:unknown`, naming a
+     * hook that did not exist.
+     */
+    public static function source(ToolCall $call, HookResult $ask): string
+    {
+        if ($ask->askedOnlyBy(PermissionGateHook::NAME)) {
+            return 'gate';
+        }
+
+        return $ask->askedBy === []
+            ? self::TOOL_SOURCE_PREFIX . $call->name()
+            : 'hook:' . implode(',', $ask->askedBy);
+    }
+
+    /**
+     * The question tool whose own question this is — `AskUser` or `PlanExit`
+     * — or null for a permission question about a call. Read off the
+     * {@see source()} the asking process wrote, so a hook's ask about an
+     * `AskUser` call stays a permission question.
+     */
+    public function question(): ?string
+    {
+        return \in_array($this->tool, self::QUESTION_TOOLS, true) && $this->source === self::TOOL_SOURCE_PREFIX . $this->tool
+            ? $this->tool
+            : null;
+    }
+
+    /**
+     * The choices an `AskUser` question offers, in order (option 1 is the
+     * recommended one) — what the modal's number keys pick. Empty for any
+     * other ask, or one whose arguments carry none.
+     *
+     * @return list<string>
+     */
+    public function choices(): array
+    {
+        if ($this->question() !== AskUserTool::NAME || !\is_array($this->arguments['options'] ?? null)) {
+            return [];
+        }
+
+        $choices = [];
+        foreach ($this->arguments['options'] as $option) {
+            if (\is_string($option) && $option !== '') {
+                $choices[] = $option;
+            }
+        }
+
+        return \array_slice($choices, 0, AskUserTool::MAX_OPTIONS);
     }
 
     /**
@@ -184,8 +246,10 @@ final class PendingAsk
      * settles as `once`: the caller gets the call it approved, and nothing
      * is remembered for a question that must be put every time.
      *
-     * @param ?string $note on a reject, feedback for the model; clipped to
-     *                      {@see ChildChannel::MAX_NOTE_BYTES}
+     * @param ?string $note on a reject, feedback for the model; on a
+     *                      permitting reply to a {@see question()}, the
+     *                      user's answer (a choice's number picks it);
+     *                      clipped to {@see ChildChannel::MAX_NOTE_BYTES}
      *
      * @return bool false when the question was already settled — answered
      *              before, or cancelled with the turn — and nothing was sent

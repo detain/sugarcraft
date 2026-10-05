@@ -626,6 +626,9 @@ final class KeyBindingRegistry
             KeyBinding::new('permission.note', 'r', 'Refuse with a note the agent reads', $c),
             KeyBinding::new('permission.stop', 'x', 'Refuse the call and stop the turn', $c),
             KeyBinding::new('permission.rearm', 'Enter', 'Make the answer keys live again', $c),
+            // Roadmap 5.7-2: a question the agent put itself (AskUser) answers
+            // by its choices' numbers; the question's own footer names them.
+            KeyBinding::new('permission.choice', '1…6', 'Pick that choice when the agent asks a question', $c),
         ];
     }
 

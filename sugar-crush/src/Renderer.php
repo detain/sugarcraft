@@ -6181,13 +6181,20 @@ final class Renderer
             );
         }
 
+        $question = $request->pendingAsk?->question();
+
         // The note being typed, in the modal itself: the draft box it is typed
         // into sits under the overlay.
         if ($stage === PermissionPromptStage::WritingNote) {
             $note = trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($chat->inputBuf)));
+            $lead = match ($question) {
+                \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME => 'Your answer: ',
+                \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME => 'What should change? ',
+                default => 'Why are you refusing? ',
+            };
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render(
-                self::wrapPermissionText('Why are you refusing? ' . ($note === '' ? '(type a note)' : $note), $inner),
+                self::wrapPermissionText($lead . ($note === '' ? '(type a note)' : $note), $inner),
             );
         }
 
@@ -6198,12 +6205,7 @@ final class Renderer
             );
         }
 
-        $options = match ($stage) {
-            PermissionPromptStage::ConfirmingAlways => self::PERMISSION_CONFIRM_OPTIONS,
-            PermissionPromptStage::Disarmed => self::PERMISSION_DISARMED_OPTIONS,
-            PermissionPromptStage::Armed => self::PERMISSION_OPTIONS,
-            PermissionPromptStage::WritingNote => self::PERMISSION_NOTE_OPTIONS,
-        };
+        $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? []);
 
         $lines[] = '';
         foreach ($options as [$keys, $label]) {
@@ -6213,11 +6215,67 @@ final class Renderer
         }
 
         return Style::new()
-            ->border(Border::rounded()->withTitle(' permission required '))
+            ->border(Border::rounded()->withTitle(match ($question) {
+                \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME => ' the agent asks ',
+                \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME => ' approve the plan ',
+                default => ' permission required ',
+            }))
             ->borderForeground($theme->border)
             ->padding(1, 2)
             ->width($inner)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The `[keys, label]` rows the permission modal's footer advertises for
+     * $stage — question-aware (roadmap 5.7-2). A question the model put
+     * itself ($question, from {@see \SugarCraft\Crush\Backend\PendingAsk::question()})
+     * keeps the same letters, worded as an answer to a question rather than a
+     * verdict on a call, with no `a` (there is no call to allow for the
+     * session); `AskUser`'s $choices lead with their number keys, and
+     * `PlanExit`'s read approve / feedback / refuse. `Chat::handlePermissionKey()`
+     * holds the arms these describe.
+     *
+     * @param list<string> $choices
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices): array
+    {
+        $askUser = \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME;
+        $planExit = \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME;
+
+        return match ($stage) {
+            PermissionPromptStage::ConfirmingAlways => self::PERMISSION_CONFIRM_OPTIONS,
+            PermissionPromptStage::Disarmed => self::PERMISSION_DISARMED_OPTIONS,
+            PermissionPromptStage::WritingNote => match ($question) {
+                $askUser => [['Enter', 'send this answer'], self::PERMISSION_NOTE_OPTIONS[1]],
+                $planExit => [['Enter', 'send this feedback; plan mode stays on'], self::PERMISSION_NOTE_OPTIONS[1]],
+                default => self::PERMISSION_NOTE_OPTIONS,
+            },
+            PermissionPromptStage::Armed => match (true) {
+                $question === $planExit => [
+                    ['y', 'approve the plan; plan mode ends with this turn'],
+                    ['r', 'send feedback, keep planning'],
+                    ['n / Esc', 'refuse the plan'],
+                    ['x', 'refuse and stop the turn'],
+                ],
+                $question === $askUser && $choices !== [] => [
+                    [\count($choices) === 1 ? '1' : '1–' . \count($choices), 'pick that choice'],
+                    ['y', 'choice 1 (recommended)'],
+                    ['r', 'answer in your own words'],
+                    ['n / Esc', 'decline the question'],
+                    ['x', 'decline and stop the turn'],
+                ],
+                $question === $askUser => [
+                    ['y', 'yes'],
+                    ['n / Esc', 'no / decline'],
+                    ['r', 'answer in your own words'],
+                    ['x', 'decline and stop the turn'],
+                ],
+                default => self::PERMISSION_OPTIONS,
+            },
+        };
     }
 
     /**

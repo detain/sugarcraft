@@ -42,8 +42,10 @@ final readonly class ApprovalVerdict
      * @param string           $feedback model-visible text about a refusal — a
      *                                   user's note (already labelled as theirs)
      *                                   or the reason nobody could answer; empty
-     *                                   when there is nothing to add. Never shown
-     *                                   on a permitting verdict.
+     *                                   when there is nothing to add. On a
+     *                                   permitting verdict only a user's note
+     *                                   ({@see fromReply()}), which only a
+     *                                   question tool reads.
      */
     private function __construct(
         public ?PermissionReply $reply,
@@ -78,9 +80,7 @@ final readonly class ApprovalVerdict
      */
     public static function rejectedByUser(string $note): self
     {
-        $note = trim($note);
-
-        return new self(PermissionReply::Reject, $note === '' ? '' : 'the user said: ' . $note);
+        return new self(PermissionReply::Reject, self::userNote($note));
     }
 
     /** Nobody answered — the question outlived whoever could have. */
@@ -91,14 +91,31 @@ final readonly class ApprovalVerdict
 
     /**
      * A {@see PermissionReply} with its optional note, as a person gave it.
+     *
+     * The note is kept on a permitting reply too, labelled as the user's
+     * (roadmap 5.7-2): for a question the model put itself — `AskUser`, or a
+     * server client answering `once` with text, or the modal's number key for
+     * a choice — the words ARE the answer
+     * ({@see \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::answer()}). A
+     * permission gate ignores feedback on a verdict that permits
+     * ({@see \SugarCraft\Crush\Hooks\HookManager}), so a note on an ordinary
+     * `once` changes nothing there.
      */
     public static function fromReply(PermissionReply $reply, string $note = ''): self
     {
         return match ($reply) {
-            PermissionReply::Once => self::once(),
+            PermissionReply::Once => new self(PermissionReply::Once, self::userNote($note)),
             PermissionReply::Always => self::always(),
             PermissionReply::Reject => self::rejectedByUser($note),
         };
+    }
+
+    /** $note labelled as the person's own words, or '' for none. */
+    private static function userNote(string $note): string
+    {
+        $note = trim($note);
+
+        return $note === '' ? '' : 'the user said: ' . $note;
     }
 
     /**
