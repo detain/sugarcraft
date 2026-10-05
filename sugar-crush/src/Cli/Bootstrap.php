@@ -31,6 +31,7 @@ use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookConfig;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\LSP\LspClient;
 use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\MCP\McpTrustPins;
@@ -726,6 +727,70 @@ final class Bootstrap
     public const MEMORY_LEGACY_BOUND_NOTICE_FORMAT =
         '%d project memory note%s written before notes were kept per project %s now bound to this project '
         . '(%s) and shown nowhere else, in %s; move a file out if it belongs to another project';
+
+    /**
+     * The catalogue key each launch-notice text above is translated through
+     * (audit 15b-14, step 15b-14-2), keyed by the English text itself.
+     *
+     * THE CONSTANTS STAY THE ENGLISH SOURCE OF TRUTH, the D7 shape
+     * `SettingCategory::label()` already has: every guard, test and doc page
+     * that reads one of these names — the format census, the page sweep, the
+     * README and SETTINGS samples — keeps reading the English, and
+     * `tests/Cli/CliLangCatalogueTest.php` pins each `lang/en.php` value to the
+     * constant it translates, byte for byte, so routing a line through
+     * {@see translated()} changes nothing in English. Another locale's entry
+     * is a printf format of its own: it may reorder with `%1$s` positions and
+     * may drop the English agreement slots (`s`, `was`/`were`, `it`/`them`),
+     * which `sprintf()` passes and ignores, but it may not ask for more
+     * arguments than the English does — the same test renders each one.
+     *
+     * NOT LISTED, ON PURPOSE: {@see STDERR_LINE_FORMAT}, the `sugarcrush: `
+     * envelope rather than a sentence, and {@see PROMPT_ATTRIBUTION_FORMAT},
+     * which the MODEL reads inside an agent's prompt and so stays English.
+     *
+     * @var array<string, string>
+     */
+    public const LAUNCH_NOTICE_CATALOGUE = [
+        self::LAUNCH_NOTICE_CLIP_SUFFIX => 'cli.launch.clip_suffix',
+        self::PROJECT_TIER_TOOL_REMOVAL_FORMAT => 'cli.launch.tool_removal',
+        self::PROJECT_TIER_TOOL_REMOVAL_LEAVING => 'cli.launch.tool_removal_leaving',
+        self::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE => 'cli.launch.tool_removal_leaving_none',
+        self::SKILL_SKIP_NOTICE_FORMAT => 'cli.launch.skill_skip',
+        self::INSTRUCTION_DEFERRAL_NOTICE_FORMAT => 'cli.launch.instruction_deferral',
+        self::SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT => 'cli.launch.skill_budget_deferral',
+        self::NONSENSE_LIMIT_NOTICE_FORMAT => 'cli.launch.nonsense_limit',
+        self::NONSENSE_STEPS_EXPECTED => 'cli.launch.nonsense_steps_expected',
+        self::NONSENSE_STEPS_CONSEQUENCE => 'cli.launch.nonsense_steps_consequence',
+        self::NONSENSE_TOKENS_EXPECTED => 'cli.launch.nonsense_tokens_expected',
+        self::NONSENSE_TOKENS_CONSEQUENCE => 'cli.launch.nonsense_tokens_consequence',
+        self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT => 'cli.launch.tui_error_log_fallback',
+        self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT => 'cli.launch.tui_error_log_discarded',
+        self::COMMAND_SKIP_NOTICE_FORMAT => 'cli.launch.command_skip',
+        self::AGENT_PRESET_SKIP_NOTICE_FORMAT => 'cli.launch.agent_preset_skip',
+        self::LAUNCH_NOTICE_OVERFLOW_FORMAT => 'cli.launch.overflow',
+        self::NARROWED_GRANT_NOTICE_FORMAT => 'cli.launch.narrowed_grant',
+        self::NARROWED_GRANT_OVERFLOW_FORMAT => 'cli.launch.narrowed_grant_overflow',
+        self::SESSION_RETENTION_SUMMARY_FORMAT => 'cli.launch.retention_summary',
+        self::SESSION_RETENTION_DETAIL_FORMAT => 'cli.launch.retention_detail',
+        self::PROJECT_TIER_REFUSAL_FORMAT => 'cli.launch.project_tier_refusal',
+        self::MCP_PARTIAL_START_LOG_FORMAT => 'cli.launch.mcp_partial_start_log',
+        self::MCP_PARTIAL_START_NOTICE_FORMAT => 'cli.launch.mcp_partial_start',
+        self::MCP_SERVER_REFUSED_NOTICE_FORMAT => 'cli.launch.mcp_server_refused',
+        self::MCP_SERVER_CHANGED_FORMAT => 'cli.launch.mcp_server_changed',
+        self::MCP_SERVER_ADDED_FORMAT => 'cli.launch.mcp_server_added',
+        self::MEMORY_LEGACY_BOUND_NOTICE_FORMAT => 'cli.launch.memory_legacy_bound',
+    ];
+
+    /**
+     * $text in the active locale: its catalogue entry when it is one of
+     * {@see LAUNCH_NOTICE_CATALOGUE}'s texts, else $text unchanged.
+     */
+    private static function translated(string $text): string
+    {
+        $key = self::LAUNCH_NOTICE_CATALOGUE[$text] ?? null;
+
+        return $key === null ? $text : Lang::t($key);
+    }
 
     /**
      * How many CALL sites in this file route a warning onto
@@ -2142,7 +2207,7 @@ final class Bootstrap
             // are bounded, but $commandLoader->refusedCommands() is one entry
             // per refused FILE and nothing caps that.
             self::warnPermissionConfigInTranscript(
-                sprintf(self::PROJECT_TIER_REFUSAL_FORMAT, $path, rtrim($reason, '.')),
+                sprintf(self::translated(self::PROJECT_TIER_REFUSAL_FORMAT), $path, rtrim($reason, '.')),
             );
         }
     }
@@ -2237,7 +2302,7 @@ final class Bootstrap
                 // Named honestly: this gate's mode came from the preset, not
                 // from the precedence chain permissionGate() walks, and a
                 // sub-agent's `/permissions` must not claim otherwise.
-                "this agent preset's permissionMode",
+                Lang::t('cli.launch_source.preset_mode'),
             ),
             permissionApprover: $approver,
             toolRegistry: self::toolSetUnder($toolUniverse, self::readUserConfig()),
@@ -2653,7 +2718,7 @@ final class Bootstrap
             // constructor arguments — so it is recorded before chat() reads the
             // list on its way out.
             self::warnPermissionConfigInTranscript(
-                "foreign agent presets unavailable ({$e->getMessage()}); continuing without them",
+                Lang::t('cli.warn.foreign_presets_unavailable', ['error' => $e->getMessage()]),
             );
             $presets = [];
         }
@@ -2763,7 +2828,7 @@ final class Bootstrap
                 }
 
                 $notice = sprintf(
-                    self::AGENT_PRESET_SKIP_NOTICE_FORMAT,
+                    self::translated(self::AGENT_PRESET_SKIP_NOTICE_FORMAT),
                     \count($skipped),
                     \count($skipped) === 1 ? '' : 's',
                     implode('; ', $rows),
@@ -2774,7 +2839,7 @@ final class Bootstrap
             // routed for the same reason: the roster the user configured is not
             // the roster they got. A malformed FILE no longer lands here (see
             // above); what is left is a failure of the walk itself.
-            $notice = "agent presets unavailable ({$e->getMessage()}); continuing with the built-in agents";
+            $notice = Lang::t('cli.warn.presets_unavailable', ['error' => $e->getMessage()]);
             $presets = [];
         }
 
@@ -3343,7 +3408,7 @@ final class Bootstrap
                 // chat()'s FIRST named constructor argument, so this lands well
                 // before chat() reads the list.
                 self::warnPermissionConfigInTranscript(
-                    "provider '{$providerType}' unavailable ({$e->getMessage()}); falling back to echo",
+                    Lang::t('cli.warn.provider_unavailable', ['provider' => $providerType, 'error' => $e->getMessage()]),
                 );
             }
         }
@@ -3380,7 +3445,7 @@ final class Bootstrap
                 // and a persisted provider that also throws degrades to echo.
                 // Two distinct sentences, so both are recorded.
                 self::warnPermissionConfigInTranscript(
-                    "persisted provider '{$persisted}' unavailable ({$e->getMessage()}); falling back to echo",
+                    Lang::t('cli.warn.persisted_provider_unavailable', ['provider' => $persisted, 'error' => $e->getMessage()]),
                 );
             }
         }
@@ -3824,11 +3889,11 @@ final class Bootstrap
         try {
             $found = self::findSession(self::sessionStore(false), self::$sessionLaunchTarget);
         } catch (\Throwable $e) {
-            return 'sugarcrush: --resume: cannot open the session store: ' . $e->getMessage();
+            return 'sugarcrush: ' . Lang::t('cli.argv.resume.store_unavailable', ['error' => $e->getMessage()]);
         }
 
         return $found === null
-            ? 'sugarcrush: --resume: no stored session has the id or name "' . self::$sessionLaunchTarget . '"'
+            ? 'sugarcrush: ' . Lang::t('cli.argv.resume.not_found', ['target' => self::$sessionLaunchTarget])
             : null;
     }
 
@@ -4302,7 +4367,7 @@ final class Bootstrap
                 self::$trustedSettingsRoots[$path] = self::trustedProjectRoots(
                     self::permissionConfig(),
                     LayeredSettings::PROJECT_SETTINGS_TRUST_KEY,
-                    'no project settings file may contribute a setting',
+                    Lang::t('cli.warn.untrusted_settings'),
                 );
             }
         } catch (\Throwable) {
@@ -4831,7 +4896,7 @@ final class Bootstrap
         $enabled = $config['enabledSkills'];
         if (!is_array($enabled)) {
             self::warnPermissionConfigInTranscript(
-                'enabledSkills is not a list of skill names; no skill bodies are enabled in the system prompt',
+                Lang::t('cli.warn.enabled_skills_not_list'),
             );
 
             return [];
@@ -4847,7 +4912,7 @@ final class Bootstrap
         foreach ($enabled as $index => $entry) {
             if (!is_string($entry)) {
                 self::warnPermissionConfigInTranscript(
-                    "enabledSkills[{$index}] is not a skill name; entry skipped",
+                    Lang::t('cli.warn.enabled_skill_not_name', ['index' => $index]),
                 );
 
                 continue;
@@ -4874,12 +4939,9 @@ final class Bootstrap
                 // below is the CONFIG, true in both cases and the only one the
                 // reader can act on. A presence accessor would be API churn
                 // bought for the phrasing of one notice.
-                $cause = $registry->isDisabled($name)
-                    ? 'is disabled by configuration'
-                    : 'was not found';
-                self::warnPermissionConfigInTranscript(
-                    "enabled skill '{$name}' {$cause}; it stays out of the system prompt",
-                );
+                self::warnPermissionConfigInTranscript($registry->isDisabled($name)
+                    ? Lang::t('cli.warn.enabled_skill_disabled', ['skill' => $name])
+                    : Lang::t('cli.warn.enabled_skill_missing', ['skill' => $name]));
 
                 continue;
             }
@@ -4887,7 +4949,7 @@ final class Bootstrap
                 $skills[] = Skill::fromFile($manifest->sourcePath);
             } catch (\RuntimeException|\InvalidArgumentException $e) {
                 self::warnPermissionConfigInTranscript(
-                    "enabled skill '{$name}' could not be read ({$e->getMessage()}); it stays out of the system prompt",
+                    Lang::t('cli.warn.enabled_skill_unreadable', ['skill' => $name, 'error' => $e->getMessage()]),
                 );
             }
         }
@@ -4965,7 +5027,7 @@ final class Bootstrap
         // PROSE_SITES and a declaration in {@see TRANSCRIPT_SEAM_CALL_SITES}, so
         // a further site reds this sentence rather than dating it.
         self::warnPermissionConfigInTranscript(sprintf(
-            self::SKILL_SKIP_NOTICE_FORMAT,
+            self::translated(self::SKILL_SKIP_NOTICE_FORMAT),
             $count,
             $count === 1 ? '' : 's',
             $count === 1 ? 'was' : 'were',
@@ -5013,7 +5075,7 @@ final class Bootstrap
         $bound = $home?->takeBoundLegacyNotes() ?? [];
         if ($bound !== [] && $home !== null) {
             $notices[] = sprintf(
-                self::MEMORY_LEGACY_BOUND_NOTICE_FORMAT,
+                self::translated(self::MEMORY_LEGACY_BOUND_NOTICE_FORMAT),
                 \count($bound),
                 \count($bound) === 1 ? '' : 's',
                 \count($bound) === 1 ? 'is' : 'are',
@@ -5104,7 +5166,7 @@ final class Bootstrap
         $documents = self::instructionDeferrals($root);
         if ($documents !== []) {
             $rows[] = sprintf(
-                self::INSTRUCTION_DEFERRAL_NOTICE_FORMAT,
+                self::translated(self::INSTRUCTION_DEFERRAL_NOTICE_FORMAT),
                 \count($documents),
                 \count($documents) === 1 ? '' : 's',
                 \count($documents) === 1 ? 'was' : 'were',
@@ -5115,7 +5177,7 @@ final class Bootstrap
         $skillBodies = self::skillBodyDeferrals($root, $skills);
         if ($skillBodies !== []) {
             $rows[] = sprintf(
-                self::SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT,
+                self::translated(self::SKILL_BUDGET_DEFERRAL_NOTICE_FORMAT),
                 \count($skillBodies),
                 \count($skillBodies) === 1 ? '' : 's',
                 \count($skillBodies) === 1 ? 'is' : 'are',
@@ -5248,13 +5310,13 @@ final class Bootstrap
         $verdicts = [
             self::MAX_TOOL_STEPS_CONFIG_KEY => [
                 self::resolvedMaxToolSteps($config),
-                self::NONSENSE_STEPS_EXPECTED,
-                self::NONSENSE_STEPS_CONSEQUENCE,
+                self::translated(self::NONSENSE_STEPS_EXPECTED),
+                self::translated(self::NONSENSE_STEPS_CONSEQUENCE),
             ],
             self::MAX_OUTPUT_TOKENS_CONFIG_KEY => [
                 self::resolvedMaxOutputTokens($config),
-                self::NONSENSE_TOKENS_EXPECTED,
-                self::NONSENSE_TOKENS_CONSEQUENCE,
+                self::translated(self::NONSENSE_TOKENS_EXPECTED),
+                self::translated(self::NONSENSE_TOKENS_CONSEQUENCE),
             ],
         ];
 
@@ -5262,7 +5324,7 @@ final class Bootstrap
         foreach ($verdicts as $key => [$resolved, $expected, $consequence]) {
             if ($resolved === null && self::isNonsenseSetting($config, $key)) {
                 $rows[] = sprintf(
-                    self::NONSENSE_LIMIT_NOTICE_FORMAT,
+                    self::translated(self::NONSENSE_LIMIT_NOTICE_FORMAT),
                     $key,
                     self::settingValueForNotice($config[$key]),
                     $expected,
@@ -5300,8 +5362,8 @@ final class Bootstrap
         }
 
         self::warnLaunchRows([self::discardsWhatIsWritten(self::$tuiErrorLog)
-            ? sprintf(self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT, '~/' . TuiErrorLog::RELATIVE_PATH)
-            : sprintf(self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT, '~/' . TuiErrorLog::RELATIVE_PATH, self::$tuiErrorLog)]);
+            ? sprintf(self::translated(self::TUI_ERROR_LOG_DISCARDED_NOTICE_FORMAT), '~/' . TuiErrorLog::RELATIVE_PATH)
+            : sprintf(self::translated(self::TUI_ERROR_LOG_FALLBACK_NOTICE_FORMAT), '~/' . TuiErrorLog::RELATIVE_PATH, self::$tuiErrorLog)]);
     }
 
     /**
@@ -5435,7 +5497,7 @@ final class Bootstrap
         // CommandLoader's property doc-block recorded in round 46: the count
         // belongs on the seam, the paths behind the debug gate.
         self::warnPermissionConfigInTranscript(sprintf(
-            self::COMMAND_SKIP_NOTICE_FORMAT,
+            self::translated(self::COMMAND_SKIP_NOTICE_FORMAT),
             $count,
             $count === 1 ? '' : 's',
             $count === 1 ? 'was' : 'were',
@@ -5633,8 +5695,7 @@ final class Bootstrap
                 // {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner}
                 // already turn into a clean exit-2 usage report.
                 throw new PermissionConfigException(
-                    $e->getMessage() . ' Refusing to start rather than run with a hook chain '
-                    . 'that is not the one configured.',
+                    Lang::t('cli.refuse.hook_chain', ['error' => $e->getMessage()]),
                     0,
                     $e,
                 );
@@ -5745,9 +5806,7 @@ final class Bootstrap
             $mode = @fileperms($target);
             if ($mode !== false && ($mode & 0002) !== 0) {
                 throw new PermissionConfigException(
-                    "{$target} is writable by every account on this machine, so the permission "
-                    . 'policy and hook chain it carries are not this user\'s. Refusing to start '
-                    . 'rather than run policy anyone could have written — `chmod o-w ' . $target . '`.',
+                    Lang::t('cli.refuse.world_writable', ['path' => $target]),
                 );
             }
 
@@ -5758,9 +5817,7 @@ final class Bootstrap
             $owner = @fileowner($target);
             if ($owner !== false && $owner !== posix_geteuid()) {
                 throw new PermissionConfigException(
-                    "{$target} belongs to uid {$owner}, not to the account this session is running as, "
-                    . 'so the permission policy and hook chain it carries are somebody else\'s. '
-                    . 'Refusing to start rather than run another account\'s policy.',
+                    Lang::t('cli.refuse.foreign_owner', ['path' => $target, 'uid' => $owner]),
                 );
             }
         }
@@ -5908,13 +5965,12 @@ final class Bootstrap
                 if (!isset(self::$reportedUntrustedHookFiles[$projectFile])) {
                     self::$reportedUntrustedHookFiles[$projectFile] = true;
 
-                    self::warnPermissionConfigInTranscript(
-                        "{$projectFile} was NOT loaded: honouring a project hook file means running shell "
-                        . "this repository's author wrote, every time you open it. Add "
-                        . '"' . rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/')
-                        . '" to "' . self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY
-                        . '" in ' . self::userConfigPath() . ' to opt in',
-                    );
+                    self::warnPermissionConfigInTranscript(Lang::t('cli.warn.hook_file_untrusted', [
+                        'file' => $projectFile,
+                        'root' => rtrim($canonicalRoot !== false ? $canonicalRoot : $root, '/'),
+                        'key' => self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY,
+                        'config' => self::userConfigPath(),
+                    ]));
                 }
             }
         }
@@ -5933,9 +5989,7 @@ final class Bootstrap
             $unreachable = self::unreachableAncestor($path);
             if ($unreachable !== null) {
                 throw new PermissionConfigException(
-                    "{$path} cannot be reached: {$unreachable}, "
-                    . 'so whether hooks are configured there is unknowable. '
-                    . 'Refusing to start rather than run with an unknown hook chain.',
+                    Lang::t('cli.refuse.hooks_unreachable', ['path' => $path, 'reason' => $unreachable]),
                 );
             }
         }
@@ -6055,7 +6109,7 @@ final class Bootstrap
         return self::trustedProjectRoots(
             $config,
             self::TRUSTED_PROJECT_HOOKS_CONFIG_KEY,
-            'no project hook file was trusted',
+            Lang::t('cli.warn.untrusted_hooks'),
         );
     }
 
@@ -6081,7 +6135,7 @@ final class Bootstrap
             self::$trustedMcpRoots[$path] = self::trustedProjectRoots(
                 self::permissionConfig(),
                 self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
-                'no project MCP config was trusted',
+                Lang::t('cli.warn.untrusted_mcp'),
             );
         }
 
@@ -6118,7 +6172,7 @@ final class Bootstrap
             self::$trustedCommandRoots[$path] = self::trustedProjectRoots(
                 self::permissionConfig(),
                 self::TRUSTED_PROJECT_COMMANDS_CONFIG_KEY,
-                'no project command file may run a shell',
+                Lang::t('cli.warn.untrusted_commands'),
             );
         }
 
@@ -6169,7 +6223,7 @@ final class Bootstrap
 
         if (!is_array($raw)) {
             self::warnPermissionConfigOnce(
-                $key . ' is not a list of project paths; ' . $nothingTrusted,
+                Lang::t('cli.warn.trust_list_not_list', ['key' => $key, 'consequence' => $nothingTrusted]),
             );
 
             return [];
@@ -6179,7 +6233,7 @@ final class Bootstrap
         foreach ($raw as $index => $entry) {
             if (!is_string($entry) || trim($entry) === '') {
                 self::warnPermissionConfigOnce(
-                    $key . "[{$index}] is not a project path; entry skipped",
+                    Lang::t('cli.warn.trust_entry_not_path', ['key' => $key, 'index' => $index]),
                 );
                 continue;
             }
@@ -6207,9 +6261,7 @@ final class Bootstrap
             // believing they opted in.
             if (!self::isAbsolutePath($expanded)) {
                 self::warnPermissionConfigOnce(
-                    $key . "[{$index}] is '{$entry}', which is relative to "
-                    . 'whatever directory sugarcrush was started in — it would trust EVERY repository you '
-                    . 'run it from, not one. Write the absolute path (or a ~/-rooted one); entry skipped',
+                    Lang::t('cli.warn.trust_entry_relative', ['key' => $key, 'index' => $index, 'entry' => $entry]),
                 );
                 continue;
             }
@@ -6380,7 +6432,7 @@ final class Bootstrap
         ];
 
         $mode = null;
-        $modeSource = 'the built-in default';
+        $modeSource = Lang::t('cli.launch_source.built_in_default');
         foreach ($candidates as $source => $raw) {
             $resolved = self::permissionModeFrom($raw, $source);
             if ($resolved !== null) {
@@ -6402,11 +6454,11 @@ final class Bootstrap
         $reviewer = null;
         $autoReview = self::readUserConfig()['autoReview'] ?? null;
         if ($autoReview !== null && !is_bool($autoReview)) {
-            self::warnPermissionConfigOnce('autoReview in your config.json or settings.json must be true or false; the auto exec reviewer stays off.');
+            self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_not_bool'));
         } elseif ($autoReview === true) {
             $titleBackend = self::titleBackend();
             if ($titleBackend === null) {
-                self::warnPermissionConfigOnce('autoReview is on, but no provider is configured to review with; auto mode denies flagged calls as before.');
+                self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_no_provider'));
             } else {
                 $reviewer = \SugarCraft\Crush\Permissions\ExecReviewer::new($titleBackend)->withTranscript(
                     static fn (string $sessionId): array => \SugarCraft\Crush\Host\TranscriptStore::new(self::sessionStore(prune: false))->load($sessionId),
@@ -6445,8 +6497,7 @@ final class Bootstrap
         $valid = implode(', ', array_map(static fn(PermissionMode $m): string => $m->value, PermissionMode::cases()));
 
         throw new PermissionConfigException(
-            "{$source} is '{$raw}', which is not a permission mode (expected one of: {$valid}). "
-            . 'Refusing to start rather than fall back to the permissive default.',
+            Lang::t('cli.refuse.bad_mode', ['source' => $source, 'value' => $raw, 'valid' => $valid]),
         );
     }
 
@@ -6609,8 +6660,7 @@ final class Bootstrap
 
                 unset($layers[$path][$key]);
                 self::warnPermissionConfigOnce(
-                    "{$key} in {$path} is empty, so it was ignored rather than allowed to discard the "
-                    . "{$key} configured in {$carried[$key]}",
+                    Lang::t('cli.warn.empty_setting_ignored', ['key' => $key, 'path' => $path, 'carried' => $carried[$key]]),
                 );
             }
         }
@@ -6737,11 +6787,9 @@ final class Bootstrap
             // distinction {@see \SugarCraft\Crush\Hooks\HookConfig::loadFromFile()}
             // draws for the hook file, so it is drawn the same way here.
             if (file_exists($path) || is_link($path)) {
-                throw new PermissionConfigException(
-                    "{$path} exists but is not a readable file (it is a "
-                    . (is_dir($path) ? 'directory' : 'symlink that does not resolve to one')
-                    . '). Refusing to start rather than run with an unknown permission policy.',
-                );
+                throw new PermissionConfigException(is_dir($path)
+                    ? Lang::t('cli.refuse.config_is_directory', ['path' => $path])
+                    : Lang::t('cli.refuse.config_dangling', ['path' => $path]));
             }
 
             // `is_file()` answers false for two things that are not the same
@@ -6757,9 +6805,7 @@ final class Bootstrap
             $unreachable = self::unreachableAncestor($path);
             if ($unreachable !== null) {
                 throw new PermissionConfigException(
-                    "{$path} cannot be reached: {$unreachable}, "
-                    . 'so whether a permission policy is configured there is unknowable. '
-                    . 'Refusing to start rather than run with an unknown permission policy.',
+                    Lang::t('cli.refuse.config_unreachable', ['path' => $path, 'reason' => $unreachable]),
                 );
             }
 
@@ -6776,8 +6822,7 @@ final class Bootstrap
         $contents = @file_get_contents($path);
         if ($contents === false) {
             throw new PermissionConfigException(
-                "{$path} exists but could not be read (check its permissions). "
-                . 'Refusing to start rather than run with an unknown permission policy.',
+                Lang::t('cli.refuse.config_unreadable', ['path' => $path]),
             );
         }
 
@@ -6810,15 +6855,13 @@ final class Bootstrap
             // there. Still a hard failure: JSON does not permit a BOM, and
             // this path may not guess at a policy.
             $error = match (true) {
-                str_starts_with($contents, "\xEF\xBB\xBF") => 'it starts with a UTF-8 byte-order mark, '
-                    . 'which JSON does not permit — re-save the file as UTF-8 without a BOM',
-                json_last_error() === JSON_ERROR_NONE => 'the top level is not a JSON object',
+                str_starts_with($contents, "\xEF\xBB\xBF") => Lang::t('cli.refuse.config_bom'),
+                json_last_error() === JSON_ERROR_NONE => Lang::t('cli.refuse.config_not_object'),
                 default => json_last_error_msg(),
             };
 
             throw new PermissionConfigException(
-                "{$path} is not usable JSON ({$error}). "
-                . 'Refusing to start rather than run with an unknown permission policy.',
+                Lang::t('cli.refuse.config_not_json', ['path' => $path, 'error' => $error]),
             );
         }
 
@@ -6858,11 +6901,11 @@ final class Bootstrap
 
         while (true) {
             if (is_dir($dir)) {
-                return is_executable($dir) ? null : "{$dir} is not searchable by this process";
+                return is_executable($dir) ? null : Lang::t('cli.refuse.not_searchable', ['dir' => $dir]);
             }
 
             if (is_link($dir)) {
-                return "{$dir} is a symlink that does not resolve to a directory this process can search";
+                return Lang::t('cli.refuse.dangling_directory', ['dir' => $dir]);
             }
 
             $parent = \dirname($dir);
@@ -6922,8 +6965,7 @@ final class Bootstrap
 
         $raw = $config[self::PERMISSION_RULES_CONFIG_KEY];
         if ($raw === null) {
-            $complaint = self::PERMISSION_RULES_CONFIG_KEY . ' is present but null rather than a list of rules; '
-                . 'no rules were loaded';
+            $complaint = Lang::t('cli.warn.rules_null', ['key' => self::PERMISSION_RULES_CONFIG_KEY]);
             if ($report !== null) {
                 $report($complaint);
             } else {
@@ -6934,7 +6976,7 @@ final class Bootstrap
         }
 
         if (!is_array($raw)) {
-            $complaint = self::PERMISSION_RULES_CONFIG_KEY . ' is not a list of rules; no rules were loaded';
+            $complaint = Lang::t('cli.warn.rules_not_list', ['key' => self::PERMISSION_RULES_CONFIG_KEY]);
             if ($report !== null) {
                 $report($complaint);
             } else {
@@ -6947,7 +6989,7 @@ final class Bootstrap
         $rules = [];
         foreach ($raw as $index => $entry) {
             if (!is_array($entry) || !is_string($entry['pattern'] ?? null)) {
-                $complaint = self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] has no string 'pattern'; rule skipped";
+                $complaint = Lang::t('cli.warn.rule_no_pattern', ['key' => self::PERMISSION_RULES_CONFIG_KEY, 'index' => $index]);
                 if ($report !== null) {
                     $report($complaint);
                 } else {
@@ -6960,8 +7002,11 @@ final class Bootstrap
                 ? PermissionAction::tryFrom($entry['action'])
                 : null;
             if ($action === null) {
-                $complaint = self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') has no valid 'action' "
-                    . "(expected allow, deny or ask); rule skipped rather than coerced";
+                $complaint = Lang::t('cli.warn.rule_no_action', [
+                    'key' => self::PERMISSION_RULES_CONFIG_KEY,
+                    'index' => $index,
+                    'pattern' => $entry['pattern'],
+                ]);
                 if ($report !== null) {
                     $report($complaint);
                 } else {
@@ -6990,9 +7035,12 @@ final class Bootstrap
             // that produces it.
             $rejection = PermissionRule::patternRejectionReason($entry['pattern']);
             if ($rejection !== null) {
-                $complaint = self::PERMISSION_RULES_CONFIG_KEY . "[{$index}] ('{$entry['pattern']}') {$rejection}, so it is "
-                    . 'not a Tool or Tool(argument-pattern) pattern; rule skipped rather than loaded as a pattern '
-                    . 'that would match nothing';
+                $complaint = Lang::t('cli.warn.rule_bad_pattern', [
+                    'key' => self::PERMISSION_RULES_CONFIG_KEY,
+                    'index' => $index,
+                    'pattern' => $entry['pattern'],
+                    'reason' => $rejection,
+                ]);
                 if ($report !== null) {
                     $report($complaint);
                 } else {
@@ -7120,9 +7168,9 @@ final class Bootstrap
             ? mb_substr(
                 $message,
                 0,
-                self::LAUNCH_NOTICE_MAX_CHARS - mb_strlen(self::LAUNCH_NOTICE_CLIP_SUFFIX, 'UTF-8'),
+                self::LAUNCH_NOTICE_MAX_CHARS - mb_strlen(self::translated(self::LAUNCH_NOTICE_CLIP_SUFFIX), 'UTF-8'),
                 'UTF-8',
-            ) . self::LAUNCH_NOTICE_CLIP_SUFFIX
+            ) . self::translated(self::LAUNCH_NOTICE_CLIP_SUFFIX)
             : $message;
 
         // The de-dup check comes FIRST so a message already recorded is never
@@ -7207,7 +7255,7 @@ final class Bootstrap
         }
 
         $header = sprintf(
-            self::NARROWED_GRANT_NOTICE_FORMAT,
+            self::translated(self::NARROWED_GRANT_NOTICE_FORMAT),
             $count,
             $count === 1 ? '' : 's',
             $count === 1 ? 'was' : 'were',
@@ -7230,7 +7278,7 @@ final class Bootstrap
         if ($shown < $count) {
             $remaining = $count - $shown;
             $rows[] = sprintf(
-                self::NARROWED_GRANT_OVERFLOW_FORMAT,
+                self::translated(self::NARROWED_GRANT_OVERFLOW_FORMAT),
                 $remaining,
                 $remaining === 1 ? '' : 's',
             );
@@ -7282,7 +7330,7 @@ final class Bootstrap
         return [
             ...self::$launchNotices,
             sprintf(
-                self::LAUNCH_NOTICE_OVERFLOW_FORMAT,
+                self::translated(self::LAUNCH_NOTICE_OVERFLOW_FORMAT),
                 $dropped,
                 $dropped === 1 ? '' : 's',
             ),
@@ -7543,17 +7591,17 @@ final class Bootstrap
 
         $contents = @file_get_contents($decision['path']);
         if (!is_string($contents)) {
-            return ['error' => 'could not be read'] + $base;
+            return ['error' => Lang::t('cli.mcp.config.unreadable')] + $base;
         }
 
         try {
             $data = json_decode($contents, true, 512, \JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
-            return ['error' => 'is not valid JSON (' . $e->getMessage() . ')'] + $base;
+            return ['error' => Lang::t('cli.mcp.config.invalid_json', ['error' => $e->getMessage()])] + $base;
         }
 
         if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
-            return ['error' => 'has no "mcpServers" object'] + $base;
+            return ['error' => Lang::t('cli.mcp.config.no_servers_object')] + $base;
         }
 
         $servers = [];
@@ -7630,11 +7678,11 @@ final class Bootstrap
 
         $contents = @file_get_contents($decision['path']);
         if (!is_string($contents)) {
-            return ['error' => 'could not be read'] + $report;
+            return ['error' => Lang::t('cli.mcp.config.unreadable')] + $report;
         }
         $data = json_decode($contents, true);
         if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
-            return ['error' => 'is not valid JSON with an "mcpServers" object'] + $report;
+            return ['error' => Lang::t('cli.mcp.config.not_a_config')] + $report;
         }
 
         $current = McpTrustPins::pinsFor($data['mcpServers']);
@@ -7658,7 +7706,7 @@ final class Bootstrap
         $isTrusted = static fn (): bool => \in_array($trustRoot, self::trustedProjectRoots(
             self::permissionConfig(),
             self::TRUSTED_PROJECT_MCP_CONFIG_KEY,
-            'no project MCP config was trusted',
+            Lang::t('cli.warn.untrusted_mcp'),
         ), true);
         if (!$isTrusted()) {
             $listed = self::permissionConfig()[self::TRUSTED_PROJECT_MCP_CONFIG_KEY] ?? [];
@@ -7673,7 +7721,7 @@ final class Bootstrap
                 $pins->withRoot($trustRoot, $current['pins'])->save();
                 $report['recorded'] = true;
             } catch (\Throwable $e) {
-                $report['error'] = 'the trust record ' . $pins->path() . ' could not be written (' . $e->getMessage() . ')';
+                $report['error'] = Lang::t('cli.mcp.config.pins_unwritable', ['path' => $pins->path(), 'error' => $e->getMessage()]);
             }
         }
 
@@ -7807,18 +7855,18 @@ final class Bootstrap
 
         $binary = $config['claudeMcpBinary'];
         if (!is_string($binary)) {
-            throw new \RuntimeException('claudeMcpBinary must be a string path in the user config');
+            throw new \RuntimeException(Lang::t('cli.refuse.claude_mcp_binary'));
         }
 
         $args = null;
         if (array_key_exists('claudeMcpArgs', $config)) {
             $rawArgs = $config['claudeMcpArgs'];
             if (!is_array($rawArgs) || !array_is_list($rawArgs)) {
-                throw new \RuntimeException('claudeMcpArgs must be a JSON array of scalars in the user config');
+                throw new \RuntimeException(Lang::t('cli.refuse.claude_mcp_args'));
             }
             foreach ($rawArgs as $arg) {
                 if (!is_string($arg) && !is_int($arg) && !is_float($arg)) {
-                    throw new \RuntimeException('claudeMcpArgs carries a non-scalar entry; argv strings only');
+                    throw new \RuntimeException(Lang::t('cli.refuse.claude_mcp_arg_entry'));
                 }
             }
             $args = array_values(array_map(static fn (string|int|float $arg): string => (string) $arg, $rawArgs));
@@ -7828,12 +7876,12 @@ final class Bootstrap
         if (array_key_exists('claudeMcpEnv', $config)) {
             $rawEnv = $config['claudeMcpEnv'];
             if (!is_array($rawEnv)) {
-                throw new \RuntimeException('claudeMcpEnv must be a JSON object in the user config');
+                throw new \RuntimeException(Lang::t('cli.refuse.claude_mcp_env'));
             }
             $env = [];
             foreach ($rawEnv as $key => $value) {
                 if (!is_string($key) || !is_string($value)) {
-                    throw new \RuntimeException('claudeMcpEnv must map string keys to string values');
+                    throw new \RuntimeException(Lang::t('cli.refuse.claude_mcp_env_entry'));
                 }
                 $env[$key] = $value;
             }
@@ -7991,8 +8039,8 @@ final class Bootstrap
             }
 
             $refused[] = $was === null
-                ? sprintf(self::MCP_SERVER_ADDED_FORMAT, $name, $pin['summary'])
-                : sprintf(self::MCP_SERVER_CHANGED_FORMAT, $name, $was['summary'], $pin['summary']);
+                ? sprintf(self::translated(self::MCP_SERVER_ADDED_FORMAT), $name, $pin['summary'])
+                : sprintf(self::translated(self::MCP_SERVER_CHANGED_FORMAT), $name, $was['summary'], $pin['summary']);
 
             return false;
         };
@@ -8181,7 +8229,7 @@ final class Bootstrap
             // LENGTH, which matters here because `$e->getMessage()` interpolates
             // a `type` string the project's `.mcp.json` chose.
             error_log(sprintf(
-                self::MCP_PARTIAL_START_LOG_FORMAT,
+                self::translated(self::MCP_PARTIAL_START_LOG_FORMAT),
                 $path,
                 $e::class,
                 $e->getMessage(),
@@ -8196,7 +8244,7 @@ final class Bootstrap
             // by
             // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()}.
             $notices[] = sprintf(
-                self::MCP_PARTIAL_START_NOTICE_FORMAT,
+                self::translated(self::MCP_PARTIAL_START_NOTICE_FORMAT),
                 $path,
                 $e->getMessage(),
             );
@@ -8218,7 +8266,7 @@ final class Bootstrap
         // census ({@see TRANSCRIPT_SEAM_CALL_SITES}) does not move.
         if ($refused !== []) {
             $notices[] = sprintf(
-                self::MCP_SERVER_REFUSED_NOTICE_FORMAT,
+                self::translated(self::MCP_SERVER_REFUSED_NOTICE_FORMAT),
                 $path,
                 implode('; ', $refused),
             );
@@ -8902,10 +8950,7 @@ final class Bootstrap
             // none left. An operator watching a model refuse to read a file has
             // no other way to learn why. Reached through tools() <- backend(),
             // chat()'s first named argument.
-            self::warnPermissionConfigInTranscript(
-                'allowedTools/disabledTools left no tools at all, so the model will be given an empty '
-                . 'tool set and can do nothing but talk',
-            );
+            self::warnPermissionConfigInTranscript(Lang::t('cli.warn.no_tools_left'));
         }
 
         return $kept;
@@ -9090,14 +9135,14 @@ final class Bootstrap
         // interactive path stderr alone is a warning nobody can read: measured,
         // this line printed 0.47s before the alternate screen opened over it.
         self::warnPermissionConfigInTranscript(sprintf(
-            self::PROJECT_TIER_TOOL_REMOVAL_FORMAT,
+            self::translated(self::PROJECT_TIER_TOOL_REMOVAL_FORMAT),
             $source,
             \count($removed),
             \count($withoutProject),
             implode(', ', $removed),
             $remaining === []
-                ? self::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE
-                : self::PROJECT_TIER_TOOL_REMOVAL_LEAVING . implode(', ', $remaining),
+                ? self::translated(self::PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE)
+                : self::translated(self::PROJECT_TIER_TOOL_REMOVAL_LEAVING) . implode(', ', $remaining),
         ));
     }
 
@@ -9147,10 +9192,7 @@ final class Bootstrap
     {
         $resolved = $root ?? (getcwd() ?: null);
         if ($resolved === null) {
-            throw new \RuntimeException(
-                'sugarcrush: cannot determine a project root — the process working directory is '
-                . 'unavailable (deleted or unreadable). Pass --root <dir>.'
-            );
+            throw new \RuntimeException('sugarcrush: ' . Lang::t('cli.refuse.no_project_root'));
         }
 
         return $resolved;
@@ -9358,14 +9400,14 @@ final class Bootstrap
     {
         $count = count($report);
         self::warnPermissionConfigInTranscript(sprintf(
-            self::SESSION_RETENTION_SUMMARY_FORMAT,
+            self::translated(self::SESSION_RETENTION_SUMMARY_FORMAT),
             $count,
             $count === 1 ? 'session' : 'sessions',
             $retentionDays,
         ));
         foreach ($report as $row) {
             fwrite(STDERR, sprintf(
-                self::SESSION_RETENTION_DETAIL_FORMAT,
+                self::translated(self::SESSION_RETENTION_DETAIL_FORMAT),
                 $row['id'],
                 $row['updated_at'],
                 $row['messages'],
@@ -9804,12 +9846,7 @@ final class Bootstrap
 
         if ($value === null || !Chat::isUsableSpendCap($value)) {
             throw new PermissionConfigException(
-                "\$SUGARCRUSH_MAX_COST is '{$trimmed}', which is not a spend ceiling. Expected a positive "
-                . 'number of US dollars (fractional allowed, a leading $ accepted), for example 5 or $2.50. '
-                . 'Zero and negative are refused rather than read as "no cap" because they are the opposite '
-                . 'request; a figure too large to represent (1e309, i.e. infinity) is refused because it '
-                . 'would install a cap that never triggers. Unset the variable for no cap. Refusing to '
-                . 'start rather than run uncapped with a ceiling you asked for.',
+                Lang::t('cli.refuse.max_cost_env', ['value' => $trimmed]),
             );
         }
 
@@ -9847,9 +9884,7 @@ final class Bootstrap
 
         if ((!\is_int($value) && !\is_float($value)) || !Chat::isUsableSpendCap((float) $value)) {
             throw new PermissionConfigException(
-                'maxCostUsd in your settings is ' . var_export($value, true) . ', which is not a spend ceiling. '
-                . 'Expected a positive number of US dollars, for example 5 or 2.5. Remove the key for no cap. '
-                . 'Refusing to start rather than run uncapped with a ceiling you asked for.',
+                Lang::t('cli.refuse.max_cost_setting', ['value' => var_export($value, true)]),
             );
         }
 
@@ -10019,13 +10054,7 @@ final class Bootstrap
     {
         $home = self::resolvedHomePath();
         if ($home === null) {
-            throw new PermissionConfigException(
-                'this process cannot determine which home directory is yours ($HOME is unset, '
-                . '$USERPROFILE is unset, and there is no passwd entry for its uid), so the '
-                . 'permission policy and hook chain in ~/.sugar-crush cannot be located. '
-                . 'Refusing to start rather than read either of them out of a world-writable '
-                . 'fallback directory — export HOME to the account this session belongs to.',
-            );
+            throw new PermissionConfigException(Lang::t('cli.refuse.no_home'));
         }
 
         $owned = HomeDirectory::owned();

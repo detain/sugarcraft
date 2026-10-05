@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Cli;
 
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Tools\ToolCall;
 
@@ -395,7 +396,7 @@ final class HeadlessPermissionPrompt
 
         $line = \fgets($this->in);
         if ($line === false) {
-            $this->write("sugarcrush: stdin ended before the question was answered — refusing {$call->name()}.\n");
+            $this->write('sugarcrush: ' . Lang::t('cli.permission.stdin_ended', ['tool' => $call->name()]) . "\n");
 
             return false;
         }
@@ -404,7 +405,7 @@ final class HeadlessPermissionPrompt
             return true;
         }
 
-        $this->write("sugarcrush: refused {$call->name()}.\n");
+        $this->write('sugarcrush: ' . Lang::t('cli.permission.refused', ['tool' => $call->name()]) . "\n");
 
         return false;
     }
@@ -424,12 +425,12 @@ final class HeadlessPermissionPrompt
 
     private function question(ToolCall $call, HookResult $ask): string
     {
-        return "\nsugarcrush: a tool call needs your permission.\n"
+        return "\nsugarcrush: " . Lang::t('cli.permission.question') . "\n"
             . '  tool: ' . Sanitize::visibleControls($call->name(), false) . "\n"
             . '  args: ' . $this->renderArguments($call) . "\n"
             . '  why:  ' . $this->oneLine($ask->message) . "\n"
             . '  mode: ' . $this->mode->value . "\n"
-            . 'Run it? [y/N] ';
+            . Lang::t('cli.permission.confirm');
     }
 
     /**
@@ -441,15 +442,12 @@ final class HeadlessPermissionPrompt
     {
         $name = Sanitize::visibleControls($call->name(), false);
 
-        return "sugarcrush: a tool call needs your permission, and stdin is not a terminal,"
-            . " so there is nobody to ask — refusing it.\n"
+        return 'sugarcrush: ' . Lang::t('cli.permission.no_tty') . "\n"
             . '  tool: ' . $name . "\n"
             . '  args: ' . $this->renderArguments($call) . "\n"
             . '  why:  ' . $this->oneLine($ask->message) . "\n"
             . '  mode: ' . $this->mode->value . "\n"
-            . "  Run this from a terminal to be prompted, or give the run a policy that decides\n"
-            . "  without asking: --permission-mode <mode> (bypass-permissions runs everything),\n"
-            . '  or a permissionRules entry for ' . $name . " in .sugar-crush/config.json.\n";
+            . Lang::t('cli.permission.no_tty_remedy', ['tool' => $name]) . "\n";
     }
 
     /**
@@ -480,7 +478,7 @@ final class HeadlessPermissionPrompt
         );
 
         if ($json === false) {
-            return '<arguments could not be rendered>';
+            return Lang::t('cli.permission.unrenderable_arguments');
         }
 
         // Before the byte cap, so the cap measures what is actually shown.
@@ -509,7 +507,7 @@ final class HeadlessPermissionPrompt
         // asked to allow.
         $hidden = $length - \strlen($shown);
 
-        return $shown . " … (truncated — {$hidden} more bytes NOT shown)";
+        return $shown . ' ' . Lang::t('cli.permission.arguments_truncated', ['bytes' => $hidden]);
     }
 
     /**

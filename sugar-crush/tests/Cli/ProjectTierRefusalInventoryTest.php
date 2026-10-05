@@ -315,8 +315,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // `$HOME/.sugar-crush`, the same boundary its sibling `loadUserRules()`
         // uses, so this second directory adds no gate of its own.
         'Context/RuleLoader.php|.sugar-crush/rulebooks' => self::USER,
-        'Cli/Help.php|.sugar-crush/config.json' => self::USER,
-        'Cli/Help.php|.sugar-crush/config.json.' => self::USER,
         // The `/budget` readout's LOWER BOUND sentence, telling the operator
         // where to declare `modelPrices` — moved out of `Chat` with the rest of
         // the spend accounting (roadmap O-2c). Never read or built here; rooted
@@ -334,12 +332,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Cli/Subcommands.php|.config/fish' => self::USER,
         // O-3a: `serve`'s state directory (the owner token today), rooted at
         // HomeDirectory::owned() and overridable only by the user's own
-        // SUGARCRUSH_SERVER_DIR — Serve builds it, Help names it, Attach (O-8a)
-        // reads its record and token from it. A cloned
+        // SUGARCRUSH_SERVER_DIR — Serve builds it, Attach (O-8a) reads its
+        // record and token from it (the help screen that names it is the
+        // `cli.help.screen` catalogue entry, outside src/ since 15b-14-2). A cloned
         // repository cannot place it, and it is created 0700 and refused when
         // loose or linked.
         'Cli/Attach.php|.sugar-crush/server' => self::USER,
-        'Cli/Help.php|.sugar-crush/server' => self::USER,
         'Cli/Serve.php|.sugar-crush/server' => self::USER,
         // Audit C2a: where the interactive TUI points `error_log` (written, never
         // read for content). The home is HomeDirectory::owned(), passed in by
@@ -410,7 +408,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY-FIVE occurrences — one per entry
+     * APPEARS IN. On this tree that is FIFTY-TWO occurrences — one per entry
      * in {@see DOT_PATHS} — of THIRTY-TWO distinct paths. TWENTY of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
@@ -462,7 +460,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * a future revision cannot quietly go back to keying on the path.
      *
      * Two strings prove it on this tree: `.sugar-crush/config.json` is user-tier
-     * in `Cli/Help.php` and PACKAGE-RELATIVE in `Agents/WorktreeConfig.php`
+     * in `Host/SpendLedger.php` and PACKAGE-RELATIVE in `Agents/WorktreeConfig.php`
      * (where it had no containment at all for nine rounds), and
      * `.sugar-crush/workflows` is repository-chosen in three files while
      * `.sugar-crush/skills` serves BOTH tiers in one.

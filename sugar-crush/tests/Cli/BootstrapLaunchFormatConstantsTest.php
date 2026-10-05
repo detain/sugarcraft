@@ -503,10 +503,12 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // named constant. The last two pieces are the walk-failure degradation
         // sentence, which PREDATES this method owning a constant and has no
         // second-party reader; it is classified here rather than promoted so
-        // the AG-2 change does not also rename a message nothing reads.
+        // the AG-2 change does not also rename a message nothing reads. Since
+        // 15b-14-2 that sentence is a catalogue entry, so what the body holds
+        // is its key and the one parameter name it fills.
         'agentPresets' => [
             "': '", ' (', ')', "''", "'s'", "'; '",
-            'agent presets unavailable (', '); continuing with the built-in agents',
+            "'cli.warn.presets_unavailable'", "'error'",
         ],
     ];
 
@@ -851,11 +853,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // is the proof the rule needed.)
         self::assertSame(
             [
-                'calls' => 6,
+                'calls' => 8,
                 'literal' => 2,
                 'interpolated' => 1,
-                'constant' => 2,
-                'other' => ["T_VARIABLE '\$format'"],
+                'constant' => 3,
+                'other' => ["T_VARIABLE '\$format'", "T_STRING 'self'"],
             ],
             self::sprintfCensus(
                 "<?php\n"
@@ -865,6 +867,8 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
                 . "sprintf(\\Some\\Where::G, 4);\n"          // constant reference, qualified
                 . "sprintf(\"c {\$x} d\", 5);\n"             // interpolated — was read as a constant
                 . "sprintf(\$format, 6);\n"                  // a variable: neither, and must be named
+                . "sprintf(self::translated(self::H), 10);\n" // a constant through its catalogue entry
+                . "sprintf(self::translated(\$x), 11);\n"     // ...but not a variable through it
                 . "\$o->sprintf('not this', 7);\n"           // a method
                 . "\$o?->sprintf('nor this', 8);\n"
                 . "Other::sprintf('nor this', 9);\n"
@@ -2453,6 +2457,27 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         }
         if ($token[0] === T_CONSTANT_ENCAPSED_STRING) {
             return 'literal';
+        }
+
+        // `self::translated(self::X)` (audit 15b-14, step 15b-14-2): a promoted
+        // constant routed through its catalogue entry, which
+        // tests/Cli/CliLangCatalogueTest.php pins byte-for-byte to the
+        // constant. Counted as the constant it wraps — and ONLY when the one
+        // argument is itself a bare constant reference and nothing follows it,
+        // so `self::translated($x)` or `self::translated(self::f())` still
+        // lands in `other` and has to be classified by hand.
+        if ($token[0] === T_STRING && strtolower($token[1]) === 'self'
+            && \is_array($significant[$at + 1] ?? null) && $significant[$at + 1][0] === T_DOUBLE_COLON
+            && \is_array($significant[$at + 2] ?? null) && $significant[$at + 2][1] === 'translated'
+            && ($significant[$at + 3] ?? null) === '('
+        ) {
+            $inner = self::classifyFirstArgument($significant, $at + 4);
+            $end = $at + 4;
+            while (($significant[$end] ?? null) !== ')' && $end < $at + 12) {
+                ++$end;
+            }
+
+            return $inner === 'constant' && $end === $at + 7 ? 'constant' : 'other';
         }
 
         // A name, possibly `A::B` or `\A\B::C`. It is a CONSTANT reference only

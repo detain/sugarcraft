@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Cli;
 
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionQuery;
 use SugarCraft\Crush\Session\SessionResolver;
@@ -103,9 +104,9 @@ final class Subcommands
             // member. Answered rather than asserted because the two lists
             // drifting apart must not be a PHP fatal on a user's terminal.
             default => NonInteractive::failUsage(
-                \sprintf('sugarcrush: %s: unknown subcommand', (string) $args->subcommand),
+                'sugarcrush: ' . Lang::t('cli.sub.unknown_subcommand', ['verb' => (string) $args->subcommand]),
                 $args->outputFormat,
-                'Valid subcommands are: ' . \implode(', ', ParsedArgs::SUBCOMMANDS) . '.',
+                Lang::t('cli.sub.valid_subcommands', ['verbs' => \implode(', ', ParsedArgs::SUBCOMMANDS)]),
             ),
         };
     }
@@ -146,9 +147,9 @@ final class Subcommands
     private static function rejectOperands(string $verb, ParsedArgs $args): int
     {
         return NonInteractive::failUsage(
-            \sprintf('sugarcrush: %s %s: unexpected operand', $verb, (string) $args->subcommandArgs[0]),
+            'sugarcrush: ' . Lang::t('cli.sub.unexpected_operand', ['verb' => $verb, 'operand' => (string) $args->subcommandArgs[0]]),
             $args->outputFormat,
-            'Usage: sugarcrush ' . $verb . ' — this subcommand takes no arguments.',
+            Lang::t('cli.sub.takes_no_arguments', ['verb' => $verb]),
         );
     }
 
@@ -213,9 +214,11 @@ final class Subcommands
             );
         }
 
-        echo "\n" . ($failed === []
-            ? "No problems detected.\n"
-            : \sprintf("%d check%s failed.\n", \count($failed), \count($failed) === 1 ? '' : 's'));
+        echo "\n" . match (\count($failed)) {
+            0 => Lang::t('cli.doctor.no_problems'),
+            1 => Lang::t('cli.doctor.failed.one', ['count' => 1]),
+            default => Lang::t('cli.doctor.failed.many', ['count' => \count($failed)]),
+        } . "\n";
 
         return $failed === [] ? NonInteractive::EXIT_OK : NonInteractive::EXIT_FAILURE;
     }
@@ -254,20 +257,20 @@ final class Subcommands
 
         try {
             new \PDO($dsn);
+            $state = Lang::t('cli.doctor.pdo_usable');
             $usable = true;
-            $why = '';
         } catch (\Throwable $e) {
+            $state = Lang::t('cli.doctor.pdo_unusable', ['error' => $e->getMessage()]);
             $usable = false;
-            $why = ': ' . $e->getMessage();
         }
 
         return [
             'status' => $usable ? 'OK' : 'FAIL',
-            'detail' => 'pdo_' . $driver . ' ' . ($usable
-                ? 'usable'
-                : 'UNUSABLE — the session store cannot open its database' . $why)
-                . '; ext-sqlite3 (declared in composer.json, unused by the code) '
-                . (\extension_loaded('sqlite3') ? 'loaded' : 'absent'),
+            'detail' => Lang::t('cli.doctor.pdo', [
+                'driver' => $driver,
+                'state' => $state,
+                'sqlite3' => \extension_loaded('sqlite3') ? Lang::t('cli.doctor.loaded') : Lang::t('cli.doctor.absent'),
+            ]),
         ];
     }
 
@@ -295,8 +298,10 @@ final class Subcommands
                 // where Composer installed under 8.3 satisfies the manifest and
                 // still cannot run the code.
                 'status' => \PHP_VERSION_ID >= 80300 ? 'OK' : 'FAIL',
-                'detail' => \PHP_VERSION . ' at ' . (\PHP_BINARY !== '' ? \PHP_BINARY : 'unknown')
-                    . (\PHP_VERSION_ID >= 80300 ? '' : ' (sugarcrush requires PHP 8.3+)'),
+                'detail' => Lang::t(\PHP_VERSION_ID >= 80300 ? 'cli.doctor.php' : 'cli.doctor.php_too_old', [
+                    'version' => \PHP_VERSION,
+                    'binary' => \PHP_BINARY !== '' ? \PHP_BINARY : Lang::t('cli.doctor.unknown'),
+                ]),
             ],
 
             'pdo_sqlite' => static fn (): array => self::pdoDriverProbe(self::SESSION_STORE_PROBE_DSN),
@@ -307,8 +312,8 @@ final class Subcommands
                 // the echo or shell-out backend entirely legitimately.
                 'status' => \extension_loaded('curl') ? 'OK' : 'WARN',
                 'detail' => \extension_loaded('curl')
-                    ? 'loaded'
-                    : 'missing — the HTTP providers (openai, anthropic, sglang, custom) will fail',
+                    ? Lang::t('cli.doctor.loaded')
+                    : Lang::t('cli.doctor.curl_missing'),
             ],
 
             'server mode' => static function (): array {
@@ -319,8 +324,8 @@ final class Subcommands
                 return [
                     'status' => $missing === [] ? 'OK' : 'WARN',
                     'detail' => $missing === []
-                        ? 'pcntl, posix and ffi available — `serve` can start'
-                        : '`serve` will refuse to start: ' . \implode('; ', $missing),
+                        ? Lang::t('cli.doctor.server_ready')
+                        : Lang::t('cli.doctor.server_refuses', ['problems' => \implode('; ', $missing)]),
                 ];
             },
 
@@ -330,16 +335,16 @@ final class Subcommands
                     // ABSENT IS NOT BROKEN. A first run has no config file and
                     // every default applies; reporting FAIL here would tell a
                     // healthy install it is sick.
-                    return ['status' => 'OK', 'detail' => $path . ' (absent — defaults apply)'];
+                    return ['status' => 'OK', 'detail' => Lang::t('cli.doctor.config_absent', ['path' => $path])];
                 }
                 if (!\is_readable($path)) {
-                    return ['status' => 'FAIL', 'detail' => $path . ' is not readable'];
+                    return ['status' => 'FAIL', 'detail' => Lang::t('cli.doctor.config_unreadable', ['path' => $path])];
                 }
                 $raw = (string) \file_get_contents($path);
                 try {
                     \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
                 } catch (\JsonException $e) {
-                    return ['status' => 'FAIL', 'detail' => $path . ': invalid JSON (' . $e->getMessage() . ')'];
+                    return ['status' => 'FAIL', 'detail' => Lang::t('cli.doctor.config_invalid', ['path' => $path, 'error' => $e->getMessage()])];
                 }
 
                 return ['status' => 'OK', 'detail' => $path];
@@ -364,9 +369,8 @@ final class Subcommands
                 // modes (decision D5), and a one-word answer would describe
                 // only one of them.
                 return ['status' => 'OK', 'detail' => $tui->mode() === $gate->mode()
-                    ? 'mode ' . $gate->mode()->value
-                    : 'mode ' . $tui->mode()->value . ' in the TUI, ' . $gate->mode()->value
-                        . ' for -p and background sessions (built-in defaults)'];
+                    ? Lang::t('cli.doctor.mode', ['mode' => $gate->mode()->value])
+                    : Lang::t('cli.doctor.mode_split', ['tui' => $tui->mode()->value, 'headless' => $gate->mode()->value])];
             },
 
             'provider' => static function (): array {
@@ -378,8 +382,8 @@ final class Subcommands
                     return [
                         'status' => $name === 'echo' ? 'WARN' : 'OK',
                         'detail' => $name === 'echo'
-                            ? 'none selected — the offline echo backend will answer (set SUGARCRUSH_PROVIDER)'
-                            : 'shell-out backend ($SUGARCRUSH_BACKEND_CMD tier)',
+                            ? Lang::t('cli.doctor.provider_none')
+                            : Lang::t('cli.doctor.provider_shell'),
                     ];
                 }
 
@@ -393,8 +397,8 @@ final class Subcommands
                 return [
                     'status' => $known ? 'OK' : 'FAIL',
                     'detail' => $known
-                        ? $name . ' (model ' . $model . ')'
-                        : $name . ' is selected but is not a known provider — see `sugarcrush models`',
+                        ? Lang::t('cli.doctor.provider', ['provider' => $name, 'model' => $model])
+                        : Lang::t('cli.doctor.provider_unknown', ['provider' => $name]),
                 ];
             },
 
@@ -411,7 +415,7 @@ final class Subcommands
                 $store = Bootstrap::sessionStore(prune: false);
                 $count = \count($store->listSessions(1000));
 
-                return ['status' => 'OK', 'detail' => $count . ' session(s) stored'];
+                return ['status' => 'OK', 'detail' => Lang::t('cli.doctor.sessions', ['count' => $count])];
             },
 
             'mcp config' => static function () use ($args): array {
@@ -419,15 +423,18 @@ final class Subcommands
 
                 return match (true) {
                     $inventory['status'] === Bootstrap::MCP_ABSENT
-                        => ['status' => 'OK', 'detail' => 'no ' . Bootstrap::MCP_CONFIG_FILENAME . ' in this project'],
+                        => ['status' => 'OK', 'detail' => Lang::t('cli.doctor.mcp_absent', ['file' => Bootstrap::MCP_CONFIG_FILENAME])],
                     $inventory['status'] === Bootstrap::MCP_OUTSIDE_TREE
-                        => ['status' => 'FAIL', 'detail' => $inventory['path'] . ' resolves outside the project tree; it is ignored'],
+                        => ['status' => 'FAIL', 'detail' => Lang::t('cli.doctor.mcp_outside', ['path' => $inventory['path']])],
                     $inventory['status'] === Bootstrap::MCP_UNTRUSTED
-                        => ['status' => 'WARN', 'detail' => $inventory['path'] . ' is present but this root is not trusted; its servers are not started'],
+                        => ['status' => 'WARN', 'detail' => Lang::t('cli.doctor.mcp_untrusted', ['path' => $inventory['path']])],
                     $inventory['error'] !== null
                         => ['status' => 'FAIL', 'detail' => $inventory['path'] . ' ' . $inventory['error']],
                     default
-                        => ['status' => 'OK', 'detail' => \count($inventory['servers']) . ' server(s) declared in ' . $inventory['path']],
+                        => ['status' => 'OK', 'detail' => Lang::t('cli.doctor.mcp_servers', [
+                            'count' => \count($inventory['servers']),
+                            'path' => $inventory['path'],
+                        ])],
                 };
             },
         ];
@@ -478,7 +485,7 @@ final class Subcommands
         if ($rows === []) {
             // Exit 0, not 1: an install with no provider configured is a
             // correctly-answered question, not a command that failed.
-            echo "No providers are configured.\n";
+            echo Lang::t('cli.models.none_configured') . "\n";
 
             return NonInteractive::EXIT_OK;
         }
@@ -491,8 +498,8 @@ final class Subcommands
             \printf("%s %-{$width}s  %s\n", $row['selected'] ? '*' : ' ', $row['provider'], $row['model']);
         }
         echo "\n" . ($selected === null
-            ? "No provider is selected; set SUGARCRUSH_PROVIDER or use Ctrl+P \"Switch model\".\n"
-            : '* = selected (SUGARCRUSH_PROVIDER or ' . Bootstrap::userConfigPath() . ").\n");
+            ? Lang::t('cli.models.none_selected')
+            : Lang::t('cli.models.selected_legend', ['path' => Bootstrap::userConfigPath()])) . "\n";
 
         return NonInteractive::EXIT_OK;
     }
@@ -525,24 +532,24 @@ final class Subcommands
     {
         $verb = $args->subcommandArgs[0] ?? null;
         if ($verb === null) {
-            return NonInteractive::failUsage('sugarcrush: session: no action given', $args->outputFormat, self::SESSION_USAGE);
+            return NonInteractive::failUsage('sugarcrush: ' . Lang::t('cli.session.no_action'), $args->outputFormat, self::sessionUsage());
         }
         if (!isset(self::SESSION_ACTION_FLAGS[$verb])) {
             return NonInteractive::failUsage(
-                \sprintf('sugarcrush: session %s: unknown action', $verb),
+                'sugarcrush: ' . Lang::t('cli.session.unknown_action', ['action' => $verb]),
                 $args->outputFormat,
-                self::SESSION_USAGE,
+                self::sessionUsage(),
             );
         }
 
         foreach (\array_keys($args->subcommandFlags) as $flag) {
             if (!\in_array($flag, self::SESSION_ACTION_FLAGS[$verb], true)) {
                 return NonInteractive::failUsage(
-                    \sprintf('sugarcrush: session %s: %s does not apply to this action', $verb, $flag),
+                    'sugarcrush: ' . Lang::t('cli.session.flag_does_not_apply', ['action' => $verb, 'flag' => $flag]),
                     $args->outputFormat,
                     self::SESSION_ACTION_FLAGS[$verb] === []
-                        ? 'session ' . $verb . ' takes no options.'
-                        : 'session ' . $verb . ' accepts: ' . \implode(', ', self::SESSION_ACTION_FLAGS[$verb]) . '.',
+                        ? Lang::t('cli.session.takes_no_options', ['action' => $verb])
+                        : Lang::t('cli.session.accepts', ['action' => $verb, 'flags' => \implode(', ', self::SESSION_ACTION_FLAGS[$verb])]),
                 );
             }
         }
@@ -559,9 +566,10 @@ final class Subcommands
     /**
      * One line per verb, for every `session` usage error.
      */
-    private const SESSION_USAGE = 'Usage: sugarcrush session list [--all|--archived|--children] [--limit N]'
-        . ' | show <target> | rename <target> <title…> | delete <target> [--with-children]'
-        . ' | pin|unpin|archive|unarchive <target> — <target> is an id, a name or a unique id prefix.';
+    private static function sessionUsage(): string
+    {
+        return Lang::t('cli.session.usage');
+    }
 
     /**
      * Each `session` action and the {@see ParsedArgs::SUBCOMMAND_FLAGS} it
@@ -605,9 +613,9 @@ final class Subcommands
             $raw = (string) $args->subcommandFlags['--limit'];
             if (\preg_match('/^[1-9]\d{0,8}$/', $raw) !== 1) {
                 return NonInteractive::failUsage(
-                    \sprintf('sugarcrush: session list --limit %s: not a positive whole number', $raw),
+                    'sugarcrush: ' . Lang::t('cli.session.bad_limit', ['limit' => $raw]),
                     $args->outputFormat,
-                    'Usage: sugarcrush session list --limit <N>, where N is 1 or more.',
+                    Lang::t('cli.session.limit_usage'),
                 );
             }
             $limit = (int) $raw;
@@ -634,7 +642,7 @@ final class Subcommands
         }
 
         if ($rows === []) {
-            echo "No sessions stored.\n";
+            echo Lang::t('cli.session.none_stored') . "\n";
 
             return NonInteractive::EXIT_OK;
         }
@@ -652,7 +660,7 @@ final class Subcommands
                 $row->kind->value,
                 $row->turns . 't',
                 $row->provider . '/' . $row->model,
-                self::sessionLabel($row) . ($row->archived() ? ' [archived]' : ''),
+                self::sessionLabel($row) . ($row->archived() ? ' ' . Lang::t('cli.session.archived_tag') : ''),
             );
         }
 
@@ -691,14 +699,19 @@ final class Subcommands
         }
 
         echo '# ' . self::sessionLabel($row) . "\n\n";
-        echo '- id: ' . $row->id . "\n";
-        echo '- kind: ' . $row->kind->value . ($row->parentId !== null ? ' (parent ' . $row->parentId . ')' : '') . "\n";
-        echo '- model: ' . $row->provider . '/' . $row->model . "\n";
-        echo '- updated: ' . $row->updatedAt . ' · ' . $row->turns . " turn(s)\n";
+        echo Lang::t('cli.session.show.id', ['id' => $row->id]) . "\n";
+        echo ($row->parentId !== null
+            ? Lang::t('cli.session.show.kind_child', ['kind' => $row->kind->value, 'parent' => $row->parentId])
+            : Lang::t('cli.session.show.kind', ['kind' => $row->kind->value])) . "\n";
+        echo Lang::t('cli.session.show.model', ['model' => $row->provider . '/' . $row->model]) . "\n";
+        echo Lang::t('cli.session.show.updated', ['updated' => $row->updatedAt, 'turns' => $row->turns]) . "\n";
         if ($row->pinned || $row->archived()) {
-            echo '- flags: ' . \implode(', ', \array_filter([$row->pinned ? 'pinned' : null, $row->archived() ? 'archived ' . $row->archivedAt : null])) . "\n";
+            echo Lang::t('cli.session.show.flags', ['flags' => \implode(', ', \array_filter([
+                $row->pinned ? Lang::t('cli.session.show.pinned') : null,
+                $row->archived() ? Lang::t('cli.session.show.archived', ['at' => (string) $row->archivedAt]) : null,
+            ]))]) . "\n";
         }
-        echo "\n" . ($messages === [] ? "(no transcript stored)\n" : \rtrim(Exporter::toMarkdown($messages)) . "\n");
+        echo "\n" . ($messages === [] ? Lang::t('cli.session.show.no_transcript') . "\n" : \rtrim(Exporter::toMarkdown($messages)) . "\n");
 
         return NonInteractive::EXIT_OK;
     }
@@ -713,9 +726,9 @@ final class Subcommands
         $title = \trim(\implode(' ', \array_slice($args->subcommandArgs, 2)));
         if (isset($args->subcommandArgs[1]) && $title === '') {
             return NonInteractive::failUsage(
-                'sugarcrush: session rename: no title given',
+                'sugarcrush: ' . Lang::t('cli.session.rename.no_title'),
                 $args->outputFormat,
-                'Usage: sugarcrush session rename <target> <title…>',
+                Lang::t('cli.session.rename.usage'),
             );
         }
 
@@ -730,7 +743,7 @@ final class Subcommands
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             self::emitDocument(['result' => ['renamed' => $row->id, 'name' => $title]]);
         } else {
-            echo 'Renamed session ' . $row->id . ' to "' . $title . "\"\n";
+            echo Lang::t('cli.session.rename.done', ['id' => $row->id, 'title' => $title]) . "\n";
         }
 
         return NonInteractive::EXIT_OK;
@@ -760,7 +773,9 @@ final class Subcommands
             self::emitDocument(['result' => ['deleted' => $row->id, 'deletedIds' => $deleted]]);
         } else {
             $others = \count($deleted) - 1;
-            echo 'Deleted session ' . $row->id . ($others > 0 ? ' and ' . $others . ' child session(s)' : '') . "\n";
+            echo ($others > 0
+                ? Lang::t('cli.session.delete.done_with_children', ['id' => $row->id, 'count' => $others])
+                : Lang::t('cli.session.delete.done', ['id' => $row->id])) . "\n";
         }
 
         return NonInteractive::EXIT_OK;
@@ -791,18 +806,16 @@ final class Subcommands
             'archive' => $store->archive($row->id),
             'unarchive' => $store->unarchive($row->id),
         };
-        $past = match ($verb) {
-            'pin' => 'pinned',
-            'unpin' => 'unpinned',
-            'archive' => 'archived',
-            'unarchive' => 'unarchived',
-        };
-
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             self::emitDocument(['result' => ['session' => $row->id, 'action' => $verb, 'changed' => $changed]]);
         } else {
-            echo ($changed ? \ucfirst($past) . ' session ' : 'Session ') . $row->id
-                . ($changed ? '' : ' is already ' . $past) . "\n";
+            $id = ['id' => $row->id];
+            echo match ($verb) {
+                'pin' => $changed ? Lang::t('cli.session.flag.pinned', $id) : Lang::t('cli.session.flag.already_pinned', $id),
+                'unpin' => $changed ? Lang::t('cli.session.flag.unpinned', $id) : Lang::t('cli.session.flag.already_unpinned', $id),
+                'archive' => $changed ? Lang::t('cli.session.flag.archived', $id) : Lang::t('cli.session.flag.already_archived', $id),
+                'unarchive' => $changed ? Lang::t('cli.session.flag.unarchived', $id) : Lang::t('cli.session.flag.already_unarchived', $id),
+            } . "\n";
         }
 
         return NonInteractive::EXIT_OK;
@@ -821,9 +834,9 @@ final class Subcommands
         $target = $args->subcommandArgs[1] ?? null;
         if ($target === null || $target === '') {
             return NonInteractive::failUsage(
-                \sprintf('sugarcrush: session %s: no session id given', $verb),
+                'sugarcrush: ' . Lang::t('cli.session.no_target', ['action' => $verb]),
                 $args->outputFormat,
-                'Usage: sugarcrush session ' . $verb . ' <id|prefix|name> — run `sugarcrush session list --all` for the ids.',
+                Lang::t('cli.session.target_usage', ['action' => $verb]),
             );
         }
 
@@ -832,12 +845,12 @@ final class Subcommands
             $shown = \array_slice($matches, 0, 10);
 
             return NonInteractive::failUsage(
-                \sprintf('sugarcrush: session %s %s: ambiguous id prefix, %d sessions match', $verb, $target, \count($matches)),
+                'sugarcrush: ' . Lang::t('cli.session.ambiguous', ['action' => $verb, 'target' => $target, 'count' => \count($matches)]),
                 $args->outputFormat,
-                'Candidates: ' . \implode(', ', \array_map(
+                Lang::t('cli.session.candidates', ['candidates' => \implode(', ', \array_map(
                     static fn(SessionRow $r): string => $r->id . ' (' . self::sessionLabel($r) . ')',
                     $shown,
-                )) . (\count($matches) > \count($shown) ? ', …' : '') . '. Type more of the id.',
+                )) . (\count($matches) > \count($shown) ? ', …' : '')]),
             );
         }
 
@@ -847,11 +860,11 @@ final class Subcommands
             // means nothing ran — which is what a MISSING target above means,
             // and is why the two branches of "the target went wrong" report
             // differently.
-            \fwrite(\STDERR, \sprintf("sugarcrush: session %s: no such session\n", $target));
+            \fwrite(\STDERR, 'sugarcrush: ' . Lang::t('cli.session.not_found', ['target' => $target]) . "\n");
             if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
                 self::emitDocument([
                     'result' => null,
-                    'error' => ['type' => 'not-found', 'message' => 'no such session: ' . $target],
+                    'error' => ['type' => 'not-found', 'message' => Lang::t('cli.session.not_found_message', ['target' => $target])],
                 ]);
             }
 
@@ -864,16 +877,16 @@ final class Subcommands
     private static function rejectSessionOperand(string $verb, string $operand, ParsedArgs $args): int
     {
         return NonInteractive::failUsage(
-            \sprintf('sugarcrush: session %s %s: unexpected operand', $verb, $operand),
+            'sugarcrush: ' . Lang::t('cli.session.unexpected_operand', ['action' => $verb, 'operand' => $operand]),
             $args->outputFormat,
-            self::SESSION_USAGE,
+            self::sessionUsage(),
         );
     }
 
     /** A row's name, or `(unnamed)` — raw storage, printed to a terminal the user owns. */
     private static function sessionLabel(SessionRow $row): string
     {
-        return $row->name ?? '(unnamed)';
+        return $row->name ?? Lang::t('cli.session.unnamed');
     }
 
     // ---------------------------------------------------------------------
@@ -908,10 +921,10 @@ final class Subcommands
         if ($verb !== 'list') {
             return NonInteractive::failUsage(
                 $verb === null
-                    ? 'sugarcrush: mcp: no action given'
-                    : \sprintf('sugarcrush: mcp %s: unknown action', $verb),
+                    ? 'sugarcrush: ' . Lang::t('cli.mcp.no_action')
+                    : 'sugarcrush: ' . Lang::t('cli.mcp.unknown_action', ['action' => $verb]),
                 $args->outputFormat,
-                'Usage: sugarcrush mcp list | sugarcrush mcp trust | sugarcrush mcp auth login <server> | sugarcrush mcp import claude|opencode <path>',
+                Lang::t('cli.mcp.usage'),
             );
         }
 
@@ -969,19 +982,17 @@ final class Subcommands
 
         switch ($inventory['status']) {
             case Bootstrap::MCP_ABSENT:
-                echo 'No ' . Bootstrap::MCP_CONFIG_FILENAME . " in this project (looked for {$inventory['path']}).\n";
+                echo Lang::t('cli.mcp.list.absent', ['file' => Bootstrap::MCP_CONFIG_FILENAME, 'path' => $inventory['path']]) . "\n";
 
                 return NonInteractive::EXIT_OK;
 
             case Bootstrap::MCP_OUTSIDE_TREE:
-                echo $inventory['path'] . " resolves outside the project tree and is ignored.\n";
+                echo Lang::t('cli.mcp.list.outside', ['path' => $inventory['path']]) . "\n";
 
                 return NonInteractive::EXIT_OK;
 
             case Bootstrap::MCP_UNTRUSTED:
-                echo $inventory['path'] . " is present but this project root is not trusted,\n"
-                    . "so its servers are not started and are not listed. Add the root to\n"
-                    . '"trustedProjectMcp" in ' . Bootstrap::userConfigPath() . " to opt in.\n";
+                echo Lang::t('cli.mcp.list.untrusted', ['path' => $inventory['path'], 'config' => Bootstrap::userConfigPath()]) . "\n";
 
                 return NonInteractive::EXIT_OK;
         }
@@ -996,7 +1007,7 @@ final class Subcommands
         }
 
         if ($inventory['servers'] === []) {
-            echo $inventory['path'] . " declares no servers.\n";
+            echo Lang::t('cli.mcp.list.empty', ['path' => $inventory['path']]) . "\n";
 
             return NonInteractive::EXIT_OK;
         }
@@ -1022,12 +1033,7 @@ final class Subcommands
             if ($wirePrefix === \SugarCraft\Crush\Tools\McpToolBridge::NAME_PREFIX . $server['name'] . '__') {
                 continue;
             }
-            \printf(
-                "  server \"%s\" is written %s on the wire (permission rules match: %s<tool>)\n",
-                $server['name'],
-                $wirePrefix,
-                $wirePrefix,
-            );
+            echo Lang::t('cli.mcp.list.wire_name', ['server' => $server['name'], 'prefix' => $wirePrefix]) . "\n";
         }
 
         return NonInteractive::EXIT_OK;
@@ -1045,9 +1051,9 @@ final class Subcommands
     {
         if (\count($args->subcommandArgs) > 1) {
             return NonInteractive::failUsage(
-                \sprintf('sugarcrush mcp trust: unexpected operand %s', $args->subcommandArgs[1]),
+                Lang::t('cli.mcp.trust.unexpected_operand', ['operand' => $args->subcommandArgs[1]]),
                 $args->outputFormat,
-                'Usage: sugarcrush mcp trust (run it in the project, or pass the project directory first)',
+                Lang::t('cli.mcp.trust.usage'),
             );
         }
 
@@ -1071,12 +1077,12 @@ final class Subcommands
 
         switch ($report['status']) {
             case Bootstrap::MCP_ABSENT:
-                echo 'No ' . Bootstrap::MCP_CONFIG_FILENAME . " in this project (looked for {$report['path']}); nothing to trust.\n";
+                echo Lang::t('cli.mcp.trust.absent', ['file' => Bootstrap::MCP_CONFIG_FILENAME, 'path' => $report['path']]) . "\n";
 
                 return NonInteractive::EXIT_OK;
 
             case Bootstrap::MCP_OUTSIDE_TREE:
-                echo $report['path'] . " resolves outside the project tree and cannot be trusted.\n";
+                echo Lang::t('cli.mcp.trust.outside', ['path' => $report['path']]) . "\n";
 
                 return NonInteractive::EXIT_OK;
         }
@@ -1086,14 +1092,13 @@ final class Subcommands
         // record could not be. Each leaves the launch refusing what it refused.
         $failure = match (true) {
             $report['error'] !== null && !$report['granted'] => $report['path'] . ' ' . $report['error'],
-            !$report['granted'] => 'mcp trust: could not add ' . $report['root'] . ' to "trustedProjectMcp" in '
-                . Bootstrap::userConfigPath() . '; nothing was recorded',
-            !$report['recorded'] => 'mcp trust: ' . (string) $report['error'],
+            !$report['granted'] => Lang::t('cli.mcp.trust.not_granted', ['root' => $report['root'], 'config' => Bootstrap::userConfigPath()]),
+            !$report['recorded'] => Lang::t('cli.mcp.trust.not_recorded', ['error' => (string) $report['error']]),
             default => null,
         };
 
         if ($failure === null || $report['granted']) {
-            echo 'Trusting the MCP servers in ' . $report['path'] . ":\n";
+            echo Lang::t('cli.mcp.trust.heading', ['path' => $report['path']]) . "\n";
             $width = 0;
             foreach ([...array_column($report['servers'], 'name'), ...$report['removed'], ...$report['invalid']] as $name) {
                 $width = \max($width, \strlen($name));
@@ -1105,7 +1110,7 @@ final class Subcommands
                 \printf("  %-{$width}s  %-9s\n", $name, 'removed');
             }
             foreach ($report['invalid'] as $name) {
-                \printf("  %-{$width}s  %-9s  (not recorded: the entry is malformed)\n", $name, 'invalid');
+                \printf("  %-{$width}s  %-9s  %s\n", $name, 'invalid', Lang::t('cli.mcp.trust.malformed'));
             }
         }
 
@@ -1115,8 +1120,9 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
 
-        echo \count($report['servers']) . ' server' . (\count($report['servers']) === 1 ? '' : 's')
-            . ' recorded; the next launch starts these and refuses any later change to them.' . "\n";
+        echo (\count($report['servers']) === 1
+            ? Lang::t('cli.mcp.trust.recorded.one', ['count' => 1])
+            : Lang::t('cli.mcp.trust.recorded.many', ['count' => \count($report['servers'])])) . "\n";
 
         return NonInteractive::EXIT_OK;
     }
@@ -1148,18 +1154,18 @@ final class Subcommands
         if ($action !== 'login') {
             return NonInteractive::failUsage(
                 $action === null
-                    ? 'sugarcrush: mcp auth: no action given'
-                    : \sprintf('sugarcrush: mcp auth %s: unknown action', $action),
+                    ? 'sugarcrush: ' . Lang::t('cli.mcp.auth.no_action')
+                    : 'sugarcrush: ' . Lang::t('cli.mcp.auth.unknown_action', ['action' => $action]),
                 $args->outputFormat,
-                'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]',
+                Lang::t('cli.mcp.auth.usage'),
             );
         }
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             return NonInteractive::failUsage(
-                'sugarcrush: mcp auth login: login is interactive by design',
+                'sugarcrush: ' . Lang::t('cli.mcp.auth.interactive'),
                 $args->outputFormat,
-                'Run it as a plain command: it prints a URL, waits for your browser, and stores the tokens.',
+                Lang::t('cli.mcp.auth.interactive_hint'),
             );
         }
 
@@ -1175,9 +1181,9 @@ final class Subcommands
             $value = $args->subcommandArgs[$i + 1] ?? null;
             if ($value === null || !\is_numeric($value) || (float) $value <= 0.0) {
                 return NonInteractive::failUsage(
-                    'sugarcrush: mcp auth login: --timeout needs a positive number of seconds',
+                    'sugarcrush: ' . Lang::t('cli.mcp.auth.bad_timeout'),
                     $args->outputFormat,
-                    'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]',
+                    Lang::t('cli.mcp.auth.usage'),
                 );
             }
             $timeout = (float) $value;
@@ -1187,9 +1193,9 @@ final class Subcommands
         $serverUrl = $operands[0] ?? null;
         if ($serverUrl === null) {
             return NonInteractive::failUsage(
-                'sugarcrush: mcp auth login: no server URL given',
+                'sugarcrush: ' . Lang::t('cli.mcp.auth.no_server'),
                 $args->outputFormat,
-                'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]',
+                Lang::t('cli.mcp.auth.usage'),
             );
         }
 
@@ -1226,7 +1232,10 @@ final class Subcommands
     /**
      * The one usage line this verb's four doors all print.
      */
-    private const IMPORT_USAGE = 'Usage: sugarcrush mcp import claude|opencode <path>';
+    private static function importUsage(): string
+    {
+        return Lang::t('cli.mcp.import.usage');
+    }
 
     /**
      * `sugarcrush mcp import claude|opencode <path>` — E710's print-only
@@ -1262,32 +1271,32 @@ final class Subcommands
         $source = $args->subcommandArgs[1] ?? null;
         if ($source === null) {
             return NonInteractive::failUsage(
-                'sugarcrush: mcp import: no source given',
+                'sugarcrush: ' . Lang::t('cli.mcp.import.no_source'),
                 $args->outputFormat,
-                self::IMPORT_USAGE,
+                self::importUsage(),
             );
         }
         if (!\in_array($source, self::importSources(), true)) {
             return NonInteractive::failUsage(
-                \sprintf('sugarcrush: mcp import %s: unknown source', $source),
+                'sugarcrush: ' . Lang::t('cli.mcp.import.unknown_source', ['source' => $source]),
                 $args->outputFormat,
-                \sprintf('Valid sources are: %s.', \implode(', ', self::importSources())),
+                Lang::t('cli.mcp.import.valid_sources', ['sources' => \implode(', ', self::importSources())]),
             );
         }
         $path = $args->subcommandArgs[2] ?? null;
         if ($path === null) {
             return NonInteractive::failUsage(
-                'sugarcrush: mcp import: no file given',
+                'sugarcrush: ' . Lang::t('cli.mcp.import.no_file'),
                 $args->outputFormat,
-                self::IMPORT_USAGE,
+                self::importUsage(),
             );
         }
         $extra = $args->subcommandArgs[3] ?? null;
         if ($extra !== null) {
             return NonInteractive::failUsage(
-                \sprintf('sugarcrush: mcp import: unexpected operand %s', $extra),
+                'sugarcrush: ' . Lang::t('cli.mcp.import.unexpected_operand', ['operand' => $extra]),
                 $args->outputFormat,
-                self::IMPORT_USAGE,
+                self::importUsage(),
             );
         }
 
@@ -1300,20 +1309,20 @@ final class Subcommands
         $raw = @file_get_contents($path);  // BARE spelling — the \-prefixed form is invisible to the read-path census scanner
         if ($raw === false) {
             return NonInteractive::failUsage(
-                \sprintf('sugarcrush: mcp import: cannot read %s', $path),
+                'sugarcrush: ' . Lang::t('cli.mcp.import.unreadable', ['path' => $path]),
                 $args->outputFormat,
-                'Check the path; nothing has been translated or written.',
+                Lang::t('cli.mcp.import.unreadable_hint'),
             );
         }
 
         try {
             $decoded = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
             if (!\is_array($decoded)) {
-                throw new \RuntimeException('the file is not a JSON object');
+                throw new \RuntimeException(Lang::t('cli.mcp.import.not_an_object'));
             }
             $translated = \SugarCraft\Crush\MCP\McpForeignTranslate::translateDocument($source, $decoded);
         } catch (\JsonException $e) {
-            return self::mcpImportFailure($path, 'is not valid JSON: ' . $e->getMessage(), $args);
+            return self::mcpImportFailure($path, Lang::t('cli.mcp.import.invalid_json', ['error' => $e->getMessage()]), $args);
         } catch (\RuntimeException $e) {
             return self::mcpImportFailure($path, $e->getMessage(), $args);
         }
@@ -1340,13 +1349,12 @@ final class Subcommands
         foreach ($translated['notes'] as $note) {
             self::mcpImportLine($note);
         }
-        self::mcpImportLine(\sprintf(
-            'nothing was written — paste the block into %s and add the root to "trustedProjectMcp" in %s to start these servers',
+        self::mcpImportLine(Lang::t('cli.mcp.import.nothing_written', [
             // Same ambient default mcpServerInventory() takes for a null
             // `--root`: the launch directory names where the block belongs.
-            \rtrim($args->root ?? getcwd(), '/') . '/' . Bootstrap::MCP_CONFIG_FILENAME,
-            Bootstrap::userConfigPath(),
-        ));
+            'file' => \rtrim($args->root ?? getcwd(), '/') . '/' . Bootstrap::MCP_CONFIG_FILENAME,
+            'config' => Bootstrap::userConfigPath(),
+        ]));
 
         return NonInteractive::EXIT_OK;
     }
@@ -1410,10 +1418,10 @@ final class Subcommands
         if ($shell === null || !\in_array($shell, self::SHELLS, true)) {
             return NonInteractive::failUsage(
                 $shell === null
-                    ? 'sugarcrush: completion: no shell given'
-                    : \sprintf('sugarcrush: completion %s: unsupported shell', $shell),
+                    ? 'sugarcrush: ' . Lang::t('cli.completion.no_shell')
+                    : 'sugarcrush: ' . Lang::t('cli.completion.unsupported_shell', ['shell' => $shell]),
                 $args->outputFormat,
-                'Usage: sugarcrush completion ' . \implode('|', self::SHELLS),
+                Lang::t('cli.completion.usage', ['shells' => \implode('|', self::SHELLS)]),
             );
         }
 
@@ -1444,38 +1452,42 @@ final class Subcommands
      * that one column into three genuinely different dialects rather than
      * sharing a script — see {@see completion()}.
      *
+     * `desc` is the `lang/en.php` key of the option's one-line description,
+     * resolved through {@see Lang::t()} when a script is generated.
+     *
      * @var array<string, array{short: string|null, value: string|null, desc: string}>
      */
     private const OPTIONS = [
-        '--prompt' => ['short' => '-p', 'value' => 'text', 'desc' => 'Run a single prompt and exit (one-shot mode)'],
-        '--output-format' => ['short' => null, 'value' => 'format', 'desc' => 'Output format: text or json'],
-        '--root' => ['short' => null, 'value' => 'dir', 'desc' => 'Use <dir> as the project root'],
-        '--config' => ['short' => null, 'value' => 'file', 'desc' => 'Read settings and permissions from <file>'],
-        '--model' => ['short' => null, 'value' => 'text', 'desc' => 'Conversation model name (not a provider)'],
-        '--permission-mode' => ['short' => null, 'value' => 'mode', 'desc' => 'Permission mode to run under'],
-        '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'Continue the most recent session'],
-        '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'Resume a stored session by id or name'],
-        '--help' => ['short' => '-h', 'value' => null, 'desc' => 'Show the help screen'],
-        '--version' => ['short' => '-v', 'value' => null, 'desc' => 'Show the installed version'],
+        '--prompt' => ['short' => '-p', 'value' => 'text', 'desc' => 'cli.completion.option.prompt'],
+        '--output-format' => ['short' => null, 'value' => 'format', 'desc' => 'cli.completion.option.output_format'],
+        '--root' => ['short' => null, 'value' => 'dir', 'desc' => 'cli.completion.option.root'],
+        '--config' => ['short' => null, 'value' => 'file', 'desc' => 'cli.completion.option.config'],
+        '--model' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.model'],
+        '--permission-mode' => ['short' => null, 'value' => 'mode', 'desc' => 'cli.completion.option.mode'],
+        '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'cli.completion.option.continue'],
+        '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.resume'],
+        '--help' => ['short' => '-h', 'value' => null, 'desc' => 'cli.completion.option.help'],
+        '--version' => ['short' => '-v', 'value' => null, 'desc' => 'cli.completion.option.version'],
     ];
 
     /**
      * The one-line summary each subcommand gets in the two shells that have
      * somewhere to put one (zsh's `_describe`, fish's `-d`). bash's `compgen
      * -W` takes bare words only, which is why its script shows names alone.
+     * Each value is the `lang/en.php` key of that summary.
      *
      * @var array<string, string>
      */
     private const SUBCOMMAND_DESCRIPTIONS = [
-        'run' => 'Run a single prompt and exit (alias for --prompt)',
-        'acp' => 'Run as an Agent Client Protocol agent for an editor',
-        'attach' => 'Run the TUI on a session of a running server',
-        'completion' => 'Emit a shell completion script',
-        'doctor' => 'Report on this installation and exit',
-        'mcp' => 'Inspect the project MCP configuration',
-        'models' => 'List the providers this install can select',
-        'serve' => 'Run the WebSocket server for the web UI',
-        'session' => 'Manage stored sessions',
+        'run' => 'cli.completion.verb.run',
+        'acp' => 'cli.completion.verb.acp',
+        'attach' => 'cli.completion.verb.attach',
+        'completion' => 'cli.completion.verb.completion',
+        'doctor' => 'cli.completion.verb.doctor',
+        'mcp' => 'cli.completion.verb.mcp',
+        'models' => 'cli.completion.verb.models',
+        'serve' => 'cli.completion.verb.serve',
+        'session' => 'cli.completion.verb.session',
     ];
 
     /**
@@ -1581,16 +1593,17 @@ final class Subcommands
             // The exclusion list keeps zsh from offering `--help` again once
             // `-h` is on the line; a spec pair without it double-offers.
             $exclusion = $spec['short'] === null ? '' : '(' . $spec['short'] . ' ' . $flag . ')';
-            $specs[] = "        '" . $exclusion . $flag . '[' . $spec['desc'] . ']' . $tail . "'";
+            $desc = \str_replace(['[', ']'], ['\\[', '\\]'], self::zshDescription(Lang::t($spec['desc'])));
+            $specs[] = "        '" . $exclusion . $flag . '[' . $desc . ']' . $tail . "'";
             if ($spec['short'] !== null) {
                 $specs[] = "        '(" . $spec['short'] . ' ' . $flag . ')' . $spec['short']
-                    . '[' . $spec['desc'] . ']' . $tail . "'";
+                    . '[' . $desc . ']' . $tail . "'";
             }
         }
 
         $verbs = [];
         foreach (self::SUBCOMMAND_DESCRIPTIONS as $verb => $desc) {
-            $verbs[] = "        '" . $verb . ':' . $desc . "'";
+            $verbs[] = "        '" . $verb . ':' . self::zshDescription(Lang::t($desc)) . "'";
         }
 
         $actionCases = '';
@@ -1631,6 +1644,18 @@ final class Subcommands
     }
 
     /**
+     * A description made safe for the single-quoted zsh word it is spliced
+     * into: a quote would end the word (and an `_arguments` spec escapes its
+     * brackets on top, see {@see zshCompletion()}). The English catalogue
+     * carries neither, so this changes no byte of the English script; it is
+     * here so a translation cannot break the user's shell completion.
+     */
+    private static function zshDescription(string $desc): string
+    {
+        return \str_replace("'", "'\\''", $desc);
+    }
+
+    /**
      * fish has no COMPREPLY equivalent and no dispatch function: completion is
      * declarative, one `complete -c` line per rule, gated by `-n` conditions.
      * So this is a third real dialect rather than a relabelling — note that
@@ -1653,7 +1678,7 @@ final class Subcommands
             $lines[] = \sprintf(
                 'complete -c sugarcrush -n "__fish_use_subcommand" -a %s -d %s',
                 \escapeshellarg($verb),
-                \escapeshellarg($desc),
+                \escapeshellarg(Lang::t($desc)),
             );
         }
         $lines[] = '';
@@ -1673,7 +1698,7 @@ final class Subcommands
                 'text' => ' -r',
                 default => '',
             };
-            $lines[] = $line . ' -d ' . \escapeshellarg($spec['desc']);
+            $lines[] = $line . ' -d ' . \escapeshellarg(Lang::t($spec['desc']));
         }
         $lines[] = '';
 
@@ -1682,7 +1707,7 @@ final class Subcommands
                 'complete -c sugarcrush -n %s -a %s -d %s',
                 \escapeshellarg('__fish_seen_subcommand_from ' . $verb),
                 \escapeshellarg(\implode(' ', $actions)),
-                \escapeshellarg($verb . ' argument'),
+                \escapeshellarg(Lang::t('cli.completion.verb_argument', ['verb' => $verb])),
             );
         }
         $lines[] = '';

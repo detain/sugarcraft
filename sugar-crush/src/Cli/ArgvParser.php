@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Cli;
 
+use SugarCraft\Crush\Lang;
+
 /**
  * Manual argv-parsing, dependency-free — no CLI-flag-parsing lib exists
  * elsewhere in the monorepo, so this follows the precedent set by
@@ -194,7 +196,7 @@ final class ArgvParser
                 if (self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = self::flagAsPromptError('run', (string) $next);
-                        $usageHint = self::PROMPT_DASH_HINT;
+                        $usageHint = self::promptDashHint();
                     }
                     $promptRequested = true;
                     ++$i; // leave the flag for the loop rather than eating it
@@ -253,7 +255,7 @@ final class ArgvParser
                 if (self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = self::flagAsPromptError('-p', (string) $next);
-                        $usageHint = self::PROMPT_DASH_HINT;
+                        $usageHint = self::promptDashHint();
                     }
                     $promptRequested = true;
                     ++$i;
@@ -279,7 +281,7 @@ final class ArgvParser
                 if (self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = self::flagAsPromptError('--prompt', (string) $next);
-                        $usageHint = self::PROMPT_DASH_HINT;
+                        $usageHint = self::promptDashHint();
                     }
                     $promptRequested = true;
                     ++$i;
@@ -327,12 +329,9 @@ final class ArgvParser
                 if ($next === null || self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = $next === null
-                            ? 'sugarcrush: --root expects a directory, but the argument list ended'
-                            : \sprintf(
-                                'sugarcrush: --root expects a directory, but the next argument is the option %s',
-                                $next,
-                            );
-                        $usageHint = self::ROOT_VALUE_HINT;
+                            ? 'sugarcrush: ' . Lang::t('cli.argv.root.missing')
+                            : 'sugarcrush: ' . Lang::t('cli.argv.root.flag', ['option' => $next]);
+                        $usageHint = self::rootValueHint();
                     }
                     ++$i; // leave a flag-shaped $next for the loop to judge
                     continue;
@@ -376,12 +375,9 @@ final class ArgvParser
                 if ($next === null || self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = $next === null
-                            ? 'sugarcrush: --config expects a file path, but the argument list ended'
-                            : \sprintf(
-                                'sugarcrush: --config expects a file path, but the next argument is the option %s',
-                                $next,
-                            );
-                        $usageHint = self::CONFIG_VALUE_HINT;
+                            ? 'sugarcrush: ' . Lang::t('cli.argv.config.missing')
+                            : 'sugarcrush: ' . Lang::t('cli.argv.config.flag', ['option' => $next]);
+                        $usageHint = self::configValueHint();
                     }
                     ++$i; // leave a flag-shaped $next for the loop to judge
                     continue;
@@ -394,13 +390,13 @@ final class ArgvParser
             // --model=<value>  (no space)
             //
             // An EMPTY value is a usage error, not a value — see
-            // self::EMPTY_MODEL_ERROR.
+            // self::emptyModelError().
             if (\str_starts_with($arg, '--model=')) {
                 $value = \substr($arg, 8); // length of "--model="
                 if ($value === '') {
                     if ($usageError === null) {
-                        $usageError = self::EMPTY_MODEL_ERROR;
-                        $usageHint = self::MODEL_VALUE_HINT;
+                        $usageError = self::emptyModelError();
+                        $usageHint = self::modelValueHint();
                     }
                     ++$i;
                     continue;
@@ -424,20 +420,17 @@ final class ArgvParser
                 if ($next === null || self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = $next === null
-                            ? 'sugarcrush: --model expects a model name, but the argument list ended'
-                            : \sprintf(
-                                'sugarcrush: --model expects a model name, but the next argument is the option %s',
-                                $next,
-                            );
-                        $usageHint = self::MODEL_VALUE_HINT;
+                            ? 'sugarcrush: ' . Lang::t('cli.argv.model.missing')
+                            : 'sugarcrush: ' . Lang::t('cli.argv.model.flag', ['option' => $next]);
+                        $usageHint = self::modelValueHint();
                     }
                     ++$i; // leave a flag-shaped $next for the loop to judge
                     continue;
                 }
                 if ($next === '') {
                     if ($usageError === null) {
-                        $usageError = self::EMPTY_MODEL_ERROR;
-                        $usageHint = self::MODEL_VALUE_HINT;
+                        $usageError = self::emptyModelError();
+                        $usageHint = self::modelValueHint();
                     }
                     $i += 2; // the empty token is consumed; it is not a prompt
                     continue;
@@ -450,12 +443,12 @@ final class ArgvParser
             // --permission-mode=<value>  (no space)
             //
             // An EMPTY value is a usage error, not a value — see
-            // self::EMPTY_PERMISSION_MODE_ERROR.
+            // self::emptyPermissionModeError().
             if (\str_starts_with($arg, '--permission-mode=')) {
                 $value = \substr($arg, 18); // length of "--permission-mode="
                 if ($value === '') {
                     if ($usageError === null) {
-                        $usageError = self::EMPTY_PERMISSION_MODE_ERROR;
+                        $usageError = self::emptyPermissionModeError();
                         $usageHint = self::permissionModeValueHint();
                     }
                     ++$i;
@@ -481,11 +474,8 @@ final class ArgvParser
                 if ($next === null || self::looksLikeFlag($next)) {
                     if ($usageError === null) {
                         $usageError = $next === null
-                            ? 'sugarcrush: --permission-mode expects a mode, but the argument list ended'
-                            : \sprintf(
-                                'sugarcrush: --permission-mode expects a mode, but the next argument is the option %s',
-                                $next,
-                            );
+                            ? 'sugarcrush: ' . Lang::t('cli.argv.mode_flag.missing')
+                            : 'sugarcrush: ' . Lang::t('cli.argv.mode_flag.flag', ['option' => $next]);
                         $usageHint = self::permissionModeValueHint();
                     }
                     ++$i; // leave a flag-shaped $next for the loop to judge
@@ -493,7 +483,7 @@ final class ArgvParser
                 }
                 if ($next === '') {
                     if ($usageError === null) {
-                        $usageError = self::EMPTY_PERMISSION_MODE_ERROR;
+                        $usageError = self::emptyPermissionModeError();
                         $usageHint = self::permissionModeValueHint();
                     }
                     $i += 2; // the empty token is consumed; it is not a prompt
@@ -556,8 +546,8 @@ final class ArgvParser
                     if (!$takesValue) {
                         if ($inline !== null) {
                             if ($usageError === null) {
-                                $usageError = \sprintf('sugarcrush: %s %s takes no value', $subcommand, $name);
-                                $usageHint = \sprintf('Write it as %s alone.', $name);
+                                $usageError = 'sugarcrush: ' . Lang::t('cli.argv.verb_flag.no_value', ['verb' => $subcommand, 'flag' => $name]);
+                                $usageHint = Lang::t('cli.argv.hint.flag_alone', ['flag' => $name]);
                             }
                         } else {
                             $subcommandFlags[$name] = true;
@@ -572,13 +562,10 @@ final class ArgvParser
                         $next = $argv[$i + 1] ?? null;
                         if ($next === null || self::looksLikeFlag($next)) {
                             if ($usageError === null) {
-                                $usageError = \sprintf(
-                                    'sugarcrush: %s %s expects a value, but %s',
-                                    $subcommand,
-                                    $name,
-                                    $next === null ? 'the argument list ended' : 'the next argument is the option ' . $next,
-                                );
-                                $usageHint = \sprintf('Write it as %s=<value>; it may not be omitted.', $name);
+                                $usageError = 'sugarcrush: ' . ($next === null
+                                    ? Lang::t('cli.argv.verb_flag.missing', ['verb' => $subcommand, 'flag' => $name])
+                                    : Lang::t('cli.argv.verb_flag.flag', ['verb' => $subcommand, 'flag' => $name, 'option' => $next]));
+                                $usageHint = Lang::t('cli.argv.hint.flag_value', ['flag' => $name]);
                             }
                             ++$i;
                             continue;
@@ -588,8 +575,8 @@ final class ArgvParser
                     }
                     if ($value === '') {
                         if ($usageError === null) {
-                            $usageError = \sprintf('sugarcrush: %s %s expects a value, but the value is empty', $subcommand, $name);
-                            $usageHint = \sprintf('Write it as %s=<value>; it may not be omitted.', $name);
+                            $usageError = 'sugarcrush: ' . Lang::t('cli.argv.verb_flag.empty', ['verb' => $subcommand, 'flag' => $name]);
+                            $usageHint = Lang::t('cli.argv.hint.flag_value', ['flag' => $name]);
                         }
                         continue;
                     }
@@ -651,14 +638,8 @@ final class ArgvParser
         // documented, and the message below names the valid spellings.
         if (!\in_array($outputFormat, ParsedArgs::OUTPUT_FORMATS, true)) {
             if ($usageError === null) {
-                $usageError = \sprintf(
-                    'sugarcrush: --output-format %s: unsupported output format',
-                    $outputFormat,
-                );
-                $usageHint = \sprintf(
-                    'Valid formats are: %s (lowercase).',
-                    \implode(', ', ParsedArgs::OUTPUT_FORMATS),
-                );
+                $usageError = 'sugarcrush: ' . Lang::t('cli.argv.output_format.unsupported', ['format' => $outputFormat]);
+                $usageHint = Lang::t('cli.argv.hint.output_formats', ['formats' => \implode(', ', ParsedArgs::OUTPUT_FORMATS)]);
             }
         }
 
@@ -668,15 +649,14 @@ final class ArgvParser
         // `-c -p "…"` that silently ran without the earlier conversation
         // would look like a model that forgot everything.
         if ($usageError === null && $continueSession && $resumeRequested) {
-            $usageError = 'sugarcrush: --continue and --resume both pick the session to open; use one of them';
-            $usageHint = 'Use --continue for the most recent session, or --resume <id|name> for a specific one.';
+            $usageError = 'sugarcrush: ' . Lang::t('cli.argv.continue_with_resume');
+            $usageHint = Lang::t('cli.argv.hint.continue_or_resume');
         }
         if ($usageError === null && $promptRequested && ($continueSession || $resumeRequested)) {
-            $usageError = \sprintf(
-                'sugarcrush: %s reopens an interactive session and cannot be combined with -p/run',
-                $continueSession ? '--continue' : '--resume',
-            );
-            $usageHint = 'Drop -p to continue the conversation in the TUI.';
+            $usageError = 'sugarcrush: ' . Lang::t('cli.argv.session_with_prompt', [
+                'flag' => $continueSession ? '--continue' : '--resume',
+            ]);
+            $usageHint = Lang::t('cli.argv.hint.drop_prompt');
         }
 
         // The FIRST positional, when it looks like a path, is the root (see
@@ -743,31 +723,33 @@ final class ArgvParser
             && (self::looksLikePath($leftover[0]) || ($leftover[0] !== '' && \is_dir($leftover[0])))
         ) {
             return $args->withUsageError(
-                \sprintf(
-                    'sugarcrush: the project root is already %s, but the argument %s also names one',
-                    $args->root,
-                    self::listOperands($leftover),
-                ),
-                'Name the project directory once: as a bare argument or with --root <dir>, not both.',
+                'sugarcrush: ' . Lang::t('cli.argv.root_twice', [
+                    'root' => $args->root,
+                    'operand' => self::listOperands($leftover),
+                ]),
+                Lang::t('cli.argv.hint.root_once'),
             );
         }
 
         $listed = self::listOperands($leftover);
-        $plural = \count($leftover) === 1 ? '' : 's';
+        $one = \count($leftover) === 1;
 
         if ($args->promptRequested) {
             return $args->withUsageError(
-                \sprintf('sugarcrush: unexpected argument%s after the prompt: %s', $plural, $listed),
-                'Quote the whole prompt as one argument: -p "<prompt>".',
+                'sugarcrush: ' . ($one
+                    ? Lang::t('cli.argv.unexpected_after_prompt.one', ['operands' => $listed])
+                    : Lang::t('cli.argv.unexpected_after_prompt.many', ['operands' => $listed])),
+                Lang::t('cli.argv.hint.quote_prompt'),
             );
         }
 
         $prompt = \implode(' ', $leftover);
         if ($args->subcommand !== null || \trim($prompt) === '') {
             return $args->withUsageError(
-                \sprintf('sugarcrush: unexpected argument%s: %s', $plural, $listed),
-                'Words after the options open the TUI with them as the first prompt; to run a one-shot prompt, '
-                . 'use -p "<prompt>". A subcommand takes no prompt, and an empty argument is not one.',
+                'sugarcrush: ' . ($one
+                    ? Lang::t('cli.argv.unexpected.one', ['operands' => $listed])
+                    : Lang::t('cli.argv.unexpected.many', ['operands' => $listed])),
+                Lang::t('cli.argv.hint.words_open_tui'),
             );
         }
 
@@ -798,10 +780,7 @@ final class ArgvParser
             return null;
         }
 
-        return sprintf(
-            'sugarcrush: --root %s: no such directory',
-            $args->root,
-        );
+        return 'sugarcrush: ' . Lang::t('cli.argv.root.no_such_directory', ['root' => $args->root]);
     }
 
     /**
@@ -842,21 +821,15 @@ final class ArgvParser
         // override that readUserConfig() then resolves to nothing, i.e. an
         // empty policy on a run that asked for a named one.
         if ($args->configPath === '') {
-            return 'sugarcrush: --config expects a file path, but the value is empty';
+            return 'sugarcrush: ' . Lang::t('cli.argv.config.empty');
         }
 
         if (!is_file($args->configPath)) {
-            return sprintf(
-                'sugarcrush: --config %s: no such file',
-                $args->configPath,
-            );
+            return 'sugarcrush: ' . Lang::t('cli.argv.config.no_such_file', ['path' => $args->configPath]);
         }
 
         if (!is_readable($args->configPath)) {
-            return sprintf(
-                'sugarcrush: --config %s: not readable',
-                $args->configPath,
-            );
+            return 'sugarcrush: ' . Lang::t('cli.argv.config.not_readable', ['path' => $args->configPath]);
         }
 
         return null;
@@ -908,21 +881,33 @@ final class ArgvParser
      * it was being printed under an `--output-format` complaint too until the
      * hint moved next to the error that earns it.
      */
-    private const PROMPT_DASH_HINT = 'To pass a prompt that begins with "-", use --prompt=<text>.';
+    private static function promptDashHint(): string
+    {
+        return Lang::t('cli.argv.hint.prompt_dash');
+    }
 
     /**
      * The hint under the two `--config` value errors {@see parse()} raises.
      *
-     * Separate from {@see PROMPT_DASH_HINT} for the reason that one exists at
+     * Separate from {@see promptDashHint()} for the reason that one exists at
      * all: the remedy for "the value is missing or flag-shaped" is not the
      * `--prompt=<text>` escape hatch, and printing that under this error is
      * what {@see ParsedArgs::$usageHint} was introduced to stop.
      */
-    private const CONFIG_VALUE_HINT = 'Write it as --config=<file> if the path begins with "-"; it may not be omitted.';
+    private static function configValueHint(): string
+    {
+        return Lang::t('cli.argv.hint.config_value');
+    }
 
-    private const ROOT_VALUE_HINT = 'Write it as --root=<dir> if the directory begins with "-"; it may not be omitted.';
+    private static function rootValueHint(): string
+    {
+        return Lang::t('cli.argv.hint.root_value');
+    }
 
-    private const MODEL_VALUE_HINT = 'Write it as --model=<name> if the model name begins with "-"; it may not be omitted.';
+    private static function modelValueHint(): string
+    {
+        return Lang::t('cli.argv.hint.model_value');
+    }
 
     /**
      * The usage error for `--model=` and `--model ""` — an EMPTY value.
@@ -942,12 +927,15 @@ final class ArgvParser
      * consumed. The =-form could be checked later; the space form could not,
      * and one site for both beats two that can drift.
      */
-    private const EMPTY_MODEL_ERROR = 'sugarcrush: --model expects a model name, but the value is empty';
+    private static function emptyModelError(): string
+    {
+        return 'sugarcrush: ' . Lang::t('cli.argv.model.empty');
+    }
 
     /**
      * The usage error for `--permission-mode=` and `--permission-mode ""`.
      *
-     * See {@see EMPTY_MODEL_ERROR} for why an empty value is an error and why
+     * See {@see emptyModelError()} for why an empty value is an error and why
      * the check lives in the parser. The stake is higher for this flag: an
      * operator writing `sugarcrush --permission-mode="$MODE"` with `$MODE`
      * unset believed a mode was in force, got none, and was told nothing at
@@ -960,7 +948,10 @@ final class ArgvParser
      * in the TUI, the permissive `bypass-permissions` for `-p`). The defect is
      * the silence, not the destination.
      */
-    private const EMPTY_PERMISSION_MODE_ERROR = 'sugarcrush: --permission-mode expects a mode, but the value is empty';
+    private static function emptyPermissionModeError(): string
+    {
+        return 'sugarcrush: ' . Lang::t('cli.argv.mode_flag.empty');
+    }
 
     /**
      * DERIVED from {@see PermissionMode::cases()} rather than written out, so
@@ -975,7 +966,7 @@ final class ArgvParser
             \SugarCraft\Crush\Permissions\PermissionMode::cases(),
         ));
 
-        return 'Valid modes are: ' . $modes . '.';
+        return Lang::t('cli.argv.hint.valid_modes', ['modes' => $modes]);
     }
 
     /**
@@ -988,10 +979,6 @@ final class ArgvParser
      */
     private static function flagAsPromptError(string $option, string $value): string
     {
-        return \sprintf(
-            'sugarcrush: %s expects a prompt, but the next argument is the option %s',
-            $option,
-            $value,
-        );
+        return 'sugarcrush: ' . Lang::t('cli.argv.prompt_is_flag', ['option' => $option, 'value' => $value]);
     }
 }

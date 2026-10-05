@@ -9,6 +9,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Socket\ConnectionInterface;
 use SugarCraft\Crush\Host\SessionHub;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Protocol\Dispatcher;
 use SugarCraft\Crush\Protocol\ServerContext;
 use SugarCraft\Crush\Server\Auth\AuthContext;
@@ -122,10 +123,6 @@ final class Serve
      */
     private const CONTROL_RELOAD_TOKEN = 'reload-token';
 
-    private const USAGE = 'Usage: sugarcrush serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-origin <origins>]'
-        . ' [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>]'
-        . ' | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]';
-
     private function __construct()
     {
     }
@@ -134,21 +131,23 @@ final class Serve
     {
         $action = $args->subcommandArgs[0] ?? '';
         if ($action !== '' && !\in_array($action, self::ACTIONS, true)) {
-            return NonInteractive::failUsage(\sprintf('sugarcrush serve %s: unknown action', $action), $args->outputFormat, self::USAGE);
+            return NonInteractive::failUsage(Lang::t('cli.serve.unknown_action', ['action' => $action]), $args->outputFormat, Lang::t('cli.serve.usage'));
         }
         if (\count($args->subcommandArgs) > 1) {
             return NonInteractive::failUsage(
-                \sprintf('sugarcrush serve %s %s: unexpected operand', $action, $args->subcommandArgs[1]),
+                Lang::t('cli.serve.unexpected_operand', ['action' => $action, 'operand' => $args->subcommandArgs[1]]),
                 $args->outputFormat,
-                self::USAGE,
+                Lang::t('cli.serve.usage'),
             );
         }
         foreach (\array_keys($args->subcommandFlags) as $flag) {
             if (!\in_array($flag, self::ACTION_FLAGS[$action], true)) {
                 return NonInteractive::failUsage(
-                    \sprintf('sugarcrush serve%s: %s does not apply to %s', $action === '' ? '' : ' ' . $action, $flag, $action === '' ? 'starting a server' : 'this action'),
+                    $action === ''
+                        ? Lang::t('cli.serve.flag_not_for_start', ['flag' => $flag])
+                        : Lang::t('cli.serve.flag_not_for_action', ['action' => $action, 'flag' => $flag]),
                     $args->outputFormat,
-                    self::USAGE,
+                    Lang::t('cli.serve.usage'),
                 );
             }
         }
@@ -185,7 +184,7 @@ final class Serve
             $args->root ?? (\getcwd() ?: null),
         );
         if ($config->stateDir === '') {
-            throw new ServerConfigException('cannot determine a home directory this user owns for the server state; set SUGARCRUSH_SERVER_DIR');
+            throw new ServerConfigException(Lang::t('cli.serve.no_home'));
         }
         // Read once, here: the guard answers to these and the sign-in URLs
         // name them, since `0.0.0.0` is not an address a browser can open.
@@ -229,7 +228,7 @@ final class Serve
             return NonInteractive::failUsage(
                 'sugarcrush serve: ' . $problems[0],
                 $args->outputFormat,
-                \count($problems) > 1 ? 'Also: ' . \implode('; ', \array_slice($problems, 1)) . '.' : null,
+                \count($problems) > 1 ? Lang::t('cli.serve.also', ['problems' => \implode('; ', \array_slice($problems, 1))]) : null,
             );
         }
 
@@ -258,11 +257,9 @@ final class Serve
             return self::failStart(
                 $args,
                 $config,
-                \sprintf(
-                    'a server is already running from %s%s — stop it with: sugarcrush serve stop',
-                    $state->path,
-                    $running !== null && $running->isLive() ? \sprintf(' (pid %d, %s)', $running->pid, $running->url) : '',
-                ),
+                $running !== null && $running->isLive()
+                    ? Lang::t('cli.serve.already_running_pid', ['dir' => $state->path, 'pid' => $running->pid, 'url' => $running->url])
+                    : Lang::t('cli.serve.already_running', ['dir' => $state->path]),
             );
         }
 
@@ -295,7 +292,7 @@ final class Serve
         if ($pair === false) {
             $state->releaseLock();
 
-            return self::failStart($args, $config, 'cannot create the channel the background server reports on');
+            return self::failStart($args, $config, Lang::t('cli.serve.no_report_channel'));
         }
         [$parentEnd, $daemonEnd] = $pair;
 
@@ -324,14 +321,16 @@ final class Serve
         \fclose($parentEnd);
 
         if ($report === null) {
-            return self::failStart($args, $config, \sprintf(
-                'the background server did not report within %d s; see %s',
-                (int) self::DETACH_REPORT_SECONDS,
-                $state->logPath(),
-            ));
+            return self::failStart($args, $config, Lang::t('cli.serve.no_report', [
+                'seconds' => (int) self::DETACH_REPORT_SECONDS,
+                'log' => $state->logPath(),
+            ]));
         }
         if (!$report['ok']) {
-            return self::failStart($args, $config, (string) ($report['reason'] ?? 'the background server failed to start') . '; see ' . $state->logPath());
+            return self::failStart($args, $config, Lang::t('cli.serve.reason_see_log', [
+                'reason' => (string) ($report['reason'] ?? Lang::t('cli.serve.failed_to_start')),
+                'log' => $state->logPath(),
+            ]));
         }
         self::announce($args, $config, $report, $static, true);
 
@@ -368,7 +367,7 @@ final class Serve
             $protocol = self::protocol($config, $loop);
         } catch (\Throwable $e) {
             $state->releaseLock();
-            $reason = 'cannot open the workspace: ' . $e->getMessage();
+            $reason = Lang::t('cli.serve.workspace_unavailable', ['error' => $e->getMessage()]);
             self::stderr('sugarcrush serve: ' . $reason);
             $report(['ok' => false, 'reason' => $reason]);
 
@@ -440,7 +439,7 @@ final class Serve
                 return;
             }
             $stopping = true;
-            self::stderr('sugarcrush serve: stopping (' . $reason . ')');
+            self::stderr(Lang::t('cli.serve.stopping', ['reason' => $reason]));
             $watchdog?->disarm($loop);
             if ($rotation instanceof TimerInterface) {
                 $loop->cancelTimer($rotation);
@@ -469,13 +468,15 @@ final class Serve
                 $finish($settled ? $reason : $reason . '; cancelling the turns still running');
             }, $reason);
             if ($protocol->isDraining()) {
-                self::stderr(\sprintf(
-                    'sugarcrush serve: draining (%s) — waiting up to %s s for %d running turn%s; signal again to stop now',
-                    $reason,
-                    \rtrim(\rtrim(\sprintf('%.1f', $drainSeconds), '0'), '.'),
-                    $protocol->context()->turnsRunning(),
-                    $protocol->context()->turnsRunning() === 1 ? '' : 's',
-                ));
+                $running = $protocol->context()->turnsRunning();
+                $params = [
+                    'reason' => $reason,
+                    'seconds' => \rtrim(\rtrim(\sprintf('%.1f', $drainSeconds), '0'), '.'),
+                    'count' => $running,
+                ];
+                self::stderr($running === 1
+                    ? Lang::t('cli.serve.draining.one', $params)
+                    : Lang::t('cli.serve.draining.many', $params));
             }
         };
 
@@ -618,15 +619,22 @@ final class Serve
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             echo NonInteractive::encodeDocument(['result' => $result]) . "\n";
         } elseif ($live) {
-            echo \sprintf("running: pid %d, %s (health: %s)\n", $record->pid, $record->url, $health);
-            echo '  root:    ' . ($record->root ?? '(none)') . "\n";
-            echo '  version: ' . $record->version . "\n";
-            echo '  started: ' . \date('Y-m-d H:i:s', $record->startedAt) . ' (up ' . self::duration($record->uptime()) . ")\n";
-            echo '  mode:    ' . ($record->detached ? 'background, log ' . $record->log : 'foreground') . "\n";
+            echo Lang::t('cli.serve.status.running', ['pid' => $record->pid, 'url' => $record->url, 'health' => (string) $health]) . "\n";
+            echo Lang::t('cli.serve.status.root', ['root' => $record->root ?? Lang::t('cli.serve.none')]) . "\n";
+            echo Lang::t('cli.serve.status.version', ['version' => $record->version]) . "\n";
+            echo Lang::t('cli.serve.status.started', [
+                'started' => \date('Y-m-d H:i:s', $record->startedAt),
+                'uptime' => self::duration($record->uptime()),
+            ]) . "\n";
+            echo ($record->detached
+                ? Lang::t('cli.serve.status.mode_background', ['log' => (string) $record->log])
+                : Lang::t('cli.serve.status.mode_foreground')) . "\n";
         } elseif ($locked) {
-            echo 'running: a server holds the lock in ' . $state->path . " but has not published its record yet\n";
+            echo Lang::t('cli.serve.status.locked', ['dir' => $state->path]) . "\n";
         } else {
-            echo 'not running' . ($record !== null ? \sprintf(' (stale record for pid %d left in %s)', $record->pid, $state?->discoveryPath()) : '') . "\n";
+            echo ($record !== null
+                ? Lang::t('cli.serve.status.stale', ['pid' => $record->pid, 'path' => (string) $state?->discoveryPath()])
+                : Lang::t('cli.serve.status.not_running')) . "\n";
         }
 
         return $running ? NonInteractive::EXIT_OK : NonInteractive::EXIT_FAILURE;
@@ -643,17 +651,17 @@ final class Serve
 
         if ($record === null || !$record->isLive()) {
             $reason = $state !== null && $state->lockHeldElsewhere()
-                ? 'a server holds the lock in ' . $state->path . ' but published no record, so it cannot be identified to stop'
-                : 'no server is running';
+                ? Lang::t('cli.serve.stop.unidentified', ['dir' => $state->path])
+                : Lang::t('cli.serve.no_server');
             if ($record !== null && $state !== null && !$state->lockHeldElsewhere()) {
                 $record->removeFrom($state);
             }
 
-            return self::answer($args, ['stopped' => false, 'reason' => $reason], 'sugarcrush serve stop: ' . $reason, NonInteractive::EXIT_FAILURE);
+            return self::answer($args, ['stopped' => false, 'reason' => $reason], Lang::t('cli.serve.stop.failed', ['reason' => $reason]), NonInteractive::EXIT_FAILURE);
         }
 
         if (!\function_exists('posix_kill')) {
-            return NonInteractive::failUsage('sugarcrush serve stop: ext-posix is missing, so the server cannot be signalled', $args->outputFormat);
+            return NonInteractive::failUsage(Lang::t('cli.serve.stop.no_posix'), $args->outputFormat);
         }
 
         // Literal numbers: SIGTERM and SIGKILL are 15 and 9 on every platform
@@ -672,8 +680,8 @@ final class Serve
         if (!self::waitForExit($record, self::STOP_KILL_WAIT_SECONDS)) {
             return self::answer(
                 $args,
-                ['stopped' => false, 'pid' => $record->pid, 'reason' => 'the server did not exit'],
-                \sprintf('sugarcrush serve stop: pid %d did not exit', $record->pid),
+                ['stopped' => false, 'pid' => $record->pid, 'reason' => Lang::t('cli.serve.stop.did_not_exit')],
+                Lang::t('cli.serve.stop.pid_did_not_exit', ['pid' => $record->pid]),
                 NonInteractive::EXIT_FAILURE,
             );
         }
@@ -689,7 +697,9 @@ final class Serve
         return self::answer(
             $args,
             ['stopped' => true, 'pid' => $record->pid, 'signal' => $signal],
-            \sprintf('stopped the server (pid %d)%s', $record->pid, $signal === 'KILL' ? ' with SIGKILL' : ''),
+            $signal === 'KILL'
+                ? Lang::t('cli.serve.stop.killed', ['pid' => $record->pid])
+                : Lang::t('cli.serve.stop.stopped', ['pid' => $record->pid]),
             NonInteractive::EXIT_OK,
         );
     }
@@ -699,7 +709,7 @@ final class Serve
     {
         $follow = isset($args->subcommandFlags['--follow']) || isset($args->subcommandFlags['-f']);
         if ($follow && $args->outputFormat === NonInteractive::FORMAT_JSON) {
-            return NonInteractive::failUsage('sugarcrush serve logs: -f streams text; it does not combine with --output-format json', $args->outputFormat);
+            return NonInteractive::failUsage(Lang::t('cli.serve.logs.follow_json'), $args->outputFormat);
         }
 
         $found = self::locate($args, $env);
@@ -713,8 +723,8 @@ final class Serve
         if ($stat === false || ((int) $stat['mode'] & 0o170000) !== 0o100000) {
             return self::answer(
                 $args,
-                ['path' => $path, 'lines' => null, 'reason' => 'no log'],
-                'sugarcrush serve logs: no log at ' . $path . ' (only a detached server writes one)',
+                ['path' => $path, 'lines' => null, 'reason' => Lang::t('cli.serve.logs.no_log')],
+                Lang::t('cli.serve.logs.no_log_at', ['path' => $path]),
                 NonInteractive::EXIT_FAILURE,
             );
         }
@@ -744,7 +754,9 @@ final class Serve
         }
         [$state, $record] = $found;
         if ($state === null || $record === null || !$record->isLive()) {
-            return self::answer($args, ['loginUrl' => null, 'reason' => 'no server is running'], 'sugarcrush serve url: no server is running', NonInteractive::EXIT_FAILURE);
+            $reason = Lang::t('cli.serve.no_server');
+
+            return self::answer($args, ['loginUrl' => null, 'reason' => $reason], Lang::t('cli.serve.url.failed', ['reason' => $reason]), NonInteractive::EXIT_FAILURE);
         }
 
         $token = $env['SUGARCRUSH_SERVER_TOKEN'] ?? '';
@@ -754,10 +766,10 @@ final class Serve
         $answer = $token === null ? null : self::controlRequest($state, self::CONTROL_LOGIN_URL . ' ' . \trim($token));
         if (!\is_array($answer) || ($answer['ok'] ?? false) !== true || !\is_string($answer['loginUrl'] ?? null)) {
             $why = \is_array($answer) && ($answer['error'] ?? null) === 'unauthorized'
-                ? 'the server refused this token (was it started with a different SUGARCRUSH_SERVER_TOKEN?)'
-                : 'the server did not answer on ' . $state->controlSocketPath();
+                ? Lang::t('cli.serve.url.token_refused')
+                : Lang::t('cli.serve.url.no_answer', ['path' => $state->controlSocketPath()]);
 
-            return self::answer($args, ['loginUrl' => null, 'reason' => $why], 'sugarcrush serve url: ' . $why, NonInteractive::EXIT_FAILURE);
+            return self::answer($args, ['loginUrl' => null, 'reason' => $why], Lang::t('cli.serve.url.failed', ['reason' => $why]), NonInteractive::EXIT_FAILURE);
         }
 
         // A server older than `loginUrls` answers with the one URL.
@@ -766,7 +778,7 @@ final class Serve
             echo NonInteractive::encodeDocument(['result' => ['url' => $record->url, 'loginUrl' => $answer['loginUrl'], 'loginUrls' => $loginUrls, 'pid' => $record->pid]]) . "\n";
         } else {
             echo \implode("\n", $loginUrls) . "\n";
-            self::stderr('(one-time code, valid ' . LoginCodes::TTL_SECONDS . ' s)');
+            self::stderr(Lang::t('cli.serve.url.one_time_code', ['seconds' => LoginCodes::TTL_SECONDS]));
         }
 
         return NonInteractive::EXIT_OK;
@@ -778,8 +790,7 @@ final class Serve
         $rotate = isset($args->subcommandFlags['--rotate']);
         if (\trim($env['SUGARCRUSH_SERVER_TOKEN'] ?? '') !== '') {
             return NonInteractive::failUsage(
-                'sugarcrush serve token: the server token comes from SUGARCRUSH_SERVER_TOKEN here; '
-                    . ($rotate ? 'unset it to rotate the stored one' : 'it is not printed'),
+                $rotate ? Lang::t('cli.serve.token.env_rotate') : Lang::t('cli.serve.token.env_print'),
                 $args->outputFormat,
             );
         }
@@ -801,17 +812,13 @@ final class Serve
             // token until it restarts, and says so.
             $answer = self::controlRequest($state, self::CONTROL_RELOAD_TOKEN . ' ' . $token);
             $reloaded = \is_array($answer) && ($answer['ok'] ?? false) === true;
-            self::stderr($reloaded
-                ? \sprintf(
-                    'sugarcrush serve token: the running server (pid %d) now accepts only the new token; every client was signed out (%d connection%s closed)',
-                    $running->pid,
-                    (int) ($answer['closed'] ?? 0),
-                    (int) ($answer['closed'] ?? 0) === 1 ? '' : 's',
-                )
-                : \sprintf(
-                    'sugarcrush serve token: the running server (pid %d) could not be told and keeps accepting the old token until it restarts: sugarcrush serve stop && sugarcrush serve --detach',
-                    $running->pid,
-                ));
+            $closed = (int) ($answer['closed'] ?? 0);
+            $params = ['pid' => $running->pid, 'count' => $closed];
+            self::stderr(match (true) {
+                !$reloaded => Lang::t('cli.serve.token.not_reloaded', $params),
+                $closed === 1 => Lang::t('cli.serve.token.reloaded.one', $params),
+                default => Lang::t('cli.serve.token.reloaded.many', $params),
+            });
         }
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
@@ -843,7 +850,7 @@ final class Serve
     {
         $path = self::stateDirPath($env);
         if ($path === '') {
-            return NonInteractive::failUsage('sugarcrush serve: cannot determine a home directory this user owns for the server state; set SUGARCRUSH_SERVER_DIR', $args->outputFormat);
+            return NonInteractive::failUsage('sugarcrush serve: ' . Lang::t('cli.serve.no_home'), $args->outputFormat);
         }
 
         try {
@@ -1183,28 +1190,34 @@ final class Serve
             ]]) . "\n";
         }
 
+        $mode = ['mode' => $config->permissionMode->value];
+        $ttl = ['seconds' => LoginCodes::TTL_SECONDS];
         $lines = [
             $detached
-                ? 'sugarcrush serve: running in the background on ' . $url . ' (pid ' . $pid . ')'
-                : 'sugarcrush serve: listening on ' . $url . ' (pid ' . $pid . ')',
-            '  root:            ' . ($config->root ?? '(none)'),
-            '  permission mode: ' . $config->permissionMode->value . ($config->allowBypass ? ' (clients may choose bypass)' : ''),
-            '  web UI:          ' . ($static->root() ?? 'not installed (composer require sugarcraft/sugar-crush-web)'),
-            '  sign in:         ' . \implode("\n                   ", $loginUrls),
+                ? Lang::t('cli.serve.announce.background', ['url' => $url, 'pid' => $pid])
+                : Lang::t('cli.serve.announce.listening', ['url' => $url, 'pid' => $pid]),
+            Lang::t('cli.serve.announce.root', ['root' => $config->root ?? Lang::t('cli.serve.none')]),
+            $config->allowBypass
+                ? Lang::t('cli.serve.announce.mode_bypass', $mode)
+                : Lang::t('cli.serve.announce.mode', $mode),
+            $static->root() !== null
+                ? Lang::t('cli.serve.announce.web', ['dir' => $static->root()])
+                : Lang::t('cli.serve.announce.web_missing'),
+            Lang::t('cli.serve.announce.sign_in', ['url' => \implode("\n                   ", $loginUrls)]),
             $detached
-                ? '                   (one-time code, valid ' . LoginCodes::TTL_SECONDS . ' s; a fresh one: sugarcrush serve url)'
-                : '                   (one-time code, valid ' . LoginCodes::TTL_SECONDS . ' s; Ctrl+C stops the server)',
+                ? Lang::t('cli.serve.announce.code_detached', $ttl)
+                : Lang::t('cli.serve.announce.code_foreground', $ttl),
         ];
         if ($detached) {
-            $lines[] = '  log:             ' . (string) ($report['log'] ?? '');
-            $lines[] = '  stop:            sugarcrush serve stop';
+            $lines[] = Lang::t('cli.serve.announce.log', ['log' => (string) ($report['log'] ?? '')]);
+            $lines[] = Lang::t('cli.serve.announce.stop');
         }
         if ($config->isWildcard() && $config->interfaceAddresses === []) {
-            $lines[] = '                   (no interface address of this machine was found: use the one other machines reach it at)';
+            $lines[] = Lang::t('cli.serve.announce.no_interface');
         }
         if (!$config->isLoopback()) {
             $lines[] = '';
-            $lines[] = '  !! Plain HTTP on ' . $config->host . ': the token, sign-in code and session cookie cross the network in cleartext — use an SSH tunnel or a TLS reverse proxy (docs/SERVER.md, "Remote access").';
+            $lines[] = Lang::t('cli.serve.announce.remote', ['host' => $config->host]);
         }
         self::stderr(\implode("\n", $lines));
     }

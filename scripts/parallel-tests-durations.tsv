@@ -432,6 +432,7 @@ sugar-crush/tests/Permissions/McpReadOnlyHintTest.php	0.330	21
 sugar-crush/tests/Support/RequirementDirectiveProvenanceTest.php	0.326	18
 sugar-crush/tests/Workspace/CheckpointDiffTest.php	0.320	3
 sugar-crush/tests/Runtime/TaskCallIdThreadingTest.php	0.320	2
+sugar-crush/tests/Cli/CliLangCatalogueTest.php	0.320	8
 sugar-crush/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.312	8
 sugar-crush/tests/Context/ContextCompactorTest.php	0.311	90
 sugar-crush/tests/Context/SortedWalkCapTest.php	0.303	9

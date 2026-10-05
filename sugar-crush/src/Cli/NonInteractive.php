@@ -11,6 +11,7 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\ToolRefusal;
@@ -177,7 +178,7 @@ final class NonInteractive
     {
         if ($args->prompt === null || \trim($args->prompt) === '') {
             return self::failUsage(
-                'sugarcrush: no prompt given - pass -p "<prompt>" or `sugarcrush run "<prompt>"`',
+                'sugarcrush: ' . Lang::t('cli.noninteractive.no_prompt'),
                 $outputFormat,
             );
         }
@@ -327,7 +328,7 @@ final class NonInteractive
         try {
             $rendered = self::format($message, $outputFormat, $refusals);
         } catch (\JsonException $e) {
-            \fwrite(\STDERR, 'sugarcrush: the answer could not be encoded as JSON: ' . $e->getMessage() . "\n");
+            \fwrite(\STDERR, 'sugarcrush: ' . Lang::t('cli.noninteractive.answer_not_json', ['error' => $e->getMessage()]) . "\n");
             self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null, $refusals);
 
             return self::EXIT_FAILURE;
@@ -422,11 +423,11 @@ final class NonInteractive
         }
 
         $hook = $verdict->refusingHook();
-        $line = \sprintf(
-            "sugarcrush: SessionEnd hook%s refused: %s\n",
-            $hook === null ? '' : ' "' . HookManager::displayName($hook) . '"',
-            \trim($verdict->message) === '' ? 'no reason given' : \trim($verdict->message),
-        );
+        $reason = \trim($verdict->message) === '' ? Lang::t('cli.noninteractive.no_reason_given') : \trim($verdict->message);
+        $line = 'sugarcrush: ' . ($hook === null
+            ? Lang::t('cli.noninteractive.session_end_refused', ['reason' => $reason])
+            : Lang::t('cli.noninteractive.session_end_hook_refused', ['hook' => HookManager::displayName($hook), 'reason' => $reason]))
+            . "\n";
         \fwrite(\STDERR, $line);
 
         return $line;
@@ -508,21 +509,17 @@ final class NonInteractive
     {
         $fromEnv = \getenv('SUGARCRUSH_PROVIDER');
         $remedy = ($fromEnv !== false && $fromEnv !== '')
-            ? 'unset SUGARCRUSH_PROVIDER to select the fallback deliberately'
-            : \sprintf(
-                'remove the "provider" entry from %s — the persisted Ctrl+P "Switch model" choice this run'
-                . ' selected it from — to select the fallback deliberately',
-                Bootstrap::userConfigPath(),
-            );
+            ? Lang::t('cli.noninteractive.provider_remedy_env')
+            : Lang::t('cli.noninteractive.provider_remedy_config', ['path' => Bootstrap::userConfigPath()]);
 
-        \fwrite(\STDERR, \sprintf(
-            "sugarcrush: provider '%s' is unusable: %s\n"
-            . "sugarcrush: refusing to silently answer from a different backend on a one-shot run"
-            . " — fix the provider configuration, or %s.\n",
-            $providerName,
-            $e->getMessage(),
-            $remedy,
-        ));
+        \fwrite(
+            \STDERR,
+            'sugarcrush: ' . Lang::t('cli.noninteractive.provider_unusable', [
+                'provider' => $providerName,
+                'error' => $e->getMessage(),
+            ]) . "\n"
+            . 'sugarcrush: ' . Lang::t('cli.noninteractive.provider_refusing', ['remedy' => $remedy]) . "\n",
+        );
 
         self::emitErrorDocument($outputFormat, 'provider_configuration', $e->getMessage(), $providerName);
 
@@ -567,12 +564,7 @@ final class NonInteractive
             return;
         }
 
-        \fwrite(
-            \STDERR,
-            "sugarcrush: no provider configured (SUGARCRUSH_PROVIDER, SUGARCRUSH_BACKEND_CMD and"
-            . " SUGARCRUSH_BACKEND_CMD_STREAM unset, none persisted); answering from the offline"
-            . " echo provider.\n"
-        );
+        \fwrite(\STDERR, 'sugarcrush: ' . Lang::t('cli.noninteractive.offline_default') . "\n");
     }
 
     /**
@@ -1057,7 +1049,7 @@ final class NonInteractive
         }
 
         if (\strlen($data) > self::MAX_STDIN_BYTES) {
-            \fwrite(\STDERR, "sugarcrush: piped stdin exceeds 10MB cap; truncating.\n");
+            \fwrite(\STDERR, 'sugarcrush: ' . Lang::t('cli.noninteractive.stdin_truncated') . "\n");
             $data = \substr($data, 0, self::MAX_STDIN_BYTES);
         }
 
@@ -1323,7 +1315,7 @@ final class NonInteractive
      */
     private static function refusalNotice(string $tool, string $kind, string $reason): string
     {
-        return "sugarcrush: [{$kind}] {$tool} was not run - {$reason}\n";
+        return 'sugarcrush: ' . Lang::t('cli.noninteractive.refusal', ['kind' => $kind, 'tool' => $tool, 'reason' => $reason]) . "\n";
     }
 
     /**

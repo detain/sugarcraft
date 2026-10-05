@@ -18,6 +18,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\Backend\RemoteBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Diagnostics\TuiErrorLog;
 use SugarCraft\Crush\Host\RemoteSessionHost;
 use SugarCraft\Crush\Server\Auth\TokenStore;
@@ -70,8 +71,6 @@ final class Attach
     /** The flags `attach` accepts (see {@see ParsedArgs::SUBCOMMAND_FLAGS}). */
     public const FLAGS = ['--url'];
 
-    private const USAGE = 'Usage: sugarcrush attach [<session>] [--url <url>]';
-
     private function __construct()
     {
     }
@@ -79,15 +78,15 @@ final class Attach
     public static function run(ParsedArgs $args): int
     {
         if (\count($args->subcommandArgs) > 1) {
-            return NonInteractive::failUsage(\sprintf('sugarcrush attach %s: unexpected operand', $args->subcommandArgs[1]), $args->outputFormat, self::USAGE);
+            return NonInteractive::failUsage(Lang::t('cli.attach.unexpected_operand', ['operand' => $args->subcommandArgs[1]]), $args->outputFormat, Lang::t('cli.attach.usage'));
         }
         foreach (\array_keys($args->subcommandFlags) as $flag) {
             if (!\in_array($flag, self::FLAGS, true)) {
-                return NonInteractive::failUsage(\sprintf('sugarcrush attach: %s does not apply to attach', $flag), $args->outputFormat, self::USAGE);
+                return NonInteractive::failUsage(Lang::t('cli.attach.flag_does_not_apply', ['flag' => $flag]), $args->outputFormat, Lang::t('cli.attach.usage'));
             }
         }
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
-            return NonInteractive::failUsage('sugarcrush attach: runs the TUI, which prints no document; --output-format json does not apply', $args->outputFormat, self::USAGE);
+            return NonInteractive::failUsage(Lang::t('cli.attach.json_does_not_apply'), $args->outputFormat, Lang::t('cli.attach.usage'));
         }
 
         $env = self::environment();
@@ -96,7 +95,7 @@ final class Attach
         if (\is_string($flagUrl)) {
             $url = self::websocketUrl($flagUrl);
             if ($url === null) {
-                return NonInteractive::failUsage(\sprintf('sugarcrush attach: --url %s is not an http(s):// or ws(s):// address', $flagUrl), $args->outputFormat, self::USAGE);
+                return NonInteractive::failUsage(Lang::t('cli.attach.bad_url', ['url' => $flagUrl]), $args->outputFormat, Lang::t('cli.attach.usage'));
             }
         }
 
@@ -104,14 +103,16 @@ final class Attach
         if ($url === null) {
             $record = $state === null ? null : DiscoveryFile::read($state);
             if ($record === null || !$record->isLive()) {
-                return self::fail('no server is running' . ($state !== null ? ' from ' . $state->path : '') . '; start one with: sugarcrush serve --detach');
+                return self::fail($state !== null
+                    ? Lang::t('cli.attach.no_server_from', ['dir' => $state->path])
+                    : Lang::t('cli.attach.no_server'));
             }
             $url = (string) self::websocketUrl($record->url);
         }
 
         $token = self::token($env, $state);
         if ($token === null) {
-            return self::fail('no server token: set SUGARCRUSH_SERVER_TOKEN, or run `sugarcrush serve token` as the user the server runs as');
+            return self::fail(Lang::t('cli.attach.no_token'));
         }
 
         $target = $args->subcommandArgs[0] ?? null;
@@ -124,7 +125,9 @@ final class Attach
             self::CONNECT_TIMEOUT_SECONDS,
         );
         if (!$outcome instanceof RemoteSessionHost) {
-            return self::fail($outcome instanceof \Throwable ? $outcome->getMessage() : 'the server did not answer within ' . (int) self::CONNECT_TIMEOUT_SECONDS . ' s');
+            return self::fail($outcome instanceof \Throwable
+                ? $outcome->getMessage()
+                : Lang::t('cli.attach.no_answer', ['seconds' => (int) self::CONNECT_TIMEOUT_SECONDS]));
         }
 
         return self::runTui($outcome, $args);
@@ -165,7 +168,7 @@ final class Attach
                 $onClose = static function () use (&$settled, $deferred): void {
                     if (!$settled) {
                         $settled = true;
-                        $deferred->reject(new \RuntimeException('the server closed the connection during the handshake'));
+                        $deferred->reject(new \RuntimeException(Lang::t('cli.attach.closed_during_handshake')));
                     }
                 };
                 $connection->on('close', $onClose);
@@ -177,7 +180,7 @@ final class Attach
                         if (\strlen($buffer) > 65536) {
                             $settled = true;
                             $connection->close();
-                            $deferred->reject(new \RuntimeException('the server answered the upgrade with something that is not HTTP'));
+                            $deferred->reject(new \RuntimeException(Lang::t('cli.attach.not_http')));
                         }
 
                         return;
@@ -190,7 +193,7 @@ final class Attach
                         $response = Psr7Message::parseResponse(\substr($buffer, 0, $end + 4));
                     } catch (\Throwable) {
                         $connection->close();
-                        $deferred->reject(new \RuntimeException('the server answered the upgrade with something that is not HTTP'));
+                        $deferred->reject(new \RuntimeException(Lang::t('cli.attach.not_http')));
 
                         return;
                     }
@@ -204,7 +207,7 @@ final class Attach
                     if (!$negotiator->validateResponse($request, $response)
                         || $response->getHeaderLine('Sec-WebSocket-Protocol') !== ServerConfig::SUBPROTOCOL) {
                         $connection->close();
-                        $deferred->reject(new \RuntimeException('the server did not complete a ' . ServerConfig::SUBPROTOCOL . ' WebSocket handshake'));
+                        $deferred->reject(new \RuntimeException(Lang::t('cli.attach.handshake_incomplete', ['subprotocol' => ServerConfig::SUBPROTOCOL])));
 
                         return;
                     }
@@ -214,7 +217,7 @@ final class Attach
                 $connection->write(Psr7Message::toString($request));
             },
             static function (\Throwable $e) use ($deferred): void {
-                $deferred->reject(new \RuntimeException('cannot reach the server: ' . $e->getMessage(), 0, $e));
+                $deferred->reject(new \RuntimeException(Lang::t('cli.attach.unreachable', ['error' => $e->getMessage()]), 0, $e));
             },
         );
 
@@ -267,7 +270,7 @@ final class Attach
             return null;
         }
 
-        return \sprintf('The sugarcrush server at %s has it open: `sugarcrush attach %s` drives it from this terminal.', $record->url, $sessionId);
+        return Lang::t('cli.attach.lock_holder_offer', ['url' => $record->url, 'session' => $sessionId]);
     }
 
     // ── internals ───────────────────────────────────────────────────────
@@ -349,7 +352,11 @@ final class Attach
             ? $decoded['error']['message']
             : null;
 
-        return \sprintf('the server refused the connection (%d %s)%s', $status, $phrase, $message !== null ? ': ' . $message : '');
+        $params = ['status' => $status, 'phrase' => $phrase];
+
+        return $message === null
+            ? Lang::t('cli.attach.refused', $params)
+            : Lang::t('cli.attach.refused_because', $params + ['reason' => $message]);
     }
 
     /** @param array<string, string> $env */

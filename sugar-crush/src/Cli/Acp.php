@@ -10,6 +10,7 @@ use React\Stream\ReadableResourceStream;
 use SugarCraft\Crush\Acp\AcpServer;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Host\SessionHub;
+use SugarCraft\Crush\Lang;
 
 /**
  * `sugarcrush acp` — sugar-crush as an Agent Client Protocol agent, for an
@@ -42,8 +43,6 @@ final class Acp
      */
     public const MAX_LINE_BYTES = 64 * 1024 * 1024;
 
-    private const USAGE = 'Usage: sugarcrush acp — run as an Agent Client Protocol agent on stdin/stdout (started by an editor)';
-
     private function __construct()
     {
     }
@@ -51,16 +50,16 @@ final class Acp
     public static function run(ParsedArgs $args): int
     {
         if ($args->subcommandArgs !== []) {
-            return NonInteractive::failUsage(\sprintf('sugarcrush acp %s: unexpected operand', $args->subcommandArgs[0]), $args->outputFormat, self::USAGE);
+            return NonInteractive::failUsage(Lang::t('cli.acp.unexpected_operand', ['operand' => $args->subcommandArgs[0]]), $args->outputFormat, Lang::t('cli.acp.usage'));
         }
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
-            return NonInteractive::failUsage('sugarcrush acp: speaks JSON-RPC on stdout, which is its only output; --output-format json does not apply', $args->outputFormat, self::USAGE);
+            return NonInteractive::failUsage(Lang::t('cli.acp.json_does_not_apply'), $args->outputFormat, Lang::t('cli.acp.usage'));
         }
 
         // Descriptor 0 is the editor's half of the connection. Checked before
         // the stream wraps it, which throws on a closed handle.
         if (!\defined('STDIN') || !\is_resource(\STDIN)) {
-            self::stderr("sugarcrush acp: stdin is closed; an editor starts this agent with a pipe on stdin and stdout\n");
+            self::stderr(Lang::t('cli.acp.stdin_closed') . "\n");
 
             return NonInteractive::EXIT_FAILURE;
         }

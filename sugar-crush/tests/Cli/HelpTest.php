@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use Composer\InstalledVersions;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\Help;
 use SugarCraft\Crush\Tests\Config\EnvRosterDriftTest;
@@ -15,6 +16,24 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 final class HelpTest extends TestCase
 {
     use SlicesDeclaredMethodsTrait;
+
+    private string $locale;
+
+    /**
+     * The screen is the `cli.help.screen` catalogue entry (audit 15b-14), and
+     * every assertion here reads its English: the locale is pinned so a
+     * process-wide T::setLocale() elsewhere cannot decide them.
+     */
+    protected function setUp(): void
+    {
+        $this->locale = T::locale();
+        T::setLocale('en');
+    }
+
+    protected function tearDown(): void
+    {
+        T::setLocale($this->locale);
+    }
 
     public function testScreenReturnsNonEmptyString(): void
     {

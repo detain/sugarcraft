@@ -2791,8 +2791,13 @@ final class DocFigureProseDriftTest extends TestCase
         $theme = (string) file_get_contents((string) (new \ReflectionClass(\SugarCraft\Kit\Theme::class))->getFileName());
         self::assertStringContainsString('ColorProfile::detect(', self::bodyExcerpt($theme, 'detect'), 'Theme::detect() stopped delegating to candy-core ColorProfile::detect()');
 
-        // The remaining blocker: the help screen is still one nowdoc.
-        self::assertStringContainsString("<<<'HELP'", self::bodyExcerpt(self::sourceOf('Cli/Help.php'), 'screen', 200), 'Help::screen() is no longer the single heredoc the row names as the blocker — revisit the row');
+        // The remaining blocker: the help screen is still one block of text —
+        // since 15b-14-2 the single `cli.help.screen` nowdoc in lang/en.php,
+        // which Help::screen() returns whole through Lang::t().
+        self::assertStringContainsString("Lang::t('cli.help.screen')", self::bodyExcerpt(self::sourceOf('Cli/Help.php'), 'screen', 200), 'Help::screen() no longer returns the one catalogue entry the row names as the blocker — revisit the row');
+        $catalogue = (string) file_get_contents($root . '/lang/en.php');
+        self::assertSame(1, substr_count($catalogue, "'cli.help.screen' => <<<'TXT'"), 'the help screen is no longer the single catalogue nowdoc the row names as the blocker — revisit the row');
+        self::assertStringContainsString('`cli.help.screen`', $row, 'the row no longer names the catalogue entry that is the help screen');
 
         // And the dependency really is unreached, which is what a row is for.
         $reaching = array_keys(array_filter(self::srcTexts(), static fn (string $text): bool => str_contains($text, 'SugarCraft\\Kit\\')));
@@ -3996,7 +4001,11 @@ final class DocFigureProseDriftTest extends TestCase
         sort($commands);
         self::assertCount($wordNumbers['eight'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
 
-        $helpSource = self::sourceOf('Cli/Help.php');
+        // The screen's ENGLISH text (15b-14-2 moved it into the catalogue):
+        // the page quotes English, so the lookup pins the locale.
+        \SugarCraft\Core\I18n\T::register('crush', \dirname(__DIR__, 2) . '/lang');
+        $helpSource = \SugarCraft\Core\I18n\T::translate('crush.cli.help.screen', [], 'en');
+        self::assertSame((require \dirname(__DIR__, 2) . '/lang/en.php')['cli.help.screen'], $helpSource, 'the help screen is not the cli.help.screen catalogue entry');
         self::assertSame(
             1,
             preg_match('/lists exactly eight under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
@@ -4126,7 +4135,9 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertStringContainsString('[-- --timeout N]', $raw, 'the page fence stopped showing the separator-qualified flag form');
         $hint = "Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [registration-url] [-- --timeout N]";
-        self::assertSame(3, substr_count(self::sourceOf('Cli/Subcommands.php'), $hint), 'the verb usage hints no longer state the same invocation the page fence shows');
+        // 15b-14-2: the hint is one catalogue entry the three doors share.
+        self::assertSame($hint, (require \dirname(__DIR__, 2) . '/lang/en.php')['cli.mcp.auth.usage'], 'the verb usage hint no longer states the same invocation the page fence shows');
+        self::assertSame(3, substr_count(self::sourceOf('Cli/Subcommands.php'), "Lang::t('cli.mcp.auth.usage')"), 'the three login doors no longer all print the one usage hint');
     }
 
     /**
