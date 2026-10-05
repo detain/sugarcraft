@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Host;
 
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\SpendCapBreached;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Usage;
 use SugarCraft\Crush\Util\TokenTracker;
 
@@ -33,14 +34,6 @@ use SugarCraft\Crush\Util\TokenTracker;
  */
 final class SpendLedger
 {
-    /**
-     * What crossed the cap when a freshly submitted prompt is refused: a
-     * previous turn, which was allowed to finish. The other refusal site (a
-     * turn the 85% tier parked) names its own crossing.
-     */
-    public const CROSSED_BY_PREVIOUS_TURN = 'The turn that crossed the cap ran to completion; the cap refuses the NEXT turn rather than '
-        . 'aborting one in flight.';
-
     private function __construct()
     {
     }
@@ -48,6 +41,16 @@ final class SpendLedger
     public static function new(): self
     {
         return new self();
+    }
+
+    /**
+     * What crossed the cap when a freshly submitted prompt is refused: a
+     * previous turn, which was allowed to finish. The other refusal site (a
+     * turn the 85% tier parked) names its own crossing.
+     */
+    public static function crossedByPreviousTurn(): string
+    {
+        return Lang::t('host.spend.crossed_by_previous_turn');
     }
 
     /**
@@ -127,15 +130,12 @@ final class SpendLedger
     {
         $spent = $this->spent($tracker);
 
-        return sprintf(
-            'Spend cap reached — this turn was not sent. $%.4f of the $%.4f cap has been reported spent. '
-            . '%s Raise it with /budget %.2f, clear it with /budget off, or restart '
-            . 'without $SUGARCRUSH_MAX_COST.',
-            $spent,
-            $cap,
-            $crossing,
-            $spent * 2,
-        );
+        return Lang::t('host.spend.refused', [
+            'spent' => sprintf('%.4f', $spent),
+            'cap' => sprintf('%.4f', $cap),
+            'crossing' => $crossing,
+            'raise' => sprintf('%.2f', $spent * 2),
+        ]);
     }
 
     /**
@@ -146,12 +146,11 @@ final class SpendLedger
      */
     public function midTurnNotice(SpendCapBreached $event): string
     {
-        return sprintf(
-            '_Spend cap reached mid-turn: aborted after provider call %d — $%.4f of the $%.4f cap spent. No further calls were made this turn; /budget raises the cap._',
-            $event->completedCalls,
-            $event->spentUsd,
-            $event->capUsd,
-        );
+        return Lang::t('host.spend.mid_turn', [
+            'calls' => $event->completedCalls,
+            'spent' => sprintf('%.4f', $event->spentUsd),
+            'cap' => sprintf('%.4f', $event->capUsd),
+        ]);
     }
 
     /**
@@ -161,19 +160,19 @@ final class SpendLedger
      */
     public function statusLine(TokenTracker $tracker, ?float $cap): string
     {
-        $capText = $cap === null ? 'no cap' : sprintf('cap $%.4f', $cap);
+        $capText = $cap === null
+            ? Lang::t('host.spend.no_cap')
+            : Lang::t('host.spend.cap', ['cap' => sprintf('%.4f', $cap)]);
 
         if (!$this->hasReported($tracker)) {
-            return 'Spend so far: not reported by this provider (' . $capText
-                . '). Streamed turns and self-hosted providers commonly report no usage at all, '
-                . 'and an unreported session is never refused by the cap.';
+            return Lang::t('host.spend.status_unreported', ['cap' => $capText]);
         }
 
-        return sprintf('Spend so far: $%.4f (%s). %s', $this->spent($tracker), $capText, $tracker->summary())
-            . ($tracker->hasUnpricedUsage()
-                ? ' At least one model this session used has no price on file, so this is a LOWER BOUND: '
-                    . 'declare rates under "modelPrices" in ~/.sugar-crush/config.json to bill them.'
-                : '');
+        return Lang::t('host.spend.status', [
+            'spent' => sprintf('%.4f', $this->spent($tracker)),
+            'cap' => $capText,
+            'summary' => $tracker->summary(),
+        ]) . ($tracker->hasUnpricedUsage() ? Lang::t('host.spend.lower_bound') : '');
     }
 
     /**
@@ -196,9 +195,8 @@ final class SpendLedger
 
         if (in_array(strtolower($argument), ['off', 'none', 'clear'], true)) {
             return [
-                'response' => $currentCap === null
-                    ? 'No spend cap was set. ' . $this->statusLine($tracker, $currentCap)
-                    : 'Spend cap cleared. ' . $this->statusLine($tracker, $currentCap),
+                'response' => Lang::t($currentCap === null ? 'host.spend.no_cap_was_set' : 'host.spend.cleared')
+                    . $this->statusLine($tracker, $currentCap),
                 'cap' => null,
                 'clearCap' => true,
             ];
@@ -210,12 +208,7 @@ final class SpendLedger
         $amount = ltrim($argument, '$');
         if (!is_numeric($amount) || !self::isUsableCap((float) $amount)) {
             return [
-                'response' => 'Usage: /budget <amount> to cap this session\'s spend (e.g. /budget 5 or /budget $2.50), '
-                    . '/budget off to clear it, /budget on its own to see where you are. '
-                    . 'The amount must be a real number greater than zero — a cap of 0 and no cap are opposite '
-                    . 'requests, so `0` is refused rather than guessed at, and a figure too large to represent '
-                    . '(`1e309`, which is infinity) is refused rather than accepted as a cap that would then '
-                    . 'never trigger.',
+                'response' => Lang::t('host.spend.usage'),
                 'cap' => null,
                 'clearCap' => false,
             ];
@@ -224,7 +217,7 @@ final class SpendLedger
         $cap = (float) $amount;
 
         return [
-            'response' => sprintf('Spend cap set to $%.4f. ', $cap) . $this->statusLine($tracker, $cap),
+            'response' => Lang::t('host.spend.set', ['cap' => sprintf('%.4f', $cap)]) . $this->statusLine($tracker, $cap),
             'cap' => $cap,
             'clearCap' => false,
         ];

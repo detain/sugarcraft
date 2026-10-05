@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Host\Commands;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 
 /**
@@ -76,17 +77,14 @@ final class CommandResult
             Message::user($text)->withUiOnly(),
             Message::notice($trimmed !== ''
                 ? $trimmed
-                : sprintf('Command failed with exit code %d and produced no output.', $exitCode)),
+                : Lang::t('host.command.failed_silently', ['code' => $exitCode])),
         );
     }
 
     /** `/$name` runs only where there is a screen; nothing happened here. */
     public static function clientOnly(string $name): self
     {
-        return new self([], [], false, self::CLIENT_ONLY, sprintf(
-            '/%s runs in the TUI client only; nothing was run in this session.',
-            $name,
-        ));
+        return new self([], [], false, self::CLIENT_ONLY, Lang::t('host.command.client_only', ['name' => $name]));
     }
 
     /**

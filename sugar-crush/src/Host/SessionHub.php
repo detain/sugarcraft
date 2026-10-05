@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Host;
 
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 
 /**
@@ -89,11 +90,10 @@ final class SessionHub
             $lease = $transcripts->lock($sessionId);
             if ($lease === null) {
                 $holder = $transcripts->lockHolder($sessionId);
-                throw new \RuntimeException(sprintf(
-                    'Session %s is open in another sugarcrush%s; only one process may write it.',
-                    $sessionId,
-                    $holder === null ? '' : " (pid {$holder})",
-                ));
+                throw new \RuntimeException(Lang::t('host.hub.locked', [
+                    'session' => $sessionId,
+                    'holder' => $holder === null ? '' : Lang::t('chat.session.lock_holder', ['pid' => $holder]),
+                ]));
             }
         }
 

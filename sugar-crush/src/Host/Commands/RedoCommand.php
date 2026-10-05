@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Host\Commands;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Workspace\WorkspaceCheckpointer;
 
 /**
@@ -20,8 +21,6 @@ use SugarCraft\Crush\Workspace\WorkspaceCheckpointer;
  */
 final class RedoCommand implements HostCommand
 {
-    private const NOTHING = 'Nothing to redo: /redo steps forward over what /rewind or /undo set aside, until the next prompt is sent.';
-
     public function run(CommandContext $context, string $text): CommandResult
     {
         $text = '/redo';
@@ -35,7 +34,7 @@ final class RedoCommand implements HostCommand
         try {
             $stack = $store->redoStack($sessionId);
             if (\count($stack) < 2) {
-                return CommandResult::reply($text, self::NOTHING);
+                return CommandResult::reply($text, Lang::t('host.redo.nothing'));
             }
             [$from, $to] = [$stack[0], $stack[1]];
             $checkpointer = $store->workspaceCheckpointer($context->projectRoot());
@@ -45,15 +44,15 @@ final class RedoCommand implements HostCommand
             if (WorkspaceCheckpointer::isCaptured($from['workspace'])) {
                 $drift = $checkpointer->changes($from['workspace']);
                 if (\is_string($drift)) {
-                    $filesNote = ' The files were left as they are: ' . $drift . '.';
+                    $filesNote = Lang::t('host.checkpoint.files_left', ['reason' => $drift]);
                 } elseif ($drift !== []) {
-                    $filesNote = ' The files were left as they are: they do not match the checkpoint the conversation was at, so moving them would overwrite changes.';
+                    $filesNote = Lang::t('host.redo.files_drifted');
                 } elseif (!WorkspaceCheckpointer::isCaptured($to['workspace'])) {
-                    $filesNote = ' The files were left as they are: ' . Checkpoints::noSnapshotReason($to['workspace']) . '.';
+                    $filesNote = Lang::t('host.checkpoint.files_left', ['reason' => Checkpoints::noSnapshotReason($to['workspace'])]);
                 } else {
                     $ahead = $checkpointer->changes($to['workspace']);
                     if (\is_string($ahead)) {
-                        $filesNote = ' The files were left as they are: ' . $ahead . '.';
+                        $filesNote = Lang::t('host.checkpoint.files_left', ['reason' => $ahead]);
                     } else {
                         $moveFiles = $ahead !== [];
                     }
@@ -62,7 +61,7 @@ final class RedoCommand implements HostCommand
 
             $step = $store->redoCheckpoint($sessionId);
             if ($step === null) {
-                return CommandResult::reply($text, self::NOTHING);
+                return CommandResult::reply($text, Lang::t('host.redo.nothing'));
             }
             if ($moveFiles && \is_array($to['workspace'])) {
                 $filesNote = ' ' . Checkpoints::fileRestoreReport($checkpointer->restore($to['workspace']));
@@ -71,12 +70,13 @@ final class RedoCommand implements HostCommand
             [$messages, $draft, $cursor] = Checkpoints::checkpointChatState($step['state']);
             $restored = max(0, Checkpoints::agentVisibleCount($messages) - Checkpoints::agentVisibleCount($context->history));
             $response = $step['tip']
-                ? "Redid {$restored} messages: back where you were before the rewind." . $filesNote
-                : "Redid {$restored} messages, to checkpoint {$step['index']}." . $filesNote . ' /redo again to go further.';
+                ? Lang::t('host.redo.to_tip', ['count' => $restored]) . $filesNote
+                : Lang::t('host.redo.to_checkpoint', ['count' => $restored, 'index' => $step['index']]) . $filesNote
+                    . Lang::t('host.redo.again');
 
             return Checkpoints::restored($messages, $draft, $cursor, $text, $response);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, "Error during redo: {$e->getMessage()}");
+            return CommandResult::reply($text, Lang::t('host.redo.error', ['error' => $e->getMessage()]));
         }
     }
 }

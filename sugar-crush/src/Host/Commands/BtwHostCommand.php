@@ -8,6 +8,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\SideQuestionAnsweredMsg;
 use SugarCraft\Crush\Support\TranscriptDigest;
@@ -45,15 +46,12 @@ final class BtwHostCommand implements HostCommand
     {
         $question = CommandText::argument($text);
         if ($question === '') {
-            return CommandResult::reply($text, 'Usage: /btw <question> — ask the title model about this conversation; '
-                . 'neither the question nor the answer is sent to the agent.')->holdingTurn();
+            return CommandResult::reply($text, Lang::t('host.btw.usage'))->holdingTurn();
         }
 
         $backend = $context->titleBackend;
         if ($backend === null) {
-            return CommandResult::reply($text, '/btw needs a title model to answer, and none is configured: set '
-                . '`titleModel` (or `SUGARCRUSH_TITLE_MODEL`). The main model is never used for a side question.')
-                ->holdingTurn();
+            return CommandResult::reply($text, Lang::t('host.btw.needs_title_model'))->holdingTurn();
         }
 
         return CommandResult::new(Message::user($text)->withUiOnly())
@@ -101,7 +99,7 @@ final class BtwHostCommand implements HostCommand
         return static function () use ($titleBackend, $request, $sessionId): PromiseInterface {
             $failed = static fn (\Throwable $e): Msg => new SideQuestionAnsweredMsg(
                 $sessionId,
-                '_The side question failed: ' . self::oneLine($e->getMessage()) . '_',
+                Lang::t('host.btw.failed', ['reason' => self::oneLine($e->getMessage())]),
             );
             try {
                 $promise = $titleBackend->completeAsync($request);
@@ -125,18 +123,18 @@ final class BtwHostCommand implements HostCommand
         $answer = trim((string) preg_replace('/<think>.*?<\/think>/is', '', $msg->answer));
         $answer = trim(Sanitize::untrusted($answer));
         if ($answer === '') {
-            $answer = '_No answer._';
+            $answer = Lang::t('host.btw.no_answer');
         } elseif (mb_strlen($answer) > self::ANSWER_MAX_CHARS) {
             $answer = mb_substr($answer, 0, self::ANSWER_MAX_CHARS - 1) . '…';
         }
 
-        return "**btw** — not sent to the agent\n\n" . $answer;
+        return Lang::t('host.btw.answer_heading') . "\n\n" . $answer;
     }
 
     private static function oneLine(string $text): string
     {
         $line = trim((string) preg_replace('/\s+/u', ' ', Sanitize::untrusted($text)));
 
-        return $line === '' ? 'no reason given' : mb_substr($line, 0, 200);
+        return $line === '' ? Lang::t('host.btw.no_reason') : mb_substr($line, 0, 200);
     }
 }

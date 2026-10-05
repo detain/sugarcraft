@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Host\Commands;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Workspace\AutoCommitter;
 
@@ -51,24 +52,32 @@ final class UndoCommand implements HostCommand
         try {
             $outcome = $committer->undo();
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, "Error during undo: {$e->getMessage()}");
+            return CommandResult::reply($text, Lang::t('host.undo.error', ['error' => $e->getMessage()]));
         }
 
         $short = $outcome['sha'] === null ? '' : substr($outcome['sha'], 0, 7);
         if (!$outcome['ok']) {
             $hint = $outcome['refusal'] === AutoCommitter::REFUSED_NOT_OURS
-                ? ' `/rewind --both` still restores the conversation and files to the last checkpoint.'
+                ? Lang::t('host.undo.rewind_hint')
                 : '';
 
-            return CommandResult::reply($text, 'Nothing was undone: ' . $outcome['reason'] . '.' . $hint);
+            return CommandResult::reply($text, Lang::t('host.undo.refused', ['reason' => $outcome['reason']]) . $hint);
         }
 
         $files = implode(', ', $outcome['files']);
         if ($outcome['kind'] === 'snapshot') {
-            return CommandResult::reply($text, "Un-committed {$short} ({$outcome['subject']}): your changes to {$files} are back to uncommitted, as they were.");
+            return CommandResult::reply($text, Lang::t('host.undo.uncommitted', [
+                'sha' => $short,
+                'subject' => $outcome['subject'],
+                'files' => $files,
+            ]));
         }
 
-        return CommandResult::reply($text, "Reverted {$short} ({$outcome['subject']}): {$files} went back to the previous commit.")
+        return CommandResult::reply($text, Lang::t('host.undo.reverted', [
+            'sha' => $short,
+            'subject' => $outcome['subject'],
+            'files' => $files,
+        ]))
             ->withRows(Message::system(
                 "The user ran /undo: the commit {$short} \"{$outcome['subject']}\" was reverted with "
                 . '`git checkout HEAD~1 -- <files>` and `git reset --soft HEAD~1`, so the change to '

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Host\Commands;
 
 use SugarCraft\Crush\Host\TitleService;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Session\TitleSource;
 
 /**
@@ -26,11 +27,11 @@ final class RenameCommand implements HostCommand
     public function run(CommandContext $context, string $text): CommandResult
     {
         if ($context->sessionStore === null) {
-            return CommandResult::reply($text, 'Session store not configured. Set a SessionStore to use /branch and /rename commands.');
+            return CommandResult::reply($text, Lang::t('host.rename.no_store'));
         }
 
         if ($context->sessionId === null) {
-            return CommandResult::reply($text, 'No active session. Start a new conversation first.');
+            return CommandResult::reply($text, Lang::t('host.rename.no_session'));
         }
 
         $argument = CommandText::argument($text);
@@ -43,7 +44,7 @@ final class RenameCommand implements HostCommand
                 ? self::regenerate($context)
                 : self::userTitle($context, $argument);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, "Error: {$e->getMessage()}");
+            return CommandResult::reply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
         }
 
         $result = CommandResult::reply($text, $response);
@@ -73,12 +74,12 @@ final class RenameCommand implements HostCommand
 
         $title = TitleService::sanitizeTitle($raw);
         if ($title === '') {
-            return ['A session name needs at least one printable character.', []];
+            return [Lang::t('host.rename.blank'), []];
         }
 
         $store->renameSession($sessionId, $title, TitleSource::User);
 
-        return ["Session renamed to '{$title}'", [CommandEffect::renameSession($title, TitleSource::User)]];
+        return [Lang::t('host.rename.renamed', ['title' => $title]), [CommandEffect::renameSession($title, TitleSource::User)]];
     }
 
     /**
@@ -108,7 +109,7 @@ final class RenameCommand implements HostCommand
         }
 
         if ($context->titleBackend === null) {
-            return ['No title model is configured, so the session name is unchanged.', []];
+            return [Lang::t('host.rename.no_title_model'), []];
         }
 
         $store->clearSessionName($sessionId);
@@ -121,13 +122,13 @@ final class RenameCommand implements HostCommand
             $context->history,
         );
         if ($call === null) {
-            return ['Session name cleared; the first reply will name it.', $effects];
+            return [Lang::t('host.rename.cleared'), $effects];
         }
 
         // The answer is a store write the titler makes itself; the TUI latches
         // it from the SessionTitledMsg the call resolves with. Nothing to show.
         $effects[] = CommandEffect::async($call);
 
-        return ['Asking the title model for a new session name…', $effects];
+        return [Lang::t('host.rename.asking'), $effects];
     }
 }

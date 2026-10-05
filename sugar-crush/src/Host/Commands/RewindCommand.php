@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Host\Commands;
 
+use SugarCraft\Crush\Lang;
+
 /**
  * `/rewind [n] [--chat|--files|--both]` — restore an earlier checkpoint: the
  * conversation, the project's files (item 3.A-2), or both (moved out of
@@ -26,8 +28,6 @@ final class RewindCommand implements HostCommand
     /** The scope words, Cline's and Claude Code's three choices. */
     public const SCOPES = ['--chat' => 'chat', '--files' => 'files', '--both' => 'both'];
 
-    public const USAGE = 'Usage: /rewind [n] [--chat|--files|--both] - step back n checkpoints, n a positive whole number (default 1). --chat (the default) restores the conversation, --files the project\'s files, --both both.';
-
     public function run(CommandContext $context, string $text): CommandResult
     {
         $refusal = Checkpoints::refusal($context, $text);
@@ -47,7 +47,7 @@ final class RewindCommand implements HostCommand
                 continue;
             }
 
-            return CommandResult::reply($text, self::USAGE);
+            return CommandResult::reply($text, Lang::t('host.rewind.usage'));
         }
 
         return match ($scope ?? 'chat') {

@@ -17,6 +17,7 @@ use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\HistoryCompactedMsg;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\ToolResult;
@@ -254,7 +255,7 @@ final class CompactionService
 
         // Build response message
         if ($baseHistory === []) {
-            $report = Message::assistant($prefix . 'Nothing to compact: chat history is empty.')->withUiOnly();
+            $report = Message::assistant($prefix . Lang::t('host.compact.nothing'))->withUiOnly();
         } elseif ($tierNotice) {
             // The automatic tier reports through the very notice its synchronous
             // route uses, so the two routes say the same thing about the same
@@ -277,11 +278,11 @@ final class CompactionService
                 $tokenLimit(),
             )->content);
         } else {
-            $report = Message::assistant(
-                $prefix
-                . "Context compacted: was {$originalCount} messages, now {$newCount} messages "
-                . "(saved {$savingsPercentage}% tokens)"
-            )->withUiOnly();
+            $report = Message::assistant($prefix . Lang::t('host.compact.done', [
+                'before' => $originalCount,
+                'after' => $newCount,
+                'saved' => $savingsPercentage,
+            ]))->withUiOnly();
         }
 
         // Every caller that passes a non-empty $inputText is `/compact` itself,
@@ -704,12 +705,10 @@ final class CompactionService
      */
     public function spendCapCompactionNotice(float $spentUsd, float $capUsd, string $tail): string
     {
-        return sprintf(
-            'Spend cap reached ($%.4f of $%.4f), so the model was not asked to summarise — '
-            . 'compacted with the local heuristic instead. ',
-            $spentUsd,
-            $capUsd,
-        ) . $tail;
+        return Lang::t('host.compact.spend_cap', [
+            'spent' => sprintf('%.4f', $spentUsd),
+            'cap' => sprintf('%.4f', $capUsd),
+        ]) . $tail;
     }
 
     /**
@@ -719,10 +718,9 @@ final class CompactionService
      */
     public function compactCommandCapNotice(float $spentUsd, float $capUsd): string
     {
-        return $this->spendCapCompactionNotice($spentUsd, $capUsd, sprintf(
-            'Raise the cap with /budget %.2f and run /compact again for model-written summaries. ',
-            $spentUsd * 2,
-        ));
+        return $this->spendCapCompactionNotice($spentUsd, $capUsd, Lang::t('host.compact.spend_cap.command', [
+            'raise' => sprintf('%.2f', $spentUsd * 2),
+        ]));
     }
 
     /**
@@ -735,9 +733,7 @@ final class CompactionService
         return $this->spendCapCompactionNotice(
             $spentUsd,
             $capUsd,
-            'Your prompt goes out against that rewrite; raise the cap with /budget '
-            . sprintf('%.2f', $spentUsd * 2)
-            . ' for model-written summaries. '
+            Lang::t('host.compact.spend_cap.parked', ['raise' => sprintf('%.2f', $spentUsd * 2)])
         );
     }
 
@@ -747,9 +743,9 @@ final class CompactionService
      */
     public function summarisingNotice(int $exchanges): string
     {
-        return 'Summarising ' . $exchanges . ' earlier '
-            . ($exchanges === 1 ? 'exchange' : 'exchanges')
-            . ' with the model — the transcript will compact when they arrive.';
+        return Lang::t($exchanges === 1 ? 'host.compact.summarising.one' : 'host.compact.summarising.other', [
+            'count' => $exchanges,
+        ]);
     }
 
     /**
@@ -794,12 +790,11 @@ final class CompactionService
         }
 
         if ($msg->error !== null) {
-            return 'Model summarisation failed (' . self::sanitizeSummaryLine($msg->error)
-                . ') — compacted with the local heuristic instead. ';
+            return Lang::t('host.compact.model_failed', ['error' => self::sanitizeSummaryLine($msg->error)]);
         }
 
         if ($msg->summaries === []) {
-            return 'The model returned no usable summaries — compacted with the local heuristic instead. ';
+            return Lang::t('host.compact.model_empty');
         }
 
         return '';
@@ -870,10 +865,10 @@ final class CompactionService
         }
 
         if ($verdict->isAsk()) {
-            return 'a PreCompact hook asked for a decision no compaction path can present';
+            return Lang::t('host.compact.hook_ask');
         }
 
-        return $verdict->message !== '' ? $verdict->message : 'a PreCompact hook refused without giving a reason';
+        return $verdict->message !== '' ? $verdict->message : Lang::t('host.compact.hook_no_reason');
     }
 
     /**
@@ -885,10 +880,8 @@ final class CompactionService
      */
     public function compactionBlockedNotice(string $reason, bool $parked): string
     {
-        return 'Compaction skipped: PreCompact hook blocked it (' . self::sanitizeSummaryLine($reason) . '). '
-            . ($parked
-                ? 'Your prompt goes out against the uncompacted history.'
-                : 'The history is unchanged.');
+        return Lang::t('host.compact.blocked', ['reason' => self::sanitizeSummaryLine($reason)])
+            . Lang::t($parked ? 'host.compact.blocked.parked' : 'host.compact.blocked.unchanged');
     }
 
     /**
@@ -898,7 +891,7 @@ final class CompactionService
      */
     public function preCompactPendingNotice(): string
     {
-        return 'Running PreCompact hooks — the transcript will compact when they answer.';
+        return Lang::t('host.compact.hooks_pending');
     }
 
     /** The longest `compact_summary` a PostCompact hook is handed, in characters. */
@@ -2046,13 +2039,13 @@ final class CompactionService
         int $tokenCount,
         int $tokenLimit,
     ): Message {
-        return Message::notice(
-            "Context reached the automatic-compaction tier, so older exchanges were "
-            . "summarized: {$beforeMessages} messages -> {$afterMessages} messages, "
-            . "~{$savedPercentage}% of the estimated token count freed "
-            . "(~{$tokenCount} estimated tokens now, against a "
-            . "{$tokenLimit}-token context window)."
-        );
+        return Message::notice(Lang::t('host.compact.tier_report', [
+            'before' => $beforeMessages,
+            'after' => $afterMessages,
+            'saved' => $savedPercentage,
+            'tokens' => $tokenCount,
+            'limit' => $tokenLimit,
+        ]));
     }
 
     /**
@@ -2337,19 +2330,17 @@ final class CompactionService
         int $tokenLimit,
         ?CompactorConfig $config = null,
     ): Message {
-        $singular = $truncatedMessages === 1;
-        $unit = $singular ? 'message' : 'messages';
-        $own = $singular ? 'its' : 'their';
-        $subject = $singular ? 'it was' : 'they were';
-        $where = $singular ? 'that message' : 'those messages';
-        $tier = self::blockingTierLabel($config ?? CompactorConfig::new(), $tokenLimit);
-
-        return Message::notice(
-            "{$truncatedMessages} {$unit} reached {$tier} on {$own} own, so {$subject} "
-            . "truncated to fit the context window rather than the turn being refused: "
-            . "~{$tokenCount} estimated tokens now, against a {$tokenLimit}-token context "
-            . "window. The dropped text is marked inline in {$where}."
-        );
+        // One whole sentence per number, so a translation agrees noun, verb,
+        // possessive and demonstrative in its own grammar.
+        return Message::notice(Lang::t(
+            $truncatedMessages === 1 ? 'host.compact.truncated.one' : 'host.compact.truncated.other',
+            [
+                'count' => $truncatedMessages,
+                'tier' => self::blockingTierLabel($config ?? CompactorConfig::new(), $tokenLimit),
+                'tokens' => $tokenCount,
+                'limit' => $tokenLimit,
+            ],
+        ));
     }
 
     /**
@@ -2367,8 +2358,8 @@ final class CompactionService
         $cap = $config->foregroundBlockingTokens;
 
         return $cap !== null && $cap < (int) ($tokenLimit * $percent / 100)
-            ? "the {$cap}-token blocking cap"
-            : "the {$percent}% blocking tier";
+            ? Lang::t('host.compact.blocking_cap', ['cap' => $cap])
+            : Lang::t('host.compact.blocking_tier', ['percent' => $percent]);
     }
 
     /**
@@ -2433,14 +2424,7 @@ final class CompactionService
      */
     public function thrashBreakerNotice(int $times = IdleCompactionPolicy::REFILL_LIMIT): string
     {
-        return sprintf(
-            'Context compaction has run %d times in a row and the transcript came straight back over the '
-            . 'limit each time, so this prompt was not sent and no further compaction was attempted. '
-            . 'The recent exchanges the rewrite keeps in full are what will not fit — trim the largest of '
-            . 'them (tool output is usually the bulk), or start over with /rewind or /clear. '
-            . '/model with a larger context window also resolves this.',
-            max(1, $times),
-        );
+        return Lang::t('host.compact.thrash', ['times' => max(1, $times)]);
     }
 
     /**

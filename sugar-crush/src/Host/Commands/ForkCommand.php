@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Host\Commands;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Session\SessionKind;
 
 /**
@@ -29,16 +30,16 @@ final class ForkCommand implements HostCommand
 
         $prompt = CommandText::argument($text);
         if ($prompt === '') {
-            return CommandResult::reply($text, 'Usage: /fork <prompt>');
+            return CommandResult::reply($text, Lang::t('host.fork.usage'));
         }
 
         $store = $context->sessionStore;
         if ($store === null) {
-            return CommandResult::reply($text, 'Session store not configured. Set a SessionStore to use /fork.');
+            return CommandResult::reply($text, Lang::t('host.fork.no_store'));
         }
 
         if ($context->sessionId === null) {
-            return CommandResult::reply($text, 'No active session. Start a new conversation first.');
+            return CommandResult::reply($text, Lang::t('host.rename.no_session'));
         }
 
         // The fork copies what is stored (audit R2): write any debounced change first.
@@ -47,7 +48,7 @@ final class ForkCommand implements HostCommand
         try {
             $forked = $store->forkSession($context->sessionId, SessionKind::Background);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, "Error: {$e->getMessage()}");
+            return CommandResult::reply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
         }
 
         return CommandResult::echo($text)->withEffect(

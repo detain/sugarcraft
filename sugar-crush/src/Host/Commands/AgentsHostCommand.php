@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Host\Commands;
 
 use SugarCraft\Crush\Commands\AgentsCommand;
+use SugarCraft\Crush\Lang;
 
 /**
  * `/agents` (`/agent`) — the session half of {@see AgentsCommand} (roadmap
@@ -21,7 +22,7 @@ final class AgentsHostCommand implements HostCommand
     public function run(CommandContext $context, string $text): CommandResult
     {
         if ($context->agentManager === null) {
-            return CommandResult::reply($text, 'Agent manager not configured. Set an AgentManager to use /agents commands.');
+            return CommandResult::reply($text, Lang::t('host.agents.not_configured'));
         }
 
         ob_start();

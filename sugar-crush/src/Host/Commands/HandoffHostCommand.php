@@ -11,6 +11,7 @@ use SugarCraft\Crush\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Host\CompactionService;
 use SugarCraft\Crush\Host\TranscriptStore;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionKind;
@@ -93,23 +94,21 @@ final class HandoffHostCommand implements HostCommand
     {
         $store = $context->sessionStore;
         if ($store === null) {
-            return CommandResult::reply($text, 'Session store not configured. Set a SessionStore to use /handoff.');
+            return CommandResult::reply($text, Lang::t('host.handoff.no_store'));
         }
 
         $sessionId = $context->sessionId;
         if ($sessionId === null) {
-            return CommandResult::reply($text, 'No active session. Start a conversation first.');
+            return CommandResult::reply($text, Lang::t('host.handoff.no_session'));
         }
 
         if (Message::agentVisible($context->history) === []) {
-            return CommandResult::reply($text, 'Nothing to hand off yet: the agent has not been sent anything in this session.');
+            return CommandResult::reply($text, Lang::t('host.handoff.nothing_yet'));
         }
 
         $backend = $this->summaryBackendSet ? $this->summaryBackend : $context->titleBackend;
 
-        return CommandResult::reply($text, $backend === null
-            ? 'Handing off: opening a new session from a state summary of this one…'
-            : 'Handing off: the summary model is writing the state summary the new session starts from…')
+        return CommandResult::reply($text, Lang::t($backend === null ? 'host.handoff.opening' : 'host.handoff.summarising'))
             ->withEffect(CommandEffect::async(
                 self::call($store, $context->transcripts, $sessionId, $context->history, $backend, CommandText::argument($text)),
                 static fn (mixed $msg): ?string => $msg instanceof HandoffSeededMsg ? self::describe($msg) : null,
@@ -213,7 +212,7 @@ final class HandoffHostCommand implements HostCommand
                 $transcripts->save($id, [Message::user($seed)]);
                 $transcripts->saveLedger($id, ContextLedger::new());
             } catch (\Throwable $e) {
-                return new HandoffSeededMsg($parentId, null, $seed, $modelWritten, $usage, 'the new session could not be opened: ' . self::oneLine($e->getMessage()));
+                return new HandoffSeededMsg($parentId, null, $seed, $modelWritten, $usage, Lang::t('host.handoff.open_failed', ['reason' => self::oneLine($e->getMessage())]));
             }
 
             return new HandoffSeededMsg($parentId, $id, $seed, $modelWritten, $usage, $note);
@@ -228,7 +227,7 @@ final class HandoffHostCommand implements HostCommand
                 $fallback,
                 false,
                 null,
-                'the summary model failed (' . self::oneLine($e->getMessage()) . '), so the summary was written from the transcript',
+                Lang::t('host.handoff.model_failed', ['reason' => self::oneLine($e->getMessage())]),
             );
             try {
                 $promise = $backend->completeAsync($request);
@@ -241,7 +240,7 @@ final class HandoffHostCommand implements HostCommand
                     $state = self::stateFromReply($reply->content, $fallback);
 
                     return $state === null
-                        ? $open($fallback, false, $reply->usage, 'the summary model wrote no state block, so the summary was written from the transcript')
+                        ? $open($fallback, false, $reply->usage, Lang::t('host.handoff.model_empty'))
                         : $open($state, true, $reply->usage, null);
                 },
                 $failed,
@@ -257,19 +256,21 @@ final class HandoffHostCommand implements HostCommand
     public static function describe(HandoffSeededMsg $msg): string
     {
         if ($msg->sessionId === null) {
-            return 'Handoff failed: ' . ($msg->error ?? 'no session was opened') . '.';
+            return Lang::t('host.handoff.failed', ['reason' => $msg->error ?? Lang::t('host.handoff.no_session_opened')]);
         }
 
-        $line = "Handed off to session {$msg->sessionId}, a branch of {$msg->fromSessionId} that starts from "
-            . ($msg->modelWritten ? 'the summary model\'s' : 'a mechanical') . ' state summary of it';
+        $line = Lang::t($msg->modelWritten ? 'host.handoff.done.model' : 'host.handoff.done.mechanical', [
+            'id' => $msg->sessionId,
+            'from' => $msg->fromSessionId,
+        ]);
 
-        return $line . ($msg->error === null ? '.' : ' — ' . $msg->error . '.');
+        return $line . ($msg->error === null ? '.' : Lang::t('host.handoff.done.note', ['note' => $msg->error]));
     }
 
     private static function oneLine(string $text): string
     {
         $line = trim((string) preg_replace('/\s+/u', ' ', Sanitize::untrusted($text)));
 
-        return $line === '' ? 'no reason given' : mb_substr($line, 0, 200);
+        return $line === '' ? Lang::t('host.handoff.no_reason') : mb_substr($line, 0, 200);
     }
 }

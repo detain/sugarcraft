@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Host\Commands;
 
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 
@@ -91,26 +92,22 @@ final class PermissionsCommand implements HostCommand
             // neither a hook chain nor an engine backend. Whatever hooks are
             // installed still run — see checkProjectCommandShell()'s own
             // "no gate is not a refusal" note.
-            return 'No permission gate is attached to this session, so no mode and no rule are '
-                . 'deciding anything here. That is what an embedder gets, and a Chat built without a '
-                . 'hook chain and without an engine backend; a `sugarcrush` launch always builds one. '
-                . 'Any hooks that are installed still run.';
+            return Lang::t('host.permissions.no_gate');
         }
 
         $mode = $gate->mode();
 
         $lines = [
-            sprintf(
-                'Permission mode: %s — from %s',
+            Lang::t('host.permissions.mode', [
                 // The mode is enum-constrained and safe by construction; the
                 // SOURCE is not. Bootstrap builds it around a file path, and
                 // that path can come from `--config`, so it is caller text on
                 // its way into the transcript exactly as a rule pattern is.
-                $mode->value,
-                $gate->modeSource() === null
-                    ? 'a source this gate did not record'
+                'mode' => $mode->value,
+                'source' => $gate->modeSource() === null
+                    ? Lang::t('host.permissions.unrecorded_source')
                     : self::reportField($gate->modeSource()),
-            ),
+            ]),
             $mode->description(),
             '',
         ];
@@ -130,14 +127,9 @@ final class PermissionsCommand implements HostCommand
             // `settings.json`. Sending a user to edit one of two files
             // is a coin flip they lose half the time, and they lose it silently
             // — rules in the file this sentence did not name still load.
-            $lines[] = 'Rules: none configured, so every decision above is the mode\'s own. '
-                . 'A `permissionRules` array in ~/.sugar-crush/config.json or in '
-                . '~/.sugar-crush/settings.json is where they go; config.json wins where both set a key.';
+            $lines[] = Lang::t('host.permissions.no_rules');
         } else {
-            $lines[] = sprintf(
-                'Rules (%d), tried in this order — the first one that matches decides, ahead of the mode:',
-                count($rules),
-            );
+            $lines[] = Lang::t('host.permissions.rules', ['count' => count($rules)]);
             foreach ($rules as $index => $rule) {
                 $lines[] = sprintf(
                     '  %d. %-5s %s',
@@ -227,23 +219,20 @@ final class PermissionsCommand implements HostCommand
         $breaker = $gate->autoBreaker();
 
         if ($gate->mode() !== PermissionMode::Auto) {
-            return sprintf(
-                'Auto-mode circuit breaker: idle. It only counts under `%s`, and this session is `%s`.',
-                PermissionMode::Auto->value,
-                $gate->mode()->value,
-            );
+            return Lang::t('host.permissions.breaker_idle', [
+                'auto' => PermissionMode::Auto->value,
+                'mode' => $gate->mode()->value,
+            ]);
         }
 
-        return sprintf(
-            'Auto-mode circuit breaker: %d of %d consecutive blocks (%s), %d of %d blocks this session. '
-            . 'Reaching either threshold turns the next block into a prompt instead of a refusal.',
-            $breaker['consecutiveBlocks'],
-            $breaker['strikeThreshold'],
-            $breaker['lastBlockedCategory'] === null
-                ? 'nothing blocked yet'
-                : 'last category: ' . self::reportField($breaker['lastBlockedCategory']),
-            $breaker['totalBlocks'],
-            $breaker['totalBlockThreshold'],
-        );
+        return Lang::t('host.permissions.breaker', [
+            'consecutive' => $breaker['consecutiveBlocks'],
+            'strikes' => $breaker['strikeThreshold'],
+            'last' => $breaker['lastBlockedCategory'] === null
+                ? Lang::t('host.permissions.breaker_nothing_blocked')
+                : Lang::t('host.permissions.breaker_last', ['category' => self::reportField($breaker['lastBlockedCategory'])]),
+            'total' => $breaker['totalBlocks'],
+            'limit' => $breaker['totalBlockThreshold'],
+        ]);
     }
 }

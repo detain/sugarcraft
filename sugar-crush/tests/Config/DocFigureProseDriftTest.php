@@ -4635,7 +4635,14 @@ final class DocFigureProseDriftTest extends TestCase
 
         $clear = self::bodyExcerpt($chatText, 'clear');
         self::assertStringContainsString('forRoot', $clear, 'MemoryCommand::clear() no longer probes the repo store — the refusal the page promises has no code home');
-        self::assertStringContainsString('Not cleared', $clear, 'the refusal wording left the arm — the page still promises a loud, total refusal');
+        // The wording lives in the catalogue since 15b-14-4a: the arm names the
+        // entry, and the entry's English carries the loud refusal.
+        self::assertStringContainsString("'host.memory.clear.refused'", $clear, 'the refusal wording left the arm — the page still promises a loud, total refusal');
+        self::assertStringContainsString(
+            'Not cleared',
+            \SugarCraft\Crush\Lang::t('host.memory.clear.refused', ['dir' => '.sugar-crush/memory']),
+            'the refusal entry stopped saying it refused — the page still promises a loud, total refusal',
+        );
         self::assertSame(
             1,
             substr_count($clear, '->clear('),

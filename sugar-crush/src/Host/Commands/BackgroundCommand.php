@@ -10,6 +10,7 @@ use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\BackgroundSessionSpawnedMsg;
 use SugarCraft\Crush\BackgroundSessionStoppedMsg;
 use SugarCraft\Crush\Host\TitleService;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Sessions\BackgroundStopOutcome;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 
@@ -46,7 +47,7 @@ final class BackgroundCommand implements HostCommand
 
         $task = CommandText::argument($text);
         if ($task === '') {
-            return CommandResult::reply($text, 'Usage: /bg <task>');
+            return CommandResult::reply($text, Lang::t('host.bg.usage'));
         }
 
         if (strcasecmp($task, 'stop') === 0) {
@@ -69,7 +70,7 @@ final class BackgroundCommand implements HostCommand
     /** The sentence `/bg` and `/fork` answer with when no supervisor is wired. */
     public static function notConfigured(): string
     {
-        return 'Background sessions not configured. Set a BackgroundSupervisor to use /bg and /fork.';
+        return Lang::t('host.bg.not_configured');
     }
 
     /**
@@ -223,10 +224,10 @@ final class BackgroundCommand implements HostCommand
             $active[] = "{$id} ('{$session->name}')";
         }
 
-        return 'Usage: /bg stop <session-id>' . "\n"
+        return Lang::t('host.bg.stop_usage') . "\n"
             . ($active === []
-                ? 'No active background sessions.'
-                : 'Active background sessions: ' . implode(', ', $active));
+                ? Lang::t('host.bg.none_active')
+                : Lang::t('host.bg.active', ['sessions' => implode(', ', $active)]));
     }
 
     /**
@@ -236,14 +237,15 @@ final class BackgroundCommand implements HostCommand
     public static function spawnedNotice(BackgroundSessionSpawnedMsg $msg): string
     {
         if ($msg->error !== null) {
-            return "Could not start background session '{$msg->name}': {$msg->error}";
+            return Lang::t('host.bg.start_failed', ['name' => $msg->name, 'error' => $msg->error]);
         }
 
-        $where = $msg->worktree === null ? '' : " It works in its own git worktree at {$msg->worktree}; its changes stay there for you to review and merge.";
+        $where = $msg->worktree === null ? '' : Lang::t('host.bg.worktree', ['path' => $msg->worktree]);
 
-        return ($msg->command === '/fork'
-            ? "Forked into background session {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel."
-            : "Backgrounded as {$msg->sessionId} ('{$msg->name}') — use /agents to check status, /bg stop {$msg->sessionId} to cancel.") . $where;
+        return Lang::t($msg->command === '/fork' ? 'host.bg.forked' : 'host.bg.backgrounded', [
+            'id' => $msg->sessionId,
+            'name' => $msg->name,
+        ]) . $where;
     }
 
     /** The answer to a settled `/bg stop`. */
@@ -253,16 +255,17 @@ final class BackgroundCommand implements HostCommand
 
         return match ($msg->outcome) {
             BackgroundStopOutcome::UnknownSession
-                => "No background session {$msg->sessionId} in this run — /bg stop lists the active ones.",
+                => Lang::t('host.bg.stop.unknown', ['id' => $msg->sessionId]),
             BackgroundStopOutcome::AlreadyFinished
-                => "Background session {$label} had already finished; nothing to stop.",
+                => Lang::t('host.bg.stop.already_finished', ['session' => $label]),
             BackgroundStopOutcome::StoppedViaIpc
-                => "Stopped background session {$label}.",
+                => Lang::t('host.bg.stop.stopped', ['session' => $label]),
             BackgroundStopOutcome::StoppedViaSignal
-                => "Stopped background session {$label} (its control socket was gone, so the daemon was signalled).",
+                => Lang::t('host.bg.stop.signalled', ['session' => $label]),
             BackgroundStopOutcome::CouldNotStop
-                => "Could not stop background session {$label}"
-                    . ($msg->error !== null ? ": {$msg->error}" : ' — its daemon could not be reached or safely signalled.'),
+                => $msg->error !== null
+                    ? Lang::t('host.bg.stop.failed', ['session' => $label, 'error' => $msg->error])
+                    : Lang::t('host.bg.stop.unreachable', ['session' => $label]),
         };
     }
 
@@ -275,7 +278,7 @@ final class BackgroundCommand implements HostCommand
     {
         $name = TitleService::sanitizeTitle($task);
 
-        return $name === '' ? 'Background task' : $name;
+        return $name === '' ? Lang::t('host.bg.default_name') : $name;
     }
 
     /**

@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Host\Commands;
 use SugarCraft\Crush\Commands\MemoryHistoryCommand;
 use SugarCraft\Crush\Context\MemoryBlock;
 use SugarCraft\Crush\Context\ProjectMemoryWriter;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Memory\ForeignMemoryImporter;
 use SugarCraft\Crush\Memory\MemoryEntry;
 use SugarCraft\Crush\Memory\MemoryHistory;
@@ -34,7 +35,7 @@ final class MemoryCommand implements HostCommand
     {
         $home = $context->memoryStore;
         if ($home === null) {
-            return self::respond($inputText, 'Memory store not configured. Set a MemoryStore to use /memory commands.');
+            return self::respond($inputText, Lang::t('host.memory.not_configured'));
         }
         $root = $context->projectRoot();
 
@@ -70,7 +71,7 @@ final class MemoryCommand implements HostCommand
             'import' => self::import($home, $root, $inputText, $args),
             'log' => self::respond($inputText, MemoryHistoryCommand::log($history, $args)),
             'restore' => self::respond($inputText, MemoryHistoryCommand::restore($history, $args)),
-            default => self::help($inputText, "Unknown command '{$command}'."),
+            default => self::help($inputText, Lang::t('host.memory.unknown_command', ['command' => $command])),
         };
 
         if ($mutates) {
@@ -99,28 +100,26 @@ final class MemoryCommand implements HostCommand
     {
         $lines = [];
         if ($error !== null) {
-            $lines[] = "**Error:** {$error}";
+            $lines[] = Lang::t('host.memory.error', ['error' => $error]);
             $lines[] = '';
         }
-        $lines[] = '**Available /memory commands:**';
+        $lines[] = Lang::t('host.memory.help.heading');
         $lines[] = '';
-        $lines[] = '`/memory list [scope]` — List all memories for a scope (default: project)';
-        $lines[] = '`/memory add <content> [--scope <scope>]` — Add a new memory entry (default: project)';
-        $lines[] = '`/memory search <query>` — Search memories by content';
-        $lines[] = '`/memory delete <id>` — Delete a memory by ID';
-        $lines[] = '`/memory edit <id> <new_content>` — Edit an existing memory';
-        $lines[] = '`/memory clear --scope <scope> --confirm` — Clear all memories for a scope';
-        $lines[] = '`/memory import claude|opencode` — Import foreign memory files (one-shot per tool)';
-        $lines[] = '`/memory log [count]` — List the memory history, newest first (default '
-            . MemoryHistory::DEFAULT_LOG_ENTRIES . ')';
-        $lines[] = '`/memory restore <commit>` — Put memory back as it stood at a commit `/memory log` lists';
-        $lines[] = '`/memory` — Show this help text';
+        $lines[] = Lang::t('host.memory.help.list');
+        $lines[] = Lang::t('host.memory.help.add');
+        $lines[] = Lang::t('host.memory.help.search');
+        $lines[] = Lang::t('host.memory.help.delete');
+        $lines[] = Lang::t('host.memory.help.edit');
+        $lines[] = Lang::t('host.memory.help.clear');
+        $lines[] = Lang::t('host.memory.help.import');
+        $lines[] = Lang::t('host.memory.help.log', ['count' => MemoryHistory::DEFAULT_LOG_ENTRIES]);
+        $lines[] = Lang::t('host.memory.help.restore');
+        $lines[] = Lang::t('host.memory.help.self');
         $lines[] = '';
-        $lines[] = 'Scopes: `project` (default), `user`, `agent`. Project and user notes reach the prompt '
-            . '(user notes first, at most ' . MemoryBlock::empty()->withSettings()->limits()['userMaxEntries'] . '); '
-            . 'agent-scope notes are listable but never reach the prompt.';
-        $lines[] = 'History: every change to the home memory directory is a git commit (when `git` is on PATH); '
-            . 'a restore is a new commit, so it can be undone the same way.';
+        $lines[] = Lang::t('host.memory.help.scopes', [
+            'max' => MemoryBlock::empty()->withSettings()->limits()['userMaxEntries'],
+        ]);
+        $lines[] = Lang::t('host.memory.help.history');
 
         return self::respond($inputText, implode("\n", $lines));
     }
@@ -131,7 +130,7 @@ final class MemoryCommand implements HostCommand
     private static function add(MemoryStore $home, string $root, string $inputText, string $args): CommandResult
     {
         if ($args === '') {
-            return self::help($inputText, 'Usage: /memory add <content> [--scope <scope>]');
+            return self::help($inputText, Lang::t('host.memory.usage.add'));
         }
 
         // Parse --scope flag if present (can be before or after content).
@@ -151,7 +150,7 @@ final class MemoryCommand implements HostCommand
         }
 
         if ($content === '') {
-            return self::help($inputText, 'Usage: /memory add <content> [--scope <scope>]');
+            return self::help($inputText, Lang::t('host.memory.usage.add'));
         }
 
         try {
@@ -165,19 +164,16 @@ final class MemoryCommand implements HostCommand
             // command. The reply SAYS when the note fell back (15d-05 residual).
             $saved = MemoryWriter::new($home, $root)
                 ->save($content, $scope);
-            $response = "Memory created with ID: `{$saved->id}` (scope: {$scope})";
+            $response = Lang::t('host.memory.created', ['id' => $saved->id, 'scope' => $scope]);
             if ($saved->fellBackToHome) {
-                $response .= "\n\nSaved in the home store, not this repository: its `.sugar-crush/memory/` "
-                    . 'could not be created or written, or it resolves outside the repository, so the note '
-                    . 'is kept on this machine only and is not part of the checkout.';
+                $response .= "\n\n" . Lang::t('host.memory.fell_back_home');
             }
             // 0.6: say so when a note lands where the model will never read it.
             if ($scope === 'agent') {
-                $response .= "\n\nAgent-scope notes are listable but never reach the prompt; "
-                    . 'use `--scope project` or `--scope user` for a note the model should see.';
+                $response .= "\n\n" . Lang::t('host.memory.agent_scope_note');
             }
         } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.memory.error', ['error' => $e->getMessage()]);
         }
 
         return self::respond($inputText, $response);
@@ -216,13 +212,10 @@ final class MemoryCommand implements HostCommand
     {
         $target = strtolower(trim($args));
         if ($target === '') {
-            return self::help($inputText, 'Usage: /memory import claude|opencode');
+            return self::help($inputText, Lang::t('host.memory.usage.import'));
         }
         if ($target !== 'claude' && $target !== 'opencode') {
-            return self::help(
-                $inputText,
-                "Unknown import target '{$target}'. Use `claude` or `opencode`."
-            );
+            return self::help($inputText, Lang::t('host.memory.import.unknown_target', ['target' => $target]));
         }
 
         // Defense-in-depth, not a behaviorally reachable branch: projectRoot()
@@ -234,9 +227,7 @@ final class MemoryCommand implements HostCommand
         if ($projectRoot === '') {
             return self::respond(
                 $inputText,
-                '**Nothing imported:** no project root could be determined, so this command has no'
-                . " project to read `{$target}` memory against or record the"
-                . " `.imported-{$target}` sentinel in."
+                Lang::t('host.memory.import.no_root', ['target' => $target])
             );
         }
 
@@ -249,7 +240,7 @@ final class MemoryCommand implements HostCommand
         if (file_exists($sentinel)) {
             return self::respond(
                 $inputText,
-                "Already imported (sentinel `{$sentinel}`; delete it to re-import)."
+                Lang::t('host.memory.import.already', ['sentinel' => $sentinel])
             );
         }
 
@@ -263,18 +254,16 @@ final class MemoryCommand implements HostCommand
             $lines = [];
             if ($imported > 0) {
                 $sentinelNote = self::writeImportSentinel($root, $sentinel, $target, $imported);
-                $lines[] = "**Imported {$imported}** `{$target}` memories into the `agent` scope."
+                $lines[] = Lang::t('host.memory.import.done', ['count' => $imported, 'target' => $target])
                     . $sentinelNote;
             } else {
-                $lines[] = $refused === []
-                    ? 'Nothing imported — no readable `'.$target.'` memory files were found for'
-                        . ' this project.'
-                    : 'Nothing imported — no readable `'.$target.'` memory files were found, and'
-                        . ' every candidate directory was refused.';
+                $lines[] = Lang::t($refused === [] ? 'host.memory.import.none' : 'host.memory.import.none_refused', [
+                    'target' => $target,
+                ]);
             }
             if ($refused !== []) {
                 $lines[] = '';
-                $lines[] = '**Directories not read:**';
+                $lines[] = Lang::t('host.memory.import.refused_heading');
                 foreach ($refused as $path => $why) {
                     $lines[] = "- `{$path}`: {$why}";
                 }
@@ -284,9 +273,7 @@ final class MemoryCommand implements HostCommand
         } catch (\Throwable $e) {
             return self::respond(
                 $inputText,
-                '**Import failed** — entries the importer had already written stay in the `agent`'
-                . ' scope and no sentinel was written, so re-running may duplicate them. Run'
-                . " `/memory list agent` before re-running. Error: {$e->getMessage()}"
+                Lang::t('host.memory.import.failed', ['error' => $e->getMessage()])
             );
         }
     }
@@ -323,19 +310,15 @@ final class MemoryCommand implements HostCommand
         // in depth; only the re-check below has no reachable path absent a
         // race.
         if (!self::importSentinelDirIsContained($root, $dir)) {
-            return ' **Warning:** the sentinel directory does not resolve inside this project, so no'
-                . ' sentinel was written and re-running the import WILL duplicate these entries.';
+            return Lang::t('host.memory.sentinel.outside');
         }
         if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
-            return ' **Warning:** the sentinel directory could not be created, so re-running the import'
-                . ' WILL duplicate these entries.';
+            return Lang::t('host.memory.sentinel.no_dir');
         }
         // The post-create re-check: defensive against a symlink appearing at
         // the checked path between the gates above and this moment.
         if (!self::importSentinelDirIsContained($root, $dir)) {
-            return ' **Warning:** the sentinel directory resolved outside this project after directory'
-                . ' creation, so no sentinel was written and re-running the import WILL duplicate'
-                . ' these entries.';
+            return Lang::t('host.memory.sentinel.escaped');
         }
 
         $tmp = $dir . '/sentinel-tmp-' . bin2hex(random_bytes(6));
@@ -346,11 +329,10 @@ final class MemoryCommand implements HostCommand
         if ($written === false || !@rename($tmp, $sentinel)) {
             @unlink($tmp);
 
-            return ' **Warning:** the sentinel could not be written, so re-running the import WILL'
-                . ' duplicate these entries.';
+            return Lang::t('host.memory.sentinel.unwritten');
         }
 
-        return " Sentinel: `{$sentinel}` (delete it to re-import).";
+        return Lang::t('host.memory.sentinel.written', ['sentinel' => $sentinel]);
     }
 
     /**
@@ -415,16 +397,16 @@ final class MemoryCommand implements HostCommand
             $entries = $home->list($scope);
             if ($repoEntries === []) {
                 if ($entries === []) {
-                    $response = "No memories found for scope `{$scope}`.";
+                    $response = Lang::t('host.memory.list.none', ['scope' => $scope]);
                 } else {
-                    $lines = ["**Memories ({$scope}):**", ''];
+                    $lines = [Lang::t('host.memory.list.heading', ['scope' => $scope]), ''];
                     foreach ($entries as $entry) {
                         $lines = [...$lines, ...self::entryRows($entry, withScope: false)];
                     }
                     $response = implode("\n", $lines);
                 }
             } else {
-                $lines = ["**Memories ({$scope}):**", '', self::storeBanner(isRepo: true)];
+                $lines = [Lang::t('host.memory.list.heading', ['scope' => $scope]), '', self::storeBanner(isRepo: true)];
                 foreach ($repoEntries as $entry) {
                     $lines = [...$lines, ...self::entryRows($entry, withScope: false)];
                 }
@@ -443,7 +425,7 @@ final class MemoryCommand implements HostCommand
                 ...$home->skipped($scope),
             ]);
         } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.memory.error', ['error' => $e->getMessage()]);
         }
 
         return self::respond($inputText, $response);
@@ -468,7 +450,7 @@ final class MemoryCommand implements HostCommand
     private static function search(MemoryStore $home, string $root, string $inputText, string $query): CommandResult
     {
         if ($query === '') {
-            return self::help($inputText, 'Usage: /memory search <query>');
+            return self::help($inputText, Lang::t('host.memory.usage.search'));
         }
 
         try {
@@ -483,15 +465,15 @@ final class MemoryCommand implements HostCommand
             $entries = $home->search($query);
             $total = count($repoEntries) + count($entries);
             if ($total === 0) {
-                $response = "No memories found matching `{$query}`.";
+                $response = Lang::t('host.memory.search.none', ['query' => $query]);
             } elseif ($repoEntries === []) {
-                $lines = ["**Search results for `{$query}` (" . self::pluralize($total, 'match') . '):**', ''];
+                $lines = [self::searchHeading($query, $total), ''];
                 foreach ($entries as $entry) {
                     $lines = [...$lines, ...self::entryRows($entry, withScope: true)];
                 }
                 $response = implode("\n", $lines);
             } else {
-                $lines = ["**Search results for `{$query}` (" . self::pluralize($total, 'match') . '):**', '', self::storeBanner(isRepo: true)];
+                $lines = [self::searchHeading($query, $total), '', self::storeBanner(isRepo: true)];
                 foreach ($repoEntries as $entry) {
                     $lines = [...$lines, ...self::entryRows($entry, withScope: true)];
                 }
@@ -510,7 +492,7 @@ final class MemoryCommand implements HostCommand
                 ...$home->skipped(),
             ]);
         } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.memory.error', ['error' => $e->getMessage()]);
         }
 
         return self::respond($inputText, $response);
@@ -591,8 +573,8 @@ final class MemoryCommand implements HostCommand
     private static function storeBanner(bool $isRepo): string
     {
         return $isRepo
-            ? '*In this repository (`' . ProjectMemoryWriter::RELATIVE_DIRECTORY . '`):*'
-            : '*In your home store:*';
+            ? Lang::t('host.memory.banner.repo', ['dir' => ProjectMemoryWriter::RELATIVE_DIRECTORY])
+            : Lang::t('host.memory.banner.home');
     }
 
     /**
@@ -602,21 +584,21 @@ final class MemoryCommand implements HostCommand
     {
         $id = trim($args);
         if ($id === '') {
-            return self::help($inputText, 'Usage: /memory delete <id>');
+            return self::help($inputText, Lang::t('host.memory.usage.delete'));
         }
 
         try {
             [$entry, $store] = self::locate($home, $root, $id);
             if ($entry === null) {
-                $response = "Memory `{$id}` not found.";
+                $response = Lang::t('host.memory.not_found', ['id' => $id]);
             } else {
                 $store->delete($id);
-                $response = "Memory `{$id}` deleted.";
+                $response = Lang::t('host.memory.deleted', ['id' => $id]);
             }
         } catch (\InvalidArgumentException $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.memory.error', ['error' => $e->getMessage()]);
         } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.memory.error', ['error' => $e->getMessage()]);
         }
 
         return self::respond($inputText, $response);
@@ -629,7 +611,7 @@ final class MemoryCommand implements HostCommand
     {
         // Parse --scope and --confirm flags
         if (!preg_match('/--scope\s+(user|project|agent)\s+--confirm/s', $args, $m)) {
-            return self::help($inputText, 'Usage: /memory clear --scope <scope> --confirm');
+            return self::help($inputText, Lang::t('host.memory.usage.clear'));
         }
 
         $scope = $m[1];
@@ -646,21 +628,16 @@ final class MemoryCommand implements HostCommand
             if ($repoNotes !== []) {
                 return self::respond(
                     $inputText,
-                    '**Not cleared:** bulk clear never reaches the repository — this tree '
-                    . 'holds project-scope notes under `' . ProjectMemoryWriter::RELATIVE_DIRECTORY
-                    . '` that only the per-id commands touch. Clearing the home half alone '
-                    . 'would silently leave "project memory" half-wiped, so nothing moved. '
-                    . 'Remove repo notes by id with `/memory delete <id>` (list them with '
-                    . '`/memory list project`).'
+                    Lang::t('host.memory.clear.refused', ['dir' => ProjectMemoryWriter::RELATIVE_DIRECTORY]),
                 );
             }
         }
 
         try {
             $home->clear($scope);
-            $response = "All memories cleared for scope `{$scope}`.";
+            $response = Lang::t('host.memory.cleared', ['scope' => $scope]);
         } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.memory.error', ['error' => $e->getMessage()]);
         }
 
         return self::respond($inputText, $response);
@@ -674,44 +651,43 @@ final class MemoryCommand implements HostCommand
         // Parse: <id> <new_content> — split on first whitespace, id is first token, rest is content
         $firstSpace = strpos($args, ' ');
         if ($firstSpace === false) {
-            return self::help($inputText, 'Usage: /memory edit <id> <new_content>');
+            return self::help($inputText, Lang::t('host.memory.usage.edit'));
         }
 
         $id = trim(substr($args, 0, $firstSpace));
         $newContent = trim(substr($args, $firstSpace + 1));
 
         if ($id === '' || $newContent === '') {
-            return self::help($inputText, 'Usage: /memory edit <id> <new_content>');
+            return self::help($inputText, Lang::t('host.memory.usage.edit'));
         }
 
         try {
             [$entry, $store] = self::locate($home, $root, $id);
             if ($entry === null) {
-                $response = "Memory `{$id}` not found.";
+                $response = Lang::t('host.memory.not_found', ['id' => $id]);
             } else {
                 $store->update($id, $entry->withContent($newContent));
-                $response = "Memory `{$id}` updated.";
+                $response = Lang::t('host.memory.updated', ['id' => $id]);
             }
         } catch (\InvalidArgumentException $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.memory.error', ['error' => $e->getMessage()]);
         } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.memory.error', ['error' => $e->getMessage()]);
         }
 
         return self::respond($inputText, $response);
     }
 
-    /** $count and $word, pluralised the English way the search heading needs. */
-    private static function pluralize(int $count, string $word): string
+    /**
+     * The search answer's heading. One whole sentence per number, so a
+     * translation agrees its noun in its own grammar rather than through an
+     * English pluraliser.
+     */
+    private static function searchHeading(string $query, int $total): string
     {
-        if ($count === 1) {
-            return "1 {$word}";
-        }
-        // Words ending in ch, x, s, o take 'es'.
-        if (preg_match('/[chxso]$/', $word)) {
-            return "{$count} {$word}es";
-        }
-
-        return "{$count} {$word}s";
+        return Lang::t($total === 1 ? 'host.memory.search.heading.one' : 'host.memory.search.heading.other', [
+            'query' => $query,
+            'count' => $total,
+        ]);
     }
 }

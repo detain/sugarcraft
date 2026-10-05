@@ -88,8 +88,8 @@ final class SkillsHostCommandTest extends TestCase
             '/skills accept triage' => 'exists already',
             '/skills accept ../skills/triage' => 'not a draft name',
             '/skills reject ghost' => 'no draft named "ghost"',
-            '/skills accept' => SkillsHostCommand::USAGE,
-            '/skills promote triage' => SkillsHostCommand::USAGE,
+            '/skills accept' => SkillsHostCommand::usage(),
+            '/skills promote triage' => SkillsHostCommand::usage(),
         ] as $text => $expected) {
             $result = (new SkillsHostCommand())->run($this->context(), $text);
             $last = $result->rows[\count($result->rows) - 1];

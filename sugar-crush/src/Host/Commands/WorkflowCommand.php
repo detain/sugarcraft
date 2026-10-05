@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Backend\CancellationToken;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Workflows\StageResult;
 use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
 use SugarCraft\Crush\Workflows\WorkflowNotRunningException;
@@ -43,7 +44,7 @@ final class WorkflowCommand implements HostCommand
     {
         $engine = $context->workflowEngine;
         if ($engine === null) {
-            return self::respond($inputText, 'Workflow engine not configured. Set a WorkflowEngine to use /workflow commands.');
+            return self::respond($inputText, Lang::t('host.workflow.not_configured'));
         }
 
         [$command, $args] = self::subcommand($inputText);
@@ -57,7 +58,7 @@ final class WorkflowCommand implements HostCommand
             'resume' => self::resume($engine, $inputText, $args),
             'status' => self::status($engine, $inputText, $args),
             'list' => self::list($engine, $inputText),
-            default => self::help($inputText, "Unknown command '{$command}'."),
+            default => self::help($inputText, Lang::t('host.workflow.unknown_command', ['command' => $command])),
         };
     }
 
@@ -98,23 +99,19 @@ final class WorkflowCommand implements HostCommand
     {
         $lines = [];
         if ($error !== null) {
-            $lines[] = "**Error:** {$error}";
+            $lines[] = Lang::t('host.workflow.error', ['error' => $error]);
             $lines[] = '';
         }
-        $lines[] = '**Available /workflow commands:**';
+        $lines[] = Lang::t('host.workflow.help.heading');
         $lines[] = '';
-        $lines[] = '`/workflow run <name> [key=val ...]` — Run a workflow by name with optional context';
-        $lines[] = '`/workflow pause <workflowId>` — Pause a running workflow';
-        $lines[] = '`/workflow resume <workflowId>` — Resume a paused workflow';
-        $lines[] = '`/workflow status <workflowId>` — Check workflow status';
-        $lines[] = '`/workflow list` — List available workflows';
-        $lines[] = '`/workflow` — Show this help text';
+        $lines[] = Lang::t('host.workflow.help.run');
+        $lines[] = Lang::t('host.workflow.help.pause');
+        $lines[] = Lang::t('host.workflow.help.resume');
+        $lines[] = Lang::t('host.workflow.help.status');
+        $lines[] = Lang::t('host.workflow.help.list');
+        $lines[] = Lang::t('host.workflow.help.self');
         $lines[] = '';
-        $lines[] = "Note: pause/resume granularity is per-whole-stage only. A real interrupt "
-            . "(Ctrl-C/SIGTERM) captures whatever stages have genuinely finished so far, but if it "
-            . "lands while a 'parallel' stage is mid-flight, that stage's individual in-progress "
-            . "agent results are NOT captured — the stage is simply re-run from scratch on resume. "
-            . "There is no partial-credit resume for a parallel sub-stage.";
+        $lines[] = Lang::t('host.workflow.help.note');
 
         return self::respond($inputText, implode("\n", $lines));
     }
@@ -168,7 +165,7 @@ final class WorkflowCommand implements HostCommand
         $workflowName = $argParts[0] ?? '';
 
         if ($workflowName === '') {
-            return self::help($inputText, "Usage: /workflow run <name> [key=val ...]");
+            return self::help($inputText, Lang::t('host.workflow.usage.run'));
         }
 
         // Parse key=val context pairs
@@ -197,7 +194,7 @@ final class WorkflowCommand implements HostCommand
                 // fiber the distinction matters LESS, not more, because an
                 // uncaught throw here surfaces on the driver's timer tick with
                 // no user-facing context at all.
-                return "**Error:** {$e->getMessage()}";
+                return Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
             }
         });
 
@@ -248,20 +245,23 @@ final class WorkflowCommand implements HostCommand
         // so a resumed run that FAILED again, or was paused again, read as a
         // success; and a run paused while live reported "completed".
         $outcome = match (true) {
-            $result->status === WorkflowStatus::Paused => 'paused',
+            $result->status === WorkflowStatus::Paused => Lang::t('host.workflow.outcome.paused'),
             // Ahead of isFailure(), which counts Cancelled as a failure: a run
             // the user stopped did not fail, and must not read as though it had.
-            $result->status === WorkflowStatus::Cancelled => 'cancelled',
-            $result->isFailure() => 'failed',
-            $result->isSuccess() => 'completed',
+            $result->status === WorkflowStatus::Cancelled => Lang::t('host.workflow.outcome.cancelled'),
+            $result->isFailure() => Lang::t('host.workflow.outcome.failed'),
+            $result->isSuccess() => Lang::t('host.workflow.outcome.completed'),
             default => $result->status->value,
         };
-        $response = "**Workflow '{$workflowName}' " . ($resumed ? "resumed and {$outcome}" : $outcome) . "**\n\n";
-        $response .= "ID: `{$result->workflowId}`\n";
-        $response .= "Status: {$result->status->value}\n";
-        $response .= "Stages completed: " . self::countDispatchedStages($result) . "\n";
-        $response .= "Total tokens: {$result->totalTokens}\n";
-        $response .= "Total cost: \${$result->totalCost}";
+        $response = Lang::t($resumed ? 'host.workflow.report.resumed' : 'host.workflow.report.heading', [
+            'name' => $workflowName,
+            'outcome' => $outcome,
+        ]) . "\n\n";
+        $response .= Lang::t('host.workflow.report.id', ['id' => $result->workflowId]) . "\n";
+        $response .= Lang::t('host.workflow.report.status', ['status' => $result->status->value]) . "\n";
+        $response .= Lang::t('host.workflow.report.stages', ['count' => self::countDispatchedStages($result)]) . "\n";
+        $response .= Lang::t('host.workflow.report.tokens', ['tokens' => $result->totalTokens]) . "\n";
+        $response .= Lang::t('host.workflow.report.cost', ['cost' => $result->totalCost]);
         // Since WF-1(b) a stage's agent may be re-run after a failed or
         // timed-out attempt; the pool folds every attempt into ONE result, so
         // without this line a stage that took three tries to pass (and paid
@@ -269,7 +269,7 @@ final class WorkflowCommand implements HostCommand
         foreach ($result->stageResults as $stage) {
             $attempts = max([1, ...array_map(static fn(AgentResult $agent): int => $agent->attempts, $stage->agents)]);
             if ($attempts > 1) {
-                $response .= "\nStage '{$stage->stageName}': {$attempts} attempts";
+                $response .= "\n" . Lang::t('host.workflow.report.attempts', ['stage' => $stage->stageName, 'attempts' => $attempts]);
             }
         }
         // The failing stage's message, or the reason never reaches the
@@ -280,16 +280,15 @@ final class WorkflowCommand implements HostCommand
         // reason on the stage; this is the only place that can show it.
         $failure = $result->firstFailure();
         if ($failure !== null && ($failure->error ?? '') !== '') {
-            $response .= "\n\nStage '{$failure->stageName}': {$failure->error}";
+            $response .= "\n\n" . Lang::t('host.workflow.report.failure', ['stage' => $failure->stageName, 'error' => $failure->error]);
         }
 
         if ($result->status === WorkflowStatus::Paused) {
-            $response .= "\n\nContinue it with `/workflow resume {$result->workflowId}`.";
+            $response .= "\n\n" . Lang::t('host.workflow.report.continue', ['id' => $result->workflowId]);
         }
 
         if ($result->status === WorkflowStatus::Cancelled) {
-            $response .= "\n\nCancelled with Esc Esc: the stage in flight had its agents stopped, and no later "
-                . 'stage ran. The totals above include what the stopped stage had already spent.';
+            $response .= "\n\n" . Lang::t('host.workflow.report.cancelled');
         }
 
         return $response;
@@ -379,7 +378,7 @@ final class WorkflowCommand implements HostCommand
                     $fiber->isStarted() ? $fiber->resume() : $fiber->start();
                 } catch (\Throwable $e) {
                     $loop->cancelTimer($timer);
-                    $deferred->resolve("**Error:** {$e->getMessage()}");
+                    $deferred->resolve(Lang::t('host.workflow.error', ['error' => $e->getMessage()]));
 
                     return;
                 }
@@ -421,7 +420,7 @@ final class WorkflowCommand implements HostCommand
         $workflowId = trim($args);
 
         if ($workflowId === '') {
-            return self::help($inputText, "Usage: /workflow pause <workflowId>");
+            return self::help($inputText, Lang::t('host.workflow.usage.pause'));
         }
 
         try {
@@ -438,13 +437,12 @@ final class WorkflowCommand implements HostCommand
 
             $engine->pause($workflowId);
             $response = $live
-                ? "Pause requested for workflow `{$workflowId}`: the stage in flight finishes, then the run "
-                    . "stops before the next one. `/workflow resume {$workflowId}` continues it."
-                : "Workflow `{$workflowId}` has been paused.";
+                ? Lang::t('host.workflow.pause_requested', ['id' => $workflowId])
+                : Lang::t('host.workflow.paused', ['id' => $workflowId]);
         } catch (WorkflowNotRunningException $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
         } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
         }
 
         return self::respond($inputText, $response);
@@ -467,7 +465,7 @@ final class WorkflowCommand implements HostCommand
         $workflowId = trim($args);
 
         if ($workflowId === '') {
-            return self::help($inputText, "Usage: /workflow resume <workflowId>");
+            return self::help($inputText, Lang::t('host.workflow.usage.resume'));
         }
 
         // Esc Esc stops a resumed run exactly as a fresh one; see start().
@@ -481,7 +479,7 @@ final class WorkflowCommand implements HostCommand
                 // WorkflowNotRunningException (nothing paused under that id),
                 // WorkflowNotFoundException (the definition is gone) and the
                 // engine's interleaving refusal all read the same to the user.
-                return "**Error:** {$e->getMessage()}";
+                return Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
             }
         });
 
@@ -500,16 +498,16 @@ final class WorkflowCommand implements HostCommand
         $workflowId = trim($args);
 
         if ($workflowId === '') {
-            return self::help($inputText, "Usage: /workflow status <workflowId>");
+            return self::help($inputText, Lang::t('host.workflow.usage.status'));
         }
 
         try {
             $status = $engine->getStatus($workflowId);
-            $response = "Workflow `{$workflowId}` status: **{$status->value}**";
+            $response = Lang::t('host.workflow.status', ['id' => $workflowId, 'status' => $status->value]);
         } catch (WorkflowNotRunningException $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
         } catch (\Throwable $e) {
-            $response = "**Error:** {$e->getMessage()}";
+            $response = Lang::t('host.workflow.error', ['error' => $e->getMessage()]);
         }
 
         return self::respond($inputText, $response);
@@ -531,12 +529,9 @@ final class WorkflowCommand implements HostCommand
             // otherwise a user who committed `deploy.php` is pointed at the
             // right directory and the wrong extension (see
             // WorkflowRegistry::__construct() for why that tier refuses PHP).
-            $response = "No workflows found. They are read from `.sugar-crush/workflows/*.yaml` "
-                . "(project, YAML only — skipped entirely if that directory resolves outside the "
-                . "checkout, which the launch reports on stderr) or "
-                . "`~/.sugar-crush/workflows/*.{yaml,php}`.";
+            $response = Lang::t('host.workflow.none');
         } else {
-            $lines = ['**Available workflows:**'];
+            $lines = [Lang::t('host.workflow.list_heading')];
             foreach ($workflows as $i => $name) {
                 $lines[] = ($i + 1) . ". `{$name}`";
             }

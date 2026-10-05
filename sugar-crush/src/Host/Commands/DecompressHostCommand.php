@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Host\Commands;
 use SugarCraft\Crush\Context\Pruning\CompressionBlock;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Context\Pruning\RefTag;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Util\TokenCount;
 
 /**
@@ -30,10 +31,10 @@ final class DecompressHostCommand implements HostCommand
         $id = self::blockId($argument);
         $block = $id === null ? null : $before->block($id);
         $reply = match (true) {
-            $id === null => 'Usage: /decompress bN — name a compressed section as listed by /decompress.',
-            $block === null => "No compressed section b{$id} in this session.",
-            !$block->isRange() => "b{$id} is a step summary the harness wrote, not a section the model compressed; only Compress sections can be taken back.",
-            $block->deactivatedByUser => "b{$id} is already decompressed; /recompress b{$id} restores it.",
+            $id === null => Lang::t('host.decompress.usage'),
+            $block === null => Lang::t('host.decompress.unknown', ['id' => $id]),
+            !$block->isRange() => Lang::t('host.decompress.step_summary', ['id' => $id]),
+            $block->deactivatedByUser => Lang::t('host.decompress.already', ['id' => $id]),
             !$block->active => self::inside($before, $block),
             default => null,
         };
@@ -43,15 +44,13 @@ final class DecompressHostCommand implements HostCommand
 
         $ledger = $before->withBlockDecompressed((int) $id);
 
-        return LedgerCommand::respond($context, $text, $before, $ledger, sprintf(
-            'Decompressed b%d (%s): %s…%s are sent in full again from the next turn (~%s tokens). /recompress b%d restores the summary.',
-            $id,
-            $block->topic,
-            RefTag::label((int) $block->fromRef),
-            RefTag::label((int) $block->toRef),
-            TokenCount::compact($block->compressedTokens),
-            $id,
-        ));
+        return LedgerCommand::respond($context, $text, $before, $ledger, Lang::t('host.decompress.done', [
+            'id' => $id,
+            'topic' => $block->topic,
+            'from' => RefTag::label((int) $block->fromRef),
+            'to' => RefTag::label((int) $block->toRef),
+            'tokens' => TokenCount::compact($block->compressedTokens),
+        ]));
     }
 
     /** The block id `bN` / `N` names, or null. */
@@ -66,8 +65,8 @@ final class DecompressHostCommand implements HostCommand
         $outer = $ledger->consumerOf($block->id);
 
         return $outer === null
-            ? "b{$block->id} is not active: the rows it named are no longer in the conversation."
-            : "b{$block->id} is inside b{$outer->id}. Restore b{$outer->id} first: /decompress b{$outer->id}.";
+            ? Lang::t('host.decompress.inactive', ['id' => $block->id])
+            : Lang::t('host.decompress.inside', ['id' => $block->id, 'outer' => $outer->id]);
     }
 
     /** Every section the model compressed, one line each. */
@@ -79,9 +78,9 @@ final class DecompressHostCommand implements HostCommand
                 continue;
             }
             $state = match (true) {
-                $block->deactivatedByUser => 'decompressed',
-                $block->active => 'active',
-                default => 'inside b' . ($ledger->consumerOf($block->id)?->id ?? '?'),
+                $block->deactivatedByUser => Lang::t('host.decompress.state.decompressed'),
+                $block->active => Lang::t('host.decompress.state.active'),
+                default => Lang::t('host.decompress.state.inside', ['outer' => $ledger->consumerOf($block->id)?->id ?? '?']),
             };
             $lines[] = sprintf(
                 'b%d · %s · %s…%s · −%s +%s · %s',
@@ -96,7 +95,7 @@ final class DecompressHostCommand implements HostCommand
         }
 
         return $lines === []
-            ? 'No compressed sections in this session. /compress [focus] asks the model to make one.'
-            : "Compressed sections:\n" . implode("\n", $lines) . "\n/decompress bN takes one back; /recompress bN restores it.";
+            ? Lang::t('host.decompress.none')
+            : Lang::t('host.decompress.heading') . "\n" . implode("\n", $lines) . "\n" . Lang::t('host.decompress.hint');
     }
 }

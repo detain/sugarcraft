@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Host\Commands;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Workspace\CheckpointDiff;
 use SugarCraft\Crush\Workspace\WorkspaceCheckpointer;
 
@@ -16,8 +17,6 @@ use SugarCraft\Crush\Workspace\WorkspaceCheckpointer;
  */
 final class DiffCommand implements HostCommand
 {
-    public const USAGE = 'Usage: /diff [n] - show what changed in the files since checkpoint n, n a positive whole number (default 1: the one taken before your last prompt).';
-
     public function run(CommandContext $context, string $text): CommandResult
     {
         $refusal = Checkpoints::refusal($context, $text);
@@ -27,7 +26,7 @@ final class DiffCommand implements HostCommand
 
         $argument = CommandText::argument($text);
         if ($argument !== '' && (!ctype_digit($argument) || (int) $argument < 1)) {
-            return CommandResult::reply($text, self::USAGE);
+            return CommandResult::reply($text, Lang::t('host.diff.usage'));
         }
         $stepsBack = $argument === '' ? 1 : (int) $argument;
 
@@ -35,39 +34,39 @@ final class DiffCommand implements HostCommand
         try {
             $positions = Checkpoints::fileCheckpointPositions($store, (string) $context->sessionId, $stepsBack);
             if ($positions === []) {
-                return CommandResult::reply($text, 'No checkpoints available to diff against.');
+                return CommandResult::reply($text, Lang::t('host.diff.none'));
             }
             $target = $positions[min($stepsBack, \count($positions)) - 1];
             if (!WorkspaceCheckpointer::isCaptured($target['workspace'])) {
-                return CommandResult::reply($text, "Checkpoint {$target['index']} has no file snapshot: " . Checkpoints::noSnapshotReason($target['workspace']) . '.');
+                return CommandResult::reply($text, Lang::t('host.diff.no_snapshot', [
+                    'index' => $target['index'],
+                    'reason' => Checkpoints::noSnapshotReason($target['workspace']),
+                ]));
             }
 
             $diff = CheckpointDiff::of($store->workspaceCheckpointer($context->projectRoot()), $target['workspace']);
             if (\is_string($diff)) {
-                return CommandResult::reply($text, "No diff against checkpoint {$target['index']}: {$diff}.");
+                return CommandResult::reply($text, Lang::t('host.diff.unavailable', ['index' => $target['index'], 'reason' => $diff]));
             }
             if ($diff->isEmpty()) {
-                return CommandResult::reply($text, "The files match checkpoint {$target['index']}: nothing has changed since.");
+                return CommandResult::reply($text, Lang::t('host.diff.unchanged', ['index' => $target['index']]));
             }
 
             $files = \count($diff->changes);
-            $response = sprintf(
-                "%d %s changed since checkpoint %d (`/rewind %d --files` puts %s back):\n\n%s\n\n%s",
-                $files,
-                $files === 1 ? 'file' : 'files',
-                $target['index'],
-                $stepsBack,
-                $files === 1 ? 'it' : 'them',
-                Checkpoints::fenced(implode("\n", $diff->summaryLines()), ''),
-                Checkpoints::fenced($diff->patch, 'diff'),
-            );
+            $response = Lang::t($files === 1 ? 'host.diff.changed.one' : 'host.diff.changed.other', [
+                'count' => $files,
+                'index' => $target['index'],
+                'steps' => $stepsBack,
+            ])
+                . "\n\n" . Checkpoints::fenced(implode("\n", $diff->summaryLines()), '')
+                . "\n\n" . Checkpoints::fenced($diff->patch, 'diff');
             if ($diff->omittedLines > 0) {
-                $response .= "\n\n{$diff->omittedLines} more lines of the patch are not shown.";
+                $response .= "\n\n" . Lang::t('host.diff.omitted', ['lines' => $diff->omittedLines]);
             }
 
             return CommandResult::reply($text, $response);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, "Error during diff: {$e->getMessage()}");
+            return CommandResult::reply($text, Lang::t('host.diff.error', ['error' => $e->getMessage()]));
         }
     }
 }

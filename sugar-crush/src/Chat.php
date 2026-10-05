@@ -11188,12 +11188,6 @@ final class Chat implements Model
     }
 
     /**
-     * The row {@see refuseReadOnly()} adds for input a read-only session will
-     * not run: `%s` the quoted draft, `%s` the session's name or id.
-     */
-    public const READ_ONLY_REFUSAL = \SugarCraft\Crush\Host\TurnController::READ_ONLY_REFUSAL;
-
-    /**
      * The built-in commands a READ-ONLY session still runs: the ones that only
      * read, change this window's own view or settings, leave the process, or
      * move to ANOTHER session (`/branch`, `/sessions`, `/fork` and `/bg`, which
@@ -18489,7 +18483,7 @@ final class Chat implements Model
             return null;
         }
 
-        return $this->spendCapTurnRefusal(\SugarCraft\Crush\Host\SpendLedger::CROSSED_BY_PREVIOUS_TURN);
+        return $this->spendCapTurnRefusal(\SugarCraft\Crush\Host\SpendLedger::crossedByPreviousTurn());
     }
 
     /**

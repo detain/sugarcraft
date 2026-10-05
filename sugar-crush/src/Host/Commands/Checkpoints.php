@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Host\Commands;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Host\CompactionService;
 use SugarCraft\Crush\Host\TurnController;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
@@ -35,15 +36,15 @@ final class Checkpoints
     public static function refusal(CommandContext $context, string $text): ?CommandResult
     {
         if ($context->sessionStore === null) {
-            return CommandResult::reply($text, 'Session store not configured.');
+            return CommandResult::reply($text, Lang::t('host.checkpoint.no_store'));
         }
 
         if (!$context->sessionStore instanceof EnhancedSessionStore) {
-            return CommandResult::reply($text, 'Session store does not support checkpoints. Use an EnhancedSessionStore.');
+            return CommandResult::reply($text, Lang::t('host.checkpoint.unsupported_store'));
         }
 
         if ($context->sessionId === null) {
-            return CommandResult::reply($text, 'No active session. Start a new conversation first.');
+            return CommandResult::reply($text, Lang::t('host.checkpoint.no_session'));
         }
 
         return null;
@@ -72,7 +73,7 @@ final class Checkpoints
         try {
             $checkpoints = $store->listCheckpoints($sessionId, $stepsBack);
             if ($checkpoints === []) {
-                return CommandResult::reply($text, 'No checkpoints available to rewind to.');
+                return CommandResult::reply($text, Lang::t('host.checkpoint.none'));
             }
             $target = $checkpoints[min($stepsBack, \count($checkpoints)) - 1];
             $targetIndex = (int) $target['index'];
@@ -84,25 +85,29 @@ final class Checkpoints
             $filesNote = '';
             if ($withFiles) {
                 if (!$captured) {
-                    $filesNote = ' The files were left as they are: ' . self::noSnapshotReason($workspace) . '.';
+                    $filesNote = Lang::t('host.checkpoint.files_left', ['reason' => self::noSnapshotReason($workspace)]);
                 } else {
                     $changes = $checkpointer->changes($workspace);
                     if (\is_string($changes)) {
                         return CommandResult::reply(
                             $text,
-                            "Nothing was rewound: the files cannot be restored to checkpoint {$targetIndex} — {$changes}. `/rewind {$stepsBack} --chat` rewinds the conversation alone.",
+                            Lang::t('host.checkpoint.files_unrestorable', [
+                                'index' => $targetIndex,
+                                'reason' => $changes,
+                                'steps' => $stepsBack,
+                            ]),
                         );
                     }
                     $restoreFiles = $changes !== [];
                     if (!$restoreFiles) {
-                        $filesNote = ' The files already match that checkpoint.';
+                        $filesNote = ' ' . Lang::t('host.checkpoint.files_match');
                     }
                 }
             }
 
             $state = $store->restoreCheckpoint($sessionId, $targetIndex, self::redoTipState($context), $context->root);
             if ($state === null) {
-                return CommandResult::reply($text, "Checkpoint {$targetIndex} not found.");
+                return CommandResult::reply($text, Lang::t('host.checkpoint.not_found', ['index' => $targetIndex]));
             }
 
             if ($restoreFiles && \is_array($workspace)) {
@@ -110,9 +115,10 @@ final class Checkpoints
             } elseif (!$withFiles && $captured && \is_array($workspace)) {
                 $changes = $checkpointer->changes($workspace);
                 if (\is_array($changes) && $changes !== []) {
-                    $filesNote = \count($changes) === 1
-                        ? ' Your files were left as they are; 1 file differs from that checkpoint — `/rewind --files` puts it back too.'
-                        : ' Your files were left as they are; ' . \count($changes) . ' files differ from that checkpoint — `/rewind --files` puts them back too.';
+                    $filesNote = Lang::t(
+                        \count($changes) === 1 ? 'host.checkpoint.files_differ.one' : 'host.checkpoint.files_differ.other',
+                        ['count' => \count($changes)],
+                    );
                 }
             }
 
@@ -121,12 +127,12 @@ final class Checkpoints
             // restore really took away: the prompt, its reply and everything
             // the turn added in between.
             $rewound = \count($context->history) - \count($messages);
-            $response = "Rewound {$rewound} messages to checkpoint {$targetIndex}." . $filesNote
-                . ' /redo steps forward again until you send another prompt.';
+            $response = Lang::t('host.checkpoint.rewound', ['count' => $rewound, 'index' => $targetIndex]) . $filesNote
+                . Lang::t('host.checkpoint.redo_hint');
 
             return self::restored($messages, $draft, $cursor, $text, $response);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, "Error during rewind: {$e->getMessage()}");
+            return CommandResult::reply($text, Lang::t('host.checkpoint.error', ['error' => $e->getMessage()]));
         }
     }
 
@@ -141,26 +147,33 @@ final class Checkpoints
         try {
             $positions = self::fileCheckpointPositions($store, (string) $context->sessionId, $stepsBack);
             if ($positions === []) {
-                return CommandResult::reply($text, 'No checkpoints available to rewind to.');
+                return CommandResult::reply($text, Lang::t('host.checkpoint.none'));
             }
             $target = $positions[min($stepsBack, \count($positions)) - 1];
             if (!WorkspaceCheckpointer::isCaptured($target['workspace'])) {
                 return CommandResult::reply(
                     $text,
-                    "Nothing was restored: checkpoint {$target['index']} has no file snapshot — " . self::noSnapshotReason($target['workspace']) . '.',
+                    Lang::t('host.checkpoint.no_file_snapshot', [
+                        'index' => $target['index'],
+                        'reason' => self::noSnapshotReason($target['workspace']),
+                    ]),
                 );
             }
 
             $result = $store->workspaceCheckpointer($context->projectRoot())->restore($target['workspace']);
             $response = match ($result['status']) {
-                'restored' => "Restored the files to checkpoint {$target['index']}: {$result['written']} rewritten, {$result['deleted']} deleted. The conversation was left as it is.",
-                'unchanged' => "The files already match checkpoint {$target['index']}; nothing was restored.",
-                default => "Nothing was restored: {$result['reason']}.",
+                'restored' => Lang::t('host.checkpoint.files_restored_to', [
+                    'index' => $target['index'],
+                    'written' => $result['written'],
+                    'deleted' => $result['deleted'],
+                ]),
+                'unchanged' => Lang::t('host.checkpoint.files_already_match', ['index' => $target['index']]),
+                default => Lang::t('host.checkpoint.nothing_restored', ['reason' => $result['reason']]),
             };
 
             return CommandResult::reply($text, $response);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, "Error during rewind: {$e->getMessage()}");
+            return CommandResult::reply($text, Lang::t('host.checkpoint.error', ['error' => $e->getMessage()]));
         }
     }
 
@@ -235,17 +248,20 @@ final class Checkpoints
         $reason = \is_string($workspace['reason'] ?? null) ? $workspace['reason'] : null;
 
         return $reason === null
-            ? 'no snapshot was taken for that checkpoint'
-            : 'no snapshot was taken for that checkpoint (' . $reason . ')';
+            ? Lang::t('host.checkpoint.no_snapshot')
+            : Lang::t('host.checkpoint.no_snapshot_because', ['reason' => $reason]);
     }
 
     /** @param array{status: string, written: int, deleted: int, reason: string} $result */
     public static function fileRestoreReport(array $result): string
     {
         return match ($result['status']) {
-            'restored' => "Restored the files: {$result['written']} rewritten, {$result['deleted']} deleted.",
-            'unchanged' => 'The files already match that checkpoint.',
-            default => "The files could not be restored: {$result['reason']}.",
+            'restored' => Lang::t('host.checkpoint.files_restored', [
+                'written' => $result['written'],
+                'deleted' => $result['deleted'],
+            ]),
+            'unchanged' => Lang::t('host.checkpoint.files_match'),
+            default => Lang::t('host.checkpoint.files_unrestored', ['reason' => $result['reason']]),
         };
     }
 

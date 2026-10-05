@@ -73,9 +73,9 @@ final class SpendLedgerTest extends TestCase
 
         self::assertSame(
             'Spend cap reached — this turn was not sent. $1.2500 of the $1.0000 cap has been reported spent. '
-            . SpendLedger::CROSSED_BY_PREVIOUS_TURN . ' Raise it with /budget 2.50, clear it with /budget off, or restart '
+            . SpendLedger::crossedByPreviousTurn() . ' Raise it with /budget 2.50, clear it with /budget off, or restart '
             . 'without $SUGARCRUSH_MAX_COST.',
-            $ledger->refusalNotice($tracker, 1.0, SpendLedger::CROSSED_BY_PREVIOUS_TURN),
+            $ledger->refusalNotice($tracker, 1.0, SpendLedger::crossedByPreviousTurn()),
         );
         self::assertSame(
             '_Spend cap reached mid-turn: aborted after provider call 3 — $0.5100 of the $0.5000 cap spent. No further calls were made this turn; /budget raises the cap._',

@@ -12,6 +12,7 @@ use Ratchet\RFC6455\Messaging\MessageInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use React\Stream\DuplexStreamInterface;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Protocol\Dispatcher;
@@ -129,12 +130,12 @@ final class RemoteSessionHost
                 try {
                     $this->buffer->onData($data);
                 } catch (\Throwable $e) {
-                    $this->gone('the server sent a frame that could not be read: ' . $e->getMessage());
+                    $this->gone(Lang::t('host.remote.bad_frame', ['error' => $e->getMessage()]));
                 }
             }
         });
-        $stream->on('close', fn () => $this->gone('the connection to the server closed'));
-        $stream->on('error', fn (\Throwable $e) => $this->gone('the connection to the server failed: ' . $e->getMessage()));
+        $stream->on('close', fn () => $this->gone(Lang::t('host.remote.closed')));
+        $stream->on('error', fn (\Throwable $e) => $this->gone(Lang::t('host.remote.failed', ['error' => $e->getMessage()])));
     }
 
     /**
@@ -393,15 +394,14 @@ final class RemoteSessionHost
             return $prefixed[0];
         }
         if ($prefixed === []) {
-            throw RpcError::notFound(\sprintf('the server has no session "%s"', $target), 'session_not_found');
+            throw RpcError::notFound(Lang::t('host.remote.no_session', ['session' => $target]), 'session_not_found');
         }
 
-        throw RpcError::of(ErrorCode::Conflict, \sprintf(
-            '"%s" starts %d session ids on the server: %s',
-            $target,
-            \count($prefixed),
-            \implode(', ', \array_map(static fn (array $row): string => (string) $row['id'], $prefixed)),
-        ), 'ambiguous');
+        throw RpcError::of(ErrorCode::Conflict, Lang::t('host.remote.ambiguous', [
+            'prefix' => $target,
+            'count' => \count($prefixed),
+            'ids' => \implode(', ', \array_map(static fn (array $row): string => (string) $row['id'], $prefixed)),
+        ]), 'ambiguous');
     }
 
     /** The session {@see open()} chose, once it has. */
@@ -555,7 +555,7 @@ final class RemoteSessionHost
         unset($data['kind']);
         $deferred->reject(RpcError::of(
             ErrorCode::tryFrom((int) ($error['code'] ?? 0)) ?? ErrorCode::Internal,
-            \is_string($error['message'] ?? null) ? $error['message'] : 'the server refused the request',
+            \is_string($error['message'] ?? null) ? $error['message'] : Lang::t('host.remote.refused'),
             $kind,
             $data,
         ));
@@ -575,7 +575,7 @@ final class RemoteSessionHost
                     $this->buffer->sendFrame($this->buffer->newCloseFrame($code === Frame::CLOSE_NO_STATUS ? Frame::CLOSE_NORMAL : $code));
                     $this->stream->end();
                 }
-                $this->gone(\sprintf('the server closed the connection (%d%s)', $code, $reason !== '' ? ': ' . $reason : ''));
+                $this->gone(Lang::t('host.remote.server_closed', ['code' => $code, 'reason' => $reason !== '' ? ': ' . $reason : '']));
                 break;
         }
     }

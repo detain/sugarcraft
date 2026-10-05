@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Host\Commands;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Skills\ProposedSkills;
 
 /**
@@ -28,7 +29,11 @@ use SugarCraft\Crush\Skills\ProposedSkills;
  */
 final class SkillsHostCommand implements HostCommand
 {
-    public const USAGE = 'Usage: /skills [proposed] · /skills accept <name> [--replace] · /skills reject <name>';
+    /** The usage line every malformed `/skills` answers with. */
+    public static function usage(): string
+    {
+        return Lang::t('host.skills.usage');
+    }
 
     public function run(CommandContext $context, string $text): CommandResult
     {
@@ -41,15 +46,15 @@ final class SkillsHostCommand implements HostCommand
             return match ($sub) {
                 'proposed', 'list' => \count($words) <= 1
                     ? CommandResult::reply($text, self::listing($drafts))
-                    : CommandResult::failure($text, self::USAGE, 2),
+                    : CommandResult::failure($text, self::usage(), 2),
                 'accept' => $this->accept($context, $drafts, $text, \array_slice($words, 1)),
                 'reject' => \count($words) === 2
                     ? $this->reject($drafts, $text, $words[1])
-                    : CommandResult::failure($text, self::USAGE, 2),
-                default => CommandResult::failure($text, self::USAGE, 2),
+                    : CommandResult::failure($text, self::usage(), 2),
+                default => CommandResult::failure($text, self::usage(), 2),
             };
         } catch (\Throwable $e) {
-            return CommandResult::failure($text, 'Skills: ' . PermissionsCommand::reportField($e->getMessage()), 1);
+            return CommandResult::failure($text, Lang::t('host.skills.error', ['error' => PermissionsCommand::reportField($e->getMessage())]), 1);
         }
     }
 
@@ -58,19 +63,21 @@ final class SkillsHostCommand implements HostCommand
     {
         $root = $drafts->root();
         if ($root === null) {
-            return 'No skill drafts: there is no home directory this user owns to keep them in.';
+            return Lang::t('host.skills.no_home');
         }
 
         $list = $drafts->drafts();
         if ($list === []) {
-            return sprintf(
-                'No skill drafts are waiting in `%s`. The dream pass proposes them only with `%s` on.',
-                PermissionsCommand::reportField($root),
-                \SugarCraft\Crush\Memory\DreamPass::SETTING_PROPOSE_SKILLS,
-            );
+            return Lang::t('host.skills.none', [
+                'root' => PermissionsCommand::reportField($root),
+                'setting' => \SugarCraft\Crush\Memory\DreamPass::SETTING_PROPOSE_SKILLS,
+            ]);
         }
 
-        $lines = [sprintf('%d skill %s waiting in `%s`:', \count($list), \count($list) === 1 ? 'draft' : 'drafts', PermissionsCommand::reportField($root))];
+        $lines = [Lang::t(\count($list) === 1 ? 'host.skills.waiting.one' : 'host.skills.waiting.other', [
+            'count' => \count($list),
+            'root' => PermissionsCommand::reportField($root),
+        ])];
         foreach ($list as $draft) {
             $lines[] = sprintf(
                 '- `%s` (%s bytes, %s) — %s',
@@ -79,12 +86,11 @@ final class SkillsHostCommand implements HostCommand
                 date('Y-m-d H:i', $draft['modified']),
                 $draft['error'] === null
                     ? PermissionsCommand::reportField((string) $draft['description'])
-                    : 'does not load as a skill: ' . PermissionsCommand::reportField($draft['error']),
+                    : Lang::t('host.skills.does_not_load', ['error' => PermissionsCommand::reportField($draft['error'])]),
             );
         }
         $lines[] = '';
-        $lines[] = 'Read one before accepting it. `/skills accept <name>` makes it live in `~/'
-            . ProposedSkills::LIVE_SUBDIR . '/<name>/` (from the next launch); `/skills reject <name>` deletes it.';
+        $lines[] = Lang::t('host.skills.review_hint', ['dir' => ProposedSkills::LIVE_SUBDIR]);
 
         return implode("\n", $lines);
     }
@@ -102,22 +108,21 @@ final class SkillsHostCommand implements HostCommand
             $names[] = $arg;
         }
         if (\count($names) !== 1) {
-            return CommandResult::failure($text, self::USAGE, 2);
+            return CommandResult::failure($text, self::usage(), 2);
         }
 
         $path = $drafts->accept($names[0], $replace, $context->projectRoot());
 
-        return CommandResult::reply($text, sprintf(
-            'Accepted the skill draft `%s`: it is now `%s`, loaded from the next launch.',
-            $names[0],
-            PermissionsCommand::reportField($path),
-        ));
+        return CommandResult::reply($text, Lang::t('host.skills.accepted', [
+            'name' => $names[0],
+            'path' => PermissionsCommand::reportField($path),
+        ]));
     }
 
     private function reject(ProposedSkills $drafts, string $text, string $name): CommandResult
     {
         $drafts->reject($name);
 
-        return CommandResult::reply($text, sprintf('Rejected and deleted the skill draft `%s`.', $name));
+        return CommandResult::reply($text, Lang::t('host.skills.rejected', ['name' => $name]));
     }
 }

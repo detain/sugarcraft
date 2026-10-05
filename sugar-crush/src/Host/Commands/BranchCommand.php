@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Host\Commands;
 
+use SugarCraft\Crush\Lang;
+
 /**
  * `/branch` — fork the current session and move onto the copy (roadmap O-2h
  * moved it out of `Chat::handleBranchCommand()`).
@@ -22,15 +24,15 @@ final class BranchCommand implements HostCommand
     {
         $store = $context->sessionStore;
         if ($store === null) {
-            return CommandResult::reply($text, 'Session store not configured. Set a SessionStore to use /branch and /rename commands.');
+            return CommandResult::reply($text, Lang::t('host.rename.no_store'));
         }
 
         if ($context->sessionId === null) {
-            return CommandResult::reply($text, 'No active session. Start a new conversation first.');
+            return CommandResult::reply($text, Lang::t('host.rename.no_session'));
         }
 
         if (CommandText::argument($text) !== '') {
-            return CommandResult::reply($text, 'Usage: /branch (takes no arguments)');
+            return CommandResult::reply($text, Lang::t('host.branch.usage'));
         }
 
         $context->transcripts->flush();
@@ -38,15 +40,15 @@ final class BranchCommand implements HostCommand
         try {
             $branch = $store->forkSession($context->sessionId);
         } catch (\Throwable $e) {
-            return CommandResult::reply($text, "Error: {$e->getMessage()}");
+            return CommandResult::reply($text, Lang::t('host.rename.error', ['error' => $e->getMessage()]));
         }
 
-        $response = "Branch created: {$branch}";
+        $response = Lang::t('host.branch.created', ['session' => $branch]);
         if ($context->readOnly) {
             // The window's lock moves onto the branch (audit SES-3(b)), so from
             // the next keystroke it writes again — to the fork, never to the
             // session the other window has.
-            $response .= ' — this window now writes to the branch; the original stays with the other sugarcrush.';
+            $response .= Lang::t('host.branch.read_only_moved');
         }
 
         return CommandResult::reply($text, $response)->withEffect(CommandEffect::switchSession($branch));

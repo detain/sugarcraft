@@ -22,6 +22,7 @@ use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\PermissionDecision;
@@ -119,14 +120,6 @@ final class TurnController
     public const ROUTE_INTERRUPT = 'interrupt';
     public const ROUTE_SIDE_QUESTION = 'side-question';
 
-    /**
-     * The row a read-only window adds for input it will not run: `%s` the
-     * quoted draft, `%s` the session's name or id.
-     */
-    public const READ_ONLY_REFUSAL = '"%s" was not sent: session %s is open in another sugarcrush, so this '
-        . 'window is read-only. Type /branch to fork it into a session of your own, and this draft comes back '
-        . 'in the box there.';
-
     private function __construct()
     {
     }
@@ -160,20 +153,13 @@ final class TurnController
     /** The notice a queued follow-up gets: $waiting is the queue's length with it. */
     public function queuedNotice(int $waiting, string $text): string
     {
-        return sprintf(
-            'Queued (%d waiting) — sent as soon as this turn finishes: %s',
-            $waiting,
-            self::quoteDraft($text),
-        );
+        return Lang::t('host.turn.queued', ['waiting' => $waiting, 'draft' => self::quoteDraft($text)]);
     }
 
     /** The notice a prompt steered into the running turn gets (roadmap 1.C-3). */
     public function steeringNotice(string $text): string
     {
-        return sprintf(
-            'Steering — the agent reads this at its next step (sent as the next prompt if the turn ends first): %s',
-            self::quoteDraft($text),
-        );
+        return Lang::t('host.turn.steering', ['draft' => self::quoteDraft($text)]);
     }
 
     /**
@@ -185,13 +171,7 @@ final class TurnController
      */
     public function emptyCustomCommandNotice(string $text): string
     {
-        return sprintf(
-            '%s is a command file whose template expanded to nothing — most often a body that is only '
-            . '$ARGUMENTS or $1, invoked with no arguments. Nothing was sent: an empty prompt costs a '
-            . 'turn and tells the model nothing. Pass arguments, or give the file a body that stands '
-            . 'on its own.',
-            self::quoteDraft($text),
-        );
+        return Lang::t('host.turn.empty_custom_command', ['draft' => self::quoteDraft($text)]);
     }
 
     /**
@@ -200,12 +180,7 @@ final class TurnController
      */
     public function inFlightCommandNotice(string $text): string
     {
-        return sprintf(
-            '%s is a command, and commands do not run while a turn is in flight — it would rewrite '
-            . 'history this turn is about to append to. Your draft is still in the box: press Enter '
-            . 'again once the turn finishes, or Esc Esc to cancel the turn now.',
-            self::quoteDraft($text),
-        );
+        return Lang::t('host.turn.in_flight_command', ['draft' => self::quoteDraft($text)]);
     }
 
     /**
@@ -214,43 +189,31 @@ final class TurnController
      */
     public function runCommandInFlightNotice(string $text): string
     {
-        return sprintf(
-            '%s was not run: commands do not run while a turn is in flight — it would rewrite '
-            . 'history this turn is about to append to. Your draft was not touched. Run it again '
-            . 'once the turn finishes, or Esc Esc to cancel the turn now.',
-            self::quoteDraft($text),
-        );
+        return Lang::t('host.turn.run_command_in_flight', ['draft' => self::quoteDraft($text)]);
     }
 
     /** Why an overlay action chosen while a turn runs was not run; $what is its label. */
     public function inFlightActionNotice(string $what): string
     {
-        return sprintf(
-            '"%s" does not run while a turn is in flight — it would change state this turn is about '
-            . 'to write. Wait for the turn to finish, or Esc Esc to cancel it now.',
-            self::quoteDraft($what),
-        );
+        return Lang::t('host.turn.in_flight_action', ['action' => self::quoteDraft($what)]);
     }
 
     /** Why a read-only session did not send $text; $session is its name or id. */
     public function readOnlyNotice(string $text, string $session): string
     {
-        return sprintf(self::READ_ONLY_REFUSAL, self::quoteDraft($text), $session);
+        return Lang::t('host.turn.read_only', ['draft' => self::quoteDraft($text), 'session' => $session]);
     }
 
     /** Why `!$command` did not run: $reason from {@see BangShell::refusal()}. */
     public function bangRefusedNotice(string $command, string $reason): string
     {
-        return sprintf('Did not run `%s`: %s.', self::quoteDraft($command), $reason);
+        return Lang::t('host.turn.bang_refused', ['command' => self::quoteDraft($command), 'reason' => $reason]);
     }
 
     /** The row a `!$command` that is about to run adds. */
     public function bangRunningNotice(string $command): string
     {
-        return sprintf(
-            'Running `%s` — its output joins the conversation when it finishes.',
-            self::quoteDraft($command),
-        );
+        return Lang::t('host.turn.bang_running', ['command' => self::quoteDraft($command)]);
     }
 
     /**
@@ -263,21 +226,17 @@ final class TurnController
     public function turnHookBlockedNotice(string $blocked, string $text, bool $boxOccupied): string
     {
         return $blocked . ($boxOccupied
-            ? ' Your prompt (“' . self::quoteDraft($text) . '”) was not sent;'
-                . ' the box keeps the draft you typed while the hook ran.'
-            : ' Your prompt was not sent and is still in the box.');
+            ? Lang::t('host.turn.hook_blocked.box_occupied', ['draft' => self::quoteDraft($text)])
+            : Lang::t('host.turn.hook_blocked.in_box'));
     }
 
     /** The row a forked command-file expansion that reported nothing gets. */
     public function expansionFailedNotice(string $text, bool $boxOccupied): string
     {
-        return sprintf(
-            '%s was not sent: expanding it ended without a result. %s',
-            self::quoteDraft($text),
-            $boxOccupied
-                ? 'The box keeps the draft you typed while it ran.'
-                : 'It is still in the box.',
-        );
+        return Lang::t('host.turn.expansion_failed', [
+            'draft' => self::quoteDraft($text),
+            'box' => Lang::t($boxOccupied ? 'host.turn.expansion_failed.box_occupied' : 'host.turn.expansion_failed.in_box'),
+        ]);
     }
 
     /**
@@ -287,24 +246,19 @@ final class TurnController
      */
     public function hostCommandNotice(string $text): string
     {
-        return sprintf(
-            '%s is a command, and commands do not run while a turn is in flight — it would rewrite '
-            . 'history this turn is about to append to. Send it again once the turn finishes, or '
-            . 'cancel the turn.',
-            self::quoteDraft($text),
-        );
+        return Lang::t('host.turn.host_command_in_flight', ['draft' => self::quoteDraft($text)]);
     }
 
     /** Why a host with no backend sent nothing. */
     public function noBackendNotice(): string
     {
-        return 'Nothing was sent: this session has no model backend configured.';
+        return Lang::t('host.turn.no_backend');
     }
 
     /** Why an empty submission sent nothing. */
     public function emptyPromptNotice(): string
     {
-        return 'Nothing was sent: the prompt is empty.';
+        return Lang::t('host.turn.empty_prompt');
     }
 
     // ── admission ──────────────────────────────────────────────────────
@@ -802,8 +756,7 @@ final class TurnController
             $sessionBlocked = $this->turnHookRefusalReason($session);
 
             if ($sessionBlocked !== null) {
-                $notes[] = Message::notice($sessionBlocked
-                    . ' The hook\'s context note was discarded and the session continues.');
+                $notes[] = Message::notice($sessionBlocked . Lang::t('host.turn.session_hook_note_discarded'));
             } elseif ($session->additionalContext !== '') {
                 $notes[] = Message::system($session->additionalContext);
             }

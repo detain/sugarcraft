@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Host\Commands;
 
 use SugarCraft\Crush\Context\Pruning\RefTag;
+use SugarCraft\Crush\Lang;
 
 /**
  * `/recompress [bN]` (roadmap 3.B-4, DCP `/dcp recompress`): restore a
@@ -25,10 +26,10 @@ final class RecompressHostCommand implements HostCommand
         $id = DecompressHostCommand::blockId($argument);
         $block = $id === null ? null : $before->block($id);
         $reply = match (true) {
-            $id === null => 'Usage: /recompress bN — name a decompressed section as listed by /recompress.',
-            $block === null || !$block->isRange() => "No compressed section b{$id} in this session.",
+            $id === null => Lang::t('host.recompress.usage'),
+            $block === null || !$block->isRange() => Lang::t('host.decompress.unknown', ['id' => $id]),
             !$block->deactivatedByUser => $block->active
-                ? "b{$id} is already compressed."
+                ? Lang::t('host.recompress.already', ['id' => $id])
                 : DecompressHostCommand::inside($before, $block),
             default => null,
         };
@@ -38,12 +39,11 @@ final class RecompressHostCommand implements HostCommand
 
         $ledger = $before->withBlockRecompressed((int) $id);
 
-        return LedgerCommand::respond($context, $text, $before, $ledger, sprintf(
-            'Recompressed b%d (%s): %s…%s are sent as its summary again from the next turn.',
-            $id,
-            $block->topic,
-            RefTag::label((int) $block->fromRef),
-            RefTag::label((int) $block->toRef),
-        ));
+        return LedgerCommand::respond($context, $text, $before, $ledger, Lang::t('host.recompress.done', [
+            'id' => $id,
+            'topic' => $block->topic,
+            'from' => RefTag::label((int) $block->fromRef),
+            'to' => RefTag::label((int) $block->toRef),
+        ]));
     }
 }

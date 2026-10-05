@@ -33,6 +33,7 @@ use SugarCraft\Crush\Host\Commands\CommandEffect;
 use SugarCraft\Crush\Host\Commands\CommandEffectKind;
 use SugarCraft\Crush\Host\Commands\CommandResult;
 use SugarCraft\Crush\Host\Commands\CommandText;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
@@ -525,7 +526,7 @@ final class SessionHost
         }
 
         $result = $this->dispatchCommand($text)
-            ?? CommandResult::refused(sprintf('/%s is not a built-in command.', $name));
+            ?? CommandResult::refused(Lang::t('host.command.unknown', ['name' => $name]));
         if (!$result->isRefused()) {
             $this->applyCommandResult($result);
         }
@@ -751,7 +752,7 @@ final class SessionHost
             return TurnTicket::refused($ledger->refusalNotice(
                 $this->spend,
                 (float) $this->workspace->maxCostUsd,
-                SpendLedger::CROSSED_BY_PREVIOUS_TURN,
+                SpendLedger::crossedByPreviousTurn(),
             ));
         }
 
@@ -1035,7 +1036,7 @@ final class SessionHost
         try {
             $promise = ($effect->run())();
         } catch (\Throwable $e) {
-            $this->appendCommandRow("**Error:** {$e->getMessage()}");
+            $this->appendCommandRow(Lang::t('host.command.error', ['error' => $e->getMessage()]));
 
             return;
         }
@@ -1048,7 +1049,7 @@ final class SessionHost
                 }
             },
             function (\Throwable $e): void {
-                $this->appendCommandRow("**Error:** {$e->getMessage()}");
+                $this->appendCommandRow(Lang::t('host.command.error', ['error' => $e->getMessage()]));
             },
         );
     }
@@ -1075,12 +1076,12 @@ final class SessionHost
         try {
             $promise = ($effect->run())();
         } catch (\Throwable $e) {
-            $land("**Error:** {$e->getMessage()}");
+            $land(Lang::t('host.command.error', ['error' => $e->getMessage()]));
 
             return;
         }
 
-        $promise->then($land, static fn (\Throwable $e) => $land("**Error:** {$e->getMessage()}"));
+        $promise->then($land, static fn (\Throwable $e) => $land(Lang::t('host.command.error', ['error' => $e->getMessage()])));
     }
 
     /** One UI-only reply row a command's later answer lands as, saved. */
