@@ -95,6 +95,53 @@ final class OverflowPruneAndRetryTest extends TestCase
         $this->assertSame(['c2'], array_keys(self::results($retried->messages)), 'c1 is in the summary, the unsent step goes whole');
     }
 
+    /**
+     * The overflow summary runs on the launch's summary model, the same field
+     * the 85% tier reads (`EngineBackend::withSummaryModel()`, resolved from
+     * `SUGARCRUSH_SUMMARY_MODEL` then the `summaryModel` key) — it used to
+     * re-read only the variable, so a `summaryModel` key never reached it.
+     */
+    public function testTheOverflowSummaryRunsOnTheLaunchSummaryModel(): void
+    {
+        putenv('SUGARCRUSH_SUMMARY_MODEL');
+        $provider = $this->refusingOnce();
+
+        $this->engine($provider)->withTools([self::tool('Task')])->withSummaryModel('small-summariser')
+            ->completeTranscript([new UserMessage('map it')]);
+
+        $this->assertCount(5, $provider->requests);
+        $this->assertTrue(self::asksForSummary($provider->requests[3]));
+        $this->assertSame('small-summariser', $provider->requests[3]->model);
+        $this->assertSame('m', $provider->requests[4]->model, 'only the summary moves');
+    }
+
+    /** Like the 85% tier, the turn never re-reads the environment the launch resolved. */
+    public function testTheOverflowSummaryDoesNotReReadTheEnvironment(): void
+    {
+        putenv('SUGARCRUSH_SUMMARY_MODEL=late-summariser');
+        try {
+            $provider = $this->refusingOnce();
+
+            $this->engine($provider)->withTools([self::tool('Task')])->completeTranscript([new UserMessage('map it')]);
+
+            $this->assertTrue(self::asksForSummary($provider->requests[3]));
+            $this->assertSame('m', $provider->requests[3]->model, 'the launch-time field, not the live variable');
+        } finally {
+            putenv('SUGARCRUSH_SUMMARY_MODEL');
+        }
+    }
+
+    private function refusingOnce(): ScriptedProvider
+    {
+        $refusals = 0;
+
+        return self::provider('Task', static function () use (&$refusals): void {
+            if ($refusals++ === 0) {
+                throw ProviderStreamException::fromErrorEvent(self::OVERFLOW_FRAME, 'SGLANG request failed: ');
+            }
+        });
+    }
+
     public function testASecondRefusalPropagates(): void
     {
         $provider = self::provider('probe', static function (): void {

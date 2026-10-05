@@ -2086,7 +2086,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     // every older tool output pruned (no protected tail, no
                     // batching floor — the request cannot be sent as it is),
                     // then a step summary of what the model was already sent,
-                    // on the turn's own model and cached prefix. Then the step
+                    // on the turn's cached prefix and the launch's summary
+                    // model (`summaryModel`, else the turn's own). Then the step
                     // goes out ONCE more; a second refusal, a refusal nothing
                     // could relieve, or any other failure propagates as
                     // before. Never after the step produced its reply: a
@@ -2127,7 +2128,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                             $billSummary,
                             $summaryLiveness,
                             $onHeartbeat,
-                            \SugarCraft\Crush\Context\Compaction\StepSummarizer::modelOverride(),
+                            // The launch-time summary model, as the 85% tier
+                            // above passes it: a live re-read of the variable
+                            // ignored the `summaryModel` key and moved with an
+                            // environment the launch had already resolved.
+                            $this->summaryModel,
                         );
                         if ($block !== null) {
                             $relieved = $relieved->withBlock($block);
