@@ -66,7 +66,10 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
 
     /**
      * THERE IS NO DEFAULT ENDPOINT (audit F-W3(b)). The constructor argument
-     * wins, then `SUGARCRUSH_SEARCH_ENDPOINT`; an empty value counts as unset.
+     * wins, then `SUGARCRUSH_SEARCH_ENDPOINT`, then the `webSearchEndpoint`
+     * setting (roadmap N-P4e: user tier only, since it decides where every
+     * model-composed query is sent); an empty value counts as unset, and a
+     * setting that is not an http(s) URL is ignored rather than dialled.
      * Until one is set the tool still constructs — Bootstrap, Chat and
      * `/websearch` build it unconditionally, and the model is better told why
      * a search failed than shown no tool — but every call is an error naming
@@ -102,10 +105,13 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
         ?callable $resolveAddresses = null,
         ?callable $isBlockedAddress = null,
     ) {
-        $limits = $timeout === null || $maxResults === null ? ToolLimits::current() : null;
+        $limits = $endpoint === null || $timeout === null || $maxResults === null ? ToolLimits::current() : null;
         $this->timeout = $timeout ?? $limits?->int(ToolLimits::WEB_SEARCH_TIMEOUT_KEY) ?? self::DEFAULT_TIMEOUT_SECONDS;
         $this->maxResults = $maxResults ?? $limits?->int(ToolLimits::WEB_SEARCH_MAX_RESULTS_KEY) ?? self::DEFAULT_MAX_RESULTS;
         $configured = $endpoint ?? getenv('SUGARCRUSH_SEARCH_ENDPOINT');
+        if (!is_string($configured) || ($endpoint === null && trim($configured) === '')) {
+            $configured = $limits?->string(ToolLimits::WEB_SEARCH_ENDPOINT_KEY);
+        }
         $this->endpoint = is_string($configured) && trim($configured) !== '' ? $configured : null;
         $this->resolveAddresses = $resolveAddresses === null
             ? static fn (string $host): array => WebFetch::resolveViaSystemDns($host)
@@ -128,7 +134,7 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
             content: 'Error: no search endpoint is configured, so WebSearch cannot run. Set SUGARCRUSH_SEARCH_ENDPOINT '
-                . 'to the search URL of a SearXNG instance you trust '
+                . '(or the webSearchEndpoint setting) to the search URL of a SearXNG instance you trust '
                 . '(for example https://searx.example.org/search) and restart; there is no built-in default.',
             isError: true,
         );

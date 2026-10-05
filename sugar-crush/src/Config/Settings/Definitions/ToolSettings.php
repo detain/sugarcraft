@@ -206,6 +206,19 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp('Seconds one search request may take.')
                 ->withReaderSymbol(WebSearch::class . '::__construct')
                 ->withReadBy('`WebSearch::__construct()`, at launch and for `/websearch`'),
+            // Roadmap N-P4e. Egress, so user tier only: the endpoint receives
+            // every model-composed query, which routinely quotes the
+            // repository's code. No default host, by design (audit F-W3(b)).
+            SettingDefinition::new(ToolLimits::WEB_SEARCH_ENDPOINT_KEY, SettingType::Url)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Egress)
+                ->withLayered()
+                ->withEnvVar('SUGARCRUSH_SEARCH_ENDPOINT')
+                ->withDefaultText('unset: no default; WebSearch refuses every call until one is set')
+                ->withLabel('WebSearch endpoint')
+                ->withHelp('Search URL of a SearXNG instance you trust (`https://searx.example.org/search`); every WebSearch query is sent there.')
+                ->withReaderSymbol(WebSearch::class . '::__construct')
+                ->withReadBy('`WebSearch::__construct()`, at launch and for `/websearch`'),
             SettingDefinition::new(ToolLimits::INTERACTIVE_IDLE_KEY, SettingType::Float, 8.0)
                 ->withCategory(SettingCategory::Tools)
                 ->withRiskClass(RiskClass::Tuning)

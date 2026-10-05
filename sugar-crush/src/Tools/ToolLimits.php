@@ -72,6 +72,12 @@ final readonly class ToolLimits
     /** WebSearch's request timeout. */
     public const WEB_SEARCH_TIMEOUT_KEY = 'webSearchTimeoutSeconds';
 
+    /**
+     * The SearXNG URL WebSearch queries (roadmap N-P4e); outranked by
+     * `SUGARCRUSH_SEARCH_ENDPOINT`. There is no default, by design.
+     */
+    public const WEB_SEARCH_ENDPOINT_KEY = 'webSearchEndpoint';
+
     /** Silence an `interactive: true` Bash run may keep before it is stopped. */
     public const INTERACTIVE_IDLE_KEY = 'bashInteractiveIdleSeconds';
 
@@ -90,6 +96,7 @@ final readonly class ToolLimits
         self::WEB_FETCH_TIMEOUT_KEY,
         self::WEB_SEARCH_MAX_RESULTS_KEY,
         self::WEB_SEARCH_TIMEOUT_KEY,
+        self::WEB_SEARCH_ENDPOINT_KEY,
         self::INTERACTIVE_IDLE_KEY,
         self::PARALLEL_TIMEOUT_KEY,
     ];
@@ -159,6 +166,14 @@ final readonly class ToolLimits
         $value = $this->values[$key] ?? null;
 
         return \is_int($value) ? $value : null;
+    }
+
+    /** The honoured text of $key (a URL, a command), or null when it is unset. */
+    public function string(string $key): ?string
+    {
+        $value = $this->values[$key] ?? null;
+
+        return \is_string($value) ? $value : null;
     }
 
     /** The honoured number of seconds of $key, or null when it is unset. */

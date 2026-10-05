@@ -6166,7 +6166,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/only ([a-z]+(?:-[a-z]+)?) of the ([a-z]+(?:-[a-z]+)?) layered keys have an\s+env override \((.*?)\)\.\s*(.*?)\s+have\s+none\./s', $settings, $envSplit),
+            preg_match('/only ([a-z]+(?:-[a-z]+)?) of the ([a-z]+(?:-[a-z]+)?) layered keys have an\s+env\s+override\s+\((.*?)\)\.\s*(.*?)\s+have\s+none\./s', $settings, $envSplit),
             'the See-also env-split sentence in docs/SETTINGS.md was reworded out from under this arm',
         );
 

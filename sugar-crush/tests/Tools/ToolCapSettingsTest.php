@@ -90,6 +90,7 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::WEB_FETCH_TIMEOUT_KEY => WebFetch::READ_TIMEOUT_SECONDS,
             ToolLimits::WEB_SEARCH_MAX_RESULTS_KEY => WebSearch::DEFAULT_MAX_RESULTS,
             ToolLimits::WEB_SEARCH_TIMEOUT_KEY => WebSearch::DEFAULT_TIMEOUT_SECONDS,
+            ToolLimits::WEB_SEARCH_ENDPOINT_KEY => null,
             ToolLimits::INTERACTIVE_IDLE_KEY => (new \ReflectionClassConstant(Bash::class, 'INTERACTIVE_IDLE_CEILING_SECONDS'))->getValue(),
             ToolLimits::PARALLEL_TIMEOUT_KEY => Chat::PARALLEL_TOOL_TIMEOUT_SECONDS,
         ];
@@ -113,7 +114,8 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::READ_PAGE_LINES_KEY,
             ToolLimits::READ_PAGE_BYTES_KEY,
         ];
-        foreach (ToolLimits::KEYS as $key) {
+        // The endpoint is Egress, pinned by WebSearchEndpointSettingTest.
+        foreach (array_diff(ToolLimits::KEYS, [ToolLimits::WEB_SEARCH_ENDPOINT_KEY]) as $key) {
             $definition = SettingsSchema::byKey($key);
             self::assertNotNull($definition);
             self::assertTrue($definition->layered, "{$key} is layered");

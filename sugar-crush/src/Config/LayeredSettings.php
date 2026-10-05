@@ -513,6 +513,7 @@ final class LayeredSettings
         'webFetchTimeoutSeconds',
         'webSearchMaxResults',
         'webSearchTimeoutSeconds',
+        'webSearchEndpoint',
         'bashInteractiveIdleSeconds',
         'chatToolTimeoutSeconds',
         'instructions',

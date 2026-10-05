@@ -216,6 +216,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `webFetchTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
 | `webSearchMaxResults` | `WebSearch::__construct()`, at launch and for `/websearch` | yes |
 | `webSearchTimeoutSeconds` | `WebSearch::__construct()`, at launch and for `/websearch` | yes |
+| `webSearchEndpoint` | `WebSearch::__construct()`, at launch and for `/websearch` | **no** |
 | `bashInteractiveIdleSeconds` | `CapturesProcessOutput::runCapturedInteractive()`, as the run starts | yes |
 | `chatToolTimeoutSeconds` | `Chat::waitForToolChildrenAsync()`, as a batch starts | yes |
 | `instructions` | `Bootstrap::forcedInstructions()` | **no** |

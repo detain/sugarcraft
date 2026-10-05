@@ -326,7 +326,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, thirty-two keys are **never** taken from a project file:
+Even for a trusted project, thirty-three keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -368,7 +368,10 @@ still a bill a clone can run up on the operator's credential;
 because every byte a result carries is replayed into each later request of the
 turn — the same money axis paid in input tokens, so a checkout may not raise
 them (the timeouts and memory bounds beside them only cost time, and a trusted
-project *may* set those);
+project *may* set those); `webSearchEndpoint`, because it decides which host
+receives every WebSearch query, and those queries routinely quote the
+repository's code, file names and error text — the `provider` argument applied
+to search;
 `secretEnvAllowlist`, because it names which of the operator's credentials
 Bash, Grep and script hooks may still inherit after the scrub that keeps them
 out of model-visible output — a project-tier `["*"]` would read every key in
