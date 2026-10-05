@@ -650,14 +650,24 @@ situations, not two:
     *) (this session)`, `this exact command`, or `this exact command without
     the leading cd`).
     A grant covers later calls of the **same turn** — the parent answers the
-    child's question without putting it up — and of every later turn, a
-    `Task` sub-agent's included. The patterns reach every later turn's gate
-    through `PermissionGate::withSessionRules()`, which consults them **only
-    to answer an `Ask`** — a configured `Deny`, Plan mode, `dont-ask` and the
+    child's question without putting it up, and the turn's own channel
+    remembers the same scope, so a parallel `Task` member's question is
+    covered too — and of every later turn, on Chat's own tool path as on the
+    engine's. The patterns reach every later turn's gate through
+    `PermissionGate::withSessionRules()`, which consults them **only to
+    answer an `Ask`** — a configured `Deny`, Plan mode, `dont-ask` and the
     `rm -rf /` breaker still win, and an `Allow` pattern still needs every
-    command of a chain to match. Nothing is written to a settings file.
+    command of a line to match. Grants belong to the **session**: they are
+    saved with it (the `permissionGrants` key of the session row's metadata)
+    and come back when you reopen it — `--resume`, `--continue`, the picker,
+    a tab — and another session starts from its own (a `/branch` starts from
+    none). `sugarcrush serve` keeps them the same way. Nothing is written to
+    a settings file.
   - Only the gate's own question offers "always". A question one of your
-    hooks asks is put every time, and `a` there counts as "once".
+    hooks asks, or one `auto` asks because of a **security finding**, is put
+    every time: the modal offers no `a` and says why (`This always asks
+    (asked by hook protect-files), so it cannot be remembered for the
+    session.`), and a grant never answers it.
   - A `Task` sub-agent running in a **parallel** batch asks like any other
     call. Its run lives in a grandchild below the turn, which cannot write the
     turn's socket, so the turn opens a private channel to each member
@@ -829,7 +839,7 @@ the console paths'), an unprompted write to `trustedProjectHooks` followed by a
 provider switch was measured end-to-end as the model granting itself the trust
 the gate exists to withhold. The rest of the policy rows are **always asked**:
 the prompt names the call, and a project skill or command can be edited by the
-agent with your yes. It is a hook's question, so `a` (always) answers it once
+agent with your yes. It is a hook's question, so the modal offers no `a` (always)
 and the next write asks again; a run with nobody to answer (`-p` without a
 terminal) refuses it. `Bash` asks on any mention, read or write —
 `cat .mcp.json` and `ls .sugar-crush/skills` prompt — since one shell string

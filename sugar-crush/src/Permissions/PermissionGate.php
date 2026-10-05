@@ -246,6 +246,16 @@ final class PermissionGate
     }
 
     /**
+     * Whether the latest {@see evaluate()} asked because of a security
+     * finding — a question no remembered "always" may answer
+     * ({@see $forcedAsk}), so the modal must not offer to remember it.
+     */
+    public function lastAskForced(): bool
+    {
+        return $this->forcedAsk;
+    }
+
+    /**
      * Returns the permission mode this gate was configured with.
      */
     public function mode(): PermissionMode

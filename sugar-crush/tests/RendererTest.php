@@ -1638,12 +1638,12 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('reject', $out);
         $this->assertStringContainsString('n / Esc', $out);
 
-        // A prompt nothing can remember (no gate question behind it) says
-        // `a` counts as once rather than promising a grant.
-        $this->assertStringContainsString(
-            'allow once — this question is asked every time',
-            Renderer::render($this->chatAwaitingPermission()),
-        );
+        // A prompt nothing can remember (no gate question behind it) offers
+        // no `a` at all, and says why it is asked every time.
+        $unrememberable = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip(Renderer::render($this->chatAwaitingPermission()))));
+        $this->assertStringContainsString('This always asks (', $unrememberable);
+        $this->assertStringNotContainsString('always allow', $unrememberable);
+        $this->assertStringContainsString('allow once', $unrememberable);
     }
 
     /**

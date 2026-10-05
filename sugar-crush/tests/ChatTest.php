@@ -4931,7 +4931,7 @@ final class ChatTest extends TestCase
         [$suspended] = $chat->update(new AssistantMsg($this->askingToolCall()));
         [$granted, $resumeCmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Always));
 
-        $this->assertSame(['bash {"cmd":"rm -rf /"}' => true], $granted->permissionGrants());
+        $this->assertSame(['call:bash {"cmd":"rm -rf /"}' => true], $granted->permissionGrants());
 
         $afterFirst = $this->awaitToolResults($granted, $resumeCmd);
         $this->assertSame('total 0', $afterFirst->history[1]->content);
@@ -5012,7 +5012,7 @@ final class ChatTest extends TestCase
 
         $this->assertNull($answered->pendingPermission());
         $this->assertSame(
-            $expected === PermissionReply::Always ? ['bash {"cmd":"rm -rf /"}' => true] : [],
+            $expected === PermissionReply::Always ? ['call:bash {"cmd":"rm -rf /"}' => true] : [],
             $answered->permissionGrants(),
         );
         $this->assertSame($expected === PermissionReply::Reject, !$answered->inFlight);
@@ -5177,7 +5177,7 @@ final class ChatTest extends TestCase
         [$suspended] = $chat->update(new AssistantMsg($this->twoAskingToolCalls()));
         [$granted, $cmd] = $suspended->update(new PermissionReplyMsg(PermissionReply::Always));
 
-        $this->assertSame(['alpha []' => true], $granted->permissionGrants());
+        $this->assertSame(['call:alpha []' => true], $granted->permissionGrants());
         $this->assertNotNull($granted->pendingPermission(), 'an always for alpha released beta');
         $this->assertSame('beta', $granted->pendingPermission()->toolCall->name);
         $this->assertSame([], $granted->history);

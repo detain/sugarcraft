@@ -123,15 +123,16 @@ final class BashPermissionPromptTest extends TestCase
         self::assertStringContainsString('always allow this exact command (this session)', self::plain($asking));
     }
 
-    public function testAHooksQuestionSaysAlwaysCountsAsOnce(): void
+    /** A question `always` cannot remember offers no `a` and says why it is put every time. */
+    public function testAHooksQuestionSaysItAlwaysAsksAndOffersNoA(): void
     {
         [$asking] = $this->asking(self::bash('git push', 'Push'), [PermissionReply::Once->value, PermissionReply::Reject->value]);
 
         self::assertNull($asking->permissionAlwaysScope());
-        self::assertStringContainsString('allow once — this question is asked every time', self::plain($asking));
-
-        [$confirming] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
-        self::assertStringContainsString('This question is asked every time', self::plain($confirming));
+        self::assertSame('not asked by the permission gate alone', $asking->permissionAlwaysAsks());
+        $out = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', self::plain($asking)));
+        self::assertStringContainsString('This always asks (not asked by the permission gate alone)', $out);
+        self::assertStringNotContainsString('always allow', $out);
     }
 
     /** Wrapped to the box, elided in the MIDDLE (the tail is where `| sh` lives), never wider than the terminal. */
@@ -196,14 +197,15 @@ final class BashPermissionPromptTest extends TestCase
         self::assertStringContainsString('always allow Bash(git log *)', $out);
     }
 
-    public function testChatsOwnToolPathShowsTheCommandAndAnExactScope(): void
+    /** Chat's own tool path remembers the same scope the engine path does. */
+    public function testChatsOwnToolPathShowsTheCommandAndTheEnginesScope(): void
     {
         [$asking] = $this->nativeChat()->update(self::nativeCall(self::bash('cd sub && ls', 'List sub'), 'call_1'));
 
         $out = self::plain($asking->withSize(100, 40));
         self::assertStringContainsString('$ cd sub && ls', $out);
         self::assertStringContainsString("Agent's note: List sub", $out);
-        self::assertSame('this exact command', $asking->permissionAlwaysScope());
+        self::assertSame('Bash(cd sub && ls *)', $asking->permissionAlwaysScope());
     }
 
     // =====================================================================
@@ -383,7 +385,7 @@ final class BashPermissionPromptTest extends TestCase
     {
         $root = $this->project();
         [$asking] = $this->nativeChat($root)->update(self::nativeCall(self::bash("cd {$root} && ls -la", 'first'), 'call_1'));
-        self::assertSame('this exact command without the leading cd', $asking->permissionAlwaysScope());
+        self::assertSame('Bash(ls *)', $asking->permissionAlwaysScope());
         [$granted, $cmd] = $asking->update(new PermissionReplyMsg(PermissionReply::Always));
         $granted = $this->reapNative($cmd, $granted);
 

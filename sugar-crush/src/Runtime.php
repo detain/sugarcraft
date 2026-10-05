@@ -3122,7 +3122,7 @@ final class Runtime
      */
     private function taskGrantMemoKey(ToolCall $toolCall, HookResult $ask): ?string
     {
-        if ($toolCall->name() !== 'Task' || !$ask->askedOnlyBy(PermissionGateHook::NAME)) {
+        if ($toolCall->name() !== 'Task' || !$ask->isRememberable()) {
             return null;
         }
 

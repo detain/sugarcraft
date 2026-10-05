@@ -503,7 +503,8 @@ final class HookRegistry
                 // a memo downstream can tell the gate's policy question from
                 // a user hook's.
                 return HookResult::ask($blocking->message, $modified?->modifiedInput, $additional)
-                    ->withAskedBy($askers);
+                    ->withAskedBy($askers)
+                    ->withAskEveryTime($blocking->askEveryTime);
             }
 
             // ALLOW, settled against the arguments in $context. A permitting

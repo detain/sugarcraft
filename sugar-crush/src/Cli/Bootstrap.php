@@ -1366,6 +1366,8 @@ final class Bootstrap
             sessionStore: $sessionStore,
             currentSessionId: $sessionId,
             currentSessionName: $sessionName,
+            // A resumed session keeps the "always" answers it was given.
+            permissionGrants: Chat::storedPermissionGrants($sessionStore, $sessionId),
             titleBackend: $workspace->titleBackend,
             // crush_code.md Phase 5 item 6. Without this argument `/compact`
             // reaches only the heuristic summarizer, whose stage-2 output for a

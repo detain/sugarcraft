@@ -70,7 +70,7 @@ final class ChatAlwaysGrantScopeTest extends TestCase
         $chat = $this->chat($this->gate());
 
         $granted = $this->answerAlways($chat, ['command' => 'ls']);
-        $this->assertSame(['bash {"command":"ls"}' => true], $granted->permissionGrants());
+        $this->assertSame(['call:bash {"command":"ls"}' => true], $granted->permissionGrants());
 
         [$next] = $granted->update($this->call(['command' => 'rm -rf build'], 'call_2'));
 
@@ -109,7 +109,7 @@ final class ChatAlwaysGrantScopeTest extends TestCase
 
         // Only the gate asks about a staging deploy: granted, for that call.
         $plain = $this->answerAlways($chat, ['command' => 'deploy staging']);
-        $this->assertSame(['bash {"command":"deploy staging"}' => true], $plain->permissionGrants());
+        $this->assertSame(['call:bash {"command":"deploy staging"}' => true], $plain->permissionGrants());
     }
 
     // ---- fixtures ----------------------------------------------------------

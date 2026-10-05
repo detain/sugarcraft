@@ -6202,6 +6202,17 @@ final class Renderer
         $stage = $chat->permissionStage();
         $alwaysScope = $chat->permissionAlwaysScope();
 
+        // A question that is put every time says so, with why, instead of
+        // offering an `a` that could not remember it.
+        $alwaysAsks = $chat->permissionAlwaysAsks();
+        if ($alwaysAsks !== null && $stage === PermissionPromptStage::Armed) {
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->render(self::wrapPermissionText(
+                Lang::t('tui.permission.always_asks', ['reason' => self::permissionVisibleOneLine($alwaysAsks)]),
+                $inner,
+            ));
+        }
+
         // The confirm REPLACES the question's own keys rather than being added
         // under them: while it is up those keys do not work, and a modal
         // showing two live meanings for `y` at once is the misreading that
@@ -6326,10 +6337,16 @@ final class Renderer
                     ['r', 'tui.permission.ask_own_words'],
                     ['x', 'tui.permission.ask_decline_stop'],
                 ],
+                // A question that cannot be remembered offers no `a` at all:
+                // the modal says why above the keys instead.
+                $alwaysScope === null => array_values(array_filter(
+                    self::PERMISSION_OPTIONS,
+                    static fn (array $row): bool => $row[0] !== 'a',
+                )),
                 default => array_map(
-                    static fn (array $row): array => $row[0] !== 'a' ? $row : ($alwaysScope === null
-                        ? ['a', 'tui.permission.always_once']
-                        : ['a', 'tui.permission.always_scope', ['scope' => self::permissionVisibleOneLine($alwaysScope)]]),
+                    static fn (array $row): array => $row[0] !== 'a'
+                        ? $row
+                        : ['a', 'tui.permission.always_scope', ['scope' => self::permissionVisibleOneLine($alwaysScope)]],
                     self::PERMISSION_OPTIONS,
                 ),
             },

@@ -552,9 +552,13 @@ asked about — the `askId` is a hash of the call's id, tool and arguments.
   (listed in the answer's `cascaded`) — the same scope as the TUI's `a` + `y`
   ([`PERMISSIONS.md`](PERMISSIONS.md)): `always` on `git status` answers an
   open `git status --short`, never an open `git push`; a leading in-project
-  `cd <dir> &&` is a no-op there too. A question that grant
-  covers arriving later in the same turn is answered without being put. A
-  question only a hook asked is put every time.
+  `cd <dir> &&` is a no-op there too, and a pipeline or chain is remembered
+  per segment (`Bash(sed * | sort * | uniq *)`). The event's `alwaysScope`
+  carries what `always` would remember as `pattern` (absent when it is the
+  exact call). A question that grant covers arriving later in the same turn
+  is answered without being put. A question a hook asked, or a security
+  finding under `auto`, is put every time and offers no `always`. Grants are saved with the session and come back
+  when the session is opened again.
 - `reject` with `cascade: true` rejects every other open question of the
   session and stops the turn at its next step.
 - `remember: "project"` is refused — permission rules are user-tier only —

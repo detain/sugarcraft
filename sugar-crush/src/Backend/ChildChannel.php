@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Backend;
 
 use SugarCraft\Crush\Events\PermissionResolved;
-use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Permissions\ApprovalVerdict;
 use SugarCraft\Crush\Permissions\PermissionReply;
@@ -27,7 +26,7 @@ use SugarCraft\Crush\Tools\ToolCall;
  *
  * | Direction     | `kind`        | Fields                                                    |
  * |---------------|---------------|-----------------------------------------------------------|
- * | child→parent  | `ask`         | `askId`, `toolCallId`, `tool`, `arguments`, `reason`, `source`, `mode`, `suggestions`, `alwaysScope`, optional `origin` (P-E2) |
+ * | child→parent  | `ask`         | `askId`, `toolCallId`, `tool`, `arguments`, `reason`, `source`, `mode`, `suggestions`, `alwaysScope` (`tool`, and `pattern` when `always` remembers one), optional `alwaysAsks` (why a question offering no `always` is put every time), optional `origin` (P-E2) |
  * | parent→child  | `ask_reply`   | `askId`, `reply` (`once`/`always`/`reject`), `note`       |
  * | parent→child  | `steer`       | `steerId`, `text`                                         |
  * | parent→child  | `cancel_soft` | —                                                         |
@@ -132,8 +131,17 @@ final class ChildChannel
 
     private bool $closed = false;
 
-    /** @var array<string, true> per-turn `always` grants, keyed by {@see grantKey()} */
-    private array $grants = [];
+    /**
+     * The `always` answers given during this turn, remembered with the SAME
+     * scope the parent remembers them with
+     * ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo} — a
+     * pattern such as `Bash(sed * | sort * | uniq *)`, else the exact call),
+     * so a later call of this turn, a parallel member's included, that the
+     * parent's grant covers is not put again. It was the exact call only, so
+     * `a` on `git status` still asked about `git status -s` until the turn
+     * ended.
+     */
+    private \SugarCraft\Crush\Permissions\SessionPermissionMemo $grants;
 
     /** @var list<array{steerId: string, text: string}> */
     private array $steers = [];
@@ -178,6 +186,7 @@ final class ChildChannel
         if (is_resource($this->socket)) {
             stream_set_read_buffer($this->socket, 0);
         }
+        $this->grants = \SugarCraft\Crush\Permissions\SessionPermissionMemo::new();
         self::$live[] = \WeakReference::create($this);
     }
 
@@ -255,15 +264,16 @@ final class ChildChannel
      */
     public function ask(ToolCall $call, HookResult $ask): PermissionResolved
     {
-        $frame = PendingAsk::describe($call, $ask, $this->mode);
+        $frame = PendingAsk::describe($call, $ask, $this->mode, $this->projectRoot === '' ? null : $this->projectRoot);
         $askId = (string) $frame['askId'];
 
         if ((int) getmypid() !== $this->ownerPid) {
             return PermissionResolved::replied($askId, PermissionReply::Reject, self::GRANDCHILD_REFUSAL);
         }
 
-        $grantKey = $ask->askedOnlyBy(PermissionGateHook::NAME) ? self::grantKey($call, $this->projectRoot) : null;
-        if ($grantKey !== null && isset($this->grants[$grantKey])) {
+        $root = $this->projectRoot === '' ? null : $this->projectRoot;
+        $rememberable = $ask->isRememberable();
+        if ($rememberable && $this->grants->allows($call->name(), $call->arguments(), $root)) {
             return PermissionResolved::replied($askId, PermissionReply::Always);
         }
 
@@ -286,8 +296,8 @@ final class ChildChannel
         // An answer this build cannot read is not consent.
         $resolution = PermissionResolved::replied($askId, $parsed ?? PermissionReply::Reject, $note);
 
-        if ($parsed === PermissionReply::Always && $grantKey !== null) {
-            $this->grants[$grantKey] = true;
+        if ($parsed === PermissionReply::Always && $rememberable) {
+            $this->grants = $this->grants->withGrant($call->name(), $call->arguments(), $root);
         }
 
         return $resolution;
@@ -461,24 +471,6 @@ final class ChildChannel
     public static function clipNote(string $note): string
     {
         return strlen($note) <= self::MAX_NOTE_BYTES ? $note : mb_strcut($note, 0, self::MAX_NOTE_BYTES, 'UTF-8');
-    }
-
-    /**
-     * The per-turn "always" memo's key: the call as it runs, without the
-     * model's caption and — given the turn's root — without a leading
-     * in-project `cd <dir> &&`:
-     * {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::identityArguments()}.
-     */
-    private static function grantKey(ToolCall $call, ?string $projectRoot): string
-    {
-        $arguments = \SugarCraft\Crush\Permissions\SessionPermissionMemo::identityArguments(
-            $call->name(),
-            $call->arguments(),
-            $projectRoot === '' ? null : $projectRoot,
-        );
-        ksort($arguments, SORT_STRING);
-
-        return hash('sha256', serialize([$call->name(), $arguments]));
     }
 
     private function poll(): void

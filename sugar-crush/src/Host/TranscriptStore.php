@@ -263,6 +263,50 @@ final class TranscriptStore
     }
 
     /**
+     * $sessionId's remembered "always" grants as a grant map
+     * ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants()}),
+     * or [] when nothing persists or the store cannot say.
+     *
+     * @return array<string, true>
+     */
+    public function loadPermissionGrants(string $sessionId): array
+    {
+        if ($this->store === null) {
+            return [];
+        }
+
+        try {
+            return array_fill_keys($this->store->permissionGrants($sessionId), true);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Save $grants (a grant map) as $sessionId's remembered grants, now.
+     * False when nothing persists or the store refused it; never thrown — a
+     * grant that is not saved is asked again after a resume, nothing worse.
+     *
+     * @param array<string, bool> $grants
+     */
+    public function savePermissionGrants(string $sessionId, array $grants): bool
+    {
+        if ($this->store === null) {
+            return false;
+        }
+
+        try {
+            return $this->store->savePermissionGrants($sessionId, array_keys(array_filter(
+                $grants,
+                static fn (mixed $granted, mixed $key): bool => $granted === true && is_string($key),
+                ARRAY_FILTER_USE_BOTH,
+            )));
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * Take the single-writer lock on $sessionId (audit SES-3(b)), or null when
      * another process holds it — or when there is no store to lock under.
      */

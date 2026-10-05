@@ -2192,7 +2192,7 @@ final class KeyHelpTest extends TestCase
         $this->assertSame([], $gatedConfirming->permissionGrants(), '"a" alone grants nothing at the real gate either');
         [$gatedGranted, $gatedCmd] = $gatedConfirming->update(new KeyMsg(KeyType::Char, 'y'));
         $this->assertNull($gatedGranted->pendingPermission());
-        $this->assertSame(['bash {"cmd":"rm -rf build/"}' => true], $gatedGranted->permissionGrants());
+        $this->assertSame(['call:bash {"cmd":"rm -rf build/"}' => true], $gatedGranted->permissionGrants());
         $this->assertInstanceOf(\Closure::class, $gatedCmd);
         // Reap the released batch: dispatch forks its child eagerly, and only
         // the Cmd collects the child's IPC payload.

@@ -1429,9 +1429,9 @@ final class KeyBindingDriftTest extends TestCase
                 [$granted, $cmd] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
                 $this->assertNull($granted->pendingPermission(), 'the confirm answers the prompt');
                 $this->assertSame(
-                    ['Bash {"command":"make clean"}' => true],
+                    ['rule:Bash(make clean)' => true, 'rule:Bash(make clean *)' => true],
                     $granted->permissionGrants(),
-                    'and THAT is what the row promises: this call, for the whole session, once confirmed',
+                    'and THAT is what the row promises: calls like this one, for the whole session, once confirmed',
                 );
                 $this->reapReleasedBatch($cmd);
 

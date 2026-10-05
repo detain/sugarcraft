@@ -706,6 +706,58 @@ final class EnhancedSessionStore
     }
 
     /**
+     * The "always" grants $sessionId was given — the
+     * {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo} grant-map
+     * keys — kept in the `sessions.metadata` JSON under `permissionGrants`,
+     * so a resumed session (`--resume`, the picker, a tab) is not asked again
+     * what it already answered. [] when the row, the column or the key is
+     * missing or unreadable.
+     *
+     * @return list<string>
+     */
+    public function permissionGrants(string $sessionId): array
+    {
+        $stmt = $this->pdo->prepare('SELECT metadata FROM sessions WHERE id = ?');
+        $stmt->execute([$sessionId]);
+        $raw = $stmt->fetchColumn();
+        $metadata = is_string($raw) ? json_decode($raw, true) : null;
+        $grants = is_array($metadata) ? ($metadata['permissionGrants'] ?? null) : null;
+        if (!is_array($grants)) {
+            return [];
+        }
+
+        return array_values(array_filter($grants, static fn (mixed $key): bool => is_string($key) && $key !== ''));
+    }
+
+    /**
+     * Replace $sessionId's remembered grants ({@see permissionGrants()}),
+     * keeping the rest of its metadata. False when no such session row
+     * exists. Does not touch `updated_at`: answering a question is not using
+     * the session.
+     *
+     * @param list<string> $grants
+     */
+    public function savePermissionGrants(string $sessionId, array $grants): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT metadata FROM sessions WHERE id = ?');
+        $stmt->execute([$sessionId]);
+        $raw = $stmt->fetchColumn();
+        if ($raw === false) {
+            return false;
+        }
+        $metadata = is_string($raw) ? json_decode($raw, true) : null;
+        $metadata = is_array($metadata) ? $metadata : [];
+        $metadata['permissionGrants'] = array_values(array_unique(array_filter($grants, 'is_string')));
+
+        $update = $this->pdo->prepare('UPDATE sessions SET metadata = ? WHERE id = ?');
+
+        return $update->execute([
+            json_encode($metadata, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            $sessionId,
+        ]);
+    }
+
+    /**
      * Get enhanced metadata for a session.
      */
     public function getSessionMeta(string $sessionId): ?SessionMeta

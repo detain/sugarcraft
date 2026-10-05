@@ -138,6 +138,16 @@ final readonly class HookResult
          * Code's envelope keeps them apart for the same reason.
          */
         public string $stopReason = '',
+        /**
+         * Why a remembered "always" may never answer this ASK, or null when
+         * one may (if the gate alone asked — {@see askedOnlyBy()}). Set by
+         * {@see BuiltIn\PermissionGateHook} on a question the gate puts EVERY
+         * time (an `auto` security finding,
+         * {@see \SugarCraft\Crush\Permissions\PermissionGate::lastAskForced()})
+         * and carried by {@see HookRegistry::executeHooks()} onto the ASK it
+         * rebuilds, so no memo answers it and no modal offers to remember it.
+         */
+        public ?string $askEveryTime = null,
     ) {}
 
     public static function allow(string $message = '', string $additionalContext = ''): self
@@ -289,6 +299,7 @@ final readonly class HookResult
             $this->refusedBy,
             $this->continue,
             $this->stopReason,
+            $this->askEveryTime,
         );
     }
 
@@ -311,6 +322,7 @@ final readonly class HookResult
             $this->refusedBy,
             $this->continue,
             $this->stopReason,
+            $this->askEveryTime,
         );
     }
 
@@ -336,6 +348,7 @@ final readonly class HookResult
             $name,
             $this->continue,
             $this->stopReason,
+            $this->askEveryTime,
         );
     }
 
@@ -422,6 +435,40 @@ final readonly class HookResult
     public function askedOnlyBy(string $hookName): bool
     {
         return $this->isAsk() && $this->askedBy === [$hookName];
+    }
+
+    /**
+     * A copy carrying $reason as {@see self::$askEveryTime}: a question no
+     * remembered answer may settle.
+     */
+    public function withAskEveryTime(?string $reason): self
+    {
+        if ($reason === $this->askEveryTime) {
+            return $this;
+        }
+
+        return new self(
+            $this->action,
+            $this->message,
+            $this->modifiedInput,
+            $this->additionalContext,
+            $this->askedBy,
+            $this->refusedBy,
+            $this->continue,
+            $this->stopReason,
+            $reason,
+        );
+    }
+
+    /**
+     * Whether a remembered "always" may answer this ASK: the gate's question
+     * alone ({@see askedOnlyBy()}) and not one it puts every time
+     * ({@see self::$askEveryTime}). THE test every memo applies before it
+     * remembers or answers.
+     */
+    public function isRememberable(): bool
+    {
+        return $this->askedOnlyBy(BuiltIn\PermissionGateHook::NAME) && $this->askEveryTime === null;
     }
 
     public function isDenied(): bool

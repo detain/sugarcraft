@@ -152,7 +152,7 @@ final readonly class PermissionGateHook implements HookInterface
             // contract of HookResult::ask().
             PermissionDecision::Ask => HookResult::ask(
                 "Allow {$context->toolName} to run? (permission mode: {$mode}{$why})",
-            ),
+            )->withAskEveryTime($this->gate->lastAskForced() ? ($reason ?? 'a security finding') : null),
         };
     }
 }

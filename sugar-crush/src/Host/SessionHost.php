@@ -166,7 +166,8 @@ final class SessionHost
     ) {
         $this->history = array_values($history);
         $this->inbox = new \ArrayObject();
-        $this->grants = SessionPermissionMemo::new();
+        // The session's own "always" answers, saved with it (Chat does the same).
+        $this->grants = SessionPermissionMemo::fromGrants($transcripts->loadPermissionGrants($sessionId));
         $this->spend = new TokenTracker();
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
         $root = $this->root();
@@ -388,6 +389,7 @@ final class SessionHost
         }
         if ($remember) {
             $this->grants = $this->grants->withGrant($ask->tool, $ask->arguments, $this->root());
+            $this->transcripts->savePermissionGrants($this->sessionId, $this->grants->grants());
         }
         $resolution = $ask->resolution();
         if ($resolution !== null) {

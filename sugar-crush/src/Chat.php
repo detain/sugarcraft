@@ -782,11 +782,12 @@ final class Chat implements Model
          */
         private readonly array $pendingPermissionJobs = [],
         /**
-         * Tool names the user answered {@see PermissionReply::Always} for,
-         * as `[name => true]` - opencode's `approved: Rule[]`, per session
-         * and in memory only. Consulted by {@see gateToolCall()}, which
-         * turns an ASK for a granted tool straight into permission without
-         * prompting again.
+         * The session's {@see PermissionReply::Always} answers, as the
+         * grant map {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo}
+         * reads (`rule:<pattern>` / `call:<exact call>` => true) — opencode's
+         * `approved: Rule[]`, per session, saved with it
+         * ({@see persistPermissionGrants()}). Consulted on both tool paths,
+         * which turn an ASK a grant covers straight into permission.
          *
          * @var array<string, bool>
          */
@@ -1774,9 +1775,42 @@ final class Chat implements Model
             // rides the tick subscriptions() declares while one is pending, so
             // no route's Cmd changes shape and no cancel arm can drop it.
             $next->persistTranscript($this);
+            $next->persistPermissionGrants($this);
         }
 
         return [$next, $cmd];
+    }
+
+    /**
+     * Save this session's "always" grants whenever an answer, an edit or a
+     * `/permissions revoke` changed them, so a resumed session (`--resume`,
+     * the picker, a tab) is not asked again what it already answered — the
+     * grants belong to the session id. A move to another session loads that
+     * session's own ({@see mutate()}), and is not a change to save.
+     */
+    private function persistPermissionGrants(self $previous): void
+    {
+        if ($this->permissionGrants === $previous->permissionGrants
+            || $this->currentSessionId === null
+            || $this->currentSessionId !== $previous->currentSessionId
+            || $this->readOnlySession) {
+            return;
+        }
+
+        $this->transcripts()->savePermissionGrants($this->currentSessionId, $this->permissionGrants);
+    }
+
+    /**
+     * The grants $store remembers for $sessionId, as the grant map a Chat
+     * opened on that session starts from (`Cli\Bootstrap`'s resume).
+     *
+     * @return array<string, true>
+     */
+    public static function storedPermissionGrants(
+        \SugarCraft\Crush\Session\SessionStore|EnhancedSessionStore|null $store,
+        ?string $sessionId,
+    ): array {
+        return $sessionId === null ? [] : \SugarCraft\Crush\Host\TranscriptStore::new($store)->loadPermissionGrants($sessionId);
     }
 
     /**
@@ -4206,7 +4240,7 @@ final class Chat implements Model
      *
      * @return array{0:Chat,1:?\Closure}
      */
-    private function answerPermission(PermissionReply $reply, string $note = ''): array
+    private function answerPermission(PermissionReply $reply, string $note = '', ?string $scope = null): array
     {
         $request = $this->pendingPermission;
         if ($request === null) {
@@ -4241,13 +4275,14 @@ final class Chat implements Model
         //
         // "Always" is remembered as a PATTERN ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo})
         // — for a question the gate put alone, the only kind it is offered on —
-        // kept in the session's grant map beside the Chat-native exact-call
-        // grants, and handed to every later turn's gate.
+        // or as the scope the user wrote ($scope, the modal's `e`), kept in
+        // the session's grant map and handed to every later turn's gate.
         if ($request->pendingAsk !== null) {
             $ask = $request->pendingAsk;
             if ($reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled()) {
-                $memo = \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants)
-                    ->withGrant($ask->tool, $ask->arguments, $this->projectRoot());
+                $memo = \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants);
+                $memo = ($scope === null ? null : $memo->withPattern($scope, $ask->tool, $ask->arguments, $this->projectRoot()))
+                    ?? $memo->withGrant($ask->tool, $ask->arguments, $this->projectRoot());
                 $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
             }
             $ask->reply($reply, $note === '' ? null : $note);
@@ -4325,9 +4360,9 @@ final class Chat implements Model
             // turned "Always" on `Bash ls` into session-wide consent to every
             // later Bash ask, whatever the command — including asks a user's
             // hooks.yaml script raised ("confirm before touching prod").
-            // permissionGrantKey() returns null for any ask a hook other than
-            // the gate raised, so "Always" there settles as "Once": the user
-            // hook's question will be put again on the next call.
+            // rememberNative() remembers nothing for an ask a hook other than
+            // the gate raised (or a security finding), so "Always" there
+            // settles as "Once": the question will be put again next call.
             $answeredAsk = null;
             foreach ($jobs as $job) {
                 if ($job[0] === $request->toolCall) {
@@ -4336,9 +4371,8 @@ final class Chat implements Model
                 }
             }
 
-            $grantKey = $answeredAsk === null ? null : self::permissionGrantKey($request->toolCall, $answeredAsk, $this->projectRoot());
-            if ($grantKey !== null) {
-                $grants[$grantKey] = true;
+            if ($answeredAsk !== null) {
+                $grants = self::rememberNative($grants, $request->toolCall, $answeredAsk, $this->projectRoot(), $scope);
                 $cleared['permissionGrants'] = $grants;
             }
         }
@@ -4354,8 +4388,7 @@ final class Chat implements Model
                     return $job;
                 }
 
-                $key = self::permissionGrantKey($job[0], $job[3], $root);
-                $answered = $job[0] === $request->toolCall || ($key !== null && isset($grants[$key]));
+                $answered = $job[0] === $request->toolCall || self::grantCovers($grants, $job[0], $job[3], $root);
 
                 // Drop ONLY the ASK the user just answered; slot 4 (the pre-hook
                 // note) rides across the re-entry so a settled question's
@@ -4762,9 +4795,10 @@ final class Chat implements Model
     /**
      * The calls granted "always" for this session, as `[grant key => true]`.
      *
-     * Each key is a {@see permissionGrantKey()}: the tool name, a space, and
-     * the call's arguments as canonical JSON — so a grant covers one exact
-     * call, never the tool as a whole (audit F-P9).
+     * The map {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo}
+     * reads and writes, on both tool paths: `rule:<pattern>` and
+     * `call:<tool> <canonical JSON>` keys — never the tool as a whole for a
+     * tool whose subject is unknown (audit F-P9).
      *
      * @return array<string, bool>
      */
@@ -4780,8 +4814,9 @@ final class Chat implements Model
      * cannot be remembered at all (a hook other than the gate asked it, so
      * `always` settles as `once` — {@see answerPermission()}).
      *
-     * The engine path remembers a {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo}
-     * scope; Chat's own tool path an exact call ({@see permissionGrantKey()}).
+     * Both tool paths remember a {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo}
+     * scope ({@see rememberNative()} on Chat's own: the exact call for a tool
+     * whose subject is unknown).
      */
     public function permissionAlwaysScope(): ?string
     {
@@ -4799,17 +4834,53 @@ final class Chat implements Model
 
         foreach ($this->pendingPermissionJobs as $job) {
             if ($job[0] === $request->toolCall && $job[3] !== null) {
-                return self::permissionGrantKey($request->toolCall, $job[3], $this->projectRoot()) === null
-                    ? null
-                    : \SugarCraft\Crush\Permissions\SessionPermissionMemo::exactScopeOf(
-                        $request->toolCall->name,
-                        $request->toolCall->arguments,
-                        $this->projectRoot(),
-                    );
+                if (!$job[3]->isRememberable()) {
+                    return null;
+                }
+                $call = $request->toolCall;
+
+                return \SugarCraft\Crush\Permissions\PermissionRule::subjectArgumentName($call->name) !== null
+                    ? \SugarCraft\Crush\Permissions\SessionPermissionMemo::scopeOf($call->name, $call->arguments, $this->projectRoot())
+                    : \SugarCraft\Crush\Permissions\SessionPermissionMemo::exactScopeOf($call->name, $call->arguments, $this->projectRoot());
             }
         }
 
         return null;
+    }
+
+    /**
+     * Why the permission question that is up cannot be remembered — `asked
+     * by hook protect-files`, `flagged as external-endpoint, a security
+     * finding, which always asks` — so the modal says so plainly and offers
+     * no `a`; null when `a` would remember it ({@see permissionAlwaysScope()})
+     * or the question is the model's own (`AskUser`, `PlanExit`).
+     */
+    public function permissionAlwaysAsks(): ?string
+    {
+        $request = $this->pendingPermission;
+        if ($request === null || $this->permissionAlwaysScope() !== null) {
+            return null;
+        }
+
+        $ask = $request->pendingAsk;
+        if ($ask !== null) {
+            if ($ask->question() !== null) {
+                return null;
+            }
+
+            return $ask->alwaysAsks !== '' ? $ask->alwaysAsks : Lang::t('chat.permission.always_asks.unattributed');
+        }
+
+        foreach ($this->pendingPermissionJobs as $job) {
+            if ($job[0] === $request->toolCall && $job[3] !== null) {
+                $reason = \SugarCraft\Crush\Backend\PendingAsk::alwaysAsksReason($request->toolCall->name, $job[3]);
+
+                return $reason === '' ? null : $reason;
+            }
+        }
+
+        // A prompt raised with no attributed question behind it at all.
+        return Lang::t('chat.permission.always_asks.unattributed');
     }
 
     /**
@@ -5834,8 +5905,8 @@ final class Chat implements Model
      * batch on (crush_feat.md §1 E2). A call the user has already answered
      * {@see PermissionReply::Always} for skips that: the ASK becomes plain
      * permission, with its HookContext intact so `PostToolUse` still runs —
-     * but only when {@see permissionGrantKey()} matches, i.e. the gate alone
-     * asked and the arguments are the granted ones (audit F-P9).
+     * but only when {@see grantCovers()} says so, i.e. the gate alone asked
+     * (not about a security finding) and a grant covers the call (audit F-P9).
      *
      * @return array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Crush\Hooks\HookResult, 4: string}
      *     [the call to execute (arguments rewritten by a MODIFY hook), a
@@ -5902,12 +5973,10 @@ final class Chat implements Model
             [$toolCall, $context] = self::applyRewrite($toolCall, $context, $hookResult);
 
             // A grant answers only the question it was given for (audit
-            // F-P9): the gate's own ask, for these exact arguments. A user
-            // hook's ask — or a gate ask about a different command — yields
-            // a null key or a key nobody granted, and is put to the user.
-            $grantKey = self::permissionGrantKey($toolCall, $hookResult, $this->projectRoot());
-
-            return $grantKey !== null && isset($this->permissionGrants[$grantKey])
+            // F-P9): the gate's own ask, for a call the grant covers. A user
+            // hook's ask, a security finding, or a call no grant covers is
+            // put to the user.
+            return self::grantCovers($this->permissionGrants, $toolCall, $hookResult, $this->projectRoot())
                 ? [$toolCall, null, $context, null, $hookResult->additionalContext]
                 : [$toolCall, null, $context, $hookResult, $hookResult->additionalContext];
         }
@@ -5928,43 +5997,63 @@ final class Chat implements Model
     }
 
     /**
-     * The identity a {@see PermissionReply::Always} grant is filed under for
-     * this call, or null when no grant may ever answer this ask (audit F-P9).
+     * Whether a grant in $grants answers this ask on Chat's own tool path —
+     * the SAME memo, keys and scopes the engine path uses
+     * ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo}), so `a`
+     * means the same thing whichever path a call took (this path kept an
+     * exact-call key of its own, so `a` on `git status` never covered
+     * `git status -s` here).
      *
-     * NULL UNLESS THE GATE ALONE ASKED ({@see HookResult::askedOnlyBy()},
-     * stamped by the registry, which a hook cannot forge). A user hook's ASK
+     * NEVER FOR AN ASK NO GRANT MAY ANSWER ({@see \SugarCraft\Crush\Hooks\HookResult::isRememberable()},
+     * stamped by the registry, which a hook cannot forge): a user hook's ASK
      * is a question about this call's content — the reason the hook exists —
-     * and the Chat path used to let one "Always" on any earlier call of the
-     * same tool answer it with no prompt. That is F-P7's defect made
-     * session-wide; opencode deliberately scopes approvals to patterns for
-     * the same reason.
+     * and a security finding is asked every time (audit F-P9).
      *
-     * OTHERWISE `<tool> <canonical JSON arguments>`: the arguments with every
-     * object's keys sorted recursively, so `{"a":1,"b":2}` and `{"b":2,"a":1}`
-     * are one call, encoded as Runtime's hook input is (slashes and unicode
-     * unescaped, invalid UTF-8 substituted) — and without the arguments that
-     * only annotate the call (`Bash`'s `description` and `timeout`), so the
-     * same command under a new caption is the same call. That is
-     * {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::callKey()}, the
-     * engine path's exact-call identity, shared rather than restated. Exact
-     * arguments, deliberately not a command-prefix pattern: a prefix is a
-     * judgement about which commands are equivalent ("git log" ≡ "git log -p"?)
-     * that the gate's own rules already express, and the conservative reading
-     * of "always allow this" is "this call, again". Null if the arguments will
-     * not encode, in which case nothing is granted and the question is put
-     * again. A leading in-project `cd <dir> &&` ($projectRoot) is not part of
-     * the identity ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::grantArguments()}).
+     * @param array<string, bool> $grants
      */
-    private static function permissionGrantKey(
+    private static function grantCovers(
+        array $grants,
         ToolCall $toolCall,
         \SugarCraft\Crush\Hooks\HookResult $ask,
         ?string $projectRoot = null,
-    ): ?string {
-        if (!$ask->askedOnlyBy(\SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook::NAME)) {
-            return null;
-        }
+    ): bool {
+        return $ask->isRememberable()
+            && \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($grants)
+                ->allows($toolCall->name, $toolCall->arguments, $projectRoot);
+    }
 
-        return \SugarCraft\Crush\Permissions\SessionPermissionMemo::callKey($toolCall->name, $toolCall->arguments, $projectRoot);
+    /**
+     * $grants with "always" remembered for $toolCall on Chat's own tool path,
+     * or $grants unchanged when the ask may not be remembered. A tool whose
+     * subject argument is known ({@see \SugarCraft\Crush\Permissions\PermissionRule::SUBJECT_ARGUMENTS})
+     * gets the engine path's scope (or the user's own, $scope, from the
+     * modal's `e`); any other tool is remembered as the exact call — an
+     * embedder's tool has no subject that can be read, and the memo would
+     * otherwise grant it whole.
+     *
+     * @param array<string, bool> $grants
+     *
+     * @return array<string, bool>
+     */
+    private static function rememberNative(
+        array $grants,
+        ToolCall $toolCall,
+        \SugarCraft\Crush\Hooks\HookResult $ask,
+        ?string $projectRoot,
+        ?string $scope = null,
+    ): array {
+        if (!$ask->isRememberable()) {
+            return $grants;
+        }
+        $memo = \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($grants);
+        $memo = match (true) {
+            $scope !== null => $memo->withPattern($scope, $toolCall->name, $toolCall->arguments, $projectRoot) ?? $memo,
+            \SugarCraft\Crush\Permissions\PermissionRule::subjectArgumentName($toolCall->name) !== null
+                => $memo->withGrant($toolCall->name, $toolCall->arguments, $projectRoot),
+            default => $memo->withExactGrant($toolCall->name, $toolCall->arguments, $projectRoot),
+        };
+
+        return [...$grants, ...$memo->grants()];
     }
 
     /**
@@ -9937,6 +10026,15 @@ final class Chat implements Model
         if (array_key_exists('currentSessionId', $changes) && $changes['currentSessionId'] !== $this->currentSessionId) {
             $constructorProps['currentSessionTitleSource'] = $changes['currentSessionTitleSource'] ?? null;
             $constructorProps['titleEditor'] = null;
+            // The "always" grants are the session's too: they were carried
+            // into whatever session came next, so a grant given in one tab
+            // answered questions in another, and a resumed session asked
+            // again what it had answered.
+            $constructorProps['permissionGrants'] = $changes['permissionGrants'] ?? (
+                \is_string($changes['currentSessionId'])
+                    ? $this->transcripts()->loadPermissionGrants($changes['currentSessionId'])
+                    : []
+            );
         }
 
         // The two write routes into the draft, kept from fighting.

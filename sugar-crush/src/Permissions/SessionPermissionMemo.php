@@ -241,6 +241,23 @@ final class SessionPermissionMemo
     }
 
     /**
+     * Remember the EXACT call, never a pattern — for a caller whose tools'
+     * subjects this class cannot read (Chat's own tool path, where a
+     * subject-less tool would otherwise be granted whole).
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public function withExactGrant(string $tool, array $arguments, ?string $projectRoot = null): self
+    {
+        $key = self::callKey($tool, $arguments, $projectRoot);
+        if ($key === null || in_array($key, $this->calls, true)) {
+            return $this;
+        }
+
+        return new self($this->patterns, [...$this->calls, $key]);
+    }
+
+    /**
      * Remember a scope the USER wrote (the modal's `e`) for the call being
      * asked about, or null when it is refused: it must be a well-formed
      * {@see PermissionRule} pattern naming exactly this tool (no tool-name

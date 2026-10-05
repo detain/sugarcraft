@@ -68,6 +68,13 @@ final class PendingAsk
         public readonly array $alwaysScope,
         private readonly \Closure $settle,
         public readonly ?\SugarCraft\Crush\Permissions\AskOrigin $origin = null,
+        /**
+         * Why this question is put every time and `always` cannot remember it
+         * (a hook asked, or the gate flagged a security finding), for the
+         * modal's "this always asks (…)" line; '' when `always` is offered,
+         * or for the model's own questions ({@see question()}).
+         */
+        public readonly string $alwaysAsks = '',
     ) {
     }
 
@@ -100,9 +107,20 @@ final class PendingAsk
      *
      * @return array<string, mixed>
      */
-    public static function describe(ToolCall $call, HookResult $ask, string $mode): array
+    public static function describe(ToolCall $call, HookResult $ask, string $mode, ?string $projectRoot = null): array
     {
-        $gateOnly = $ask->askedOnlyBy(PermissionGateHook::NAME);
+        $gateOnly = $ask->isRememberable();
+        $scope = [];
+        if ($gateOnly) {
+            $scope = ['tool' => $call->name()];
+            $patterns = \SugarCraft\Crush\Permissions\SessionPermissionMemo::patternsFor($call->name(), $call->arguments(), $projectRoot);
+            if ($patterns !== []) {
+                // What `always` will remember, for a client to show (the web
+                // card's label) — the same pattern the TUI's `a` row names.
+                $scope['pattern'] = $patterns[\count($patterns) - 1];
+            }
+        }
+        $alwaysAsks = $gateOnly ? '' : self::alwaysAsksReason($call->name(), $ask);
 
         return [
             'kind' => ChildChannel::ASK,
@@ -116,10 +134,29 @@ final class PendingAsk
             'suggestions' => $gateOnly
                 ? [PermissionReply::Once->value, PermissionReply::Always->value, PermissionReply::Reject->value]
                 : [PermissionReply::Once->value, PermissionReply::Reject->value],
-            'alwaysScope' => $gateOnly ? ['tool' => $call->name()] : [],
+            'alwaysScope' => $scope,
             // P-E2: which delegated run asked, when this process was told
             // (a relayed member's question); absent for the turn's own.
-        ] + (($origin = \SugarCraft\Crush\Permissions\AskOrigin::current()) === null ? [] : ['origin' => $origin->toArray()]);
+        ] + ($alwaysAsks === '' ? [] : ['alwaysAsks' => $alwaysAsks])
+            + (($origin = \SugarCraft\Crush\Permissions\AskOrigin::current()) === null ? [] : ['origin' => $origin->toArray()]);
+    }
+
+    /**
+     * Why a question `always` cannot remember is put every time, in words
+     * for the modal — '' for the model's own questions, which say what they
+     * are themselves.
+     */
+    public static function alwaysAsksReason(string $tool, HookResult $ask): string
+    {
+        if ($ask->askEveryTime !== null) {
+            return $ask->askEveryTime;
+        }
+        $hooks = array_values(array_diff($ask->askedBy, [PermissionGateHook::NAME]));
+        if ($hooks !== []) {
+            return \SugarCraft\Crush\Lang::t('chat.permission.always_asks.hook', ['hooks' => implode(', ', $hooks)]);
+        }
+
+        return in_array($tool, self::QUESTION_TOOLS, true) ? '' : \SugarCraft\Crush\Lang::t('chat.permission.always_asks.unattributed');
     }
 
     /**
@@ -230,6 +267,7 @@ final class PendingAsk
             $alwaysScope,
             $settle,
             \SugarCraft\Crush\Permissions\AskOrigin::fromArray($frame['origin'] ?? null),
+            mb_strcut($string($frame['alwaysAsks'] ?? null), 0, 512, 'UTF-8'),
         );
     }
 

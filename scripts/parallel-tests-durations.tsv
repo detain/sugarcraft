@@ -326,6 +326,7 @@ sugar-crush/tests/Agents/WorktreeRemovalReportingTest.php	0.759	10
 sugar-crush/tests/Backend/ModelPruneInTurnTest.php	0.750	3
 sugar-crush/tests/Agents/TeamManagerTest.php	0.747	30
 sugar-crush/tests/Cli/BootstrapPermissionGateTest.php	0.740	65
+sugar-crush/tests/Permissions/AlwaysAllowReliabilityTest.php	0.740	5
 sugar-crush/tests/Providers/ClaudeCodeProviderStreamReapTest.php	0.729	6
 sugar-crush/tests/Cli/HeadlessPermissionPromptTest.php	0.728	19
 sugar-crush/tests/Cli/BootstrapSpendAndSummaryTest.php	0.712	27

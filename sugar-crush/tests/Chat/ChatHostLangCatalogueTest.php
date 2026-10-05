@@ -81,7 +81,7 @@ final class ChatHostLangCatalogueTest extends TestCase
         }
 
         $unused = array_values(array_diff(array_keys($this->catalogue()), array_keys($asked)));
-        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host or SessionPermissionMemo asks for');
+        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host, SessionPermissionMemo or PendingAsk asks for');
     }
 
     public function testTheEnglishRenderingIsTheTextTheLiteralsUsedToSpell(): void
@@ -120,8 +120,9 @@ final class ChatHostLangCatalogueTest extends TestCase
     private function sources(): array
     {
         // SessionPermissionMemo names what a session grant remembers, in the
-        // words Chat's permission modal shows (`this exact command`).
-        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php'];
+        // words Chat's permission modal shows (`this exact command`), and
+        // PendingAsk why a question cannot be remembered (`asked by hook …`).
+        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Backend/PendingAsk.php'];
         $walk = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(self::SRC . '/Host', \FilesystemIterator::SKIP_DOTS),
         );
