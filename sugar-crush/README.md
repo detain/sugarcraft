@@ -970,7 +970,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these ninety-one keys are layered — `provider`, `models`, `titleModel`,
+Only these ninety-four keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
@@ -985,18 +985,19 @@ Only these ninety-one keys are layered — `provider`, `models`, `titleModel`,
 `env.diffMaxBytes`, `contextWindow`, `autoReview`, `secretEnvAllowlist`,
 `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`,
 `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
-`readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
-`webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
-`webSearchEndpoint`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
-`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `skills.pathNudges`,
-`instructions`, `disabledRules`, `embeddingModel`, `disabledSkills`,
-`enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
-`subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
-`attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
-`watchFiles`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`,
-`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
-`maxCheckpoints`, `lintCommands`, `connectTimeoutSeconds`,
-`providerRetryAttempts`, `providerRetryBaseBackoffMs`.
+`readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`,
+`toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`,
+`webFetchMaxBytes`, `webFetchTimeoutSeconds`, `webSearchMaxResults`,
+`webSearchTimeoutSeconds`, `webSearchEndpoint`, `bashInteractiveIdleSeconds`,
+`bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`,
+`skills.pathNudges`, `instructions`, `disabledRules`, `embeddingModel`,
+`disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxTurns`,
+`subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,
+`includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `theme`,
+`statusLine`, `layout`, `notify`, `watchFiles`, `queueMode`, `mouse`,
+`mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
+`diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints`, `lintCommands`,
+`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1033,7 +1034,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, forty-four keys are **never** taken from a project file:
+Even for a trusted project, forty-five keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1075,8 +1076,8 @@ still a bill a clone can run up on the operator's credential;
 `compaction.refillLimit`, because it is how many automatic compactions that
 bought nothing the thrash breaker lets a session pay for in a row — the same
 argument counted in summarisation calls; `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
-`readPageBytes` and `toolSpillWindowPercent`, the six caps on what one tool
-result may hand the model,
+`readPageBytes`, `toolSpillWindowPercent` and `toolInstructionCapBytes`, the
+seven caps on what one tool result may hand the model,
 because every byte a result carries is replayed into each later request of the
 turn — the same money axis paid in input tokens, so a checkout may not raise
 them (the timeouts and memory bounds beside them only cost time, and a trusted

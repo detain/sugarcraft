@@ -388,7 +388,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, BuildsFromCatalo
         // every edit result for a governed path, replayed into every
         // following request of the turn.
         if ($nestedContent !== null) {
-            $message = $this->clipInstructions($nestedContent, self::DEFAULT_MAX_INSTRUCTION_BYTES)
+            $message = $this->clipInstructions($nestedContent, $this->instructionCapBytes())
                 . "\n\n" . $message;
         }
 

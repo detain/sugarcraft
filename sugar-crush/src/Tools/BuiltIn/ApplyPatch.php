@@ -602,7 +602,7 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, BuildsFrom
             }
         }
         if ($instructions !== []) {
-            $message = $this->clipInstructions(implode("\n\n", $instructions), self::DEFAULT_MAX_INSTRUCTION_BYTES)
+            $message = $this->clipInstructions(implode("\n\n", $instructions), $this->instructionCapBytes())
                 . "\n\n" . $message;
         }
         foreach ($touched as $path) {

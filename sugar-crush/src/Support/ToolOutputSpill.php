@@ -63,7 +63,8 @@ final class ToolOutputSpill
      * spill would spend a visible share of a deliberately tiny cap on a path and
      * shrink the preview it accompanies, so a tool built with a cap this small
      * keeps the plain announced truncation it always had. Every shipped default
-     * cap is far above it (64 KiB for the capped tools).
+     * cap is far above it (64 KiB for the capped tools). The default of the
+     * `toolSpillMinCapBytes` setting ({@see minCapBytes()}).
      */
     public const MIN_CAP_BYTES = 8192;
 
@@ -71,7 +72,8 @@ final class ToolOutputSpill
      * How much of a process's output a spilling tool captures (per stream):
      * 4 MiB. The cap decides what the model is SHOWN; this decides what the
      * saved file can hold. Bounded all the same, because the capture is held in
-     * memory, and a `find /` has no natural end.
+     * memory, and a `find /` has no natural end. The default of the
+     * `toolSpillCaptureBytes` setting ({@see captureBytes()}).
      */
     public const CAPTURE_BYTES = 4 * 1024 * 1024;
 
@@ -120,6 +122,31 @@ final class ToolOutputSpill
     public static function directory(): string
     {
         return self::$directoryOverride ?? PrivateRetainedDir::forCurrentUser(self::DIR_NAME);
+    }
+
+    /**
+     * The smallest cap a tool-side spill is attempted at, as configured: the
+     * `toolSpillMinCapBytes` setting when one is set and valid, else
+     * {@see MIN_CAP_BYTES}. Read through the merged config at each clip that
+     * could spill (roadmap N-P4c), so a save applies from the next tool call
+     * with no rebuild of the tools the launch made.
+     */
+    public static function minCapBytes(): int
+    {
+        return \SugarCraft\Crush\Tools\ToolLimits::current()->int(\SugarCraft\Crush\Tools\ToolLimits::SPILL_MIN_CAP_KEY)
+            ?? self::MIN_CAP_BYTES;
+    }
+
+    /**
+     * How much of a process's output a spilling tool captures, as configured:
+     * the `toolSpillCaptureBytes` setting when one is set and valid, else
+     * {@see CAPTURE_BYTES}. A memory bound, not a result bound — the cap still
+     * decides what the model is shown.
+     */
+    public static function captureBytes(): int
+    {
+        return \SugarCraft\Crush\Tools\ToolLimits::current()->int(\SugarCraft\Crush\Tools\ToolLimits::SPILL_CAPTURE_BYTES_KEY)
+            ?? self::CAPTURE_BYTES;
     }
 
     public static function useDirectoryForTesting(?string $directory): void

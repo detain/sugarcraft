@@ -224,6 +224,9 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `readPageLines` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
 | `readPageBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
 | `toolSpillWindowPercent` | `Runtime::settle()` → `ToolOutputSpill::forModel()`, per large result | **no** |
+| `toolInstructionCapBytes` | `TruncatesOutput::instructionCapBytes()`, each Edit, Write or ApplyPatch call | **no** |
+| `toolSpillCaptureBytes` | `TruncatesOutput::captureBound()` → `ToolOutputSpill::captureBytes()`, as a capture starts | yes |
+| `toolSpillMinCapBytes` | `TruncatesOutput::spillOverflow()` → `ToolOutputSpill::minCapBytes()`, per cut result | yes |
 | `globMaxMatches` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
 | `webFetchMaxBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
 | `webFetchTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
@@ -270,7 +273,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these ninety-one, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these ninety-four, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -1022,6 +1025,9 @@ project-settable.
 | `readPageLines` | Tools | int | `2000` | U C | — | next turn | spend |
 | `readPageBytes` | Tools | int | `51200` | U C | — | next turn | spend |
 | `toolSpillWindowPercent` | Tools | int | `30` | U C | — | next turn | spend |
+| `toolInstructionCapBytes` | Tools | int | `16384` | U C | — | next turn | spend |
+| `toolSpillCaptureBytes` | Tools | int | `4194304` | P U C | — | next turn | tuning |
+| `toolSpillMinCapBytes` | Tools | int | `8192` | P U C | — | next turn | tuning |
 | `globMaxMatches` | Tools | int | `1000` | P U C | — | next turn | tuning |
 | `webFetchMaxBytes` | Tools | int | `2097152` | P U C | — | next turn | tuning |
 | `webFetchTimeoutSeconds` | Tools | int | `30` | P U C | — | next turn | tuning |
@@ -1183,7 +1189,7 @@ Saved is not applied: see the next section for when each key takes effect.
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints` |
-| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
+| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
 | restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `watchFiles`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
@@ -1198,14 +1204,15 @@ Saved is not applied: see the next section for when each key takes effect.
 `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
 `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
 `env.diffMaxBytes`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`,
-`readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`,
-`webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`,
-`bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`,
-`skills.pathNudges`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`,
-`subagentMaxActive`, `theme`, `statusLine`, `queueMode`, `mouse`, `mouseClicks`,
-`scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
-`toolOutputPreviewLines`, `maxCheckpoints`, `providerRetryAttempts` and
-`providerRetryBaseBackoffMs`.
+`readPageLines`, `readPageBytes`, `toolSpillWindowPercent`,
+`toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
+`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
+`bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
+`chatToolTimeoutSeconds`, `skills.pathNudges`, `embeddingModel`,
+`subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `theme`,
+`statusLine`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`,
+`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
+`maxCheckpoints`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the
@@ -1323,7 +1330,7 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only eleven of the ninety-one layered keys have an
+  They do not cover it: only eleven of the ninety-four layered keys have an
   env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`, `webSearchEndpoint`,
   `mouse`, `mouseClicks`, `connectTimeoutSeconds`). `maxOutputTokens`,
@@ -1340,15 +1347,16 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `env.diffMaxBytes`, `contextWindow`, `autoReview`, `secretEnvAllowlist`,
   `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`,
   `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
-  `readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
-  `webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
-  `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
-  `chatToolTimeoutSeconds`, `skills.pathNudges`, `instructions`, `disabledRules`,
-  `embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
-  `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
-  `subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
-  `autoCommit`, `theme`, `statusLine`, `layout`, `notify`, `watchFiles`,
-  `queueMode`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
+  `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`,
+  `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`,
+  `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `webSearchMaxResults`,
+  `webSearchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+  `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `skills.pathNudges`,
+  `instructions`, `disabledRules`, `embeddingModel`, `disabledSkills`,
+  `enabledSkills`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+  `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
+  `attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
+  `watchFiles`, `queueMode`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
   `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints`, `lintCommands`,
   `providerRetryAttempts` and `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->

@@ -16,7 +16,9 @@ use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\MCP\McpTool;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Support\ToolOutputSpill;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Tests\Support\ScriptedProvider;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
@@ -25,6 +27,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\LspTool;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
+use SugarCraft\Crush\Tools\BuiltIn\Write;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Tools\McpToolBridge;
@@ -86,6 +89,9 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::READ_PAGE_LINES_KEY => Read::PAGE_LINES,
             ToolLimits::READ_PAGE_BYTES_KEY => Read::PAGE_BYTES,
             ToolLimits::SPILL_WINDOW_PERCENT_KEY => \SugarCraft\Crush\Support\ToolOutputSpill::WINDOW_SHARE_PERCENT,
+            ToolLimits::INSTRUCTION_CAP_KEY => (new \ReflectionClassConstant(Edit::class, 'DEFAULT_MAX_INSTRUCTION_BYTES'))->getValue(),
+            ToolLimits::SPILL_CAPTURE_BYTES_KEY => ToolOutputSpill::CAPTURE_BYTES,
+            ToolLimits::SPILL_MIN_CAP_KEY => ToolOutputSpill::MIN_CAP_BYTES,
             ToolLimits::GLOB_MAX_MATCHES_KEY => Glob::DEFAULT_MAX_MATCHES,
             ToolLimits::WEB_FETCH_MAX_BYTES_KEY => WebFetch::MAX_WIRE_BYTES,
             ToolLimits::WEB_FETCH_TIMEOUT_KEY => WebFetch::READ_TIMEOUT_SECONDS,
@@ -117,6 +123,7 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::READ_PAGE_LINES_KEY,
             ToolLimits::READ_PAGE_BYTES_KEY,
             ToolLimits::SPILL_WINDOW_PERCENT_KEY,
+            ToolLimits::INSTRUCTION_CAP_KEY,
         ];
         // The endpoint is Egress, pinned by WebSearchEndpointSettingTest.
         foreach (array_diff(ToolLimits::KEYS, [ToolLimits::WEB_SEARCH_ENDPOINT_KEY]) as $key) {
@@ -314,6 +321,95 @@ final class ToolCapSettingsTest extends TestCase
 
         self::assertTrue($result->isError(), $result->content());
         self::assertLessThan(6.0, $elapsed, 'the run outlived a 1-second idle ceiling');
+    }
+
+    /**
+     * The nested-instruction cap (N-P4c remainder) is the setting: the same
+     * rule book comes back at the shipped 16 KiB without it and at the
+     * configured 2 KiB with it, through Edit and Write alike.
+     */
+    public function testTheNestedInstructionCapIsTheSetting(): void
+    {
+        mkdir($this->dir . '/work/sub', 0700, true);
+        file_put_contents(
+            $this->dir . '/work/sub/CLAUDE.md',
+            "# BIG-RULE\n" . str_repeat("RULE: a long instruction line that keeps going.\n", 800),
+        );
+
+        $run = function (string $name): array {
+            file_put_contents($this->dir . '/work/sub/' . $name . '.php', "<?php\n// original\n");
+            $loader = new InstructionFileLoader($this->dir . '/work');
+
+            return [
+                'Edit' => (new Edit($this->dir . '/work', instructionLoader: $loader))->execute([
+                    'file_path' => $this->dir . '/work/sub/' . $name . '.php',
+                    'old_string' => '// original',
+                    'new_string' => '// replaced',
+                ])->content(),
+                'Write' => (new Write($this->dir . '/work', instructionLoader: new InstructionFileLoader($this->dir . '/work')))->execute([
+                    'file_path' => $this->dir . '/work/sub/' . $name . '-new.php',
+                    'content' => "<?php\n",
+                ])->content(),
+            ];
+        };
+
+        foreach ($run('shipped') as $tool => $content) {
+            self::assertGreaterThan(8192, strlen($content), "{$tool} keeps the shipped 16 KiB of rules");
+            self::assertLessThanOrEqual(16384 + 256, strlen($content), $tool);
+        }
+
+        Bootstrap::writeUserConfig([ToolLimits::INSTRUCTION_CAP_KEY => 2048]);
+
+        foreach ($run('configured') as $tool => $content) {
+            self::assertLessThanOrEqual(2048 + 256, strlen($content), "{$tool} must clip to the configured cap");
+            self::assertStringContainsString('instructions truncated:', $content, $tool);
+            self::assertStringContainsString('BIG-RULE', $content, "{$tool} still names the rule book");
+        }
+    }
+
+    /**
+     * The spill bounds (N-P4c remainder) are read through the merged config:
+     * the floor decides whether a cut Grep result is saved at all, and the
+     * capture bound how much of a Bash command's output the saved file holds.
+     */
+    public function testTheSpillBoundsAreTheSettings(): void
+    {
+        ToolOutputSpill::useDirectoryForTesting($this->dir . '/spill');
+        try {
+            self::assertSame(ToolOutputSpill::MIN_CAP_BYTES, ToolOutputSpill::minCapBytes());
+            self::assertSame(ToolOutputSpill::CAPTURE_BYTES, ToolOutputSpill::captureBytes());
+
+            $lines = [];
+            for ($i = 1; $i <= 3000; $i++) {
+                $lines[] = 'needle ' . $i . ' ' . str_repeat('x', 20);
+            }
+            file_put_contents($this->dir . '/work/hits.txt', implode("\n", $lines) . "\n");
+            $grep = fn (): string => (new Grep($this->dir . '/work', 10000))->execute(['pattern' => 'needle', 'path' => '.'])->content();
+            $bash = fn (): string => (new Bash($this->dir . '/work'))->execute([
+                'command' => 'head -c 300000 /dev/zero | tr "\\0" "y" | fold -w 99',
+                'description' => 'Print a lot',
+            ])->content();
+
+            self::assertStringContainsString('[saved: the ', $grep(), 'a 10,000-byte cap is over the shipped 8 KiB floor');
+            self::assertMatchesRegularExpression('/\[saved: the 30\d{4} bytes/', $bash(), 'the shipped 4 MiB capture holds all of it');
+
+            Bootstrap::writeUserConfig([
+                ToolLimits::SPILL_MIN_CAP_KEY => 20000,
+                ToolLimits::SPILL_CAPTURE_BYTES_KEY => 100000,
+            ]);
+
+            self::assertSame(20000, ToolOutputSpill::minCapBytes());
+            self::assertSame(100000, ToolOutputSpill::captureBytes());
+            $grepped = $grep();
+            self::assertStringNotContainsString('[saved: the ', $grepped, 'under the configured floor the cut is not saved');
+            self::assertStringContainsString('PARTIAL', $grepped, 'and is still announced');
+            $bashed = $bash();
+            self::assertSame(1, preg_match('/\[saved: the (\d+) bytes .* further bytes were never captured/s', $bashed, $saved), 'the capture stopped at the configured bound');
+            self::assertGreaterThan(90000, (int) $saved[1]);
+            self::assertLessThanOrEqual(100000, (int) $saved[1], 'the file holds no more than the configured capture');
+        } finally {
+            ToolOutputSpill::useDirectoryForTesting(null);
+        }
     }
 
     /** End to end: a saved key reaches the tool schema the provider is sent. */

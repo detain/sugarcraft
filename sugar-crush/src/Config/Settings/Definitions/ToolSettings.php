@@ -16,6 +16,7 @@ use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Lint\TestRunner;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
+use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
@@ -166,6 +167,44 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp('Largest share of the context window one tool result may take; past it the result is saved to a file and the model shown its start and end.')
                 ->withReaderSymbol(ToolOutputSpill::class . '::forModel')
                 ->withReadBy('`Runtime::settle()` → `ToolOutputSpill::forModel()`, per large result'),
+            // Spend, user tier only: the instruction body is prepended to an
+            // Edit/Write/ApplyPatch result and replayed into every later
+            // request of the turn, like any capped result.
+            SettingDefinition::new(ToolLimits::INSTRUCTION_CAP_KEY, SettingType::Int, Edit::DEFAULT_MAX_INSTRUCTION_BYTES)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(1024, 1048576)
+                ->withLabel('Nested instruction cap (bytes)')
+                ->withHelp('Most bytes of a governing CLAUDE.md/AGENTS.md body an Edit, Write or ApplyPatch result may carry; the rest is cut with a marker.')
+                ->withReaderSymbol(Edit::class . '::instructionCapBytes')
+                ->withReadBy('`TruncatesOutput::instructionCapBytes()`, each Edit, Write or ApplyPatch call'),
+            // Memory and disk, not what the model is shown: the result cap
+            // still bounds that, so these are Tuning like the WebFetch body
+            // bound below.
+            SettingDefinition::new(ToolLimits::SPILL_CAPTURE_BYTES_KEY, SettingType::Int, ToolOutputSpill::CAPTURE_BYTES)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(65536, 67108864)
+                ->withLabel('Spill capture (bytes)')
+                ->withHelp('Most of a Bash command\'s output (per stream) held in memory and saved to the spill file when the result is cut; never below the output cap.')
+                ->withReaderSymbol(ToolOutputSpill::class . '::captureBytes')
+                ->withReadBy('`TruncatesOutput::captureBound()` → `ToolOutputSpill::captureBytes()`, as a capture starts'),
+            SettingDefinition::new(ToolLimits::SPILL_MIN_CAP_KEY, SettingType::Int, ToolOutputSpill::MIN_CAP_BYTES)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(2048, 1048576)
+                ->withLabel('Spill floor (bytes)')
+                ->withHelp('Smallest result cap at which a cut tool result is saved to a file; under it the cut is announced and the rest dropped.')
+                ->withReaderSymbol(ToolOutputSpill::class . '::minCapBytes')
+                ->withReadBy('`TruncatesOutput::spillOverflow()` → `ToolOutputSpill::minCapBytes()`, per cut result'),
             SettingDefinition::new(ToolLimits::GLOB_MAX_MATCHES_KEY, SettingType::Int, Glob::DEFAULT_MAX_MATCHES)
                 ->withCategory(SettingCategory::Tools)
                 ->withRiskClass(RiskClass::Tuning)

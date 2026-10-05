@@ -42,9 +42,11 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * many may run at once.
  *
  * Bounds read where a turn-time rebind cannot reach — the search tool's,
- * built per use by `/websearch` too, and the two process-wait bounds read
- * at the moment they are armed — are read through {@see current()} at their
- * use site instead, from the same definitions.
+ * built per use by `/websearch` too, the two process-wait bounds read
+ * at the moment they are armed, and the trait-level instruction cap and spill
+ * capture bounds, which belong to no one tool's constructor — are read
+ * through {@see current()} at their use site instead, from the same
+ * definitions.
  */
 final readonly class ToolLimits
 {
@@ -90,6 +92,19 @@ final readonly class ToolLimits
     /** The window share one tool result may take before it is spilled ({@see \SugarCraft\Crush\Support\ToolOutputSpill::forModel()}). */
     public const SPILL_WINDOW_PERCENT_KEY = 'toolSpillWindowPercent';
 
+    /**
+     * The flat bound on the nested instruction-file body Edit, Write and
+     * ApplyPatch prepend to their one-line result —
+     * `TruncatesOutput::DEFAULT_MAX_INSTRUCTION_BYTES`.
+     */
+    public const INSTRUCTION_CAP_KEY = 'toolInstructionCapBytes';
+
+    /** How much of a process's output a spilling tool captures — {@see \SugarCraft\Crush\Support\ToolOutputSpill::CAPTURE_BYTES}. */
+    public const SPILL_CAPTURE_BYTES_KEY = 'toolSpillCaptureBytes';
+
+    /** The smallest result cap a tool-side spill is attempted at — {@see \SugarCraft\Crush\Support\ToolOutputSpill::MIN_CAP_BYTES}. */
+    public const SPILL_MIN_CAP_KEY = 'toolSpillMinCapBytes';
+
     /** Bash's `timeout` default, in seconds (W9 integration of the N-P4c remainder). */
     public const BASH_TIMEOUT_KEY = 'bashTimeoutSeconds';
 
@@ -119,6 +134,9 @@ final readonly class ToolLimits
         self::READ_PAGE_LINES_KEY,
         self::READ_PAGE_BYTES_KEY,
         self::SPILL_WINDOW_PERCENT_KEY,
+        self::INSTRUCTION_CAP_KEY,
+        self::SPILL_CAPTURE_BYTES_KEY,
+        self::SPILL_MIN_CAP_KEY,
         self::GLOB_MAX_MATCHES_KEY,
         self::WEB_FETCH_MAX_BYTES_KEY,
         self::WEB_FETCH_TIMEOUT_KEY,

@@ -76,7 +76,7 @@ use SugarCraft\Crush\Tools\Tool;
 trait TruncatesOutput
 {
     // ROADMAP 2.8 — A CUT IS NO LONGER A LOSS. When the clip runs inside a TOOL
-    // under a cap of at least ToolOutputSpill::MIN_CAP_BYTES, truncateMerged()
+    // under a cap of at least ToolOutputSpill::minCapBytes(), truncateMerged()
     // first saves everything the call captured to a private, session-scoped
     // file (Support\ToolOutputSpill), keeps a head AND a tail of a single-stream
     // result, and ends with a pointer telling the model to Read the file with
@@ -338,14 +338,17 @@ trait TruncatesOutput
      * Qualifies means: the trait is running inside a TOOL (it also bounds parts
      * of the system prompt, {@see \SugarCraft\Crush\Context\EnvironmentBlock},
      * where a file pointer would be noise in every request); the cap is at least
-     * {@see ToolOutputSpill::MIN_CAP_BYTES}, so the pointer costs a small share
-     * of it; and the clip really cuts bytes this call holds. A result that is
+     * {@see ToolOutputSpill::minCapBytes()} (the `toolSpillMinCapBytes`
+     * setting, else {@see ToolOutputSpill::MIN_CAP_BYTES}), so the pointer
+     * costs a small share of it; and the clip really cuts bytes this call holds. A result that is
      * short only because the CAPTURE dropped bytes has nothing more to save than
      * the model already sees.
      */
     private function spillOverflow(string $joined, int $maxBytes, bool $save = true): ?string
     {
-        if (!$this instanceof Tool || $maxBytes < ToolOutputSpill::MIN_CAP_BYTES || strlen($joined) <= $maxBytes) {
+        // The length test first: the configured floor is read from the merged
+        // config, and only a clip that really cuts needs to ask.
+        if (!$this instanceof Tool || strlen($joined) <= $maxBytes || $maxBytes < ToolOutputSpill::minCapBytes()) {
             return null;
         }
 
@@ -415,7 +418,9 @@ trait TruncatesOutput
     /**
      * How much of a process's output to CAPTURE for a result capped at
      * $maxOutputBytes: the cap itself when no spill can apply (unchanged
-     * behaviour), and {@see ToolOutputSpill::CAPTURE_BYTES} when one can, so
+     * behaviour), and {@see ToolOutputSpill::captureBytes()} (the
+     * `toolSpillCaptureBytes` setting, else {@see ToolOutputSpill::CAPTURE_BYTES})
+     * when one can, so
      * the saved file holds the overflow rather than only the bytes the cap
      * would have kept anyway. Null means unbounded, matching a disabled cap.
      */
@@ -425,8 +430,8 @@ trait TruncatesOutput
             return null;
         }
 
-        return $this instanceof Tool && $maxOutputBytes >= ToolOutputSpill::MIN_CAP_BYTES
-            ? max($maxOutputBytes, ToolOutputSpill::CAPTURE_BYTES)
+        return $this instanceof Tool && $maxOutputBytes >= ToolOutputSpill::minCapBytes()
+            ? max($maxOutputBytes, ToolOutputSpill::captureBytes())
             : $maxOutputBytes;
     }
 
@@ -514,8 +519,25 @@ trait TruncatesOutput
      * own result is one line ("File updated: <path>"), so a cap on it would
      * bound nothing, but the instruction body they prepend to it is a whole
      * markdown file replayed into every following request of the turn.
+     *
+     * Public since the N-P4c remainder, so the `toolInstructionCapBytes`
+     * setting names this number as its default instead of restating it; read
+     * through {@see instructionCapBytes()}.
      */
-    private const DEFAULT_MAX_INSTRUCTION_BYTES = 16384;
+    public const DEFAULT_MAX_INSTRUCTION_BYTES = 16384;
+
+    /**
+     * The instruction bound Edit, Write and ApplyPatch clip their nested body
+     * to: the `toolInstructionCapBytes` setting when one is set and valid
+     * (roadmap N-P4c), else {@see DEFAULT_MAX_INSTRUCTION_BYTES}. Read through
+     * the merged config at the call, because these tools have no result cap
+     * for a turn-time rebind to replace.
+     */
+    private function instructionCapBytes(): int
+    {
+        return \SugarCraft\Crush\Tools\ToolLimits::current()->int(\SugarCraft\Crush\Tools\ToolLimits::INSTRUCTION_CAP_KEY)
+            ?? self::DEFAULT_MAX_INSTRUCTION_BYTES;
+    }
 
     /**
      * The share of a tool's output budget that instruction-file text may take.
@@ -580,8 +602,9 @@ trait TruncatesOutput
      *
      * $budget <= 0 disables the bound, matching {@see truncateOutput()}. NO
      * CALLER CAN REACH IT — which is a stronger statement than "no test does",
-     * and it is the one that holds. There are exactly three callers. Edit and
-     * Write pass the constant {@see DEFAULT_MAX_INSTRUCTION_BYTES}.
+     * and it is the one that holds. There are exactly three kinds of caller.
+     * Edit, Write and ApplyPatch pass {@see instructionCapBytes()}, which is
+     * never below the `toolInstructionCapBytes` setting's 1,024-byte floor.
      * {@see instructionSection()} guards its own call with `max(1, ...)`.
      * {@see \SugarCraft\Crush\Tools\BuiltIn\Read}'s reserve is
      * `max(1, intdiv($maxBytes, 4))` while `$maxBytes > 0`, and its `: $reserve`
