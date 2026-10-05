@@ -33,11 +33,66 @@ A terminal AI coding agent — PHP port of [`charmbracelet/crush`](https://githu
 
 > **History:** SugarCrush absorbed the former experimental `candy-crush` port. There is now a single `SugarCraft\Crush` library.
 
-## Run it
+## Contents
+
+This README is the user guide. It runs from installing to everyday use, then
+configuration, then the reference material. Each topic links to its own page
+under [`docs/`](docs/) for the full detail.
+
+| Section | What it covers |
+|---|---|
+| [Install](#install) · [Quick start](#quick-start) | Requirements, picking a provider, the first launch |
+| [Using the TUI](#using-the-tui) | Keys, mouse, panes, steering and queueing, attachments, `!` shell commands, slash commands, what a running turn shows |
+| [Sessions and checkpoints](#sessions-and-checkpoints) | New, continue and resume; `/undo`, `/redo`, `/rewind`, `/diff` |
+| [Configuration](#configuration) | Settings files and tiers, project trust, permission modes, automation |
+| [Providers](#providers) | Provider types, model metadata, fallback models, SGLang specifics |
+| [Scripting and automation](#scripting-and-automation) | `-p`/`run`, flags, exit codes, the JSON document, subcommands, shell-out backends |
+| [Server mode, web UI and attach](#server-mode-web-ui-and-attach) | `sugarcrush serve`, the browser UI, `sugarcrush attach` |
+| [The agent loop](#the-agent-loop) · [Capabilities](#capabilities) · [Architecture](#architecture) | How a turn runs and what ships |
+| [Limitations](#limitations) · [Tests](#tests) | What is not finished; how the suite is run |
+
+### Documentation index
+
+| Page | Topic |
+|---|---|
+| [`docs/SETTINGS.md`](docs/SETTINGS.md) | Every settings key, the four file tiers plus the session tier, the settings view, when a change applies |
+| [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | Every environment variable, including provider credentials and the shell-out backends |
+| [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) | The six permission modes, plan mode, rules, the four `trustedProject*` keys, the Bash sandbox |
+| [`docs/CONTEXT.md`](docs/CONTEXT.md) | The context engine: pruning, `Prune`/`Compress`/`Recall`, compaction tiers, background summaries, re-injection, overflow recovery |
+| [`docs/AGENTS.md`](docs/AGENTS.md) | Sub-agents: `Task`, background and nested runs, worktree isolation, teams, the live agent lines, the agents strip and the Agent View |
+| [`docs/AGENTS_AUTHORING.md`](docs/AGENTS_AUTHORING.md) | Writing an agent preset: where it goes, its frontmatter, how grants are enforced |
+| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Every built-in slash command, and writing your own |
+| [`docs/HOOKS.md`](docs/HOOKS.md) | `hooks.yaml`, every hook event, the exit-code and JSON stdout contract, post-edit lint, diagnostics, auto-commit and auto-test |
+| [`docs/MEMORY.md`](docs/MEMORY.md) | Memory notes, the `Memory` tool, recall, auto-consolidation, the dream pass, instruction files |
+| [`docs/SKILLS.md`](docs/SKILLS.md) | Writing a skill, where skills load from, how they reach the model |
+| [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
+| [`docs/MCP.md`](docs/MCP.md) | MCP servers: `.mcp.json`, the trust gate, auth, serving your own |
+| [`docs/SERVER.md`](docs/SERVER.md) | `sugarcrush serve`, the `sugarcrush.v1` protocol, the web UI, `sugarcrush attach` |
+| [`docs/PROMPT_ENGINEERING.md`](docs/PROMPT_ENGINEERING.md) | How the system prompt and the turn-context row are assembled, and why |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What runs where: the binary, the bootstrap, `Chat`, the engine, sessions |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |
+| [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web) | The browser UI that `sugarcrush serve` hosts |
+
+## Install
 
 ```bash
-composer install
-./bin/sugarcrush
+composer require sugarcraft/sugar-crush        # as a dependency; the binary is vendor/bin/sugarcrush
+# or, from a checkout of this package:
+composer install && ./bin/sugarcrush
+```
+
+Requirements: PHP 8.3+, `ext-sqlite3` and `pdo_sqlite` (the session store),
+and `ext-curl` for the HTTP providers. `ext-pcntl` is strongly recommended:
+each turn runs in a forked child, and without it turns, parallel tool calls and
+sub-agents run in-process and the screen only updates when they finish.
+`sugarcrush serve` additionally needs `ext-pcntl`, `ext-posix` and `ext-ffi`,
+and serves the browser UI when `sugarcraft/sugar-crush-web` is installed
+beside it. `sugarcrush doctor` checks all of this for you.
+
+## Quick start
+
+```bash
+./bin/sugarcrush            # or vendor/bin/sugarcrush in a project that requires the package
 ```
 
 With no configuration the binary runs the **offline `EchoProvider`** through the full engine, so it launches with zero network and zero keys. Point it at a real model with environment variables:
@@ -50,71 +105,21 @@ export SUGARCRUSH_MODEL=gpt-4o          # optional; provider default otherwise
 ./bin/sugarcrush
 ```
 
-`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in coding tools (Bash/Read/Edit/Write/Glob/Grep/WebFetch/WebSearch/`doctor`/Skill/Lsp) and the safety hooks automatically. These are **runtime tool names**, and `doctor` is lower-case: `allowedTools`, `disabledTools` and every `permissionRules` pattern match them with case-sensitive `fnmatch()`, so a rule written `Doctor` matches no tool at all. (The class is `Tools\BuiltIn\Doctor`, and the two spellings are worth keeping straight rather than conflating. This sentence used to end — correctly, when it was written — by exempting the Capabilities section below, whose roster spelled the tool `Doctor` "because that is the class and not this name". The exemption is withdrawn, and not because it was untrue: the roster it exempted also listed `Skill` and `Lsp`, whose classes are `SkillTool` and `LspTool`, so it was a class list with two entries that were not class names. A reader copying a name out of it had no way to tell which kind of name they had. That roster now spells all eleven the way the runtime does, and names the three class files beside them.)
+`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in tools (Bash, Read, Edit, Write, Glob, Grep, WebFetch, WebSearch, `doctor`, Skill, Lsp, Memory, RepoMap, Todo, Prune, Compress, Recall, Workflow, Team and Task) and the safety hooks automatically. These are **runtime tool names**, and `doctor` is lower-case: `allowedTools`, `disabledTools` and every `permissionRules` pattern match them with case-sensitive `fnmatch()`, so a rule written `Doctor` matches no tool at all (the class is `Tools\BuiltIn\Doctor`; the [Capabilities](#capabilities) roster lists every runtime name beside its class file).
 
 Every environment variable SugarCrush reads is documented in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
 **Where the interactive TUI's diagnostics go.** Parser, provider and runtime warnings are written through PHP's `error_log()`, and in the TUI stderr is the screen being drawn on — so before the TUI starts, `error_log` is pointed at `~/.sugar-crush/logs/sugarcrush.log` (directory 0700, file 0600; a log over 5 MiB at launch is rotated to `sugarcrush.log.1`, and each launch writes a `session start pid=…` header). The ones meant for you also show up in the transcript as system rows. PHP's own warnings and notices go to the same file instead of being displayed, and if PHP hits a fatal error the screen gets one line saying so and naming the log. If your PHP ini already sets `error_log` to something other than stderr, that is left alone. `-p`/`run` and the subcommands are unaffected: they keep writing to stderr. If the log can't be set up (no home directory this process can confirm is yours, or a log directory it can't create), the TUI still launches. In that case the warnings that also have a transcript row are shown only there, and are not written to the screen. Any other `error_log()` line can still appear on the screen, as it did before this change.
 
-### Non-interactive (one-shot) mode
+### Choosing a provider without editing anything
 
-`bin/sugarcrush` parses `argv` *before* it constructs a `Program`, so the
-scriptable paths never attach to the TTY or enter the alt-screen:
+Three ways to get off the offline `EchoProvider`, from quickest to most permanent:
 
-```bash
-sugarcrush -p "explain the Width helper"        # one prompt, print, exit
-sugarcrush run "explain the Width helper"       # same thing
-sugarcrush -p "audit this" --output-format json # machine-readable envelope
-sugarcrush --output-format json run "audit this" # `run` works after flags too
-sugarcrush doctor                               # check the install (see Subcommands)
-sugarcrush --root /path/to/project              # set the project root explicitly
-sugarcrush src                                  # an existing directory as the only argument is the root too
-sugarcrush --config ~/policies/crush.json       # read settings/permissions from this file
-sugarcrush --model gpt-5 -p "audit this"        # pick the model (not the provider)
-sugarcrush --permission-mode plan -p "audit this" # pick the permission mode for this run
-sugarcrush --help                               # prints and exits (never opens the TUI)
-sugarcrush --version                            # prints the installed version and exits
-sugarcrush -- --not-a-flag                      # `--` ends options; everything after is positional
-```
+1. **One-off, this run only:** `SUGARCRUSH_PROVIDER=dev-sglang ./bin/sugarcrush` — `dev-sglang` is sugar-crush's own dev/test SGLang endpoint (declared in the `.sugar-crush/config.dev.json` that ships inside the sugar-crush package — not a file in the project you run it in), useful for trying a real (if smaller) model with zero API keys.
+2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in the package's own `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it; `/model dev-sglang <model id>` switches to that model on it as well. **Switch theme** works the same way for color themes.
+3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD`/`$SUGARCRUSH_BACKEND_CMD_STREAM` still take priority over the persisted choice when set, for scripting/CI overrides. The **model** persists too, separately and per provider: `"models": {"dev-sglang": "<model id>"}` in `config.json` (or your `settings.json`) is the model that provider runs whenever it is selected — at launch and after a switch — unless `--model` or `$SUGARCRUSH_MODEL` names one; keyed by provider because a model id means nothing to any other provider. `/model <provider> <model>` writes that entry for you (through the settings view's writer, carrying the other providers' entries along) and switches to it at once — a session started with `--model` or `$SUGARCRUSH_MODEL` still runs the model you just picked, and keeps outranking the saved entry at the next launch. There is no top-level `model` key.
 
-`--model <name>` (also `--model=<name>`) names the conversation MODEL and
-overrides `$SUGARCRUSH_MODEL`, the model persisted for the provider (the
-`models` setting) and the provider's own default. It does not pick a
-provider — that still comes from `$SUGARCRUSH_PROVIDER` or the persisted
-`provider` setting, and the two are independent axes. The Ctrl+P palette entry
-labelled "Switch model" switches the PROVIDER, which is why the distinction is
-worth stating twice.
-
-`--permission-mode <mode>` (also `--permission-mode=<mode>`) runs this launch
-under one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`,
-`bypass-permissions`. It is the highest-precedence source, beating
-`$SUGARCRUSH_PERMISSION_MODE` and the `permissionMode` config key. With none of
-the three set, the **TUI starts in `default`** — every write and shell command
-asks through the y/n/a modal — while `-p` and background sessions start in
-`bypass-permissions`, because their console approver refuses whenever no
-terminal is attached (see *Permission modes* below).
-
-A **non-empty** value that is not one of those modes refuses the launch with
-exit 2 rather than falling back to the default — the same refusal,
-with the same message shape, that the environment variable and the config key
-already produce; only the named source differs. (`sugarcrush doctor` is not a
-launch: it reports the same bad value as a failed `permission policy` check and
-exits 1.)
-
-An **empty** value — `--permission-mode=` or `--permission-mode ""` — is a
-usage error, also exit 2, but raised by the argument parser before any of that.
-Here the flag is deliberately **stricter than the other two sources**: an empty
-`$SUGARCRUSH_PERMISSION_MODE` or `"permissionMode": ""` is read as *absent* and
-the run proceeds on the next source down, whereas an empty flag refuses. The
-asymmetry is intentional. An unset variable is a normal state of an environment,
-but typing the flag is an explicit act, and `sugarcrush --permission-mode="$MODE"`
-with `$MODE` unset otherwise leaves the operator believing a mode is in force
-when none is — succeeding silently at exit 0 under whatever the config said.
-`--config` refuses an empty value for exactly this reason; this flag now follows
-that precedent instead of half of it. `--model`/`--model=` is refused the same
-way.
-
-Both flags apply to the TUI and to `-p`/`run` alike.
+### Starting in a project, with a first prompt
 
 The project root can also be given as a bare argument: a **first** argument
 that looks like a path (`sugarcrush ../other-project`, `./app`, `/srv/app`) or
@@ -139,773 +144,6 @@ needs a value that is not an option: `--root --model x` is a usage error rather
 than a root named `--model` (use `--root=<dir>` for a directory whose name
 begins with `-`). Subcommand operands (`session delete <id>`) are not affected.
 
-### Sessions: new, continue, resume
-
-Every launch opens a **new** session. The conversation is saved as it changes —
-every message, tool call, tool result and thought — so any session can be picked
-up again later, with the model seeing the whole earlier exchange. Saves are
-batched: a change is written within half a second, and at once when you switch
-sessions, `/branch`, `/fork` or quit (Ctrl+C included), so only a hard kill
-(`kill -9`, a power cut) can lose the last half-second:
-
-```sh
-sugarcrush                  # a new session (Up still recalls prompts from earlier ones)
-sugarcrush --continue       # reopen the most recently used session (short: -c)
-sugarcrush --resume 3f9a    # reopen one by id, unique id prefix, or name
-sugarcrush --resume         # open the session picker at launch
-```
-
-`--resume <id>` also accepts `--resume=<id>`; ids come from `sugarcrush session
-list` or the picker. A target that names no stored session is a usage error
-(exit 2) before the TUI starts. `--continue` and `--resume` cannot be combined
-with each other or with `-p`/`run`. Inside the TUI, `Ctrl+R` (or `/sessions`)
-opens the same picker and `Enter` loads the chosen session's transcript;
-`Ctrl+Tab` and the tab strip switch the same way. A tool call that was still
-running when its session was last saved comes back marked interrupted.
-`--continue` only considers your own conversations: it skips sub-agent
-sessions and sessions you have archived. The picker and the tab strip leave
-them out too.
-
-A session is named after its first reply by a cheap title model, and a name
-you give it always wins over a generated one — even one still in flight when
-you typed yours. `/rename <title>` names the current session; a bare `/rename`
-(or **Rename session…** in `Ctrl+P`, or a double-click on the current tab)
-opens an inline title row above the input box — `Enter` saves, `Esc` cancels,
-and saving it empty clears the name and asks the title model for a new one,
-which is also what `/rename --auto` does. Pinned sessions (`p` in the picker,
-or **Pin or unpin session** in `Ctrl+P`) lead the tab strip with a `★`.
-
-**One window writes a session at a time.** A launch that opens a session
-another sugarcrush already has open — `--continue` in a second terminal, the
-same `--resume` twice, or picking it in the picker — opens it **read-only**: the
-transcript is shown, but prompts and the commands that would change the session
-(`/clear`, `/compact`, `/rename`, `/rewind`, `/undo`, `/redo`,
-`/workflow run|resume`, any custom command) are refused and nothing is saved, and the status bar leads with
-`read-only: /branch to fork` (narrowing to `RO` on a small terminal). `/branch` forks the session into a
-new one this window owns and carries on there, and the refused draft comes back
-in the box;
-commands that only read or change the window itself (`/help`, `/sessions`,
-`/theme`, `/model`, …) still work, and so does switching to another session.
-Close the other window and this one notices within a second: it takes the
-session over, reloads the transcript (so whatever the other window saved is
-kept), says so, and puts a refused draft back in the box.
-The guard is a `flock()` on `~/.sugar-crush/sessions/<id>.lock`, so it is
-released the moment the holding process exits, however it exits. Where the lock
-cannot be taken at all (a home directory that refuses the file), the session
-opens writable, as before.
-
-Launches that were quit without typing leave empty sessions behind; the next
-launch deletes the ones older than an hour (unnamed, with no transcript and no
-checkpoint — nothing that could be wanted back).
-
-**Each turn also snapshots your files.** Just before a prompt is sent, the
-project's files are recorded with the turn's checkpoint, so a turn's edits can
-be undone later. In a git repository the snapshot is a hidden commit under
-`refs/sugar-crush/checkpoints/<session>/<n>`. Your branch, index and stash list
-are not touched, and `git stash list` does not show it. Outside a repository it
-goes into a private git directory under `~/.sugar-crush/checkpoints/`, and
-nothing is written into the project. Untracked files over 2 MiB, dependency and
-build directories (`node_modules/`, `vendor/`, `dist/`, …), media, archives,
-binaries, databases, logs and `.env*` files are left out. No snapshot is taken
-in your home directory itself, a directory above it, or `~/Desktop`,
-`~/Documents` and `~/Downloads`. A snapshot that cannot be taken never holds up
-the turn, but the first time it is refused or fails in a directory the
-transcript says why, once.
-
-**Taking a turn back.** `/undo` restores the conversation to the checkpoint
-before your last prompt, puts that prompt back in the box, and puts the files
-back the way that turn found them. `/redo` steps forward again, one checkpoint
-at a time, until you send another prompt. `/rewind [n]` steps back `n`
-checkpoints and restores the conversation only (`--chat`, the default); it
-tells you when the files differ from that checkpoint, and `/rewind --files`
-then puts them back too. `--files` alone restores the files and leaves the
-conversation, `--both` does both. `/diff [n]` shows what changed in the files
-since checkpoint `n` (`1`, the one before your last prompt, by default), as the
-list of files and the patch. A file restore is refused once HEAD has moved since
-the checkpoint (it would undo those commits): `--both` and `/undo` then change
-nothing, and `--chat` still works. Files a snapshot leaves out are never
-touched by a restore. `/redo` moves the files only when they still match the
-checkpoint the conversation is at, so edits you made after a rewind are kept.
-The refs are deleted with their checkpoints: old ones past the per-session
-limit, a deleted session's, and the ones a rewind set aside once the next
-prompt is sent. `/branch` keeps its own copy. Unused snapshots in the private
-directories are cleaned up by a `git gc` at most once a day.
-
-### Settings files
-
-Four files are read, and the **highest one that mentions a key wins** for that
-key:
-
-| # | File | Who wrote it | Wins over |
-|---|------|--------------|-----------|
-| 4 | `~/.sugar-crush/config.json` | you, and the CLI itself — Ctrl+P and `/theme` write `theme` here, `/model` writes `provider`, and the settings view's save writes the keys it changes (never `provider` or `theme`) | everything |
-| 3 | `~/.sugar-crush/settings.json` | you, by hand | the project's two |
-| 2 | `<project>/.sugar-crush/settings.local.json` | whoever wrote the repository (`.gitignore`d **by convention**, which is not a trust signal — see below), or you, through the settings view's **This project (local)** tier once you trust the project | the shared project file |
-| 1 | `<project>/.sugar-crush/settings.json` | whoever wrote the repository, or you, through the settings view's **This project (shared)** tier once you trust the project — it is committed, so everyone who clones the repository (and trusts it) gets what you save there | nothing |
-
-Two things about that order are deliberate and the reverse of what most editors
-do. **Your files beat the project's**, because a project file arrived with a
-`git clone` — a repository can fill in what you left unsaid and never overrule
-a choice you made. And **`config.json` beats `settings.json`**, because it is
-the file the CLI *writes*: ranked the other way, a `settings.json` naming
-`theme` would outrank what Ctrl+P "Switch theme" **or `/theme <name>`** had just
-written, and the choice would fail to stick with no error anywhere and nothing
-pointing at the file responsible. (This sentence credited the palette alone
-until round 43 — the same omission the `provider` row of the table above once
-had, and it matters for the same reason: a reader who reached for `/theme`
-cannot tell whether the sentence is about them.)
-
-> **This paragraph used to say `config.json` was "the deprecated name".** It is
-> not, and the word was doing real damage in the file most likely to be read:
-> it told you to migrate off the only settings file this app ever writes back
-> to. What is true is that `config.json` is the *older* of the two names —
-> nothing in `src/` marks it deprecated, `Bootstrap::writeUserConfig()` writes
-> it (via `Bootstrap::userConfigPath()`), and every persisted `theme` and
-> `provider` lands there. The sentence still earns its place because the
-> ranking genuinely is surprising and still needs explaining; only its reason
-> was wrong. `config.json` keeps working indefinitely, and there is nothing to
-> migrate *to*: your `~/.sugar-crush/settings.json` is never written.
-
-The settings view (`/settings`, `t` to pick the tier) writes either project
-file only for a project you already trust, and only the keys a project file may
-set; the save preview names the file and, for the shared one, warns that it is
-committed.
-
-**Above all four sits the session tier.** The settings view can save a change
-**for this session only**: nothing is written to disk, the value outranks every
-file until the process exits, and the environment and flags still outrank it. A turn's forked child and the Task
-sub-agents it runs inherit it; a `/bg` daemon is a separate process and starts
-from the files alone. Only keys that take effect without a restart can be set
-there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) lists
-them, and says when every other key a save changes applies.
-
-<!-- settings:layered:begin -->
-Only these eighty-three keys are layered — `provider`, `models`, `titleModel`,
-`summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
-`promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
-`maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
-`compaction.blockPercent`, `compaction.keepRecent`,
-`compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
-`compaction.toolOutputChars`, `compaction.reminderTokens`,
-`compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
-`contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
-`contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
-`contextWindow`, `autoReview`, `secretEnvAllowlist`, `allowedTools`,
-`disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
-`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
-`toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
-`webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
-`webSearchEndpoint`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
-`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `instructions`,
-`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
-`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
-`subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
-`attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
-`watchFiles`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`,
-`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
-`maxCheckpoints`, `lintCommands`, `connectTimeoutSeconds`,
-`providerRetryAttempts`, `providerRetryBaseBackoffMs`.
-<!-- settings:layered:end -->
-
-That roster (and its count) is generated from `SettingsSchema` by
-`php tools/gen-settings-doc.php --write`. The `trustedProject*` lists are read
-from `~/.sugar-crush/config.json` **alone**, so no lower layer can grant itself
-trust.
-
-`permissionMode` and `permissionRules` are the one pair that is neither: they
-are read from `~/.sugar-crush/settings.json` **and** `config.json` (the latter
-wins), and from **no project file at any trust level** — a checked-in
-`bypass-permissions` would be a sandbox escape delivered by `git clone`. They
-also do not go through the layered reader, because that reader is *tolerant* by
-design (a malformed file just contributes nothing) and a permission policy may
-not be: a `settings.json` that exists and cannot be parsed now **stops the
-launch**, exactly as such a `config.json` already did. That is the same bargain,
-one file wider — and it is louder rather than newly broken, since such a file
-already cost you your theme and provider without saying so.
-
-**A project's settings files are ignored until you opt that project in.**
-`<project>/.sugar-crush/settings.json` was written by whoever wrote the
-repository, so honouring it out of the box would let `git clone <repo> && cd
-<repo> && sugarcrush` pick your model and turn off your skills. Same gate shape
-as project hooks and `.mcp.json`, separate key — list the project in
-`trustedProjectSettings` in your own `~/.sugar-crush/config.json`:
-
-```json
-{ "trustedProjectSettings": ["/home/you/src/that-project"] }
-```
-
-Absolute (or `~/`-rooted) paths only; a relative entry like `"."` would trust
-every repository you ever run from, so it is refused and reported. And
-`settings.local.json` gets **the same gate** as its tracked sibling: `.gitignore`
-is advice to whoever commits, not a property of a repo someone else wrote, so a
-`git add -f`'d "local" file arrives with a clone just as readily. The two differ
-in precedence only.
-
-Even for a trusted project, forty-one keys are **never** taken from a project file:
-`statusLine`, because its value is a shell command this app runs on a timer —
-a project-tier one would be arbitrary code execution on clone-and-launch, with
-no tool call and no permission gate anywhere in the path; `lintCommands`, for
-the same reason — each value is a lint command the post-edit hook runs after an
-edit; `lsp`, for the same reason again — each entry is a language server this app
-starts at launch; `autoCommit`, because a commit runs the repository's own git
-hooks and writes into the operator's history, and a checkout must not be able to
-switch that on; `maxCheckpoints`, because it decides how much of the
-operator's own session history `/rewind` can still return to, and a checkout
-setting it to 1 would quietly prune that history at every turn; `testCommand` and `autoTest`, for the lint reason — the first is
-a shell command auto-test runs at the end of a turn that edited a file, the
-second switches that run on;
-`provider`, because it decides which host every prompt in the session is sent
-to; `instructions`, because it decides which files become authoritative
-system-prompt text; `disabledRules`, because its value is a list of names
-pointing at the operator's own rule packs, so a project-tier one would let a
-checkout choose which of the operator's instructions go silent — a different
-power from the `disabledSkills` a project *may* set, because a rule pack is
-prompt prose the operator wrote, not a capability the harness enforces (see
-`RulesState`); `maxOutputTokens`, because it is the one layered key whose
-meaningful direction is UP — every raise sends bigger paid requests on the
-operator's credential, and a spend ceiling a checkout can lift is a bill a
-clone can run up; `modelPrices`, because it sets the rate every billed token
-converts at — the mirrored direction on the same money axis, where a
-project-supplied map could zero a rate and silently blind the spend cap and the
-`/budget` totals, the exact failure the unpriced-model notice exists to make
-loud; `models`, `titleModel`, `summaryModel`, `subagentModel` and
-`embeddingModel`, because they choose the model the session itself and every
-title, prompt suggestion, `/compact` summary, delegated sub-agent run and
-memory-recall embedding run on with the operator's key — within one provider the price spread is over 100×, and a model with no
-price on file bills as $0, so a project-chosen one blinds the spend cap the same
-way a zeroed rate would; `layout`, because it records where the operator chose to put
-their own windows — frame geometry is a personal habit, not a property of the
-checked-out code, and a project that moves your panes behind your back is
-answering to the wrong owner; `maxToolSteps`, because it multiplies how many
-billed provider round-trips one turn may fan out — the `maxOutputTokens` money
-axis counted in calls instead of tokens, and a ceiling a checkout can raise is
-still a bill a clone can run up on the operator's credential;
-`toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
-`readPageBytes` and `toolSpillWindowPercent`, the six caps on what one tool
-result may hand the model,
-because every byte a result carries is replayed into each later request of the
-turn — the same money axis paid in input tokens, so a checkout may not raise
-them (the timeouts and memory bounds beside them only cost time, and a trusted
-project *may* set those); `webSearchEndpoint`, because it decides which host
-receives every WebSearch query, and those queries routinely quote the
-repository's code, file names and error text — the `provider` argument applied
-to search; `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`
-and `subagentMaxActive`, because each multiplies the provider calls one turn
-may fan out through delegated runs — the `maxToolSteps` argument applied to
-sub-agents;
-`secretEnvAllowlist`, because it names which of the operator's credentials
-Bash, Grep and script hooks may still inherit after the scrub that keeps them
-out of model-visible output — a project-tier `["*"]` would read every key in
-the operator's shell back through one `env` call; `autoReview`, because every flagged `auto` call it reviews is a paid request on the operator's title model — the money axis again, and a checkout must not be able to switch a per-call charge on; `contextWindow`,
-`extraBody`, `thinkingBudget` and `promptCache`, the four provider-shaping
-keys, because each moves the bill — an inflated window switches
-auto-compaction off so requests grow until the server refuses them, an extra
-body field such as `n` multiplies every request, a thinking budget is billed as
-output, and switching prompt caching off bills every prompt in full;
-`bashSandbox`, because its meaningful direction is `off` — a checkout able to
-set it could lift the write jail the operator put around every command `Bash`
-runs, from inside the very repository that jail confines;
-`attribution`, because it is the trailer the model is told to stamp on every
-commit it makes under the operator's git identity, and a checkout choosing that
-text would be a repository writing into the operator's own history (its sibling
-`includeGitInstructions` only removes prompt text, so a trusted project *may*
-set that one); `enabledSkills`, because it names skills whose full bodies
-ride the system prompt every turn — the `instructions` argument applied to
-skills, where a checkout could make any skill it ships standing,
-authoritative prompt text (the `disabledSkills` a project *may* set only ever
-removes one); `watchFiles`, because it turns an `AI!` comment saved into the
-repository's files into a prompt the agent acts on, and a checkout must not be
-able to make its own text your next instruction; and
-`allowedTools`, for a reason worth spelling
-out because on capability alone it looks harmless. A whitelist is an intersection — it
-cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
-defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all twenty-four of the others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents` and `InterruptAgent` —<!-- tools:others:end --> in one line, and what the model does next is the
-same work through `Bash`, which reaches the permission gate as opaque shell text
-instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
-
-Its sibling `disabledTools` *is* available to a trusted project — but not for
-the reason this section used to give.
-
-> **This paragraph used to say that expressing the same attack through
-> `disabledTools` "means naming every tool it removes — a value you can see".
-> That is false**, and it is corrected here rather than deleted because it was
-> the stated reason for the tiering, and because it is the sentence you would
-> lean on when deciding whether a cloned repository's settings need reading at
-> all. `Bootstrap::filterToolSet()` matches names through
-> `PermissionRule::matchesToolName()`, which is bare `fnmatch()`, and
-> `fnmatch()` honours negated character classes. Measured end to end on PHP
-> 8.3.6, in a project you have listed under `trustedProjectSettings`:
->
-> ```json
-> { "disabledTools": ["[!B]*"] }
-> ```
->
-> leaves exactly `Bash` out of the twenty-five built-in tools the project tier can filter.
-> `Task`, the concrete `Tool` class wired outside that ceiling since E675, is
-> appended after `filterToolSet()` and gated on the launch holding an
-> `AgentManager` — outside every project glob's reach — so on a manager-bound
-> chat launch it stands there too. The glob is five
-> characters and names none of the twenty-four it removes. The negation is not the
-> trick either: `["[C-Z]*", "[a-z]*"]` leaves exactly `Bash` too, measured the
-> same way, so no restriction on *pattern shape* could make the old sentence
-> true again. What earns the paragraph its place is the shape argument for
-> `allowedTools` above, which does hold; what it lost is the claim that
-> `disabledTools` cannot express the same thing.
-
-**Two things narrow it, and both are measured.** An *untrusted* project's
-`disabledTools` never reaches the merge at all — all twenty-five filterable tools survive, and `Task`, being post-filter, was never in this setting's reach to lose — so
-this needs a `trustedProjectSettings` grant you made yourself. And the layers
-merge key by key rather than as a union: if *you* name any `disabledTools`,
-yours replaces the project's outright — your `["Read"]` against a trusted
-project's `["[!B]*"]` removes exactly `Read` and leaves everything the
-project's glob named. The gap is open only for an operator who trusted a
-repository and set no `disabledTools` of their own.
-
-So **a trusted project's `disabledTools` can choose your tool set** — do not
-grant `trustedProjectSettings` to a repository you would not trust with
-`allowedTools`. What it can no longer do is choose it *unnoticed*: a trusted
-project's tool removals are reported at launch, naming the file, the tools it
-took and the tools it left.
-
-```text
-sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 24 of the
-25 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
-WebSearch, doctor, Skill, Lsp, Memory, RepoMap, Prune, Todo, Compress, Workflow,
-Recall, Team, ApplyPatch, AskUser, PlanExit, SendMessage, Subagents,
-InterruptAgent — leaving: Bash.
-```
-
-The two keys are combined as one condition rather than as two passes — a
-tool survives only if your allow-list admits it *and* no deny entry names it —
-so there is no later step in which a project's `disabledTools` could re-admit
-something your `allowedTools` left out. Put the whitelist in your own file where
-you can see it.
-
-`--config <file>` (also `--config=<file>`) replaces the per-user
-`~/.sugar-crush/config.json` for this run: the theme, the persisted provider,
-the `instructions` globs, the `permissionMode`, the `permissionRules` and the
-`trustedProjectHooks` list all come out of the named file, and the discovered
-one is not merged in. It names one **file**, not a config directory — agents,
-skills, workflows, sessions and memory still live under `~/.sugar-crush`, and
-`--config` does not relax the "is this home directory yours" check that guards
-them. **`settings.json` is one of the things it does not move**: layer 3 above
-is always `~/.sugar-crush/settings.json`, never a `settings.json` sitting next
-to the file you named. Otherwise `--config ./anything.json` would hand a
-directory nobody vetted the user tier — the tier that may set `provider` and
-`instructions`. One consequence of that, worth stating because "replaces the
-per-user config" reads like a clean substitution and this is not one: since
-`~/.sugar-crush/settings.json` may now carry `permissionMode`, it is a policy
-file, and a policy file that exists and cannot be parsed stops the launch —
-including when you named a perfectly good file with `--config`. `--config` is
-not an escape hatch from a broken home config, and deliberately so: it is
-documented above as *not* disarming the gate, and letting it suppress an
-unreadable policy file would be exactly that. Move or fix the broken
-`settings.json`. The file must already exist and be readable; naming one that does not is
-a usage error (exit `2`) rather than a fall-back to discovery, for the same
-reason `--root /typo` is one — silently running the DEFAULT permission policy
-while the operator believes a restrictive one is in force is worse than not
-starting. So is a `--config` with no value at all, or one followed by another
-option (`--config -p "hi"`, which used to eat the `-p` as the file name): a
-missing value is indistinguishable from an absent flag once parsed, so
-accepting it is the same silent fall-back to discovery.
-
-Because the named file carries the permission policy, it is held to the **same
-standard as `~/.sugar-crush/config.json`**: it must be owned by you, and
-neither it nor its directory may be world-writable. That rules out the two
-paths people reach for first — a file under `/tmp` is refused for the
-directory's `o+w` bit, and a root-owned `/etc/crush.json` for its ownership —
-and the refusal is a launch-time `PermissionConfigException` (exit `2`) from
-`Bootstrap`, worded about the file rather than about the flag. The check is
-deliberately not duplicated in `ArgvParser::configError()`, which validates
-existence and readability only: two copies of an ownership/mode rule is how the
-two drift apart.
-
-`--output-format` accepts exactly `text` (the default) and `json`, matched
-case-sensitively; anything else is a usage error (exit `2`) on both the
-one-shot and the TUI path. It used to be accepted verbatim and then compared
-for equality against `json` at each consumer, so `--output-format xml` printed
-plain text and exited `0` — a `| jq` caller got an empty pipe with a success
-status.
-
-**One-shot mode never falls back to the offline echo provider.** If this run
-selected a provider — via `$SUGARCRUSH_PROVIDER` or a persisted Ctrl+P "Switch
-model" choice — and that provider cannot be constructed (unknown name, missing
-credential), `-p`/`run` prints the reason to stderr and exits **2** rather than
-returning a canned reply at exit 0. The stderr line names the source it came
-from, so a persisted choice sends you to `~/.sugar-crush/config.json` rather
-than to a `$SUGARCRUSH_PROVIDER` nothing ever set. The interactive TUI keeps
-the opposite, lenient behaviour: it warns and opens an offline session, because
-refusing to launch an editor over a missing API key is worse than an offline
-one.
-
-The same three exit codes govern every subcommand below.
-
-| exit | meaning |
-| --- | --- |
-| `0` | the prompt ran and produced an answer, or the subcommand answered |
-| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found` |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
-
-`2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
-the invocation is malformed, no backend is ever selected, and a CI gate that
-retries on `1` would otherwise retry it forever. It also covers a subcommand
-handed a missing or unknown operand (`sugarcrush session`, `sugarcrush mcp
-bogus`, `sugarcrush completion tcsh`).
-
-### Subcommands
-
-```sh
-sugarcrush doctor                    # check this installation, exit 1 if anything FAILs
-sugarcrush models                    # providers this install can select; * marks the selected one
-sugarcrush session list              # stored sessions, pinned then newest first
-                                     #   [--children] [--archived] [--all] [--limit N]
-sugarcrush session show <target>     # one session's details + transcript (Markdown)
-sugarcrush session rename <target> <title…>
-sugarcrush session delete <target>   # sub-agent children go too; [--with-children] takes branches
-sugarcrush session pin|unpin|archive|unarchive <target>
-sugarcrush mcp list                  # what .mcp.json declares — without starting anything
-sugarcrush mcp trust                 # approve .mcp.json as it is now (command/args/env pinned per server)
-sugarcrush mcp import claude|opencode <path>
-                                     # translate a foreign MCP config, print the block — writes nothing
-sugarcrush serve                     # WebSocket + HTTP server for the web UI, until Ctrl+C
-                                     #   [--host IP] [--port N] [--allow-remote] [--allowed-origin LIST]
-                                     #   [--web-root DIR] [--no-web] [--allow-bypass] [--allow-root]
-                                     #   [--detach] [--parent-pid PID]
-sugarcrush serve status|stop|logs|url|token
-                                     # the running server: stop [--force], logs [-f], token [--rotate]
-sugarcrush attach [<session>]        # the TUI on a session of the running server — turns run there
-                                     #   [--url URL]
-sugarcrush acp                       # an Agent Client Protocol agent on stdio, for an editor to start
-sugarcrush completion bash|zsh|fish  # a shell completion script on stdout
-```
-
-Every one of these is dispatched in the same pre-flight place `--help` and
-`--version` are, **before** `Program` is constructed: they answer on a machine
-with no provider, no API key and no TTY, and none of them but `attach` enters
-the alt-screen. `serve` is the one that keeps running: it binds `127.0.0.1:7420`,
-prints a one-time sign-in URL, and answers until `Ctrl+C` or `SIGTERM`. Every
-client must authenticate — loopback is not trusted on its own — and a
-non-loopback `--host`, the bypass permission modes and running as root are each
-refused unless their `--allow-*` flag is given; it also refuses to start
-without `ext-pcntl`, `ext-posix` and `ext-ffi` (`doctor` reports all three).
-The flags belong to `serve` (before it they are unknown options). `serve
---detach` runs it in the background instead, printing the URL and pid once the
-port is bound; `serve status`, `stop`, `logs`, `url` (a fresh sign-in link) and
-`token` manage whichever server holds the state directory's lock, and
-`--parent-pid` stops it when the process that started it exits. `attach` is
-the one verb that opens the TUI, and only once it has connected: it follows a
-session of that server (an id, name or unique prefix; a new one without) and
-runs the usual screen over it — the server runs the turns and their tools,
-this terminal streams them and answers their permission questions, and
-quitting leaves a running turn running. Its
-transport, auth flow, background mode and security model are in
-[docs/SERVER.md](docs/SERVER.md). `acp` is the verb an editor runs rather than
-a person: Zed, JetBrains or Neovim starts it and speaks the Agent Client
-Protocol on its stdin and stdout — sessions open in the editor's project root,
-turns run here with this install's provider and tools, and the editor answers
-their permission questions ([docs/SERVER.md](docs/SERVER.md#editors-sugarcrush-acp)). `doctor` is the sharpest case — it is a health check for an install
-that may be broken, so it must not require the thing it is diagnosing. A
-config whose `permissionMode` is unusable makes the launch refuse to start
-(exit `2`, above); `doctor` still runs, names that as the failing check, and
-exits `1`.
-
-A session `<target>` is an id, a name or a unique id prefix — the resolver
-`--resume` uses, over every kind and archived rows too. Nothing matching exits
-`1` (`not-found`); an ambiguous prefix exits `2` and lists the candidates. The
-flags after `session list` and `session delete` belong to that verb: before it
-they are unknown options. `list` prints `★ id updated kind turns
-provider/model name` (★ = pinned, `[archived]` after an archived name), and its
-JSON rows carry every stored column (`kind`, `parent_id`, `pinned`,
-`archived_at`, `turns`, …). A pinned session lists first and is never pruned;
-an archived one leaves the default list, the tab strip and `--continue` but
-keeps its transcript.
-
-`doctor` is **read-only**: it counts the rows in the session database through
-`Bootstrap::sessionStore(prune: false)` rather than the plain accessor, so the
-opt-in `SUGARCRUSH_SESSION_RETENTION_DAYS` sweep that a *launch* applies cannot
-delete conversations on the way to a health check. `doctor` and `models` take
-no operands and reject one at exit `2` rather than ignoring it.
-
-`sugarcrush doctor` is **not** the model-callable `doctor` tool. That one is
-registered in `Bootstrap::tools()`, advertised to the LLM, and answers a
-completely different question — which image protocol this terminal speaks, with
-a PNG capability swatch attached. The CLI subcommand reports PHP, the
-extensions the session store and `serve` need, the config file, the permission policy, the
-selected provider, the session database and the project MCP config, takes no
-model, and cannot be reached by a tool call.
-
-`mcp list` **reads and never runs**. `Bootstrap::mcpClient()` starts every
-configured server as a side effect of being asked for the client, so routing a
-listing through it would `proc_open()` every program the repository names — the
-exact act the trust gate exists to make deliberate, performed by the command
-you run *because* you do not yet trust the file. It shares its path,
-containment and trust decision with `mcpClient()` (both go through
-`Bootstrap::mcpConfigDecision()`), so it can never report a verdict the launch
-disagrees with; an untrusted or out-of-tree config is reported rather than
-enumerated.
-
-`--output-format json` applies to `doctor`, `models`, every `session` verb,
-`mcp list` and `mcp import`, producing the same `{"result": …}` envelope the
-one-shot path does, and
-the same `{"result":null,"error":{"type":…,"message":…}}` document on any
-failure — an operand error, an unknown session id, or an unreadable trusted
-`.mcp.json`. **The exit code never depends on the format**: `sugarcrush mcp
-list` and `sugarcrush --output-format json mcp list` return the same code for
-the same install, so a CI gate can be written either way. A refused config
-(absent, out of tree, untrusted) is an answer and exits `0` in both. `completion` is the exception, and deliberately: its output is a shell
-script you `eval`, and JSON-quoting it would produce something no shell can
-source — the same reasoning that keeps `--help` and `--version` plain text.
-
-A `1` from the engine already had its retries. Transient provider failures — a
-connect failure, a 5xx, a 408/429, an Anthropic `overloaded_error` — are retried
-inside the provider call with exponential backoff before the run gives up, so
-for a provider-selected run (and for the offline default, which is the engine
-too) `1` means "every attempt failed", not "one attempt failed". An outer retry
-still helps for an outage longer than the couple of seconds of backoff that
-spends; it is just not the first one.
-
-The retry lives in the provider call, so it covers the engine and nothing else.
-A run whose backend is either `$SUGARCRUSH_BACKEND_CMD` variable's external command delegates
-instead of calling a provider, and its `1` is a first attempt — retrying it from
-outside is the only retry it gets.
-
-With `--output-format json`, stdout is always exactly one JSON object: either
-`{"result": <the answer>}` or `{"result": null, "error": {"type": "usage" |
-"provider_configuration" | "installation" | "backend" | "encoding" |
-"not-found" | "mcp-config", "message":
-"...", "provider": "..."}}` (`provider` present only when a selection is to blame), so
-a `| jq` consumer never sees an empty pipe. That holds for the flag, `--config`
-and `--root` usage errors too, which `bin/sugarcrush` catches before the one-shot
-path is entered, and for a reply or an error message carrying bytes that are
-not valid UTF-8 (they are substituted, not dropped along with the whole
-document). `error.type` is not the exit code renamed — `usage`,
-`provider_configuration` and `installation` are all `2`, `backend`,
-`encoding`, `not-found` and `mcp-config` are all `1` — it is how a consumer
-that kept the code tells apart the kinds of each. The set's spellings are
-mixed by history, not by mistake: five names are single words or
-`snake_case`, while `not-found` and `mcp-config` are the two `kebab-case`
-names `src/Cli/Subcommands.php` added when its subcommand errors joined the
-contract. Renaming them to `snake_case` was weighed and declined (E116);
-match exact strings, never an inferred alphabet.
-
-One key is **conditional**, and it is the only one: `refusals`. A turn that
-blocked a tool call — a permission ASK that nothing could answer, an explicit
-`n` at the prompt, a hook that denied the call outright — adds
-`"refusals": [{"tool": "<name>", "kind": "<which of the three>", "reason":
-"<why it was stopped>"}, …]` to whichever document it emits, the answer and
-the error one alike. A row for an ASK that the run answered by refusing it
-because there was no terminal to ask at carries one extra key,
-`"unattended": true`; a refusal a human answered — with `n`, or an EOF at a
-live prompt — never does. One `kind` covers both nobody-being-there and a
-person-saying-no, whose reason texts are byte-identical, so this key is a
-qualifier on the row, not a fourth `kind`. `kind` is one of exactly three tokens and says which of
-those three things happened: `hook` (a hook denied the call outright),
-`refused` (an approver was asked and answered no) and `unanswered` (the call
-needed permission and there was nobody to ask). It is there so a consumer does
-not have to re-match the prefix `reason` opens with — that prefix is still
-present and unchanged, so a script written against the older document keeps
-working. Before this,
-the document read `{"result": "<the answer>"}` for a turn in which a tool was
-quietly not run, and the model — which *did* see the refusal — had simply
-answered around it. `refusals` is **absent, not empty**, on a run that refused
-nothing, so the ordinary document is unchanged and `jq '.refusals // []'` is
-the way to read it unconditionally. It is not a list of tool calls that
-*failed*: a tool that ran and returned an error is a result the model acted
-on, whereas a refusal is a call that never happened. That distinction is carried on
-the result by whoever refused the call, never read off its text, so a tool
-that ran and printed a line opening `Permission denied:` before failing — a
-shell script, an MCP server — is not listed (audit F-P8).
-
-`--output-format text` carries no such list on stdout, and **this paragraph
-has been wrong about that twice.** It first said the format needed none
-because "every refusal is already on stderr, in front of the person reading
-the terminal" — not true, and least true for the commonest refusal there is,
-since only the console permission prompt wrote to stderr and it is only ever
-reached for a hook verdict of ASK. It then said the gap was real and that
-"the fix is a stderr line on the deny path". The diagnosis was right; the
-owner was not. `Runtime` is the engine, and the TUI forks into the same
-`Runtime` with descriptor 2 pointing at a terminal that is in the alternate
-screen — a refusal line written there would paint over a live frame on every
-denied call.
-
-**What is true now: on the `-p` one-shot path, every refused tool call is
-announced on stderr,** one line per refusal, naming the tool and quoting the
-reason the model was given — which opens with `Hook denied:`,
-`Permission denied:` or `Permission required:` depending on whether a hook
-objected, you answered no, or nothing was attached to ask. It is written from
-the one-shot path itself, which owns its console, and it appears on **both**
-formats: stdout under `text` stays the answer and nothing else, and under
-`json` it stays exactly one object, so a shell pipeline and `jq` are both
-unaffected.
-
-The scope in that sentence is deliberate. The interactive TUI has never had
-this gap — it draws a refused call struck through — but a **background
-session** still does: `BackgroundSessionRunner` calls the backend's
-`complete()` with a token callback and no event callback at all, so nothing
-downstream ever sees the refusal to announce it. That one is recorded, not
-fixed here.
-
-Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
-that is the thing to know if you are reading the source to find where a type
-comes from. `installation` is hand-rolled by `bin/sugarcrush`'s autoload guard
-— see the one exception below for why it has to be. `not-found` and
-`mcp-config` come from the subcommands, which build their own documents
-through `Subcommands::emitDocument()`: `session delete <id>` on an id the store
-does not hold, and `mcp list` on a **trusted** `.mcp.json` that could not be
-read or decoded. Both exit `1` — the store and the file were opened, so
-something was attempted; an absent, out-of-tree or untrusted `.mcp.json` is an
-answer rather than a failure and exits `0` with a `status` field saying so.
-
-Two shapes of that contract are easy to over-read, so both are stated
-plainly. **`result` is not always a string.** It is one on the one-shot path
-(`-p`/`run`), where the answer *is* text; every subcommand puts an object
-there — `{"result":{"checks":[…],"failed":2}}`, `{"result":{"sessions":[…]}}`.
-And **a failure does not always carry an `error` object.** `doctor` exits `1`
-when any check came back `FAIL`, and its document is still
-`{"result":{…}}` with no `error` key at all, because the failing checks *are*
-the answer and naming one of them `error.type` would say less than the report
-already does. (MEASURED: `sugarcrush doctor --output-format json` on an
-install with a failing check → rc 1, one `result` object, no `error`.) So
-branch on the **exit code** first and on `error.type` second; a consumer that
-reads `.error.type` to decide whether the run failed will read `null` on that
-one.
-
-There is exactly one exception, and it is not a case of the JSON renderer
-being unavailable — it is the caller asking for a rendering nothing implements:
-an **`--output-format` value that is not `text` or `json`**. That run exits `2`
-with an **empty stdout** and its message on stderr, because the requested
-rendering is the thing being rejected, so there is no format left to honour —
-emitting the JSON document anyway would mean guessing that `--output-format
-xml` meant `json`, and `text` is what an unrecognised value has always fallen
-back to. (MEASURED: `sugarcrush -p hi --output-format xml` → rc 2, stdout 0
-bytes.) Note the scope: it is the **invalid value** that is exempt, not the
-flag — a *valid* `--output-format json` alongside any other usage error, such
-as `--output-format json --config /nonexistent`, still emits the document.
-
-**A checkout with no `vendor/autoload.php` is no longer an exception**, and this
-section used to say it was.
-
-> **What this used to say.** That there were *exactly two exceptions*, the second
-> being a checkout with no `vendor/autoload.php`, which "exits `2` with an empty
-> stdout, because the class that owns the JSON document shape is precisely the
-> one that could not be loaded, and hand-rolling a second copy of the shape in
-> `bin/sugarcrush` to cover it would be the drift that having one definition
-> prevents".
->
-> **What is true now.** That branch emits the document, and has since the
-> autoload guard was given one. On a checkout with no `vendor/autoload.php`,
-> `sugarcrush --output-format json -p hi` prints
-> `{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot
-> find composer autoload.php"}}` and a newline on stdout, the same message on
-> stderr, and exits `2`. The old reasoning had the wrong half of the problem:
-> the shape's **owner** is unreachable there, the shape itself never was.
-> `json_encode()` is a core function and needs no autoloader, so the choice was
-> never "document or no document" — it was "one duplicated document, or an
-> empty pipe", and an empty pipe is the worse of the two by this contract's own
-> argument, because a consumer cannot tell "empty because the binary died before
-> it could speak" from "empty because there was nothing to say".
->
-> **Why the old worry still earns its place.** Hand-rolling a second copy of the
-> shape really is the drift that one definition exists to prevent, so it is paid
-> for rather than waved away: the guard in `bin/sugarcrush` and
-> `NonInteractive::emitErrorDocument()` each name the other, and
-> `BinSugarcrushAutoloadGuardTest` asserts the two documents key-for-key **and**
-> the two `json_encode()` flag expressions token-for-token — a key comparison
-> alone cannot see an encode flag. Run `composer install` all the same: the
-> document reports a broken checkout, it does not repair one.
->
-> The guard also honours `--output-format` only when this invocation actually
-> asked for `json`, read straight out of raw `argv` because the option parser is
-> behind the same missing autoloader. Any other value leaves stdout empty, which
-> is what the working binary does on that same input.
-
-With no provider configured at all, one-shot mode still answers offline from
-the `EchoProvider` and exits 0 — nothing was substituted for anything — but
-says so on stderr.
-
-### Dependency-free shell-out
-
-To avoid PHP SDKs entirely, set `SUGARCRUSH_BACKEND_CMD` to a command that reads JSON history on stdin and writes the reply to stdout:
-
-```bash
-export SUGARCRUSH_BACKEND_CMD=~/bin/anthropic.sh
-./bin/sugarcrush
-```
-
-```bash
-#!/usr/bin/env bash
-# ~/bin/anthropic.sh — keeps PHP network-dep-free, swap models by editing this file
-payload=$(jq -nc --argjson h "$(cat)" '{model:"claude-opus-4-8", max_tokens:4096, messages:$h}')
-curl -sN https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" \
-  -H "content-type: application/json" -d "$payload" | jq -r '.content[0].text'
-```
-
-There is a second variable for the *streaming* shell-out,
-`SUGARCRUSH_BACKEND_CMD_STREAM`, and it is deliberately not the same one. It is
-a **token-stream** protocol, not a prose one: the wrapper writes **one token per
-line**, the newline *between* two tokens is framing and is dropped, and a
-**blank line means a literal newline** in the answer (an unterminated empty
-remainder at EOF means nothing). That blank-line rule is the only way the
-protocol can express a line break at all, and it is what makes it able to
-express any string.
-
-So the two contracts are mutually exclusive in both directions. Run the prose
-wrapper above through the streaming variable and every newline it emitted is
-gone while each blank line it emitted comes back as *one* newline rather than
-two — a paragraph break, a list and a code fence do not survive the trip. Run a
-token-per-line wrapper through `SUGARCRUSH_BACKEND_CMD` and you get its framing
-newlines verbatim, one word per line. That is why the streaming backend has its
-own variable instead of inheriting this one. `SUGARCRUSH_BACKEND_CMD` wins if
-both are set; for either variable, unset, empty and whitespace-only all count as
-absent. Neither path imposes any completion deadline.
-
-**"Streaming" buys you a live screen, not just the callback.** The backend
-invokes its per-token callback as each token's newline lands on the pipe, *and*
-the TUI repaints between the tokens. The second half used to be false and is
-worth recording because it was measured both ways: the read loop ran to
-completion inside one ReactPHP `futureTick`, so the event loop was blocked for
-the duration of the completion and the TUI repainted once, when the answer
-resolved. Measured against a wrapper emitting six tokens 300ms apart, with a
-50ms periodic timer standing in for the render tick:
-
-| | before | after |
-|---|---|---|
-| callbacks | 6, at 0.005s/0.304s/0.608s/0.907s/1.210s/1.514s | 6, at 0.010s/0.309s/0.609s/0.914s/1.214s/1.515s |
-| loop ticks during the stream | **0** | **36** |
-
-The read loop was not rewritten, it was hoisted: one implementation of the
-stdout protocol, driven either by the blocking path's own loop or by a periodic
-timer on the event loop. `SUGARCRUSH_BACKEND_CMD` had the same defect in a worse
-form — its promise executor ran the blocking call *immediately*, so the freeze
-started before the promise was even returned — and is drained from a timer now
-too. The one-shot `-p` path passes no callback at all and blocks deliberately.
-See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md#the-two-shell-out-variables) for
-the byte-level comparison and for the Windows `bypass_shell` note.
-
-```bash
-export SUGARCRUSH_BACKEND_CMD_STREAM=~/bin/ollama-stream.sh
-./bin/sugarcrush
-```
-
-```bash
-#!/usr/bin/env bash
-# ~/bin/ollama-stream.sh — satisfies the TOKEN protocol, not the prose one:
-# `jq -r` prints one line per streamed content chunk, and prints an EMPTY line
-# for a chunk that is just "\n" — which is exactly how this protocol spells a
-# line break. Do not point this variable at the prose wrapper above.
-payload=$(jq -nc --argjson h "$(cat)" '{model:"llama3", stream:true, messages:$h}')
-curl -sN http://localhost:11434/api/chat -d "$payload" | jq -r '.message.content'
-```
-
-### Choosing a backend without editing anything
-
-Three ways to get off the offline `EchoProvider`, from quickest to most permanent:
-
-1. **One-off, this run only:** `SUGARCRUSH_PROVIDER=dev-sglang ./bin/sugarcrush` — `dev-sglang` is sugar-crush's own dev/test SGLang endpoint (declared in the `.sugar-crush/config.dev.json` that ships inside the sugar-crush package — not a file in the project you run it in), useful for trying a real (if smaller) model with zero API keys.
-2. **From inside the TUI:** press **Ctrl+P**, choose **Switch model**, pick any provider from the list (built-in types plus every name declared in the package's own `.sugar-crush/config.dev.json`, e.g. `dev-sglang`) — switches immediately, no restart. `/model` opens the same picker and `/model dev-sglang` skips it; `/model dev-sglang <model id>` switches to that model on it as well. **Switch theme** works the same way for color themes.
-3. **Persisted across restarts:** either of the above choices — the palette's, or `/model`'s, which goes through the same code path — is written to `~/.sugar-crush/config.json` and read back on the next launch — so picking `dev-sglang` once via Ctrl+P means every future `./bin/sugarcrush` (with no env vars set at all) uses it automatically. `$SUGARCRUSH_PROVIDER`/`$SUGARCRUSH_BACKEND_CMD`/`$SUGARCRUSH_BACKEND_CMD_STREAM` still take priority over the persisted choice when set, for scripting/CI overrides. The **model** persists too, separately and per provider: `"models": {"dev-sglang": "<model id>"}` in `config.json` (or your `settings.json`) is the model that provider runs whenever it is selected — at launch and after a switch — unless `--model` or `$SUGARCRUSH_MODEL` names one; keyed by provider because a model id means nothing to any other provider. `/model <provider> <model>` writes that entry for you (through the settings view's writer, carrying the other providers' entries along) and switches to it at once — a session started with `--model` or `$SUGARCRUSH_MODEL` still runs the model you just picked, and keeps outranking the saved entry at the next launch. There is no top-level `model` key.
-
 ## Using the TUI
 
 The interactive binary boots a **pane shell** (`App`) that hosts the chat
@@ -923,7 +161,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Enter` (mid-turn) | **Steer** the running turn: the agent reads the message at its next step, and the step's tool calls that have not started yet are skipped (`Skipped to process an incoming message.`) so it reads it before doing more. If the turn ends before its next step, the message is sent as the next prompt instead — never lost. The `queueMode` setting changes what Enter does here: `followup` queues it like `Tab`, `interrupt` stops the turn at its next step (and the call running now) and then sends it |
 | `Tab` (mid-turn, draft in the box) | **Queue** the draft for after the running turn instead of steering it in; it is sent when the turn ends, like any queued message |
 | `Enter` (docked pane focused, empty draft) | Open the command palette — the door from a read-only pane to the commands that change things; on the **Settings** pane it opens the settings view instead (see `Ctrl+,`). A non-empty draft sends exactly as before, from any pane |
-| `Ctrl+,` | Focus the Settings pane; press it again there (or `Enter` on an empty draft, or type `/settings` — alias `/config` — or pick **View settings** from `Ctrl+P` or the `F10` App menu) to open the **settings view**: every setting, by category, with the value this launch runs with, where it came from (default, a project file, your `settings.json` or `config.json`, the environment, a flag), whether an environment variable or flag locks it, and when a change would apply (live, next turn, restart, next launch). `/` searches every category (`/settings compaction` opens with the search filled in), `←`/`→` switch category, `↑`/`↓` move, and `Esc` clears the search, then closes the view. The last tab, **Files**, lists the settings files and whether this launch reads them — including a project's own `.sugar-crush/config.json`, which is *not* a settings layer. It also edits: `Enter` opens the highlighted setting in a field (`Enter` stages the value, `Esc` drops it), `r` stages a reset to the default, `t` cycles the file a save writes — **You** (your `config.json`), **This project (local)**, **This project (shared)** (the project's committed `.sugar-crush/settings.json`; the preview warns it is committed) and **This session only** (memory, until exit) — `i` swaps the list for the highlighted setting's details in a narrow terminal, `s` shows the save preview — the target file, a diff of it and when each change applies — `↑`/`↓` scroll a long one, and `y` (or `Enter`) writes it, `n` (or `Esc`) goes back with everything still staged. `Enter` on one of the `trustedProject*` lists asks whether to trust this project for it and `y` adds the project to that list in your `config.json` (from the next launch). `Esc` with changes staged asks first: `d` discards them, `k` keeps editing, `s` previews the save. Nothing is written without that preview, so the view opens mid-turn too (except as a typed `/settings`, refused mid-turn like every slash command but `/btw`). Many terminals cannot send `Ctrl+,`; the slash command, the palette row and the menu row always work |
+| `Ctrl+,` | Focus the Settings pane; press it again there (or `Enter` on an empty draft, or type `/settings` — alias `/config` — or pick **View settings** from `Ctrl+P` or the `F10` App menu) to open the **settings view**: every setting, by category, with the value this launch runs with, where it came from (default, a project file, your `settings.json` or `config.json`, the environment, a flag), whether an environment variable or flag locks it, and when a change would apply (live, next turn, restart, next launch). `/` searches every category (`/settings compaction` opens with the search filled in), `←`/`→` switch category, `↑`/`↓` move, and `Esc` clears the search, then closes the view. The last tab, **Files**, lists the settings files and whether this launch reads them — including a project's own `.sugar-crush/config.json`, which is *not* a settings layer. It also edits: `Enter` opens the highlighted setting in a field (`Enter` stages the value, `Esc` drops it), `r` stages a reset to the default, `t` switches the file a save writes (**You**, your `config.json`, or **This project (local)**), `s` shows the save preview — the target file, a diff of it and when each change applies — and `y` (or `Enter`) writes it, `n` (or `Esc`) goes back with everything still staged. `Enter` on one of the `trustedProject*` lists asks whether to trust this project for it and `y` adds the project to that list in your `config.json` (from the next launch). `Esc` with changes staged asks first: `d` discards them, `k` keeps editing, `s` previews the save. Nothing is written without that preview, so the view opens mid-turn too (except as a typed `/settings`, refused mid-turn like every slash command but `/btw`). Many terminals cannot send `Ctrl+,`; the slash command, the palette row and the menu row always work |
 | `Esc` | On an engine turn that reports its steps: stop the running tool, then the turn after the current step. The running call is cancelled, not waited for: a parallel member's process is killed, and a lone `Task` stops at its sub-agent's next tool or step and stays resumable. A sequential tool such as `Bash` still runs to its end. The cancelled call reads `Cancelled by the user (Esc) while it was running.` and the turn's other results are kept. The status bar then reads `stopping after step N · Esc to cancel now`, and any later `Esc` cancels hard |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (the `doubleEscSeconds` setting). On a turn that reports no steps a single `Esc` only arms the cancel, which is why the status bar reads `Esc Esc to cancel` while thinking |
 | `Esc` | Close the palette or the session picker (a filter typed into the picker is cleared first) |
@@ -936,7 +174,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Alt+↓` | Focus the **live agents strip**, the one row above the input box that lists the delegated runs that are live, plus finished ones for 30 s: `agents: ⠋ explore · ✗ reviewer   (alt+↓)`. Then `←`/`→` (or `↑`/`↓`) move, `Enter` opens the run in the **Agent View** (its own transcript in place of the main one — see *What you see while a turn runs*), `c` stops it (only that run's `Task` call; the turn goes on), `x` dismisses a finished run or stops a running one, and `Esc` or `Alt+↑` gives the keyboard back. Any other key gives it back too, and lands in the input box. A click on a run on the strip opens it the same way. While the strip shows, it replaces the agent list below the input |
 | `Alt+M` | Toggle **plan mode** between turns: into `plan` from any mode, and back to the mode you left. In `plan` the agent reads and explores but every change is refused except a Markdown plan in `.sugar-crush/plans/`, and the prompt tells it so. The agent is told about each switch once — a switch you undo before sending anything is never sent — and the status bar shows any mode other than `default` (`plan mode (Alt+M to leave)`). `Shift+Tab` stays the backward pane cycle. See [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md#setting-the-mode) |
 | `Esc` / `Alt+↑` (Agent View) | Back to the main transcript; the `Esc` that leaves the view is never the first half of an `Esc` `Esc` cancel. `Alt+N` / `Alt+P` open the next / previous agent of the same `Task` batch |
-| `Ctrl+X` `c` / `p` / `s` / `o` / `b` (Agent View) | Control the agent on screen: `c` **cancels** it at its next tool or step (it stays resumable; press again within 3 s to stop it at once), `p` **pauses** it at its next step boundary — `⏸ paused` on its line, for 10 minutes at most, then it goes on by itself so the parent turn never hangs — and `p` again lets it go on, `s` cancels **every** running agent, `o` **opens it as a session**: once it has finished, its stored sub-agent session becomes the session on screen, a normal one to type into (not while a turn runs), and `b` **sends it to the background**: at its next tool or step it is saved and a background session continues the same conversation, its `Task` call returns at once (`⧗ moved to the background` on its line) so the parent turn goes on, and the result is announced into the chat when the session finishes, like any background agent. Only a run the main conversation delegated can go — a nested run, or one on a launch that cannot start background sessions, says so and keeps running |
+| `Ctrl+X` `c` / `p` / `s` / `o` (Agent View) | Control the agent on screen: `c` **cancels** it at its next tool or step (it stays resumable; press again within 3 s to stop it at once), `p` **pauses** it at its next step boundary — `⏸ paused` on its line, for 10 minutes at most, then it goes on by itself so the parent turn never hangs — and `p` again lets it go on, `s` cancels **every** running agent, and `o` **opens it as a session**: once it has finished, its stored sub-agent session becomes the session on screen, a normal one to type into (not while a turn runs) |
 | `Ctrl+G` | **Broadcast**: the composer sends to every running agent of the batch at once (an empty box reads `message all 3 agents…`); it opens the Agent View on the newest running agent when none is open. `Ctrl+G` again goes back to the one on screen |
 | `Enter` (Agent View) | Send the draft **to the agent on screen** — the input box is its composer while the view is open (an empty box says `message <agent>…`). A running agent reads it at its next step; a finished one is continued by a follow-up run of the same conversation. Idle or mid-turn alike, and never to the main model. A `/command` or `!command` still runs as one |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
@@ -1001,9 +239,6 @@ Six panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**,
 menu bar's right end carries a tab for chat plus each dockable pane, and the
 tab tells you the whole state at a glance: muted when the pane is undocked,
 full foreground when it is docked, bold-underlined when it also holds focus.
-Below about a hundred columns each tab shrinks to its icon (`[◫]` for Files)
-so the menus keep their room, the `Currently:` indicator still naming the
-focused pane; on a very narrow terminal the indicator drops its prefix too.
 Clicking a tab toggles docking — docking lands the pane on its home side and
 focuses it; undocking the focused pane hands focus back to chat. Clicking the
 **Chat** tab never hides anything (the center pane is always up); it just
@@ -1126,9 +361,9 @@ finishes. A lone `!` is an ordinary prompt.
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
 `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
-`/exit` (`/quit`) `/fork` `/goal` `/grind` `/handoff` `/help` `/init` `/keys`
-`/layout` `/mcp` `/memory` `/model` `/newrule` `/notices` `/pane` `/permissions`
-`/pruning` `/recompress` `/redo` `/rename` `/rewind` `/rules` `/sessions`
+`/exit` (`/quit`) `/fork` `/goal` `/grind` `/help` `/init` `/keys` `/layout`
+`/mcp` `/memory` `/model` `/notices` `/pane` `/permissions` `/pruning`
+`/recompress` `/redo` `/rename` `/rewind` `/rules` `/sessions`
 `/settings` (`/config`) `/share` `/sweep` `/theme` `/undo` `/websearch`
 `/workflow`.
 <!-- commands:roster:end -->
@@ -1539,6 +774,436 @@ small-model backend** (supplied separately from the conversation backend, so
 naming never costs a second tool-capable agent turn) generates a title, which
 is what `/sessions`, the tab strip and `Ctrl+R` list.
 
+## Sessions and checkpoints
+
+### Sessions: new, continue, resume
+
+Every launch opens a **new** session. The conversation is saved as it changes —
+every message, tool call, tool result and thought — so any session can be picked
+up again later, with the model seeing the whole earlier exchange. Saves are
+batched: a change is written within half a second, and at once when you switch
+sessions, `/branch`, `/fork` or quit (Ctrl+C included), so only a hard kill
+(`kill -9`, a power cut) can lose the last half-second:
+
+```sh
+sugarcrush                  # a new session (Up still recalls prompts from earlier ones)
+sugarcrush --continue       # reopen the most recently used session (short: -c)
+sugarcrush --resume 3f9a    # reopen one by id, unique id prefix, or name
+sugarcrush --resume         # open the session picker at launch
+```
+
+`--resume <id>` also accepts `--resume=<id>`; ids come from `sugarcrush session
+list` or the picker. A target that names no stored session is a usage error
+(exit 2) before the TUI starts. `--continue` and `--resume` cannot be combined
+with each other or with `-p`/`run`. Inside the TUI, `Ctrl+R` (or `/sessions`)
+opens the same picker and `Enter` loads the chosen session's transcript;
+`Ctrl+Tab` and the tab strip switch the same way. A tool call that was still
+running when its session was last saved comes back marked interrupted.
+`--continue` only considers your own conversations: it skips sub-agent
+sessions and sessions you have archived. The picker and the tab strip leave
+them out too.
+
+A session is named after its first reply by a cheap title model, and a name
+you give it always wins over a generated one — even one still in flight when
+you typed yours. `/rename <title>` names the current session; a bare `/rename`
+(or **Rename session…** in `Ctrl+P`, or a double-click on the current tab)
+opens an inline title row above the input box — `Enter` saves, `Esc` cancels,
+and saving it empty clears the name and asks the title model for a new one,
+which is also what `/rename --auto` does. Pinned sessions (`p` in the picker,
+or **Pin or unpin session** in `Ctrl+P`) lead the tab strip with a `★`.
+
+**One window writes a session at a time.** A launch that opens a session
+another sugarcrush already has open — `--continue` in a second terminal, the
+same `--resume` twice, or picking it in the picker — opens it **read-only**: the
+transcript is shown, but prompts and the commands that would change the session
+(`/clear`, `/compact`, `/rename`, `/rewind`, `/undo`, `/redo`,
+`/workflow run|resume`, any custom command) are refused and nothing is saved, and the status bar leads with
+`read-only: /branch to fork` (narrowing to `RO` on a small terminal). `/branch` forks the session into a
+new one this window owns and carries on there, and the refused draft comes back
+in the box;
+commands that only read or change the window itself (`/help`, `/sessions`,
+`/theme`, `/model`, …) still work, and so does switching to another session.
+Close the other window and this one notices within a second: it takes the
+session over, reloads the transcript (so whatever the other window saved is
+kept), says so, and puts a refused draft back in the box.
+The guard is a `flock()` on `~/.sugar-crush/sessions/<id>.lock`, so it is
+released the moment the holding process exits, however it exits. Where the lock
+cannot be taken at all (a home directory that refuses the file), the session
+opens writable, as before.
+
+Launches that were quit without typing leave empty sessions behind; the next
+launch deletes the ones older than an hour (unnamed, with no transcript and no
+checkpoint — nothing that could be wanted back).
+
+### Checkpoints: undo, redo, rewind and diff
+
+**Each turn also snapshots your files.** Just before a prompt is sent, the
+project's files are recorded with the turn's checkpoint, so a turn's edits can
+be undone later. In a git repository the snapshot is a hidden commit under
+`refs/sugar-crush/checkpoints/<session>/<n>`. Your branch, index and stash list
+are not touched, and `git stash list` does not show it. Outside a repository it
+goes into a private git directory under `~/.sugar-crush/checkpoints/`, and
+nothing is written into the project. Untracked files over 2 MiB, dependency and
+build directories (`node_modules/`, `vendor/`, `dist/`, …), media, archives,
+binaries, databases, logs and `.env*` files are left out. No snapshot is taken
+in your home directory itself, a directory above it, or `~/Desktop`,
+`~/Documents` and `~/Downloads`. A snapshot that cannot be taken never holds up
+the turn, but the first time it is refused or fails in a directory the
+transcript says why, once.
+
+**Taking a turn back.** `/undo` restores the conversation to the checkpoint
+before your last prompt, puts that prompt back in the box, and puts the files
+back the way that turn found them. `/redo` steps forward again, one checkpoint
+at a time, until you send another prompt. `/rewind [n]` steps back `n`
+checkpoints and restores the conversation only (`--chat`, the default); it
+tells you when the files differ from that checkpoint, and `/rewind --files`
+then puts them back too. `--files` alone restores the files and leaves the
+conversation, `--both` does both. `/diff [n]` shows what changed in the files
+since checkpoint `n` (`1`, the one before your last prompt, by default), as the
+list of files and the patch. A file restore is refused once HEAD has moved since
+the checkpoint (it would undo those commits): `--both` and `/undo` then change
+nothing, and `--chat` still works. Files a snapshot leaves out are never
+touched by a restore. `/redo` moves the files only when they still match the
+checkpoint the conversation is at, so edits you made after a rewind are kept.
+The refs are deleted with their checkpoints: old ones past the per-session
+limit, a deleted session's, and the ones a rewind set aside once the next
+prompt is sent. `/branch` keeps its own copy. Unused snapshots in the private
+directories are cleaned up by a `git gc` at most once a day.
+
+## Configuration
+
+Most behaviour is a **setting**: a key in one of four JSON files, or for this
+session only. The quickest way to see and change them is the settings view —
+`/settings` (alias `/config`), `Ctrl+,`, **View settings** in `Ctrl+P` or the
+`F10` App menu — which lists every key by category with its live value, where
+that value came from, whether an environment variable or flag locks it, and
+when a change applies, and saves only after showing you a diff of the file it
+will write. Every key is in [`docs/SETTINGS.md`](docs/SETTINGS.md); every
+environment variable in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
+
+### Settings files
+
+Four files are read, and the **highest one that mentions a key wins** for that
+key:
+
+| # | File | Who wrote it | Wins over |
+|---|------|--------------|-----------|
+| 4 | `~/.sugar-crush/config.json` | you, and the CLI itself — Ctrl+P and `/theme` write `theme` here, `/model` writes `provider`, and the settings view's save writes the keys it changes (never `provider` or `theme`) | everything |
+| 3 | `~/.sugar-crush/settings.json` | you, by hand | the project's two |
+| 2 | `<project>/.sugar-crush/settings.local.json` | whoever wrote the repository (`.gitignore`d **by convention**, which is not a trust signal — see below) | the shared project file |
+| 1 | `<project>/.sugar-crush/settings.json` | whoever wrote the repository | nothing |
+
+Two things about that order are deliberate and the reverse of what most editors
+do. **Your files beat the project's**, because a project file arrived with a
+`git clone` — a repository can fill in what you left unsaid and never overrule
+a choice you made. And **`config.json` beats `settings.json`**, because it is
+the file the CLI *writes*: ranked the other way, a `settings.json` naming
+`theme` would outrank what Ctrl+P "Switch theme" **or `/theme <name>`** had just
+written, and the choice would fail to stick with no error anywhere and nothing
+pointing at the file responsible. (This sentence credited the palette alone
+until round 43 — the same omission the `provider` row of the table above once
+had, and it matters for the same reason: a reader who reached for `/theme`
+cannot tell whether the sentence is about them.)
+
+> **This paragraph used to say `config.json` was "the deprecated name".** It is
+> not, and the word was doing real damage in the file most likely to be read:
+> it told you to migrate off the only settings file this app ever writes back
+> to. What is true is that `config.json` is the *older* of the two names —
+> nothing in `src/` marks it deprecated, `Bootstrap::writeUserConfig()` writes
+> it (via `Bootstrap::userConfigPath()`), and every persisted `theme` and
+> `provider` lands there. The sentence still earns its place because the
+> ranking genuinely is surprising and still needs explaining; only its reason
+> was wrong. `config.json` keeps working indefinitely, and there is nothing to
+> migrate *to*: `settings.json` is never written.
+
+**Above all four sits the session tier.** The settings view (`/settings`, `t`
+to pick the tier) can save a change **for this session only**: nothing is
+written to disk, the value outranks every file until the process exits, and
+the environment and flags still outrank it. A turn's forked child and the Task
+sub-agents it runs inherit it; a `/bg` daemon is a separate process and starts
+from the files alone. Only keys that take effect without a restart can be set
+there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) lists
+them, and says when every other key a save changes applies.
+
+<!-- settings:layered:begin -->
+Only these eighty-one keys are layered — `provider`, `models`, `titleModel`,
+`summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
+`promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
+`maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
+`compaction.blockPercent`, `compaction.keepRecent`,
+`compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
+`compaction.toolOutputChars`, `compaction.reminderTokens`,
+`compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
+`contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
+`contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
+`contextWindow`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`,
+`bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
+`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+`toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
+`webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
+`webSearchEndpoint`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `instructions`,
+`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
+`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
+`attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
+`queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`,
+`paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints`,
+`lintCommands`, `connectTimeoutSeconds`, `providerRetryAttempts`,
+`providerRetryBaseBackoffMs`.
+<!-- settings:layered:end -->
+
+That roster (and its count) is generated from `SettingsSchema` by
+`php tools/gen-settings-doc.php --write`. The `trustedProject*` lists are read
+from `~/.sugar-crush/config.json` **alone**, so no lower layer can grant itself
+trust.
+
+`permissionMode` and `permissionRules` are the one pair that is neither: they
+are read from `~/.sugar-crush/settings.json` **and** `config.json` (the latter
+wins), and from **no project file at any trust level** — a checked-in
+`bypass-permissions` would be a sandbox escape delivered by `git clone`. They
+also do not go through the layered reader, because that reader is *tolerant* by
+design (a malformed file just contributes nothing) and a permission policy may
+not be: a `settings.json` that exists and cannot be parsed now **stops the
+launch**, exactly as such a `config.json` already did. That is the same bargain,
+one file wider — and it is louder rather than newly broken, since such a file
+already cost you your theme and provider without saying so.
+
+**A project's settings files are ignored until you opt that project in.**
+`<project>/.sugar-crush/settings.json` was written by whoever wrote the
+repository, so honouring it out of the box would let `git clone <repo> && cd
+<repo> && sugarcrush` pick your model and turn off your skills. Same gate shape
+as project hooks and `.mcp.json`, separate key — list the project in
+`trustedProjectSettings` in your own `~/.sugar-crush/config.json`:
+
+```json
+{ "trustedProjectSettings": ["/home/you/src/that-project"] }
+```
+
+Absolute (or `~/`-rooted) paths only; a relative entry like `"."` would trust
+every repository you ever run from, so it is refused and reported. And
+`settings.local.json` gets **the same gate** as its tracked sibling: `.gitignore`
+is advice to whoever commits, not a property of a repo someone else wrote, so a
+`git add -f`'d "local" file arrives with a clone just as readily. The two differ
+in precedence only.
+
+Even for a trusted project, thirty-nine keys are **never** taken from a project file:
+`statusLine`, because its value is a shell command this app runs on a timer —
+a project-tier one would be arbitrary code execution on clone-and-launch, with
+no tool call and no permission gate anywhere in the path; `lintCommands`, for
+the same reason — each value is a lint command the post-edit hook runs after an
+edit; `lsp`, for the same reason again — each entry is a language server this app
+starts at launch; `autoCommit`, because a commit runs the repository's own git
+hooks and writes into the operator's history, and a checkout must not be able to
+switch that on; `maxCheckpoints`, because it decides how much of the
+operator's own session history `/rewind` can still return to, and a checkout
+setting it to 1 would quietly prune that history at every turn; `testCommand` and `autoTest`, for the lint reason — the first is
+a shell command auto-test runs at the end of a turn that edited a file, the
+second switches that run on;
+`provider`, because it decides which host every prompt in the session is sent
+to; `instructions`, because it decides which files become authoritative
+system-prompt text; `disabledRules`, because its value is a list of names
+pointing at the operator's own rule packs, so a project-tier one would let a
+checkout choose which of the operator's instructions go silent — a different
+power from the `disabledSkills` a project *may* set, because a rule pack is
+prompt prose the operator wrote, not a capability the harness enforces (see
+`RulesState`); `maxOutputTokens`, because it is the one layered key whose
+meaningful direction is UP — every raise sends bigger paid requests on the
+operator's credential, and a spend ceiling a checkout can lift is a bill a
+clone can run up; `modelPrices`, because it sets the rate every billed token
+converts at — the mirrored direction on the same money axis, where a
+project-supplied map could zero a rate and silently blind the spend cap and the
+`/budget` totals, the exact failure the unpriced-model notice exists to make
+loud; `models`, `titleModel`, `summaryModel`, `subagentModel` and
+`embeddingModel`, because they choose the model the session itself and every
+title, prompt suggestion, `/compact` summary, delegated sub-agent run and
+memory-recall embedding run on with the operator's key — within one provider the price spread is over 100×, and a model with no
+price on file bills as $0, so a project-chosen one blinds the spend cap the same
+way a zeroed rate would; `layout`, because it records where the operator chose to put
+their own windows — frame geometry is a personal habit, not a property of the
+checked-out code, and a project that moves your panes behind your back is
+answering to the wrong owner; `maxToolSteps`, because it multiplies how many
+billed provider round-trips one turn may fan out — the `maxOutputTokens` money
+axis counted in calls instead of tokens, and a ceiling a checkout can raise is
+still a bill a clone can run up on the operator's credential;
+`toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
+`readPageBytes` and `toolSpillWindowPercent`, the six caps on what one tool
+result may hand the model,
+because every byte a result carries is replayed into each later request of the
+turn — the same money axis paid in input tokens, so a checkout may not raise
+them (the timeouts and memory bounds beside them only cost time, and a trusted
+project *may* set those); `webSearchEndpoint`, because it decides which host
+receives every WebSearch query, and those queries routinely quote the
+repository's code, file names and error text — the `provider` argument applied
+to search; `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`
+and `subagentMaxActive`, because each multiplies the provider calls one turn
+may fan out through delegated runs — the `maxToolSteps` argument applied to
+sub-agents;
+`secretEnvAllowlist`, because it names which of the operator's credentials
+Bash, Grep and script hooks may still inherit after the scrub that keeps them
+out of model-visible output — a project-tier `["*"]` would read every key in
+the operator's shell back through one `env` call; `contextWindow`,
+`extraBody`, `thinkingBudget` and `promptCache`, the four provider-shaping
+keys, because each moves the bill — an inflated window switches
+auto-compaction off so requests grow until the server refuses them, an extra
+body field such as `n` multiplies every request, a thinking budget is billed as
+output, and switching prompt caching off bills every prompt in full;
+`bashSandbox`, because its meaningful direction is `off` — a checkout able to
+set it could lift the write jail the operator put around every command `Bash`
+runs, from inside the very repository that jail confines;
+`attribution`, because it is the trailer the model is told to stamp on every
+commit it makes under the operator's git identity, and a checkout choosing that
+text would be a repository writing into the operator's own history (its sibling
+`includeGitInstructions` only removes prompt text, so a trusted project *may*
+set that one); `enabledSkills`, because it names skills whose full bodies
+ride the system prompt every turn — the `instructions` argument applied to
+skills, where a checkout could make any skill it ships standing,
+authoritative prompt text (the `disabledSkills` a project *may* set only ever
+removes one); and
+`allowedTools`, for a reason worth spelling
+out because on capability alone it looks harmless. A whitelist is an intersection — it
+cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
+defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all eighteen of the others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall` and `Team` —<!-- tools:others:end --> in one line, and what the model does next is the
+same work through `Bash`, which reaches the permission gate as opaque shell text
+instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
+
+Its sibling `disabledTools` *is* available to a trusted project — but not for
+the reason this section used to give.
+
+> **This paragraph used to say that expressing the same attack through
+> `disabledTools` "means naming every tool it removes — a value you can see".
+> That is false**, and it is corrected here rather than deleted because it was
+> the stated reason for the tiering, and because it is the sentence you would
+> lean on when deciding whether a cloned repository's settings need reading at
+> all. `Bootstrap::filterToolSet()` matches names through
+> `PermissionRule::matchesToolName()`, which is bare `fnmatch()`, and
+> `fnmatch()` honours negated character classes. Measured end to end on PHP
+> 8.3.6, in a project you have listed under `trustedProjectSettings`:
+>
+> ```json
+> { "disabledTools": ["[!B]*"] }
+> ```
+>
+> leaves exactly `Bash` out of the nineteen built-in tools the project tier can filter.
+> `Task`, the concrete `Tool` class wired outside that ceiling since E675, is
+> appended after `filterToolSet()` and gated on the launch holding an
+> `AgentManager` — outside every project glob's reach — so on a manager-bound
+> chat launch it stands there too. The glob is five
+> characters and names none of the eighteen it removes. The negation is not the
+> trick either: `["[C-Z]*", "[a-z]*"]` leaves exactly `Bash` too, measured the
+> same way, so no restriction on *pattern shape* could make the old sentence
+> true again. What earns the paragraph its place is the shape argument for
+> `allowedTools` above, which does hold; what it lost is the claim that
+> `disabledTools` cannot express the same thing.
+
+**Two things narrow it, and both are measured.** An *untrusted* project's
+`disabledTools` never reaches the merge at all — all nineteen filterable tools survive, and `Task`, being post-filter, was never in this setting's reach to lose — so
+this needs a `trustedProjectSettings` grant you made yourself. And the layers
+merge key by key rather than as a union: if *you* name any `disabledTools`,
+yours replaces the project's outright — your `["Read"]` against a trusted
+project's `["[!B]*"]` removes exactly `Read` and leaves everything the
+project's glob named. The gap is open only for an operator who trusted a
+repository and set no `disabledTools` of their own.
+
+So **a trusted project's `disabledTools` can choose your tool set** — do not
+grant `trustedProjectSettings` to a repository you would not trust with
+`allowedTools`. What it can no longer do is choose it *unnoticed*: a trusted
+project's tool removals are reported at launch, naming the file, the tools it
+took and the tools it left.
+
+```text
+sugarcrush: /repo/.sugar-crush/settings.json (disabledTools) disabled 18 of the
+19 tools your own settings left — Read, Edit, Glob, Grep, Write, WebFetch,
+WebSearch, doctor, Skill, Lsp, Memory, RepoMap, Prune, Todo, Compress, Workflow,
+Recall, Team — leaving: Bash.
+```
+
+The two keys are combined as one condition rather than as two passes — a
+tool survives only if your allow-list admits it *and* no deny entry names it —
+so there is no later step in which a project's `disabledTools` could re-admit
+something your `allowedTools` left out. Put the whitelist in your own file where
+you can see it.
+
+### Permission modes and plan mode
+
+Every tool call passes a permission gate in one of six modes. The full table,
+the rule grammar and the sandbox are in
+[`docs/PERMISSIONS.md`](docs/PERMISSIONS.md); in short:
+
+| Mode | Reads | Edits and shell | Notes |
+|---|---|---|---|
+| `default` | run | ask | the **TUI's default**: the y/n/a modal asks for every write, shell command and network call |
+| `accept-edits` | run | in-project `Edit`/`Write` run; most shell commands ask | |
+| `plan` | run | refused, except a Markdown plan in `.sugar-crush/plans/` and read-only `Bash` | toggle with **`Alt+M`** between turns |
+| `auto` | classified | classified by `SafetyClassifier`; a flagged call is refused, and asks after three blocks in a row or twenty in all | |
+| `dont-ask` | run | refused | never prompts |
+| `bypass-permissions` | run | run | the default for `-p` and background sessions, which have nobody to ask |
+
+Set the mode with `--permission-mode`, `$SUGARCRUSH_PERMISSION_MODE` or
+`permissionMode` in your own settings — never from a project file — and narrow
+it with `permissionRules` such as `{"pattern": "Bash(rm *)", "action":
+"deny"}`. `/permissions` shows the live policy. At the modal, `y` allows once,
+`a` then `y` allows calls like this one for the session, `n` refuses, `r`
+refuses with a note the model reads, and `x` refuses and stops the turn.
+Whatever you allow, `/undo` and `/rewind` can take the files back. On Linux,
+`"bashSandbox": "on"` (or `"no-network"`) additionally runs every `Bash`
+command inside bubblewrap, writable only in the project.
+
+### Hooks and automation
+
+A `PreToolUse` hook can allow, deny, rewrite or ask about a tool call; other
+events fire around the prompt, the turn's end (`Stop`, `SubagentStop`), the
+session's end and every compaction. Hooks are shell commands in
+`~/.sugar-crush/hooks.yaml` (or a trusted project's), answering by exit code or
+a JSON object on stdout. Built on the same chain, each opt-in in your own
+settings:
+
+- **Post-edit lint** — every `Edit`/`Write` is linted (`php -l` built in,
+  others through `lintCommands`) and the errors are appended to the result.
+- **Post-edit diagnostics** — with language servers under `lsp`, each edit is
+  re-checked and its errors appended; the same servers answer the `Lsp` tool.
+- **Auto-test** — `"autoTest": true` with a `testCommand` runs your tests at
+  the end of a turn that edited a file and hands failures back to the model, up
+  to three times.
+- **Auto-commit** — `"autoCommit": "turn"` commits each turn's changes with a
+  generated Conventional-Commits subject, `"edit"` commits each edit; your own
+  uncommitted work is never mixed in, and `/undo` reverts the last such commit.
+
+All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
+
+### Memory, instructions, skills and MCP
+
+- **Instruction files** — `CLAUDE.md`/`AGENTS.md` at the project root (or
+  another agent's alias), nested ones when a tool touches their directory, and
+  your personal `~/.sugar-crush/AGENTS.md`, all with `@import`. `/init` writes
+  a starting `AGENTS.md` for the project; `/rules` toggles rule packs for the
+  session.
+- **Memory** — notes that outlive the session. The prompt carries an index of
+  them; the model reads, saves and searches them with the `Memory` tool, you
+  with `/memory`. Auto-memory saves durable facts at the end of a turn, a
+  periodic dream pass folds the compaction journal into them, and the home
+  store keeps a git history (`/memory log`, `/memory restore`). See
+  [`docs/MEMORY.md`](docs/MEMORY.md).
+- **Skills** — `SKILL.md` files whose name and description ride the prompt and
+  whose body the model loads with the `Skill` tool; `Ctrl+S` picks one for the
+  session and `enabledSkills` makes one standing. See
+  [`docs/SKILLS.md`](docs/SKILLS.md).
+- **MCP** — servers from `~/.sugar-crush/` or a trusted project's `.mcp.json`
+  become `mcp__<server>__<tool>` tools; `/mcp` lists the servers and manages
+  their auth, and `sugarcrush mcp list|trust|import` work from the shell. See [`docs/MCP.md`](docs/MCP.md).
+- **Workflows** — staged multi-agent pipelines in YAML or PHP, run with
+  `/workflow run` or written by the model itself through the `Workflow` tool.
+  See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md).
+
+### Interface settings
+
+`theme` (`/theme` or **Switch theme** in `Ctrl+P`), `statusLine` (a command
+whose output becomes a custom status line), `layout` (pane docking, saved as
+you change it), `notify` (`bell` or `osc9` desktop notifications when a turn
+ends or an approval waits), `queueMode` (what `Enter` does mid-turn), `mouse`,
+`scrollWheelLines`, `doubleEscSeconds` and the preview sizes are all live
+settings — see the *Interface* rows of [`docs/SETTINGS.md`](docs/SETTINGS.md#every-key).
+
 ## Providers
 
 `SugarCraft\Crush\Providers\ProviderInterface` is the single LLM abstraction (capability introspection, batch + `\Generator` streaming, function calling, embeddings, per-model cost). Build one directly or from config via `ProviderFactory` (which resolves `${VAR}` / `${VAR:-default}` from the environment):
@@ -1667,6 +1332,515 @@ for agentic and non-agentic use. MiniMax-M2.x is unaffected by all of the above:
 `top_p`, and sends no `reasoning_effort` unless you set one explicitly. A
 per-request override lives on `CompleteRequest::$reasoningEffort`.
 
+## Scripting and automation
+
+Everything the TUI does is also reachable without it: a one-shot prompt on
+the command line (`-p`/`run`) with a machine-readable result, a set of
+subcommands that answer without a provider or a terminal, and two shell-out
+backends that swap the provider for a script of your own. The exit-code and
+JSON contracts below are stable and test-pinned, so CI gates can rely on them.
+
+### Non-interactive (one-shot) mode
+
+`bin/sugarcrush` parses `argv` *before* it constructs a `Program`, so the
+scriptable paths never attach to the TTY or enter the alt-screen:
+
+```bash
+sugarcrush -p "explain the Width helper"        # one prompt, print, exit
+sugarcrush run "explain the Width helper"       # same thing
+sugarcrush -p "audit this" --output-format json # machine-readable envelope
+sugarcrush --output-format json run "audit this" # `run` works after flags too
+sugarcrush doctor                               # check the install (see Subcommands)
+sugarcrush --root /path/to/project              # set the project root explicitly
+sugarcrush src                                  # an existing directory as the only argument is the root too
+sugarcrush --config ~/policies/crush.json       # read settings/permissions from this file
+sugarcrush --model gpt-5 -p "audit this"        # pick the model (not the provider)
+sugarcrush --permission-mode plan -p "audit this" # pick the permission mode for this run
+sugarcrush --help                               # prints and exits (never opens the TUI)
+sugarcrush --version                            # prints the installed version and exits
+sugarcrush -- --not-a-flag                      # `--` ends options; everything after is positional
+```
+
+`--model <name>` (also `--model=<name>`) names the conversation MODEL and
+overrides `$SUGARCRUSH_MODEL`, the model persisted for the provider (the
+`models` setting) and the provider's own default. It does not pick a
+provider — that still comes from `$SUGARCRUSH_PROVIDER` or the persisted
+`provider` setting, and the two are independent axes. The Ctrl+P palette entry
+labelled "Switch model" switches the PROVIDER, which is why the distinction is
+worth stating twice.
+
+`--permission-mode <mode>` (also `--permission-mode=<mode>`) runs this launch
+under one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`,
+`bypass-permissions`. It is the highest-precedence source, beating
+`$SUGARCRUSH_PERMISSION_MODE` and the `permissionMode` config key. With none of
+the three set, the **TUI starts in `default`** — every write and shell command
+asks through the y/n/a modal — while `-p` and background sessions start in
+`bypass-permissions`, because their console approver refuses whenever no
+terminal is attached (see *Permission modes* below).
+
+A **non-empty** value that is not one of those modes refuses the launch with
+exit 2 rather than falling back to the default — the same refusal,
+with the same message shape, that the environment variable and the config key
+already produce; only the named source differs. (`sugarcrush doctor` is not a
+launch: it reports the same bad value as a failed `permission policy` check and
+exits 1.)
+
+An **empty** value — `--permission-mode=` or `--permission-mode ""` — is a
+usage error, also exit 2, but raised by the argument parser before any of that.
+Here the flag is deliberately **stricter than the other two sources**: an empty
+`$SUGARCRUSH_PERMISSION_MODE` or `"permissionMode": ""` is read as *absent* and
+the run proceeds on the next source down, whereas an empty flag refuses. The
+asymmetry is intentional. An unset variable is a normal state of an environment,
+but typing the flag is an explicit act, and `sugarcrush --permission-mode="$MODE"`
+with `$MODE` unset otherwise leaves the operator believing a mode is in force
+when none is — succeeding silently at exit 0 under whatever the config said.
+`--config` refuses an empty value for exactly this reason; this flag now follows
+that precedent instead of half of it. `--model`/`--model=` is refused the same
+way.
+
+Both flags apply to the TUI and to `-p`/`run` alike.
+
+`--config <file>` (also `--config=<file>`) replaces the per-user
+`~/.sugar-crush/config.json` for this run: the theme, the persisted provider,
+the `instructions` globs, the `permissionMode`, the `permissionRules` and the
+`trustedProjectHooks` list all come out of the named file, and the discovered
+one is not merged in. It names one **file**, not a config directory — agents,
+skills, workflows, sessions and memory still live under `~/.sugar-crush`, and
+`--config` does not relax the "is this home directory yours" check that guards
+them. **`settings.json` is one of the things it does not move**: layer 3 above
+is always `~/.sugar-crush/settings.json`, never a `settings.json` sitting next
+to the file you named. Otherwise `--config ./anything.json` would hand a
+directory nobody vetted the user tier — the tier that may set `provider` and
+`instructions`. One consequence of that, worth stating because "replaces the
+per-user config" reads like a clean substitution and this is not one: since
+`~/.sugar-crush/settings.json` may now carry `permissionMode`, it is a policy
+file, and a policy file that exists and cannot be parsed stops the launch —
+including when you named a perfectly good file with `--config`. `--config` is
+not an escape hatch from a broken home config, and deliberately so: it is
+documented above as *not* disarming the gate, and letting it suppress an
+unreadable policy file would be exactly that. Move or fix the broken
+`settings.json`. The file must already exist and be readable; naming one that does not is
+a usage error (exit `2`) rather than a fall-back to discovery, for the same
+reason `--root /typo` is one — silently running the DEFAULT permission policy
+while the operator believes a restrictive one is in force is worse than not
+starting. So is a `--config` with no value at all, or one followed by another
+option (`--config -p "hi"`, which used to eat the `-p` as the file name): a
+missing value is indistinguishable from an absent flag once parsed, so
+accepting it is the same silent fall-back to discovery.
+
+Because the named file carries the permission policy, it is held to the **same
+standard as `~/.sugar-crush/config.json`**: it must be owned by you, and
+neither it nor its directory may be world-writable. That rules out the two
+paths people reach for first — a file under `/tmp` is refused for the
+directory's `o+w` bit, and a root-owned `/etc/crush.json` for its ownership —
+and the refusal is a launch-time `PermissionConfigException` (exit `2`) from
+`Bootstrap`, worded about the file rather than about the flag. The check is
+deliberately not duplicated in `ArgvParser::configError()`, which validates
+existence and readability only: two copies of an ownership/mode rule is how the
+two drift apart.
+
+`--output-format` accepts exactly `text` (the default) and `json`, matched
+case-sensitively; anything else is a usage error (exit `2`) on both the
+one-shot and the TUI path. It used to be accepted verbatim and then compared
+for equality against `json` at each consumer, so `--output-format xml` printed
+plain text and exited `0` — a `| jq` caller got an empty pipe with a success
+status.
+
+**One-shot mode never falls back to the offline echo provider.** If this run
+selected a provider — via `$SUGARCRUSH_PROVIDER` or a persisted Ctrl+P "Switch
+model" choice — and that provider cannot be constructed (unknown name, missing
+credential), `-p`/`run` prints the reason to stderr and exits **2** rather than
+returning a canned reply at exit 0. The stderr line names the source it came
+from, so a persisted choice sends you to `~/.sugar-crush/config.json` rather
+than to a `$SUGARCRUSH_PROVIDER` nothing ever set. The interactive TUI keeps
+the opposite, lenient behaviour: it warns and opens an offline session, because
+refusing to launch an editor over a missing API key is worse than an offline
+one.
+
+### Exit codes and the JSON document
+
+The same three exit codes govern every subcommand below.
+
+| exit | meaning |
+| --- | --- |
+| `0` | the prompt ran and produced an answer, or the subcommand answered |
+| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, or a trusted `.mcp.json` could not be parsed — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found` |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is neither `text` nor `json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.sugar-crush/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$SUGARCRUSH_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help. `error.type`: `usage`, `provider_configuration`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
+
+`2` covers "no prompt given" (`sugarcrush -p`, `sugarcrush run`) deliberately:
+the invocation is malformed, no backend is ever selected, and a CI gate that
+retries on `1` would otherwise retry it forever. It also covers a subcommand
+handed a missing or unknown operand (`sugarcrush session`, `sugarcrush mcp
+bogus`, `sugarcrush completion tcsh`).
+
+`--output-format json` applies to `doctor`, `models`, every `session` verb,
+`mcp list` and `mcp import`, producing the same `{"result": …}` envelope the
+one-shot path does, and
+the same `{"result":null,"error":{"type":…,"message":…}}` document on any
+failure — an operand error, an unknown session id, or an unreadable trusted
+`.mcp.json`. **The exit code never depends on the format**: `sugarcrush mcp
+list` and `sugarcrush --output-format json mcp list` return the same code for
+the same install, so a CI gate can be written either way. A refused config
+(absent, out of tree, untrusted) is an answer and exits `0` in both. `completion` is the exception, and deliberately: its output is a shell
+script you `eval`, and JSON-quoting it would produce something no shell can
+source — the same reasoning that keeps `--help` and `--version` plain text.
+
+A `1` from the engine already had its retries. Transient provider failures — a
+connect failure, a 5xx, a 408/429, an Anthropic `overloaded_error` — are retried
+inside the provider call with exponential backoff before the run gives up, so
+for a provider-selected run (and for the offline default, which is the engine
+too) `1` means "every attempt failed", not "one attempt failed". An outer retry
+still helps for an outage longer than the couple of seconds of backoff that
+spends; it is just not the first one.
+
+The retry lives in the provider call, so it covers the engine and nothing else.
+A run whose backend is either `$SUGARCRUSH_BACKEND_CMD` variable's external command delegates
+instead of calling a provider, and its `1` is a first attempt — retrying it from
+outside is the only retry it gets.
+
+With `--output-format json`, stdout is always exactly one JSON object: either
+`{"result": <the answer>}` or `{"result": null, "error": {"type": "usage" |
+"provider_configuration" | "installation" | "backend" | "encoding" |
+"not-found" | "mcp-config", "message":
+"...", "provider": "..."}}` (`provider` present only when a selection is to blame), so
+a `| jq` consumer never sees an empty pipe. That holds for the flag, `--config`
+and `--root` usage errors too, which `bin/sugarcrush` catches before the one-shot
+path is entered, and for a reply or an error message carrying bytes that are
+not valid UTF-8 (they are substituted, not dropped along with the whole
+document). `error.type` is not the exit code renamed — `usage`,
+`provider_configuration` and `installation` are all `2`, `backend`,
+`encoding`, `not-found` and `mcp-config` are all `1` — it is how a consumer
+that kept the code tells apart the kinds of each. The set's spellings are
+mixed by history, not by mistake: five names are single words or
+`snake_case`, while `not-found` and `mcp-config` are the two `kebab-case`
+names `src/Cli/Subcommands.php` added when its subcommand errors joined the
+contract. Renaming them to `snake_case` was weighed and declined (E116);
+match exact strings, never an inferred alphabet.
+
+One key is **conditional**, and it is the only one: `refusals`. A turn that
+blocked a tool call — a permission ASK that nothing could answer, an explicit
+`n` at the prompt, a hook that denied the call outright — adds
+`"refusals": [{"tool": "<name>", "kind": "<which of the three>", "reason":
+"<why it was stopped>"}, …]` to whichever document it emits, the answer and
+the error one alike. A row for an ASK that the run answered by refusing it
+because there was no terminal to ask at carries one extra key,
+`"unattended": true`; a refusal a human answered — with `n`, or an EOF at a
+live prompt — never does. One `kind` covers both nobody-being-there and a
+person-saying-no, whose reason texts are byte-identical, so this key is a
+qualifier on the row, not a fourth `kind`. `kind` is one of exactly three tokens and says which of
+those three things happened: `hook` (a hook denied the call outright),
+`refused` (an approver was asked and answered no) and `unanswered` (the call
+needed permission and there was nobody to ask). It is there so a consumer does
+not have to re-match the prefix `reason` opens with — that prefix is still
+present and unchanged, so a script written against the older document keeps
+working. Before this,
+the document read `{"result": "<the answer>"}` for a turn in which a tool was
+quietly not run, and the model — which *did* see the refusal — had simply
+answered around it. `refusals` is **absent, not empty**, on a run that refused
+nothing, so the ordinary document is unchanged and `jq '.refusals // []'` is
+the way to read it unconditionally. It is not a list of tool calls that
+*failed*: a tool that ran and returned an error is a result the model acted
+on, whereas a refusal is a call that never happened. That distinction is carried on
+the result by whoever refused the call, never read off its text, so a tool
+that ran and printed a line opening `Permission denied:` before failing — a
+shell script, an MCP server — is not listed (audit F-P8).
+
+`--output-format text` carries no such list on stdout, and **this paragraph
+has been wrong about that twice.** It first said the format needed none
+because "every refusal is already on stderr, in front of the person reading
+the terminal" — not true, and least true for the commonest refusal there is,
+since only the console permission prompt wrote to stderr and it is only ever
+reached for a hook verdict of ASK. It then said the gap was real and that
+"the fix is a stderr line on the deny path". The diagnosis was right; the
+owner was not. `Runtime` is the engine, and the TUI forks into the same
+`Runtime` with descriptor 2 pointing at a terminal that is in the alternate
+screen — a refusal line written there would paint over a live frame on every
+denied call.
+
+**What is true now: on the `-p` one-shot path, every refused tool call is
+announced on stderr,** one line per refusal, naming the tool and quoting the
+reason the model was given — which opens with `Hook denied:`,
+`Permission denied:` or `Permission required:` depending on whether a hook
+objected, you answered no, or nothing was attached to ask. It is written from
+the one-shot path itself, which owns its console, and it appears on **both**
+formats: stdout under `text` stays the answer and nothing else, and under
+`json` it stays exactly one object, so a shell pipeline and `jq` are both
+unaffected.
+
+The scope in that sentence is deliberate. The interactive TUI has never had
+this gap — it draws a refused call struck through — but a **background
+session** still does: `BackgroundSessionRunner` calls the backend's
+`complete()` with a token callback and no event callback at all, so nothing
+downstream ever sees the refusal to announce it. That one is recorded, not
+fixed here.
+
+Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
+that is the thing to know if you are reading the source to find where a type
+comes from. `installation` is hand-rolled by `bin/sugarcrush`'s autoload guard
+— see the one exception below for why it has to be. `not-found` and
+`mcp-config` come from the subcommands, which build their own documents
+through `Subcommands::emitDocument()`: `session delete <id>` on an id the store
+does not hold, and `mcp list` on a **trusted** `.mcp.json` that could not be
+read or decoded. Both exit `1` — the store and the file were opened, so
+something was attempted; an absent, out-of-tree or untrusted `.mcp.json` is an
+answer rather than a failure and exits `0` with a `status` field saying so.
+
+Two shapes of that contract are easy to over-read, so both are stated
+plainly. **`result` is not always a string.** It is one on the one-shot path
+(`-p`/`run`), where the answer *is* text; every subcommand puts an object
+there — `{"result":{"checks":[…],"failed":2}}`, `{"result":{"sessions":[…]}}`.
+And **a failure does not always carry an `error` object.** `doctor` exits `1`
+when any check came back `FAIL`, and its document is still
+`{"result":{…}}` with no `error` key at all, because the failing checks *are*
+the answer and naming one of them `error.type` would say less than the report
+already does. (MEASURED: `sugarcrush doctor --output-format json` on an
+install with a failing check → rc 1, one `result` object, no `error`.) So
+branch on the **exit code** first and on `error.type` second; a consumer that
+reads `.error.type` to decide whether the run failed will read `null` on that
+one.
+
+There is exactly one exception, and it is not a case of the JSON renderer
+being unavailable — it is the caller asking for a rendering nothing implements:
+an **`--output-format` value that is not `text` or `json`**. That run exits `2`
+with an **empty stdout** and its message on stderr, because the requested
+rendering is the thing being rejected, so there is no format left to honour —
+emitting the JSON document anyway would mean guessing that `--output-format
+xml` meant `json`, and `text` is what an unrecognised value has always fallen
+back to. (MEASURED: `sugarcrush -p hi --output-format xml` → rc 2, stdout 0
+bytes.) Note the scope: it is the **invalid value** that is exempt, not the
+flag — a *valid* `--output-format json` alongside any other usage error, such
+as `--output-format json --config /nonexistent`, still emits the document.
+
+**A checkout with no `vendor/autoload.php` is no longer an exception**, and this
+section used to say it was.
+
+> **What this used to say.** That there were *exactly two exceptions*, the second
+> being a checkout with no `vendor/autoload.php`, which "exits `2` with an empty
+> stdout, because the class that owns the JSON document shape is precisely the
+> one that could not be loaded, and hand-rolling a second copy of the shape in
+> `bin/sugarcrush` to cover it would be the drift that having one definition
+> prevents".
+>
+> **What is true now.** That branch emits the document, and has since the
+> autoload guard was given one. On a checkout with no `vendor/autoload.php`,
+> `sugarcrush --output-format json -p hi` prints
+> `{"result":null,"error":{"type":"installation","message":"sugarcrush: cannot
+> find composer autoload.php"}}` and a newline on stdout, the same message on
+> stderr, and exits `2`. The old reasoning had the wrong half of the problem:
+> the shape's **owner** is unreachable there, the shape itself never was.
+> `json_encode()` is a core function and needs no autoloader, so the choice was
+> never "document or no document" — it was "one duplicated document, or an
+> empty pipe", and an empty pipe is the worse of the two by this contract's own
+> argument, because a consumer cannot tell "empty because the binary died before
+> it could speak" from "empty because there was nothing to say".
+>
+> **Why the old worry still earns its place.** Hand-rolling a second copy of the
+> shape really is the drift that one definition exists to prevent, so it is paid
+> for rather than waved away: the guard in `bin/sugarcrush` and
+> `NonInteractive::emitErrorDocument()` each name the other, and
+> `BinSugarcrushAutoloadGuardTest` asserts the two documents key-for-key **and**
+> the two `json_encode()` flag expressions token-for-token — a key comparison
+> alone cannot see an encode flag. Run `composer install` all the same: the
+> document reports a broken checkout, it does not repair one.
+>
+> The guard also honours `--output-format` only when this invocation actually
+> asked for `json`, read straight out of raw `argv` because the option parser is
+> behind the same missing autoloader. Any other value leaves stdout empty, which
+> is what the working binary does on that same input.
+
+With no provider configured at all, one-shot mode still answers offline from
+the `EchoProvider` and exits 0 — nothing was substituted for anything — but
+says so on stderr.
+
+### Subcommands
+
+```sh
+sugarcrush doctor                    # check this installation, exit 1 if anything FAILs
+sugarcrush models                    # providers this install can select; * marks the selected one
+sugarcrush session list              # stored sessions, pinned then newest first
+                                     #   [--children] [--archived] [--all] [--limit N]
+sugarcrush session show <target>     # one session's details + transcript (Markdown)
+sugarcrush session rename <target> <title…>
+sugarcrush session delete <target>   # sub-agent children go too; [--with-children] takes branches
+sugarcrush session pin|unpin|archive|unarchive <target>
+sugarcrush mcp list                  # what .mcp.json declares — without starting anything
+sugarcrush mcp trust                 # approve .mcp.json as it is now (command/args/env pinned per server)
+sugarcrush mcp import claude|opencode <path>
+                                     # translate a foreign MCP config, print the block — writes nothing
+sugarcrush serve                     # WebSocket + HTTP server for the web UI, until Ctrl+C
+                                     #   [--host IP] [--port N] [--allow-remote] [--allowed-origin LIST]
+                                     #   [--web-root DIR] [--no-web] [--allow-bypass] [--allow-root]
+                                     #   [--detach] [--parent-pid PID]
+sugarcrush serve status|stop|logs|url|token
+                                     # the running server: stop [--force], logs [-f], token [--rotate]
+sugarcrush attach [<session>]        # the TUI on a session of the running server — turns run there
+                                     #   [--url URL]
+sugarcrush completion bash|zsh|fish  # a shell completion script on stdout
+```
+
+Every one of these is dispatched in the same pre-flight place `--help` and
+`--version` are, **before** `Program` is constructed: they answer on a machine
+with no provider, no API key and no TTY, and none of them but `attach` enters
+the alt-screen. `serve` is the one that keeps running: it binds `127.0.0.1:7420`,
+prints a one-time sign-in URL, and answers until `Ctrl+C` or `SIGTERM`. Every
+client must authenticate — loopback is not trusted on its own — and a
+non-loopback `--host`, the bypass permission modes and running as root are each
+refused unless their `--allow-*` flag is given; it also refuses to start
+without `ext-pcntl`, `ext-posix` and `ext-ffi` (`doctor` reports all three).
+The flags belong to `serve` (before it they are unknown options). `serve
+--detach` runs it in the background instead, printing the URL and pid once the
+port is bound; `serve status`, `stop`, `logs`, `url` (a fresh sign-in link) and
+`token` manage whichever server holds the state directory's lock, and
+`--parent-pid` stops it when the process that started it exits. `attach` is
+the one verb that opens the TUI, and only once it has connected: it follows a
+session of that server (an id, name or unique prefix; a new one without) and
+runs the usual screen over it — the server runs the turns and their tools,
+this terminal streams them and answers their permission questions, and
+quitting leaves a running turn running. Its
+transport, auth flow, background mode and security model are in
+[docs/SERVER.md](docs/SERVER.md). `doctor` is the sharpest case — it is a health check for an install
+that may be broken, so it must not require the thing it is diagnosing. A
+config whose `permissionMode` is unusable makes the launch refuse to start
+(exit `2`, above); `doctor` still runs, names that as the failing check, and
+exits `1`.
+
+A session `<target>` is an id, a name or a unique id prefix — the resolver
+`--resume` uses, over every kind and archived rows too. Nothing matching exits
+`1` (`not-found`); an ambiguous prefix exits `2` and lists the candidates. The
+flags after `session list` and `session delete` belong to that verb: before it
+they are unknown options. `list` prints `★ id updated kind turns
+provider/model name` (★ = pinned, `[archived]` after an archived name), and its
+JSON rows carry every stored column (`kind`, `parent_id`, `pinned`,
+`archived_at`, `turns`, …). A pinned session lists first and is never pruned;
+an archived one leaves the default list, the tab strip and `--continue` but
+keeps its transcript.
+
+`doctor` is **read-only**: it counts the rows in the session database through
+`Bootstrap::sessionStore(prune: false)` rather than the plain accessor, so the
+opt-in `SUGARCRUSH_SESSION_RETENTION_DAYS` sweep that a *launch* applies cannot
+delete conversations on the way to a health check. `doctor` and `models` take
+no operands and reject one at exit `2` rather than ignoring it.
+
+`sugarcrush doctor` is **not** the model-callable `doctor` tool. That one is
+registered in `Bootstrap::tools()`, advertised to the LLM, and answers a
+completely different question — which image protocol this terminal speaks, with
+a PNG capability swatch attached. The CLI subcommand reports PHP, the
+extensions the session store and `serve` need, the config file, the permission policy, the
+selected provider, the session database and the project MCP config, takes no
+model, and cannot be reached by a tool call.
+
+`mcp list` **reads and never runs**. `Bootstrap::mcpClient()` starts every
+configured server as a side effect of being asked for the client, so routing a
+listing through it would `proc_open()` every program the repository names — the
+exact act the trust gate exists to make deliberate, performed by the command
+you run *because* you do not yet trust the file. It shares its path,
+containment and trust decision with `mcpClient()` (both go through
+`Bootstrap::mcpConfigDecision()`), so it can never report a verdict the launch
+disagrees with; an untrusted or out-of-tree config is reported rather than
+enumerated.
+
+### Dependency-free shell-out
+
+To avoid PHP SDKs entirely, set `SUGARCRUSH_BACKEND_CMD` to a command that reads JSON history on stdin and writes the reply to stdout:
+
+```bash
+export SUGARCRUSH_BACKEND_CMD=~/bin/anthropic.sh
+./bin/sugarcrush
+```
+
+```bash
+#!/usr/bin/env bash
+# ~/bin/anthropic.sh — keeps PHP network-dep-free, swap models by editing this file
+payload=$(jq -nc --argjson h "$(cat)" '{model:"claude-opus-4-8", max_tokens:4096, messages:$h}')
+curl -sN https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" -d "$payload" | jq -r '.content[0].text'
+```
+
+There is a second variable for the *streaming* shell-out,
+`SUGARCRUSH_BACKEND_CMD_STREAM`, and it is deliberately not the same one. It is
+a **token-stream** protocol, not a prose one: the wrapper writes **one token per
+line**, the newline *between* two tokens is framing and is dropped, and a
+**blank line means a literal newline** in the answer (an unterminated empty
+remainder at EOF means nothing). That blank-line rule is the only way the
+protocol can express a line break at all, and it is what makes it able to
+express any string.
+
+So the two contracts are mutually exclusive in both directions. Run the prose
+wrapper above through the streaming variable and every newline it emitted is
+gone while each blank line it emitted comes back as *one* newline rather than
+two — a paragraph break, a list and a code fence do not survive the trip. Run a
+token-per-line wrapper through `SUGARCRUSH_BACKEND_CMD` and you get its framing
+newlines verbatim, one word per line. That is why the streaming backend has its
+own variable instead of inheriting this one. `SUGARCRUSH_BACKEND_CMD` wins if
+both are set; for either variable, unset, empty and whitespace-only all count as
+absent. Neither path imposes any completion deadline.
+
+**"Streaming" buys you a live screen, not just the callback.** The backend
+invokes its per-token callback as each token's newline lands on the pipe, *and*
+the TUI repaints between the tokens. The second half used to be false and is
+worth recording because it was measured both ways: the read loop ran to
+completion inside one ReactPHP `futureTick`, so the event loop was blocked for
+the duration of the completion and the TUI repainted once, when the answer
+resolved. Measured against a wrapper emitting six tokens 300ms apart, with a
+50ms periodic timer standing in for the render tick:
+
+| | before | after |
+|---|---|---|
+| callbacks | 6, at 0.005s/0.304s/0.608s/0.907s/1.210s/1.514s | 6, at 0.010s/0.309s/0.609s/0.914s/1.214s/1.515s |
+| loop ticks during the stream | **0** | **36** |
+
+The read loop was not rewritten, it was hoisted: one implementation of the
+stdout protocol, driven either by the blocking path's own loop or by a periodic
+timer on the event loop. `SUGARCRUSH_BACKEND_CMD` had the same defect in a worse
+form — its promise executor ran the blocking call *immediately*, so the freeze
+started before the promise was even returned — and is drained from a timer now
+too. The one-shot `-p` path passes no callback at all and blocks deliberately.
+See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md#the-two-shell-out-variables) for
+the byte-level comparison and for the Windows `bypass_shell` note.
+
+```bash
+export SUGARCRUSH_BACKEND_CMD_STREAM=~/bin/ollama-stream.sh
+./bin/sugarcrush
+```
+
+```bash
+#!/usr/bin/env bash
+# ~/bin/ollama-stream.sh — satisfies the TOKEN protocol, not the prose one:
+# `jq -r` prints one line per streamed content chunk, and prints an EMPTY line
+# for a chunk that is just "\n" — which is exactly how this protocol spells a
+# line break. Do not point this variable at the prose wrapper above.
+payload=$(jq -nc --argjson h "$(cat)" '{model:"llama3", stream:true, messages:$h}')
+curl -sN http://localhost:11434/api/chat -d "$payload" | jq -r '.message.content'
+```
+
+## Server mode, web UI and attach
+
+`sugarcrush serve` runs the same engine headless, behind an HTTP + WebSocket
+server on `127.0.0.1:7420`, and prints a one-time sign-in URL. Three kinds of
+client drive it over the `sugarcrush.v1` JSON-RPC protocol:
+
+- **A browser.** With [`sugarcraft/sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web)
+  installed, `serve` hands out its pre-built Vue UI on the same port: a
+  sessions sidebar, a streaming transcript with tool cards and diffs,
+  permission cards, a composer that queues, steers or interrupts, tabs and a
+  tiled grid of live sessions, a server-wide approvals drawer, the settings
+  form, and the Agents, Todo, Background, Workflows and Memory panels.
+- **A terminal.** `sugarcrush attach [<session>]` opens the usual TUI as a
+  client of the running server: turns and their tools run on the server, this
+  terminal streams them and answers their permission questions, and quitting
+  leaves a running turn running.
+- **A script**, speaking the protocol directly; its JSON Schema is generated
+  into [`docs/protocol/sugarcrush.v1.schema.json`](docs/protocol/sugarcrush.v1.schema.json).
+
+`serve --detach` runs it in the background, and `serve status|stop|logs|url|token`
+manage it. Every client must authenticate (loopback is not trusted on its
+own), and a non-loopback `--host`, the bypass permission modes and running as
+root are each refused unless their `--allow-*` flag is given. Binding,
+authentication, the protocol's methods and events, background mode, workspace
+hosts, reverse proxies and the security model are in
+[`docs/SERVER.md`](docs/SERVER.md).
+
 ## The agent loop
 
 `EngineBackend` bridges the chat-shell `Backend` seam to the engine. Each user turn runs a **bounded agentic loop**: call the provider through the `Runtime`, execute any tool calls through the hook gate, feed the results back, and repeat until the model answers without calling tools — or a `maxSteps` ceiling is hit (default 1000, `maxToolSteps` in `~/.sugar-crush/config.json`; `Task` sub-agents default to 200). A **repeat-call loop guard** watches the same tool called with the same arguments and getting the same result: the 3rd such call is warned, the 5th refused, the 8th ends the turn — the brake the spend cap cannot be on a provider that reports $0. A turn the ceiling or the guard stops gets one final request with tools disabled, asking the model to summarise what is done, what remains and what comes next. A reply that calls no tool and says nothing is not taken as the answer: one that only reasoned gets a single nudge asking for an answer or a tool call, and a fully empty one is re-requested up to twice — each extra call only while a step is left and the spend cap is not reached. After a compaction — `/compact`, the automatic tier, or a step summary inside the turn — the next request re-injects what the summary took out of view: up to five of the files the agent was working on, re-read from disk, its plan-mode plan, the bodies of the skills it had loaded, a fresh git snapshot and its open todo list (see docs/PROMPT_ENGINEERING.md). A delegated run (a `Task` sub-agent, a workflow or pool agent) also watches its own context window: once a request it sends still uses 80% of it after the step's own relief, the model is told once to wrap up or hand off, and at 90% the run is stopped — the `Task` result then carries its partial output and the resume id, so resuming it is the hand-off.
@@ -1688,7 +1862,7 @@ $backend = (EngineBackend::new($provider, 'gpt-4o'))
 
 ## Capabilities
 
-- **Tools** — `Tools\BuiltIn\*`: <!-- tools:roster:begin -->`Bash`, `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch` (against `$SUGARCRUSH_SEARCH_ENDPOINT`), `doctor` (a capability probe the model can call to report what this build/deployment actually supports), `Skill` (level 2 of the progressive-disclosure design below), `Lsp` (definitions/references/hover/symbols/code-actions/diagnostics from a language server), `Memory` (view, save, edit, delete and recall the persistent memory notes indexed in the system prompt), `RepoMap` (a ranked outline of the definitions the rest of the project references most, sized to a token budget), `Prune` (drop or distill its own finished tool outputs from what it is sent, by their `<ctx-ref r="N"/>` refs), `Todo` (the session's own checklist, rewritten whole on each call, at most one item in progress), `Compress` (replace a closed range of the conversation with its own summary — only on a turn you start with `/compress`), `Workflow` (runs a model-authored YAML plan of staged sub-agents), `Recall` (bring back, word for word, a tool output it pruned or a section it compressed, by its `rN` / `bN` ref), `Team` (a team task board for background teammates: claim, complete and dependencies over a shared task list, plus team messages), `ApplyPatch` (add, change, move and delete several files in one call from a `*** Begin Patch` patch, all or nothing), `AskUser` (put one question to the user, with optional choices, and wait for the answer), `PlanExit` (leave plan mode: put the written plan to the user for approval), `SendMessage` (message a sub-agent it launched — steer a running one, continue a finished one — or, from inside a sub-agent, its parent), `Subagents` (list, wait for or cancel the sub-agents it launched, and read the messages they sent back), and `InterruptAgent` (make a running sub-agent skip the rest of its current step and read a message first). These are **runtime tool names**, the same spelling the launch report and every `allowedTools`/`disabledTools`/`permissionRules` pattern uses; twelve of them differ from their class file, which is why the list is not a directory listing — `doctor` is `Doctor.php`, `Skill` is `SkillTool.php`, `Lsp` is `LspTool.php`, `Memory` is `MemoryTool.php`, `RepoMap` is `RepoMapTool.php`, `Workflow` is `WorkflowTool.php`, `Team` is `TeamTool.php`, `AskUser` is `AskUserTool.php`, `PlanExit` is `PlanExitTool.php`, `SendMessage` is `SendMessageTool.php`, `Subagents` is `SubagentsTool.php`, `InterruptAgent` is `InterruptAgentTool.php`. Twenty-five classes ship on every launch, and `Bootstrap::tools()` ships all twenty-five; `src/Tools/BuiltIn/` also holds `BoardPostTool.php`, whose runtime name `BoardPost` is offered only to the members of a parallel `Task` batch, to post to the board they share, `BoardReadTool.php`, whose runtime name `BoardRead` is offered only to the members of a parallel `Task` batch, to read the board they share, and `TaskTool.php`, whose runtime name `Task`<!-- tools:roster:end --> joins the set only when the launcher threads an `AgentManager` into the build (the E675 task feed) — every live `chat()` threads one, so `Task` is present in every real run and absent only from a bare `tools()` call built without a manager. **Be precise about what "ships" buys for `Lsp`:** it is REACHABLE on every launch and USEFUL once you list a language server under `lsp` in your own `~/.sugar-crush/config.json` (e.g. `{"lsp": {"php": {"command": "intelephense", "args": ["--stdio"]}}}`; user tier only, because starting a server is code execution). With none configured every call returns an *error* naming the language it could not ask — an empty success would read to the model as "this symbol has no references", which is a fabricated fact about your code. With one, `LspLauncher` starts each server once at launch, in the TUI parent, and stops it at exit; `LspConnection` is fork-safe, so forked turns and sub-agents share it — request ids are process-unique, every exchange is serialised under a cross-process lock that also carries unread output, a frame half-written or half-read by a killed process is repaired by the next caller, server notifications reach every sharer, and only the starting process can shut the server down. The same servers re-check every file `Edit`/`Write` touches and append up to 20 errors per file to the edit's result (`PostEditDiagnosticsHook`, waiting at most 5 s), answer `Lsp`'s `diagnostics` by re-checking the file on demand, and give `Read` an outline of a file too long for one page — from the server when there is one, from the source text otherwise. `Lsp` is classified read-only by the permission gate, so `plan` mode allows it without prompting: every one of its operations is a query, and the mutating half of LSP (rename, formatting, applying a code action's edit) is absent from the tool by construction. `RepoMap` is Aider's repo map as a tool: it ranks the files `git ls-files` lists by PageRank over which files reference which definitions and outlines the winners to a token budget, mapping PHP with the engine's own tokenizer and every other language only when Universal Ctags built with `+json` is on `PATH` (`doctor` says which); symbols are cached per project under `~/.sugar-crush/cache/repomap/`, so only the first call in a checkout pays for the parse. `Write` was the odd one out until recently: it was written, tested and referenced from this README, but never listed in that array, so no real run could reach it and `Edit`'s `file_exists()` precondition left `Bash` as the model's only way to create a file. `Bash` takes an optional `timeout` in seconds (default 120, max 600 — the `bashTimeoutSeconds` and `bashMaxTimeoutSeconds` settings; out-of-range values are clamped, never unbounded): past it the command and its whole process group are killed, and the result keeps the output produced so far plus a line saying it timed out — `interactive: true` runs take the same number as their wall bound beside the idle ceiling. `Edit` matches `old_string` exactly first and then through a chain of looser stages — one indentation shift, whitespace-trimmed lines, collapsed runs of spaces, a block anchored by its first and last lines, folded curly quotes and dashes — each of which must find exactly one place; the result names the stage that matched, a loose match far out of proportion to `old_string` is refused, and further replacements in `edits` are applied in order, all or nothing. `ApplyPatch` brings the same chain to a `*** Begin Patch` patch that adds, updates, moves and deletes several files in one call: each hunk is found by its text (after its `@@` anchor lines and the hunk before it) and must match exactly one place, every path goes through the same jail, permission check and `protect-files` screen as `Edit`, and if any section fails no file is changed. `Read`, `Edit`, `Write` and `ApplyPatch` share one session read ledger (`Tools\ReadLedger`, one per launch's tool build): an edit, an overwrite or a patch of a file that changed on disk after the model last read it — by the user, a formatter or a command; compared by content, so a `touch` is not a change — is refused with the file left untouched until the model reads it again, and each turn's context lists the files that changed since they were read. A file the model never read is never refused. Implement `Tools\Tool` for your own.
+- **Tools** — `Tools\BuiltIn\*`: <!-- tools:roster:begin -->`Bash`, `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch` (against `$SUGARCRUSH_SEARCH_ENDPOINT`), `doctor` (a capability probe the model can call to report what this build/deployment actually supports), `Skill` (level 2 of the progressive-disclosure design below), `Lsp` (definitions/references/hover/symbols/code-actions/diagnostics from a language server), `Memory` (view, save, edit, delete and recall the persistent memory notes indexed in the system prompt), `RepoMap` (a ranked outline of the definitions the rest of the project references most, sized to a token budget), `Prune` (drop or distill its own finished tool outputs from what it is sent, by their `<ctx-ref r="N"/>` refs), `Todo` (the session's own checklist, rewritten whole on each call, at most one item in progress), `Compress` (replace a closed range of the conversation with its own summary — only on a turn you start with `/compress`), `Workflow` (runs a model-authored YAML plan of staged sub-agents), `Recall` (bring back, word for word, a tool output it pruned or a section it compressed, by its `rN` / `bN` ref), and `Team` (a team task board for background teammates: claim, complete and dependencies over a shared task list, plus team messages). These are **runtime tool names**, the same spelling the launch report and every `allowedTools`/`disabledTools`/`permissionRules` pattern uses; seven of them differ from their class file, which is why the list is not a directory listing — `doctor` is `Doctor.php`, `Skill` is `SkillTool.php`, `Lsp` is `LspTool.php`, `Memory` is `MemoryTool.php`, `RepoMap` is `RepoMapTool.php`, `Workflow` is `WorkflowTool.php`, `Team` is `TeamTool.php`. Nineteen classes ship on every launch, and `Bootstrap::tools()` ships all nineteen; `src/Tools/BuiltIn/` also holds `TaskTool.php`, whose runtime name `Task`<!-- tools:roster:end --> joins the set only when the launcher threads an `AgentManager` into the build (the E675 task feed) — every live `chat()` threads one, so `Task` is present in every real run and absent only from a bare `tools()` call built without a manager. **Be precise about what "ships" buys for `Lsp`:** it is REACHABLE on every launch and USEFUL once you list a language server under `lsp` in your own `~/.sugar-crush/config.json` (e.g. `{"lsp": {"php": {"command": "intelephense", "args": ["--stdio"]}}}`; user tier only, because starting a server is code execution). With none configured every call returns an *error* naming the language it could not ask — an empty success would read to the model as "this symbol has no references", which is a fabricated fact about your code. With one, `LspLauncher` starts each server once at launch, in the TUI parent, and stops it at exit; `LspConnection` is fork-safe, so forked turns and sub-agents share it — request ids are process-unique, every exchange is serialised under a cross-process lock that also carries unread output, a frame half-written or half-read by a killed process is repaired by the next caller, server notifications reach every sharer, and only the starting process can shut the server down. The same servers re-check every file `Edit`/`Write` touches and append up to 20 errors per file to the edit's result (`PostEditDiagnosticsHook`, waiting at most 5 s), answer `Lsp`'s `diagnostics` by re-checking the file on demand, and give `Read` an outline of a file too long for one page — from the server when there is one, from the source text otherwise. `Lsp` is classified read-only by the permission gate, so `plan` mode allows it without prompting: every one of its operations is a query, and the mutating half of LSP (rename, formatting, applying a code action's edit) is absent from the tool by construction. `RepoMap` is Aider's repo map as a tool: it ranks the files `git ls-files` lists by PageRank over which files reference which definitions and outlines the winners to a token budget, mapping PHP with the engine's own tokenizer and every other language only when Universal Ctags built with `+json` is on `PATH` (`doctor` says which); symbols are cached per project under `~/.sugar-crush/cache/repomap/`, so only the first call in a checkout pays for the parse. `Write` was the odd one out until recently: it was written, tested and referenced from this README, but never listed in that array, so no real run could reach it and `Edit`'s `file_exists()` precondition left `Bash` as the model's only way to create a file. `Bash` takes an optional `timeout` in seconds (default 120, max 600 — the `bashTimeoutSeconds` and `bashMaxTimeoutSeconds` settings; out-of-range values are clamped, never unbounded): past it the command and its whole process group are killed, and the result keeps the output produced so far plus a line saying it timed out — `interactive: true` runs take the same number as their wall bound beside the idle ceiling. `Edit` matches `old_string` exactly first and then through a chain of looser stages — one indentation shift, whitespace-trimmed lines, collapsed runs of spaces, a block anchored by its first and last lines, folded curly quotes and dashes — each of which must find exactly one place; the result names the stage that matched, a loose match far out of proportion to `old_string` is refused, and further replacements in `edits` are applied in order, all or nothing. Implement `Tools\Tool` for your own.
 - **Hooks** — `Hooks\*`: pre/post-tool-use guards (allow / deny / **modify** the input / **ask** the user). `HookManager::registerBuiltIns()` registers `AuditHook`, `ConfirmRemoveHook` and `ProtectFilesHook`; `BashEscapeDenyHook` is registered separately by `EngineBackend::withWorktreeRoot()`, since it needs the worktree root to decide what counts as an escape; and every engine turn registers a fresh `RepeatCallGuardHook`/`RepeatCallCountHook` pair (the repeat-call loop guard, see [The agent loop](#the-agent-loop)) on its own copy of the chain. YAML config and external `ScriptHook` supported: a hook script's exit code selects the outcome — `0` allow, `1` deny, `2` hard block, `3` ask (stdout becomes the question), `4` modify (stdout must be a JSON object replacing the tool input, or the call is denied rather than run unmodified). Hook files are read from `~/.sugar-crush/hooks.yaml` and — **only if you have opted that project in** — `<project>/.sugar-crush/hooks.yaml`, after the built-ins and before the permission gate. Both files are **additive**: a hook may not reuse the name of a built-in guard, of the permission gate, or of a hook the other file already declared — a config file may add to the chain, never replace what is in it. Note the flip side of refusing rather than overriding: if a project file you have trusted declares a hook `name:` your own file already uses, `sugarcrush` stops with exit 2 in that directory until one of the two names changes. A hook that rewrites the tool input (exit `4`) has its rewrite **re-judged by the whole chain** before anything runs — so a rewrite to `rm -rf /` is caught by `ConfirmRemoveHook` on the next pass rather than executed. Read that as "a rewrite gets no privilege the original call would not have had", **not** as a safety net: the re-scan is only as wide as the hooks in the chain, and a rewrite to something the built-ins have no opinion about (`curl … | sh`) re-scans clean and runs.
 
   **A project hook file is code execution, so it is off by default.** A hook entry is a shell command and a `matcher: '.*'` entry runs it on the model's first tool call — so honouring `<project>/.sugar-crush/hooks.yaml` means that `git clone <repo> && cd <repo> && sugarcrush` runs shell **that repository's author wrote**, with no prompt and nothing in the transcript. No permission mode protects you from it (`plan` included): config hooks are registered before the permission gate, and a scan stops at the first refusal, so the payload has already run by the time the gate would have refused. SugarCrush therefore ignores a project hook file unless *your* `~/.sugar-crush/config.json` — a file no repository can write — names that project in `trustedProjectHooks`:
@@ -1698,7 +1872,7 @@ $backend = (EngineBackend::new($provider, 'gpt-4o'))
   ```
 
   Paths are matched by real path, so a symlinked or trailing-slash spelling of a trusted root still matches. The match is **exact, not a subtree**: trusting `~/src` does not trust `~/src/anything` — list each repository you mean, and note that a trusted root's sibling sharing its spelling (`my-repo-evil` beside `my-repo`) is never trusted by accident. An entry must also be **absolute** (or `~/`-rooted): a relative one like `"."` is resolved fresh against the current directory on every launch, exactly as the project root is, so it would always agree and turn a per-path allowlist into "trust every repository I `cd` into". Such an entry is refused and reported rather than honoured. When a project hook file is present and *not* trusted, the launch says so on stderr — once per launch, naming the canonical absolute path to add — rather than dropping it silently. Your own `~/.sugar-crush/hooks.yaml` is never gated: you wrote it, and that premise is enforced rather than assumed — if this process cannot determine which home directory is yours (`$HOME` unset, `$USERPROFILE` unset, and no passwd entry for its uid) the launch **stops** rather than reading a hook chain or a permission policy out of a world-writable fallback directory.
-- **Permission modes** — `Permissions\*`: `PermissionGate` evaluates a tool call against one of six `PermissionMode`s (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`), with a mode-independent rm-rf circuit breaker and a fail-closed `auto` classifier when no `SafetyClassifier` is configured. Under `auto` a security finding — fetched code piped to a shell, data sent to an endpoint, credentials, `.git` and policy files — is put to you rather than refused unseen, and with `"autoReview": true` (user tier only) every other flagged call is first reviewed by the title model, which may allow it, ask you or deny it ([`docs/PERMISSIONS.md`](docs/PERMISSIONS.md#what-auto-classifies)). It reaches the main loop as `PermissionGateHook`, registered *after* the built-ins so a narrow, specific hazard ("Bash path outside the workspace root") reports before the broad policy one ("mode `plan` does not allow Edit"). Set the mode with `$SUGARCRUSH_PERMISSION_MODE` or a `permissionMode` key in `~/.sugar-crush/config.json` (or `settings.json`, which it outranks); add `permissionRules` entries like `{"pattern": "Bash*", "action": "deny"}` for per-pattern overrides. A pattern is `Tool` or `Tool(argument-glob)`, both halves `fnmatch()` — so `Bash(rm -rf *)`, `Read(./.env)`, `Read(./secrets/*)`, `mcp__*__push`. **Argument-scoped patterns matched nothing at all before this release**: the matcher compared the tool name only, so `Deny Bash(rm -rf *)` evaluated to `allow` while the documentation said otherwise. They work now, and two things about them are worth knowing rather than discovering. **Every argument-scoped `Deny` is advisory**, shell and path alike. A shell one survives whitespace runs and a command hidden behind `&&`/`;`/`|`/newline, and does *not* survive `/bin/rm`, `$(echo rm)`, `bash -c '…'` or `find -delete`, because no pattern over shell text can. A path one survives the `./` prefix, `//` runs and `.`/`..` segments — all normalised away on both sides, so `Read(./.env)` also covers `.env`, `.//.env` and `./foo/../.env`, none of which it caught in the first cut of this feature — and a *restrictive* path pattern spelled relatively additionally reads as "at any depth", so it covers `/home/you/proj/.env` too (a permissive one does not, or `Allow Read(.env)` would grant `/etc/.env`). It does *not* survive a symlinked spelling of the same file, and nothing here touches the filesystem: resolving would make the decision depend on the process's cwd and race the tool being gated. So treat any `Tool(...)` deny as a guard rail against the model doing something by *accident*, not as containment. The boundaries that do not depend on a spelling are `plan` mode, which refuses whole tool kinds, and the path jails, which resolve. The mode-independent `rm -rf /` breaker reads like a third and is not one: unswitchable is not unevadable — it reads `arguments['command']` and tokenises it without expanding anything, so while `/bin/rm -rf /` and `rm '-rf' ~` are caught, `bash -c 'rm -rf /'` and `$(echo rm) -rf /` are past it. (Its own newline-chain hole *was* real and is fixed here: `echo hi⏎rm -rf /` was **allowed** under `bypass-permissions` while `echo hi && rm -rf /` was denied.) And an argument-scoped rule does **not** refuse a *declaration* (a workflow stage's `tools: [Bash]`), only a real call: one `Deny Bash(rm -rf *)` should not make every stage that declares `Bash` unusable. A pattern the grammar cannot parse is reported on stderr — naming the reason it actually gave, which is either an unterminated `(`, a `)` that never opened, an empty pattern, or a missing tool-name half (`(rm *)`) — and skipped rather than loaded as a rule that would match nothing. **The default depends on the path.** The **TUI starts in `default`**: reads run, and every write, shell command and network call asks through the y/n/a modal — on `Chat`'s own tool path and, through the turn's two-way frame channel, on the engine path too — with `/rewind`'s workspace checkpoints behind whatever you allowed. It used to start in `bypass-permissions`, because an ASK on the engine path could not reach the screen and an asking default would have refused every edit; that is fixed (see *Permission prompts* below). One gap remains: a `Task` sub-agent run in a **parallel** batch cannot ask yet, so its question is refused with a reason the model reads — run it alone, allow it by rule, or pick `accept-edits`/`bypass-permissions` if you delegate edits in parallel. **`-p` and background sessions start in `bypass-permissions`**: their approver asks on stderr at a terminal and *refuses* without one, so an asking default would turn an unattended CI run's first edit into a refusal. Be clear about what that costs: with no `permissionRules` configured, `bypass-permissions` is *identical* to having no gate — every destructive `rm` its circuit breaker refuses is already refused, earlier and more broadly, by `ConfirmRemoveHook`. Any mode you configure (flag, variable or key) applies on every path alike.
+- **Permission modes** — `Permissions\*`: `PermissionGate` evaluates a tool call against one of six `PermissionMode`s (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`), with a mode-independent rm-rf circuit breaker and a fail-closed `auto` classifier when no `SafetyClassifier` is configured. It reaches the main loop as `PermissionGateHook`, registered *after* the built-ins so a narrow, specific hazard ("Bash path outside the workspace root") reports before the broad policy one ("mode `plan` does not allow Edit"). Set the mode with `$SUGARCRUSH_PERMISSION_MODE` or a `permissionMode` key in `~/.sugar-crush/config.json` (or `settings.json`, which it outranks); add `permissionRules` entries like `{"pattern": "Bash*", "action": "deny"}` for per-pattern overrides. A pattern is `Tool` or `Tool(argument-glob)`, both halves `fnmatch()` — so `Bash(rm -rf *)`, `Read(./.env)`, `Read(./secrets/*)`, `mcp__*__push`. **Argument-scoped patterns matched nothing at all before this release**: the matcher compared the tool name only, so `Deny Bash(rm -rf *)` evaluated to `allow` while the documentation said otherwise. They work now, and two things about them are worth knowing rather than discovering. **Every argument-scoped `Deny` is advisory**, shell and path alike. A shell one survives whitespace runs and a command hidden behind `&&`/`;`/`|`/newline, and does *not* survive `/bin/rm`, `$(echo rm)`, `bash -c '…'` or `find -delete`, because no pattern over shell text can. A path one survives the `./` prefix, `//` runs and `.`/`..` segments — all normalised away on both sides, so `Read(./.env)` also covers `.env`, `.//.env` and `./foo/../.env`, none of which it caught in the first cut of this feature — and a *restrictive* path pattern spelled relatively additionally reads as "at any depth", so it covers `/home/you/proj/.env` too (a permissive one does not, or `Allow Read(.env)` would grant `/etc/.env`). It does *not* survive a symlinked spelling of the same file, and nothing here touches the filesystem: resolving would make the decision depend on the process's cwd and race the tool being gated. So treat any `Tool(...)` deny as a guard rail against the model doing something by *accident*, not as containment. The boundaries that do not depend on a spelling are `plan` mode, which refuses whole tool kinds, and the path jails, which resolve. The mode-independent `rm -rf /` breaker reads like a third and is not one: unswitchable is not unevadable — it reads `arguments['command']` and tokenises it without expanding anything, so while `/bin/rm -rf /` and `rm '-rf' ~` are caught, `bash -c 'rm -rf /'` and `$(echo rm) -rf /` are past it. (Its own newline-chain hole *was* real and is fixed here: `echo hi⏎rm -rf /` was **allowed** under `bypass-permissions` while `echo hi && rm -rf /` was denied.) And an argument-scoped rule does **not** refuse a *declaration* (a workflow stage's `tools: [Bash]`), only a real call: one `Deny Bash(rm -rf *)` should not make every stage that declares `Bash` unusable. A pattern the grammar cannot parse is reported on stderr — naming the reason it actually gave, which is either an unterminated `(`, a `)` that never opened, an empty pattern, or a missing tool-name half (`(rm *)`) — and skipped rather than loaded as a rule that would match nothing. **The default depends on the path.** The **TUI starts in `default`**: reads run, and every write, shell command and network call asks through the y/n/a modal — on `Chat`'s own tool path and, through the turn's two-way frame channel, on the engine path too — with `/rewind`'s workspace checkpoints behind whatever you allowed. It used to start in `bypass-permissions`, because an ASK on the engine path could not reach the screen and an asking default would have refused every edit; that is fixed (see *Permission prompts* below). One gap remains: a `Task` sub-agent run in a **parallel** batch cannot ask yet, so its question is refused with a reason the model reads — run it alone, allow it by rule, or pick `accept-edits`/`bypass-permissions` if you delegate edits in parallel. **`-p` and background sessions start in `bypass-permissions`**: their approver asks on stderr at a terminal and *refuses* without one, so an asking default would turn an unattended CI run's first edit into a refusal. Be clear about what that costs: with no `permissionRules` configured, `bypass-permissions` is *identical* to having no gate — every destructive `rm` its circuit breaker refuses is already refused, earlier and more broadly, by `ConfirmRemoveHook`. Any mode you configure (flag, variable or key) applies on every path alike.
 
 A permission setting that is **present but unusable stops the launch** (exit 2 — see the exit-code table above) instead of falling back to the permissive default: a `~/.sugar-crush/config.json` that is unreadable, unparseable, whose top level is a JSON *list* rather than an object, or that is not a regular file at all (a directory or a dangling symlink of that name); a config directory this process cannot search (so whether a policy is configured there is unknowable); or a `permissionMode` — in either source — that names no real mode. A **hook file** is held to the same standard, for the same reason: an unreadable or unparseable `hooks.yaml`, a top level that is a YAML *list* rather than a mapping, a top-level key that is not `hooks:` (a typo'd `hook:` used to install zero guards and say nothing), a key on a hook *entry* that is not one of `name` / `matcher` / `command` / `description` / `disabled` / `timeout` (`mather:` used to fall back to the `.*` default and run the hook on every call; `enabled: false` was accepted and ignored, and so was `timeout:` back when this format had no such key — it has one now, and it is honoured), an unknown event name, a matcher that is not a valid regular expression, a `disabled` that is not `true`/`false`, a `timeout` that is not a positive *finite* number of seconds (`0`, `-1`, `.inf`, `1e400` and `.nan` are all refused rather than read as “no timeout”, and so is a `timeout:` written with no value after it), a hook with no command, or a name collision all stop the launch rather than quietly leaving the chain a guard short. `disabled: true` keeps that entry out of the chain while still validating everything else about it; a matcher may contain `/` (the delimiter is chosen to avoid whatever the pattern uses). Absence is not an error: a fresh install with no config, no hook file, and a zero-byte config all get the default. Individual malformed `permissionRules` entries are skipped (never coerced to `allow`) and reported on stderr, because the list is item-wise in a way a JSON syntax error is not; so is a `"permissionRules": null` that is *present* rather than absent, since someone who typed the key believes they configured rules. An error message also names the file the bad value came from, `settings.json` or `config.json`, rather than always naming the one the CLI writes.
 - **Skills** — `Skills\*`: frontmatter `SKILL.md` files inject prompt context, matched by keyword/path. Discovered from built-ins (`src/Skills/BuiltIn/`), `<project>/.sugar-crush/skills`, and `~/.sugar-crush/skills` (lowest to highest: **your own skill beats a project's** of the same name, and a project's beats a built-in; every shadowed skill is reported through `SkillManager::skipped()`, the launch notice and `SUGARCRUSH_DEBUG_SKILLS=1`). Ships 8 built-ins spanning language/framework conventions (`php-best-practices`, `laravel-best-practices`, `symfony-best-practices`), testing (`phpunit-master`, `testing-strategies`), `api-design`, `security-audit` and `composer-wizard`. The SugarCraft monorepo's own skills (`explore-codebase`, `worktree-workflow`, `mcp-authoring`, `matchups-sync`) live in the monorepo's project tier (`.sugar-crush/skills/` at its repository root), so they load only inside that checkout — as built-ins they were listed to every project, and one told the model to discard a dirty tree's uncommitted work. `disable-model-invocation` and `user-invocable` frontmatter flags are enforced, not decorative. `context: fork`, `allowed-tools`, `disallowed-tools`, `model` and `effort` are parsed and **not acted on** — there is no fork executor, so a `context: fork` skill behaves exactly like a `thread` one — and the launch says so: one aggregated row names every skill, agent preset, command or rule that declares an inert field or an unknown key (with a did-you-mean for a near miss such as `permisionMode`), and never refuses the file for it ([`docs/SKILLS.md`](docs/SKILLS.md#diagnostics)). Loading is **progressive**: the system prompt carries only each skill's name + description, and the model pulls the full `SKILL.md` body through the `Skill` tool when it decides one is relevant. Path-scoped skills self-announce — the first time `Read`/`Edit`/`Glob` touches a file a skill's `paths:` covers, that skill is surfaced (once per session, via one shared announce-set across the three tools). Those `paths:` globs are `fnmatch()` semantics **without `FNM_PATHNAME`**, so a single `*` crosses `/`, and `**` means zero or more directory levels **at any position, the first included** — which is a behaviour change worth knowing about if you wrote a skill against the older matcher: a leading `**` used not to claim files at the tree root and now does, so the three shipped skills scoped `**/*.php` or `**/*Test.php` (`security-audit`, `php-best-practices`, `phpunit-master`) now fire on a root-level file where they used to stay silent. [`docs/SKILLS.md`](docs/SKILLS.md) has the measured table. Skills authored for other CLIs are imported rather than ignored — `~/.claude/skills`, `<project>/.claude/skills`, `~/.config/opencode/skills` and `<project>/.opencode/skills` are all scanned, and the picker shows a provenance badge for where each one came from (symlinked skill directories are followed, which is how those trees are commonly laid out — but a link is **confined**: one in your own `~/.claude/skills` may point anywhere else in your home, while one in a cloned repository's `<project>/.claude/skills` may not leave that skills directory. That confinement is enforced on the *directory* as well as on each entry in it, and both halves are needed: an entry is judged against the skills directory's real path, so committing `.claude/skills` **itself** as a link used to relocate the boundary rather than trip it — every `SKILL.md` under the target was read, and a skill body is prompt context. The directory is therefore held inside the checkout it came from, which is the one path in the pair a repository cannot have forged; a link that stays inside the checkout (`.claude/skills -> shared/skills`) is still honoured, and a refused tree is dropped without disturbing your own or the built-ins. Be precise about what that buys, though: "inside the checkout" is not the same as "committed", since a checkout also holds untracked and gitignored files — so what is closed is a repo reading files from *outside* the tree you cloned, not every conceivable in-tree misdirection. A refused directory is named on stderr at launch rather than silently skipped. Both directory-level checks — this one and the workflow tier's — are the single predicate in `Support\ContainedPath`, which is also where the difference between them is written down: an entry resolving *onto* its boundary is fine, a directory resolving onto its trust anchor is not. The walk is also depth- and breadth-bounded, so a link to a huge tree cannot cost seconds per launch). Collisions resolve so that **nothing you did not write can re-point a name you already use**: the tier decides first — built-in < project < user, whatever the format — so a cloned repository's `.sugar-crush/skills` or `.claude/skills` copy cannot replace a skill in your `~/.sugar-crush/skills`, `~/.claude/skills` or `~/.config/opencode/skills`, because a project's skill arrives with whatever you cloned (it used to: native project skills outranked yours, audit 15d-03). Inside one tier a native skill wins over an imported one, and between the two foreign tools, opencode wins over Claude. An imported `SKILL.md` that will not parse is another tool's file and not something you can fix, so it is skipped quietly rather than logged to stderr on every launch; the launch prints **one** line saying how many were skipped, and `SUGARCRUSH_DEBUG_SKILLS=1` lists them (they are also readable from `SkillManager::skipped()` and, for the launch as a whole, `Bootstrap::skillSkips()`).
@@ -1755,7 +1929,7 @@ Things that are genuinely not finished, stated plainly rather than left for you 
 
   The TUI's default mode is `default`, which asks; `-p` and background sessions keep `bypass-permissions` (see *Permission modes*).
 - **The `anthropic` provider type key is OpenAI-shaped.** It authenticates as Anthropic but posts to `chat/completions` with `supportsFunctionCalling: false`, so it cannot call tools. Use `claude-code` or `SUGARCRUSH_BACKEND_CMD` for a native Anthropic path.
-- **Agent controls reach delegated runs only, and only softly at first.** The dashboard's `c`/`r`/`s`, `Ctrl+G` and the Agent View's `Ctrl+X` chords act through each run's mailbox, which a `Task` run reads while it works — a dashboard row that is not one (a `/workflow` stage, a background session) is refused on the status line. A cancel or pause takes effect at the run's next tool or step, so a long `Bash` call finishes first; a second cancel within 3 s stops the run's `Task` call at once (a parallel member's process is killed, a lone `Task` stops at its next step), but there is no per-run kill for a detached follow-up yet. `Ctrl+X b` (send to the background) likewise waits for the run's next tool or step, and is not offered for a nested run or by the web client's `agent.control`.
+- **Agent controls reach delegated runs only, and only softly at first.** The dashboard's `c`/`r`/`s`, `Ctrl+G` and the Agent View's `Ctrl+X` chords act through each run's mailbox, which a `Task` run reads while it works — a dashboard row that is not one (a `/workflow` stage, a background session) is refused on the status line. A cancel or pause takes effect at the run's next tool or step, so a long `Bash` call finishes first; a second cancel within 3 s stops the run's `Task` call at once (a parallel member's process is killed, a lone `Task` stops at its next step), but there is no per-run kill for a detached follow-up yet. `Ctrl+X b` (send to the background) is claimed but does nothing until background `Task` runs land.
 - **Worktree isolation covers `Task` and `/bg`, not workflow stages, and never merges.** An agent whose preset says `isolation: worktree` runs a delegation (or a `/bg`/`/fork` session) in its own git worktree under `<root>/.sugar-crush/worktrees/`, with its tools jailed there; a run that cannot be isolated is refused rather than run in your checkout. A tree that ends with work in it is kept and named in the result — merging it is yours (or the delegating model's) to do, and nothing does it automatically. A `/workflow` stage ignores the field and runs in the checkout. See [`docs/AGENTS_AUTHORING.md`](docs/AGENTS_AUTHORING.md#teams-and-worktrees).
 - **Workflow resume granularity is per whole stage.** An interrupted *parallel* sub-stage cannot be resumed with partial credit.
 - **Workflow stages run the real tool loop — on a launch with a provider.** `Bootstrap::workflowEngine()` gives the pool an `Agents\EngineExecutor` as its forked executor, and `Chat`'s constructor binds the chat's current backend into it (re-bound on a provider switch). Each stage agent — sequential, pipeline, verification or parallel — then runs through that engine's bounded loop in a forked child: same provider, hook chain, permission gate and root as the chat, narrowed to the stage's `tools:`, with `Task` withheld and a 200-step cap. With no provider, the pool keeps `ProcessExecutor`'s worker, which fails closed naming the absence, and a provider that fails to build (the chat then degrades to echo) is refused by the executor itself — echoed text is never reported as a stage's work.
