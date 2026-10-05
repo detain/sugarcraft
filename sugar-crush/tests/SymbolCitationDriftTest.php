@@ -563,6 +563,12 @@ final class SymbolCitationDriftTest extends TestCase
         if (\in_array($short, self::PLACEHOLDER_CLASSES, true)) {
             return false;
         }
+        // A lower-case first letter is a settings key or a variable — the
+        // `autoTest` setting (roadmap 3.H) — never a class: every class in
+        // this tree is StudlyCaps (PSR-1), so such a token cites nothing.
+        if (!ctype_upper($short[0])) {
+            return false;
+        }
         if (str_contains($target, 'SugarCraft\\Crush\\Tests\\')) {
             return true;
         }

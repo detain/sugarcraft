@@ -28,6 +28,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  */
 final class TaskNestingDepthCapTest extends TestCase
 {
+    use \SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
+
     private string $dir;
 
     protected function setUp(): void
@@ -41,6 +43,7 @@ final class TaskNestingDepthCapTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         $this->removeTree($this->dir);
     }
 
@@ -138,12 +141,12 @@ final class TaskNestingDepthCapTest extends TestCase
             $this->markTestSkipped('pcntl_fork() unavailable');
         }
         $ready = $this->dir . '/ready';
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === 0) {
             $seat = DelegationSlots::acquire('sess-a', 1, $this->dir);
             touch($ready);
             usleep($seat instanceof DelegationSlot ? 1_500_000 : 0);
-            posix_kill(getmypid(), SIGKILL);
+            \SugarCraft\Crush\Support\ForkedChild::exitNow();
         }
         $deadline = microtime(true) + 5.0;
         while (!is_file($ready) && microtime(true) < $deadline) {

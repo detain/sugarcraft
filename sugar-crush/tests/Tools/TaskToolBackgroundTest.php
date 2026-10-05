@@ -30,6 +30,7 @@ use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 final class TaskToolBackgroundTest extends TestCase
 {
     use StoppableDaemonFixtureTrait;
+    use \SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 
     /** Scratch temp root for the supervisors. SHORT: socket paths must fit 108 bytes. */
     private string $root = '';
@@ -52,6 +53,7 @@ final class TaskToolBackgroundTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         $this->tearDownDaemonFixture();
         $this->removeTree($this->root);
 
@@ -75,11 +77,11 @@ final class TaskToolBackgroundTest extends TestCase
         $out = $this->fixtureHome . '/result.json';
 
         // The turn child: the call runs in a process forked from the host.
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         if ($pid === 0) {
             $result = $task->execute(['id' => 'call_1', 'description' => 'Audit the parser', 'prompt' => 'audit src/Parser', 'agent' => 'coder', 'background' => true]);
             file_put_contents($out, (string) json_encode(['error' => $result->isError(), 'content' => $result->content()]));
-            posix_kill(getmypid(), SIGKILL);
+            \SugarCraft\Crush\Support\ForkedChild::exitNow();
         }
         pcntl_waitpid($pid, $status);
 

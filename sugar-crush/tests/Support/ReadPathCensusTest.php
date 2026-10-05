@@ -126,6 +126,27 @@ final class ReadPathCensusTest extends TestCase
      * @var array<string, list<string>>
      */
     private const READ_PATHS = [
+        'Agents/AgentManager.php|scandir' => [
+            'NAMES_ONLY — pruneSessionArtifacts() (roadmap P-D1) lists the session directories '
+                . 'under `subagents/` and `mailboxes/`, which this package\'s own writers create; '
+                . 'links are skipped and nothing is read',
+            'NAMES_ONLY — newestMtime() lists a session directory two levels down to stat ages, '
+                . 'never following a link; nothing is read',
+            'NAMES_ONLY — removeTree() lists the same directory to unlink it; a link is unlinked, '
+                . 'never followed',
+        ],
+        'Agents/DelegationSlots.php|fopen' => [
+            'SELF_LOCATED — a `slot-<n>.lock` seat file in the per-scope directory this class made '
+                . 'inside the PrivateDir-verified per-uid base; opened only to flock() it, nothing is read',
+            'SELF_LOCATED — the stale-scope sweep opens the same seat files to test their lock, '
+                . 'nothing is read',
+        ],
+        'Agents/DelegationSlots.php|glob' => [
+            'NAMES_ONLY — the stale-scope sweep lists the scope directories in the PrivateDir-verified '
+                . 'per-uid base this class owns; links are skipped',
+            'NAMES_ONLY — the same sweep lists one scope directory\'s `slot-*.lock` seat files to '
+                . 'test their locks',
+        ],
         'Agents/AgentPresetRegistry.php|glob' => [
             'CONTAINED — the preset directory is anchored and each `*.md` confined to it',
         ],
@@ -600,6 +621,10 @@ final class ReadPathCensusTest extends TestCase
                 . 'reconnect() adopted from the index after vetting its directory)',
             'SELF_LOCATED — the per-spawn token file this supervisor minted, read to '
                 . 'authenticate a reconnect (audit M5)',
+            'SELF_LOCATED — ownedActiveSummaries() (roadmap 4.3-2) reads one `sess_*.json` index '
+                . 'record a supervisor of this uid wrote into the 0700 index directory indexDir() '
+                . 'verified; only its name, agent tag and task are used, and only when it names '
+                . 'this process as owner',
         ],
         'Sessions/BackgroundSupervisor.php|glob' => [
             'NAMES_ONLY — the startup sweep (audit BG-2) lists `sugar_crush_bg_<uid>_*` names in the '
@@ -608,6 +633,11 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — reconnect() (roadmap 4.3-3) lists `sess_*.json` records in the per-uid '
                 . 'index directory, which indexDir() lstat-verified as a 0700 directory of this uid; '
                 . 'the content is read by the fopen below',
+            'NAMES_ONLY — adoptHandedOff() (roadmap 4.3-2) lists the same index directory for '
+                . 'records a forked turn handed to this process; each is claimed through the '
+                . 'same fopen and vetting as reconnect()',
+            'NAMES_ONLY — ownedActiveSummaries() (roadmap 4.3-2) lists the same index directory; '
+                . 'the record is read by the file_get_contents above',
         ],
         'Sessions/BackgroundSupervisor.php|fopen' => [
             'SELF_LOCATED — one index record a supervisor of this uid wrote 0600 into its own 0700 '

@@ -422,6 +422,11 @@ final class StderrEmitterCensusTest extends TestCase
         // construction, and MEASURED to do so when the literals were written.
         'src/Agents/AgentWorkerPool.php' => 3,
         'src/Agents/ForeignAgentPresetRegistry.php' => 2,
+        // Not stderr: roadmap 5.14a's terminal notifications (turn finished,
+        // goal settled, waiting for approval) carry the app's name as the
+        // OSC 9 / bell notification's title, written to the TERMINAL through
+        // Tui\TerminalNotifier — a desktop notification, not a diagnostic.
+        'src/Chat.php' => 3,
         // +2 each for the session-launch flags: ArgvParser's two refusals
         // (--continue with --resume, either with -p) and Bootstrap's two
         // --resume target errors. All four are pre-launch usage errors printed

@@ -475,6 +475,10 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 'Protocol/ServerContext.php',
                 'Protocol/SessionFeed.php',
                 'Server/ServerConfig.php',
+                // Roadmap O-7: not a preset read. The workspace host takes the
+                // SERVER's session mode off the gateway's spawn line (stdin),
+                // validated against PermissionMode, as `serve` itself does.
+                'Server/Workspace/WorkspaceHostProcess.php',
                 // Roadmap 4.1-2: the gate was decided. TaskTool hands the mode
                 // to AgentManager::createSubAgent(), which narrows it to the
                 // session's (stricter-of, never wider), and fromPreset()

@@ -176,6 +176,13 @@ use PHPUnit\Framework\TestCase;
  *    string list: a redirect target in a shell command the hook JUDGES is
  *    compared against it, and nothing is opened. Closing this process's
  *    descriptor 0 cannot change what the hook answers.
+ *  - `sugar-crush/src/Server/Workspace/WorkspaceHostProcess.php` — A READER,
+ *    IN ITS OWN PROCESS ONLY (roadmap O-7). `main()` is the entry point of a
+ *    workspace-host child the serve gateway spawns with `php -r`; descriptor
+ *    0 there is the gateway's config pipe — one JSON line, then EOF meaning
+ *    "the gateway let go". Nothing in the TUI or the suite's runner calls
+ *    `main()`, so closing THIS process's descriptor 0 never reaches it; a
+ *    host started with descriptor 0 closed reads no config and exits 2.
  *
  *  - `sugar-crush/src/Cli/NonInteractive.php` — FIXED (E338); the row is
  *    rewritten rather than dropped, because what it records is why the guard
@@ -377,6 +384,7 @@ final class StdinConstantReaderCensusTest extends TestCase
         'sugar-crush/src/Agents/ProcessExecutor.php' => ['STDIN'],
         'sugar-crush/src/Cli/NonInteractive.php' => ['STDIN'],
         'sugar-crush/src/Hooks/BuiltIn/BashEscapeDenyHook.php' => ['/dev/stdin'],
+        'sugar-crush/src/Server/Workspace/WorkspaceHostProcess.php' => ['STDIN'],
     ];
 
     public function testTheReachableDescriptorZeroReaderRosterIsUnchanged(): void

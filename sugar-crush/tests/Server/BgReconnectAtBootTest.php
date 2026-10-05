@@ -344,10 +344,13 @@ final class BgReconnectAtBootTest extends TestCase
 
     private function deadPid(): int
     {
-        $proc = \proc_open([\PHP_BINARY, '-r', 'exit(0);'], [['file', '/dev/null', 'r'], ['file', '/dev/null', 'a'], ['file', '/dev/null', 'a']], $pipes);
+        $proc = \proc_open([\PHP_BINARY, '-r', 'exit(0);'], [['file', '/dev/null', 'r'], ['file', '/dev/null', 'a'], ['pipe', 'w']], $pipes);
         self::assertIsResource($proc);
         $pid = (int) \proc_get_status($proc)['pid'];
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[2]);
         \proc_close($proc);
+        self::assertSame('', $stderr, 'the stand-in process said nothing');
 
         return $pid;
     }

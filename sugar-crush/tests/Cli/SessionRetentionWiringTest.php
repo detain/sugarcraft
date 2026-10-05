@@ -264,9 +264,6 @@ final class SessionRetentionWiringTest extends TestCase
     }
 
     /**
-     * @param array<string, string|null> $sessions id => name
-     */
-    /**
      * Roadmap P-D1: a pruning launch also sweeps the sub-agent logs and
      * mailboxes whose session the store no longer has — on every launch
      * that builds the store, not only the TUI's own App::init() sweep — and
@@ -296,6 +293,9 @@ final class SessionRetentionWiringTest extends TestCase
         }
     }
 
+    /**
+     * @param array<string, string|null> $sessions id => name
+     */
     private function seedStore(array $sessions): void
     {
         $store = new EnhancedSessionStore($this->tmpHome . '/.sugar-crush/session.db');
