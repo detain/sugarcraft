@@ -279,9 +279,9 @@ final class CompactionLiveSettingsTest extends TestCase
         file_put_contents($this->home . '/.sugar-crush/config.json', json_encode($data === [] ? new \stdClass() : $data));
     }
 
-    private static function toastText(Chat $chat): string
+    private static function toastText(?Chat $chat): string
     {
-        $toast = $chat->settingsToast();
+        $toast = $chat?->settingsToast();
         self::assertNotNull($toast, 'a save always reports itself');
 
         return trim((string) preg_replace('/[│╭╮╰╯─✔ℹ\s]+/u', ' ', Ansi::strip($toast->view('', 400, 0))));

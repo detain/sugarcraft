@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Skills;
 
 use SugarCraft\Crush\Memory\SecretRedactor;
 use SugarCraft\Crush\Support\AtomicFileWriter;
+use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\HomeDirectory;
 
 /**
@@ -329,9 +330,9 @@ final class ProposedSkills
         }
         @chmod($root, 0700);
 
-        $real = realpath($root);
-        $live = realpath((string) $this->liveRoot());
-        if ($real === false || ($live !== false && ($real === $live || str_starts_with($real . '/', $live . '/')))) {
+        // ContainedPath::within() answers false when the live tree does not
+        // exist yet, which is the case with nothing to be inside.
+        if (realpath($root) === false || ContainedPath::within($root, (string) $this->liveRoot())) {
             throw new \RuntimeException("{$root} resolves inside the live skills directory; no draft is written there");
         }
     }

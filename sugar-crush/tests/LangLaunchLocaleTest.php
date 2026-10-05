@@ -48,9 +48,8 @@ final class LangLaunchLocaleTest extends TestCase
         }
         if ($this->catalogue !== null) {
             T::overrideNamespace('crush', \dirname(__DIR__) . '/lang');
-            foreach (\glob($this->catalogue . '/*') ?: [] as $file) {
-                \unlink($file);
-            }
+            @\unlink($this->catalogue . '/en.php');
+            @\unlink($this->catalogue . '/de.php');
             \rmdir($this->catalogue);
         }
         T::setLocale($this->localeBefore);

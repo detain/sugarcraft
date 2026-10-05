@@ -18,6 +18,7 @@ use SugarCraft\Crush\Protocol\ServerContext;
 use SugarCraft\Crush\Server\ServerConfig;
 use SugarCraft\Crush\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Crush\Tests\Server\Support\WireClient;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * N-P5: the web settings form offers the project-shared tier — the committed
@@ -27,12 +28,12 @@ use SugarCraft\Crush\Tests\Server\Support\WireClient;
  */
 final class SettingsSharedTierTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $dir;
     private string $root;
     private Dispatcher $dispatcher;
     private SessionHub $hub;
-
-    private string|false $home = false;
 
     protected function setUp(): void
     {
@@ -40,8 +41,7 @@ final class SettingsSharedTierTest extends TestCase
         \mkdir($this->dir . '/project', 0o700, true);
         \mkdir($this->dir . '/home/' . LayeredSettings::dir(), 0o700, true);
         $this->root = (string) \realpath($this->dir . '/project');
-        $this->home = \getenv('HOME');
-        \putenv('HOME=' . $this->dir . '/home');
+        $this->useHomeSandbox($this->dir . '/home');
     }
 
     protected function tearDown(): void
@@ -54,7 +54,7 @@ final class SettingsSharedTierTest extends TestCase
             Loop::cancelTimer($timer);
         }
 
-        \putenv($this->home === false ? 'HOME' : 'HOME=' . $this->home);
+        $this->restoreHomeSandbox();
         ProtocolFixture::removeTree($this->dir);
     }
 

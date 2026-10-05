@@ -196,7 +196,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     private const DOT_PATHS = [
         // Repository-chosen: the checkout under analysis says where these point.
         'Agents/ForeignAgentPresetRegistry.php|.opencode/agents' => self::REPOSITORY,
-        'Host/Commands/WorkflowCommand.php|.sugar-crush/workflows' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/agents' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/hooks.yaml' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/workflows' => self::REPOSITORY,
@@ -237,7 +236,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // (in `Chat` until roadmap O-2h) records its re-import guard at
         // `.sugar-crush/memory/.imported-<target>` under the PROJECT root, so the
         // clone under analysis chooses where it points — repository-chosen on the
-        // same basis as `WorkflowCommand.php`'s workflows row above. It is a named GAP like `.opencode/memory` directly below:
+        // same basis as `Workflows/WorkflowRegistry.php`'s workflows row below. It is a named GAP like `.opencode/memory` directly below:
         // the refusals surface in the command's own response and nothing
         // reaches `$projectTierRefusals` (DRAIN_EVIDENCE stays without an entry,
         // which is what keeps the derivation calling it a gap). The write is
@@ -265,45 +264,25 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/Team.php|.sugar-crush/teams' => self::USER,
         'Agents/TeamConfig.php|.sugar-crush/teams' => self::USER,
         'Agents/TeamManager.php|.sugar-crush/teams' => self::USER,
-        // 5.4-2: `/memory log|restore` names the home memory directory it
-        // versions (`~/.sugar-crush/memory`) in its refusal text — user-tier.
-        'Commands/MemoryHistoryCommand.php|.sugar-crush/memory' => self::USER,
         'Agents/Teammate.php|.sugar-crush/teams' => self::USER,
-        // Not a path this file reads or builds: it is the sentence
-        // `Chat::refuseCommandShell()` puts in the transcript telling the
-        // operator WHERE to write `trustedProjectCommands` if they want a
-        // project command file's !`cmd` to run. User-tier by the same rule as
-        // the entries around it — the grant lives under `~`, which is exactly
-        // why a repository cannot make it.
-        'Chat.php|.sugar-crush/config.json' => self::USER,
-        // Both halves of the same sentence, and the SECOND one is why the
-        // sentence changed: `/permissions` told a user with no rules that
-        // `permissionRules` lives in `config.json`, when
-        // `Cli\Bootstrap::PERMISSION_SETTINGS_KEYS` reads it from
-        // `settings.json` too and `permissionConfigLayers()` merges both. Naming
-        // one of two files sends half of the people who follow it to the wrong
-        // one. User-tier for the same reason as the entry above: the file is
-        // under `~`, so a repository cannot write it. The report left `Chat` for
-        // `Host\Commands\PermissionsCommand` (roadmap O-2h), so a headless
-        // session prints the same sentence — which is why its `config.json`
-        // half is now a second occurrence beside the `refuseCommandShell()` one.
-        'Host/Commands/PermissionsCommand.php|.sugar-crush/config.json' => self::USER,
-        'Host/Commands/PermissionsCommand.php|.sugar-crush/settings.json' => self::USER,
+        // A SENTENCE IN THE CATALOGUE IS NOT AN OCCURRENCE IN `src/`. The
+        // transcript sentences that told the operator where a `~` file lives —
+        // `Chat::refuseCommandShell()`'s `trustedProjectCommands`, the
+        // `/permissions` pair naming `config.json` and `settings.json`, the
+        // `/budget` lower bound's `modelPrices`, `/workflow`'s project
+        // directory, `/rules`' two pack directories, `/memory log`'s home
+        // memory directory — moved into `lang/en.php` with audit 15b-14 (as the help
+        // screen did), and the derivation walks `src/` only. Deliberately: a
+        // catalogue entry is text a person reads, never a path anything builds
+        // or opens, and every one of those paths still occurs in the code that
+        // does (or in a sentence below that is still a source literal), so no
+        // DISTINCT path left this map with them.
+        //
         // The protocol's refusal of `permission.respond remember:"user"`
         // (roadmap O-3b) names where to add the rule by hand — a sentence
         // to the client, not a path this file opens; rooted at `~`, so
-        // user-tier like the `/permissions` sentence above.
+        // user-tier like every entry around it.
         'Protocol/Methods/PermissionMethods.php|.sugar-crush/settings.json' => self::USER,
-        // The two sentences `/rules` prints when there is nothing to list: where
-        // a pack goes, and the older directory that holds packs too. Neither is a
-        // path this file reads or builds — same shape as the
-        // `Chat.php|.sugar-crush/config.json` entry above, which is only the
-        // transcript telling the operator where to put something. Rooted at `~`,
-        // so user-tier by the same rule as everything around it, and each is a
-        // SECOND occurrence of a path this inventory already knows from another
-        // file — which is the case the derivation keys per file precisely to catch.
-        'Commands/RulesCommand.php|.sugar-crush/rulebooks' => self::USER,
-        'Commands/RulesCommand.php|.sugar-crush/rules' => self::USER,
         // The rulebook tier (Phase 6 P6.S3). Reused class, not a new one: the
         // classification axis here is WHO CHOSE the path, not which loader opens
         // it, and `~/.sugar-crush/rulebooks` is rooted at `~` exactly like the
@@ -315,15 +294,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // `$HOME/.sugar-crush`, the same boundary its sibling `loadUserRules()`
         // uses, so this second directory adds no gate of its own.
         'Context/RuleLoader.php|.sugar-crush/rulebooks' => self::USER,
-        // The `/budget` readout's LOWER BOUND sentence, telling the operator
-        // where to declare `modelPrices` — moved out of `Chat` with the rest of
-        // the spend accounting (roadmap O-2c). Never read or built here; rooted
-        // at `~`, so user-tier like the `Chat.php` row above.
-        'Host/SpendLedger.php|.sugar-crush/config.json' => self::USER,
         // The command-file shell refusal's sentence, telling the operator where
         // `trustedProjectCommands` is declared — moved out of `Chat` with the
         // rest of the submit pipeline (roadmap O-2g). Never read or built here;
-        // rooted at `~`, so user-tier like the `Chat.php` row above.
+        // rooted at `~`, so user-tier like the protocol sentence above.
         'Host/TurnController.php|.sugar-crush/config.json' => self::USER,
         // The install path `sugarcrush completion fish` PRINTS, in a comment.
         // Rooted at `~`, so it is user-tier by the same rule as every entry
@@ -356,6 +330,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Memory/EmbeddingCache.php|.sugar-crush/cache' => self::USER,
         'MCP/OAuthClientRegistration.php|.local/share' => self::USER,
         'Session.php|.config/sugarcraft-crush' => self::USER,
+        // 5.4-3: the dream pass's skill drafts, `~/.sugar-crush/skills-proposed`,
+        // and the user's live tree an accepted draft is copied into — both under
+        // HomeDirectory::owned(), so a checkout cannot place either. The settings
+        // row is `memory.dreamProposeSkills`' help sentence naming the drafts'
+        // directory.
+        'Skills/ProposedSkills.php|.sugar-crush/skills' => self::USER,
+        'Skills/ProposedSkills.php|.sugar-crush/skills-proposed' => self::USER,
+        'Config/Settings/Definitions/MemoryRuleSettings.php|.sugar-crush/skills-proposed' => self::USER,
         'Skills/ForeignSkillDiscovery.php|.config/opencode' => self::USER,
 
         // PACKAGE-RELATIVE — the tier the old two-value map had no name for, and
@@ -408,8 +390,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FIFTY-TWO occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-TWO distinct paths. TWENTY of those
+     * APPEARS IN. On this tree that is FORTY-SEVEN occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-TWO distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are FIFTEEN distinct paths — which is the figure
@@ -460,10 +442,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * a future revision cannot quietly go back to keying on the path.
      *
      * Two strings prove it on this tree: `.sugar-crush/config.json` is user-tier
-     * in `Host/SpendLedger.php` and PACKAGE-RELATIVE in `Agents/WorktreeConfig.php`
-     * (where it had no containment at all for nine rounds), and
-     * `.sugar-crush/workflows` is repository-chosen in three files while
-     * `.sugar-crush/skills` serves BOTH tiers in one.
+     * in `Host/TurnController.php` and repository-chosen in
+     * `Agents/WorktreeConfig.php` (where it had no containment at all for nine
+     * rounds), and `.sugar-crush/skills` is user-tier in
+     * `Skills/ProposedSkills.php` while it serves BOTH tiers in
+     * `Skills/SkillDiscovery.php`.
      */
     public function testOneDotPathCanCarryDifferentTiersInDifferentFiles(): void
     {

@@ -411,10 +411,12 @@ final class WorktreeRemovalReportingTest extends TestCase
     }
 
     /**
-     * EXACTLY TWO PLACES IN `src/` OR `bin/` BUILD A `WorktreeManager`, BY ANY
-     * SHAPE (roadmap 4.9): `Bootstrap::tools()`, for `Task`'s isolated runs,
-     * and `BackgroundCommand::spawnThunk()`, for a `/bg` session run as an
-     * `isolation: worktree` agent.
+     * EXACTLY THREE PLACES IN `src/` OR `bin/` BUILD A `WorktreeManager`, BY
+     * ANY SHAPE (roadmap 4.9): `Bootstrap::tools()`, for `Task`'s isolated
+     * runs, `BackgroundCommand::spawnThunk()`, for a `/bg` session run as an
+     * `isolation: worktree` agent, and `BackgroundSessionRunner`'s delegation
+     * arm, for a background `Task` of such a preset (over the same root the
+     * launch's manager uses, so both share one registry and sweep).
      *
      * This test pinned ZERO while the class was dormant, and said that the day
      * it redded would be good news — someone wired the class. Roadmap 4.9 did;
@@ -423,7 +425,7 @@ final class WorktreeRemovalReportingTest extends TestCase
      * scored a false zero that way), so a third builder — or a lost one — is a
      * red that sends the reader to the doc-blocks describing who builds it.
      */
-    public function testExactlyTheTwoWiredBuildersConstructAWorktreeManager(): void
+    public function testExactlyTheThreeWiredBuildersConstructAWorktreeManager(): void
     {
         $root = \dirname(__DIR__, 2);
         $files = self::phpSources($root);
@@ -438,7 +440,11 @@ final class WorktreeRemovalReportingTest extends TestCase
         self::assertFileExists($root . '/bin/sugarcrush');
 
         self::assertSame(
-            ['src/Cli/Bootstrap.php: new', 'src/Host/Commands/BackgroundCommand.php: new'],
+            [
+                'src/Cli/Bootstrap.php: new',
+                'src/Host/Commands/BackgroundCommand.php: new',
+                'src/Sessions/BackgroundSessionRunner.php: new',
+            ],
             self::sitesIn($files, $root),
         );
 

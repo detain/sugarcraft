@@ -408,7 +408,6 @@ final class TitleService
         return '';
     }
 
-    /** Set to anything but empty or `0`. */
     /**
      * Whether a session is titled automatically after its first turn: the
      * `sessions.autoTitle` setting (default on). Off leaves every new session
@@ -447,6 +446,7 @@ final class TitleService
         return \SugarCraft\Crush\Config\Settings\UiSettings::int(self::PROMPT_SUGGESTION_HISTORY_SETTING);
     }
 
+    /** Set to anything but empty or `0`. */
     private static function envFlag(string $name): bool
     {
         $value = getenv($name);

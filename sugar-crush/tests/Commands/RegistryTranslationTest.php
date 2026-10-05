@@ -58,7 +58,11 @@ final class RegistryTranslationTest extends TestCase
     {
         $en = require self::LANG_DIR . '/en.php';
         $missing = [];
-        foreach (glob(BuiltInCommands::specDir() . '/*.php') ?: [] as $file) {
+        // The package's own spec directory, spelled from here so the census is
+        // a resolvable tree-wide walk, and pinned to the one the loader reads.
+        $specDir = \dirname(__DIR__, 2) . '/builtin-commands';
+        self::assertSame(realpath(BuiltInCommands::specDir()), realpath($specDir));
+        foreach (glob(\dirname(__DIR__, 2) . '/builtin-commands/*.php') ?: [] as $file) {
             preg_match_all("/Lang::t\\(\\s*'([^']+)'/", (string) file_get_contents($file), $hits);
             self::assertNotSame([], $hits[1], basename($file) . ' shows no translated text');
             foreach ($hits[1] as $key) {

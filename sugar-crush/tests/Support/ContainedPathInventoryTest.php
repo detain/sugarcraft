@@ -191,6 +191,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Memory/ForeignMemoryImporter.php' => 2,
         'Providers/ProviderFactory.php' => 2,
         'Server/Http/StaticFiles.php' => 1,
+        'Skills/ProposedSkills.php' => 1,
         'Skills/SkillLoader.php' => 3,
         'Workflows/WorkflowRegistry.php' => 3,
     ];

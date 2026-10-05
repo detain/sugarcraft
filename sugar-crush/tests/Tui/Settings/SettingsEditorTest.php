@@ -184,8 +184,10 @@ final class SettingsEditorTest extends TestCase
         self::assertContains('trustedProjectHooks', $keys);
         $categories = array_unique(array_map(static fn (SettingDefinition $d): string => $d->category->value, $editor->rows()));
         // O-3a's `server.trustedProxies` matches too: the search spans categories.
+        // So do the MCP keys whose help says "a trusted project's .mcp.json" /
+        // "`untrusted_*`": the substring pass reads the help sentence on purpose.
         self::assertEqualsCanonicalizing(
-            [SettingCategory::Permissions->value, SettingCategory::Server->value],
+            [SettingCategory::HooksMcp->value, SettingCategory::Permissions->value, SettingCategory::Server->value],
             array_values($categories),
         );
 

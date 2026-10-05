@@ -476,7 +476,9 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // The two decision keys it reads; both messages are named now.
         // MCP-5 added the trust-record plumbing: the decision's canonicalRoot
         // key, the path separator, the two pin keys and the item separator.
-        'mcpClient' => ["'path'", "'status'", "'canonicalRoot'", "'/'", "'fingerprint'", "'summary'", "'; '"],
+        // E696 added the deny map's plumbing: the empty glob it skips and the
+        // `deny` value every disabledMcpServers pattern maps to.
+        'mcpClient' => ["'path'", "'status'", "'canonicalRoot'", "'/'", "'fingerprint'", "'summary'", "''", "'deny'", "'; '"],
         // Audit 15d-05's binding row: the plural pair and the is/are pick.
         'reportMemorySkips' => ["''", "'s'", "'is'", "'are'"],
         // Audit R1's two rows: the plural pair, the was/were pick of the
