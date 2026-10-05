@@ -131,12 +131,14 @@ final class ProposedSkillsTest extends TestCase
         mkdir($this->home . '/.sugar-crush/skills', 0700, true);
         symlink($this->home . '/.sugar-crush/skills', $this->home . '/.sugar-crush/skills-proposed');
 
+        $caught = null;
         try {
             ProposedSkills::new()->propose(SkillProposal::new('x', 'd', 'b'));
-            self::fail('a draft was written through a symlink into the live tree');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('symlink', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a draft was written through a symlink into the live tree');
+        self::assertStringContainsString('symlink', $caught->getMessage());
         self::assertSame([], array_diff(scandir($this->home . '/.sugar-crush/skills') ?: [], ['.', '..']));
     }
 
@@ -192,13 +194,15 @@ final class ProposedSkillsTest extends TestCase
         $store = ProposedSkills::new();
         $store->propose(SkillProposal::new('triage', 'proposed', 'Proposed steps.'));
 
+        $caught = null;
         try {
             $store->accept('triage', false, $this->project);
-            self::fail('a live skill was replaced without --replace');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('exists already', $e->getMessage());
-            self::assertStringContainsString('--replace', $e->getMessage());
+            $caught = $e;
         }
+        self::assertNotNull($caught, 'a live skill was replaced without --replace');
+        self::assertStringContainsString('exists already', $caught->getMessage());
+        self::assertStringContainsString('--replace', $caught->getMessage());
         self::assertSame('mine', Skill::fromFile($live . '/SKILL.md')->description);
         self::assertFileExists($store->root() . '/triage/SKILL.md', 'the refused draft stays');
 
@@ -219,12 +223,14 @@ final class ProposedSkillsTest extends TestCase
         $store->propose(SkillProposal::new('deploy', 'a dream copy', 'x'));
 
         foreach (['security-audit' => 'built-in', 'deploy' => 'project'] as $name => $tier) {
+            $caught = null;
             try {
                 $store->accept($name, false, $this->project);
-                self::fail("{$name} shadowed the {$tier} skill without --replace");
             } catch (\RuntimeException $e) {
-                self::assertStringContainsString("a {$tier} skill", $e->getMessage());
+                $caught = $e;
             }
+            self::assertNotNull($caught, "{$name} shadowed the {$tier} skill without --replace");
+            self::assertStringContainsString("a {$tier} skill", $caught->getMessage());
         }
         self::assertDirectoryDoesNotExist($this->home . '/.sugar-crush/skills');
     }

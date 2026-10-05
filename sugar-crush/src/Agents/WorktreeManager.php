@@ -80,7 +80,10 @@ use SugarCraft\Crush\Workspace\GitRunner;
  * `Task`, which creates an `isolation: worktree` run's tree, releases it when
  * the run ends and sweeps stale ones, and
  * {@see \SugarCraft\Crush\Host\Commands\BackgroundCommand::spawnThunk()}
- * builds one for a `/bg` session run as such an agent.
+ * builds one for a `/bg` session run as such an agent, and
+ * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner} builds one for
+ * a background `Task` (the daemon's own process, off any turn of the
+ * session that started it).
  *
  * WHAT THIS PARAGRAPH ONCE SAID: "These fire while the alternate screen is up,
  * so today they land as unprefixed lines on a frame the renderer believes it

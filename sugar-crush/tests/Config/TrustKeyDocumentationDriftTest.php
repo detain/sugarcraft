@@ -520,19 +520,18 @@ final class TrustKeyDocumentationDriftTest extends TestCase
         // figure can never again be prose nothing reads.
         self::assertSame(
             1,
-            preg_match('/^\s*(?:\*\*)?([a-z]+(?:-[a-z]+)?)(?:\*\*)? keys are layered/', $sentence, $w),
+            preg_match('/^\s*(?:\*\*)?([a-z]+(?:-[a-z]+)?(?:\s+hundred(?:\s+and\s+[a-z]+(?:-[a-z]+)?)?)?)(?:\*\*)? keys are layered/', $sentence, $w),
             'README.md\'s "Only these … keys are layered" roster must spell its count in words — '
                 . 'this guard derives that word from count(LAYERED_KEYS), so a digit or a '
                 . 'missing numeral leaves the figure unpinned',
         );
-        self::assertArrayHasKey(
-            \count(LayeredSettings::LAYERED_KEYS),
-            self::NUMBER_WORDS,
+        self::assertNotNull(
+            self::numberWord(\count(LayeredSettings::LAYERED_KEYS)),
             'count(LAYERED_KEYS) has moved outside the range this file can spell; add the word',
         );
         self::assertSame(
-            self::NUMBER_WORDS[\count(LayeredSettings::LAYERED_KEYS)],
-            strtolower($w[1]),
+            self::numberWord(\count(LayeredSettings::LAYERED_KEYS)),
+            (string) preg_replace('/\s+/', ' ', strtolower($w[1])),
             "README.md spells a layered-key count that is not count(LAYERED_KEYS): the constant holds "
                 . \count(LayeredSettings::LAYERED_KEYS) . ' keys',
         );
@@ -554,6 +553,20 @@ final class TrustKeyDocumentationDriftTest extends TestCase
             "README.md's \"Only these … keys are layered\" roster disagrees with LayeredSettings::LAYERED_KEYS — "
                 . 'a key was layered without a README edit, or named in the page without being layered',
         );
+    }
+
+    /**
+     * {@see NUMBER_WORDS}, and past ninety-nine "one hundred and four" — the
+     * spelling {@see \SugarCraft\Crush\Config\Settings\SettingsDocGenerator::spell()}
+     * writes. Null outside what this file can spell.
+     */
+    private static function numberWord(int $n): ?string
+    {
+        if ($n >= 100 && $n < 200) {
+            return $n === 100 ? 'one hundred' : 'one hundred and ' . ([1 => 'one'] + self::NUMBER_WORDS)[$n - 100];
+        }
+
+        return self::NUMBER_WORDS[$n] ?? null;
     }
 
     /**

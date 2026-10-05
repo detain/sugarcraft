@@ -764,9 +764,9 @@ final class KeyBindingRegistry
             KeyBinding::new('settings.preview-scroll', '↑ / ↓', 'Scroll the save preview (or k / j)', $c),
             // N-P5: the file behind a tier in $EDITOR, and settings profiles.
             // All three are the shell's (App::settingsShellKey()): each is I/O.
-            KeyBinding::new('settings.open-file', 'e', 'Open the tier\'s file, or the highlighted file, in $EDITOR', $c),
+            KeyBinding::new('settings.open-file', 'e', 'Open the target file or Files row in $EDITOR', $c),
             KeyBinding::new('settings.export', 'x', 'Export a settings profile to a file you name', $c),
-            KeyBinding::new('settings.import', 'p', 'Import a settings profile into the staged changes', $c),
+            KeyBinding::new('settings.import', 'p', 'Import a settings profile as staged changes', $c),
             KeyBinding::new('settings.profile-go', 'Enter', 'Export or import at the profile path typed', $c),
         ];
     }

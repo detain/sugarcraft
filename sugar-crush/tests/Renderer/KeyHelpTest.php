@@ -1119,7 +1119,10 @@ final class KeyHelpTest extends TestCase
         // `settings.preview-scroll`: 150 lines, 123 -> 125, fitting at 100x155.
         // The question-aware permission modal (5.7-2) declared
         // `permission.choice`: 151 lines, 125 -> 126, fitting at 100x156.
-        foreach ([[100, 30, 126], [100, 156, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // The settings view's files and profiles (N-P5 remainder) declared
+        // `settings.open-file`, `.export`, `.import` and `.profile-go`: 155
+        // lines, 126 -> 130, fitting at 100x160.
+        foreach ([[100, 30, 130], [100, 160, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1183,8 +1186,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 156 rows, not 80: the list is 151 content lines now (128 live
-            // rows, 12 headers, 11 separators; 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
+            // 160 rows, not 80: the list is 155 content lines now (132 live
+            // rows, 12 headers, 11 separators; 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
             // body of 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form
@@ -1193,7 +1196,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 156))),
+                Width::of($this->footer($this->chat('', $cols, 160))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

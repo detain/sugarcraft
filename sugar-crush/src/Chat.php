@@ -17616,7 +17616,9 @@ final class Chat implements Model
         // which creates, releases and sweeps an `isolation: worktree` run's
         // tree inside the turn — on the interactive path, inside the forked
         // child — so its notices are in-turn rows this clause covers. (`/bg`'s
-        // off-turn spawn, `BackgroundCommand::spawnThunk()`, builds the other.)
+        // off-turn spawn, `BackgroundCommand::spawnThunk()`, builds another,
+        // and a background `Task`'s daemon, `BackgroundSessionRunner`, a
+        // third in its own process.)
         //
         // AND `hasPending()` ALONE IS NOT MERELY WEAKER, IT CAN NEVER FIRE ON
         // ITS OWN (E193). `Program` consults this method only when it

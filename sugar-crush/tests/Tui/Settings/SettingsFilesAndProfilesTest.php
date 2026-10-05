@@ -218,12 +218,14 @@ final class SettingsFilesAndProfilesTest extends TestCase
     public function testAProfileIsNeverWrittenOverASettingsFile(): void
     {
         foreach (SettingsProfile::LAYER_FILE_NAMES as $name) {
+            $caught = null;
             try {
                 SettingsProfile::write($this->dir . '/home/' . LayeredSettings::dir() . '/' . $name, ['maxToolSteps' => 1]);
-                self::fail($name . ' was written as a profile');
             } catch (\RuntimeException $e) {
-                self::assertStringContainsString('settings file name', $e->getMessage());
+                $caught = $e;
             }
+            self::assertNotNull($caught, $name . ' was written as a profile');
+            self::assertStringContainsString('settings file name', $caught->getMessage());
         }
 
         self::assertFileDoesNotExist($this->configPath);

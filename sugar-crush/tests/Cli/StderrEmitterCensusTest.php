@@ -1368,8 +1368,10 @@ final class StderrEmitterCensusTest extends TestCase
         // the pin moved from "nothing builds it" to the two builders, and the
         // four doc-blocks that argued dormancy (WorktreeManager's, Bootstrap's,
         // WorktreeConfig's, Chat::subscriptions()'s) were rewritten with it.
+        // Roadmap 4.9's background-Task fix added a third builder, the
+        // background daemon's BackgroundSessionRunner.
         self::assertSame(
-            ['src/Cli/Bootstrap.php' => 1, 'src/Host/Commands/BackgroundCommand.php' => 1],
+            ['src/Cli/Bootstrap.php' => 1, 'src/Host/Commands/BackgroundCommand.php' => 1, 'src/Sessions/BackgroundSessionRunner.php' => 1],
             $built,
             'the set of files that construct — or statically call — a WorktreeManager moved. Its five '
                 . 'seam sites fire wherever it is built: re-read WorktreeManager\'s class doc-block (which '
