@@ -749,6 +749,21 @@ final class KeyBindingDriftTest extends TestCase
                 [$next] = $chat->update($k[0]);
 
                 $this->assertSame('read @src/Uniquely.php ', $next->inputBuf);
+
+                // Roadmap 5.14l: the "$skill name" half — a user-invocable
+                // skill's name, from the workspace's registry.
+                $skills = new \SugarCraft\Crush\Skills\SkillRegistry();
+                $skills->register(['security-audit' => \SugarCraft\Crush\Skills\Skill::parse("---\nname: security-audit\ndescription: audit\n---\nbody", 'security-audit')]);
+                $chat = (new Chat(
+                    inputBuf: 'review $sec',
+                    backend: new EchoBackend(),
+                    workspace: \SugarCraft\Crush\Host\WorkspaceContext::new(skills: $skills),
+                ))->withSize(100, 30);
+                $this->assertTrue($chat->mentionOwnsTab(), 'fixture: the caret ends a $ mention');
+
+                [$next] = $chat->update($k[0]);
+
+                $this->assertSame('review $security-audit ', $next->inputBuf);
             },
             'chat.recall' => function (array $k): void {
                 [$next] = $this->chat([Message::user('earlier')])->update($k[0]);

@@ -94,6 +94,89 @@ final class SkillMentions
     }
 
     /**
+     * The `$` token the caret sits at the end of, or null when it is not in
+     * one — the Tab-completion counterpart of
+     * {@see \SugarCraft\Crush\Attachments\FileMentions::tokenAt()}. `start`
+     * is the byte offset of the `$`; `partial` is the name typed after it,
+     * possibly empty. A `$` inside a `` `code span` `` (an odd number of
+     * backticks before it) is not a mention, as in {@see names()}.
+     *
+     * @return array{start: int, partial: string}|null
+     */
+    public static function tokenAt(string $buffer, int $caret): ?array
+    {
+        $caret = max(0, min($caret, \strlen($buffer)));
+        $before = substr($buffer, 0, $caret);
+        if (!str_contains($before, '$')
+            || preg_match('/(?<![^\s])\$([A-Za-z0-9][A-Za-z0-9_.:-]*)?$/u', $before, $m, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        // The token must end at the caret, or the completion would be spliced
+        // into the middle of it.
+        if ($caret < \strlen($buffer) && !ctype_space($buffer[$caret])) {
+            return null;
+        }
+
+        $start = $m[0][1];
+        if (substr_count(substr($buffer, 0, $start), '`') % 2 === 1) {
+            return null;
+        }
+
+        return ['start' => $start, 'partial' => (string) ($m[1][0] ?? '')];
+    }
+
+    /**
+     * Complete a half-typed `$` mention against the skills a user may invoke
+     * ({@see SkillRegistry::getUserInvocable()}) the way a shell completes: a
+     * unique match comes back whole (`unique`, so the caller may close it
+     * with a space), several as their longest common prefix. Null when no
+     * name starts with $partial, or the matches add nothing to it.
+     *
+     * @return array{name: string, unique: bool}|null
+     */
+    public static function complete(string $partial, SkillRegistry $registry): ?array
+    {
+        $names = self::completions($partial, $registry);
+        if ($names === []) {
+            return null;
+        }
+        if (\count($names) === 1) {
+            return ['name' => $names[0], 'unique' => true];
+        }
+
+        $common = $names[0];
+        foreach ($names as $name) {
+            while ($common !== '' && !str_starts_with($name, $common)) {
+                $common = substr($common, 0, -1);
+            }
+        }
+
+        return \strlen($common) > \strlen($partial) ? ['name' => $common, 'unique' => false] : null;
+    }
+
+    /**
+     * The user-invocable skill names that start with $partial, sorted — what
+     * makes a `$` token a completion target at all, so `$HOME` in a shell line
+     * leaves Tab alone.
+     *
+     * @return list<string>
+     */
+    public static function completions(string $partial, SkillRegistry $registry): array
+    {
+        $names = [];
+        foreach ($registry->getUserInvocable() as $skill) {
+            if (str_starts_with($skill->name, $partial)) {
+                $names[$skill->name] = true;
+            }
+        }
+        $names = array_map('strval', array_keys($names));
+        sort($names, SORT_STRING);
+
+        return $names;
+    }
+
+    /**
      * Every skill `$`-mentioned in $text, snapshotted, plus one notice per
      * mention that names a skill but could not be attached.
      *

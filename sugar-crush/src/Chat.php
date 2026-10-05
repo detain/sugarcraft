@@ -16111,16 +16111,18 @@ final class Chat implements Model
     }
 
     /**
-     * Whether a bare Tab completes an `@file` mention rather than cycling
-     * panes (audit 15b-15): the caret ends an `@` token in the draft and no
-     * modal is up. The modal guards are {@see slashMenuOwnsTab()}'s four, for
+     * Whether a bare Tab completes an `@file` mention — or a `$skill` one
+     * (roadmap 5.14l) — rather than cycling panes (audit 15b-15): the caret
+     * ends such a token in the draft and no modal is up. The modal guards are {@see slashMenuOwnsTab()}'s four, for
      * the reason its docblock gives - a shell that yields Tab on a condition
      * update() does not answer turns Tab into a dead key.
      *
      * No filesystem here: it is read by the shell on every key, so it only
      * asks whether the caret is IN a mention. A mention that completes to
      * nothing leaves the draft as it is - Tab inside a half-typed path is a
-     * completion attempt, never a pane switch out from under the typing.
+     * completion attempt, never a pane switch out from under the typing. A
+     * `$` token counts only while some user-invocable skill name starts with
+     * it (an in-memory registry read), so `$HOME` in a shell line keeps Tab.
      */
     public function mentionOwnsTab(): bool
     {
@@ -16132,29 +16134,44 @@ final class Chat implements Model
     }
 
     /**
-     * The `@` token the caret ends, in CHARACTER offsets (the widget's unit).
+     * The `@` or `$` token the caret ends, in CHARACTER offsets (the widget's
+     * unit), with its sigil. A `$` token is one only while the workspace's
+     * skill registry has a user-invocable name it is the start of
+     * ({@see \SugarCraft\Crush\Skills\SkillMentions::completions()}).
      *
-     * @return array{start: int, partial: string}|null
+     * @return array{start: int, partial: string, sigil: string}|null
      */
     private function mentionTokenAtCaret(): ?array
     {
-        if (!str_contains($this->inputBuf, '@')) {
+        $at = str_contains($this->inputBuf, '@');
+        $skills = str_contains($this->inputBuf, '$') ? $this->workspace?->skills : null;
+        if (!$at && $skills === null) {
             return null;
         }
 
         $caret = strlen(mb_substr($this->inputBuf, 0, $this->inputCursorOffset(), 'UTF-8'));
-        $token = FileMentions::tokenAt($this->inputBuf, $caret);
+        $token = $at ? FileMentions::tokenAt($this->inputBuf, $caret) : null;
+        $sigil = '@';
+        if ($token === null && $skills !== null) {
+            $token = \SugarCraft\Crush\Skills\SkillMentions::tokenAt($this->inputBuf, $caret);
+            if ($token !== null && \SugarCraft\Crush\Skills\SkillMentions::completions($token['partial'], $skills) === []) {
+                $token = null;
+            }
+            $sigil = '$';
+        }
         if ($token === null) {
             return null;
         }
 
-        return ['start' => mb_strlen(substr($this->inputBuf, 0, $token['start']), 'UTF-8'), 'partial' => $token['partial']];
+        return ['start' => mb_strlen(substr($this->inputBuf, 0, $token['start']), 'UTF-8'), 'partial' => $token['partial'], 'sigil' => $sigil];
     }
 
     /**
      * Tab on an `@file` mention: replace the typed path with its completion
      * from the project root ({@see FileMentions::complete()}), closing a
-     * unique file with a space so the next word can follow.
+     * unique file with a space so the next word can follow. On a `$skill`
+     * mention (roadmap 5.14l) the same, from the user-invocable skill names
+     * ({@see \SugarCraft\Crush\Skills\SkillMentions::complete()}).
      *
      * @return array{0: self, 1: null}
      */
@@ -16165,12 +16182,18 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        $completion = FileMentions::complete($token['partial'], $this->projectRoot());
+        if ($token['sigil'] === '$') {
+            $skills = $this->workspace?->skills;
+            $skill = $skills === null ? null : \SugarCraft\Crush\Skills\SkillMentions::complete($token['partial'], $skills);
+            $completion = $skill === null ? null : ['path' => $skill['name'], 'unique' => $skill['unique']];
+        } else {
+            $completion = FileMentions::complete($token['partial'], $this->projectRoot());
+        }
         if ($completion === null) {
             return [$this, null];
         }
 
-        $replacement = '@' . $completion['path'] . ($completion['unique'] ? ' ' : '');
+        $replacement = $token['sigil'] . $completion['path'] . ($completion['unique'] ? ' ' : '');
         $from = $token['start'];
         $to = $from + 1 + mb_strlen($token['partial'], 'UTF-8');
         $buffer = mb_substr($this->inputBuf, 0, $from, 'UTF-8') . $replacement . mb_substr($this->inputBuf, $to, null, 'UTF-8');

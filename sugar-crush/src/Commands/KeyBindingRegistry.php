@@ -411,7 +411,7 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.slash-complete', 'Tab', 'Complete the highlighted "/" command', $c),
             // Audit 15b-15: the second thing a bare Tab completes, on the same
             // shell-yield contract (Chat::mentionOwnsTab()).
-            KeyBinding::new('chat.mention-complete', 'Tab', 'Complete the @file path at the cursor', $c),
+            KeyBinding::new('chat.mention-complete', 'Tab', 'Complete the @file or $skill name at the cursor', $c),
             KeyBinding::new('chat.recall', '↑', 'Walk back through past prompts (empty box)', $c),
             KeyBinding::new('chat.recall-next', '↓', 'Walk forward again, then back to your draft', $c),
             KeyBinding::new('chat.accept-suggestion', '→', 'Take the grayed suggestion (empty input box)', $c),

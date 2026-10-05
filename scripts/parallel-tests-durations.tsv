@@ -609,6 +609,7 @@ sugar-crush/tests/Chat/TurnEndNotificationTest.php	0.100	8
 sugar-crush/tests/Chat/BtwCommandTest.php	0.100	10
 sugar-crush/tests/Skills/SkillMentionTest.php	0.100	10
 sugar-crush/tests/Chat/MainMailboxWakeTest.php	0.100	4
+sugar-crush/tests/Chat/SkillMentionTabCompletionTest.php	0.100	5
 sugar-crush/tests/Support/ManifestDependencyReachTest.php	0.099	3
 sugar-crush/tests/Chat/AbsoluteCapBreakerTest.php	0.097	3
 sugar-crush/tests/Prompt/PromptSnapshotDriftTest.php	0.096	3

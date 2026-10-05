@@ -521,6 +521,11 @@ one on demand with the `Skill` tool.
   there, as the tool substitutes its `args`; any other body is attached
   unchanged, because your prompt already says what to do with it.
 - **At most three** skills per prompt; each one past that gets a notice.
+- **`Tab` completes the name** when the cursor ends a `$` word in the TUI
+  draft, from the skills you can invoke (`SkillMentions::complete()`): a unique
+  name comes back whole with a trailing space, several their common prefix. A
+  `$` word no such name starts with (`$HOME`) is left alone, and `Tab` does
+  what it would otherwise do.
 
 ---
 
