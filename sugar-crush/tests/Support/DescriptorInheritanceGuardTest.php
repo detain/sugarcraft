@@ -188,6 +188,20 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'count' => 1,
             'reason' => 'handle returned for loop-driven draining; child outlives the call by design',
         ],
+
+        // Roadmap O-7. The workspace-host child of a multi-root `serve`, one
+        // per project root, held by its WorkspaceHostClient for as long as
+        // the root is open and reaped by stop() through the TERM→KILL ladder
+        // over its containment group. The server's own sockets (listener,
+        // accepted WebSockets, control socket, this spawn's UNIX listener)
+        // are close-on-exec, so the exec'd child never holds them; what else
+        // sits at fd ≥3 when it is spawned (the session store's SQLite
+        // handle) it inherits, and this row is where that stays written down.
+        'Server/Workspace/WorkspaceHostClient.php::start' => [
+            'count' => 1,
+            'reason' => 'long-lived per-root workspace host, reaped by stop(); server sockets are '
+                . 'FD_CLOEXEC, other fds ≥3 inherited',
+        ],
     ];
 
     /**

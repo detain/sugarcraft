@@ -79,6 +79,7 @@ sugar-crush/tests/ChatTest.php	4.663	254
 sugar-crush/tests/Workflows/WorkflowLivePaneTest.php	4.417	11
 sugar-crush/tests/Runtime/DroppedStreamContinueTest.php	4.400	7
 sugar-crush/tests/Server/PermissionFirstWinsTest.php	4.400	8
+sugar-crush/tests/Server/WorkspaceHostTest.php	4.400	7
 sugar-crush/tests/Support/AssertionSwallowingCatchTest.php	4.327	6
 sugar-crush/tests/Chat/UndoRefusalsTest.php	4.300	8
 sugar-crush/tests/Chat/ExecuteAgentsTimeoutTest.php	4.287	2

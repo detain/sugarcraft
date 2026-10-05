@@ -596,6 +596,56 @@ command (`theme` is `/theme`'s, `provider` is `/model`'s) — and only to your
 config or a trusted project's local file, through the same writer and refusals
 as the TUI editor.
 
+## More than one project root (workspace hosts)
+
+A server serves the root it was started on; its sessions, settings, trust
+answers, hooks, skills and MCP servers are that root's. That is not a policy
+but a property of the process: `Cli\Bootstrap` keeps a launch's root in
+process statics (the project the settings layers read, the frozen trust
+lists, the MCP clients started once per launch). So a second root runs in a
+**process of its own** — a workspace host — and the gateway
+(`Server\Workspace\Gateway`) in front of the protocol routes to it:
+
+- **Its own methods.** `workspace.list` → `{items: [{root, primary, running,
+  pid}]}`; `workspace.open {root}` starts that root's host (or finds it
+  running); `workspace.close {root, force?}` stops it, refused (`-32010`,
+  `turn_running`) while one of its turns runs unless `force`. The server's own
+  root is `primary` and closes only with the server. A `root` that is not a
+  directory is `-32004` `root_not_found`; at most eight hosts run at once
+  (`too_many_workspaces`).
+- **Routing.** A request whose params name another `root` goes to that
+  root's host — `session.create {root}`, `session.list {root}` — and so does
+  any request naming a `sessionId` a host answered for. Everything else is the
+  server's own. The `root` param is the gateway's; the hosts never see it.
+  Answers and events relayed from a host carry `root`.
+- **Following a session** works as on the server's own root: the gateway is
+  the host's one client and fans its events out to the clients that
+  subscribed through it, keeping a cursor per client, so a second subscriber's
+  replay never reaches the first twice. The last one to leave unsubscribes
+  upstream.
+- **A host that dies** (crash, kill, lost socket) is announced to every client
+  following one of its sessions as `server.overflow {sessionId, dropped: 0,
+  action: "resubscribe"}`; resubscribing starts a fresh host, which opens the
+  session from its store. A host that nobody follows and that runs no turn is
+  stopped after 15 minutes idle, which bounds a long-running PHP process's
+  memory.
+
+The host is spawned the way `/bg` spawns a session daemon: an argv (`php -r`
+with the entry point, nothing secret on it), in its own process group, with the
+root, a per-spawn token and the server's session settings (permission mode,
+`--allow-bypass`, the session and turn caps, the question timeout) on its
+stdin. The gateway binds a UNIX listener in `<state dir>/workspaces` (0700)
+only after the spawn, so no child inherits it; the child connects back and
+must send the token first, and from then on the socket carries the same
+`sugarcrush.v1` JSON-RPC, WebSocket-framed. The child stops when its stdin
+closes — the gateway let go, or died — and is otherwise reaped with the usual
+TERM-then-KILL ladder over its group, its turns with it. Its output goes to
+`<state dir>/workspaces/workspace-<hash>.log`.
+
+`sugarcrush serve` does not put the gateway in front of its listener yet: a
+running server answers for its own root only, and `workspace.*` is not among
+its methods.
+
 ## Attaching a terminal (`sugarcrush attach`)
 
 ```sh

@@ -68,9 +68,12 @@ final class RemoteSessionHost
     /** @var array<string, Deferred> request id => the answer's deferred */
     private array $pending = [];
 
+    /** @var array<string, true> request ids answered as decoded objects ({@see callPreserving()}) */
+    private array $preserving = [];
+
     private int $nextId = 0;
 
-    /** @var array<int, \Closure(array<string, mixed>): void> */
+    /** @var array<int, \Closure(array<string, mixed>, string): void> */
     private array $listeners = [];
 
     /** @var array<int, \Closure(string): void> */
@@ -211,11 +214,43 @@ final class RemoteSessionHost
     }
 
     /**
+     * {@see call()}, answered with the result decoded as OBJECTS (`\stdClass`
+     * for every JSON object), so a relay that re-encodes it hands its own
+     * client exactly the shape the server sent — an empty `{}` stays an
+     * object rather than becoming `[]`. The workspace gateway forwards calls
+     * this way ({@see \SugarCraft\Crush\Server\Workspace\Gateway}).
+     *
+     * @param array<string, mixed>|\stdClass $params
+     *
+     * @return PromiseInterface<mixed>
+     */
+    public function callPreserving(string $method, array|\stdClass $params): PromiseInterface
+    {
+        if (!$this->open) {
+            return reject(new \RuntimeException($this->closeReason ?? 'not connected to a server'));
+        }
+
+        $id = 'a' . ++$this->nextId;
+        $deferred = new Deferred();
+        $this->pending[$id] = $deferred;
+        $this->preserving[$id] = true;
+        $this->buffer->sendMessage(JsonRpc::encode([
+            'jsonrpc' => JsonRpc::VERSION,
+            'id' => $id,
+            'method' => $method,
+            'params' => $params === [] ? new \stdClass() : $params,
+        ]));
+
+        return $deferred->promise();
+    }
+
+    /**
      * Hear every `event` notification: the envelope's fields
-     * (`sessionId`, `seq`, `type`, `turnId`, `durable`, `data`). Answers the
+     * (`sessionId`, `seq`, `type`, `turnId`, `durable`, `data`), and the raw
+     * notification text beside it for a listener that relays it. Answers the
      * detach.
      *
-     * @param \Closure(array<string, mixed>): void $listener
+     * @param \Closure(array<string, mixed>, string): void $listener
      *
      * @return \Closure(): void
      */
@@ -485,7 +520,7 @@ final class RemoteSessionHost
             }
             foreach ($this->listeners as $listener) {
                 try {
-                    $listener($envelope);
+                    $listener($envelope, $payload);
                 } catch (\Throwable) {
                     // One listener's failure is its own; the others still hear.
                 }
@@ -499,9 +534,16 @@ final class RemoteSessionHost
             return;
         }
         $deferred = $this->pending[$id];
-        unset($this->pending[$id]);
+        $preserve = isset($this->preserving[$id]);
+        unset($this->pending[$id], $this->preserving[$id]);
 
         if (\array_key_exists('result', $message)) {
+            if ($preserve) {
+                $objects = \json_decode($payload, false, JsonRpc::MAX_DEPTH);
+                $deferred->resolve(\is_object($objects) && \property_exists($objects, 'result') ? $objects->result : new \stdClass());
+
+                return;
+            }
             $deferred->resolve(\is_array($message['result']) ? $message['result'] : []);
 
             return;
@@ -548,6 +590,7 @@ final class RemoteSessionHost
 
         $pending = $this->pending;
         $this->pending = [];
+        $this->preserving = [];
         foreach ($pending as $deferred) {
             $deferred->reject(new \RuntimeException($reason));
         }
