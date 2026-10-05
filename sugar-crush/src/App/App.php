@@ -30,6 +30,7 @@ use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulesState;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -838,12 +839,12 @@ final class App implements Model
     public function toggleAgentBroadcast(): self
     {
         if ($this->agentBroadcast) {
-            return $this->mutate(agentBroadcast: false)->withStatus('Messages go to the agent on screen again.');
+            return $this->mutate(agentBroadcast: false)->withStatus(Lang::t('tui.app.broadcast_off'));
         }
 
         $running = $this->runningAgentIds();
         if ($running === []) {
-            return $this->withStatus('No agent is running to message.');
+            return $this->withStatus(Lang::t('tui.app.broadcast_none'));
         }
 
         $app = $this->agentViewTarget === null || !\in_array($this->agentViewTarget, $running, true)
@@ -851,7 +852,7 @@ final class App implements Model
             : $this;
         $app = $app->mutate(agentBroadcast: true);
 
-        return $app->withStatus(sprintf('Messages go to all %d running agents (Ctrl+G again to stop).', \count($app->agentComposerTargets())));
+        return $app->withStatus(Lang::t('tui.app.broadcast_on', ['count' => \count($app->agentComposerTargets())]));
     }
 
     /**
@@ -866,13 +867,13 @@ final class App implements Model
     public function deliverAgentControl(\SugarCraft\Crush\AgentControlMsg $control): array
     {
         if ($control->agentIds === []) {
-            return [$this->withStatus('No agent to ' . match ($control->verb) {
-                \SugarCraft\Crush\AgentControlMsg::RESUME => 'resume',
-                \SugarCraft\Crush\AgentControlMsg::PAUSE => 'pause',
-                \SugarCraft\Crush\AgentControlMsg::OPEN_SESSION => 'open',
-                \SugarCraft\Crush\AgentControlMsg::MESSAGE => 'message',
-                default => 'stop',
-            } . '.'), null];
+            return [$this->withStatus(match ($control->verb) {
+                \SugarCraft\Crush\AgentControlMsg::RESUME => Lang::t('tui.app.no_agent.resume'),
+                \SugarCraft\Crush\AgentControlMsg::PAUSE => Lang::t('tui.app.no_agent.pause'),
+                \SugarCraft\Crush\AgentControlMsg::OPEN_SESSION => Lang::t('tui.app.no_agent.open'),
+                \SugarCraft\Crush\AgentControlMsg::MESSAGE => Lang::t('tui.app.no_agent.message'),
+                default => Lang::t('tui.app.no_agent.stop'),
+            }), null];
         }
 
         $app = $this->mutate(agentCancelArmed: null);
@@ -883,19 +884,19 @@ final class App implements Model
                 $armed = $this->agentCancelArmed;
                 if ($armed !== null && $armed['ids'] === $control->agentIds && $now - $armed['at'] <= self::AGENT_HARD_CANCEL_SECONDS) {
                     $control = new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::STOP, $control->agentIds);
-                    $app = $app->withStatus(sprintf('Stopping %s now.', $names));
+                    $app = $app->withStatus(Lang::t('tui.app.agent_stopping', ['names' => $names]));
                 } else {
                     $app = $app->mutate(agentCancelArmed: ['ids' => $control->agentIds, 'at' => $now])
-                        ->withStatus(sprintf('Asked %s to stop at its next step — again within 3 s to stop it now.', $names));
+                        ->withStatus(Lang::t('tui.app.agent_cancel_armed', ['names' => $names]));
                 }
                 break;
             case \SugarCraft\Crush\AgentControlMsg::PAUSE:
                 $app = $app->mutate(agentPaused: array_values(array_unique([...$this->agentPaused, ...$control->agentIds])))
-                    ->withStatus(sprintf('%s pauses at its next step (for 10 min at most).', ucfirst($names)));
+                    ->withStatus(Lang::t('tui.app.agent_pausing', ['names' => ucfirst($names)]));
                 break;
             case \SugarCraft\Crush\AgentControlMsg::RESUME:
                 $app = $app->mutate(agentPaused: array_values(array_diff($this->agentPaused, $control->agentIds)))
-                    ->withStatus(sprintf('%s goes on.', ucfirst($names)));
+                    ->withStatus(Lang::t('tui.app.agent_resumed', ['names' => ucfirst($names)]));
                 break;
             case \SugarCraft\Crush\AgentControlMsg::OPEN_SESSION:
                 $app = $app->closeAgentView();
@@ -913,7 +914,7 @@ final class App implements Model
     private function agentNames(array $ids): string
     {
         if (\count($ids) > 2) {
-            return \count($ids) . ' agents';
+            return Lang::t('tui.app.agents_count', ['count' => \count($ids)]);
         }
 
         $names = [];
@@ -921,7 +922,9 @@ final class App implements Model
             $names[] = \SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames($this->chat?->agentLive()->get($id)?->name ?? $id);
         }
 
-        return implode(' and ', $names);
+        return \count($names) === 2
+            ? Lang::t('tui.app.names_pair', ['first' => $names[0], 'second' => $names[1]])
+            : implode('', $names);
     }
 
     /**
@@ -1023,7 +1026,7 @@ final class App implements Model
             // P-D3: what the composer's placeholder names — the broadcast's
             // audience, when Ctrl+G turned it on for more than this run.
             'composer' => $this->agentBroadcast && \count($targets = $this->agentComposerTargets()) > 1
-                ? sprintf('all %d agents', \count($targets))
+                ? Lang::t('tui.app.composer_all', ['count' => \count($targets)])
                 : null,
             'attach' => $attach,
             'siblings' => $this->agentViewSiblings(),
@@ -1223,7 +1226,7 @@ final class App implements Model
         $tier = $editor->tier;
         if ($writer === null) {
             return $this->mutate(settingsEditor: $editor->withPreview(
-                SettingsSavePreview::blocked($tier, null, 'settings cannot be saved from this session'),
+                SettingsSavePreview::blocked($tier, null, Lang::t('tui.app.settings_unsavable')),
             ));
         }
 
@@ -1271,11 +1274,11 @@ final class App implements Model
 
             $sources = [$resolved->source, ...$resolved->shadowed];
             if ($editor->tier === SettingsTier::You && \in_array(SettingSource::UserSettings, $sources, true)) {
-                $notes[] = "{$key}: overrides the value in your settings.json";
+                $notes[] = Lang::t('tui.app.settings_overrides', ['key' => $key]);
             }
 
             if ($resolved->source->precedence() > $editor->tier->source()->precedence()) {
-                $notes[] = "{$key}: {$resolved->source->label()} still sets it, and outranks this file";
+                $notes[] = Lang::t('tui.app.settings_outranked', ['key' => $key, 'source' => $resolved->source->label()]);
             }
         }
 
@@ -2971,16 +2974,16 @@ final class App implements Model
         if ($path === null) {
             $writer = $this->settingsWriter;
             if ($writer === null) {
-                return [$this->mutate(settingsEditor: $editor->withNotice('Not opened: settings cannot be saved from this session')), null];
+                return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.app.settings_unsavable')))), null];
             }
 
             if ($editor->tier === SettingsTier::Session) {
-                return [$this->mutate(settingsEditor: $editor->withNotice('Not opened: ' . SettingsTier::Session->label() . ' has no file — t switches the tier')), null];
+                return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.app.settings_tier_no_file', ['tier' => SettingsTier::Session->label()])))), null];
             }
 
             $path = $writer->targetPath($editor->tier);
             if ($path === null) {
-                return [$this->mutate(settingsEditor: $editor->withNotice('Not opened: ' . (string) $writer->tierRefusal($editor->tier))), null];
+                return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', (string) $writer->tierRefusal($editor->tier)))), null];
             }
 
             // A project tier's `.sugar-crush` may not exist yet; the writer
@@ -2988,7 +2991,7 @@ final class App implements Model
             // would make it, or the editor could not write the file.
             $dir = \dirname($path);
             if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
-                return [$this->mutate(settingsEditor: $editor->withNotice("Not opened: {$dir} could not be created")), null];
+                return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.opened', Lang::t('tui.settings.profile.dir_not_created', ['dir' => $dir])))), null];
             }
         }
 
@@ -3009,7 +3012,7 @@ final class App implements Model
     {
         $editor = $this->settingsEditor;
         if (!$msg->ok()) {
-            return [$editor === null ? $this : $this->mutate(settingsEditor: $editor->withNotice('Not re-read: ' . (string) $msg->error)), null];
+            return [$editor === null ? $this : $this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.reread', (string) $msg->error))), null];
         }
 
         // Read strictly: a file the edit left unparseable is said so, and
@@ -3041,9 +3044,13 @@ final class App implements Model
                 ? ($this->settingsSources)()
                 : SettingsSources::bestEffort($this->root));
             $status = match (true) {
-                $broken => 'Not applied: ' . $msg->path . ' is not a JSON object now — fix it (e) before the next launch',
-                $changed === [] => 'Edited ' . $msg->path . ': no setting changed',
-                default => sprintf('Edited %s: %d setting%s changed (%s)', $msg->path, \count($changed), \count($changed) === 1 ? '' : 's', implode(', ', $changed)),
+                $broken => SettingsEditor::failure('tui.settings.failed.applied', Lang::t('tui.app.settings_file_broken', ['path' => $msg->path])),
+                $changed === [] => Lang::t('tui.app.settings_file_unchanged', ['path' => $msg->path]),
+                default => Lang::t(\count($changed) === 1 ? 'tui.app.settings_file_changed_one' : 'tui.app.settings_file_changed', [
+                    'path' => $msg->path,
+                    'count' => \count($changed),
+                    'keys' => implode(', ', $changed),
+                ]),
             };
             $app = $this->mutate(settingsEditor: $editor->withNotice($status));
         }
@@ -3076,7 +3083,7 @@ final class App implements Model
         $path = SettingsProfile::expand((string) $editor->profilePath(), HomeDirectory::owned());
         $editor = $editor->cancelEdit();
         if ($path === '') {
-            return [$this->mutate(settingsEditor: $editor->withNotice('Not done: no file named')), null];
+            return [$this->mutate(settingsEditor: $editor->withNotice(SettingsEditor::failure('tui.settings.failed.done', Lang::t('tui.app.settings_no_file_named')))), null];
         }
 
         if ($action === SettingsEditor::PROFILE_EXPORT) {
@@ -3131,7 +3138,7 @@ final class App implements Model
             return [$this->mutate(settingsEditor: $editor->withSaved(SettingsSavedMsg::failed(
                 SettingsTier::You,
                 [$key],
-                $writer === null ? 'settings cannot be saved from this session' : 'this launch has no project root to trust',
+                Lang::t($writer === null ? 'tui.app.settings_unsavable' : 'tui.app.settings_no_root'),
             ))), null];
         }
 
@@ -3252,7 +3259,7 @@ final class App implements Model
             }
         }
 
-        return [$this->withError("No command matches menu item '{$selected->item}'."), null];
+        return [$this->withError(Lang::t('tui.app.menu_no_command', ['item' => $selected->item])), null];
     }
 
     /**
@@ -3289,7 +3296,7 @@ final class App implements Model
         }
 
         if ($spec === null) {
-            return [$this->withError("Unknown command '{$name}'."), null];
+            return [$this->withError(Lang::t('tui.app.unknown_command', ['name' => $name])), null];
         }
 
         // The settings view is shell state that writes nothing, so it opens
@@ -3300,7 +3307,7 @@ final class App implements Model
         }
 
         if ($this->chat === null) {
-            return [$this->withStatus("No chat is hosted — '{$name}' was not dispatched."), null];
+            return [$this->withStatus(Lang::t('tui.app.no_chat', ['name' => $name])), null];
         }
 
         [$next, $cmd] = $spec->slashVisible
@@ -3387,7 +3394,7 @@ final class App implements Model
             $msg instanceof UserInputMsg => $this->handleUserInput($msg),
             $msg instanceof SelectPaneMsg => [$this->withPane($msg->pane)->withError(null), null],
             $msg instanceof DockPaneMsg => $this->applyDockCommand($msg),
-            $msg instanceof LayoutResetMsg => [$this->layoutReset()->withStatus('layout: reset to the launch default'), null],
+            $msg instanceof LayoutResetMsg => [$this->layoutReset()->withStatus(Lang::t('tui.app.layout_reset')), null],
             $msg instanceof ToolResultMsg => $this->handleToolResult($msg),
             $msg instanceof ErrorMsg => [$this->withError($msg->message), null],
             $msg instanceof StatusMsg => [$this->withStatus($msg->message), null],
@@ -3434,22 +3441,22 @@ final class App implements Model
         $side = self::dockSideFromWord($action);
 
         if ($side === null) {
-            return [$this->withError("pane: dock side must be left or right, got '{$msg->action}'"), null];
+            return [$this->withError(Lang::t('tui.app.pane_bad_side', ['side' => $msg->action])), null];
         }
 
         $name = $msg->paneName ?? $this->pane->value;
 
         if ($msg->paneName === null && !$this->pane->dockable()) {
-            return [$this->withError('pane: no dockable pane is focused — name one with /pane dock <left|right> <name>'), null];
+            return [$this->withError(Lang::t('tui.app.pane_none_focused_dock')), null];
         }
 
         $pane = $name !== null ? Pane::tryFrom($name) : null;
 
         if ($pane === null || !$pane->dockable()) {
-            return [$this->withError("pane: '{$name}' is not a dockable pane"), null];
+            return [$this->withError(Lang::t('tui.app.pane_not_dockable', ['name' => $name])), null];
         }
 
-        return [$this->setPaneSide($pane, $side)->withStatus("pane: {$pane->label()} docked {$side->name}"), null];
+        return [$this->setPaneSide($pane, $side)->withStatus(Lang::t($side === Side::Left ? 'tui.app.pane_docked_left' : 'tui.app.pane_docked_right', ['pane' => $pane->label()])), null];
     }
 
     /**
@@ -3467,19 +3474,19 @@ final class App implements Model
     private function applyPaneToggle(DockPaneMsg $msg): array
     {
         if ($msg->paneName === null && !$this->pane->dockable()) {
-            return [$this->withError('pane: no dockable pane is focused — name one with /pane toggle <name>'), null];
+            return [$this->withError(Lang::t('tui.app.pane_none_focused_toggle')), null];
         }
 
         $name = $msg->paneName ?? $this->pane->value;
         $pane = Pane::tryFrom($name);
 
         if ($pane === null || !$pane->dockable()) {
-            return [$this->withError("pane: '{$name}' is not a dockable pane"), null];
+            return [$this->withError(Lang::t('tui.app.pane_not_dockable', ['name' => $name])), null];
         }
 
-        $verb = $this->isDocked($pane) ? 'undocked' : 'docked';
+        $key = $this->isDocked($pane) ? 'tui.app.pane_undocked' : 'tui.app.pane_docked';
 
-        return [$this->togglePaneDocking($pane)->withStatus("pane: {$pane->label()} {$verb}"), null];
+        return [$this->togglePaneDocking($pane)->withStatus(Lang::t($key, ['pane' => $pane->label()])), null];
     }
 
     /**
@@ -3650,7 +3657,7 @@ final class App implements Model
         );
 
         if ($options === []) {
-            $next = $next->withStatus('No user-invocable skills are registered.');
+            $next = $next->withStatus(Lang::t('tui.app.no_skills'));
         }
 
         return [$next, null];
@@ -3676,7 +3683,7 @@ final class App implements Model
         }
 
         if ($skill === null) {
-            return [$this->withError("Skill '{$msg->skillName}' is not user-invocable or does not exist."), null];
+            return [$this->withError(Lang::t('tui.app.skill_unknown', ['name' => $msg->skillName])), null];
         }
 
         $alreadyEnabled = false;
@@ -3698,9 +3705,8 @@ final class App implements Model
         // are named on dispatchSkill(); this line's job is only to stop the
         // interface claiming an outcome that does not happen.
         $status = $this->availableSkills->isContextFork($skill->name)
-            ? "Skill '{$skill->name}' declares context: fork — enabled, but not inlined, "
-                . 'and no fork dispatch is wired yet.'
-            : "Enabled skill '{$skill->name}'.";
+            ? Lang::t('tui.app.skill_fork', ['name' => $skill->name])
+            : Lang::t('tui.app.skill_enabled', ['name' => $skill->name]);
 
         $next = $this->mutate(
             enabledSkills: $enabledSkills,

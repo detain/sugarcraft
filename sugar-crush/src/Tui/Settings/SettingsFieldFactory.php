@@ -9,6 +9,7 @@ use SugarCraft\Crush\Config\Settings\OptionsProvider;
 use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\Input;
@@ -88,34 +89,34 @@ final class SettingsFieldFactory
             if ($provider === null || $provider === '') {
                 return Input::new($definition->key)
                     ->withTitle($title)
-                    ->withDescription('<provider>=<model id> sets that provider\'s model; <provider>= clears it.');
+                    ->withDescription(Lang::t('tui.settings.field.models_no_provider'));
             }
 
             $entry = \is_array($current) ? ($current[$provider] ?? '') : '';
 
             return Input::new($definition->key)
-                ->withTitle($title . ' for ' . $provider)
-                ->withDescription('Model id; leave empty for the provider default. <provider>=<model id> sets another provider\'s.')
+                ->withTitle(Lang::t('tui.settings.field.title_for_provider', ['title' => $title, 'provider' => $provider]))
+                ->withDescription(Lang::t('tui.settings.field.models_for_provider'))
                 ->withValue(\is_string($entry) ? $entry : '');
         }
 
         if (self::jsonMap($definition)) {
             return Input::new($definition->key)
                 ->withTitle($title)
-                ->withDescription('One JSON object. ' . $definition->help)
+                ->withDescription(Lang::t('tui.settings.field.json_object') . ' ' . $definition->help)
                 ->withValue(\is_array($current) && $current !== [] ? self::text($definition, $current) : '{}');
         }
 
         if (self::jsonList($definition)) {
             return Input::new($definition->key)
                 ->withTitle($title)
-                ->withDescription('One JSON list, first match wins: [{"pattern": "Bash(rm *)", "action": "deny"}, …]. ' . $definition->help)
+                ->withDescription(Lang::t('tui.settings.field.json_list') . ' ' . $definition->help)
                 ->withValue(\is_array($current) ? (string) json_encode(array_values($current), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) : '[]');
         }
 
         $input = Input::new($definition->key)
             ->withTitle($title)
-            ->withDescription($definition->type === SettingType::StringList ? 'Comma-separated.' : $definition->help)
+            ->withDescription($definition->type === SettingType::StringList ? Lang::t('tui.settings.field.comma_separated') : $definition->help)
             ->withValue(self::text($definition, $current));
 
         return $definition->type === SettingType::Secret ? $input->withPassword() : $input;
@@ -141,9 +142,9 @@ final class SettingsFieldFactory
 
         return match (true) {
             $definition->applyMode === ApplyMode::Frozen
-                => $definition->label . ' is set by hand in your config.json; it applies from the next launch',
-            $definition->ui === UiEditability::ReadOnly => $definition->label . ' is written by the app itself, not edited here',
-            default => $definition->label . ' is edited by hand in your config.json',
+                => Lang::t('tui.settings.field.frozen', ['label' => $definition->label]),
+            $definition->ui === UiEditability::ReadOnly => Lang::t('tui.settings.field.read_only', ['label' => $definition->label]),
+            default => Lang::t('tui.settings.field.hand_edited', ['label' => $definition->label]),
         };
     }
 
@@ -184,7 +185,7 @@ final class SettingsFieldFactory
             }
 
             if ($target === null || $target === '') {
-                throw new \InvalidArgumentException('name the provider: <provider>=<model id>');
+                throw new \InvalidArgumentException(Lang::t('tui.settings.field.name_the_provider'));
             }
 
             $map = \is_array($current) ? $current : [];
@@ -200,13 +201,13 @@ final class SettingsFieldFactory
         if (self::jsonMap($definition)) {
             $decoded = json_decode($text === '' ? '{}' : $text, true);
             if (!\is_array($decoded) || ($decoded !== [] && array_is_list($decoded))) {
-                throw new \InvalidArgumentException("{$definition->label} needs one JSON object, e.g. {\"name\": …}");
+                throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_json_object', ['label' => $definition->label]));
             }
 
             // `{}` would be written as a JSON list (`[]`) and states nothing a
             // reset does not state better: the reset removes the key.
             if ($decoded === []) {
-                throw new \InvalidArgumentException("{$definition->label} is empty; press r to reset it instead");
+                throw new \InvalidArgumentException(Lang::t('tui.settings.field.empty_object', ['label' => $definition->label]));
             }
 
             return $decoded;
@@ -215,7 +216,7 @@ final class SettingsFieldFactory
         if (self::jsonList($definition)) {
             $decoded = json_decode($text === '' ? '[]' : $text, true);
             if (!\is_array($decoded) || !array_is_list($decoded)) {
-                throw new \InvalidArgumentException("{$definition->label} needs one JSON list, e.g. [{\"pattern\": \"Bash\", \"action\": \"ask\"}]");
+                throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_json_list', ['label' => $definition->label]));
             }
 
             return $decoded;
@@ -224,10 +225,10 @@ final class SettingsFieldFactory
         return match ($definition->type) {
             SettingType::Int => preg_match('/^-?\d+$/', $text) === 1
                 ? (int) $text
-                : throw new \InvalidArgumentException("{$definition->label} needs a whole number"),
+                : throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_integer', ['label' => $definition->label])),
             SettingType::Float => is_numeric($text)
                 ? (float) $text
-                : throw new \InvalidArgumentException("{$definition->label} needs a number"),
+                : throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_number', ['label' => $definition->label])),
             SettingType::StringList => array_values(array_filter(
                 array_map('trim', explode(',', $text)),
                 static fn (string $entry): bool => $entry !== '',
@@ -262,7 +263,7 @@ final class SettingsFieldFactory
 
         $decoded = json_decode($text, true);
         if (!\is_array($decoded)) {
-            throw new \InvalidArgumentException("{$definition->label} needs a number or a JSON object");
+            throw new \InvalidArgumentException(Lang::t('tui.settings.field.needs_number_or_object', ['label' => $definition->label]));
         }
 
         return $decoded;

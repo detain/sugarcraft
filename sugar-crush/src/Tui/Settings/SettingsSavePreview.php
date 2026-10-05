@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Config\Settings\ApplyMode;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingsTier;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Diff\Diff;
 use SugarCraft\Diff\DiffOptions;
@@ -161,7 +162,7 @@ final class SettingsSavePreview
         $error = Style::new()->foreground($theme->shellError);
         $fit = static fn (string $s): string => Width::truncate($s, $width);
 
-        $lines = [$head->render($fit('Save to ' . $this->tier->label()))];
+        $lines = [$head->render($fit(Lang::t('tui.settings.preview.save_to', ['tier' => $this->tier->label()])))];
         if ($this->path !== null) {
             $lines[] = $muted->render(Width::truncateMiddle($this->path, $width));
         }
@@ -181,14 +182,14 @@ final class SettingsSavePreview
 
         if ($this->tier === SettingsTier::ProjectShared) {
             $lines[] = Style::new()->foreground($theme->shellWarning)->render($fit(
-                '! A committed file: everyone who clones this repository and trusts it gets these values.',
+                '! ' . Lang::t('tui.settings.preview.committed'),
             ));
         }
 
         $lines[] = '';
         $diff = $this->diff();
         if ($diff->isEmpty()) {
-            $lines[] = $muted->render($fit('No change to the file.'));
+            $lines[] = $muted->render($fit(Lang::t('tui.settings.preview.no_change')));
         }
 
         foreach ($diff->hunks as $hunk) {
@@ -206,7 +207,7 @@ final class SettingsSavePreview
         $lines[] = '';
         $summary = $this->applySummary();
         if ($summary !== '') {
-            $lines[] = $text->render($fit('Applies: ' . $summary));
+            $lines[] = $text->render($fit(Lang::t('tui.settings.preview.applies', ['summary' => $summary])));
         }
 
         foreach ($this->notes as $note) {
@@ -214,7 +215,7 @@ final class SettingsSavePreview
         }
 
         if ($turnRunning) {
-            $lines[] = $muted->render($fit('A turn is running — it keeps the settings it began with.'));
+            $lines[] = $muted->render($fit(Lang::t('tui.settings.preview.turn_running')));
         }
 
         return $lines;
@@ -230,8 +231,8 @@ final class SettingsSavePreview
         $lines = [];
         foreach ($this->changed() as $key) {
             $definition = SettingsSchema::byKey($key);
-            $was = \array_key_exists($key, $this->was) ? $this->shown($key, $this->was[$key]) : '(not in this file)';
-            $now = \array_key_exists($key, $this->set) ? $this->shown($key, $this->set[$key]) : '(removed: a lower layer or the default)';
+            $was = \array_key_exists($key, $this->was) ? $this->shown($key, $this->was[$key]) : Lang::t('tui.settings.preview.not_in_file');
+            $now = \array_key_exists($key, $this->set) ? $this->shown($key, $this->set[$key]) : Lang::t('tui.settings.preview.removed');
             $badge = ($definition?->applyMode ?? ApplyMode::Restart)->badge();
             $lines[] = "{$key}: {$was} → {$now}  [{$badge}]";
         }

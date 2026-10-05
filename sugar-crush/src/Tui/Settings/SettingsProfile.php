@@ -13,6 +13,7 @@ use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingsTier;
 use SugarCraft\Crush\Config\Settings\SettingsWriter;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Protocol\Methods\SettingsMethods;
 
 /**
@@ -117,9 +118,9 @@ final class SettingsProfile
         foreach ($profile as $key => $value) {
             $key = (string) $key;
             $definition = SettingsSchema::byKey($key);
-            $refusal = $definition === null ? "{$key} is not a setting" : SettingsWriter::keyRefusal($tier, $key);
+            $refusal = $definition === null ? Lang::t('tui.settings.profile.not_a_setting', ['key' => $key]) : SettingsWriter::keyRefusal($tier, $key);
             if ($refusal === null && $definition !== null && !self::exportable($definition)) {
-                $refusal = "{$key} is not carried by a profile";
+                $refusal = Lang::t('tui.settings.profile.not_carried', ['key' => $key]);
             }
 
             if ($refusal !== null) {
@@ -151,7 +152,7 @@ final class SettingsProfile
     public static function write(string $path, array $values): void
     {
         if ($values === []) {
-            throw new \RuntimeException('nothing to export: every setting is at its default, or set by the environment or a flag');
+            throw new \RuntimeException(Lang::t('tui.settings.profile.nothing_to_export'));
         }
 
         // A profile is never a settings LAYER: those have their own writers
@@ -159,22 +160,22 @@ final class SettingsProfile
         // so an export refuses any file named like one rather than replace it
         // behind their backs.
         if (\in_array(basename($path), self::LAYER_FILE_NAMES, true)) {
-            throw new \RuntimeException(basename($path) . ' is a settings file name; a profile is not written over one — name it something else');
+            throw new \RuntimeException(Lang::t('tui.settings.profile.layer_name', ['name' => basename($path)]));
         }
 
         $dir = \dirname($path);
         if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
-            throw new \RuntimeException("{$dir} could not be created");
+            throw new \RuntimeException(Lang::t('tui.settings.profile.dir_not_created', ['dir' => $dir]));
         }
 
         if (is_link($path)) {
-            throw new \RuntimeException("{$path} is a link; a profile is not written through one");
+            throw new \RuntimeException(Lang::t('tui.settings.profile.is_link', ['path' => $path]));
         }
 
         try {
             AtomicJsonFile::new($path)->withPermissions(0o600)->write($values);
         } catch (\Throwable $e) {
-            throw new \RuntimeException("{$path} could not be written (" . $e->getMessage() . ')', 0, $e);
+            throw new \RuntimeException(Lang::t('tui.settings.profile.not_written', ['path' => $path, 'error' => $e->getMessage()]), 0, $e);
         }
     }
 
@@ -189,17 +190,17 @@ final class SettingsProfile
     public static function read(string $path): array
     {
         if (!is_file($path)) {
-            throw new \RuntimeException("{$path} does not exist");
+            throw new \RuntimeException(Lang::t('tui.settings.profile.missing', ['path' => $path]));
         }
 
         try {
             $data = AtomicJsonFile::new($path)->read();
         } catch (\Throwable $e) {
-            throw new \RuntimeException("{$path} is not a readable JSON object (" . $e->getMessage() . ')', 0, $e);
+            throw new \RuntimeException(Lang::t('tui.settings.profile.unreadable', ['path' => $path, 'error' => $e->getMessage()]), 0, $e);
         }
 
         if ($data !== [] && array_is_list($data)) {
-            throw new \RuntimeException("{$path} holds a JSON list, not a settings object");
+            throw new \RuntimeException(Lang::t('tui.settings.profile.is_list', ['path' => $path]));
         }
 
         return $data;

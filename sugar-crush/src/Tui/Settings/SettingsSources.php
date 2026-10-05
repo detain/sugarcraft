@@ -9,6 +9,7 @@ use SugarCraft\Crush\Config\Settings\OptionsProvider;
 use SugarCraft\Crush\Config\Settings\SessionSettings;
 use SugarCraft\Crush\Config\Settings\SettingSource;
 use SugarCraft\Crush\Config\Settings\SettingsResolver;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\HomeDirectory;
 
@@ -85,41 +86,40 @@ final class SettingsSources
         $files = [];
         if ($userConfigPath !== null) {
             $files[] = new SettingsFile(
-                'your config',
+                Lang::t('tui.settings.file.your_config'),
                 $userConfigPath,
                 is_file($userConfigPath) ? 'read' : 'absent',
-                'Layer 4: outranks every settings file. /theme, /model and the pane layout write here.',
+                Lang::t('tui.settings.file.your_config_note'),
             );
         }
 
         if ($userSettingsDir !== null) {
             $path = rtrim($userSettingsDir, '/') . '/' . LayeredSettings::USER_FILE;
             $files[] = new SettingsFile(
-                'your settings',
+                Lang::t('tui.settings.file.your_settings'),
                 $path,
                 is_file($path) ? 'read' : 'absent',
-                'Layer 5: the layered keys and the two permission keys. Never written by the app.',
+                Lang::t('tui.settings.file.your_settings_note'),
             );
         }
 
         if ($root !== null && $root !== '') {
             foreach ([
-                ['project local', LayeredSettings::LOCAL_PATH, 'Layer 6'],
-                ['project shared', LayeredSettings::SHARED_PATH, 'Layer 7'],
+                [Lang::t('tui.settings.file.project_local'), LayeredSettings::LOCAL_PATH, Lang::t('tui.settings.file.layer', ['n' => 6])],
+                [Lang::t('tui.settings.file.project_shared'), LayeredSettings::SHARED_PATH, Lang::t('tui.settings.file.layer', ['n' => 7])],
             ] as [$role, $relative, $layer]) {
                 $path = rtrim($root, '/') . '/' . $relative;
                 $present = is_file($path);
                 [$status, $note] = match (true) {
-                    !$present => ['absent', "{$layer}: only the project-settable keys are read from it."],
+                    !$present => ['absent', Lang::t('tui.settings.file.project_absent_note', ['layer' => $layer])],
                     $projectTrusted === null => [
                         'not shown',
-                        "{$layer}: this view was not told whether the project is trusted, so values from it are not shown.",
+                        Lang::t('tui.settings.file.project_unknown_note', ['layer' => $layer]),
                     ],
-                    $projectTrusted => ['read', "{$layer}: trusted project; only the project-settable keys apply."],
+                    $projectTrusted => ['read', Lang::t('tui.settings.file.project_trusted_note', ['layer' => $layer])],
                     default => [
                         'ignored',
-                        "{$layer}: ignored until the project root is listed under "
-                            . LayeredSettings::PROJECT_SETTINGS_TRUST_KEY . ' in your config.',
+                        Lang::t('tui.settings.file.project_ignored_note', ['layer' => $layer, 'key' => LayeredSettings::PROJECT_SETTINGS_TRUST_KEY]),
                     ],
                 };
                 $files[] = new SettingsFile($role, $path, $status, $note);
@@ -131,11 +131,10 @@ final class SettingsSources
             $worktree = rtrim($root, '/') . '/' . LayeredSettings::dir() . '/config.json';
             if (is_file($worktree)) {
                 $files[] = new SettingsFile(
-                    'project config',
+                    Lang::t('tui.settings.file.project_config'),
                     $worktree,
                     'not a layer',
-                    'Not a settings layer: only the worktree configuration reads it, and nothing applies '
-                        . 'its keys (including trustedProjectMcp) to this session.',
+                    Lang::t('tui.settings.file.project_config_note'),
                 );
             }
         }

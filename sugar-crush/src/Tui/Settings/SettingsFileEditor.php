@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui\Settings;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Crush\Commands\EditorCommand;
+use SugarCraft\Crush\Lang;
 
 /**
  * Opens a settings file in the user's own editor from the settings view
@@ -62,8 +63,8 @@ final class SettingsFileEditor
     public static function collect(string $path, array $before, string $editor, int $exit, ?\Throwable $error): SettingsFileEditedMsg
     {
         return match (true) {
-            $error !== null => new SettingsFileEditedMsg($path, $before, $editor, sprintf('%s could not be started (%s)', $editor, $error->getMessage())),
-            $exit !== 0 => new SettingsFileEditedMsg($path, $before, $editor, sprintf('%s exited with status %d', $editor, $exit)),
+            $error !== null => new SettingsFileEditedMsg($path, $before, $editor, Lang::t('tui.settings.editor.not_started', ['editor' => $editor, 'error' => $error->getMessage()])),
+            $exit !== 0 => new SettingsFileEditedMsg($path, $before, $editor, Lang::t('tui.settings.editor.exit_status', ['editor' => $editor, 'status' => $exit])),
             default => new SettingsFileEditedMsg($path, $before, $editor),
         };
     }

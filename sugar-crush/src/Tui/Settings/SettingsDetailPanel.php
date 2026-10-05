@@ -9,6 +9,7 @@ use SugarCraft\Crush\Config\Settings\ResolvedSetting;
 use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingSource;
 use SugarCraft\Crush\Config\Settings\SettingType;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 
 /**
@@ -47,22 +48,22 @@ final class SettingsDetailPanel
         // Provenance first, the prose after it (N-P5): a short terminal shows
         // only the panel's top rows, and "what is it, where did it come from,
         // what locks it" is the answer the panel exists for.
-        $out = [['', $definition->label], ['key', $definition->key]];
-        $out[] = ['value', self::value($definition, $resolved->value)];
-        $out[] = ['source', self::sourceLabel($resolved->source)];
+        $out = [['', $definition->label], [Lang::t('tui.settings.detail.key'), $definition->key]];
+        $out[] = [Lang::t('tui.settings.detail.value'), self::value($definition, $resolved->value)];
+        $out[] = [Lang::t('tui.settings.detail.source'), self::sourceLabel($resolved->source)];
         if ($resolved->sourcePath !== null) {
             $out[] = [self::CONTINUED, PaneLabel::of($resolved->sourcePath)];
         }
 
         if ($resolved->shadowed !== []) {
-            $out[] = ['shadows', implode(', ', array_map(
+            $out[] = [Lang::t('tui.settings.detail.shadows'), implode(', ', array_map(
                 static fn (SettingSource $s): string => self::sourceLabel($s),
                 $resolved->shadowed,
             ))];
         }
 
         if ($resolved->locked) {
-            $out[] = ['locked', PaneLabel::of((string) $resolved->lockReason) . ' — unset it to change this here'];
+            $out[] = [Lang::t('tui.settings.detail.locked'), Lang::t('tui.settings.detail.locked_reason', ['reason' => PaneLabel::of((string) $resolved->lockReason)])];
         }
 
         $out[] = ['', ''];
@@ -72,23 +73,23 @@ final class SettingsDetailPanel
         }
 
         $out[] = ['', ''];
-        $out[] = ['default', $definition->defaultText !== null
+        $out[] = [Lang::t('tui.settings.detail.default'), $definition->defaultText !== null
             ? PaneLabel::of(str_replace('`', '', $definition->defaultText))
             : self::value($definition, $definition->default)];
-        $out[] = ['applies', $definition->applyMode->badge()];
-        $out[] = ['set in', self::tiers($definition)];
+        $out[] = [Lang::t('tui.settings.detail.applies'), $definition->applyMode->badge()];
+        $out[] = [Lang::t('tui.settings.detail.set_in'), self::tiers($definition)];
         if ($definition->envVar !== null) {
-            $out[] = ['env', $definition->envVar];
+            $out[] = [Lang::t('tui.settings.detail.env'), $definition->envVar];
         }
 
         if ($definition->cliFlag !== null) {
-            $out[] = ['flag', $definition->cliFlag];
+            $out[] = [Lang::t('tui.settings.detail.flag'), $definition->cliFlag];
         }
 
-        $out[] = ['risk', $definition->riskClass->value];
+        $out[] = [Lang::t('tui.settings.detail.risk'), $definition->riskClass->value];
         $reader = $definition->readerShort() ?? $definition->readBy;
         if ($reader !== null) {
-            $out[] = ['read by', PaneLabel::of($reader)];
+            $out[] = [Lang::t('tui.settings.detail.read_by'), PaneLabel::of($reader)];
         }
 
         return $out;
@@ -97,12 +98,34 @@ final class SettingsDetailPanel
     /** The lines for a row of the Files tab. @return list<array{0: string, 1: string}> */
     public static function fileLines(SettingsFile $file, int $width): array
     {
-        $out = [['', $file->role], ['path', PaneLabel::of($file->path)], ['status', $file->status], ['', '']];
+        $out = [
+            ['', $file->role],
+            [Lang::t('tui.settings.detail.path'), PaneLabel::of($file->path)],
+            [Lang::t('tui.settings.detail.status'), self::fileStatus($file->status)],
+            ['', ''],
+        ];
         foreach (explode("\n", Width::wrap($file->note, max(8, $width))) as $line) {
             $out[] = ['', $line];
         }
 
         return $out;
+    }
+
+    /**
+     * The on-screen word for a {@see SettingsFile::$status}. The status itself
+     * stays the English word the protocol carries and the view keys its
+     * colour on; only what the row says is translated.
+     */
+    public static function fileStatus(string $status): string
+    {
+        return match ($status) {
+            'read' => Lang::t('tui.settings.file_status.read'),
+            'absent' => Lang::t('tui.settings.file_status.absent'),
+            'ignored' => Lang::t('tui.settings.file_status.ignored'),
+            'not shown' => Lang::t('tui.settings.file_status.not_shown'),
+            'not a layer' => Lang::t('tui.settings.file_status.not_a_layer'),
+            default => $status,
+        };
     }
 
     /**
@@ -112,21 +135,21 @@ final class SettingsDetailPanel
     public static function value(SettingDefinition $definition, mixed $value): string
     {
         if ($value === null) {
-            return '(unset)';
+            return Lang::t('tui.settings.value.unset');
         }
 
         if ($definition->type === SettingType::Secret) {
-            return '(set, hidden)';
+            return Lang::t('tui.settings.value.secret');
         }
 
         if (\is_array($value) && self::holdsEnvironment($definition)) {
-            return sprintf('(%d %s, hidden)', \count($value), \count($value) === 1 ? 'variable' : 'variables');
+            return Lang::t(\count($value) === 1 ? 'tui.settings.value.env_one' : 'tui.settings.value.env', ['count' => \count($value)]);
         }
 
         return PaneLabel::of(match (true) {
-            \is_bool($value) => $value ? 'on' : 'off',
+            \is_bool($value) => Lang::t($value ? 'tui.settings.value.on' : 'tui.settings.value.off'),
             \is_array($value) && array_is_list($value) && self::allScalar($value) => $value === []
-                ? '(empty)'
+                ? Lang::t('tui.settings.value.empty')
                 : implode(', ', array_map(static fn ($v): string => \is_bool($v) ? ($v ? 'true' : 'false') : (string) $v, $value)),
             \is_array($value) => (string) json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE),
             \is_scalar($value) => (string) $value,
@@ -141,14 +164,14 @@ final class SettingsDetailPanel
     public static function sourceLabel(SettingSource $source): string
     {
         return match ($source) {
-            SettingSource::Default => 'default',
-            SettingSource::ProjectShared => 'project',
-            SettingSource::ProjectLocal => 'project (local)',
-            SettingSource::UserSettings => 'you (settings.json)',
-            SettingSource::UserConfig => 'you (config.json)',
-            SettingSource::Session => 'this session',
-            SettingSource::Env => 'environment',
-            SettingSource::Flag => 'command-line flag',
+            SettingSource::Default => Lang::t('tui.settings.source.default'),
+            SettingSource::ProjectShared => Lang::t('tui.settings.source.project'),
+            SettingSource::ProjectLocal => Lang::t('tui.settings.source.project_local'),
+            SettingSource::UserSettings => Lang::t('tui.settings.source.user_settings'),
+            SettingSource::UserConfig => Lang::t('tui.settings.source.user_config'),
+            SettingSource::Session => Lang::t('tui.settings.source.session'),
+            SettingSource::Env => Lang::t('tui.settings.source.env'),
+            SettingSource::Flag => Lang::t('tui.settings.source.flag'),
         };
     }
 
@@ -156,10 +179,10 @@ final class SettingsDetailPanel
     public static function sourceShort(SettingSource $source): string
     {
         return match ($source) {
-            SettingSource::UserSettings => 'you (settings)',
-            SettingSource::UserConfig => 'you (config)',
-            SettingSource::Env => 'env',
-            SettingSource::Flag => 'flag',
+            SettingSource::UserSettings => Lang::t('tui.settings.source.user_settings_short'),
+            SettingSource::UserConfig => Lang::t('tui.settings.source.user_config_short'),
+            SettingSource::Env => Lang::t('tui.settings.source.env_short'),
+            SettingSource::Flag => Lang::t('tui.settings.source.flag_short'),
             default => self::sourceLabel($source),
         };
     }
@@ -182,7 +205,7 @@ final class SettingsDetailPanel
         $names = [];
         foreach ($definition->sources() as $source) {
             $name = match ($source) {
-                SettingSource::ProjectShared => 'project files',
+                SettingSource::ProjectShared => Lang::t('tui.settings.tier.project_files'),
                 SettingSource::UserSettings => 'settings.json',
                 SettingSource::UserConfig => 'config.json',
                 default => null,

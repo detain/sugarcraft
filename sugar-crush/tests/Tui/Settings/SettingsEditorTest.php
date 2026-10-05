@@ -13,6 +13,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingSource;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Tui\Settings\SettingsEditor;
 use SugarCraft\Crush\Tui\Settings\SettingsFile;
 use SugarCraft\Crush\Tui\Settings\SettingsSources;
@@ -65,7 +66,7 @@ final class SettingsEditorTest extends TestCase
         $editor = SettingsEditor::open($this->sources());
         $labels = $editor->tabLabels();
 
-        self::assertSame(SettingsEditor::FILES_TAB, end($labels));
+        self::assertSame(Lang::t(SettingsEditor::FILES_TAB), end($labels));
         self::assertCount(\count($editor->categories()) + 1, $labels);
 
         $seen = [];

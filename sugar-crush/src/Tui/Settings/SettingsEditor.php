@@ -15,6 +15,7 @@ use SugarCraft\Crush\Config\Settings\SettingSource;
 use SugarCraft\Crush\Config\Settings\SettingsTier;
 use SugarCraft\Crush\Config\Settings\SettingsWriter;
 use SugarCraft\Crush\Config\Settings\UiEditability;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneLabel;
 use SugarCraft\Forms\Field;
@@ -87,8 +88,25 @@ final class SettingsEditor
     public const PROFILE_EXPORT = 'profile:export';
     public const PROFILE_IMPORT = 'profile:import';
 
-    /** The last tab: the files the layers come from, not a schema category. */
-    public const FILES_TAB = 'Files';
+    /** Lang key of the last tab: the files the layers come from, not a schema category. */
+    public const FILES_TAB = 'tui.settings.files_tab';
+
+    /**
+     * Lang keys of the heads a failed action's status opens with ("Not
+     * saved", …), {@see failure()}. The status line is painted in the error
+     * colour when it opens with one of them, translated — so the colour does
+     * not hang on the English word "Not".
+     */
+    public const FAILURE_HEADS = [
+        'tui.settings.failed.applied',
+        'tui.settings.failed.done',
+        'tui.settings.failed.exported',
+        'tui.settings.failed.imported',
+        'tui.settings.failed.opened',
+        'tui.settings.failed.reread',
+        'tui.settings.failed.saved',
+        'tui.settings.failed.staged',
+    ];
 
     /** Inner width from which the detail column sits beside the list. */
     private const DETAIL_BESIDE_COLS = 90;
@@ -103,6 +121,27 @@ final class SettingsEditor
 
     /** A status line that warns rather than reports; painted in the warning colour. */
     private const WARN = '! ';
+
+    /**
+     * A failed action's status line: the head {@see FAILURE_HEADS} names,
+     * then why. Shared with the shell, whose file and profile actions report
+     * through {@see withNotice()}.
+     */
+    public static function failure(string $headKey, string $reason): string
+    {
+        return Lang::t($headKey) . ': ' . $reason;
+    }
+
+    private static function isFailure(string $status): bool
+    {
+        foreach (self::FAILURE_HEADS as $headKey) {
+            if (str_starts_with($status, Lang::t($headKey) . ': ')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /** Rows one wheel notch moves the highlight — the transcript's own step. */
     private const WHEEL_ROWS = 3;
@@ -205,7 +244,7 @@ final class SettingsEditor
 
         $field = SettingsFieldFactory::field($selected, $this->currentValue($selected), $this->sources->options, $this->activeProvider());
         if ($field === null) {
-            return $this->withStatus(SettingsFieldFactory::whyNotEditable($selected) ?? $selected->label . ' is not edited here');
+            return $this->withStatus(SettingsFieldFactory::whyNotEditable($selected) ?? Lang::t('tui.settings.not_edited_here', ['label' => $selected->label]));
         }
 
         [$focused] = $field->focus();
@@ -241,7 +280,7 @@ final class SettingsEditor
         try {
             $value = SettingsFieldFactory::value($selected, $field, $this->currentValue($selected), $this->activeProvider());
         } catch (\InvalidArgumentException $e) {
-            return $this->withEditing($field, 'Not staged: ' . $e->getMessage());
+            return $this->withEditing($field, self::failure('tui.settings.failed.staged', $e->getMessage()));
         }
 
         return $this->stage($selected->key, $value);
@@ -279,7 +318,7 @@ final class SettingsEditor
         $resolved = $this->resolvedFor($definition);
 
         return $resolved->locked
-            ? self::WARN . $definition->label . ' is locked: ' . PaneLabel::of((string) $resolved->lockReason) . ' — unset it to change this here'
+            ? self::WARN . Lang::t('tui.settings.locked', ['label' => $definition->label, 'reason' => PaneLabel::of((string) $resolved->lockReason)])
             : null;
     }
 
@@ -303,9 +342,9 @@ final class SettingsEditor
         }
 
         if ($refused !== []) {
-            $more = \count($refused) > 1 ? sprintf(' (+%d more)', \count($refused) - 1) : '';
+            $more = \count($refused) > 1 ? ' ' . Lang::t('tui.settings.refused_more', ['count' => \count($refused) - 1]) : '';
 
-            return self::WARN . $refused[0] . $more . ' — t switches the tier';
+            return self::WARN . Lang::t('tui.settings.refused_switch_tier', ['reason' => $refused[0] . $more]);
         }
 
         if (!$tier->isProject()) {
@@ -313,9 +352,9 @@ final class SettingsEditor
         }
 
         return match (true) {
-            $this->sources->root === null => self::WARN . 'No project is open, so there is no project file to save to',
+            $this->sources->root === null => self::WARN . Lang::t('tui.settings.no_project'),
             $this->sources->projectTrusted === false
-                => self::WARN . 'This project is not trusted, so a save here is refused — Enter on Trusted project settings grants it',
+                => self::WARN . Lang::t('tui.settings.untrusted_project'),
             default => null,
         };
     }
@@ -344,10 +383,10 @@ final class SettingsEditor
     {
         $export = $action === self::PROFILE_EXPORT;
         $field = Input::new($export ? self::PROFILE_EXPORT : self::PROFILE_IMPORT)
-            ->withTitle($export ? 'Export a settings profile to' : 'Import a settings profile from')
+            ->withTitle(Lang::t($export ? 'tui.settings.profile.export_title' : 'tui.settings.profile.import_title'))
             ->withDescription($export
-                ? 'The settings your files and this session set, as one JSON object. Secrets and trust grants are left out.'
-                : 'Its settings are staged on ' . $this->tier->label() . '; s previews the save.')
+                ? Lang::t('tui.settings.profile.export_description')
+                : Lang::t('tui.settings.profile.import_description', ['tier' => $this->tier->label()]))
             ->withValue($path);
         [$focused] = $field->focus();
 
@@ -376,26 +415,26 @@ final class SettingsEditor
     public function withProfileResult(SettingsProfileMsg $msg): self
     {
         if (!$msg->ok()) {
-            return $this->mutate(['status' => 'Not ' . ($msg->action === SettingsProfileMsg::EXPORT ? 'exported' : 'imported') . ': ' . $msg->error]);
+            return $this->mutate(['status' => self::failure($msg->action === SettingsProfileMsg::EXPORT ? 'tui.settings.failed.exported' : 'tui.settings.failed.imported', (string) $msg->error)]);
         }
 
         if ($msg->action === SettingsProfileMsg::EXPORT) {
             $count = \count($msg->values);
 
-            return $this->mutate(['status' => sprintf('Exported %d setting%s to %s', $count, $count === 1 ? '' : 's', $msg->path)]);
+            return $this->mutate(['status' => Lang::t($count === 1 ? 'tui.settings.profile.exported_one' : 'tui.settings.profile.exported', ['count' => $count, 'path' => $msg->path])]);
         }
 
         ['set' => $set, 'skipped' => $skipped, 'same' => $same] = SettingsProfile::staged($msg->values, $this->resolved, $this->tier);
         $next = $this->edited($this->tier, array_merge($this->set, $set), array_values(array_diff($this->unset, array_keys($set))));
-        $parts = [sprintf('Staged %d setting%s from %s', \count($set), \count($set) === 1 ? '' : 's', $msg->path)];
+        $parts = [Lang::t(\count($set) === 1 ? 'tui.settings.profile.staged_one' : 'tui.settings.profile.staged', ['count' => \count($set), 'path' => $msg->path])];
         if ($same !== []) {
-            $parts[] = \count($same) . ' already in force';
+            $parts[] = Lang::t('tui.settings.profile.already_in_force', ['count' => \count($same)]);
         }
         if ($skipped !== []) {
-            $parts[] = \count($skipped) . ' skipped (' . array_values($skipped)[0] . (\count($skipped) > 1 ? ', …' : '') . ')';
+            $parts[] = Lang::t('tui.settings.profile.skipped', ['count' => \count($skipped), 'reason' => array_values($skipped)[0] . (\count($skipped) > 1 ? ', …' : '')]);
         }
         if ($set !== []) {
-            $parts[] = 's previews the save';
+            $parts[] = Lang::t('tui.settings.profile.previews_save');
         }
 
         return $next->mutate(['status' => ($skipped !== [] ? self::WARN : '') . implode(' · ', $parts)]);
@@ -497,7 +536,7 @@ final class SettingsEditor
     public function withSaved(SettingsSavedMsg $msg): self
     {
         if (!$msg->ok()) {
-            return $this->mutate(['status' => 'Not saved: ' . $msg->error]);
+            return $this->mutate(['status' => self::failure('tui.settings.failed.saved', (string) $msg->error)]);
         }
 
         $set = $this->set;
@@ -506,7 +545,7 @@ final class SettingsEditor
         }
 
         $count = \count($msg->changed);
-        $status = sprintf('Saved %d setting%s to %s', $count, $count === 1 ? '' : 's', (string) $msg->path);
+        $status = Lang::t($count === 1 ? 'tui.settings.saved_one' : 'tui.settings.saved', ['count' => $count, 'path' => (string) $msg->path]);
 
         return $this->mutate([
             'set' => $set,
@@ -539,7 +578,7 @@ final class SettingsEditor
     /** @return list<string> the tab labels: each category, then {@see FILES_TAB} */
     public function tabLabels(): array
     {
-        return [...array_map(static fn (SettingCategory $c): string => $c->label(), $this->categories()), self::FILES_TAB];
+        return [...array_map(static fn (SettingCategory $c): string => Lang::t($c->labelKey()), $this->categories()), Lang::t(self::FILES_TAB)];
     }
 
     public function onFilesTab(): bool
@@ -737,7 +776,7 @@ final class SettingsEditor
         $g = $this->geometry($theme, $cols, $rows);
 
         if ($g === null) {
-            return self::fit([Style::new()->foreground($theme->shellMuted)->render('settings: terminal too small')], $cols, $rows);
+            return self::fit([Style::new()->foreground($theme->shellMuted)->render(Lang::t('tui.settings.too_small'))], $cols, $rows);
         }
 
         $border = Style::new()->foreground($theme->shellPrimary);
@@ -752,7 +791,7 @@ final class SettingsEditor
         $inner[] = $this->searchLine($theme, $w);
         $inner[] = $this->query === ''
             ? $g['tabLine']
-            : $muted->render(sprintf('%d %s across every category', \count($this->rows()), \count($this->rows()) === 1 ? 'match' : 'matches'));
+            : $muted->render(Lang::t(\count($this->rows()) === 1 ? 'tui.settings.search.match_one' : 'tui.settings.search.matches', ['count' => \count($this->rows())]));
         $inner[] = $muted->render(str_repeat('─', $w));
         $body = $this->bodyLines($theme, $g);
         if ($this->preview !== null) {
@@ -770,7 +809,7 @@ final class SettingsEditor
         $inner[] = $muted->render(str_repeat('─', $w));
         $inner[] = $this->status !== null
             ? Style::new()->foreground(match (true) {
-                str_starts_with($this->status, 'Not ') => $theme->shellError,
+                self::isFailure($this->status) => $theme->shellError,
                 str_starts_with($this->status, self::WARN) => $theme->shellWarning,
                 default => $theme->shellSuccess,
             })->render(Width::truncate($this->status, $w))
@@ -919,8 +958,8 @@ final class SettingsEditor
 
         if ($all === []) {
             $empty = $this->query !== ''
-                ? 'No setting matches "' . $this->query . '". Backspace edits the search, Esc clears it.'
-                : 'Nothing in this category.';
+                ? Lang::t('tui.settings.search.no_match', ['query' => $this->query])
+                : Lang::t('tui.settings.empty_category');
 
             $wrapped = array_map(
                 static fn (string $line): string => $muted->render(Width::truncate($line, $width)),
@@ -959,7 +998,7 @@ final class SettingsEditor
 
         $source = SettingsDetailPanel::sourceGlyph($resolved->source) . ' '
             . SettingsDetailPanel::sourceShort($resolved->source)
-            . ($resolved->locked ? ' (locked)' : '');
+            . ($resolved->locked ? ' ' . Lang::t('tui.settings.row.locked') : '');
 
         $staged = \array_key_exists($definition->key, $this->set);
         $reset = \in_array($definition->key, $this->unset, true);
@@ -969,7 +1008,7 @@ final class SettingsEditor
         $mark = $refused ? '✗ ' : '• ';
         $value = match (true) {
             $staged => $mark . SettingsDetailPanel::value($definition, $this->set[$definition->key]),
-            $reset => $mark . 'reset to default',
+            $reset => $mark . Lang::t('tui.settings.row.reset'),
             default => SettingsDetailPanel::value($definition, $resolved->value),
         };
 
@@ -1005,7 +1044,7 @@ final class SettingsEditor
         return ($selected ? $label->render('▸ ') : '  ')
             . $label->render(self::pad($file->role, $roleW)) . ' '
             . Style::new()->foreground($file->status === 'read' ? $theme->shellSuccess : $theme->shellMuted)
-                ->render(self::pad($file->status, $statusW)) . ' '
+                ->render(self::pad(SettingsDetailPanel::fileStatus($file->status), $statusW)) . ' '
             . Style::new()->foreground($theme->shellForeground)
                 ->render(Width::truncateMiddle(PaneLabel::of($file->path), max(4, $width - 2 - $roleW - 1 - $statusW - 1)));
     }
@@ -1023,7 +1062,7 @@ final class SettingsEditor
             : SettingsDetailPanel::lines($selected, $this->resolvedFor($selected), $width);
 
         if ($selected instanceof SettingDefinition && $this->query !== '') {
-            array_splice($pairs, 2, 0, [['category', $selected->category->label()]]);
+            array_splice($pairs, 2, 0, [[Lang::t('tui.settings.detail.category'), Lang::t($selected->category->labelKey())]]);
         }
 
         $muted = Style::new()->foreground($theme->shellMuted);
@@ -1050,9 +1089,9 @@ final class SettingsEditor
     {
         $label = Style::new()->foreground($this->searching ? $theme->shellPrimary : $theme->shellMuted);
         $caret = $this->searching ? '▏' : '';
-        $hint = $this->query === '' && !$this->searching ? 'press / to search' : '';
+        $hint = $this->query === '' && !$this->searching ? Lang::t('tui.settings.search.hint') : '';
 
-        return $label->render('Search: ')
+        return $label->render(Lang::t('tui.settings.search.label') . ' ')
             . Style::new()->foreground($theme->shellForeground)->render(Width::truncate($this->query, max(1, $width - 10)) . $caret)
             . Style::new()->foreground($theme->shellMuted)->render($hint);
     }
@@ -1069,60 +1108,60 @@ final class SettingsEditor
     private function footer(array $g): array
     {
         if ($this->searching) {
-            return ['type to filter', 'Enter keep matches', '↑↓ move', 'Esc clear'];
+            return [Lang::t('tui.settings.keys.type_to_filter'), Lang::t('tui.settings.keys.keep_matches'), Lang::t('tui.settings.keys.move'), Lang::t('tui.settings.keys.clear')];
         }
 
         if ($this->confirm === self::CONFIRM_TRUST) {
-            return ['y trust this project', 'n cancel'];
+            return [Lang::t('tui.settings.keys.trust_yes'), Lang::t('tui.settings.keys.trust_no')];
         }
 
         if ($this->confirm === self::CONFIRM_DISCARD) {
-            return ['d discard', 'k keep editing', 's save'];
+            return [Lang::t('tui.settings.keys.discard'), Lang::t('tui.settings.keys.keep_editing'), Lang::t('tui.settings.keys.save')];
         }
 
         if ($this->editing !== null) {
             return match ($this->profileAction()) {
-                self::PROFILE_EXPORT => ['Enter export', 'Esc cancel'],
-                self::PROFILE_IMPORT => ['Enter import', 'Esc cancel'],
-                default => ['Enter stage', 'Esc cancel'],
+                self::PROFILE_EXPORT => [Lang::t('tui.settings.keys.export'), Lang::t('tui.settings.keys.cancel')],
+                self::PROFILE_IMPORT => [Lang::t('tui.settings.keys.import'), Lang::t('tui.settings.keys.cancel')],
+                default => [Lang::t('tui.settings.keys.stage'), Lang::t('tui.settings.keys.cancel')],
             };
         }
 
         if ($this->preview !== null) {
-            return ['y save', 'n back', '↑↓ scroll'];
+            return [Lang::t('tui.settings.keys.preview_save'), Lang::t('tui.settings.keys.preview_back'), Lang::t('tui.settings.keys.scroll')];
         }
 
         $hints = [];
         $selected = $this->selected();
         if ($g['single']) {
-            $hints[] = $this->detail ? 'i list' : 'i details';
+            $hints[] = Lang::t($this->detail ? 'tui.settings.keys.list' : 'tui.settings.keys.details');
         }
 
         if ($selected instanceof SettingDefinition) {
             $resolved = $this->resolvedFor($selected);
             if ($resolved->locked) {
-                $hints[] = 'locked (' . PaneLabel::of((string) $resolved->lockReason) . ')';
+                $hints[] = Lang::t('tui.settings.keys.locked', ['reason' => PaneLabel::of((string) $resolved->lockReason)]);
             } elseif (self::isTrustKey($selected)) {
-                $hints[] = 'Enter trust this project';
+                $hints[] = Lang::t('tui.settings.keys.trust');
             } elseif (SettingsFieldFactory::editable($selected)) {
-                $hints[] = 'Enter edit';
-                $hints[] = 'r reset';
+                $hints[] = Lang::t('tui.settings.keys.edit');
+                $hints[] = Lang::t('tui.settings.keys.reset');
             } else {
-                $hints[] = 'Enter why not';
+                $hints[] = Lang::t('tui.settings.keys.why_not');
             }
         }
 
         if ($this->hasChanges()) {
-            $hints[] = 's save';
+            $hints[] = Lang::t('tui.settings.keys.save');
         }
 
-        $hints[] = $selected instanceof SettingsFile ? 'e open in editor' : 'e edit file';
-        $hints[] = 'x/p profile';
+        $hints[] = Lang::t($selected instanceof SettingsFile ? 'tui.settings.keys.open_in_editor' : 'tui.settings.keys.edit_file');
+        $hints[] = Lang::t('tui.settings.keys.profile');
 
         // While a search filters the list, ←/→ do nothing and Esc clears it.
         return $this->query !== ''
-            ? [...$hints, 't tier', '↑↓ move', 'Backspace edit search', 'Esc clear search']
-            : [...$hints, 't tier', '/ search', '↑↓ move', '←→ category', 'Esc close'];
+            ? [...$hints, Lang::t('tui.settings.keys.tier'), Lang::t('tui.settings.keys.move'), Lang::t('tui.settings.keys.edit_search'), Lang::t('tui.settings.keys.clear_search')]
+            : [...$hints, Lang::t('tui.settings.keys.tier'), Lang::t('tui.settings.keys.search'), Lang::t('tui.settings.keys.move'), Lang::t('tui.settings.keys.category'), Lang::t('tui.settings.keys.close')];
     }
 
     /**
@@ -1158,16 +1197,16 @@ final class SettingsEditor
     private function title(int $width): string
     {
         if (!$this->hasChanges()) {
-            return Width::truncate(' ⚙ settings · nothing staged ', max(0, $width));
+            return Width::truncate(' ⚙ ' . Lang::t('tui.settings.title.clean') . ' ', max(0, $width));
         }
 
         $count = \count($this->set) + \count($this->unset);
-        $full = sprintf(' ⚙ settings · %d unsaved · %s ', $count, $this->tier->label());
+        $full = ' ⚙ ' . Lang::t('tui.settings.title.unsaved', ['count' => $count, 'tier' => $this->tier->label()]) . ' ';
         if (Width::string($full) <= $width) {
             return $full;
         }
 
-        return Width::truncate(sprintf(' ⚙ %d unsaved · %s ', $count, $this->tier->shortLabel()), max(0, $width));
+        return Width::truncate(' ⚙ ' . Lang::t('tui.settings.title.unsaved_short', ['count' => $count, 'tier' => $this->tier->shortLabel()]) . ' ', max(0, $width));
     }
 
     /**
@@ -1188,7 +1227,7 @@ final class SettingsEditor
         $offset = max(0, min($this->previewOffset, \count($all) - $window));
         $lines = \array_slice($all, $offset, $window);
         $lines[] = Style::new()->foreground($theme->shellMuted)->render(Width::truncate(
-            sprintf('lines %d–%d of %d · ↑↓ scroll', $offset + 1, $offset + $window, \count($all)),
+            Lang::t('tui.settings.preview.window', ['from' => $offset + 1, 'to' => $offset + $window, 'count' => \count($all)]),
             $width,
         ));
 
@@ -1213,10 +1252,10 @@ final class SettingsEditor
             $keys = [...array_keys($this->set), ...$this->unset];
 
             return [
-                $cut($head, sprintf('Close with %d unsaved change%s?', $count, $count === 1 ? '' : 's')),
+                $cut($head, Lang::t($count === 1 ? 'tui.settings.confirm.discard_one' : 'tui.settings.confirm.discard', ['count' => $count])),
                 $cut($text, implode(', ', $keys)),
                 '',
-                $cut($muted, 'd discards them and closes · k keeps editing · s previews the save'),
+                $cut($muted, Lang::t('tui.settings.confirm.discard_keys')),
             ];
         }
 
@@ -1224,12 +1263,12 @@ final class SettingsEditor
         $definition = SettingsSchema::byKey($key);
 
         return [
-            $cut($head, 'Trust this project: ' . $key),
-            $cut($text, 'Adds this project to the ' . $key . ' list in your config.json.'),
+            $cut($head, Lang::t('tui.settings.confirm.trust', ['key' => $key])),
+            $cut($text, Lang::t('tui.settings.confirm.trust_adds', ['key' => $key])),
             $cut($text, $definition?->help ?? ''),
-            $cut($muted, 'Trust applies from the next launch; this one keeps what it started with.'),
+            $cut($muted, Lang::t('tui.settings.confirm.trust_next_launch')),
             '',
-            $cut($muted, 'y grants it · n cancels'),
+            $cut($muted, Lang::t('tui.settings.confirm.trust_keys')),
         ];
     }
 
