@@ -271,7 +271,9 @@ final class EchoProvider implements ProviderInterface
             // Step 1.A-1: the harness's `<turn-context>` row is user-ROLE but
             // not the user's turn, so it is never the thing echoed.
             if ($msg instanceof Message && $msg->role() === 'user' && !TurnContextBlock::isTurnContext($msg)) {
-                $lastUser = $msg->content();
+                // The `<ctx-ref>` handle the engine appends to every prompt
+                // for the model's pruning tools is not what the user said.
+                $lastUser = RefTag::stripFrom($msg->content());
             }
         }
 

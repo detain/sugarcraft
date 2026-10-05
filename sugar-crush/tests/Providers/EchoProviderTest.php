@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Providers;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Context\Pruning\RefTag;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -100,6 +101,18 @@ final class EchoProviderTest extends TestCase
 
         $this->assertStringContainsString('> line one', $response->content);
         $this->assertStringContainsString('> line two', $response->content);
+    }
+
+    public function testCompleteDoesNotEchoTheEngineRefTag(): void
+    {
+        $request = new CompleteRequest(
+            model: 'echo',
+            messages: [new UserMessage("hello\n" . RefTag::render(1))],
+        );
+
+        $response = $this->provider->complete($request);
+
+        $this->assertSame("You said:\n\n> hello", $response->content);
     }
 
     public function testCompleteStreamYieldsPiecesThatReassemble(): void
