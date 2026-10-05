@@ -34,8 +34,11 @@ own counts.
 `/context` (or `/tokens`) breaks the *next* request down: the system prompt
 layer by layer, the tool schemas, the history, what pruning removed (each
 pruned output by its `r17`-style ref, with why and by whom), the free space,
-the largest messages, and how much of each prompt the provider served from its
-cache. It is local and calls no model.
+the largest messages, how much of each prompt the provider served from its
+cache, and how many requests lost the prefix the request before them had
+cached (a *cache break*: one after a prune or a compression is that rewrite's
+price; two in a row mean a rewrite is not byte-stable). It is local and calls
+no model.
 
 The window is the provider's own `contextWindow()`; a backend that cannot say
 (the offline echo provider) is measured against 100,000 tokens

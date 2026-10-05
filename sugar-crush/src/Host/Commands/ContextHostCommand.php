@@ -12,7 +12,7 @@ use SugarCraft\Crush\Context\ContextBreakdown;
 /**
  * `/context` (and `/tokens`): where the next request's context window goes —
  * the system prompt per layer, the tool schemas, the history, the largest
- * messages and the cache-hit share (roadmap 5.6). Read-only and local: it
+ * messages, the cache-hit share (roadmap 5.6) and the cache breaks (3.B-5). Read-only and local: it
  * measures in this process, sends nothing and calls no model. The report
  * itself is {@see ContextCommand}'s; this is its session half (roadmap O-2h).
  *
@@ -48,6 +48,11 @@ final class ContextHostCommand implements HostCommand
         )
             // Roadmap 5.6 remainder: what the session's ledger prunes out.
             ->withPruning($context->contextLedger(), $context->history);
+        if ($context->backend instanceof EngineBackend) {
+            // Roadmap 3.B-5: the session's prompt-cache breaks, off the
+            // watch every clone of the backend shares.
+            $breakdown = $breakdown->withCacheBreaks($context->backend->cacheBreaks(), $context->backend->lastCacheBreak());
+        }
 
         return CommandResult::reply($text, (new ContextCommand($breakdown))->report());
     }

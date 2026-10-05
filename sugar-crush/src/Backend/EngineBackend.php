@@ -2822,6 +2822,30 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * How many prompt-cache breaks this session has seen — requests that read
+     * under half of the prefix the request before them had cached
+     * ({@see CacheHealthWatch::observeReuse()}, roadmap 3.B-5, DCP §13.2
+     * P2-10). Read by `/context`. Every clone of this backend shares one
+     * watch, and a forked turn's count rides home on its result frame, so
+     * the hosted Chat's copy answers for every turn the session ran.
+     */
+    public function cacheBreaks(): int
+    {
+        return $this->cacheHealth->cacheBreaks();
+    }
+
+    /**
+     * The newest cache break as the cached share before and after it, in
+     * whole percent, or null when there has been none — see {@see cacheBreaks()}.
+     *
+     * @return array{from: int, to: int}|null
+     */
+    public function lastCacheBreak(): ?array
+    {
+        return $this->cacheHealth->lastCacheBreak();
+    }
+
+    /**
      * The part of a tool's own provider spend that is folded into the calling
      * turn's {@see Usage}: tokens, dollars and the unpriced signal — and NOT
      * the prompt-side buckets (audit B4).

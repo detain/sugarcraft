@@ -455,6 +455,8 @@ No other provider marks anything: `openai` and `sglang` cache server-side withou
   after a prune or compression is that rewrite's price and is only counted; two in a row means
   the cache is not recovering, and one `RuntimeNoticeSink` notice says so for the session. A
   delegated run's requests are another conversation and are never compared with the parent's.
+  `/context` prints the count and the newest break (`EngineBackend::cacheBreaks()`,
+  `lastCacheBreak()`); a forked turn's tally rides home on the same result frame.
 
 ## Session affinity — the request carries the session
 

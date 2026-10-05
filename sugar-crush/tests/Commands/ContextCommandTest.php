@@ -185,6 +185,103 @@ final class ContextCommandTest extends TestCase
         self::assertSame(TokenEstimate::ofToolSchemas($tools), $b->toolTokens);
     }
 
+    /**
+     * Roadmap 3.B-5 (DCP §13.2 P2-10): `/context` says how often a request
+     * lost the prefix the request before it had cached — the telemetry
+     * opencode-dcp #614 was diagnosed from — and "not measured" where the
+     * backend keeps no such count, never a zero.
+     */
+    public function testTheReportCarriesTheCacheBreakLine(): void
+    {
+        $cached = [Message::user('q'), Message::assistant('a')->withUsage(Usage::new(2000, 0.0, inputTokens: 200, cacheReadTokens: 1800))];
+        $measured = ContextBreakdown::measure($cached, null, null, 100_000, 10);
+
+        self::assertStringContainsString(
+            "Cache breaks: not measured — this backend does not track its requests' cache reuse.",
+            ContextCommand::compose($measured),
+        );
+        self::assertStringContainsString('Cache breaks: none this session.', ContextCommand::compose($measured->withCacheBreaks(0, null)));
+        self::assertStringNotContainsString(
+            'Cache breaks',
+            ContextCommand::compose(ContextBreakdown::measure([Message::user('hi')], null, null, 8192, 1)->withCacheBreaks(0, null)),
+            'with no cache split reported, the cache line above already says it all',
+        );
+
+        $report = ContextCommand::compose($measured->withCacheBreaks(2, ['from' => 90, 'to' => 5]));
+        self::assertStringContainsString(
+            'Cache breaks: 2 this session — the newest read 5% of its prompt from cache, after 90% on the request before.',
+            $report,
+        );
+        self::assertSame(2, $measured->withCacheBreaks(2, null)->withPruning(\SugarCraft\Crush\Context\Pruning\ContextLedger::new(), $cached)->cacheBreaks['breaks'] ?? null, 'withPruning() keeps the breaks');
+    }
+
+    /**
+     * The figure is the engine's own: a turn whose second and fourth requests
+     * read almost none of the prefix the one before had cached counts two breaks
+     * on the backend's shared watch, and `/context` reads them through
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::cacheBreaks()}.
+     */
+    public function testSlashContextReadsTheEnginesCacheBreaks(): void
+    {
+        $provider = new class () implements \SugarCraft\Crush\Providers\ProviderInterface {
+            public int $calls = 0;
+
+            public function name(): string { return 'cache-breaking'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 100_000; }
+            public function costPer1kTokens(string $model, string $direction): float { return 0.0; }
+
+            public function complete(\SugarCraft\Crush\Providers\CompleteRequest $request): \SugarCraft\Crush\Providers\CompleteResponse
+            {
+                $call = ++$this->calls;
+                // 90% of a 2,000-token prompt from cache; then 5%, 95% and
+                // 5% of 2,100: two breaks, with a recovery between them.
+                $read = [1 => 1800, 2 => 105, 3 => 1995][$call] ?? 105;
+
+                return new \SugarCraft\Crush\Providers\CompleteResponse(
+                    content: $call < 4 ? 'checking' : 'done',
+                    toolCalls: $call < 4 ? [new \SugarCraft\Crush\Tools\ToolCall('call_' . $call, 'no_such_tool', [])] : null,
+                    usage: Usage::new(2100, 0.0, 2100 - $read - ($call === 1 ? 100 : 0), 20, $read, 0),
+                );
+            }
+
+            public function completeStream(\SugarCraft\Crush\Providers\CompleteRequest $request): \Generator
+            {
+                yield $this->complete($request);
+            }
+
+            public function embeddings(\SugarCraft\Crush\Providers\EmbeddingsRequest $request): \SugarCraft\Crush\Providers\EmbeddingsResponse
+            {
+                return new \SugarCraft\Crush\Providers\EmbeddingsResponse([]);
+            }
+        };
+        $backend = \SugarCraft\Crush\Backend\EngineBackend::new($provider, 'm');
+
+        \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::reset();
+        $previous = ini_set('error_log', $this->sandbox . '-error.log');
+        try {
+            $backend->complete([Message::user('go')]);
+        } finally {
+            ini_set('error_log', (string) $previous);
+            @unlink($this->sandbox . '-error.log');
+            \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::reset();
+        }
+
+        self::assertSame(4, $provider->calls);
+        self::assertSame(2, $backend->withMaxSteps(9)->cacheBreaks(), 'every clone reads the one shared watch');
+        self::assertSame(['from' => 95, 'to' => 5], $backend->lastCacheBreak());
+
+        $reply = (new \SugarCraft\Crush\Host\Commands\ContextHostCommand())->run(
+            \SugarCraft\Crush\Host\Commands\CommandContext::new(history: [Message::user('go')], backend: $backend, contextTokenLimit: 100_000, contextTokens: 5),
+            '/context',
+        );
+        $text = implode("\n", array_map(static fn (Message $m): string => $m->content, $reply->rows));
+        self::assertStringContainsString('Cache breaks: 2 this session — the newest read 5% of its prompt from cache, after 95% on the request before.', $text);
+    }
+
     private function runtime(App $app): Runtime
     {
         return new Runtime(

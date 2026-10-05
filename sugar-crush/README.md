@@ -497,7 +497,9 @@ estimated size split into the system prompt **per layer** (base, maxims, repo
 map, rules, project instructions, memory, skills, `<env>` — each with its
 stability), the tool schemas, the history (and how many UI-only rows were never
 sent), the five largest messages, and the share of each prompt the provider
-served from its cache — for the last reply and across the session. It also
+served from its cache — for the last reply and across the session — and how
+many requests lost the prefix the request before them had cached (cache
+breaks, the newest with its cached share before and after). It also
 says what the session's pruning takes out of what the model is sent — pruned
 tool outputs (the newest named by ref, `r17`, with why and by whom), superseded
 state rows and an active step summary — and the total is the estimate after

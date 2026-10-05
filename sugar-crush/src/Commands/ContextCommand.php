@@ -118,8 +118,39 @@ final class ContextCommand
                 self::plural($b->sessionCache['replies'], 'reporting reply', 'reporting replies'),
             );
         }
+        $breaks = self::cacheBreakLine($b);
+        if ($breaks !== null) {
+            $lines[] = $breaks;
+        }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The cache-break line (roadmap 3.B-5, DCP §13.2 P2-10): how many
+     * requests lost the prefix the request before them had cached, and the
+     * newest one's cached share against the request before it — the telemetry opencode-dcp #614
+     * was diagnosed from, where a context rewrite that was not byte-stable
+     * cost every later request its cache. Nothing when no reply has
+     * reported a cache split and none broke: the cache line above already
+     * says so.
+     */
+    private static function cacheBreakLine(ContextBreakdown $b): ?string
+    {
+        $breaks = $b->cacheBreaks;
+        if ($breaks === null) {
+            return 'Cache breaks: not measured — this backend does not track its requests\' cache reuse.';
+        }
+        if ($breaks['breaks'] === 0) {
+            return $b->sessionCache === null ? null : 'Cache breaks: none this session.';
+        }
+        $last = $breaks['last'];
+
+        return sprintf(
+            'Cache breaks: %d this session%s. One after a prune or a compression is that rewrite\'s price; two in a row mean a rewrite is not byte-stable.',
+            $breaks['breaks'],
+            $last === null ? '' : sprintf(' — the newest read %d%% of its prompt from cache, after %d%% on the request before', $last['to'], $last['from']),
+        );
     }
 
     /**

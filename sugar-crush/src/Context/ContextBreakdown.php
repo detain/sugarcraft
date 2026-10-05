@@ -64,6 +64,11 @@ final readonly class ContextBreakdown
      *        what the session's context ledger takes out of the history the
      *        model is sent (roadmap 5.6 / 3.B), null when not measured
      *        ({@see withPruning()})
+     * @param array{breaks: int, last: ?array{from: int, to: int}}|null $cacheBreaks
+     *        the session's prompt-cache breaks — requests that lost the prefix
+     *        the request before them had cached — and the newest as the
+     *        cached share before and after it (roadmap 3.B-5); null when the
+     *        backend does not track them ({@see withCacheBreaks()})
      */
     public function __construct(
         public int $window,
@@ -77,6 +82,7 @@ final readonly class ContextBreakdown
         public ?array $lastCache,
         public ?array $sessionCache,
         public ?array $pruning = null,
+        public ?array $cacheBreaks = null,
     ) {
     }
 
@@ -141,6 +147,35 @@ final readonly class ContextBreakdown
                 'block' => $block === null ? null : ['id' => $block->id, 'compressed' => $block->compressedTokens, 'summary' => $block->summaryTokens],
                 'rows' => array_reverse(\array_slice($rows, -self::PRUNED_ROWS)),
             ],
+            $this->cacheBreaks,
+        );
+    }
+
+    /**
+     * This breakdown with the session's prompt-cache breaks (roadmap 3.B-5,
+     * DCP §13.2 P2-10): $breaks requests so far read under half of the prefix
+     * the request before them had cached, the newest moving the cached share
+     * from `$last['from']`% to `$last['to']`%. The provider's own counts,
+     * read off the backend's watch
+     * ({@see \SugarCraft\Crush\Backend\EngineBackend::cacheBreaks()}).
+     *
+     * @param array{from: int, to: int}|null $last
+     */
+    public function withCacheBreaks(int $breaks, ?array $last): self
+    {
+        return new self(
+            $this->window,
+            $this->sections,
+            $this->toolCount,
+            $this->toolTokens,
+            $this->historyTokens,
+            $this->historyMessages,
+            $this->uiOnlyRows,
+            $this->largest,
+            $this->lastCache,
+            $this->sessionCache,
+            $this->pruning,
+            ['breaks' => max(0, $breaks), 'last' => $last],
         );
     }
 
