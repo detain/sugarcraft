@@ -9707,8 +9707,9 @@ final class Bootstrap
     }
 
     /**
-     * The spend ceiling `$SUGARCRUSH_MAX_COST` sets, in US dollars, or null for
-     * no cap (crush_code.md Phase 5 item 7).
+     * The spend ceiling `$SUGARCRUSH_MAX_COST` sets, in US dollars — else the
+     * `maxCostUsd` setting ({@see persistedMaxCostUsd()}) — or null for no cap
+     * (crush_code.md Phase 5 item 7).
      *
      * ABSENCE AND A BAD VALUE ARE DIFFERENT ANSWERS, exactly as they are for
      * `$SUGARCRUSH_PERMISSION_MODE` (see {@see permissionGate()}), and for the
@@ -9740,7 +9741,7 @@ final class Bootstrap
     {
         $raw = getenv('SUGARCRUSH_MAX_COST');
         if ($raw === false || trim($raw) === '') {
-            return null;
+            return self::persistedMaxCostUsd();
         }
 
         $trimmed = trim($raw);
@@ -9759,6 +9760,45 @@ final class Bootstrap
         }
 
         return $value;
+    }
+
+    /** The settings key {@see maxCostUsd()} falls back to (roadmap N-P4g). */
+    public const MAX_COST_SETTING = 'maxCostUsd';
+
+    /**
+     * The `maxCostUsd` setting, for a launch with no `$SUGARCRUSH_MAX_COST`:
+     * the persistent spend ceiling, or null when no settings file sets one.
+     *
+     * USER TIER ONLY, so a checkout can neither impose a cap that refuses the
+     * operator's turns nor be the reason one is missing. Read once, when the
+     * workspace is built; `/budget` still changes the running launch's cap and
+     * never writes it back.
+     *
+     * HELD TO THE VARIABLE'S STANDARD, not to the "a bad hand edit costs that
+     * one knob" tolerance other settings readers have: a ceiling the user wrote
+     * down and that is silently dropped is an uncapped session nobody chose —
+     * the fail-open {@see maxCostUsd()} refuses for the variable. So a value
+     * that is present and not a positive finite number of dollars refuses the
+     * launch the same way (the settings view refuses to save one).
+     *
+     * @throws PermissionConfigException when the setting is present and unusable
+     */
+    private static function persistedMaxCostUsd(): ?float
+    {
+        $value = self::readUserConfig()[self::MAX_COST_SETTING] ?? null;
+        if ($value === null) {
+            return null;
+        }
+
+        if ((!\is_int($value) && !\is_float($value)) || !Chat::isUsableSpendCap((float) $value)) {
+            throw new PermissionConfigException(
+                'maxCostUsd in your settings is ' . var_export($value, true) . ', which is not a spend ceiling. '
+                . 'Expected a positive number of US dollars, for example 5 or 2.5. Remove the key for no cap. '
+                . 'Refusing to start rather than run uncapped with a ceiling you asked for.',
+            );
+        }
+
+        return (float) $value;
     }
 
     /**

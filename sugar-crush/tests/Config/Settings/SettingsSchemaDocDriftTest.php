@@ -198,6 +198,9 @@ final class SettingsSchemaDocDriftTest extends TestCase
         self::assertSame('twenty', SettingsDocGenerator::spell(20));
         self::assertSame('twenty-four', SettingsDocGenerator::spell(24));
         self::assertSame('ninety-nine', SettingsDocGenerator::spell(99));
+        self::assertSame('one hundred', SettingsDocGenerator::spell(100));
+        self::assertSame('one hundred and four', SettingsDocGenerator::spell(104));
+        self::assertSame('one hundred and twenty-one', SettingsDocGenerator::spell(121));
     }
 
     /** A block inside a list item keeps the item's indentation, so the item does not end early. */

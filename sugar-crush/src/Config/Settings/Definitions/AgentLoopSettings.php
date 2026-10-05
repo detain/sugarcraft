@@ -12,6 +12,7 @@ use SugarCraft\Crush\Config\Settings\SettingCategory;
 use SugarCraft\Crush\Config\Settings\SettingDefinition;
 use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
+use SugarCraft\Crush\Config\Settings\Validator\SpendCapValidator;
 use SugarCraft\Crush\Runtime;
 
 /**
@@ -63,6 +64,22 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withHelp('Provider calls one turn may make; unset keeps the engine default.')
                 ->withReaderSymbol(Bootstrap::class . '::resolvedMaxToolSteps')
                 ->withReadBy('`Bootstrap::backend()`, `Chat::applySettings()` → `resolvedMaxToolSteps()`'),
+            // Roadmap N-P4g: the persistent `/budget`. User tier only (Spend):
+            // a checkout may neither impose a cap on the operator's turns nor
+            // lift one. A present value that is not a ceiling refuses the launch,
+            // as `$SUGARCRUSH_MAX_COST` does.
+            SettingDefinition::new(Bootstrap::MAX_COST_SETTING, SettingType::Float)
+                ->withCategory(SettingCategory::AgentLoop)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnvVar('SUGARCRUSH_MAX_COST')
+                ->withValidators(SpendCapValidator::new())
+                ->withLabel('Spend cap (USD)')
+                ->withHelp('Refuse new turns once the provider-reported spend of a launch reaches this many US dollars; unset is no cap. /budget changes it for the running launch only.')
+                ->withDefaultText('unset (no cap)')
+                ->withReaderSymbol(Bootstrap::class . '::maxCostUsd')
+                ->withReadBy('`Bootstrap::workspace()` → `maxCostUsd()` → `persistedMaxCostUsd()`'),
         ];
     }
 }

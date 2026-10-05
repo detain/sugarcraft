@@ -6191,25 +6191,34 @@ final class DocFigureProseDriftTest extends TestCase
             'ninety-one' => 91, 'ninety-two' => 92, 'ninety-three' => 93, 'ninety-four' => 94, 'ninety-five' => 95,
             'ninety-six' => 96, 'ninety-seven' => 97, 'ninety-eight' => 98, 'ninety-nine' => 99,
         ];
+        // Past ninety-nine the prose reads "one hundred and four" (SettingsDocGenerator::spell()).
+        $wordNumbers['one hundred'] = 100;
+        foreach ($wordNumbers as $word => $n) {
+            if ($n < 100) {
+                $wordNumbers['one hundred and ' . $word] = 100 + $n;
+            }
+        }
+        $number = '([a-z]+(?:-[a-z]+)?(?:\s+hundred(?:\s+and\s+[a-z]+(?:-[a-z]+)?)?)?)';
+        $spelled = static fn (string $words): string => (string) preg_replace('/\s+/', ' ', $words);
 
-        self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+(?:-[a-z]+)?)/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');
+        self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ' . $number . '/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');
         self::assertSame(
             count($keys),
-            $wordNumbers[$tableCount[1]] ?? -1,
+            $wordNumbers[$spelled($tableCount[1])] ?? -1,
             'the "exactly these (word)" sentence under the layered table no longer counts LAYERED_KEYS — flip both together (census-trio lesson)',
         );
 
         self::assertSame(
             1,
-            preg_match('/only ([a-z]+(?:-[a-z]+)?) of the ([a-z]+(?:-[a-z]+)?) layered keys have an\s+env\s+override\s+\((.*?)\)\.\s*(.*?)\s+have\s+none\./s', $settings, $envSplit),
+            preg_match('/only ' . $number . '\s+of\s+the\s+' . $number . '\s+layered\s+keys\s+have\s+an\s+env\s+override\s+\((.*?)\)\.\s*(.*?)\s+have\s+none\./s', $settings, $envSplit),
             'the See-also env-split sentence in docs/SETTINGS.md was reworded out from under this arm',
         );
 
         preg_match_all('/`([a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*)`/', $envSplit[3], $withEnv);
         preg_match_all('/`([a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*)`/', $envSplit[4], $withoutEnv);
 
-        self::assertSame($wordNumbers[$envSplit[1]] ?? -1, count($withEnv[1]), 'the first spelled count no longer matches the env-override list it introduces');
-        self::assertSame(count($keys), $wordNumbers[$envSplit[2]] ?? -1, 'the second spelled count no longer matches LAYERED_KEYS');
+        self::assertSame($wordNumbers[$spelled($envSplit[1])] ?? -1, count($withEnv[1]), 'the first spelled count no longer matches the env-override list it introduces');
+        self::assertSame(count($keys), $wordNumbers[$spelled($envSplit[2])] ?? -1, 'the second spelled count no longer matches LAYERED_KEYS');
         self::assertSame(
             $withEnv[1],
             array_values(array_unique($withEnv[1])),

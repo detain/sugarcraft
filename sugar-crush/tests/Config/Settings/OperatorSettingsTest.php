@@ -163,6 +163,57 @@ final class OperatorSettingsTest extends TestCase
         }
     }
 
+    // ── the spend cap ───────────────────────────────────────────────────
+
+    public function testTheSpendCapIsTheSettingUnlessTheVariableIsSet(): void
+    {
+        $was = getenv('SUGARCRUSH_MAX_COST');
+        putenv('SUGARCRUSH_MAX_COST');
+        try {
+            self::assertNull(Bootstrap::maxCostUsd(), 'no cap by default');
+
+            $this->writeConfig(['maxCostUsd' => 5]);
+            self::assertSame(5.0, Bootstrap::maxCostUsd());
+            self::assertSame(5.0, Bootstrap::workspace($this->home)->maxCostUsd, 'every launch starts with it');
+
+            putenv('SUGARCRUSH_MAX_COST=$2.50');
+            self::assertSame(2.5, Bootstrap::maxCostUsd(), 'the variable wins');
+        } finally {
+            putenv($was === false ? 'SUGARCRUSH_MAX_COST' : 'SUGARCRUSH_MAX_COST=' . $was);
+        }
+    }
+
+    /** @return array<string, array{0: mixed}> */
+    public static function unusableCaps(): array
+    {
+        return ['zero' => [0], 'negative' => [-5], 'a string' => ['5USD'], 'a list' => [[5]]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unusableCaps')]
+    public function testAPersistedCapThatIsNotACeilingRefusesTheLaunch(mixed $cap): void
+    {
+        $was = getenv('SUGARCRUSH_MAX_COST');
+        putenv('SUGARCRUSH_MAX_COST');
+        try {
+            $this->writeConfig(['maxCostUsd' => $cap]);
+            self::assertNotNull(SettingsSchema::byKey('maxCostUsd')?->validate($cap), 'the settings view refuses to save it');
+
+            $this->expectException(\SugarCraft\Crush\Cli\PermissionConfigException::class);
+            $this->expectExceptionMessage('maxCostUsd');
+            Bootstrap::maxCostUsd();
+        } finally {
+            putenv($was === false ? 'SUGARCRUSH_MAX_COST' : 'SUGARCRUSH_MAX_COST=' . $was);
+        }
+    }
+
+    public function testAProjectFileCannotSetTheSpendCap(): void
+    {
+        $definition = SettingsSchema::byKey('maxCostUsd');
+        self::assertNotNull($definition);
+        self::assertFalse($definition->projectSettable);
+        self::assertNull($definition->default);
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────
 
     private function forcePush(int $n): ToolCall

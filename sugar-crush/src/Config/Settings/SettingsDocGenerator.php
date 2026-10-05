@@ -118,8 +118,8 @@ final class SettingsDocGenerator
     public function countAnchors(): array
     {
         return [
-            [self::SETTINGS_DOC, '/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+(?:-[a-z]+)?)\b/', \count(SettingsSchema::layeredKeys())],
-            [self::README, '/Even for a trusted project, ([a-z]+(?:-[a-z]+)?) keys are/', \count(self::userTierOnlyKeys())],
+            [self::SETTINGS_DOC, '/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+(?:-[a-z]+)?(?: hundred(?: and [a-z]+(?:-[a-z]+)?)?)?)\b/', \count(SettingsSchema::layeredKeys())],
+            [self::README, '/Even for a trusted project, ([a-z]+(?:-[a-z]+)?(?: hundred(?: and [a-z]+(?:-[a-z]+)?)?)?) keys are/', \count(self::userTierOnlyKeys())],
         ];
     }
 
@@ -218,8 +218,14 @@ final class SettingsDocGenerator
         $ones = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
             'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
         $tens = [2 => 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
-        if ($n < 0 || $n > 99) {
+        if ($n < 0 || $n > 999) {
             throw new \InvalidArgumentException("cannot spell {$n}");
+        }
+
+        if ($n >= 100) {
+            $rest = $n % 100;
+
+            return $ones[intdiv($n, 100)] . ' hundred' . ($rest === 0 ? '' : ' and ' . self::spell($rest));
         }
 
         if ($n < 20) {

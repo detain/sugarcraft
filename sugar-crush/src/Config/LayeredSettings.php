@@ -485,6 +485,7 @@ final class LayeredSettings
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',
         'maxToolSteps',
+        'maxCostUsd',
         'compaction.reminderPercent',
         'compaction.autoPercent',
         'compaction.blockPercent',

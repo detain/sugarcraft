@@ -568,9 +568,10 @@ branches the current session.
 and optionally caps it. `/budget 5` sets a $5 ceiling, `/budget off` clears one,
 and `/budget` on its own prints the running total plus the token breakdown that
 does not fit on the status bar. `$SUGARCRUSH_MAX_COST` sets the same ceiling at
-launch, and refuses to start at all if what you set is not a ceiling (`5USD`,
-`0`, `1e309`) rather than running uncapped without saying so. Four things about
-it are worth knowing before you rely on it:
+launch, and so does the `maxCostUsd` setting when the variable is unset; either
+refuses to start at all if what you set is not a ceiling (`5USD`, `0`, `1e309`)
+rather than running uncapped without saying so. Four things about it are worth
+knowing before you rely on it:
 
 - It refuses the **next** turn once the reported spend has reached the cap; it
   does not abort a turn in flight (the work happens in a forked child, whose
@@ -586,8 +587,13 @@ it are worth knowing before you rely on it:
   session still compacts, on the local heuristic, and the transcript says the cap
   is why. The session titler needs no separate gate: it only ever rides along
   with a turn the cap already let through.
-- The cap lives for the launch. It is deliberately not persisted, so it cannot
-  silently refuse turns in a later session whose spend you never looked at.
+- What `/budget` sets lives for the launch: it is never written back, so a cap
+  you typed for one session cannot silently refuse turns in a later one whose
+  spend you never looked at. A cap meant to outlive the launch is the
+  `maxCostUsd` setting, in your own `settings.json` or `config.json` (or the
+  settings view, from the next launch): every launch starts with it, `/budget`
+  can still raise, lower or clear it for the session at hand, and a project file
+  can never set it — a checkout may neither cap your turns nor lift your cap.
 
 ### Your own slash commands
 
@@ -970,11 +976,11 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these ninety-nine keys are layered — `provider`, `models`, `titleModel`,
+Only these one hundred keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
-`maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
-`compaction.blockPercent`, `compaction.keepRecent`,
+`maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`,
+`compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
 `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
@@ -1036,7 +1042,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, forty-eight keys are **never** taken from a project file:
+Even for a trusted project, forty-nine keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1076,12 +1082,15 @@ checked-out code, and a project that moves your panes behind your back is
 answering to the wrong owner; `maxToolSteps`, because it multiplies how many
 billed provider round-trips one turn may fan out — the `maxOutputTokens` money
 axis counted in calls instead of tokens, and a ceiling a checkout can raise is
-still a bill a clone can run up on the operator's credential;
+still a bill a clone can run up on the operator's credential; `maxCostUsd`,
+because it is the spend ceiling itself — a checkout must be able neither to lift
+the operator's cap nor to impose one that refuses their turns;
 `compaction.refillLimit`, because it is how many automatic compactions that
 bought nothing the thrash breaker lets a session pay for in a row — the same
-argument counted in summarisation calls; `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
-`readPageBytes`, `toolSpillWindowPercent` and `toolInstructionCapBytes`, the
-seven caps on what one tool result may hand the model,
+argument counted in summarisation calls; `toolOutputCapBytes`,
+`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+`toolSpillWindowPercent` and `toolInstructionCapBytes`, the seven caps on what
+one tool result may hand the model,
 because every byte a result carries is replayed into each later request of the
 turn — the same money axis paid in input tokens, so a checkout may not raise
 them (the timeouts and memory bounds beside them only cost time, and a trusted
