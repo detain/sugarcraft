@@ -50,9 +50,9 @@ final class ModelPruneInTurnTest extends TestCase
         $reply = $this->engine($provider)->withContextLedger(self::autoLedger())->complete([Message::user('read a.php, then tidy up')]);
 
         $this->assertCount(3, $provider->requests);
-        $this->assertSame(RefTag::appendTo(self::bigOutput(), 1), self::sent($provider->requests[1], 'c1'), 'the model read the output, tagged r1');
+        $this->assertSame(RefTag::appendTo(self::bigOutput(), 2), self::sent($provider->requests[1], 'c1'), 'the model read the output, tagged r2 (r1 is the prompt, roadmap 3.B-4)');
         $this->assertSame(
-            RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 1),
+            RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 2),
             self::sent($provider->requests[2], 'c1'),
             'the step after the Prune call is already projected through it',
         );
@@ -62,7 +62,7 @@ final class ModelPruneInTurnTest extends TestCase
         $this->assertNotNull($entry, 'the turn hands back the ledger the model changed');
         $this->assertSame(PruneAuthor::Model, $entry->by);
         $this->assertSame(PruneKind::Output, $entry->kind);
-        $this->assertSame(1, $reply->contextLedger->refOf('c1'), 'and its ref is fixed as the model read it');
+        $this->assertSame(2, $reply->contextLedger->refOf('c1'), 'and its ref is fixed as the model read it');
     }
 
     public function testTheToolIsOfferedOnlyToAnAutoSessionWhoseHostKeepsALedger(): void
@@ -120,7 +120,7 @@ final class ModelPruneInTurnTest extends TestCase
     {
         return new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('c1', 'Read', ['file_path' => 'a.php'])]),
-            new CompleteResponse(content: '', toolCalls: [new ToolCall('p1', 'Prune', ['targets' => [['ref' => 'r1']], 'reason' => 'done'])]),
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('p1', 'Prune', ['targets' => [['ref' => 'r2']], 'reason' => 'done'])]),
             new CompleteResponse(content: 'tidied'),
         ], contextWindow: 1_000_000);
     }

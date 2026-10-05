@@ -78,7 +78,7 @@ final class TurnRunnerLedgerTest extends TestCase
         $this->assertNotNull($saved);
         $this->assertTrue($saved->isPruned('old'), 'what the session pruned is still pruned');
         $this->assertFalse($saved->isPruned('rewound away'), 'a prune naming a row the history lost was forgotten before the turn');
-        $this->assertSame(['old' => 1, 'new' => 2], $saved->refs, 'the turn\'s refs are the session\'s now');
+        $this->assertSame(['old' => 2, 'new' => 4], self::toolRefs($saved), 'the turn\'s refs are the session\'s now (r1, r3: the prompts, roadmap 3.B-4)');
     }
 
     public function testWithoutAStoreTheRunnerKeepsEachSessionsLedgerItself(): void
@@ -88,7 +88,7 @@ final class TurnRunnerLedgerTest extends TestCase
 
         $this->runTurn($runner, null, null);
         $first = $runner->ledger(null, null);
-        $this->assertSame(['old' => 1, 'new' => 2], $first->refs);
+        $this->assertSame(['old' => 2, 'new' => 4], self::toolRefs($first));
 
         $runner->saveLedger(null, 'other', ContextLedger::new()->withPrune(self::entry('x')));
         $this->assertTrue($runner->ledger(null, 'other')->isPruned('x'));
@@ -196,5 +196,16 @@ final class TurnRunnerLedgerTest extends TestCase
                 return new EngineToolResult(toolCallId: '', content: 'echoed');
             }
         };
+    }
+
+    /**
+     * The refs of the tool results alone — the prompts carry refs too
+     * (roadmap 3.B-4), keyed by their bytes.
+     *
+     * @return array<string, int>
+     */
+    private static function toolRefs(ContextLedger $ledger): array
+    {
+        return array_filter($ledger->refs, static fn (int|string $key): bool => !ContextLedger::isUserRowKey((string) $key), ARRAY_FILTER_USE_KEY);
     }
 }

@@ -32,14 +32,17 @@ final class ContextLedgerSyncTest extends TestCase
         $turn = [new UserMessage('go'), ...self::step('a'), ...self::step('b'), new ToolResultMessage('a', 'again')];
         $ledger = ContextLedger::new();
 
-        $this->assertSame(['a' => 1, 'b' => 2], $ledger->refsFor($turn), 'one ref per call, in order of first appearance');
-        $this->assertSame(['a' => 1], $ledger->refsFor(\array_slice($turn, 0, 3)), 'appending rows never renumbers the rows before');
+        // Roadmap 3.B-4: the prompt is a row with a ref too, in the same order.
+        $go = ContextLedger::userRowKey('go', 1);
+        $this->assertSame([$go => 1, 'a' => 2, 'b' => 3], $ledger->refsFor($turn), 'one ref per row, in order of first appearance');
+        $this->assertSame([$go => 1, 'a' => 2], $ledger->refsFor(\array_slice($turn, 0, 3)), 'appending rows never renumbers the rows before');
+        $this->assertSame([], $ledger->refsFor([new UserMessage('go')]), 'the prompt being answered has no ref until something follows it');
 
         $fixed = $ledger->withRefsAssigned($turn);
         $this->assertSame($ledger->refsFor($turn), $fixed->refs, 'the turn\'s end keeps exactly the refs its requests showed');
-        $this->assertSame(3, $fixed->nextRef);
-        $this->assertSame(2, $fixed->refOf('b'));
-        $this->assertSame('b', $fixed->toolCallIdForRef(2));
+        $this->assertSame(4, $fixed->nextRef);
+        $this->assertSame(3, $fixed->refOf('b'));
+        $this->assertSame('b', $fixed->toolCallIdForRef(3));
         $this->assertNull($fixed->toolCallIdForRef(9));
         $this->assertSame([], $ledger->refs, 'the original is untouched');
         $this->assertSame($fixed, $fixed->withRefsAssigned($turn), 'nothing new to fix is the same ledger');

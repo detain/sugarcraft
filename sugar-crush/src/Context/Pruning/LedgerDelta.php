@@ -20,12 +20,21 @@ final readonly class LedgerDelta
      *                                               content hash
      *                                               ({@see ContextLedger::contextRowKey()})
      *                                               => estimated tokens freed
-     * @param list<CompressionBlock> $blocks          step summaries to apply
+     * @param list<CompressionBlock> $blocks          step summaries and
+     *                                               `Compress` ranges to apply
+     * @param array<string, string> $nudges          {@see NudgePolicy} anchors
+     *                                               to add, row key => kind
+     *                                               (roadmap 3.B-4)
+     * @param bool               $clearNudges        every anchor is cleared
+     *                                               first — the cooldown after
+     *                                               a prune or a compress
      */
     private function __construct(
         public array $prunes,
         public array $droppedContextRows,
         public array $blocks = [],
+        public array $nudges = [],
+        public bool $clearNudges = false,
     ) {
     }
 
@@ -36,32 +45,50 @@ final readonly class LedgerDelta
 
     public function withPrune(PruneEntry $entry): self
     {
-        return new self([...$this->prunes, $entry], $this->droppedContextRows, $this->blocks);
+        return $this->mutate(prunes: [...$this->prunes, $entry]);
     }
 
     public function withDroppedContextRow(string $key, int $tokens): self
     {
-        return new self($this->prunes, [...$this->droppedContextRows, $key => $tokens], $this->blocks);
+        return $this->mutate(droppedContextRows: [...$this->droppedContextRows, $key => $tokens]);
     }
 
     public function withBlock(CompressionBlock $block): self
     {
-        return new self($this->prunes, $this->droppedContextRows, [...$this->blocks, $block]);
+        return $this->mutate(blocks: [...$this->blocks, $block]);
     }
 
-    /** This delta followed by $other, as one. */
+    /** This delta with a nudge of $kind anchored on row $key (roadmap 3.B-4). */
+    public function withNudge(string $key, string $kind): self
+    {
+        return $this->mutate(nudges: [...$this->nudges, $key => $kind]);
+    }
+
+    /** This delta clearing every anchor before it adds its own. */
+    public function withNudgesCleared(): self
+    {
+        return $this->mutate(clearNudges: true, nudges: []);
+    }
+
+    /**
+     * This delta followed by $other, as one. A clear in $other drops the
+     * anchors this one would have added.
+     */
     public function merge(self $other): self
     {
         return new self(
             [...$this->prunes, ...$other->prunes],
             [...$this->droppedContextRows, ...$other->droppedContextRows],
             [...$this->blocks, ...$other->blocks],
+            $other->clearNudges ? $other->nudges : [...$this->nudges, ...$other->nudges],
+            $this->clearNudges || $other->clearNudges,
         );
     }
 
     public function isEmpty(): bool
     {
-        return $this->prunes === [] && $this->droppedContextRows === [] && $this->blocks === [];
+        return $this->prunes === [] && $this->droppedContextRows === [] && $this->blocks === []
+            && $this->nudges === [] && !$this->clearNudges;
     }
 
     /**
@@ -69,7 +96,7 @@ final readonly class LedgerDelta
      * {@see \SugarCraft\Crush\Events\ContextLedgerChanged}): the parent
      * unserializes with `allowed_classes => false`, so no object may ride it.
      *
-     * @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>}
+     * @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>,nudges?:array<string,string>,clearNudges?:bool}
      */
     public function toArray(): array
     {
@@ -77,6 +104,9 @@ final readonly class LedgerDelta
             'prunes' => array_map(static fn (PruneEntry $entry): array => $entry->toArray(), $this->prunes),
             'droppedContextRows' => $this->droppedContextRows,
             'blocks' => array_map(static fn (CompressionBlock $block): array => $block->toArray(), $this->blocks),
+            // Only when set, so a delta without them keeps its 3.B-3 shape.
+            ...($this->nudges === [] ? [] : ['nudges' => $this->nudges]),
+            ...($this->clearNudges ? ['clearNudges' => true] : []),
         ];
     }
 
@@ -109,8 +139,22 @@ final readonly class LedgerDelta
                 $delta = $delta->withBlock($block);
             }
         }
+        if (($raw['clearNudges'] ?? false) === true) {
+            $delta = $delta->withNudgesCleared();
+        }
+        foreach (is_array($raw['nudges'] ?? null) ? $raw['nudges'] : [] as $key => $kind) {
+            if ((string) $key !== '' && is_string($kind) && NudgePolicy::isKind($kind)) {
+                $delta = $delta->withNudge((string) $key, $kind);
+            }
+        }
 
         return $delta;
+    }
+
+    /** A copy with the named fields replaced; every other field carried. */
+    private function mutate(mixed ...$changes): self
+    {
+        return new self(...[...get_object_vars($this), ...$changes]);
     }
 
     /** Estimated tokens the delta frees from the projected request. */

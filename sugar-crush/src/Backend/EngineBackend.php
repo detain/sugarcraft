@@ -1470,6 +1470,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             ->withTools(self::gatedLedgerTools(
                 $this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd, $contextLedger, $app),
                 $preCompact,
+                $messages,
             ))
             ->withMessages($messages);
 
@@ -1648,6 +1649,29 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         $onEvent(new ContextLedgerChanged($delta, $toolCallId));
                     }
                 };
+
+            // Roadmap 3.B-4 (DCP §13.2 E): remind the model to manage its
+            // context once it is filling up — ANCHORED on the newest tool
+            // result or prompt, a row this request sends for the first time,
+            // and re-rendered there on every later request, so a reminder
+            // never rewrites bytes the provider already cached. Only where a
+            // host keeps the session's ledger, in the `auto` mode; cleared
+            // after a successful Prune / Compress (the cooldown).
+            if ($this->contextLedger !== null) {
+                [$anchorTokens, $anchorRows] = $pressureAnchor;
+                $nudge = \SugarCraft\Crush\Context\Pruning\NudgePolicy::new()->decide(
+                    $anchorTokens !== null
+                        ? $anchorTokens + \SugarCraft\Crush\Context\ContextPressure::ofMessages(\array_slice($app->messages, $anchorRows))
+                        : \SugarCraft\Crush\Context\ContextPressure::ofMessages($app->messages),
+                    $app->messages,
+                    $contextLedger,
+                );
+                if (!$nudge->isEmpty()) {
+                    $contextLedger = $contextLedger->apply($nudge);
+                    $app = $app->withContextLedger($contextLedger);
+                    $showLedger('');
+                }
+            }
 
             // Roadmap 2.2-1 / 2.4-1: an over-budget request is relieved before
             // it is sent. The observer sees the request fully built and, while
@@ -2743,22 +2767,51 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     /**
      * $tools with every ledger tool `turnTools()` bound to the turn's ledger
      * also bound to the turn's PreCompact gate (roadmap 3.B-3, DCP §13.2 F):
-     * the model's `Prune` is a compaction, and a hook that refuses
-     * compactions refuses it. Every other tool is returned as it was.
+     * the model's `Prune` and `Compress` are compactions, and a hook that
+     * refuses compactions refuses them. Every other tool is returned as it was.
+     *
+     * Roadmap 3.B-4: `Compress` is MANUAL by default
+     * ({@see \SugarCraft\Crush\Tools\BuiltIn\Compress::MODE_DEFAULT}) — it is
+     * offered only on a turn the person started with `/compress`
+     * ({@see \SugarCraft\Crush\Tools\BuiltIn\Compress::isTriggered()}), and
+     * that turn may make one successful call. On every other turn it is left
+     * out, so its schema is never sent.
      *
      * @param list<Tool>                                     $tools
      * @param \Closure(string $trigger, string $focus): ?string $preCompact
+     * @param list<TypedMessage>                             $messages the turn's incoming rows
      *
      * @return list<Tool>
      */
-    private static function gatedLedgerTools(array $tools, \Closure $preCompact): array
+    private static function gatedLedgerTools(array $tools, \Closure $preCompact, array $messages = []): array
     {
-        return array_map(
-            static fn (Tool $tool): Tool => $tool instanceof \SugarCraft\Crush\Tools\MutatesContextLedger
+        $triggered = \SugarCraft\Crush\Tools\BuiltIn\Compress::isTriggered(array_values($messages));
+        $budget = 1;
+        $allowance = static function (bool $spend) use (&$budget): bool {
+            if ($budget <= 0) {
+                return false;
+            }
+            if ($spend) {
+                $budget--;
+            }
+
+            return true;
+        };
+
+        $gated = [];
+        foreach ($tools as $tool) {
+            if ($tool instanceof \SugarCraft\Crush\Tools\BuiltIn\Compress) {
+                if (!$triggered) {
+                    continue;
+                }
+                $tool = $tool->withAllowance($allowance);
+            }
+            $gated[] = $tool instanceof \SugarCraft\Crush\Tools\MutatesContextLedger
                 ? $tool->withCompactionGate($preCompact)
-                : $tool,
-            $tools,
-        );
+                : $tool;
+        }
+
+        return $gated;
     }
 
     /**

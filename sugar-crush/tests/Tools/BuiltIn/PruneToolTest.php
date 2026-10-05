@@ -71,13 +71,13 @@ final class PruneToolTest extends TestCase
         $result = $this->bound()->execute([
             'reason' => 'done',
             'targets' => [
-                ['ref' => 'r1'],
-                ['ref' => '<ctx-ref r="2"/>', 'distillation' => 'b.php: class B { f(): int }'],
+                ['ref' => 'r2'],
+                ['ref' => '<ctx-ref r="3"/>', 'distillation' => 'b.php: class B { f(): int }'],
             ],
         ]);
 
         $this->assertFalse($result->isError(), $result->content());
-        $this->assertMatchesRegularExpression('/^Pruned 2 outputs \(~[\d.]+K? tokens\): Read ×2\. Distilled: r2\.$/u', $result->content());
+        $this->assertMatchesRegularExpression('/^Pruned 2 outputs \(~[\d.]+K? tokens\): Read ×2\. Distilled: r3\.$/u', $result->content());
 
         $this->assertCount(1, $this->applied, 'one delta per call');
         $first = $this->ledger->prune('c1');
@@ -96,12 +96,12 @@ final class PruneToolTest extends TestCase
                 $sent[$message->toolCallId()] = $message->content();
             }
         }
-        $this->assertSame(RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 1), $sent['c1']);
+        $this->assertSame(RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 2), $sent['c1']);
         $this->assertSame(
-            RefTag::appendTo(PrunedOutputPlaceholder::distilled('Read', ['file_path' => 'b.php'], 'b.php: class B { f(): int }'), 2),
+            RefTag::appendTo(PrunedOutputPlaceholder::distilled('Read', ['file_path' => 'b.php'], 'b.php: class B { f(): int }'), 3),
             $sent['c2'],
         );
-        $this->assertSame(RefTag::appendTo(self::toolOutput('t'), 3), $sent['c3'], 'a protected output stays as it was');
+        $this->assertSame(RefTag::appendTo(self::toolOutput('t'), 4), $sent['c3'], 'a protected output stays as it was');
     }
 
     public function testEveryTargetItMayNotPruneIsSkippedByName(): void
@@ -111,25 +111,27 @@ final class PruneToolTest extends TestCase
         $result = $this->bound()->execute([
             'reason' => 'noise',
             'targets' => [
-                ['ref' => 'r1'],
-                ['ref' => 'r2', 'distillation' => str_repeat('x', 5000)],
-                ['ref' => 'r3'],
+                ['ref' => 'r2'],
+                ['ref' => 'r3', 'distillation' => str_repeat('x', 5000)],
+                ['ref' => 'r4'],
                 ['ref' => 'r9'],
                 ['ref' => 'banana'],
-                ['ref' => 'r4'],
-                ['ref' => 'r4'],
+                ['ref' => 'r5'],
+                ['ref' => 'r5'],
+                ['ref' => 'r1'],
             ],
         ]);
 
-        $this->assertFalse($result->isError(), 'r4 still applied');
+        $this->assertFalse($result->isError(), 'r5 still applied');
         $this->assertStringStartsWith('Pruned 1 output (~', $result->content());
         foreach ([
-            'r1 (already pruned)',
-            'r2 (the distillation is no shorter than the output)',
-            'r3 (protected: Task)',
+            'r2 (already pruned)',
+            'r3 (the distillation is no shorter than the output)',
+            'r4 (protected: Task)',
             'r9 (no tool result you have read has this ref)',
             '"banana" (not a ref)',
-            'r4 (named twice)',
+            'r5 (named twice)',
+            'r1 (a prompt, not a tool result)',
         ] as $reason) {
             $this->assertStringContainsString($reason, $result->content());
         }
@@ -138,18 +140,18 @@ final class PruneToolTest extends TestCase
 
     public function testACallWhereNothingAppliedFailsAndAppliesNothing(): void
     {
-        $result = $this->bound()->execute(['reason' => 'done', 'targets' => [['ref' => 'r3'], ['ref' => 'r5']]]);
+        $result = $this->bound()->execute(['reason' => 'done', 'targets' => [['ref' => 'r4'], ['ref' => 'r6']]]);
 
         $this->assertTrue($result->isError());
-        $this->assertStringStartsWith('Error: nothing was pruned. Skipped: r3 (protected: Task); r5 (too small to be worth a placeholder).', $result->content());
+        $this->assertStringStartsWith('Error: nothing was pruned. Skipped: r4 (protected: Task); r6 (too small to be worth a placeholder).', $result->content());
         $this->assertSame([], $this->applied);
     }
 
     public function testMalformedArgumentsAreRefused(): void
     {
-        $this->assertStringContainsString('reason must be one of noise, superseded, done', $this->bound()->execute(['targets' => [['ref' => 'r1']], 'reason' => 'aged'])->content());
+        $this->assertStringContainsString('reason must be one of noise, superseded, done', $this->bound()->execute(['targets' => [['ref' => 'r2']], 'reason' => 'aged'])->content());
         $this->assertStringContainsString('targets must be a non-empty list', $this->bound()->execute(['targets' => [], 'reason' => 'done'])->content());
-        $this->assertStringContainsString('targets must be a non-empty list', $this->bound()->execute(['targets' => ['a' => ['ref' => 'r1']], 'reason' => 'done'])->content());
+        $this->assertStringContainsString('targets must be a non-empty list', $this->bound()->execute(['targets' => ['a' => ['ref' => 'r2']], 'reason' => 'done'])->content());
         $this->assertSame([], $this->applied);
     }
 
@@ -157,7 +159,7 @@ final class PruneToolTest extends TestCase
     {
         $this->ledger = $this->ledger->withMode(PruningMode::Manual);
 
-        $result = $this->bound()->execute(['reason' => 'done', 'targets' => [['ref' => 'r1']]]);
+        $result = $this->bound()->execute(['reason' => 'done', 'targets' => [['ref' => 'r2']]]);
 
         $this->assertTrue($result->isError());
         $this->assertStringContainsString('context pruning is `manual` for this session', $result->content());
@@ -168,7 +170,7 @@ final class PruneToolTest extends TestCase
     {
         $tool = Prune::new()->withLedger(fn (): array => [$this->ledger, self::rows()], static fn (LedgerDelta $delta): ?ContextLedger => null);
 
-        $result = $tool->execute(['reason' => 'done', 'targets' => [['ref' => 'r1']]]);
+        $result = $tool->execute(['reason' => 'done', 'targets' => [['ref' => 'r2']]]);
 
         $this->assertTrue($result->isError());
         $this->assertStringContainsString('could not be reached', $result->content());

@@ -8,6 +8,7 @@ use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\Message as TypedMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
@@ -41,7 +42,16 @@ use SugarCraft\Crush\Tools\ToolCall;
  *     result — pruned or not — ends with its `<ctx-ref r="N"/>` tag
  *     ({@see RefTag}), the ref the ledger gives it ({@see ContextLedger::refsFor()},
  *     numbered over the rows BEFORE step 1 drops any, so a block never shifts
- *     a ref), and a tag the model echoed into its own text is stripped.
+ *     a ref), and a tag the model echoed into its own text is stripped. Since
+ *     roadmap 3.B-4 a user prompt carries its ref too;
+ *  6. roadmap 3.B-4: every active `Compress` range block
+ *     ({@see ContextLedger::activeRangeBlocks()}) replaces the rows from its
+ *     first to its last with one user-role summary row — its placeholders
+ *     expanded ({@see expandedSummary()}), the protected outputs inside it
+ *     kept verbatim ({@see protectedOutputs()}) — applied right after step 1;
+ *  7. a nudge anchored on a row ({@see NudgePolicy}, roadmap 3.B-4) is
+ *     appended to that tool result or prompt — never to an assistant row —
+ *     and a reminder block the model echoed is stripped like a tag.
  *
  * Steps 1 and 2 remove rows only at step boundaries or rows that pair with
  * nothing, so every tool call that is sent keeps its result.
@@ -75,50 +85,75 @@ final class ContextProjector
             return new ProjectedContext($messages);
         }
 
+        // Refs and row keys are read off the rows BEFORE any block drops one,
+        // so a block never shifts a ref or loses a nudge's anchor.
         $refs = $this->refTags ? $ledger->refsFor($messages) : [];
+        $keys = ContextLedger::rowKeys($messages, true);
         $calls = self::callsById($messages);
+
+        /** @var list<array{0: TypedMessage, 1: ?string}> $rows */
+        $rows = [];
+        foreach ($messages as $index => $message) {
+            $rows[] = [$message, $keys[$index] ?? null];
+        }
+
         $block = $ledger->activeBlock();
         if ($block !== null) {
             $keepFrom = self::stepOpening($messages, $block->keepFromToolCallId);
             if ($keepFrom !== null) {
-                $messages = [$block->summaryRow(), ...\array_slice($messages, $keepFrom)];
+                $rows = [[$block->summaryRow(), null], ...\array_slice($rows, $keepFrom)];
             }
+        }
+        foreach ($ledger->activeRangeBlocks() as $range) {
+            $rows = self::applyRange($rows, $range, $ledger, $calls, $refs);
         }
 
         $lastContextRow = null;
-        foreach ($messages as $index => $message) {
+        foreach ($rows as $index => [$message]) {
             if (TurnContextBlock::isTurnContext($message)) {
                 $lastContextRow = $index;
             }
         }
 
         $projected = [];
-        foreach ($messages as $index => $message) {
+        foreach ($rows as $index => [$message, $key]) {
             if ($index !== $lastContextRow && TurnContextBlock::isTurnContext($message) && $ledger->dropsContextRow($message->content())) {
                 continue;
             }
+            $nudge = $key === null ? null : ($ledger->nudges[$key] ?? null);
             if ($message instanceof ToolResultMessage) {
                 $entry = $ledger->prune($message->toolCallId());
                 if ($entry !== null && !$entry->kind->rewritesInput()) {
                     $message = self::pruned($message, $entry, $calls[$message->toolCallId()] ?? null);
                 }
                 $ref = $refs[$message->toolCallId()] ?? null;
-                if ($ref !== null) {
+                $content = $ref === null ? $message->content() : RefTag::appendTo($message->content(), $ref);
+                $content = $nudge === null ? $content : NudgePolicy::appendTo($content, $nudge);
+                if ($content !== $message->content()) {
                     $message = new ToolResultMessage(
                         $message->toolCallId(),
-                        RefTag::appendTo($message->content(), $ref),
+                        $content,
                         $message->isError(),
                         $message->imageBytes(),
                         $message->imageProtocol(),
                         $message->usage(),
                     );
                 }
+            } elseif ($message instanceof UserMessage && $key !== null) {
+                // Roadmap 3.B-4: a prompt carries its ref too, so a Compress
+                // range can start or end at it — and its anchored nudge.
+                $ref = $refs[$key] ?? null;
+                $content = $ref === null ? $message->content() : RefTag::appendTo($message->content(), $ref);
+                $content = $nudge === null ? $content : NudgePolicy::appendTo($content, $nudge);
+                if ($content !== $message->content()) {
+                    $message = new UserMessage($content, $message->attachments());
+                }
             } elseif ($message instanceof AssistantMessage) {
                 if (($message->toolCalls() ?? []) !== []) {
                     $message = self::withPrunedInputs($message, $ledger);
                 }
                 if ($this->refTags) {
-                    $stripped = RefTag::stripFrom($message->content());
+                    $stripped = NudgePolicy::stripFrom(RefTag::stripFrom($message->content()));
                     if ($stripped !== $message->content()) {
                         $message = new AssistantMessage($stripped, $message->toolCalls(), $message->reasoning(), $message->usage(), $message->lengthStopped());
                     }
@@ -128,6 +163,130 @@ final class ContextProjector
         }
 
         return new ProjectedContext($projected);
+    }
+
+    /**
+     * Where a range block's first and last rows sit in $messages, or null
+     * when either is gone (the block is then inert): a user row by its key,
+     * a step from the assistant row that opened it through the last of the
+     * results that answer it — so no call is ever cut from its result.
+     *
+     * @param list<TypedMessage>  $messages
+     * @param array<int, ?string> $keys     index => row key
+     * @return array{0: int, 1: int}|null
+     */
+    public static function rangeBounds(array $messages, array $keys, string $fromKey, string $toKey): ?array
+    {
+        $start = self::boundaryIndex($messages, $keys, $fromKey, false);
+        $end = self::boundaryIndex($messages, $keys, $toKey, true);
+
+        return $start === null || $end === null || $start > $end ? null : [$start, $end];
+    }
+
+    /**
+     * The summary a range block shows, every `(bN)` placeholder replaced by
+     * the summary of the block it names — recursively, each block at most
+     * once along a path, so a corrupt cycle cannot loop.
+     *
+     * @param array<int, true> $seen
+     */
+    public static function expandedSummary(CompressionBlock $block, ContextLedger $ledger, array $seen = []): string
+    {
+        $seen[$block->id] = true;
+
+        return (string) preg_replace_callback('/\(b(\d+)\)/', static function (array $m) use ($ledger, $seen): string {
+            $child = $ledger->block((int) $m[1]);
+            if ($child === null || isset($seen[$child->id])) {
+                return $m[0];
+            }
+
+            return self::expandedSummary($child, $ledger, $seen);
+        }, $block->summary);
+    }
+
+    /**
+     * The verbatim outputs of the protected tools ({@see PruningPolicy::COMPRESS_PROTECTED_TOOLS})
+     * among $rows — what a range summary carries whole, since a `Task` report
+     * or a `Skill` body cannot be fetched again (DCP `appendProtectedTools`).
+     * Empty when there are none.
+     *
+     * @param list<TypedMessage>     $rows
+     * @param array<string, ToolCall> $calls
+     * @param array<string, int>      $refs
+     */
+    public static function protectedOutputs(array $rows, array $calls, array $refs = []): string
+    {
+        $kept = [];
+        foreach ($rows as $row) {
+            if (!$row instanceof ToolResultMessage) {
+                continue;
+            }
+            $tool = ($calls[$row->toolCallId()] ?? null)?->name();
+            if ($tool === null || !\in_array($tool, PruningPolicy::COMPRESS_PROTECTED_TOOLS, true)) {
+                continue;
+            }
+            $ref = $refs[$row->toolCallId()] ?? null;
+            $kept[] = '### ' . $tool . ($ref === null ? '' : ' (' . RefTag::label($ref) . ')') . "\n" . $row->content();
+        }
+
+        return $kept === [] ? '' : "The following protected tool outputs from this section are kept verbatim:\n" . implode("\n\n", $kept);
+    }
+
+    /**
+     * $rows with $block's range replaced by its summary row, or unchanged
+     * when the range is gone or no longer whole.
+     *
+     * @param list<array{0: TypedMessage, 1: ?string}> $rows
+     * @param array<string, ToolCall>                    $calls
+     * @param array<string, int>                         $refs
+     * @return list<array{0: TypedMessage, 1: ?string}>
+     */
+    private static function applyRange(array $rows, CompressionBlock $block, ContextLedger $ledger, array $calls, array $refs): array
+    {
+        $messages = array_map(static fn (array $row): TypedMessage => $row[0], $rows);
+        $keys = array_map(static fn (array $row): ?string => $row[1], $rows);
+        $bounds = self::rangeBounds($messages, $keys, (string) $block->fromKey, (string) $block->toKey);
+        if ($bounds === null) {
+            return $rows;
+        }
+        [$start, $end] = $bounds;
+        $covered = \array_slice($messages, $start, $end - $start + 1);
+        foreach ($covered as $row) {
+            // Another block already stands here: the ranges overlap, which
+            // the tool refuses — an inert block rather than a mangled view.
+            if (CompressionBlock::isSummaryRow($row)) {
+                return $rows;
+            }
+        }
+
+        $text = self::expandedSummary($block, $ledger);
+        $kept = self::protectedOutputs($covered, $calls, $refs);
+        $summary = $block->summaryRow($kept === '' ? $text : $text . "\n\n" . $kept);
+
+        return [...\array_slice($rows, 0, $start), [$summary, null], ...\array_slice($rows, $end + 1)];
+    }
+
+    /**
+     * @param list<TypedMessage>  $messages
+     * @param array<int, ?string> $keys
+     */
+    private static function boundaryIndex(array $messages, array $keys, string $key, bool $end): ?int
+    {
+        if (!str_starts_with($key, 's:')) {
+            $index = array_search($key, $keys, true);
+
+            return $index === false ? null : (int) $index;
+        }
+        $opener = self::stepOpening($messages, substr($key, 2));
+        if ($opener === null || !$end) {
+            return $opener;
+        }
+        $last = $opener;
+        while (($messages[$last + 1] ?? null) instanceof ToolResultMessage) {
+            $last++;
+        }
+
+        return $last;
     }
 
     /**

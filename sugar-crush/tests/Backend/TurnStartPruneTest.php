@@ -54,7 +54,7 @@ final class TurnStartPruneTest extends TestCase
         $this->engine($provider)->withContextLedger(ContextLedger::new()->withMode(PruningMode::Manual))->complete(self::history());
 
         $this->assertStringContainsString('state one', self::wire($provider));
-        $this->assertSame(RefTag::appendTo('a', 1), self::sentResult($provider, 'old'));
+        $this->assertSame(RefTag::appendTo('a', 2), self::sentResult($provider, 'old'), 'r1 is the first prompt (roadmap 3.B-4)');
     }
 
     public function testAnOffSessionShowsNoRefsAndAHostWithoutALedgerSendsTheRowsAsTheyAre(): void

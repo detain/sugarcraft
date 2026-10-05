@@ -62,9 +62,11 @@ final class EngineBackendLedgerFrameTest extends TestCase
         $ledger = $reply->contextLedger;
         $this->assertInstanceOf(ContextLedger::class, $ledger);
         $this->assertTrue($ledger->isPruned('old'), 'what the session pruned comes back');
-        $this->assertSame(1, $ledger->refOf('old'), 'refs are fixed in the order the model read the results');
-        $this->assertSame(2, $ledger->refOf('new'), 'the turn\'s own result keeps its ref');
-        $this->assertSame(3, $ledger->nextRef);
+        // Roadmap 3.B-4: the prompts are numbered in the same order — r1
+        // "read a.php", r3 "now echo".
+        $this->assertSame(2, $ledger->refOf('old'), 'refs are fixed in the order the model read the rows');
+        $this->assertSame(4, $ledger->refOf('new'), 'the turn\'s own result keeps its ref');
+        $this->assertSame(5, $ledger->nextRef);
     }
 
     public function testAHostThatKeepsNoLedgerGetsNoneBack(): void

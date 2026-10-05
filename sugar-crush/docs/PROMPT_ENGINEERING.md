@@ -155,7 +155,11 @@ re-prefills the whole conversation behind it.
   order the model first read it and never reused or renumbered
   (`ContextLedger::refsFor()`, fixed where the turn ends), so the tag is the
   same bytes on every request. A tag the model copies into its own reply is
-  stripped from the assistant text before the next request is built.
+  stripped from the assistant text before the next request is built. User
+  prompts carry refs too, in the same numbering (`ContextLedger::rowKeys()`,
+  keyed by the prompt's bytes), so a range can start or end at one; a harness
+  row (`<turn-context>`, a summary row) carries none, and the prompt being
+  answered gets its ref once something follows it — a range never reaches it.
 - **The model prunes too.** In the `auto` mode the model is offered `Prune`
   (`Tools\BuiltIn\Prune`): `{"targets": [{"ref": "r17", "distillation": "…"}],
   "reason": "noise|superseded|done"}`. Each target's output is replaced by the
@@ -167,6 +171,29 @@ re-prefills the whole conversation behind it.
   receipts) are never pruned, and a distillation must be shorter than the
   output; such targets are skipped and named in the receipt. A `manual` or
   `off` session, a sub-agent and a `-p` run are not offered the tool.
+- **The model compresses, when asked.** `Compress` (`Tools\BuiltIn\Compress`):
+  `{"topic": "Auth exploration", "ranges": [{"from": "r12", "to": "r40",
+  "summary": "…"}]}` replaces a closed range — prompts, steps and outputs — with
+  the model's own summary, as a range block in the turn's ledger: the next
+  request sends one user row, `[Compressed section b3: "Auth exploration" —
+  replaces r12…r40]` and the summary, in the range's place. A range that covers
+  an earlier block names it once as `(b2)`, expanded to that block's summary;
+  `Task` and `Skill` outputs inside it are re-attached verbatim. A summary more
+  than half the tokens it newly replaces plus 2000 is refused (opencode-dcp's
+  compression snowball), and so is a block whose placeholders would expand past
+  16K tokens. Compress is MANUAL by default: it is offered only on a turn you
+  start with `/compress [focus]`, whose prompt opens `<compress triggered
+  manually>`, and that turn may make one successful call. `/decompress bN` and
+  `/recompress bN` take a block back and restore it.
+- **Context reminders.** In the `auto` mode, once the context passes 60K tokens
+  the model is reminded to manage it (`Context\Pruning\NudgePolicy`): a
+  `<context-reminder>` block — one fixed text per kind: a turn's prompt, a run
+  of ten tool results since it, or past 120K the strong limit reminder —
+  appended to the newest tool result or prompt, never to an assistant row (a
+  request ending on a synthetic assistant turn is a prefill some providers
+  reject). The anchor is kept in the ledger and re-rendered on that row on
+  every later request, five rows at least between two, so a reminder never
+  moves along the tail; a successful `Prune` or `Compress` clears them all.
 - **Step summaries.** When a request is still over its budget after that prune,
   the engine asks the turn's model for a summary with the request it last sent
   plus one user row, `StepSummarizer::INSTRUCTION` ("…Do not call any tools —

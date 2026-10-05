@@ -296,7 +296,7 @@ final class LiveLedgerFrameTest extends TestCase
     {
         return new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('c1', 'Read', ['file_path' => 'a.php'])]),
-            new CompleteResponse(content: '', toolCalls: [new ToolCall('p1', 'Prune', ['targets' => [['ref' => 'r1']], 'reason' => 'done'])]),
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('p1', 'Prune', ['targets' => [['ref' => 'r2']], 'reason' => 'done'])]),
             new CompleteResponse(content: 'tidied'),
         ], contextWindow: 1_000_000);
     }

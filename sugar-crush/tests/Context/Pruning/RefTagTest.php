@@ -63,10 +63,10 @@ final class RefTagTest extends TestCase
         $first = $projector->project($messages, $ledger)->messages;
         $results = self::results($first);
 
-        $this->assertSame(RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 1), $results['a'], 'a placeholder keeps its ref');
-        $this->assertSame(RefTag::appendTo('contents of b', 2), $results['b']);
+        $this->assertSame(RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 2), $results['a'], 'a placeholder keeps its ref');
+        $this->assertSame(RefTag::appendTo('contents of b', 3), $results['b']);
         $this->assertSame(serialize($first), serialize($projector->project($messages, $ledger)->messages), 'two projections are the same bytes');
-        $this->assertSame('go', $first[0]->content(), 'a user row carries no tag');
+        $this->assertSame(RefTag::appendTo('go', 1), $first[0]->content(), 'a prompt carries its ref too (roadmap 3.B-4)');
 
         $grown = [...$messages, ...self::step('c')];
         $this->assertSame(
@@ -94,7 +94,7 @@ final class RefTagTest extends TestCase
         $projected = ContextProjector::new()->withRefTags()->project($messages, $ledger)->messages;
 
         $this->assertTrue(CompressionBlock::isSummaryRow($projected[0]));
-        $this->assertSame(RefTag::appendTo('contents of b', 2), self::results($projected)['b'], 'b keeps the ref it had before a was summarised away');
+        $this->assertSame(RefTag::appendTo('contents of b', 3), self::results($projected)['b'], 'b keeps the ref it had before a was summarised away');
     }
 
     public function testAnEchoedTagIsStrippedFromTheModelsTextOnly(): void
@@ -111,7 +111,7 @@ final class RefTagTest extends TestCase
         $this->assertSame('I read it ', $projected[1]->content());
         $this->assertSame($messages[1]->toolCalls(), $projected[1]->toolCalls(), 'the calls and reasoning stay');
         $this->assertSame('thinking', $projected[1]->reasoning());
-        $this->assertSame(RefTag::appendTo('contents of a', 1), $projected[2]->content(), 'the harness\'s own tag stays');
+        $this->assertSame(RefTag::appendTo('contents of a', 2), $projected[2]->content(), 'the harness\'s own tag stays');
     }
 
     /** @return list<Message> */

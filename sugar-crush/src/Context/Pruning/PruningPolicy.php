@@ -28,6 +28,16 @@ final readonly class PruningPolicy
     /** @var list<string> */
     public const PROTECTED_TOOLS = ['Task', 'Skill', 'Edit', 'Write'];
 
+    /**
+     * The outputs a `Compress` range keeps VERBATIM beside its summary
+     * (roadmap 3.B-4, DCP `appendProtectedTools`): a delegated run's report
+     * and a skill body cannot be fetched again by re-running a cheap call.
+     * `Edit` / `Write` answer with a one-line receipt the summary covers.
+     *
+     * @var list<string>
+     */
+    public const COMPRESS_PROTECTED_TOOLS = ['Task', 'Skill'];
+
     /** Newest tool output, in estimated tokens, the age rule never prunes. */
     public const PROTECT_TOKENS = 40_000;
 

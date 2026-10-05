@@ -225,6 +225,12 @@ final readonly class Prune implements Tool, BuildsFromCatalog, MutatesContextLed
             $named[$ref] = true;
 
             $id = isset($idsByRef[$ref]) ? (string) $idsByRef[$ref] : null;
+            if ($id !== null && ContextLedger::isUserRowKey($id)) {
+                // Roadmap 3.B-4: prompts carry refs too, for Compress ranges.
+                $skipped[] = $label . ' (a prompt, not a tool result)';
+
+                continue;
+            }
             $result = $id === null ? null : ($results[$id] ?? null);
             if ($id === null || $result === null) {
                 $skipped[] = $label . ' (no tool result you have read has this ref)';

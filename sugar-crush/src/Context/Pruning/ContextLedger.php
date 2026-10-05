@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Context\Pruning;
 
 use SugarCraft\Crush\Context\TurnContextBlock;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Messages\UserMessage;
 
 /**
  * What has been taken out of the model's view of a conversation, kept apart
@@ -44,6 +45,17 @@ use SugarCraft\Crush\Messages\ToolResultMessage;
  * is PROVISIONAL ({@see refsFor()}): the next numbers in order of first
  * appearance, which is exactly what the turn's end then fixes, so every
  * request of the turn already shows the ref the result keeps.
+ *
+ * USER ROWS HAVE REFS TOO (roadmap 3.B-4), so a `Compress` range can start
+ * or end at a prompt. A user row has no stored identity on the typed path,
+ * so it is keyed by its bytes and which occurrence of them it is
+ * ({@see userRowKey()}); harness rows are not tagged ({@see rowKeys()}).
+ * The ref counter is one namespace: `r12` may be a prompt and `r13` the
+ * result after it.
+ *
+ * NUDGES (roadmap 3.B-4, {@see NudgePolicy}) are anchored on a row's key and
+ * re-rendered at that row on every later request, so a reminder never moves
+ * along the tail and costs the prompt cache one row, once.
  */
 final readonly class ContextLedger
 {
@@ -78,6 +90,9 @@ final readonly class ContextLedger
      *                                                          relief, a sub-agent's)
      *                                                          names no refs nobody
      *                                                          will keep
+     * @param array<string, string>         $nudges             row key => the
+     *                                                          {@see NudgePolicy}
+     *                                                          kind anchored there
      */
     private function __construct(
         public array $prunes,
@@ -88,12 +103,80 @@ final readonly class ContextLedger
         public int $nextRef = 1,
         public ?PruningMode $mode = null,
         public PruningMode $defaultMode = PruningMode::Off,
+        public array $nudges = [],
     ) {
     }
 
     public static function new(): self
     {
         return new self([], []);
+    }
+
+    /**
+     * The key a user row is filed under (roadmap 3.B-4): its bytes and which
+     * occurrence of those bytes it is, counted from the conversation's start,
+     * so two identical prompts ("continue") are two rows.
+     */
+    public static function userRowKey(string $content, int $occurrence): string
+    {
+        return 'u:' . hash('xxh128', $content) . ':' . $occurrence;
+    }
+
+    /** Whether $key names a user row ({@see userRowKey()}) rather than a tool result. */
+    public static function isUserRowKey(string $key): bool
+    {
+        return str_starts_with($key, 'u:');
+    }
+
+    /**
+     * The key a `Compress` range boundary names a STEP by (roadmap 3.B-4):
+     * the call id its opening assistant row issued — the one identity a step
+     * has on every path.
+     */
+    public static function stepKey(string $toolCallId): string
+    {
+        return 's:' . $toolCallId;
+    }
+
+    /**
+     * Every row of $messages that carries a ref, by index => key: each tool
+     * result (keyed by its call id) and each user row (keyed by
+     * {@see userRowKey()}) — except harness rows the model never names: a
+     * `<turn-context>` row, a block's summary row, and a user row that is the
+     * LAST of $messages, which is either the prompt being answered right now
+     * (never part of a range: it is not closed) or a harness instruction
+     * appended for one request (a summary's, a continuation's). Such a row
+     * gets its ref once something follows it, and no ref before it moves.
+     * $includeLastUserRow keys that last row too — what a nudge anchored on
+     * the prompt being answered needs ({@see NudgePolicy}); its key is the one
+     * it keeps once something follows it.
+     *
+     * @param list<mixed> $messages
+     * @return array<int, string>
+     */
+    public static function rowKeys(array $messages, bool $includeLastUserRow = false): array
+    {
+        $keys = [];
+        $seen = [];
+        $last = array_key_last($messages);
+        foreach ($messages as $index => $message) {
+            if ($message instanceof ToolResultMessage) {
+                if ($message->toolCallId() !== '') {
+                    $keys[$index] = $message->toolCallId();
+                }
+            } elseif ($message instanceof UserMessage
+                && !TurnContextBlock::isTurnContext($message)
+                && !CompressionBlock::isSummaryRow($message)
+            ) {
+                $content = RefTag::stripFrom($message->content());
+                $occurrence = $seen[$content] = ($seen[$content] ?? 0) + 1;
+                if ($index !== $last || $includeLastUserRow) {
+                    $keys[$index] = self::userRowKey($content, $occurrence);
+                }
+            }
+        }
+
+        return $keys;
     }
 
     /** The key a `<turn-context>` row's bytes are filed under. */
@@ -126,11 +209,16 @@ final readonly class ContextLedger
      * by it — a step summary covers the conversation's whole start, so the
      * newer one covers the older one's rows and its summary too. A block id
      * already present changes nothing, which keeps {@see apply()} idempotent.
+     * A range block ({@see CompressionBlock::isRange()}) consumes only the
+     * blocks it names ({@see withRangeBlock()}).
      */
     public function withBlock(CompressionBlock $block): self
     {
         if (isset($this->blocks[$block->id])) {
             return $this;
+        }
+        if ($block->isRange()) {
+            return $this->withRangeBlock($block);
         }
 
         $blocks = [];
@@ -145,6 +233,120 @@ final readonly class ContextLedger
         $blocks[$block->id] = $block->withConsumedBlockIds([...$block->consumedBlockIds, ...$consumed]);
 
         return $this->mutate(blocks: $blocks, nextBlockId: max($this->nextBlockId, $block->id + 1));
+    }
+
+    /**
+     * This ledger with the range block $block active (roadmap 3.B-4) and every
+     * block it names in {@see CompressionBlock::$consumedBlockIds} — the
+     * earlier ranges it covers — deactivated beneath it. Idempotent like
+     * {@see withBlock()}.
+     */
+    public function withRangeBlock(CompressionBlock $block): self
+    {
+        if (isset($this->blocks[$block->id])) {
+            return $this;
+        }
+        $blocks = $this->blocks;
+        foreach ($block->consumedBlockIds as $id) {
+            if (isset($blocks[$id]) && $blocks[$id]->active) {
+                $blocks[$id] = $blocks[$id]->deactivated();
+            }
+        }
+        $blocks[$block->id] = $block;
+
+        return $this->mutate(blocks: $blocks, nextBlockId: max($this->nextBlockId, $block->id + 1));
+    }
+
+    /**
+     * Every range block the projection applies, in id order: active, so not
+     * consumed by a later one and not taken back by the person.
+     *
+     * @return list<CompressionBlock>
+     */
+    public function activeRangeBlocks(): array
+    {
+        $active = array_values(array_filter($this->blocks, static fn (CompressionBlock $b): bool => $b->active && $b->isRange()));
+        usort($active, static fn (CompressionBlock $a, CompressionBlock $b): int => $a->id <=> $b->id);
+
+        return $active;
+    }
+
+    public function block(int $id): ?CompressionBlock
+    {
+        return $this->blocks[$id] ?? null;
+    }
+
+    /** The block that consumed block $id, or null when none did. */
+    public function consumerOf(int $id): ?CompressionBlock
+    {
+        foreach ($this->blocks as $block) {
+            if (\in_array($id, $block->consumedBlockIds, true)) {
+                return $block;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * This ledger with range block $id taken back by the person
+     * (`/decompress`, roadmap 3.B-4): its rows are sent again, and the
+     * blocks it had consumed — not themselves taken back — stand again in
+     * its place. Unchanged for anything but an active range block.
+     */
+    public function withBlockDecompressed(int $id): self
+    {
+        $block = $this->blocks[$id] ?? null;
+        if ($block === null || !$block->isRange() || !$block->active) {
+            return $this;
+        }
+        $blocks = $this->blocks;
+        $blocks[$id] = $block->decompressed();
+        foreach ($block->consumedBlockIds as $child) {
+            if (isset($blocks[$child]) && !$blocks[$child]->deactivatedByUser) {
+                $blocks[$child] = $blocks[$child]->reactivated();
+            }
+        }
+
+        return $this->mutate(blocks: $blocks);
+    }
+
+    /**
+     * This ledger with range block $id the person took back applied again
+     * (`/recompress`): it consumes its children again. Unchanged for anything
+     * but a range block that was decompressed.
+     */
+    public function withBlockRecompressed(int $id): self
+    {
+        $block = $this->blocks[$id] ?? null;
+        if ($block === null || !$block->isRange() || !$block->deactivatedByUser) {
+            return $this;
+        }
+        $blocks = $this->blocks;
+        $blocks[$id] = $block->reactivated();
+        foreach ($block->consumedBlockIds as $child) {
+            if (isset($blocks[$child]) && $blocks[$child]->active) {
+                $blocks[$child] = $blocks[$child]->deactivated();
+            }
+        }
+
+        return $this->mutate(blocks: $blocks);
+    }
+
+    /** This ledger with a nudge of $kind anchored on row $key (roadmap 3.B-4). */
+    public function withNudge(string $key, string $kind): self
+    {
+        if (($this->nudges[$key] ?? null) === $kind) {
+            return $this;
+        }
+
+        return $this->mutate(nudges: [...$this->nudges, $key => $kind]);
+    }
+
+    /** This ledger with every nudge anchor cleared — the cooldown after a prune or a compress. */
+    public function withoutNudges(): self
+    {
+        return $this->nudges === [] ? $this : $this->mutate(nudges: []);
     }
 
     /** This ledger with the session's own mode set (null: follow the configured one). */
@@ -165,12 +367,12 @@ final readonly class ContextLedger
         return $this->mode ?? $this->defaultMode;
     }
 
-    /** The block the projection applies, or null. */
+    /** The step summary the projection applies, or null (range blocks: {@see activeRangeBlocks()}). */
     public function activeBlock(): ?CompressionBlock
     {
         $active = null;
         foreach ($this->blocks as $block) {
-            if ($block->active) {
+            if ($block->active && !$block->isRange()) {
                 $active = $block;
             }
         }
@@ -190,6 +392,12 @@ final readonly class ContextLedger
         }
         foreach ($delta->blocks as $block) {
             $ledger = $ledger->withBlock($block);
+        }
+        if ($delta->clearNudges) {
+            $ledger = $ledger->withoutNudges();
+        }
+        foreach ($delta->nudges as $key => $kind) {
+            $ledger = $ledger->withNudge((string) $key, $kind);
         }
 
         return $ledger;
@@ -225,6 +433,14 @@ final readonly class ContextLedger
                 $delta = $delta->withBlock($block);
             }
         }
+        if (array_diff_key($before->nudges, $this->nudges) !== []) {
+            $delta = $delta->withNudgesCleared();
+        }
+        foreach ($this->nudges as $key => $kind) {
+            if (($before->nudges[$key] ?? null) !== $kind || $delta->clearNudges) {
+                $delta = $delta->withNudge((string) $key, $kind);
+            }
+        }
 
         return $delta;
     }
@@ -235,21 +451,18 @@ final readonly class ContextLedger
      * order of first appearance. Pure: the same rows and ledger give the same
      * refs, and appending rows never changes the refs of the rows before
      * them, which is what keeps a turn's requests byte-stable while its refs
-     * are still provisional. A result with an empty call id gets none.
+     * are still provisional. A result with an empty call id gets none. User
+     * rows are numbered in the same order ({@see rowKeys()}, roadmap 3.B-4).
      *
      * @param iterable<mixed> $messages typed messages; anything else is skipped
-     * @return array<string, int> tool-call id => ref
+     * @return array<string, int> tool-call id (or user-row key) => ref
      */
     public function refsFor(iterable $messages): array
     {
         $refs = [];
         $next = $this->nextRef;
-        foreach ($messages as $message) {
-            if (!$message instanceof ToolResultMessage) {
-                continue;
-            }
-            $id = $message->toolCallId();
-            if ($id === '' || isset($refs[$id])) {
+        foreach (self::rowKeys(\is_array($messages) ? array_values($messages) : iterator_to_array($messages, false)) as $id) {
+            if (isset($refs[$id])) {
                 continue;
             }
             $refs[$id] = $this->refs[$id] ?? $next++;
@@ -322,17 +535,35 @@ final readonly class ContextLedger
 
         $prunes = array_filter($this->prunes, static fn (PruneEntry $entry): bool => isset($live[$entry->toolCallId]));
         $dropped = array_filter($this->droppedContextRows, static fn (int|string $key): bool => isset($rows[$key]), ARRAY_FILTER_USE_KEY);
-        $refs = array_filter($this->refs, static fn (int|string $id): bool => isset($live[$id]), ARRAY_FILTER_USE_KEY);
+        // A user row's ref (3.B-4) is kept: its key is its bytes, which the
+        // stored rows and the typed ones need not spell alike, and a ref that
+        // names no row any more costs one map entry, never a wrong row.
+        $refs = array_filter($this->refs, static fn (int|string $id): bool => isset($live[$id]) || self::isUserRowKey((string) $id), ARRAY_FILTER_USE_KEY);
+        $nudges = array_filter($this->nudges, static fn (int|string $key): bool => isset($live[$key]) || self::isUserRowKey((string) $key), ARRAY_FILTER_USE_KEY);
         $blocks = [];
         foreach ($this->blocks as $id => $block) {
-            $blocks[$id] = $block->active && !isset($live[$block->keepFromToolCallId]) ? $block->deactivated() : $block;
+            $gone = $block->isRange()
+                ? !self::boundaryLive((string) $block->fromKey, $live) || !self::boundaryLive((string) $block->toKey, $live)
+                : !isset($live[$block->keepFromToolCallId]);
+            $blocks[$id] = $block->active && $gone ? $block->deactivated() : $block;
         }
 
-        if ($prunes === $this->prunes && $dropped === $this->droppedContextRows && $refs === $this->refs && $blocks == $this->blocks) {
+        if ($prunes === $this->prunes && $dropped === $this->droppedContextRows && $refs === $this->refs && $blocks == $this->blocks && $nudges === $this->nudges) {
             return $this;
         }
 
-        return $this->mutate(prunes: $prunes, droppedContextRows: $dropped, blocks: $blocks, refs: $refs);
+        return $this->mutate(prunes: $prunes, droppedContextRows: $dropped, blocks: $blocks, refs: $refs, nudges: $nudges);
+    }
+
+    /**
+     * Whether a range boundary still names a row: a step's call is live; a
+     * user row is taken to be (see the refs note in {@see syncAgainst()}).
+     *
+     * @param array<string, true> $live
+     */
+    private static function boundaryLive(string $key, array $live): bool
+    {
+        return str_starts_with($key, 's:') ? isset($live[substr($key, 2)]) : true;
     }
 
     /**
@@ -370,7 +601,7 @@ final readonly class ContextLedger
 
     public function isEmpty(): bool
     {
-        return $this->prunes === [] && $this->droppedContextRows === [] && $this->blocks === [];
+        return $this->prunes === [] && $this->droppedContextRows === [] && $this->blocks === [] && $this->nudges === [];
     }
 
     public function isPruned(string $toolCallId): bool
@@ -388,7 +619,7 @@ final readonly class ContextLedger
         return isset($this->droppedContextRows[self::contextRowKey($content)]);
     }
 
-    /** @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>,nextBlockId:int,refs:array<string,int>,nextRef:int,mode:?string} */
+    /** @return array{prunes:list<array<string,mixed>>,droppedContextRows:array<string,int>,blocks:list<array<string,mixed>>,nextBlockId:int,refs:array<string,int>,nextRef:int,mode:?string,nudges?:array<string,string>} */
     public function toArray(): array
     {
         return [
@@ -399,6 +630,9 @@ final readonly class ContextLedger
             'refs' => $this->refs,
             'nextRef' => $this->nextRef,
             'mode' => $this->mode?->value,
+            // Written only when there are any, so a ledger with none keeps
+            // the shape it was stored in before 3.B-4.
+            ...($this->nudges === [] ? [] : ['nudges' => $this->nudges]),
         ];
     }
 
@@ -462,7 +696,14 @@ final readonly class ContextLedger
 
         $mode = is_string($raw['mode'] ?? null) ? PruningMode::tryFrom($raw['mode']) : null;
 
-        return new self($ledger->prunes, $ledger->droppedContextRows, $blocks, $next, $refs, $nextRef, $mode);
+        $nudges = [];
+        foreach (is_array($raw['nudges'] ?? null) ? $raw['nudges'] : [] as $key => $kind) {
+            if ((string) $key !== '' && is_string($kind) && NudgePolicy::isKind($kind)) {
+                $nudges[(string) $key] = $kind;
+            }
+        }
+
+        return new self($ledger->prunes, $ledger->droppedContextRows, $blocks, $next, $refs, $nextRef, $mode, PruningMode::Off, $nudges);
     }
 
     /** A copy with the named fields replaced; every other field carried. */
