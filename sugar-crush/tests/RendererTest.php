@@ -1537,16 +1537,39 @@ final class RendererTest extends TestCase
         string $toolName = 'Bash',
         int $cols = 80,
         int $rows = 40,
+        ?\SugarCraft\Crush\Backend\PendingAsk $pendingAsk = null,
     ): Chat {
         [$blocked] = $this->sizedChat([Message::user('clean up')], $cols, $rows)->update(
             new \SugarCraft\Crush\PermissionRequestMsg(
                 Message::assistant(''),
                 new \SugarCraft\Crush\ToolCall($toolName, $arguments, 'call_1'),
                 $prompt,
+                null,
+                $pendingAsk,
             ),
         );
 
         return $blocked;
+    }
+
+    /** An engine-path prompt for the gate's own question, which offers `always`. */
+    private function chatAwaitingGateAsk(): Chat
+    {
+        $arguments = ['command' => 'git status', 'description' => 'Show the working tree status'];
+
+        return $this->chatAwaitingPermission('Allow Bash to run? (permission mode: default)', $arguments, pendingAsk: new \SugarCraft\Crush\Backend\PendingAsk(
+            \SugarCraft\Crush\Backend\PendingAsk::askId('call_1', 'Bash', $arguments),
+            'call_1',
+            'Bash',
+            $arguments,
+            'Allow Bash to run? (permission mode: default)',
+            'gate',
+            'default',
+            ['once', 'always', 'reject'],
+            ['tool' => 'Bash'],
+            static function (): void {
+            },
+        ));
     }
 
     /**
@@ -1603,13 +1626,23 @@ final class RendererTest extends TestCase
      */
     public function testPermissionPromptAdvertisesTheThreeAnswerKeys(): void
     {
-        $out = Renderer::render($this->chatAwaitingPermission());
+        $out = Renderer::render($this->chatAwaitingGateAsk());
 
         $this->assertStringContainsString('allow once', $out);
-        $this->assertStringContainsString('allow calls like this one', $out);
-        $this->assertStringContainsString('asks first', $out);
+        // The `a` row names what it would remember (SessionPermissionMemo).
+        $this->assertStringContainsString('always allow Bash(git status *) (this session)', $out);
+        // Wrapped across two rows at this width; read as one line.
+        $flat = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', Ansi::strip($out)));
+        $this->assertStringContainsString('(this session) — asks first', $flat);
         $this->assertStringContainsString('reject', $out);
         $this->assertStringContainsString('n / Esc', $out);
+
+        // A prompt nothing can remember (no gate question behind it) says
+        // `a` counts as once rather than promising a grant.
+        $this->assertStringContainsString(
+            'allow once — this question is asked every time',
+            Renderer::render($this->chatAwaitingPermission()),
+        );
     }
 
     /**
@@ -1648,12 +1681,13 @@ final class RendererTest extends TestCase
      */
     public function testTheAlwaysConfirmIsRenderedWithItsOwnQuestionAndKeys(): void
     {
-        [$confirming] = $this->chatAwaitingPermission()->update(new KeyMsg(KeyType::Char, 'a'));
+        [$confirming] = $this->chatAwaitingGateAsk()->update(new KeyMsg(KeyType::Char, 'a'));
         $this->assertSame(PermissionPromptStage::ConfirmingAlways, $confirming->permissionStage());
 
         $out = Renderer::render($confirming);
 
-        $this->assertStringContainsString('Allow Bash calls like this one for the rest of this session?', $out);
+        $this->assertStringContainsString('Always allow Bash(git status *) for the rest of', $out);
+        $this->assertStringContainsString('remember it for this session', $out);
         $this->assertStringContainsString('back to the question', $out);
         $this->assertStringNotContainsString(
             'allow once',

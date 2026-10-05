@@ -73,19 +73,47 @@ final class PermissionFirstWinsTest extends TestCase
         self::assertSame(-32602, $a->request('permission.respond', ['sessionId' => $sessionId, 'askId' => '0123456789abcdef', 'reply' => 'maybe'])['error']['code']);
     }
 
-    public function testAlwaysIsRememberedForTheSessionAndCoversTheSameToolsOpenQuestions(): void
+    public function testAlwaysIsRememberedForTheSessionAndCoversTheOpenQuestionsItsGrantCovers(): void
     {
         [$a, , $sessionId] = $this->twoClientsOnARunningTurn();
         $first = $this->fixture->backend->ask('c1', 'Bash', ['command' => 'git status']);
-        $second = $this->fixture->backend->ask('c2', 'Bash', ['command' => 'git log']);
-        $other = $this->fixture->backend->ask('c3', 'Write', ['file_path' => 'a.txt']);
+        $second = $this->fixture->backend->ask('c2', 'Bash', ['command' => 'git status --short']);
+        $push = $this->fixture->backend->ask('c3', 'Bash', ['command' => 'git push']);
+        $other = $this->fixture->backend->ask('c4', 'Write', ['file_path' => 'a.txt']);
         $this->fixture->run(0.08);
 
         $answer = $a->call('permission.respond', ['sessionId' => $sessionId, 'askId' => $first->askId, 'reply' => 'always']);
 
-        self::assertSame([$second->askId], $answer['cascaded']);
+        self::assertSame([$second->askId], $answer['cascaded'], 'Bash(git status *) covers `git status --short`');
+        self::assertFalse($push->isSettled(), '`always` on `git status` is not `always` on Bash');
         self::assertFalse($other->isSettled(), 'another tool still asks');
         self::assertNotSame([], $this->fixture->hub->get($sessionId)?->grants()->patterns(), 'every later turn of the session is told');
+        self::assertSame([$push->askId, $other->askId], \array_column($a->call('permission.pending', ['sessionId' => $sessionId])['items'], 'askId'));
+    }
+
+    /**
+     * The running turn's gate was built before the grant, so a later question
+     * of the SAME turn reaches the host: one the session's grants cover — the
+     * pattern, or the identical chain under a new caption — is answered there,
+     * never put to the clients as an open question.
+     */
+    public function testALaterQuestionTheGrantCoversIsAnsweredWithoutBeingPut(): void
+    {
+        [$a, , $sessionId] = $this->twoClientsOnARunningTurn();
+        $simple = $this->fixture->backend->ask('c1', 'Bash', ['command' => 'git status', 'description' => 'Status']);
+        $chain = $this->fixture->backend->ask('c2', 'Bash', ['command' => 'cd sub && ls', 'description' => 'List sub']);
+        $this->fixture->run(0.08);
+        $a->call('permission.respond', ['sessionId' => $sessionId, 'askId' => $simple->askId, 'reply' => 'always']);
+        $a->call('permission.respond', ['sessionId' => $sessionId, 'askId' => $chain->askId, 'reply' => 'always']);
+
+        $pattern = $this->fixture->backend->ask('c3', 'Bash', ['command' => 'git status --short', 'description' => 'Short status']);
+        $rerun = $this->fixture->backend->ask('c4', 'Bash', ['command' => 'cd sub && ls', 'description' => 'List sub again', 'timeout' => 5000]);
+        $other = $this->fixture->backend->ask('c5', 'Bash', ['command' => 'cd sub && rm x', 'description' => 'List sub']);
+        $this->fixture->run(0.08);
+
+        self::assertSame(PermissionReply::Once, $pattern->resolution()?->reply);
+        self::assertSame(PermissionReply::Once, $rerun->resolution()?->reply);
+        self::assertFalse($other->isSettled(), 'a different command is still put to the clients');
         self::assertSame([$other->askId], \array_column($a->call('permission.pending', ['sessionId' => $sessionId])['items'], 'askId'));
     }
 

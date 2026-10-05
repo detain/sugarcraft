@@ -4781,6 +4781,41 @@ final class Chat implements Model
     }
 
     /**
+     * What `a` + `y` would remember for the question that is up, as the modal
+     * names it before the user commits: a pattern (`Bash(git status *)`),
+     * `this exact command` / `this exact call`, or null when this question
+     * cannot be remembered at all (a hook other than the gate asked it, so
+     * `always` settles as `once` — {@see answerPermission()}).
+     *
+     * The engine path remembers a {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo}
+     * scope; Chat's own tool path an exact call ({@see permissionGrantKey()}).
+     */
+    public function permissionAlwaysScope(): ?string
+    {
+        $request = $this->pendingPermission;
+        if ($request === null) {
+            return null;
+        }
+
+        $ask = $request->pendingAsk;
+        if ($ask !== null) {
+            return $ask->offers(PermissionReply::Always)
+                ? \SugarCraft\Crush\Permissions\SessionPermissionMemo::scopeOf($ask->tool, $ask->arguments)
+                : null;
+        }
+
+        foreach ($this->pendingPermissionJobs as $job) {
+            if ($job[0] === $request->toolCall && $job[3] !== null) {
+                return self::permissionGrantKey($request->toolCall, $job[3]) === null
+                    ? null
+                    : ($request->toolCall->name === 'Bash' ? 'this exact command' : 'this exact call');
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Show a "running" placeholder per call, fork the already-gated batch and
      * schedule the Cmd that waits for the children.
      *
@@ -5910,12 +5945,17 @@ final class Chat implements Model
      * OTHERWISE `<tool> <canonical JSON arguments>`: the arguments with every
      * object's keys sorted recursively, so `{"a":1,"b":2}` and `{"b":2,"a":1}`
      * are one call, encoded as Runtime's hook input is (slashes and unicode
-     * unescaped, invalid UTF-8 substituted). Exact arguments, deliberately not
-     * a command-prefix pattern: a prefix is a judgement about which commands
-     * are equivalent ("git log" ≡ "git log -p"?) that the gate's own rules
-     * already express, and the conservative reading of "always allow this"
-     * is "this call, again". Null if the arguments will not encode, in which
-     * case nothing is granted and the question is put again.
+     * unescaped, invalid UTF-8 substituted) — and without the arguments that
+     * only annotate the call (`Bash`'s `description` and `timeout`), so the
+     * same command under a new caption is the same call. That is
+     * {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::callKey()}, the
+     * engine path's exact-call identity, shared rather than restated. Exact
+     * arguments, deliberately not a command-prefix pattern: a prefix is a
+     * judgement about which commands are equivalent ("git log" ≡ "git log -p"?)
+     * that the gate's own rules already express, and the conservative reading
+     * of "always allow this" is "this call, again". Null if the arguments will
+     * not encode, in which case nothing is granted and the question is put
+     * again.
      */
     private static function permissionGrantKey(
         ToolCall $toolCall,
@@ -5925,35 +5965,7 @@ final class Chat implements Model
             return null;
         }
 
-        try {
-            $json = json_encode(
-                self::canonicalArguments($toolCall->arguments),
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
-                    | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
-            );
-        } catch (\JsonException) {
-            return null;
-        }
-
-        return $toolCall->name . ' ' . $json;
-    }
-
-    /**
-     * $value with every string-keyed array's keys sorted, recursively; a
-     * list keeps its order (element order is meaning there).
-     */
-    private static function canonicalArguments(mixed $value): mixed
-    {
-        if (!is_array($value)) {
-            return $value;
-        }
-
-        $value = array_map(self::canonicalArguments(...), $value);
-        if (!array_is_list($value)) {
-            ksort($value, SORT_STRING);
-        }
-
-        return $value;
+        return \SugarCraft\Crush\Permissions\SessionPermissionMemo::callKey($toolCall->name, $toolCall->arguments);
     }
 
     /**

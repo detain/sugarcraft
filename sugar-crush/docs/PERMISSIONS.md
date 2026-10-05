@@ -578,7 +578,12 @@ executing `PermissionRule::matchesToolName('Doctor', 'doctor')` — `false`.
 situations, not two:
 
 - **`Chat`** shows a modal and settles the paused call — on its own tool path
-  and on the **engine** path alike. An engine turn runs in a forked child;
+  and on the **engine** path alike. For `Bash` the modal asks `Run this
+  command?` over the command itself, every byte visible, wrapped to the box
+  (a command taller than twelve rows loses rows from its middle, with a row
+  saying how many — the head and the tail stay); the model's `description` is
+  shown only beneath it, as the agent's note. Chat's own tool path remembers
+  `a` + `y` as the exact call (same rule for the caption). An engine turn runs in a forked child;
   `Chat` starts it through `InteractiveTurn::completeInteractive()`, so each
   `Ask` the child's gate raises crosses the turn's socket as an `ask` frame,
   becomes the same y/n/a modal, and the answer returns as `ask_reply` while
@@ -593,12 +598,21 @@ situations, not two:
     refused call instead of the model trying something else;
   - a question the turn ends underneath (the child or its stream gone) is
     `Permission required:`, because nobody answered it;
+  - `y` allows **this call only**: the same command later asks again.
   - `a` + `y` remembers a **pattern** for the rest of the session
     (`Permissions\SessionPermissionMemo`): `git status` → `Bash(git status)`
     and `Bash(git status *)`, an `Edit` → that path, a `WebFetch` → that host,
     a tool with no subject argument (`mcp__*`, `Task`) → the tool. A chained,
     piped, redirected or launcher (`bash -c`, `sudo`, `xargs`, `find`) `Bash`
-    line is remembered exactly. The patterns reach every later turn's gate
+    line is remembered exactly — so `cd src && ls` covers that same line
+    again, not `cd src && cat x`. "Exactly" is the command as it runs:
+    `Bash`'s `description` (the model's caption, rewritten on every call) and
+    `timeout` are not part of it, so the identical command re-run under a new
+    caption is covered. The modal names the scope before you confirm (`a
+    always allow Bash(git status *) (this session)`, or `this exact command`).
+    A grant covers later calls of the **same turn** — the parent answers the
+    child's question without putting it up — and of every later turn, a
+    `Task` sub-agent's included. The patterns reach every later turn's gate
     through `PermissionGate::withSessionRules()`, which consults them **only
     to answer an `Ask`** — a configured `Deny`, Plan mode, `dont-ask` and the
     `rm -rf /` breaker still win, and an `Allow` pattern still needs every

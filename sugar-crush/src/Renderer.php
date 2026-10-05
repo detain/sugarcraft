@@ -516,6 +516,15 @@ final class Renderer
      */
     private const PERMISSION_PROMPT_MAX_ROWS = 8;
 
+    /**
+     * Rows a `Bash` command may take in the permission modal before its
+     * middle is elided ({@see permissionCommandBlock()}), and how many of them
+     * are kept from its end.
+     */
+    private const PERMISSION_COMMAND_MAX_ROWS = 12;
+
+    private const PERMISSION_COMMAND_TAIL_ROWS = 3;
+
     /** Lead of the permission modal's title row, before the tool name. */
     private const PERMISSION_TITLE_ICON = '🔒 ';
 
@@ -563,7 +572,7 @@ final class Renderer
      * constants exists to prevent.
      */
     private const PERMISSION_CONFIRM_OPTIONS = [
-        ['y', 'yes — calls like this one, this session'],
+        ['y', 'yes — remember it for this session'],
         ['n / Esc', 'no — back to the question'],
     ];
 
@@ -6152,8 +6161,7 @@ final class Renderer
                     $call->name,
                     $inner - Width::of(self::PERMISSION_TITLE_ICON),
                 )),
-            Style::new()->foreground($theme->assistantLabel)
-                ->render(self::wrapPermissionText(Message::describeToolCall($call), $inner)),
+            ...self::permissionSubjectLines($call, $inner, $theme),
         ];
 
         $prompt = self::wrapPermissionText($request->prompt, $inner);
@@ -6163,6 +6171,7 @@ final class Renderer
         }
 
         $stage = $chat->permissionStage();
+        $alwaysScope = $chat->permissionAlwaysScope();
 
         // The confirm REPLACES the question's own keys rather than being added
         // under them: while it is up those keys do not work, and a modal
@@ -6174,8 +6183,12 @@ final class Renderer
                 self::wrapPermissionText(
                     // The grant is a PATTERN on the engine path (SessionPermissionMemo)
                     // and the exact call on Chat's own — never "every later call to
-                    // this tool", which is what this used to say.
-                    'Allow ' . self::permissionVisibleOneLine($call->name) . ' calls like this one for the rest of this session?',
+                    // this tool", which is what this used to say. Named exactly,
+                    // so the user knows what the `y` they are about to press
+                    // covers; a question that cannot be remembered says so.
+                    $alwaysScope === null
+                        ? 'This question is asked every time, so this allows the call once. Allow it?'
+                        : 'Always allow ' . self::permissionVisibleOneLine($alwaysScope) . ' for the rest of this session?',
                     $inner,
                 ),
             );
@@ -6205,7 +6218,7 @@ final class Renderer
             );
         }
 
-        $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? []);
+        $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope);
 
         $lines[] = '';
         foreach ($options as [$keys, $label]) {
@@ -6236,17 +6249,24 @@ final class Renderer
      * `PlanExit`'s read approve / feedback / refuse. `Chat::handlePermissionKey()`
      * holds the arms these describe.
      *
+     * The `a` row names what it would remember ($alwaysScope, from
+     * {@see \SugarCraft\Crush\Chat::permissionAlwaysScope()}) — `Bash(git status *)`,
+     * `this exact command` — and, for a question that cannot be remembered
+     * (null), says that `a` counts as once.
+     *
      * @param list<string> $choices
      *
      * @return list<array{0: string, 1: string}>
      */
-    private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices): array
+    private static function permissionOptions(PermissionPromptStage $stage, ?string $question, array $choices, ?string $alwaysScope = null): array
     {
         $askUser = \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME;
         $planExit = \SugarCraft\Crush\Tools\BuiltIn\PlanExitTool::NAME;
 
         return match ($stage) {
-            PermissionPromptStage::ConfirmingAlways => self::PERMISSION_CONFIRM_OPTIONS,
+            PermissionPromptStage::ConfirmingAlways => $alwaysScope === null
+                ? [['y', 'yes — allow it once'], self::PERMISSION_CONFIRM_OPTIONS[1]]
+                : self::PERMISSION_CONFIRM_OPTIONS,
             PermissionPromptStage::Disarmed => self::PERMISSION_DISARMED_OPTIONS,
             PermissionPromptStage::WritingNote => match ($question) {
                 $askUser => [['Enter', 'send this answer'], self::PERMISSION_NOTE_OPTIONS[1]],
@@ -6273,9 +6293,95 @@ final class Renderer
                     ['r', 'answer in your own words'],
                     ['x', 'decline and stop the turn'],
                 ],
-                default => self::PERMISSION_OPTIONS,
+                default => array_map(
+                    static fn (array $row): array => $row[0] !== 'a' ? $row : ['a', $alwaysScope === null
+                        ? 'allow once — this question is asked every time'
+                        : 'always allow ' . self::permissionVisibleOneLine($alwaysScope) . ' (this session) — asks first'],
+                    self::PERMISSION_OPTIONS,
+                ),
             },
         };
+    }
+
+    /**
+     * The modal's "what will run" rows for $call: for `Bash`, the question
+     * and the COMMAND itself ({@see permissionCommandBlock()}); for any other
+     * tool, the call with its arguments. The model's `description` is a
+     * caption it wrote about its own call, so it is never shown INSTEAD of the
+     * call — {@see Message::describeToolCall()} prefers it, which is right for
+     * a transcript row and wrong for a gate — only beneath it, faint, as the
+     * agent's note.
+     *
+     * @return list<string>
+     */
+    private static function permissionSubjectLines(\SugarCraft\Crush\ToolCall $call, int $inner, Theme $theme): array
+    {
+        $arguments = $call->arguments;
+        $caption = $arguments['description'] ?? null;
+        if (\is_string($caption)) {
+            unset($arguments['description']);
+        }
+
+        $command = $call->name === 'Bash' ? ($arguments['command'] ?? null) : null;
+        $lines = [];
+        if (\is_string($command) && trim($command) !== '') {
+            $lines[] = Style::new()->foreground($theme->userLabel)->bold()
+                ->render(self::wrapPermissionText('Run this command?', $inner));
+            $lines[] = Style::new()->foreground($theme->assistantLabel)
+                ->render(self::permissionCommandBlock($command, $inner));
+        } else {
+            $lines[] = Style::new()->foreground($theme->assistantLabel)->render(self::wrapPermissionText(
+                Message::describeToolCall(new \SugarCraft\Crush\ToolCall($call->name, $arguments, $call->id)),
+                $inner,
+            ));
+        }
+
+        $caption = \is_string($caption) ? trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($caption))) : '';
+        if ($caption !== '') {
+            $rows = explode("\n", Width::wrap("Agent's note: " . $caption, max(2, $inner)));
+            if (\count($rows) > 2) {
+                $rows = [$rows[0], Width::truncate($rows[1], max(1, $inner - 1)) . '…'];
+            }
+            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(implode("\n", $rows));
+        }
+
+        return $lines;
+    }
+
+    /**
+     * A `Bash` command as the gate sees it, every byte visible
+     * ({@see permissionVisible()}): `$ ` before the first line, its
+     * continuation rows and further lines indented under it, wrapped to
+     * $inner cells. A command taller than {@see PERMISSION_COMMAND_MAX_ROWS}
+     * loses rows from its MIDDLE, with a row saying how many: the head says
+     * what starts, and the tail is where `| sh` or `&& rm …` would be.
+     */
+    private static function permissionCommandBlock(string $command, int $inner): string
+    {
+        $text = trim(self::permissionVisible(str_replace(["\r\n", "\r"], "\n", $command)), "\n");
+        // The `$ ` gutter only where it leaves room for the command itself.
+        $gutter = $inner >= 6;
+        $room = $gutter ? $inner - 2 : max(1, $inner);
+
+        $rows = [];
+        foreach (explode("\n", $text) as $index => $line) {
+            foreach (explode("\n", Width::wrap($line, $room)) as $part => $row) {
+                $rows[] = ($gutter ? ($index === 0 && $part === 0 ? '$ ' : '  ') : '') . $row;
+            }
+        }
+
+        if (\count($rows) > self::PERMISSION_COMMAND_MAX_ROWS) {
+            $tail = self::PERMISSION_COMMAND_TAIL_ROWS;
+            $head = self::PERMISSION_COMMAND_MAX_ROWS - $tail - 1;
+            $hidden = \count($rows) - $head - $tail;
+            $rows = [
+                ...\array_slice($rows, 0, $head),
+                Width::truncate("  … {$hidden} more lines of this command …", $inner),
+                ...\array_slice($rows, -$tail),
+            ];
+        }
+
+        return implode("\n", $rows);
     }
 
     /**

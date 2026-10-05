@@ -80,7 +80,7 @@ sugar-crush/tests/Chat/UndoRedoDiffCommandsTest.php	4.670	10
 sugar-crush/tests/ChatTest.php	4.663	254
 sugar-crush/tests/Workflows/WorkflowLivePaneTest.php	4.417	11
 sugar-crush/tests/Runtime/DroppedStreamContinueTest.php	4.400	7
-sugar-crush/tests/Server/PermissionFirstWinsTest.php	4.400	8
+sugar-crush/tests/Server/PermissionFirstWinsTest.php	4.400	9
 sugar-crush/tests/Server/WorkspaceHostTest.php	4.400	7
 sugar-crush/tests/Support/AssertionSwallowingCatchTest.php	4.327	6
 sugar-crush/tests/Chat/UndoRefusalsTest.php	4.300	8
@@ -142,6 +142,7 @@ sugar-crush/tests/Host/SessionHostTest.php	2.800	12
 sugar-crush/tests/Chat/AutomaticCompactionModelSummaryTest.php	2.777	37
 sugar-crush/tests/Tui/TextSelectionCandyMouseTest.php	2.680	4
 sugar-crush/tests/Acp/AcpPromptStreamTest.php	2.600	9
+sugar-crush/tests/Permissions/BashPermissionPromptTest.php	2.600	12
 sugar-crush/tests/Support/NonBlockingVocabularyTest.php	2.569	25
 sugar-crush/tests/Integration/ParallelDeadlineExemptionTest.php	2.542	1
 sugar-crush/tests/Tools/CapturedProcessDeadlineTest.php	2.539	5
@@ -654,7 +655,7 @@ sugar-crush/tests/RuntimeToolResultUtf8Test.php	0.073	6
 sugar-crush/tests/Providers/SglangProviderRequestBuildingTest.php	0.072	87
 sugar-crush/tests/Chat/MouseTextSelectionTest.php	0.072	9
 sugar-crush/tests/Commands/CommandFailureTranscriptTest.php	0.070	7
-sugar-crush/tests/Backend/ChildChannelTest.php	0.070	11
+sugar-crush/tests/Backend/ChildChannelTest.php	0.070	12
 sugar-crush/tests/Chat/MemoryAddDefaultScopeTest.php	0.070	5
 sugar-crush/tests/RepoMap/RepoMapRendererBudgetTest.php	0.070	9
 sugar-crush/tests/Host/CompactionServiceParityTest.php	0.070	8

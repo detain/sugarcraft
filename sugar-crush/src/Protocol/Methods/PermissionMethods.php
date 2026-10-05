@@ -27,8 +27,9 @@ use SugarCraft\Crush\Protocol\SessionFeed;
  * the `askId` is a hash of the call id, tool and (rewritten) arguments.
  *
  * - `always` is remembered for the session (every later turn's gate), and
- *   covers the other questions already open for the same tool, which are
- *   answered `once` on its strength (listed in `cascaded`);
+ *   covers the other questions already open that the remembered grant
+ *   covers (the pattern, or the identical call), which are answered `once`
+ *   on its strength (listed in `cascaded`);
  * - `reject` with `cascade: true` rejects every other open question of the
  *   session and soft-cancels the turn ("Reject & stop");
  * - `remember: "project"` is refused — permission rules are user-tier only
@@ -102,8 +103,14 @@ final class PermissionMethods
             }
             $host->cancelSoft();
         } elseif ($resolution->reply === PermissionReply::Always && $asked !== null) {
+            // Only what the grant just remembered covers — the pattern
+            // (`Bash(git status *)`) or the identical call — never the tool as
+            // a whole: `always` on `git status` must not answer an open
+            // `git push`.
+            $grants = $host->grants();
             foreach ($host->pendingAsks() as $other) {
-                if ($other->tool === $asked->tool && $other->offers(PermissionReply::Always)
+                if ($other->offers(PermissionReply::Always)
+                    && $grants->allows($other->tool, $other->arguments, $host->workspace()->root)
                     && $host->answer($other->askId, PermissionReply::Once) !== null) {
                     $cascaded[] = $other->askId;
                 }

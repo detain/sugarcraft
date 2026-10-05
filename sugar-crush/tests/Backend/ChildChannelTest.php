@@ -164,6 +164,28 @@ final class ChildChannelTest extends TestCase
         self::assertCount(2, $written);
     }
 
+    /**
+     * The per-turn memo keys the call as it RUNS: `Bash`'s `description`
+     * caption and `timeout` are not part of it, so the same command re-run
+     * under a new caption is answered without a frame.
+     */
+    public function testAlwaysCoversTheSameCommandUnderANewCaption(): void
+    {
+        [$parent, $child] = $this->pair();
+        $first = ['command' => 'cd sub && ls', 'description' => 'List sub'];
+        self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c1', 'Bash', $first), 'reply' => 'always']);
+        $written = [];
+        $channel = $this->channel($child, $written);
+
+        self::assertTrue($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        $again = $channel->ask(
+            new ToolCall('c2', 'Bash', ['timeout' => 5000, 'description' => 'List sub again', 'command' => 'cd sub && ls']),
+            ForkChannelEofIsUnansweredTest::gateAsk(),
+        );
+        self::assertTrue($again->permits());
+        self::assertCount(1, $written, 'the identical command was asked again under its new caption');
+    }
+
     public function testAlwaysOnAUserHookQuestionIsNotRemembered(): void
     {
         [$parent, $child] = $this->pair();

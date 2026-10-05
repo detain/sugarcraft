@@ -1354,7 +1354,21 @@ final class SessionHost
         }
 
         if ($event instanceof PermissionAsked) {
-            $this->pendingAsks[$event->ask->askId] = $event->ask;
+            // An "always" given earlier answers it without asking — the same
+            // rule the TUI's pump applies (Chat::pumpLiveToolEvents()): the
+            // running turn's gate was built before the grant, so a later
+            // call of the SAME turn, and every exact-call grant, is settled
+            // here. Only a question the gate put alone; a hook's is put every
+            // time.
+            $ask = $event->ask;
+            if (!$ask->isSettled() && $ask->offers(PermissionReply::Always)
+                && $this->grants->allows($ask->tool, $ask->arguments, $this->root())) {
+                $runner->recordEvent($turn, $event);
+                $ask->reply(PermissionReply::Once);
+
+                return;
+            }
+            $this->pendingAsks[$ask->askId] = $ask;
         } elseif ($event instanceof PermissionResolved) {
             unset($this->pendingAsks[$event->askId]);
             $this->remember($event);

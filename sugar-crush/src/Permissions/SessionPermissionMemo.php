@@ -35,6 +35,15 @@ use SugarCraft\Crush\ToolCall;
  * cannot be read) are remembered as the EXACT call instead, which
  * {@see allows()} answers but the gate's rules never see.
  *
+ * THE EXACT CALL IS WHAT RUNS, NOT WHAT THE MODEL SAID ABOUT IT
+ * ({@see identityArguments()}): `Bash`'s required `description` is the
+ * model's own caption, rewritten on every call, and `timeout` only bounds how
+ * long the same command may take. Keyed on them, an "always" for a chain was
+ * never seen again — the identical command came back with a new caption and
+ * was asked about anew. They are left out of the exact-call identity, here,
+ * in {@see \SugarCraft\Crush\Backend\ChildChannel}'s per-turn memo and in the
+ * Chat tool path's grant key alike.
+ *
  * WHAT A GRANT NEVER DOES: override a refusal. These rules reach the gate
  * through {@see PermissionGate::withSessionRules()}, which consults them only
  * to turn an `Ask` into an `Allow` — a configured `Deny`, Plan mode's refusals
@@ -82,6 +91,17 @@ final class SessionPermissionMemo
         'bash', 'sh', 'zsh', 'dash', 'fish', 'ksh', 'env', 'sudo', 'doas', 'su', 'xargs',
         'eval', 'exec', 'nohup', 'timeout', 'nice', 'ionice', 'watch', 'time', 'command',
         'builtin', 'source', '.', 'find', 'awk', 'gawk', 'perl', 'ruby', 'ssh',
+    ];
+
+    /**
+     * Arguments that annotate a call rather than choose what it does, per
+     * tool: left out of the exact-call identity ({@see identityArguments()}).
+     * `interactive` is deliberately NOT here — it changes how the command
+     * runs (attached to a terminal), so a grant for one form is not one for
+     * the other.
+     */
+    private const ANNOTATION_ARGUMENTS = [
+        'Bash' => ['description', 'timeout'],
     ];
 
     /** `<tool> <subcommand>` pairs whose NEXT word picks what they do too (`npm run build`). */
@@ -222,6 +242,43 @@ final class SessionPermissionMemo
     }
 
     /**
+     * What an "always" on this call would remember, as the user should read
+     * it before confirming: the broadest pattern granted (`Bash(git status *)`
+     * — the bare `Bash(git status)` beside it only covers the same command
+     * with no arguments), or, when no pattern fits, `this exact command` /
+     * `this exact call`. A `Bash` line gets the exact form when it is a
+     * chain, a pipe, a redirection or a launcher — see the class docblock.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public static function scopeOf(string $tool, array $arguments): string
+    {
+        $patterns = self::patternsFor($tool, $arguments);
+        if ($patterns !== []) {
+            return $patterns[\count($patterns) - 1];
+        }
+
+        return $tool === 'Bash' ? 'this exact command' : 'this exact call';
+    }
+
+    /**
+     * The arguments that make two calls the SAME call for an exact-call
+     * grant: all of them, minus the tool's {@see ANNOTATION_ARGUMENTS}.
+     *
+     * @param array<string, mixed> $arguments
+     *
+     * @return array<string, mixed>
+     */
+    public static function identityArguments(string $tool, array $arguments): array
+    {
+        foreach (self::ANNOTATION_ARGUMENTS[$tool] ?? [] as $annotation) {
+            unset($arguments[$annotation]);
+        }
+
+        return $arguments;
+    }
+
+    /**
      * The {@see PermissionRule} patterns an "always" on this call grants, or
      * an empty list when no pattern fits and the exact call is remembered
      * instead. See the class docblock's table.
@@ -327,15 +384,16 @@ final class SessionPermissionMemo
 
     /**
      * The exact-call identity: tool name plus canonical JSON of the
-     * arguments, so key order does not make two calls different.
+     * {@see identityArguments()}, so neither key order nor the model's
+     * caption makes two calls different.
      *
      * @param array<string, mixed> $arguments
      */
-    private static function callKey(string $tool, array $arguments): ?string
+    public static function callKey(string $tool, array $arguments): ?string
     {
         try {
             $json = json_encode(
-                self::canonical($arguments),
+                self::canonical(self::identityArguments($tool, $arguments)),
                 JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
                     | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
             );

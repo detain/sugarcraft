@@ -459,9 +459,16 @@ final class ChildChannel
         return strlen($note) <= self::MAX_NOTE_BYTES ? $note : mb_strcut($note, 0, self::MAX_NOTE_BYTES, 'UTF-8');
     }
 
+    /**
+     * The per-turn "always" memo's key: the call as it runs, without the
+     * model's caption — {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::identityArguments()}.
+     */
     private static function grantKey(ToolCall $call): string
     {
-        return hash('sha256', serialize([$call->name(), $call->arguments()]));
+        $arguments = \SugarCraft\Crush\Permissions\SessionPermissionMemo::identityArguments($call->name(), $call->arguments());
+        ksort($arguments, SORT_STRING);
+
+        return hash('sha256', serialize([$call->name(), $arguments]));
     }
 
     private function poll(): void
