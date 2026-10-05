@@ -186,6 +186,32 @@ final class ChildChannelTest extends TestCase
         self::assertCount(1, $written, 'the identical command was asked again under its new caption');
     }
 
+    /**
+     * Given the turn's root, a leading in-project `cd <dir> &&` is not part of
+     * the per-turn memo's key: `always` on `cd <root> && ls` answers a later
+     * `ls` without a frame, and a cd out of the project is still asked.
+     */
+    public function testALeadingInProjectCdIsNotPartOfTheKey(): void
+    {
+        $root = (string) realpath(sys_get_temp_dir());
+        [$parent, $child] = $this->pair();
+        $first = ['command' => "cd {$root} && ls", 'description' => 'List'];
+        self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c1', 'Bash', $first), 'reply' => 'always']);
+        $written = [];
+        $channel = $this->channel($child, $written, root: $root);
+
+        // Were `ls` put to the parent, this refusal would be its answer.
+        self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c2', 'Bash', ['command' => 'ls', 'description' => 'List again']), 'reply' => 'reject']);
+
+        self::assertTrue($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertTrue($channel->ask(new ToolCall('c2', 'Bash', ['command' => 'ls', 'description' => 'List again']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertCount(1, $written, '`ls` was asked again after `always` on `cd <root> && ls`');
+
+        self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c3', 'Bash', ['command' => 'cd / && ls']), 'reply' => 'once']);
+        self::assertTrue($channel->ask(new ToolCall('c3', 'Bash', ['command' => 'cd / && ls']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertCount(2, $written, 'a cd out of the project is a different call');
+    }
+
     public function testAlwaysOnAUserHookQuestionIsNotRemembered(): void
     {
         [$parent, $child] = $this->pair();
@@ -246,7 +272,7 @@ final class ChildChannelTest extends TestCase
     /**
      * @param list<array<string, mixed>> $written
      */
-    private function channel($child, array &$written, string $mode = 'default'): ChildChannel
+    private function channel($child, array &$written, string $mode = 'default', ?string $root = null): ChildChannel
     {
         return ChildChannel::new(
             $child,
@@ -255,6 +281,7 @@ final class ChildChannelTest extends TestCase
             },
             ForkChannelEofIsUnansweredTest::drain(),
             $mode,
+            $root,
         );
     }
 

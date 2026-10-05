@@ -314,8 +314,89 @@ final class BashPermissionPromptTest extends TestCase
     }
 
     // =====================================================================
+    // (c) a leading in-project `cd <dir> &&` is a no-op for "always"
+    // =====================================================================
+
+    public function testAlwaysOnAnInProjectCdNamesAndRemembersTheRemaindersPattern(): void
+    {
+        $root = $this->project();
+        [$asking, , $inbox] = $this->asking(self::bash("cd {$root} && git status --short", 'Status'), root: $root);
+
+        self::assertSame('Bash(git status *)', $asking->permissionAlwaysScope(), 'the modal names the scope without the cd');
+        self::assertStringContainsString('always allow Bash(git status *) (this session)', self::plain($asking));
+        [$confirming] = $asking->update(new KeyMsg(KeyType::Char, 'a'));
+        self::assertStringContainsString('Always allow Bash(git status *) for the rest', self::plain($confirming));
+        [$granted] = $confirming->update(new KeyMsg(KeyType::Char, 'y'));
+        self::assertNull($granted->pendingPermission());
+
+        $n = 1;
+        foreach (["cd {$root} && git status", 'git status', "cd {$root}/sub && git status"] as $later) {
+            $ask = self::pendingAsk('l' . $n++, self::bash($later, 'later'));
+            $inbox[] = [self::GENERATION, new PermissionAsked($ask)];
+            [$granted] = $granted->update(new ToolEventPumpMsg());
+            self::assertNull($granted->pendingPermission(), "`{$later}` was asked about again");
+            self::assertSame(PermissionReply::Once, $ask->resolution()?->reply, $later);
+        }
+
+        $outside = self::pendingAsk('l9', self::bash('cd /etc && git status', 'outside'));
+        $inbox[] = [self::GENERATION, new PermissionAsked($outside)];
+        [$prompted] = $granted->update(new ToolEventPumpMsg());
+        self::assertSame($outside, $prompted->pendingPermission()?->pendingAsk, 'a cd out of the project is part of the command');
+    }
+
+    public function testAnInProjectCdBeforeAPipeIsRememberedExactlyWithoutIt(): void
+    {
+        $root = $this->project();
+        [$asking] = $this->asking(self::bash("cd {$root} && git status | sh", 'Pipe'), root: $root);
+
+        self::assertSame('this exact command without the leading cd', $asking->permissionAlwaysScope());
+        self::assertStringContainsString('a always allow this exact command without the leading cd', self::plain($asking));
+    }
+
+    public function testChatsOwnToolPathTreatsAnInProjectCdAsANoOpToo(): void
+    {
+        $root = $this->project();
+        [$asking] = $this->nativeChat($root)->update(self::nativeCall(self::bash("cd {$root} && ls -la", 'first'), 'call_1'));
+        self::assertSame('this exact command without the leading cd', $asking->permissionAlwaysScope());
+        [$granted, $cmd] = $asking->update(new PermissionReplyMsg(PermissionReply::Always));
+        $granted = $this->reapNative($cmd, $granted);
+
+        foreach (['ls -la', "cd {$root}/sub && ls -la"] as $i => $later) {
+            [$next, $cmd2] = $granted->update(self::nativeCall(self::bash($later, 'later'), 'call_l' . $i));
+            self::assertNull($next->pendingPermission(), "`{$later}` was asked about again");
+            $this->reapNative($cmd2, $next);
+        }
+
+        [$other] = $granted->update(self::nativeCall(self::bash('cd /etc && ls -la', 'outside'), 'call_o'));
+        self::assertNotNull($other->pendingPermission(), 'a cd out of the project is still asked about');
+    }
+
+    // =====================================================================
     // Fixtures
     // =====================================================================
+
+    /** @var list<string> */
+    private array $projects = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->projects as $base) {
+            @rmdir($base . '/project/sub');
+            @rmdir($base . '/project');
+            @rmdir($base);
+        }
+        $this->projects = [];
+    }
+
+    /** A real project root with a `sub/` directory, resolved. */
+    private function project(): string
+    {
+        $base = sys_get_temp_dir() . '/bpp-' . bin2hex(random_bytes(4));
+        mkdir($base . '/project/sub', 0o700, true);
+        $this->projects[] = $base;
+
+        return (string) realpath($base . '/project');
+    }
 
     /** @return array<string, mixed> */
     private static function bash(string $command, string $description, ?int $timeout = null): array
@@ -353,7 +434,7 @@ final class BashPermissionPromptTest extends TestCase
      *
      * @return array{0: Chat, 1: PendingAsk, 2: \ArrayObject}
      */
-    private function asking(array $arguments, ?array $suggestions = null, int $cols = 100): array
+    private function asking(array $arguments, ?array $suggestions = null, int $cols = 100, ?string $root = null): array
     {
         $inbox = new \ArrayObject();
         $chat = (new Chat(
@@ -362,6 +443,7 @@ final class BashPermissionPromptTest extends TestCase
             inFlight: true,
             generation: self::GENERATION,
             liveToolEvents: $inbox,
+            projectRoot: $root,
         ))->withSize($cols, 60);
         $ask = self::pendingAsk('c1', $arguments, $suggestions);
         $inbox[] = [self::GENERATION, new PermissionAsked($ask)];
@@ -380,12 +462,12 @@ final class BashPermissionPromptTest extends TestCase
         return $granted;
     }
 
-    private function nativeChat(): Chat
+    private function nativeChat(?string $root = null): Chat
     {
         $hooks = new HookManager(new HookRegistry());
         $hooks->register(new PermissionGateHook(new PermissionGate(PermissionMode::Default)));
 
-        return (new Chat())
+        return (new Chat(projectRoot: $root))
             ->registerTool('Bash', static fn (array $args): string => 'ran: ' . ($args['command'] ?? ''))
             ->withHooks($hooks);
     }

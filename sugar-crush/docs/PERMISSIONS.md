@@ -583,7 +583,8 @@ situations, not two:
   (a command taller than twelve rows loses rows from its middle, with a row
   saying how many — the head and the tail stay); the model's `description` is
   shown only beneath it, as the agent's note. Chat's own tool path remembers
-  `a` + `y` as the exact call (same rule for the caption). An engine turn runs in a forked child;
+  `a` + `y` as the exact call (same rules for the caption and for a leading
+  in-project `cd`, below). An engine turn runs in a forked child;
   `Chat` starts it through `InteractiveTurn::completeInteractive()`, so each
   `Ask` the child's gate raises crosses the turn's socket as an `ask` frame,
   becomes the same y/n/a modal, and the answer returns as `ask_reply` while
@@ -604,12 +605,29 @@ situations, not two:
     and `Bash(git status *)`, an `Edit` → that path, a `WebFetch` → that host,
     a tool with no subject argument (`mcp__*`, `Task`) → the tool. A chained,
     piped, redirected or launcher (`bash -c`, `sudo`, `xargs`, `find`) `Bash`
-    line is remembered exactly — so `cd src && ls` covers that same line
-    again, not `cd src && cat x`. "Exactly" is the command as it runs:
+    line is remembered exactly — so `make && make test` covers that same line
+    again, not `make && rm -rf build`. "Exactly" is the command as it runs:
     `Bash`'s `description` (the model's caption, rewritten on every call) and
     `timeout` are not part of it, so the identical command re-run under a new
-    caption is covered. The modal names the scope before you confirm (`a
-    always allow Bash(git status *) (this session)`, or `this exact command`).
+    caption is covered. A **leading `cd` into the project is a no-op** for a
+    grant (`Permissions\LeadingCd`): exactly one `cd <dir> &&` at the start,
+    whose `<dir>` is a plain or quoted path with no `$`, backtick, glob or `~`
+    and resolves (relative to the project root, symlinks followed) to an
+    existing directory inside the project root, comes off before the grant is
+    derived and before a later call is checked against it — so `a` on
+    `cd /repo && git status --short` remembers `Bash(git status *)`, and a
+    later `git status`, `cd /repo && git status` or `cd /repo/sub && git
+    status` is covered. What follows the `cd` is judged as usual (a pipe,
+    redirection, `;`, `||` or further `&&` keeps it exact — `cd /repo && a &&
+    b` is remembered as exactly `a && b`). Anything else is not stripped: a
+    `cd` out of the project (`cd /etc && …`, `cd ../.. && …`, a symlink
+    pointing out), an expansion (`cd $HOME`, `cd "$(…)"`), `cd -`, bare `cd`,
+    `pushd`, `cd x; …`, `cd x || …` — and with `CDPATH` set, a bare relative
+    name (use `./name`). Only the grant sees the stripped form: configured
+    rules, the mode and its refusals still judge the line as written. The
+    modal names the scope before you confirm (`a always allow Bash(git status
+    *) (this session)`, `this exact command`, or `this exact command without
+    the leading cd`).
     A grant covers later calls of the **same turn** — the parent answers the
     child's question without putting it up — and of every later turn, a
     `Task` sub-agent's included. The patterns reach every later turn's gate

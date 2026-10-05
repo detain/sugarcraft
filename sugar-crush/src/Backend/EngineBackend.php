@@ -4610,6 +4610,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     return self::drainFrames($inbound, $corrupt);
                 },
                 $this->permissionGate?->mode()->value ?? '',
+                $this->root,
             );
             if ($interactive) {
                 $engine = $this->withPermissionApprover($channel->approver());

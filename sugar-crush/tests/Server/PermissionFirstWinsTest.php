@@ -117,6 +117,31 @@ final class PermissionFirstWinsTest extends TestCase
         self::assertSame([$other->askId], \array_column($a->call('permission.pending', ['sessionId' => $sessionId])['items'], 'askId'));
     }
 
+    /**
+     * A leading `cd <dir inside the workspace root> &&` is a no-op for the
+     * session's grants on the server path too — in what `always` remembers,
+     * in its cascade, and in the host's answer to a later question.
+     */
+    public function testAnInProjectLeadingCdIsANoOpForTheSessionsGrants(): void
+    {
+        [$a, , $sessionId] = $this->twoClientsOnARunningTurn();
+        $root = (string) \realpath($this->fixture->root);
+        $first = $this->fixture->backend->ask('c1', 'Bash', ['command' => "cd {$root} && git status --short", 'description' => 'Status']);
+        $open = $this->fixture->backend->ask('c2', 'Bash', ['command' => 'git status', 'description' => 'Status']);
+        $this->fixture->run(0.08);
+
+        $answer = $a->call('permission.respond', ['sessionId' => $sessionId, 'askId' => $first->askId, 'reply' => 'always']);
+        self::assertSame([$open->askId], $answer['cascaded'], 'the cascade covers the remainder\'s pattern');
+        self::assertSame(['Bash(git status)', 'Bash(git status *)'], $this->fixture->hub->get($sessionId)?->grants()->patterns());
+
+        $later = $this->fixture->backend->ask('c3', 'Bash', ['command' => "cd {$root} && git status", 'description' => 'Again']);
+        $outside = $this->fixture->backend->ask('c4', 'Bash', ['command' => 'cd /etc && git status', 'description' => 'Outside']);
+        $this->fixture->run(0.08);
+
+        self::assertSame(PermissionReply::Once, $later->resolution()?->reply);
+        self::assertFalse($outside->isSettled(), 'a cd out of the project is still put to the clients');
+    }
+
     public function testARejectThatCascadesRejectsTheRestAndStopsTheTurn(): void
     {
         [$a, , $sessionId] = $this->twoClientsOnARunningTurn();

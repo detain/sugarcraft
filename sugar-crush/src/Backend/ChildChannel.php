@@ -160,6 +160,9 @@ final class ChildChannel
      * @param \Closure(string, bool): list<array<string, mixed>>    $drainFrames by-reference `(string &$buffer,
      *                                                                           bool &$corrupt)`: the parent's
      *                                                                           own frame decoder
+     * @param string|null                                           $projectRoot the turn's root: a leading
+     *                                                                           in-project `cd` is not part of
+     *                                                                           the per-turn memo's key
      */
     public function __construct(
         private $socket,
@@ -167,6 +170,7 @@ final class ChildChannel
         private readonly \Closure $drainFrames,
         private readonly string $mode,
         private readonly int $ownerPid,
+        private readonly ?string $projectRoot = null,
     ) {
         // Reads go select-then-fread. With PHP's own read buffer in between,
         // bytes it had already pulled off the fd would be invisible to the
@@ -219,9 +223,9 @@ final class ChildChannel
      * @param \Closure(array<string, mixed>): void               $writeFrame
      * @param \Closure(string, bool): list<array<string, mixed>> $drainFrames
      */
-    public static function new($socket, \Closure $writeFrame, \Closure $drainFrames, string $mode = ''): self
+    public static function new($socket, \Closure $writeFrame, \Closure $drainFrames, string $mode = '', ?string $projectRoot = null): self
     {
-        return new self($socket, $writeFrame, $drainFrames, $mode, (int) getmypid());
+        return new self($socket, $writeFrame, $drainFrames, $mode, (int) getmypid(), $projectRoot);
     }
 
     /**
@@ -258,7 +262,7 @@ final class ChildChannel
             return PermissionResolved::replied($askId, PermissionReply::Reject, self::GRANDCHILD_REFUSAL);
         }
 
-        $grantKey = $ask->askedOnlyBy(PermissionGateHook::NAME) ? self::grantKey($call) : null;
+        $grantKey = $ask->askedOnlyBy(PermissionGateHook::NAME) ? self::grantKey($call, $this->projectRoot) : null;
         if ($grantKey !== null && isset($this->grants[$grantKey])) {
             return PermissionResolved::replied($askId, PermissionReply::Always);
         }
@@ -461,11 +465,17 @@ final class ChildChannel
 
     /**
      * The per-turn "always" memo's key: the call as it runs, without the
-     * model's caption — {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::identityArguments()}.
+     * model's caption and — given the turn's root — without a leading
+     * in-project `cd <dir> &&`:
+     * {@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::identityArguments()}.
      */
-    private static function grantKey(ToolCall $call): string
+    private static function grantKey(ToolCall $call, ?string $projectRoot): string
     {
-        $arguments = \SugarCraft\Crush\Permissions\SessionPermissionMemo::identityArguments($call->name(), $call->arguments());
+        $arguments = \SugarCraft\Crush\Permissions\SessionPermissionMemo::identityArguments(
+            $call->name(),
+            $call->arguments(),
+            $projectRoot === '' ? null : $projectRoot,
+        );
         ksort($arguments, SORT_STRING);
 
         return hash('sha256', serialize([$call->name(), $arguments]));

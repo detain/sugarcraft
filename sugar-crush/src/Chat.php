@@ -4256,7 +4256,7 @@ final class Chat implements Model
             $ask = $request->pendingAsk;
             if ($reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) && !$ask->isSettled()) {
                 $memo = \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants)
-                    ->withGrant($ask->tool, $ask->arguments);
+                    ->withGrant($ask->tool, $ask->arguments, $this->projectRoot());
                 $cleared['permissionGrants'] = [...$this->permissionGrants, ...$memo->grants()];
             }
             $ask->reply($reply, $note === '' ? null : $note);
@@ -4344,7 +4344,7 @@ final class Chat implements Model
                 }
             }
 
-            $grantKey = $answeredAsk === null ? null : self::permissionGrantKey($request->toolCall, $answeredAsk);
+            $grantKey = $answeredAsk === null ? null : self::permissionGrantKey($request->toolCall, $answeredAsk, $this->projectRoot());
             if ($grantKey !== null) {
                 $grants[$grantKey] = true;
                 $cleared['permissionGrants'] = $grants;
@@ -4355,13 +4355,14 @@ final class Chat implements Model
         // grant, other queued asks the same grant answers) - every other entry
         // keeps its ASK, because consent for one call is not consent for
         // another.
+        $root = $this->projectRoot();
         $jobs = array_map(
-            static function (array $job) use ($request, $grants): array {
+            static function (array $job) use ($request, $grants, $root): array {
                 if ($job[3] === null) {
                     return $job;
                 }
 
-                $key = self::permissionGrantKey($job[0], $job[3]);
+                $key = self::permissionGrantKey($job[0], $job[3], $root);
                 $answered = $job[0] === $request->toolCall || ($key !== null && isset($grants[$key]));
 
                 // Drop ONLY the ASK the user just answered; slot 4 (the pre-hook
@@ -4800,15 +4801,19 @@ final class Chat implements Model
         $ask = $request->pendingAsk;
         if ($ask !== null) {
             return $ask->offers(PermissionReply::Always)
-                ? \SugarCraft\Crush\Permissions\SessionPermissionMemo::scopeOf($ask->tool, $ask->arguments)
+                ? \SugarCraft\Crush\Permissions\SessionPermissionMemo::scopeOf($ask->tool, $ask->arguments, $this->projectRoot())
                 : null;
         }
 
         foreach ($this->pendingPermissionJobs as $job) {
             if ($job[0] === $request->toolCall && $job[3] !== null) {
-                return self::permissionGrantKey($request->toolCall, $job[3]) === null
+                return self::permissionGrantKey($request->toolCall, $job[3], $this->projectRoot()) === null
                     ? null
-                    : ($request->toolCall->name === 'Bash' ? 'this exact command' : 'this exact call');
+                    : \SugarCraft\Crush\Permissions\SessionPermissionMemo::exactScopeOf(
+                        $request->toolCall->name,
+                        $request->toolCall->arguments,
+                        $this->projectRoot(),
+                    );
             }
         }
 
@@ -5908,7 +5913,7 @@ final class Chat implements Model
             // F-P9): the gate's own ask, for these exact arguments. A user
             // hook's ask — or a gate ask about a different command — yields
             // a null key or a key nobody granted, and is put to the user.
-            $grantKey = self::permissionGrantKey($toolCall, $hookResult);
+            $grantKey = self::permissionGrantKey($toolCall, $hookResult, $this->projectRoot());
 
             return $grantKey !== null && isset($this->permissionGrants[$grantKey])
                 ? [$toolCall, null, $context, null, $hookResult->additionalContext]
@@ -5955,17 +5960,19 @@ final class Chat implements Model
      * that the gate's own rules already express, and the conservative reading
      * of "always allow this" is "this call, again". Null if the arguments will
      * not encode, in which case nothing is granted and the question is put
-     * again.
+     * again. A leading in-project `cd <dir> &&` ($projectRoot) is not part of
+     * the identity ({@see \SugarCraft\Crush\Permissions\SessionPermissionMemo::grantArguments()}).
      */
     private static function permissionGrantKey(
         ToolCall $toolCall,
         \SugarCraft\Crush\Hooks\HookResult $ask,
+        ?string $projectRoot = null,
     ): ?string {
         if (!$ask->askedOnlyBy(\SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook::NAME)) {
             return null;
         }
 
-        return \SugarCraft\Crush\Permissions\SessionPermissionMemo::callKey($toolCall->name, $toolCall->arguments);
+        return \SugarCraft\Crush\Permissions\SessionPermissionMemo::callKey($toolCall->name, $toolCall->arguments, $projectRoot);
     }
 
     /**

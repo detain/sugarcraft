@@ -652,10 +652,21 @@ final class PermissionGate
      * `Allow`s, so {@see PermissionRule::matches()} applies the permissive
      * arm: every command of a chain must match, a substitution or a writing
      * redirection grants nothing, and an unknowable subject (a declaration)
-     * never matches.
+     * never matches. Judged on {@see SessionPermissionMemo::grantArguments()} —
+     * the call without a leading in-project `cd <dir> &&`, the form the grant
+     * was remembered in — and only here: the configured rules and the mode
+     * above judged the line as written.
      */
     private function sessionAllows(ToolCall $call, bool $argumentsKnown, ?string $projectRoot): bool
     {
+        if ($this->sessionRules === []) {
+            return false;
+        }
+        $call = new ToolCall(
+            $call->name,
+            SessionPermissionMemo::grantArguments($call->name, $call->arguments, $projectRoot === '' ? null : $projectRoot),
+            $call->id,
+        );
         foreach ($this->sessionRules as $rule) {
             if ($rule->matches($call, $argumentsKnown, $projectRoot)) {
                 return true;

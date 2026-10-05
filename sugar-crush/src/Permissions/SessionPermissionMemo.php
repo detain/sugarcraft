@@ -22,6 +22,15 @@ use SugarCraft\Crush\ToolCall;
  * | `WebSearch`, `Skill`                  | that exact subject                 |
  * | a tool with no subject argument (`mcp__*`, `Task`, …) | the tool: `mcp__git__status` |
  *
+ * A LEADING IN-PROJECT `cd <dir> &&` IS A NO-OP for every grant
+ * ({@see grantArguments()}, {@see LeadingCd}): `always` on
+ * `cd /repo && git status --short` remembers `Bash(git status *)`, and a later
+ * `git status`, `cd /repo && git status` or `cd /repo/sub && git status` is
+ * covered — the remainder is what is remembered AND what a later call is
+ * checked against, exact-call keys included. Only one such prefix comes off;
+ * anything else about the line is judged as written. Every consumer passes
+ * the session's project root; without one nothing is stripped.
+ *
  * Subcommand tools (`git`, `npm`, `composer`, …) keep their subcommand,
  * interpreters (`php`, `python3`, `node`, …) keep their script, and a
  * launcher whose job is to run something else (`bash -c`, `sudo`, `xargs`,
@@ -174,12 +183,13 @@ final class SessionPermissionMemo
      *
      * @param array<string, mixed> $arguments the arguments that were asked about
      *                                        (after any hook rewrite)
+     * @param string|null $projectRoot the session's root, for {@see grantArguments()}
      */
-    public function withGrant(string $tool, array $arguments): self
+    public function withGrant(string $tool, array $arguments, ?string $projectRoot = null): self
     {
-        $patterns = self::patternsFor($tool, $arguments);
+        $patterns = self::patternsFor($tool, $arguments, $projectRoot);
         if ($patterns === []) {
-            $key = self::callKey($tool, $arguments);
+            $key = self::callKey($tool, $arguments, $projectRoot);
             if ($key === null || in_array($key, $this->calls, true)) {
                 return $this;
             }
@@ -226,12 +236,12 @@ final class SessionPermissionMemo
      */
     public function allows(string $tool, array $arguments, ?string $projectRoot = null): bool
     {
-        $key = self::callKey($tool, $arguments);
+        $key = self::callKey($tool, $arguments, $projectRoot);
         if ($key !== null && in_array($key, $this->calls, true)) {
             return true;
         }
 
-        $call = new ToolCall($tool, $arguments);
+        $call = new ToolCall($tool, self::grantArguments($tool, $arguments, $projectRoot));
         foreach ($this->rules() as $rule) {
             if ($rule->matches($call, true, $projectRoot)) {
                 return true;
@@ -248,29 +258,86 @@ final class SessionPermissionMemo
      * with no arguments), or, when no pattern fits, `this exact command` /
      * `this exact call`. A `Bash` line gets the exact form when it is a
      * chain, a pipe, a redirection or a launcher — see the class docblock.
+     * Computed on the {@see grantArguments()}, so a dropped leading `cd` shows:
+     * `cd /repo && git status` reads `Bash(git status *)`.
      *
      * @param array<string, mixed> $arguments
      */
-    public static function scopeOf(string $tool, array $arguments): string
+    public static function scopeOf(string $tool, array $arguments, ?string $projectRoot = null): string
     {
-        $patterns = self::patternsFor($tool, $arguments);
+        $patterns = self::patternsFor($tool, $arguments, $projectRoot);
         if ($patterns !== []) {
             return $patterns[\count($patterns) - 1];
         }
 
-        return $tool === 'Bash' ? 'this exact command' : 'this exact call';
+        return self::exactScopeOf($tool, $arguments, $projectRoot);
     }
 
     /**
-     * The arguments that make two calls the SAME call for an exact-call
-     * grant: all of them, minus the tool's {@see ANNOTATION_ARGUMENTS}.
+     * How an EXACT-call grant on this call reads: `this exact call`,
+     * `this exact command`, or — when {@see grantArguments()} dropped a
+     * leading in-project `cd` — `this exact command without the leading cd`,
+     * so the user can see the remembered call is the remainder.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public static function exactScopeOf(string $tool, array $arguments, ?string $projectRoot = null): string
+    {
+        if ($tool !== 'Bash') {
+            return 'this exact call';
+        }
+
+        return self::grantArguments($tool, $arguments, $projectRoot) === $arguments
+            ? 'this exact command'
+            : 'this exact command without the leading cd';
+    }
+
+    /**
+     * The arguments a grant is remembered under and checked against:
+     * $arguments with a `Bash` command's leading in-project `cd <dir> &&`
+     * removed ({@see LeadingCd::strip()}), or $arguments unchanged — any other
+     * tool, no root, or a prefix that does not qualify. THE one normaliser
+     * every grant path shares: {@see patternsFor()} and {@see callKey()} (and
+     * so {@see withGrant()}, {@see allows()}, Chat's exact-call key and
+     * {@see \SugarCraft\Crush\Backend\ChildChannel}'s per-turn memo) and
+     * {@see PermissionGate}'s session-rule check. Applied ONCE: a remainder
+     * that itself opens with a `cd` is a chain, judged as written.
      *
      * @param array<string, mixed> $arguments
      *
      * @return array<string, mixed>
      */
-    public static function identityArguments(string $tool, array $arguments): array
+    public static function grantArguments(string $tool, array $arguments, ?string $projectRoot): array
     {
+        if ($tool !== 'Bash') {
+            return $arguments;
+        }
+        $subjectName = PermissionRule::subjectArgumentName($tool) ?? 'command';
+        $command = $arguments[$subjectName] ?? null;
+        if (!is_string($command)) {
+            return $arguments;
+        }
+        $remainder = LeadingCd::strip($command, $projectRoot);
+        if ($remainder !== null) {
+            $arguments[$subjectName] = $remainder;
+        }
+
+        return $arguments;
+    }
+
+    /**
+     * The arguments that make two calls the SAME call for an exact-call
+     * grant: all of them, minus the tool's {@see ANNOTATION_ARGUMENTS}. With
+     * the root in hand this is computed on the {@see grantArguments()}, so a
+     * leading in-project `cd` is not part of the identity either.
+     *
+     * @param array<string, mixed> $arguments
+     *
+     * @return array<string, mixed>
+     */
+    public static function identityArguments(string $tool, array $arguments, ?string $projectRoot = null): array
+    {
+        $arguments = self::grantArguments($tool, $arguments, $projectRoot);
         foreach (self::ANNOTATION_ARGUMENTS[$tool] ?? [] as $annotation) {
             unset($arguments[$annotation]);
         }
@@ -281,14 +348,16 @@ final class SessionPermissionMemo
     /**
      * The {@see PermissionRule} patterns an "always" on this call grants, or
      * an empty list when no pattern fits and the exact call is remembered
-     * instead. See the class docblock's table.
+     * instead. See the class docblock's table; judged on the
+     * {@see grantArguments()}.
      *
      * @param array<string, mixed> $arguments
      *
      * @return list<string>
      */
-    public static function patternsFor(string $tool, array $arguments): array
+    public static function patternsFor(string $tool, array $arguments, ?string $projectRoot = null): array
     {
+        $arguments = self::grantArguments($tool, $arguments, $projectRoot);
         if ($tool === '' || !PermissionRule::isWellFormedPattern(self::escape($tool))) {
             return [];
         }
@@ -389,11 +458,11 @@ final class SessionPermissionMemo
      *
      * @param array<string, mixed> $arguments
      */
-    public static function callKey(string $tool, array $arguments): ?string
+    public static function callKey(string $tool, array $arguments, ?string $projectRoot = null): ?string
     {
         try {
             $json = json_encode(
-                self::canonical(self::identityArguments($tool, $arguments)),
+                self::canonical(self::identityArguments($tool, $arguments, $projectRoot)),
                 JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
                     | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
             );

@@ -550,7 +550,8 @@ asked about — the `askId` is a hash of the call's id, tool and arguments.
   answers the session's other open questions that what it remembered covers
   (listed in the answer's `cascaded`) — the same scope as the TUI's `a` + `y`
   ([`PERMISSIONS.md`](PERMISSIONS.md)): `always` on `git status` answers an
-  open `git status --short`, never an open `git push`. A question that grant
+  open `git status --short`, never an open `git push`; a leading in-project
+  `cd <dir> &&` is a no-op there too. A question that grant
   covers arriving later in the same turn is answered without being put. A
   question only a hook asked is put every time.
 - `reject` with `cascade: true` rejects every other open question of the

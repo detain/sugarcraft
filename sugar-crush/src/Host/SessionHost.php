@@ -386,7 +386,7 @@ final class SessionHost
             return null;
         }
         if ($remember) {
-            $this->grants = $this->grants->withGrant($ask->tool, $ask->arguments);
+            $this->grants = $this->grants->withGrant($ask->tool, $ask->arguments, $this->root());
         }
         $resolution = $ask->resolution();
         if ($resolution !== null) {
