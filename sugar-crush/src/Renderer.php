@@ -282,8 +282,17 @@ final class Renderer
      * an "N more lines" trailer. A single Edit can rewrite hundreds of lines;
      * without a cap the diff alone would fill the viewport and evict the whole
      * transcript once {@see render()}'s tail-clipping runs.
+     *
+     * The DEFAULT of the `diffPreviewRows` setting (roadmap N-P4g);
+     * {@see renderDiff()} reads {@see diffPreviewRows()}.
      */
-    private const DIFF_MAX_ROWS = 24;
+    public const DIFF_MAX_ROWS = 24;
+
+    /** The diff rows painted before the trailer: `diffPreviewRows` (N-P4g). */
+    private static function diffPreviewRows(): int
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::int('diffPreviewRows');
+    }
 
     /**
      * Columns of diff text {@see renderDiff()} insists on keeping before it
@@ -588,8 +597,17 @@ final class Renderer
      * limits matter independently: a `Grep` result can be 400 short lines
      * (blows the line budget) and a `Bash` result can be one 200KB line
      * (blows the character budget while still being "1 line").
+     *
+     * The line limit is the DEFAULT of the `toolOutputPreviewLines`
+     * setting (roadmap N-P4g), read through {@see toolOutputPreviewLines()}.
      */
-    private const TOOL_OUTPUT_MAX_LINES = 10;
+    public const TOOL_OUTPUT_MAX_LINES = 10;
+
+    /** Collapsed tool-output lines: `toolOutputPreviewLines` (N-P4g). */
+    private static function toolOutputPreviewLines(): int
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::int('toolOutputPreviewLines');
+    }
 
     private const TOOL_OUTPUT_MAX_CHARS = 2000;
 
@@ -4834,7 +4852,7 @@ final class Renderer
             return self::hiddenBodyHint(substr_count($body, "\n") + 1, $theme);
         }
 
-        $collapsed = self::collapseToolOutput($body, self::TOOL_OUTPUT_MAX_LINES, self::TOOL_OUTPUT_MAX_CHARS);
+        $collapsed = self::collapseToolOutput($body, self::toolOutputPreviewLines(), self::TOOL_OUTPUT_MAX_CHARS);
         if (!$collapsed['overflow']) {
             return $collapsed['output'];
         }
@@ -4961,9 +4979,10 @@ final class Renderer
         $inner = max(1, $width - 4);
 
         $rows = preg_split('/\r\n|\r|\n/', rtrim($diff, "\r\n")) ?: [];
-        $overflow = count($rows) - self::DIFF_MAX_ROWS;
+        $maxRows = self::diffPreviewRows();
+        $overflow = count($rows) - $maxRows;
         if ($overflow > 0) {
-            $rows = array_slice($rows, 0, self::DIFF_MAX_ROWS);
+            $rows = array_slice($rows, 0, $maxRows);
         }
 
         // TAB has to be expanded HERE, before anything measures a row.

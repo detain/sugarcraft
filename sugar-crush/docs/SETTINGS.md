@@ -237,6 +237,15 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `statusLine` | `Bootstrap::chat()`, `Chat::applySettings()` → `StatusLineCommand::fromSettings()` | **no** |
 | `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
 | `notify` | `Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()` | yes |
+| `queueMode` | `Chat::submit()`, `SubmitOptions::effectiveDelivery()` → `QueueMode::onEnter()` | yes |
+| `mouse` | `Chat::programOptions()` at launch, `Chat::applySettings()` on a save → `Chat::mouseMode()` | yes |
+| `mouseClicks` | `Chat::mouseClicksEnabled()` | yes |
+| `scrollWheelLines` | `Chat::scrollWheelLines()` | yes |
+| `doubleEscSeconds` | `Chat::doubleEscapeWindowSeconds()` | yes |
+| `paletteMru` | `Chat::paletteMruLimit()` | yes |
+| `diffPreviewRows` | `Renderer::diffPreviewRows()` | yes |
+| `toolOutputPreviewLines` | `Renderer::toolOutputPreviewLines()` | yes |
+| `maxCheckpoints` | `EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()` | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 | `connectTimeoutSeconds` | `HttpClientDefaults::connectTimeoutSeconds()`, when a provider client is built | yes |
 | `providerRetryAttempts` | `Runtime::runStreaming()`, `runBatch()`, `AgentManager::executeSubAgent()` → `TransientFailure::maxAttempts()` | yes |
@@ -977,6 +986,15 @@ project-settable.
 | `statusLine` | Interface | object | unset | U C | — | live | exec |
 | `layout` | Interface | JSON | unset | U C | — | live | cosmetic |
 | `notify` | Interface | enum | `off` | P U C | — | restart | cosmetic |
+| `queueMode` | Interface | enum | `steer` | P U C | — | live | tuning |
+| `mouse` | Interface | bool | `true` | P U C | `SUGARCRUSH_DISABLE_MOUSE` | live | cosmetic |
+| `mouseClicks` | Interface | bool | `true` | P U C | `SUGARCRUSH_DISABLE_MOUSE_CLICKS` | live | cosmetic |
+| `scrollWheelLines` | Interface | int | `3` | P U C | — | live | cosmetic |
+| `doubleEscSeconds` | Interface | number | `0.6` | P U C | — | live | cosmetic |
+| `paletteMru` | Interface | int | `8` | P U C | — | live | cosmetic |
+| `diffPreviewRows` | Interface | int | `24` | P U C | — | live | cosmetic |
+| `toolOutputPreviewLines` | Interface | int | `10` | P U C | — | live | cosmetic |
+| `maxCheckpoints` | Interface | int | `100` | U C | — | live | tuning |
 | `lintCommands` | Hooks & MCP | object | `{}` | U C | — | restart | exec |
 | `claudeMcpBinary` | Hooks & MCP | path | unset | C | — | next launch | exec |
 | `claudeMcpArgs` | Hooks & MCP | list | unset | C | — | next launch | exec |

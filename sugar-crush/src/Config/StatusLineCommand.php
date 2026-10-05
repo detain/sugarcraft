@@ -150,6 +150,15 @@ final class StatusLineCommand
     public const TIMEOUT_SECONDS = self::REFRESH_SECONDS / 2.0;
 
     /**
+     * The longest `refreshSeconds` a `statusLine` entry may ask for (roadmap
+     * N-P4g): an hour. The setting only ever SLOWS the refresh —
+     * {@see REFRESH_SECONDS} is its floor, because {@see TIMEOUT_SECONDS} is
+     * derived from that period and a faster tick would let one run's budget
+     * and graces fill it — so a slow or costly command can be run less often.
+     */
+    public const MAX_REFRESH_SECONDS = 3600.0;
+
+    /**
      * Bytes of stdout kept before the child is killed.
      *
      * 16 KiB, which is
@@ -272,6 +281,11 @@ final class StatusLineCommand
          * leaves that something orphaned when the run is killed.
          */
         public readonly string $command,
+        /**
+         * Seconds between two runs: the entry's `refreshSeconds`, held to
+         * [{@see REFRESH_SECONDS}, {@see MAX_REFRESH_SECONDS}] (roadmap N-P4g).
+         */
+        public readonly float $refreshSeconds = self::REFRESH_SECONDS,
     ) {
     }
 
@@ -304,7 +318,16 @@ final class StatusLineCommand
             return null;
         }
 
-        return new self($command);
+        // N-P4g: an optional `refreshSeconds` slows the refresh; a value that
+        // is not a number, or outside the range, keeps the default rather than
+        // costing the status line.
+        $refresh = $entry['refreshSeconds'] ?? null;
+        $seconds = (\is_int($refresh) || \is_float($refresh))
+            && $refresh >= self::REFRESH_SECONDS && $refresh <= self::MAX_REFRESH_SECONDS
+                ? (float) $refresh
+                : self::REFRESH_SECONDS;
+
+        return new self($command, $seconds);
     }
 
     /**
@@ -376,8 +399,9 @@ final class StatusLineCommand
     }
 
     /**
-     * Run the configured command if {@see REFRESH_SECONDS} have passed since
-     * the last run, and cache what it said.
+     * Run the configured command if its {@see $refreshSeconds} (by default
+     * {@see REFRESH_SECONDS}) have passed since the last run, and cache what
+     * it said.
      *
      * THE ONLY SIDE-EFFECTING ENTRY POINT. Called from
      * {@see \SugarCraft\Crush\Chat::update()} on a
@@ -404,7 +428,7 @@ final class StatusLineCommand
         }
 
         $now = microtime(true);
-        if (self::$refreshedAt > 0.0 && ($now - self::$refreshedAt) < self::REFRESH_SECONDS) {
+        if (self::$refreshedAt > 0.0 && ($now - self::$refreshedAt) < $command->refreshSeconds) {
             return;
         }
 

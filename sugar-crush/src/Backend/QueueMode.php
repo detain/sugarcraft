@@ -8,10 +8,10 @@ namespace SugarCraft\Crush\Backend;
  * What a prompt sent while a turn is running does (roadmap 1.C-3, decision
  * D6; OpenClaw `queueMode`, opencode `delivery`).
  *
- * The TUI binds Enter-while-busy to {@see Steer} and Tab to {@see Followup}.
- * The setting that would let a user make another mode the Enter default is
- * `queueMode` (settings step N-P4g); until it lands the mode is fixed at
- * {@see Steer}, which is why {@see onEnter()} is a method and not a config read.
+ * The TUI binds Enter-while-busy to {@see onEnter()} — {@see Steer} unless
+ * the `queueMode` setting (roadmap N-P4g) names another case — and Tab to
+ * {@see Followup}. A headless host's submission that names no delivery gets
+ * the same default ({@see \SugarCraft\Crush\Host\SubmitOptions::effectiveDelivery()}).
  */
 enum QueueMode: string
 {
@@ -29,14 +29,20 @@ enum QueueMode: string
 
     /**
      * Stop the running turn at its next step boundary (a soft cancel), then
-     * send the message as a new turn. Declared for the `queueMode` setting;
-     * no key binds it yet.
+     * send the message as a new turn. What Enter does when `queueMode` is
+     * `interrupt`; no key binds it on its own.
      */
     case Interrupt = 'interrupt';
 
-    /** The mode Enter uses while a turn runs, until `queueMode` exists (D6). */
+    /**
+     * The mode Enter uses while a turn runs: the `queueMode` setting
+     * (decision D6, roadmap N-P4g), {@see Steer} when it is unset or not one
+     * of the cases. The single switch: every Enter-while-busy reads it here.
+     */
     public static function onEnter(): self
     {
-        return self::Steer;
+        $value = \SugarCraft\Crush\Config\Settings\UiSettings::value('queueMode');
+
+        return \is_string($value) ? (self::tryFrom($value) ?? self::Steer) : self::Steer;
     }
 }

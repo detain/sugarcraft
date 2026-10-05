@@ -360,8 +360,17 @@ final class Chat implements Model
      * abort it (see the Escape arm in {@see update()}). A single Escape
      * never quits the app any more - use /exit, Ctrl+C, or the palette's
      * Exit action for that.
+     *
+     * The DEFAULT of the `doubleEscSeconds` setting (roadmap N-P4g); the
+     * arm reads {@see doubleEscapeWindowSeconds()}.
      */
-    private const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
+    public const DOUBLE_ESCAPE_WINDOW_SECONDS = 0.6;
+
+    /** The double-Esc window in force: `doubleEscSeconds` (N-P4g). */
+    private static function doubleEscapeWindowSeconds(): float
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::float('doubleEscSeconds');
+    }
 
     /** Alias of {@see \SugarCraft\Crush\Host\CompactionService::PARK_NOTICE_PREFIX}, which documents it. */
     private const PARK_NOTICE_PREFIX = \SugarCraft\Crush\Host\CompactionService::PARK_NOTICE_PREFIX;
@@ -415,15 +424,29 @@ final class Chat implements Model
      * How many palette rows the MRU list remembers. Small on purpose: the
      * bias is only meant to keep the handful of rows a user actually cycles
      * through near the top, not to permanently re-rank the whole palette.
+     * The DEFAULT of the `paletteMru` setting (roadmap N-P4g).
      */
-    private const PALETTE_MRU_LIMIT = 8;
+    public const PALETTE_MRU_LIMIT = 8;
+
+    /** How many palette rows the MRU list keeps: `paletteMru` (N-P4g). */
+    private static function paletteMruLimit(): int
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::int('paletteMru');
+    }
 
     /**
      * Transcript lines moved per wheel notch (crush_feat.md §8 E4's literal
      * `$delta = ... ? -3 : 3`). Three keeps a notch's worth of context
      * overlapping between the old and new window instead of paging blind.
+     * The DEFAULT of the `scrollWheelLines` setting (roadmap N-P4g).
      */
-    private const SCROLL_WHEEL_LINES = 3;
+    public const SCROLL_WHEEL_LINES = 3;
+
+    /** Lines one wheel notch scrolls: `scrollWheelLines` (N-P4g). */
+    private static function scrollWheelLines(): int
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::int('scrollWheelLines');
+    }
 
     /**
      * How far (Manhattan cells) the pointer may stray between press and
@@ -2881,7 +2904,7 @@ final class Chat implements Model
             // — the status bar says so ("Esc to cancel now") for as long as
             // the turn takes to reach its boundary.
             $isSecondPress = ($this->lastEscapeAt !== null
-                && ($now - $this->lastEscapeAt) <= self::DOUBLE_ESCAPE_WINDOW_SECONDS)
+                && ($now - $this->lastEscapeAt) <= self::doubleEscapeWindowSeconds())
                 || $this->stopRequested();
 
             if (!$isSecondPress) {
@@ -7138,21 +7161,32 @@ final class Chat implements Model
      * mode: wheel events are reported over the same tracking mode as
      * clicks, so "keep scroll, drop clicks" can only be honoured above the
      * protocol — by refusing to hit-test (see {@see zoneAt()}).
+     *
+     * Each variable outranks a SETTING (roadmap N-P4g): `mouse: false` does
+     * what `SUGARCRUSH_DISABLE_MOUSE` does and `mouseClicks: false` what
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` does, so the escape hatch no longer
+     * needs the environment of every launch. The variable wins when set,
+     * which is the precedence every `SUGARCRUSH_DISABLE_*` flag has.
      */
     public static function mouseMode(): MouseMode
     {
-        return self::envFlag('SUGARCRUSH_DISABLE_MOUSE') ? MouseMode::Off : MouseMode::CellMotion;
+        $off = self::envFlag('SUGARCRUSH_DISABLE_MOUSE')
+            || !\SugarCraft\Crush\Config\Settings\UiSettings::bool('mouse');
+
+        return $off ? MouseMode::Off : MouseMode::CellMotion;
     }
 
     /**
      * Whether click/drag hit-testing is live. False when either
      * `SUGARCRUSH_DISABLE_MOUSE` (no tracking at all) or
-     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` (clicks off, wheel kept) is set.
+     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS` (clicks off, wheel kept) is set, or
+     * the `mouse` / `mouseClicks` setting is off (roadmap N-P4g).
      */
     public static function mouseClicksEnabled(): bool
     {
         return self::mouseMode() !== MouseMode::Off
-            && !self::envFlag('SUGARCRUSH_DISABLE_MOUSE_CLICKS');
+            && !self::envFlag('SUGARCRUSH_DISABLE_MOUSE_CLICKS')
+            && \SugarCraft\Crush\Config\Settings\UiSettings::bool('mouseClicks');
     }
 
     /**
@@ -8165,8 +8199,8 @@ final class Chat implements Model
     private function scrollTranscript(MouseButton $button): array
     {
         $notch = match ($button) {
-            MouseButton::WheelUp   => self::SCROLL_WHEEL_LINES,
-            MouseButton::WheelDown => -self::SCROLL_WHEEL_LINES,
+            MouseButton::WheelUp   => self::scrollWheelLines(),
+            MouseButton::WheelDown => -self::scrollWheelLines(),
             default                => 0,
         };
 
@@ -8617,7 +8651,13 @@ final class Chat implements Model
      *  - LIVE, Cmd: `statusLine` re-installs the status-line command
      *    ({@see \SugarCraft\Crush\Config\StatusLineCommand::reconfigure()}) in
      *    the returned Cmd — the command is process state, and changing it is a
-     *    side effect `update()` does not perform.
+     *    side effect `update()` does not perform. `mouse` (roadmap N-P4g)
+     *    turns the terminal's mouse reporting on or off the same way.
+     *  - LIVE, read on use: the other interface keys (`queueMode`,
+     *    `mouseClicks`, the preview sizes, the wheel step, the double-Esc
+     *    window, `paletteMru`, `maxCheckpoints`) are read through
+     *    {@see \SugarCraft\Crush\Config\Settings\UiSettings}, whose held
+     *    values every save drops, so the next frame or keystroke reads them.
      *  - LIVE, engine: {@see ENGINE_SETTINGS} rebuild the backend through
      *    {@see withBackend()} — at once when idle, otherwise parked in
      *    {@see $pendingSettingsApply} for {@see update()} to apply once the
@@ -8646,6 +8686,9 @@ final class Chat implements Model
         if ($changed === []) {
             return [$this, null];
         }
+
+        // N-P4g: the held interface settings are re-read from what was saved.
+        \SugarCraft\Crush\Config\Settings\UiSettings::forget();
 
         $chat = $this;
         $cmds = [];
@@ -8689,6 +8732,8 @@ final class Chat implements Model
                     $restart[] = $key;
                     continue;
                 }
+            } elseif ($key === 'mouse') {
+                $cmds[] = self::mouseMode() === MouseMode::Off ? Cmd::disableMouse() : Cmd::enableMouseCellMotion();
             } elseif ($key === 'statusLine') {
                 $cmds[] = static function (): StatusLineTickMsg {
                     StatusLineCommand::reconfigure(\SugarCraft\Crush\Cli\Bootstrap::readUserConfig());
@@ -10190,8 +10235,8 @@ final class Chat implements Model
             // (decision D6): Enter mid-turn STEERS the running turn — the agent
             // reads the message at its next step boundary — and Tab queues it
             // for after the turn ({@see queueOwnsTab()}). The `queueMode`
-            // setting that could make another mode Enter's default is N-P4g's;
-            // until then the mode is fixed ({@see QueueMode::onEnter()}).
+            // setting (roadmap N-P4g) can make Enter queue, or interrupt the
+            // turn instead ({@see QueueMode::onEnter()}).
             return match ($this->turnController()->midTurnRoute(
                 $text,
                 // Only consulted past the `/exit` arm, so it is read lazily.
@@ -10209,8 +10254,7 @@ final class Chat implements Model
                     ? $this->handleBtwCommand($text)
                     : $this->refuseInFlightCommand($text),
                 \SugarCraft\Crush\Host\TurnController::ROUTE_STEER => $this->steerPrompt($text),
-                // An interrupt is a host's delivery; Enter never asks for one,
-                // and a queued follow-up is what this arm always did otherwise.
+                \SugarCraft\Crush\Host\TurnController::ROUTE_INTERRUPT => $this->interruptWithPrompt($text),
                 default => $this->enqueuePrompt($text),
             };
         }
@@ -10730,6 +10774,29 @@ final class Chat implements Model
      *
      * @return array{0:self,1:?\Closure}
      */
+    /**
+     * `queueMode: interrupt` (roadmap N-P4g): stop the running turn at its
+     * next step boundary — and the call running now, as the first `Esc`
+     * does (roadmap 1.C-4) — then send $text as the next turn. The text is
+     * queued, so the turn's own settle releases it; a turn that reports no
+     * steps cannot stop softly and simply runs on with the message queued.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function interruptWithPrompt(string $text): array
+    {
+        if ($this->liveStep() !== null) {
+            $this->inFlightCancellation?->cancelSoft();
+            foreach ($this->history as $message) {
+                if ($message->pendingToolCallId !== null) {
+                    $this->inFlightCancellation?->cancelTool($message->pendingToolCallId);
+                }
+            }
+        }
+
+        return $this->enqueuePrompt($text);
+    }
+
     private function enqueuePrompt(string $text): array
     {
         $queue = [...$this->queuedPrompts, $text];
@@ -16147,7 +16214,7 @@ final class Chat implements Model
         ));
         array_unshift($mru, $label);
 
-        return $this->mutate(['paletteMru' => array_slice($mru, 0, self::PALETTE_MRU_LIMIT)]);
+        return $this->mutate(['paletteMru' => array_slice($mru, 0, self::paletteMruLimit())]);
     }
 
     /**

@@ -820,7 +820,21 @@ final class EnhancedSessionStore
     // Checkpoint management (for /rewind functionality)
     // =======================================================================
 
-    private const MAX_CHECKPOINTS_PER_SESSION = 100;
+    /**
+     * The DEFAULT of the `maxCheckpoints` setting (roadmap N-P4g);
+     * {@see saveCheckpoint()} prunes to {@see maxCheckpoints()}.
+     */
+    public const MAX_CHECKPOINTS_PER_SESSION = 100;
+
+    /**
+     * How many live checkpoints a session keeps before the oldest are pruned:
+     * the `maxCheckpoints` setting, else
+     * {@see MAX_CHECKPOINTS_PER_SESSION}.
+     */
+    public static function maxCheckpoints(): int
+    {
+        return \SugarCraft\Crush\Config\Settings\UiSettings::int('maxCheckpoints');
+    }
 
     /**
      * Checkpoint-state key holding the workspace snapshot taken for that turn
@@ -1210,8 +1224,9 @@ final class EnhancedSessionStore
 
         $nextIndex = $this->insertCheckpointRow($sessionId, $chatState, self::CHECKPOINT_LIVE);
 
-        // Enforce the 100 checkpoint limit: delete oldest checkpoints if over limit
-        $this->pruneOldCheckpoints($sessionId, self::MAX_CHECKPOINTS_PER_SESSION);
+        // Enforce the checkpoint cap (`maxCheckpoints`, 100 unless
+        // set): delete the oldest checkpoints past it.
+        $this->pruneOldCheckpoints($sessionId, self::maxCheckpoints());
 
         return $nextIndex;
     }

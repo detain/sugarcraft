@@ -185,7 +185,9 @@ final class ApplySettingsTest extends TestCase
      */
     public function testEveryLiveKeyTheViewCanSaveHasAnApplyArm(): void
     {
-        $handled = ['maxToolSteps', 'theme', 'statusLine'];
+        // N-P4g: the interface keys read through UiSettings apply by the
+        // save dropping its held values.
+        $handled = ['maxToolSteps', 'theme', 'statusLine', ...\SugarCraft\Crush\Config\Settings\UiSettings::KEYS];
         $ownDoors = array_keys(SettingsWriter::LIVE_COMMAND_KEYS);
         foreach (SettingsSchema::all() as $definition) {
             if ($definition->applyMode !== ApplyMode::Live || \in_array($definition->ui, [UiEditability::ReadOnly, UiEditability::Hidden], true)) {
@@ -206,7 +208,7 @@ final class ApplySettingsTest extends TestCase
         self::assertStringContainsString('restart', (string) $writer->refusal(SettingsTier::Session, 'instructions', ['AGENTS.md']));
         self::assertStringContainsString('config.json', (string) $writer->refusal(SettingsTier::Session, 'permissionMode', 'plan'));
         self::assertNotNull($writer->refusal(SettingsTier::Session, 'trustedProjectHooks', ['/x']), 'trust never goes through a save');
-        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'embeddingModel', 'theme', 'statusLine', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
+        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'embeddingModel', 'theme', 'statusLine', 'queueMode', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
 
         $writer->write(SettingsTier::Session, ['maxOutputTokens' => 100]);
         self::assertSame(['maxOutputTokens' => 100], $writer->current(SettingsTier::Session));
