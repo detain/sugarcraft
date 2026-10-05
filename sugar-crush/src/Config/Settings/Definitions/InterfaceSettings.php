@@ -20,6 +20,7 @@ use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Support\AiCommentWatcher;
 use SugarCraft\Crush\Theme;
+use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Crush\Tui\TerminalNotifier;
 
 /**
@@ -112,6 +113,20 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp('steer (the agent reads it at its next step), followup (sent after the turn) or interrupt (stop the turn at its next step, then send). Tab always queues.')
                 ->withReaderSymbol(QueueMode::class . '::onEnter')
                 ->withReadBy('`Chat::submit()`, `SubmitOptions::effectiveDelivery()` → `QueueMode::onEnter()`'),
+            // Cosmetic and project-settable like `theme`: it only says what
+            // the `adaptive` theme should believe about the background.
+            SettingDefinition::new(TerminalBackground::SETTINGS_KEY, SettingType::Enum, 'auto')
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnvVar(TerminalBackground::ENV_OVERRIDE)
+                ->withEnumValues(TerminalBackground::SETTING_VALUES)
+                ->withLabel('Terminal background')
+                ->withHelp('What the adaptive theme assumes behind the text: auto asks the terminal (OSC 11, then COLORFGBG); light or dark says so outright.')
+                ->withReaderSymbol(TerminalBackground::class . '::setting')
+                ->withReadBy('`Theme::adaptive()`, the shell chrome → `TerminalBackground::isDark()`, `color()` → `setting()`'),
             SettingDefinition::new('mouse', SettingType::Bool, true)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Cosmetic)

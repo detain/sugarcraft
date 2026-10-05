@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Config\Settings;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\Settings\SessionSettings;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
@@ -15,6 +16,7 @@ use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\SafetyClassifier;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tui\TerminalBackground;
 
 /**
  * Roadmap N-P4g remainder: the operator's own knobs that were constants or
@@ -88,6 +90,30 @@ final class OperatorSettingsTest extends TestCase
         $this->writeConfig([PermissionGate::STRIKE_LIMIT_SETTING => 0, PermissionGate::TOTAL_LIMIT_SETTING => 'many']);
 
         self::assertSame(['strike' => 3, 'total' => 20], PermissionGate::autoBreakerLimits());
+    }
+
+    // ── the terminal background ─────────────────────────────────────────
+
+    public function testTheBackgroundSettingAnswersAboveTheTerminalAndTheVariableAboveIt(): void
+    {
+        TerminalBackground::forget();
+        try {
+            self::assertNull(TerminalBackground::setting(), 'auto defers to detection');
+            self::assertTrue(TerminalBackground::isDark(['COLORFGBG' => '0;0']));
+
+            $this->writeConfig(['terminalBackground' => 'light']);
+            self::assertFalse(TerminalBackground::isDark(['COLORFGBG' => '0;0']), 'the setting outranks COLORFGBG');
+            TerminalBackground::observe(new BackgroundColorMsg(0, 0, 0));
+            self::assertFalse(TerminalBackground::isDark([]), 'and the terminal\'s own answer');
+            self::assertSame(15, TerminalBackground::color([])->ansiIndex, 'the chrome resolves against white');
+            self::assertTrue(TerminalBackground::isDark(['SUGARCRUSH_BACKGROUND' => 'dark']), 'the variable wins');
+            self::assertTrue(TerminalBackground::detect(['COLORFGBG' => '0;0']), 'detect() stays a pure function of the environment');
+
+            $this->writeConfig(['terminalBackground' => 'purple']);
+            self::assertTrue(TerminalBackground::isDark([]), 'a value that is not one of the three is auto');
+        } finally {
+            TerminalBackground::forget();
+        }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────

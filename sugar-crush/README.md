@@ -970,7 +970,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these ninety-seven keys are layered — `provider`, `models`, `titleModel`,
+Only these ninety-eight keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
@@ -996,9 +996,9 @@ Only these ninety-seven keys are layered — `provider`, `models`, `titleModel`,
 `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
 `subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
 `autoCommit`, `theme`, `statusLine`, `layout`, `notify`, `watchFiles`,
-`queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`,
-`paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints`,
-`lintCommands`, `disabledMcpServers`, `connectTimeoutSeconds`,
+`queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
+`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
+`maxCheckpoints`, `lintCommands`, `disabledMcpServers`, `connectTimeoutSeconds`,
 `providerRetryAttempts`, `providerRetryBaseBackoffMs`.
 <!-- settings:layered:end -->
 

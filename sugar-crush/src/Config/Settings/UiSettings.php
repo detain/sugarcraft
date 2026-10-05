@@ -43,6 +43,7 @@ final class UiSettings
      */
     public const KEYS = [
         'queueMode',
+        'terminalBackground',
         'mouse',
         'mouseClicks',
         'scrollWheelLines',

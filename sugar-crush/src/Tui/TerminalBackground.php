@@ -16,7 +16,9 @@ use SugarCraft\Core\Util\Color;
  * Three sources, in precedence order:
  *
  *   1. **The user's explicit override.** `SUGARCRUSH_BACKGROUND=light|dark`
- *      ({@see ENV_OVERRIDE}) is a statement, not a measurement, so it outranks
+ *      ({@see ENV_OVERRIDE}), else the `terminalBackground` setting
+ *      ({@see SETTINGS_KEY}, roadmap N-P4g) when it says `light` or `dark`,
+ *      is a statement, not a measurement, so it outranks
  *      even the terminal's own answer. It has to: nearly every terminal worth
  *      running this in answers OSC 11, so ranking the measurement first would
  *      make the documented escape hatch inert in exactly the common case —
@@ -56,6 +58,16 @@ final class TerminalBackground
      * detection heuristics are guesses, and a guess needs an off switch.
      */
     public const ENV_OVERRIDE = 'SUGARCRUSH_BACKGROUND';
+
+    /**
+     * The settings key that says the same thing persistently: `auto` (the
+     * default — detect), `light` or `dark`. The variable outranks it, as every
+     * `SUGARCRUSH_*` variable outranks its settings key.
+     */
+    public const SETTINGS_KEY = 'terminalBackground';
+
+    /** The setting's values; `auto` defers to detection. */
+    public const SETTING_VALUES = ['auto', 'light', 'dark'];
 
     /**
      * The terminal's own OSC 11 answer for this process, or null while we
@@ -163,7 +175,7 @@ final class TerminalBackground
     {
         $env ??= self::defaultEnv();
 
-        $override = self::override($env);
+        $override = self::explicit($env);
         if ($override !== null) {
             return $override ? Color::ansi(0) : Color::ansi(15);
         }
@@ -216,7 +228,37 @@ final class TerminalBackground
         // that actually reaches detect().
         $env ??= self::defaultEnv();
 
-        return self::override($env) ?? self::$observed ?? self::detect($env);
+        return self::explicit($env) ?? self::$observed ?? self::detect($env);
+    }
+
+    /**
+     * The `terminalBackground` setting as an answer: true for `dark`, false
+     * for `light`, null for `auto` (or no readable settings), which leaves the
+     * question to the terminal. Read through
+     * {@see \SugarCraft\Crush\Config\Settings\UiSettings}, which holds the
+     * merged settings between saves — this runs on every theme resolution, so
+     * per frame — and drops them when the settings view saves, so a change
+     * repaints at once.
+     */
+    public static function setting(): ?bool
+    {
+        return match (\SugarCraft\Crush\Config\Settings\UiSettings::value(self::SETTINGS_KEY)) {
+            'light' => false,
+            'dark' => true,
+            default => null,
+        };
+    }
+
+    /**
+     * The user's explicit answer, the variable first and then the setting —
+     * the top tier of {@see isDark()} and {@see color()}. {@see detect()}
+     * stays a pure function of the environment and reads only the variable.
+     *
+     * @param array<string,string> $env
+     */
+    private static function explicit(array $env): ?bool
+    {
+        return self::override($env) ?? self::setting();
     }
 
     /**

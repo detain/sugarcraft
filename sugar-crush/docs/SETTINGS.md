@@ -260,6 +260,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `notify` | `Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()` | yes |
 | `watchFiles` | `Chat::subscriptions()` → `AiCommentWatcher::enabled()` | **no** |
 | `queueMode` | `Chat::submit()`, `SubmitOptions::effectiveDelivery()` → `QueueMode::onEnter()` | yes |
+| `terminalBackground` | `Theme::adaptive()`, the shell chrome → `TerminalBackground::isDark()`, `color()` → `setting()` | yes |
 | `mouse` | `Chat::programOptions()` at launch, `Chat::applySettings()` on a save → `Chat::mouseMode()` | yes |
 | `mouseClicks` | `Chat::mouseClicksEnabled()` | yes |
 | `scrollWheelLines` | `Chat::scrollWheelLines()` | yes |
@@ -276,7 +277,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these ninety-seven, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these ninety-eight, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -1073,6 +1074,7 @@ project-settable.
 | `notify` | Interface | enum | `off` | P U C | — | restart | cosmetic |
 | `watchFiles` | Interface | bool | `false` | U C | — | restart | prompt |
 | `queueMode` | Interface | enum | `steer` | P U C | — | live | tuning |
+| `terminalBackground` | Interface | enum | `auto` | P U C | `SUGARCRUSH_BACKGROUND` | live | cosmetic |
 | `mouse` | Interface | bool | `true` | P U C | `SUGARCRUSH_DISABLE_MOUSE` | live | cosmetic |
 | `mouseClicks` | Interface | bool | `true` | P U C | `SUGARCRUSH_DISABLE_MOUSE_CLICKS` | live | cosmetic |
 | `scrollWheelLines` | Interface | int | `3` | P U C | — | live | cosmetic |
@@ -1194,7 +1196,7 @@ Saved is not applied: see the next section for when each key takes effect.
 <!-- settings:apply:begin -->
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
-| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints` |
+| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
 | restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `watchFiles`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
@@ -1216,10 +1218,10 @@ Saved is not applied: see the next section for when each key takes effect.
 `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`,
 `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`,
 `skills.pathNudges`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`,
-`subagentMaxActive`, `theme`, `statusLine`, `queueMode`, `mouse`, `mouseClicks`,
-`scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`,
-`toolOutputPreviewLines`, `maxCheckpoints`, `providerRetryAttempts` and
-`providerRetryBaseBackoffMs`.
+`subagentMaxActive`, `theme`, `statusLine`, `queueMode`, `terminalBackground`,
+`mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
+`diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints`,
+`providerRetryAttempts` and `providerRetryBaseBackoffMs`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the
@@ -1337,11 +1339,11 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only eleven of the ninety-seven layered keys have an
+  They do not cover it: only twelve of the ninety-eight layered keys have an
   env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`, `webSearchEndpoint`,
-  `mouse`, `mouseClicks`, `connectTimeoutSeconds`). `maxOutputTokens`,
-  `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`,
+  `terminalBackground`, `mouse`, `mouseClicks`, `connectTimeoutSeconds`).
+  `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`, `maxToolSteps`,
   `compaction.reminderPercent`, `compaction.autoPercent`,
   `compaction.blockPercent`, `compaction.keepRecent`,
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
