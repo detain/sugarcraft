@@ -84,8 +84,22 @@ final class McpRouter
      */
     private function matchesAnyDenyPattern(string $serverName): bool
     {
-        foreach ($this->denyPatterns as $pattern => $action) {
-            if ($action === 'deny' && fnmatch($pattern, $serverName)) {
+        return self::serverDenied($serverName, $this->denyPatterns);
+    }
+
+    /**
+     * Whether ONE server matches a deny-pattern map (pattern => "deny",
+     * `fnmatch` wildcards, compared against the RAW `.mcp.json` key as
+     * {@see serverAllowed()} is). Exposed for the same one-law reason:
+     * {@see McpClient} applies the same map to the servers it starts and to
+     * its unrestricted arm, which never builds a router.
+     *
+     * @param array<array-key, mixed> $denyPatterns
+     */
+    public static function serverDenied(string $server, array $denyPatterns): bool
+    {
+        foreach ($denyPatterns as $pattern => $action) {
+            if ($action === 'deny' && \is_string($pattern) && $pattern !== '' && fnmatch($pattern, $server)) {
                 return true;
             }
         }

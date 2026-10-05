@@ -55,6 +55,20 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withHelp('Seconds a hook entry with no `timeout:` may run before it is killed and counted as a refusal.')
                 ->withReaderSymbol(\SugarCraft\Crush\Hooks\ScriptHook::class . '::defaultTimeoutSeconds')
                 ->withReadBy('`HookConfig::parse()` → `ScriptHook::defaultTimeoutSeconds()`, as each hook file loads'),
+            // E696. Narrowing, so a trusted project may set it like
+            // `disabledTools`: a deny only ever removes servers, and the
+            // key-level merge lets the user's own list replace a project's.
+            SettingDefinition::new(\SugarCraft\Crush\MCP\McpClient::DENY_SETTINGS_KEY, SettingType::StringList, [])
+                ->withCategory(SettingCategory::HooksMcp)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withUi(UiEditability::List)
+                ->withLabel('Disabled MCP servers')
+                ->withHelp('`.mcp.json` server names or globs (`untrusted_*`) that are never started, listed or called, for the main agent and every sub-agent.')
+                ->withReaderSymbol(Bootstrap::class . '::mcpClient')
+                ->withReadBy('`Bootstrap::mcpClient()` → `McpClient::setDenyPatterns()`, at the first MCP launch'),
             SettingDefinition::new('claudeMcpBinary', SettingType::Path)
                 ->withCategory(SettingCategory::HooksMcp)
                 ->withRiskClass(RiskClass::Exec)

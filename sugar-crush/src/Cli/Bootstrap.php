@@ -7976,14 +7976,26 @@ final class Bootstrap
             // measurements are in
             // {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest}.
             //
-            // NO $denyPatterns ARGUMENT, deliberately: `McpClient` consults them
-            // only through `router()`, which only the AgentPreset arm reaches, so
-            // on this path they are inert. Passing a list that cannot be enforced
-            // would be a clause with no truth behind it. Deny patterns belong to
-            // the sub-agent path, which this bundle does not wire.
+            // The deny patterns are set just below (E696), and they DO bind on
+            // this path: the client applies them to the servers it starts and
+            // to its unrestricted arm, not only through the preset router.
             unrestricted: true,
             admit: $admit,
         );
+
+        // E696: the operator's `disabledMcpServers` globs (raw `.mcp.json`
+        // keys, `fnmatch` wildcards) become the client's deny map BEFORE the
+        // start, so a denied server is never spawned, never listed and never
+        // callable, for the main agent and every sub-agent alike. Anything
+        // but a non-empty string is skipped rather than read as a pattern.
+        $deny = self::readUserConfig()[McpClient::DENY_SETTINGS_KEY] ?? [];
+        $client->setDenyPatterns(array_fill_keys(
+            array_values(array_filter(
+                \is_array($deny) ? $deny : [],
+                static fn (mixed $glob): bool => \is_string($glob) && $glob !== '',
+            )),
+            'deny',
+        ));
 
         // Registered BEFORE start, and the order matters: startServers() adds
         // each server to the client as it comes up, so a client that throws

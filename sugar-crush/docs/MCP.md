@@ -517,11 +517,21 @@ unasked — `plan` and `auto` included. The hint is honoured only because a
 server is started only once trusted; see
 [PERMISSIONS.md](PERMISSIONS.md#the-six-modes) for the full rule.
 
-No `denyPatterns` are passed on this path, deliberately: `McpClient` consults
-them only through `router()`, which only the `AgentPreset` arm reaches, so they
-would be inert here. Deny patterns belong to the sub-agent path — whose
-allowlist half is now enforced at grant-resolution (above); the deny half is
-still minted and unwired, because no settings producer feeds it (E696).
+**Denying servers.** The `disabledMcpServers` setting lists `.mcp.json` server
+names, or `fnmatch` globs such as `untrusted_*`, that this launch must not use
+(E696). `Bootstrap::mcpClient()` hands them to `McpClient::setDenyPatterns()`
+before any server starts, and the client applies them everywhere: a matching
+entry is never started (so it is not pinned as trusted either), its tools are
+never listed, and a call naming it is refused — on the unrestricted main-agent
+path as well as through `McpRouter` for a preset-routed client. Names are the
+raw config keys, not the sanitised `mcp__<key>__` spelling. A trusted project
+may set the list too, since a deny only removes servers; your own list replaces
+a project's rather than merging with it. It is read once, at the first MCP
+launch, so a change applies on restart:
+
+```json
+{ "disabledMcpServers": ["untrusted_*", "scratch"] }
+```
 
 ---
 

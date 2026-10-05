@@ -68,8 +68,26 @@ final class McpClient
      */
     private bool $unrestricted;
 
-    /** @var array<string, string> */
+    /**
+     * The setting whose globs become {@see $denyPatterns} at launch (E696):
+     * `.mcp.json` server keys, `fnmatch` wildcards.
+     */
+    public const DENY_SETTINGS_KEY = 'disabledMcpServers';
+
+    /**
+     * Server-name pattern => "deny" (E696). Fed at launch from the
+     * `disabledMcpServers` setting by
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()}: a matching
+     * server is never started ({@see startServer()}), and the map is applied
+     * again on every listing and call, preset-routed or unrestricted, so a map
+     * set after the servers came up still hides and refuses them.
+     *
+     * @var array<string, string>
+     */
     private array $denyPatterns;
+
+    /** @var list<string> entries {@see startServers()} skipped for matching a deny pattern */
+    private array $deniedServers = [];
 
     public function __construct(
         private string $configPath,
@@ -107,7 +125,8 @@ final class McpClient
     /**
      * Set the global wildcard deny-pattern map (server-name pattern => "deny")
      * forwarded to McpRouter on every routed call, alongside the active agent
-     * preset's allowlist.
+     * preset's allowlist, and applied by the unrestricted arm and by
+     * {@see startServers()} too.
      *
      * @param array<string, string> $denyPatterns
      */
@@ -144,6 +163,7 @@ final class McpClient
         $failures = [];
         $this->disabledServers = [];
         $this->refusedServers = [];
+        $this->deniedServers = [];
         $this->strippedSecretEnv = [];
 
         foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
@@ -190,6 +210,18 @@ final class McpClient
     public function refusedServers(): array
     {
         return $this->refusedServers;
+    }
+
+    /**
+     * The entries the last {@see startServers()} run did not start because
+     * their name matches a deny pattern (E696). Not reported as a failure:
+     * the operator's own setting declined them.
+     *
+     * @return list<string>
+     */
+    public function deniedServers(): array
+    {
+        return $this->deniedServers;
     }
 
     /**
@@ -422,6 +454,13 @@ final class McpClient
 
                 return null;
             }
+            // Before the admission check, so a denied entry is neither
+            // started nor recorded as trusted: the operator said no to it.
+            if (McpRouter::serverDenied($name, $this->denyPatterns)) {
+                $this->deniedServers[] = $name;
+
+                return null;
+            }
             if ($this->admit !== null && ($this->admit)($name, $type, $entry) !== true) {
                 $this->refusedServers[] = $name;
 
@@ -565,7 +604,11 @@ final class McpClient
 
         $tools = [];
 
-        foreach ($this->servers as $server) {
+        foreach ($this->servers as $name => $server) {
+            if (McpRouter::serverDenied($name, $this->denyPatterns)) {
+                continue;
+            }
+
             $tools = array_merge($tools, $server->listTools());
         }
 
@@ -618,7 +661,7 @@ final class McpClient
             return in_array($serverName, $this->router()->resolveAllowedServers($this->agentPreset), true);
         }
 
-        return $this->unrestricted;
+        return $this->unrestricted && !McpRouter::serverDenied($serverName, $this->denyPatterns);
     }
 
     /**
