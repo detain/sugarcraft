@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
@@ -63,7 +64,7 @@ final class ReadOnlySessionTest extends TestCase
         $last = $second->history[\count($second->history) - 1];
         self::assertSame(Role::System, $last->role);
         self::assertSame(
-            sprintf(Chat::READ_ONLY_SESSION_NOTICE, 'Shared work', ' (pid ' . getmypid() . ')'),
+            Lang::t('chat.session.read_only', ['session' => 'Shared work', 'holder' => ' (pid ' . getmypid() . ')']),
             $last->content,
         );
         self::assertStringContainsString('/branch', $last->content);
@@ -323,7 +324,7 @@ final class ReadOnlySessionTest extends TestCase
             'the transcript was reloaded from the store, not kept',
         );
         self::assertSame(
-            sprintf(Chat::SESSION_WRITABLE_NOTICE, 'Shared work'),
+            Lang::t('chat.session.writable', ['session' => 'Shared work']),
             $upgraded->history[\count($upgraded->history) - 1]->content,
         );
         self::assertNull($this->store->lockSession('shared'), 'this window holds the session now');

@@ -543,6 +543,7 @@ sugar-crush/tests/Chat/GoalCommandTest.php	0.150	16
 sugar-crush/tests/Tools/BuiltIn/AskUserToolTest.php	0.150	18
 sugar-crush/tests/Agents/Board/BoardTest.php	0.150	20
 sugar-crush/tests/Commands/NewRuleCommandTest.php	0.150	9
+sugar-crush/tests/Chat/ChatHostLangCatalogueTest.php	0.150	3
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23

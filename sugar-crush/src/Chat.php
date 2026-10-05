@@ -1938,11 +1938,10 @@ final class Chat implements Model
         return $this->mutate([
             'sessionLock' => null,
             'readOnlySession' => true,
-            'history' => [...$this->history, Message::notice(sprintf(
-                self::READ_ONLY_SESSION_NOTICE,
-                $this->currentSessionName ?? $id,
-                self::lockHolderClause($holder),
-            ) . ($attachOffer === null ? '' : ' ' . $attachOffer))],
+            'history' => [...$this->history, Message::notice(Lang::t('chat.session.read_only', [
+                'session' => $this->currentSessionName ?? $id,
+                'holder' => self::lockHolderClause($holder),
+            ]) . ($attachOffer === null ? '' : ' ' . $attachOffer))],
         ]);
     }
 
@@ -1998,10 +1997,9 @@ final class Chat implements Model
             'sessionLock' => $lock,
             'readOnlySession' => false,
             'readOnlyDraft' => null,
-            'history' => [...$transcripts->load($id), Message::notice(sprintf(
-                self::SESSION_WRITABLE_NOTICE,
-                $this->currentSessionName ?? $id,
-            ))],
+            'history' => [...$transcripts->load($id), Message::notice(Lang::t('chat.session.writable', [
+                'session' => $this->currentSessionName ?? $id,
+            ]))],
             ...($draft !== null && trim($this->inputBuf) === '' ? ['inputBuf' => $draft] : []),
         ]);
     }
@@ -2009,7 +2007,7 @@ final class Chat implements Model
     /** ` (pid N)` for the read-only notices, or '' when the holder is unknown. */
     private static function lockHolderClause(?int $pid): string
     {
-        return $pid === null ? '' : " (pid {$pid})";
+        return $pid === null ? '' : Lang::t('chat.session.lock_holder', ['pid' => $pid]);
     }
 
     /**
@@ -2114,7 +2112,7 @@ final class Chat implements Model
             // auto-titled name stays replaceable and a user's stays latched.
             'currentSessionTitleSource' => $name === null ? null : $this->storedTitleSource($sessionId),
             'history' => [...$history, Message::notice(
-                '_Resumed session ' . ($name ?? $sessionId) . '._',
+                Lang::t('chat.session.resumed', ['session' => $name ?? $sessionId]),
             )],
         ]);
     }
@@ -2423,7 +2421,7 @@ final class Chat implements Model
             // Roadmap 5.14a: the `notify` setting's bell or desktop
             // notification, once the turn is really over — not while a queued
             // prompt or a goal's judging carries it on.
-            $notify = $done->inFlight ? null : $done->terminalNotification('sugarcrush: turn finished');
+            $notify = $done->inFlight ? null : $done->terminalNotification('sugarcrush: ' . Lang::t('chat.notify.turn_finished'));
             $cmds = array_values(array_filter([
                 $doneCmd,
                 $suggest,
@@ -2751,7 +2749,7 @@ final class Chat implements Model
             // dropped one would, so it is attached on send and visible - and
             // removable - until then.
             if ($msg->path === null) {
-                return [$this->mutate(['history' => [...$this->history, Message::notice(self::NO_CLIPBOARD_IMAGE_NOTICE)]]), null];
+                return [$this->mutate(['history' => [...$this->history, Message::notice(Lang::t('chat.clipboard.no_image'))]]), null];
             }
 
             return [$this->withInput($this->input->insertString($this->mentionFor($msg->path) . ' ')), null];
@@ -2974,7 +2972,7 @@ final class Chat implements Model
                 // A workflow turn says what the cancel is doing, since its
                 // report is still to come (driveWorkflowFiber()).
                 'history' => [...$this->historyWithInterruptedPlaceholders(), Message::notice(
-                    $this->workflowTurnInFlight ? self::WORKFLOW_CANCELLED_NOTICE : '_Request cancelled._',
+                    Lang::t($this->workflowTurnInFlight ? 'chat.workflow.cancelled' : 'chat.request.cancelled'),
                 )],
                 // Half a sentence left under the cancellation notice would
                 // read as an answer the user is still waiting on. The
@@ -3616,20 +3614,16 @@ final class Chat implements Model
             return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::reply(
                 $text,
                 $live === null
-                    ? sprintf(
-                        'No goal is set. `%1$s <condition>` sets one: the agent starts on it at once, and after '
-                        . 'every turn the title model checks the transcript for evidence that it is met, sending the '
-                        . 'agent back to work until it is (up to %2$d follow-up rounds).',
-                        $mode->command(),
-                        $mode->maxRounds(),
-                    )
-                    : sprintf(
-                        'Goal (%1$s, %2$d of %3$d follow-up rounds used): %4$s. `%1$s clear` stops it.',
-                        $live->mode->command(),
-                        $live->round,
-                        $live->mode->maxRounds(),
-                        $live->condition,
-                    ),
+                    ? Lang::t('chat.goal.none_set', [
+                        'command' => $mode->command(),
+                        'rounds' => $mode->maxRounds(),
+                    ])
+                    : Lang::t('chat.goal.status', [
+                        'command' => $live->mode->command(),
+                        'round' => $live->round,
+                        'rounds' => $live->mode->maxRounds(),
+                        'condition' => $live->condition,
+                    ]),
             ));
         }
 
@@ -3637,9 +3631,9 @@ final class Chat implements Model
             $result = \SugarCraft\Crush\Host\Commands\CommandResult::new(Message::user($text)->withUiOnly());
 
             return $this->applyCommandResult($live === null
-                ? $result->withRows(Message::assistant('No goal is set, so there is nothing to clear.')->withUiOnly())
+                ? $result->withRows(Message::assistant(Lang::t('chat.goal.nothing_to_clear'))->withUiOnly())
                 : $result->withRows(
-                    Message::notice(sprintf('Goal cleared: %s', $live->condition)),
+                    Message::notice(Lang::t('chat.goal.cleared', ['condition' => $live->condition])),
                     $live->withStatus(\SugarCraft\Crush\Goal\GoalState::CLEARED)->toMessage(),
                 ));
         }
@@ -3647,11 +3641,7 @@ final class Chat implements Model
         if ($this->titleBackend === null) {
             return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::reply(
                 $text,
-                sprintf(
-                    '%s needs a title model to judge the goal, and none is configured: set `titleModel` '
-                    . '(or `SUGARCRUSH_TITLE_MODEL`). The main model is never asked to judge its own work.',
-                    $mode->command(),
-                ),
+                Lang::t('chat.goal.needs_title_model', ['command' => $mode->command()]),
             ));
         }
 
@@ -3662,13 +3652,11 @@ final class Chat implements Model
         $goal = \SugarCraft\Crush\Goal\GoalState::new($mode, $condition);
         $set = $this->mutate(['history' => [
             ...$this->history,
-            Message::notice(sprintf(
-                'Goal set: %s. After every turn the title model checks the transcript for evidence that it is '
-                . 'met; until it is, the agent is sent back to work, up to %d follow-up rounds. `%s clear` stops it.',
-                $goal->condition,
-                $mode->maxRounds(),
-                $mode->command(),
-            )),
+            Message::notice(Lang::t('chat.goal.set', [
+                'condition' => $goal->condition,
+                'rounds' => $mode->maxRounds(),
+                'command' => $mode->command(),
+            ])),
             $goal->toMessage(),
         ]]);
 
@@ -3700,7 +3688,7 @@ final class Chat implements Model
         if ($this->spendCapReached()) {
             return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::reply(
                 $text,
-                'The spend cap is reached, so the side question was not asked. `/budget` shows or raises the cap.',
+                Lang::t('chat.btw.spend_cap'),
             )->holdingTurn());
         }
 
@@ -3722,16 +3710,15 @@ final class Chat implements Model
     {
         $judge = $this->titleBackend;
         $stop = match (true) {
-            $judge === null => 'no title model is configured to judge it',
-            $this->spendCapReached() => 'the spend cap is reached',
+            $judge === null => Lang::t('chat.goal.stop.no_title_model'),
+            $this->spendCapReached() => Lang::t('chat.goal.stop.spend_cap'),
             default => null,
         };
         if ($stop !== null || $judge === null) {
-            return [$this->endGoal($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, sprintf(
-                'Goal check stopped: %s. The goal is no longer live; `%s <condition>` starts it again.',
-                $stop,
-                $goal->mode->command(),
-            )), null];
+            return [$this->endGoal($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, Lang::t('chat.goal.check_stopped', [
+                'reason' => $stop,
+                'command' => $goal->mode->command(),
+            ])), null];
         }
 
         $generation = $this->generation + 1;
@@ -3781,27 +3768,27 @@ final class Chat implements Model
 
         $verdict = $msg->verdict;
         if ($verdict === null) {
-            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, sprintf(
-                'Goal check stopped: %s. The goal is no longer live; `%s <condition>` starts it again.',
-                $msg->error ?? 'the judge gave no verdict',
-                $goal->mode->command(),
-            ));
+            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, Lang::t('chat.goal.check_stopped', [
+                'reason' => $msg->error ?? Lang::t('chat.goal.stop.no_verdict'),
+                'command' => $goal->mode->command(),
+            ]));
         }
 
         $score = $verdict->score === null ? '' : ' (' . $verdict->scoreLabel() . ')';
         if ($verdict->complete) {
-            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::MET, sprintf('Goal met%s: %s', $score, $goal->condition));
+            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::MET, Lang::t('chat.goal.met', ['score' => $score, 'condition' => $goal->condition]));
         }
 
         if ($goal->exhausted()) {
-            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, sprintf(
-                'Goal not met after %d follow-up rounds%s: %s.%s The loop stopped; `%s <condition>` starts it again.',
-                $goal->round,
-                $score,
-                $goal->condition,
-                $verdict->missing === [] ? '' : ' Still missing: ' . implode('; ', $verdict->missing) . '.',
-                $goal->mode->command(),
-            ));
+            return $released->goalEnded($goal, \SugarCraft\Crush\Goal\GoalState::STOPPED, Lang::t('chat.goal.not_met', [
+                'rounds' => $goal->round,
+                'score' => $score,
+                'condition' => $goal->condition,
+                'missing' => $verdict->missing === []
+                    ? ''
+                    : Lang::t('chat.goal.still_missing', ['missing' => implode('; ', $verdict->missing)]),
+                'command' => $goal->mode->command(),
+            ]));
         }
 
         if ($released->queuedPrompts !== []) {
@@ -3828,7 +3815,7 @@ final class Chat implements Model
         [$next, $cmd] = self::releaseQueuedPrompts([$this->endGoal($goal, $status, $notice), null]);
         // The goal loop held the turn until now, so this is its turn end
         // (roadmap 5.14a) — unless a queued prompt has just taken the slot.
-        $notify = $next->inFlight ? null : $next->terminalNotification('sugarcrush: goal ' . $status);
+        $notify = $next->inFlight ? null : $next->terminalNotification('sugarcrush: ' . Lang::t('chat.notify.goal_ended', ['status' => $status]));
 
         return [$next, $cmd === null || $notify === null ? ($cmd ?? $notify) : Cmd::batch($cmd, $notify)];
     }
@@ -4189,8 +4176,12 @@ final class Chat implements Model
         $wait = Cmd::promise(static fn(): PromiseInterface => $deferred->promise());
         // Roadmap 5.14a: the agent is now waiting on the user, which is the
         // other moment the `notify` setting rings for.
-        $notify = $this->terminalNotification('sugarcrush: waiting for approval: ' . $msg->toolCall->name
-            . ($origin === null ? '' : ' (sub-agent ' . ($origin->name !== '' ? $origin->name : $origin->id) . ')'));
+        $notify = $this->terminalNotification('sugarcrush: ' . Lang::t('chat.notify.awaiting_approval', [
+            'tool' => $msg->toolCall->name,
+            'origin' => $origin === null ? '' : Lang::t('chat.notify.awaiting_approval_origin', [
+                'agent' => $origin->name !== '' ? $origin->name : $origin->id,
+            ]),
+        ]));
 
         return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
     }
@@ -4266,16 +4257,17 @@ final class Chat implements Model
             // run's Task row is — keeps the record the modal took away.
             $origin = \SugarCraft\Crush\Permissions\AskOrigin::locate($ask, $this->history, $this->agentLive());
             if ($origin !== null) {
-                $cleared['history'] = [...$this->history, Message::notice(sprintf(
-                    'sub-agent %s asked to run %s: %s',
-                    $origin->name !== '' ? $origin->name : $origin->id,
-                    $ask->tool,
-                    match (true) {
-                        $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) => 'allowed for this session',
-                        $reply->permits() => 'allowed once',
-                        default => 'refused' . ($note === '' ? '' : ' (' . $note . ')'),
+                $cleared['history'] = [...$this->history, Message::notice(Lang::t('chat.permission.subagent_answered', [
+                    'agent' => $origin->name !== '' ? $origin->name : $origin->id,
+                    'tool' => $ask->tool,
+                    'answer' => match (true) {
+                        $reply === PermissionReply::Always && $ask->offers(PermissionReply::Always) => Lang::t('chat.permission.answer.always'),
+                        $reply->permits() => Lang::t('chat.permission.answer.once'),
+                        default => $note === ''
+                            ? Lang::t('chat.permission.answer.refused')
+                            : Lang::t('chat.permission.answer.refused_note', ['note' => $note]),
                     },
-                ))];
+                ]))];
             }
 
             return [$this->mutate($cleared), null];
@@ -8454,7 +8446,7 @@ final class Chat implements Model
         // halves are pinned, keyboard and mouse in the identical state, by
         // {@see \SugarCraft\Crush\Tests\MouseModalGuardTest::testMidTurnAClickOnTheCurrentTabRefusesNothingWhileCtrlTabStillDoes()}.
         if ($this->inFlight) {
-            return $this->refuseInFlightAction('Switch session');
+            return $this->refuseInFlightAction(Lang::t('chat.action.switch_session'));
         }
 
         return [$this->switchToSession($id, $this->storedSessionName($id)), null];
@@ -8896,7 +8888,7 @@ final class Chat implements Model
 
         $summary = self::settingsSavedSummary(\count($changed), $savedTo, \count($now), \count($held), \count($nextTurn), $restart);
         if ($refused !== []) {
-            $summary .= ' · ' . implode(', ', $refused) . ' is not a spend ceiling, so the cap stays as it was';
+            $summary .= ' · ' . Lang::t('chat.settings.not_a_spend_cap', ['keys' => implode(', ', $refused)]);
         }
         [$chat, $toastCmd] = $chat->withSettingsToast(
             $summary,
@@ -8939,7 +8931,9 @@ final class Chat implements Model
         $chat = $this->mutate(['pendingSettingsApply' => []])->withEngineSettings();
 
         return $chat->withSettingsToast(
-            'The turn ended, so ' . implode(', ', $keys) . ' now ' . (\count($keys) === 1 ? 'applies' : 'apply') . '.',
+            Lang::t(\count($keys) === 1 ? 'chat.settings.turn_ended.one' : 'chat.settings.turn_ended.other', [
+                'keys' => implode(', ', $keys),
+            ]),
             \SugarCraft\Toast\ToastType::Success,
         );
     }
@@ -9030,19 +9024,22 @@ final class Chat implements Model
      */
     private static function settingsSavedSummary(int $count, ?string $savedTo, int $now, int $held, int $nextTurn, array $restart): string
     {
-        $parts = [sprintf('Saved %d setting%s', $count, $count === 1 ? '' : 's')
-            . ($savedTo === null || $savedTo === '' ? '' : ' to ' . $savedTo)];
+        $parts = [Lang::t($count === 1 ? 'chat.settings.saved.one' : 'chat.settings.saved.other', ['count' => $count])
+            . ($savedTo === null || $savedTo === '' ? '' : Lang::t('chat.settings.saved_to', ['path' => $savedTo]))];
         if ($now > 0) {
-            $parts[] = $now . ' ' . ($now === 1 ? 'applies' : 'apply') . ' now';
+            $parts[] = Lang::t($now === 1 ? 'chat.settings.applies_now.one' : 'chat.settings.applies_now.other', ['count' => $now]);
         }
         if ($held > 0) {
-            $parts[] = $held . ' when this turn ends';
+            $parts[] = Lang::t('chat.settings.when_turn_ends', ['count' => $held]);
         }
         if ($nextTurn > 0) {
-            $parts[] = $nextTurn . ' next turn';
+            $parts[] = Lang::t('chat.settings.next_turn', ['count' => $nextTurn]);
         }
         if ($restart !== []) {
-            $parts[] = \count($restart) . ' ' . (\count($restart) === 1 ? 'needs' : 'need') . ' a restart (' . implode(', ', $restart) . ')';
+            $parts[] = Lang::t(\count($restart) === 1 ? 'chat.settings.needs_restart.one' : 'chat.settings.needs_restart.other', [
+                'count' => \count($restart),
+                'keys' => implode(', ', $restart),
+            ]);
         }
 
         return implode(' · ', $parts);
@@ -10186,7 +10183,7 @@ final class Chat implements Model
                 => static fn (): AgentMessageSentMsg => new AgentMessageSentMsg($id, $name, $text, $status, $msgId, $detail);
 
             if ($state === null) {
-                $cmds[] = $answer(AgentMessageSentMsg::FAILED, null, 'not a delegated run of this session');
+                $cmds[] = $answer(AgentMessageSentMsg::FAILED, null, Lang::t('chat.agents.not_delegated'));
 
                 continue;
             }
@@ -10198,7 +10195,7 @@ final class Chat implements Model
                 continue;
             }
             if ($inbox === null) {
-                $cmds[] = $answer(AgentMessageSentMsg::FAILED, null, 'this session keeps no agent mailboxes');
+                $cmds[] = $answer(AgentMessageSentMsg::FAILED, null, Lang::t('chat.agents.no_mailboxes'));
 
                 continue;
             }
@@ -10265,7 +10262,7 @@ final class Chat implements Model
         foreach (array_values(array_unique($msg->agentIds)) as $id) {
             $state = $registry->get($id);
             if ($state === null) {
-                $problems[] = sprintf('"%s" is not a delegated run of this session', $id);
+                $problems[] = Lang::t('chat.agents.problem.not_delegated', ['id' => $id]);
 
                 continue;
             }
@@ -10273,13 +10270,13 @@ final class Chat implements Model
             if ($msg->verb === AgentControlMsg::OPEN_SESSION) {
                 $child = $state->childSessionId;
                 if ($child === null || $child === '') {
-                    $problems[] = sprintf('%s opens as a session once it has finished and been stored', $state->name);
+                    $problems[] = Lang::t('chat.agents.problem.not_stored', ['agent' => $state->name]);
                 } elseif ($chat->inFlight) {
-                    $problems[] = sprintf('a turn is running; open %s as a session once it ends', $state->name);
+                    $problems[] = Lang::t('chat.agents.problem.turn_running', ['agent' => $state->name]);
                 } elseif ($chat->sessionStore === null) {
-                    $problems[] = 'this chat keeps no sessions to switch to';
+                    $problems[] = Lang::t('chat.agents.problem.no_sessions');
                 } else {
-                    $chat = $chat->switchToSession($child, $state->name . ' (agent)');
+                    $chat = $chat->switchToSession($child, Lang::t('chat.agents.session_name', ['agent' => $state->name]));
                 }
 
                 break;
@@ -10294,7 +10291,7 @@ final class Chat implements Model
             if ($state->isFinished()) {
                 // Nothing left to cancel, pause or stop — nor to move.
                 if ($msg->verb === AgentControlMsg::BACKGROUND) {
-                    $problems[] = sprintf('%s has already finished, so there is nothing to move to the background', $state->name);
+                    $problems[] = Lang::t('chat.agents.problem.already_finished', ['agent' => $state->name]);
                 }
 
                 continue;
@@ -10302,7 +10299,7 @@ final class Chat implements Model
             // P-E3: a nested run's Task call belongs to the run that made it,
             // so only a run this conversation delegated can be handed on.
             if ($msg->verb === AgentControlMsg::BACKGROUND && $state->parentAgentId !== null && $state->parentAgentId !== '') {
-                $problems[] = sprintf('%s is a nested run; only a run this conversation delegated can move to the background', $state->name);
+                $problems[] = Lang::t('chat.agents.problem.nested', ['agent' => $state->name]);
 
                 continue;
             }
@@ -10317,7 +10314,7 @@ final class Chat implements Model
                 }
             }
             if ($inbox === null) {
-                $problems[] = sprintf('%s cannot be reached: this session keeps no agent mailboxes', $state->name);
+                $problems[] = Lang::t('chat.agents.problem.unreachable', ['agent' => $state->name]);
 
                 continue;
             }
@@ -10363,15 +10360,15 @@ final class Chat implements Model
         $sessionId = $this->currentSessionId;
         $resumeId = $state->resumeId;
         if ($resumeId === null || $resumeId === '') {
-            return [$this, $failed('this run cannot be continued (it kept no resume id)'), false];
+            return [$this, $failed(Lang::t('chat.agents.followup.no_resume_id')), false];
         }
         if ($sessionId === null || !$this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend) {
-            return [$this, $failed('continuing a run needs the engine backend and a session'), false];
+            return [$this, $failed(Lang::t('chat.agents.followup.needs_engine')), false];
         }
 
         $resume = \SugarCraft\Crush\Host\AgentResume::new($this->backend->withSessionId($sessionId));
         if (!$resume->available()) {
-            return [$this, $failed('this session has no Task tool to continue the run with'), false];
+            return [$this, $failed(Lang::t('chat.agents.followup.no_task_tool')), false];
         }
 
         // The follow-up's beats go where a turn's go: the dashboard's mirror
@@ -10385,7 +10382,7 @@ final class Chat implements Model
         $description = $state->description;
 
         return [
-            $this->mutate(['history' => [...$this->history, Message::toAgent($name, $text, '(follow-up)')]]),
+            $this->mutate(['history' => [...$this->history, Message::toAgent($name, $text, Lang::t('chat.agents.followup.badge'))]]),
             Cmd::batch(
                 static fn (): AgentMessageSentMsg => new AgentMessageSentMsg($id, $name, $text, AgentMessageSentMsg::RESUMING),
                 Cmd::promise(static fn (): PromiseInterface => $resume
@@ -10394,7 +10391,7 @@ final class Chat implements Model
                         $why = trim(strtok($result->content(), "\n") ?: '');
 
                         return $result->isError()
-                            ? new AgentMessageSentMsg($id, $name, $text, AgentMessageSentMsg::FAILED, null, $why === '' ? 'the follow-up failed' : $why)
+                            ? new AgentMessageSentMsg($id, $name, $text, AgentMessageSentMsg::FAILED, null, $why === '' ? Lang::t('chat.agents.followup.failed') : $why)
                             : new AgentMessageSentMsg($id, $name, $text, AgentMessageSentMsg::REPLIED);
                     })),
             ),
@@ -11191,32 +11188,6 @@ final class Chat implements Model
     }
 
     /**
-     * The row {@see withSessionLocking()} adds when the session it opened is
-     * held by another TUI (audit SES-3(b)): `%s` the session's name or id,
-     * `%s` ` (pid N)` or ''. Public because the read-only tests and the
-     * README quote it.
-     */
-    public const READ_ONLY_SESSION_NOTICE = 'Session %s is open in another sugarcrush%s, so this window is '
-        . 'read-only: nothing typed here is sent to the model or saved to that session. Type /branch to fork '
-        . 'it into a new session this window owns and carry on there, or close the other window and this one '
-        . 'becomes writable by itself.';
-
-    /**
-     * The row double-Escape adds when the turn it cancels is a workflow run:
-     * the run's agents are being stopped, and its partial report — a
-     * {@see CancelledWorkflowReportMsg} — follows once they have.
-     */
-    public const WORKFLOW_CANCELLED_NOTICE = '_Workflow cancelled: stopping its agents. Its report follows._';
-
-    /**
-     * The row {@see retakenSessionLock()} adds when a read-only window takes
-     * the lock after the other TUI let go: `%s` the session's name or id.
-     * Public for the tests that quote it.
-     */
-    public const SESSION_WRITABLE_NOTICE = 'The other sugarcrush has closed session %s, so this window can write '
-        . 'to it now. The transcript was reloaded to include what it saved.';
-
-    /**
      * The row {@see refuseReadOnly()} adds for input a read-only session will
      * not run: `%s` the quoted draft, `%s` the session's name or id.
      */
@@ -11582,7 +11553,7 @@ final class Chat implements Model
         }
 
         if ($msg->type === KeyType::Tab && $msg->ctrl) {
-            return $this->refuseInFlightAction('Switch session');
+            return $this->refuseInFlightAction(Lang::t('chat.action.switch_session'));
         }
 
         if ($msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
@@ -12382,9 +12353,9 @@ final class Chat implements Model
             };
 
             try {
-                return $run()->then($land, static fn (\Throwable $e): Msg => $land("**Error:** {$e->getMessage()}"));
+                return $run()->then($land, static fn (\Throwable $e): Msg => $land(Lang::t('chat.command.error', ['error' => $e->getMessage()])));
             } catch (\Throwable $e) {
-                return \React\Promise\resolve($land("**Error:** {$e->getMessage()}"));
+                return \React\Promise\resolve($land(Lang::t('chat.command.error', ['error' => $e->getMessage()])));
             }
         });
     }
@@ -12741,7 +12712,7 @@ final class Chat implements Model
 
             return [$this->withInputBuf('')->mutate(['history' => [
                 ...$this->history,
-                Message::assistant("Usage: /model [provider [model]]. Available: {$available}")->withUiOnly(),
+                Message::assistant(Lang::t('chat.model.usage', ['available' => $available]))->withUiOnly(),
             ]]), null];
         }
 
@@ -12784,7 +12755,7 @@ final class Chat implements Model
         // 20-column floor its 20 columns always fit, which hid that it was the
         // one line this method never clipped.
         $budget = max(1, ($this->cols ?? 80) - self::HELP_CHROME_COLS);
-        $lines = [self::clip('Slash commands (' . count($commands) . '):', $budget)];
+        $lines = [self::clip(Lang::t('chat.help.heading', ['count' => count($commands)]), $budget)];
 
         // GROUPED, not walked in declared order: the registry INTERLEAVES its
         // categories - the 'Session' rows arrive in several separate runs, and
@@ -12855,7 +12826,7 @@ final class Chat implements Model
         // Clipped like every other row: at 40 columns this sentence is the
         // longest line in the listing, and an unclipped trailer would be the
         // one over-wide row the rest of this method exists to avoid.
-        $lines[] = self::clip('Press ? or type /keys for the keyboard shortcut reference.', $budget);
+        $lines[] = self::clip(Lang::t('chat.help.keys_hint'), $budget);
 
         return [$this->withInputBuf('')->mutate(['history' => [
             ...$this->history,
@@ -13341,7 +13312,7 @@ final class Chat implements Model
 
         if ($verb === 'toggle') {
             if (count($tokens) > 3) {
-                return $this->gestureUsageResponse($inputBuf, 'usage: /pane toggle [pane name]');
+                return $this->gestureUsageResponse($inputBuf, Lang::t('chat.pane.usage_toggle'));
             }
 
             $name = isset($tokens[2]) ? strtolower($tokens[2]) : null;
@@ -13358,7 +13329,7 @@ final class Chat implements Model
         $side = strtolower($tokens[2] ?? '');
 
         if (count($tokens) > 4 || $verb !== 'dock' || ($side !== 'left' && $side !== 'right')) {
-            return $this->gestureUsageResponse($inputBuf, 'usage: /pane dock <left|right> [pane name] | /pane toggle [pane name]');
+            return $this->gestureUsageResponse($inputBuf, Lang::t('chat.pane.usage'));
         }
 
         $name = isset($tokens[3]) ? strtolower($tokens[3]) : null;
@@ -13386,7 +13357,7 @@ final class Chat implements Model
         $tokens = self::commandTokens($inputBuf);
 
         if (count($tokens) !== 2 || strtolower($tokens[1]) !== 'reset') {
-            return $this->gestureUsageResponse($inputBuf, 'usage: /layout reset');
+            return $this->gestureUsageResponse($inputBuf, Lang::t('chat.layout.usage'));
         }
 
         $next = $this->mutate([
@@ -14518,10 +14489,7 @@ final class Chat implements Model
         // across it.
         if ($compacted->spendCapReached()) {
             return self::releaseQueuedPrompts($compacted->withCompactionOutcome($refilled, turnSent: false)
-                ->spendCapTurnRefusal(
-                    'The summarization this turn was parked behind is what reached the cap; that call went out '
-                    . 'before the cap was met and is billed. Your prompt is in the transcript above, unsent.'
-                ));
+                ->spendCapTurnRefusal(Lang::t('chat.spend.crossed_by_summarization')));
         }
         //
         // The 95% blocking tier is re-tested HERE rather than in {@see submit()}
@@ -14654,20 +14622,17 @@ final class Chat implements Model
     private function handleSessionsCommand(string $inputText): array
     {
         if ($this->sessionStore === null) {
-            return $this->sessionResponse($inputText, 'Session store not configured. Set a SessionStore to use /sessions.');
+            return $this->sessionResponse($inputText, Lang::t('chat.sessions.no_store'));
         }
 
         $query = self::commandArgument($inputText);
         $picker = $this->buildSessionPicker($query);
         if ($picker === null) {
-            return $this->sessionResponse($inputText, 'No sessions recorded yet.');
+            return $this->sessionResponse($inputText, Lang::t('chat.sessions.none'));
         }
 
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant(
-                'Session picker open — ↑/↓ or wheel browse, click selects, ↵ resume, / filter, '
-                . 'r rename, d delete, p pin, f fork, esc close.',
-            )->withUiOnly()],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant(Lang::t('chat.sessions.picker_open'))->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
             'sessionPicker' => $picker,
@@ -14937,7 +14902,7 @@ final class Chat implements Model
             // action is refused with a notice naming it. Same rule as the
             // palette's; see {@see runSelectedPaletteActionWhileInFlight()}.
             'resume' => $this->inFlight
-                ? $this->refuseInFlightAction('Resume session')
+                ? $this->refuseInFlightAction(Lang::t('chat.action.resume_session'))
                 : $this->resumeSelectedSession($next),
             'preview' => [$this->mutate(['sessionPicker' => $this->previewSessionInPicker($next)]), null],
             'close' => [$this->mutate(['sessionPicker' => null]), null],
@@ -15004,7 +14969,7 @@ final class Chat implements Model
                     }
                     $store->archive($id);
 
-                    return $keep($this->reloadSessionPicker($picker)->withNotice('Archived. Press a to show archived sessions, u to bring one back.'));
+                    return $keep($this->reloadSessionPicker($picker)->withNotice(Lang::t('chat.picker.archived')));
 
                 case $Action::Unarchive:
                     if ($id === null) {
@@ -15018,13 +14983,15 @@ final class Chat implements Model
                 case $Action::DeleteWithChildren:
                     $target = $picker->armedDeleteId();
                     if ($target === null || $target === $this->currentSessionId) {
-                        return $keep($picker->withNotice('This is the session on screen; switch to another before deleting it.'));
+                        return $keep($picker->withNotice(Lang::t('chat.picker.delete_current')));
                     }
                     $deleted = $store->deleteSession($target, $action === $Action::DeleteWithChildren);
                     $count = count($deleted);
 
                     return $keep($this->reloadSessionPicker($picker)->withNotice(
-                        $count > 1 ? "Deleted the session and {$this->pluralSessions($count - 1)} under it." : 'Deleted the session.',
+                        $count > 1
+                            ? Lang::t('chat.picker.deleted_with_children', ['sessions' => $this->pluralSessions($count - 1)])
+                            : Lang::t('chat.picker.deleted'),
                     ));
 
                 case $Action::Rename:
@@ -15047,7 +15014,7 @@ final class Chat implements Model
                         }
                         $store->clearSessionName($rename['id']);
 
-                        return $keep($this->reloadSessionPicker($picker, $rename['id'])->withNotice('Session name cleared.'));
+                        return $keep($this->reloadSessionPicker($picker, $rename['id'])->withNotice(Lang::t('chat.picker.name_cleared')));
                     }
                     $store->renameSession($rename['id'], $title, \SugarCraft\Crush\Session\TitleSource::User);
                     $next = $rename['id'] === $this->currentSessionId
@@ -15061,7 +15028,7 @@ final class Chat implements Model
                         return $keep($picker);
                     }
                     if ($this->inFlight) {
-                        return $this->refuseInFlightAction('Fork session');
+                        return $this->refuseInFlightAction(Lang::t('chat.action.fork_session'));
                     }
                     // forkSession() copies the STORED transcript: write any
                     // debounced change first, or the fork starts behind the
@@ -15072,7 +15039,7 @@ final class Chat implements Model
                     return [$this->mutate(['sessionPicker' => null])->switchToSession($forkId, $this->storedSessionName($forkId)), null];
             }
         } catch (\Throwable $e) {
-            return $keep($picker->withNotice('Error: ' . self::sanitizeSessionField($e->getMessage())));
+            return $keep($picker->withNotice(Lang::t('chat.picker.error', ['error' => self::sanitizeSessionField($e->getMessage())])));
         }
 
         return $keep($picker);
@@ -15081,7 +15048,7 @@ final class Chat implements Model
     /** "1 session" / "N sessions". */
     private function pluralSessions(int $count): string
     {
-        return $count . ($count === 1 ? ' session' : ' sessions');
+        return Lang::t($count === 1 ? 'chat.picker.sessions.one' : 'chat.picker.sessions.other', ['count' => $count]);
     }
 
     /**
@@ -15106,13 +15073,13 @@ final class Chat implements Model
             }
             $text = trim((string) preg_replace('/\s+/u', ' ', self::sanitizeSessionField($message->content)));
             if ($text !== '') {
-                $lines[] = ($message->role === Role::User ? 'you: ' : 'ai:  ') . $text;
+                $lines[] = Lang::t($message->role === Role::User ? 'chat.picker.preview.you' : 'chat.picker.preview.ai') . $text;
             }
         }
 
         return $picker->withPreview(
             $selected['sessionId'],
-            $lines === [] ? ['(no saved messages to preview)'] : array_slice($lines, -SessionPicker::PREVIEW_LINES),
+            $lines === [] ? [Lang::t('chat.picker.preview.empty')] : array_slice($lines, -SessionPicker::PREVIEW_LINES),
         );
     }
 
@@ -15399,7 +15366,7 @@ final class Chat implements Model
                 [$next, $response] = $closed->applyUserSessionTitle($editor->value);
             }
         } catch (\Throwable $e) {
-            [$next, $response] = [$closed, 'Error: ' . self::sanitizeSessionField($e->getMessage())];
+            [$next, $response] = [$closed, Lang::t('chat.title.error', ['error' => self::sanitizeSessionField($e->getMessage())])];
         }
 
         return [
@@ -15579,15 +15546,15 @@ final class Chat implements Model
     {
         $lines = [];
         if ($error !== null) {
-            $lines[] = "**Error:** {$error}";
+            $lines[] = Lang::t('chat.command.error', ['error' => $error]);
             $lines[] = '';
         }
-        $lines[] = '**Available /session commands:**';
+        $lines[] = Lang::t('chat.session_help.heading');
         $lines[] = '';
-        $lines[] = '`/rename <name>` — Name the current session for easy resume';
-        $lines[] = '`/branch` — Fork the current session into a new copy';
-        $lines[] = '`/rewind [n]` — Rewind n steps (default: 1) to a previous checkpoint';
-        $lines[] = '`/session` — Show this help text';
+        $lines[] = Lang::t('chat.session_help.rename');
+        $lines[] = Lang::t('chat.session_help.branch');
+        $lines[] = Lang::t('chat.session_help.rewind');
+        $lines[] = Lang::t('chat.session_help.session');
 
         return $this->sessionResponse($inputText, implode("\n", $lines));
     }
@@ -15805,9 +15772,7 @@ final class Chat implements Model
         }
 
         $clipped = mb_substr($decoded, 0, self::OSC52_MAX_CHARS, 'UTF-8');
-        $notices->record(
-            'Clipboard copy clipped to ' . self::OSC52_MAX_CHARS . ' of ' . $chars . ' characters.'
-        );
+        $notices->record(Lang::t('chat.clipboard.clipped', ['max' => self::OSC52_MAX_CHARS, 'chars' => $chars]));
 
         return new RawMsg(Ansi::setClipboard($clipped, $out[1]));
     }
@@ -16097,11 +16062,6 @@ final class Chat implements Model
             && $this->sessionPicker === null
             && $this->slashMenuMatches() !== [];
     }
-
-    /** What Ctrl+V says when the clipboard held no image a tool could read. */
-    private const NO_CLIPBOARD_IMAGE_NOTICE = 'No image on the clipboard to attach. Ctrl+V reads an image through '
-        . 'pngpaste (macOS), wl-paste (Wayland) or xclip (X11); paste text with your terminal\'s own paste key, '
-        . 'or attach a file with @path.';
 
     /**
      * The `@` mention that names $path in a draft: relative to the project
@@ -16895,11 +16855,11 @@ final class Chat implements Model
     private function togglePinCurrentSession(): array
     {
         if ($this->sessionStore === null || $this->currentSessionId === null) {
-            $line = 'No active session to pin. Start a new conversation first.';
+            $line = Lang::t('chat.pin.no_session');
         } else {
             $pinned = (bool) ($this->sessionStore->getSession($this->currentSessionId)['pinned'] ?? false);
             $this->sessionStore->setPinned($this->currentSessionId, !$pinned);
-            $line = $pinned ? 'Unpinned this session.' : 'Pinned this session: it lists first in the session picker and the tab strip.';
+            $line = Lang::t($pinned ? 'chat.pin.unpinned' : 'chat.pin.pinned');
         }
 
         return [$this->mutate(['history' => [...$this->history, Message::assistant($line)->withUiOnly()]]), null];
@@ -16923,7 +16883,7 @@ final class Chat implements Model
         }
 
         return [
-            $next->mutate(['sessionPicker' => $picker->withNotice('Highlight a session and press d twice to delete it; the session on screen cannot be deleted.')]),
+            $next->mutate(['sessionPicker' => $picker->withNotice(Lang::t('chat.picker.delete_hint'))]),
             $cmd,
         ];
     }
@@ -17022,16 +16982,11 @@ final class Chat implements Model
     {
         $gate = $this->permissionGate();
         if ($gate === null) {
-            return [$this->mutate(['history' => [...$this->history, Message::notice(
-                'This session runs without a permission gate, so there is no mode to switch.',
-            )]]), null];
+            return [$this->mutate(['history' => [...$this->history, Message::notice(Lang::t('chat.mode.no_gate'))]]), null];
         }
 
         if ($this->inFlight) {
-            return [$this->mutate(['history' => [...$this->history, Message::notice(
-                'The permission mode does not change while a turn runs: the turn keeps the mode it started '
-                . 'with. Switch after it ends, or Esc Esc to cancel it now.',
-            )]]), null];
+            return [$this->mutate(['history' => [...$this->history, Message::notice(Lang::t('chat.mode.turn_running'))]]), null];
         }
 
         $current = $gate->mode();
@@ -17059,7 +17014,7 @@ final class Chat implements Model
 
         [$history, $from] = self::withoutUnsentModeNotice($this->history, $current);
         $history[] = $from === $target
-            ? Message::notice("Back to `{$target->value}` before anything was sent, so the agent is not told about the switch.")
+            ? Message::notice(Lang::t('chat.mode.back_unsent', ['mode' => $target->value]))
             : Message::system(self::modeChangeNotice($from, $target));
 
         return [$chat->mutate(['history' => $history]), null];
@@ -17134,10 +17089,13 @@ final class Chat implements Model
     {
         $model = $model === null || trim($model) === '' ? null : trim($model);
         $saved = null;
+        // Whether $saved reports a choice that WAS written — kept apart from
+        // the (translated) wording so the failure note below never parses it.
+        $persisted = false;
         if ($model !== null) {
             $writer = $this->workspace?->service(\SugarCraft\Crush\Config\Settings\SettingsWriter::class);
             if (!$writer instanceof \SugarCraft\Crush\Config\Settings\SettingsWriter) {
-                $saved = 'for this session only: nothing here saves a model choice';
+                $saved = Lang::t('chat.provider.model_not_savable');
             } elseif (!\in_array($name, $this->availableProviderNames(), true)) {
                 // Never save a model under a name that is not a provider: the
                 // entry would sit in config.json, read by nothing.
@@ -17151,9 +17109,13 @@ final class Chat implements Model
                         $model,
                         \is_array($layered) ? $layered : [],
                     );
-                    $saved = 'saved as models.' . self::reportField($name) . ' in ' . self::reportField($path);
+                    $saved = Lang::t('chat.provider.model_saved', [
+                        'provider' => self::reportField($name),
+                        'path' => self::reportField($path),
+                    ]);
+                    $persisted = true;
                 } catch (\Throwable $e) {
-                    $saved = 'not saved: ' . self::reportField($e->getMessage());
+                    $saved = Lang::t('chat.provider.model_not_saved', ['error' => self::reportField($e->getMessage())]);
                 }
             }
         }
@@ -17213,7 +17175,7 @@ final class Chat implements Model
             // A model is a property of the engine; a command-line backend has
             // no model to switch, and saying "switched" would be a lie.
             if ($model !== null && !$backend instanceof \SugarCraft\Crush\Backend\EngineBackend) {
-                throw new \RuntimeException('this provider does not take a model choice');
+                throw new \RuntimeException(Lang::t('chat.provider.no_model_choice'));
             }
             if ($model !== null) {
                 $backend = $backend->withModel($model);
@@ -17222,22 +17184,34 @@ final class Chat implements Model
             // A model choice saved before the build failed stays saved (it is
             // a valid entry for a real provider), so the reply says so rather
             // than letting the next launch surprise the user with it.
-            $note = $model !== null && $saved !== null && str_starts_with($saved, 'saved')
-                ? " (model '" . self::reportField($model) . "' was {$saved})"
+            $note = $model !== null && $saved !== null && $persisted
+                ? Lang::t('chat.provider.saved_note', ['model' => self::reportField($model), 'saved' => $saved])
                 : '';
 
             return [$this->mutate([
                 'palette' => null,
-                'history' => [...$this->history, Message::assistant("Could not switch to provider '{$name}': {$e->getMessage()}{$note}")->withUiOnly()],
+                'history' => [...$this->history, Message::assistant(Lang::t('chat.provider.switch_failed', [
+                    'provider' => $name,
+                    'error' => $e->getMessage(),
+                    'note' => $note,
+                ]))->withUiOnly()],
             ]), null];
         }
 
         $this->onConfigChange?->__invoke('provider', $name);
 
-        $report = $model === null
-            ? "Switched to provider '{$name}'."
-            : "Switched to provider '{$name}', model '" . self::reportField($model) . "'"
-                . ($saved === null ? '.' : " ({$saved}).");
+        $report = match (true) {
+            $model === null => Lang::t('chat.provider.switched', ['provider' => $name]),
+            $saved === null => Lang::t('chat.provider.switched_model', [
+                'provider' => $name,
+                'model' => self::reportField($model),
+            ]),
+            default => Lang::t('chat.provider.switched_model_saved', [
+                'provider' => $name,
+                'model' => self::reportField($model),
+                'saved' => $saved,
+            ]),
+        };
 
         return [$this->mutate([
             'palette' => null,
@@ -17260,7 +17234,7 @@ final class Chat implements Model
         return [$this->mutate([
             'palette' => null,
             'themeName' => $name,
-            'history' => [...$this->history, Message::assistant("Theme set to '{$name}'.")->withUiOnly()],
+            'history' => [...$this->history, Message::assistant(Lang::t('chat.theme.set', ['theme' => $name]))->withUiOnly()],
         ]), null];
     }
 
@@ -17271,7 +17245,7 @@ final class Chat implements Model
     {
         if ($this->sessionStore === null) {
             return [$this->mutate([
-                'history' => [...$this->history, Message::assistant('Session store not configured. Set a SessionStore to create sessions.')->withUiOnly()],
+                'history' => [...$this->history, Message::assistant(Lang::t('chat.sessions.no_store_new'))->withUiOnly()],
             ]), null];
         }
 
@@ -17291,7 +17265,7 @@ final class Chat implements Model
             // that transcripts are saved on change, store it there as well.
             // UI-only (audit 15b-03): a transcript that opened on an assistant
             // row is one strict providers reject, and the model did not say it.
-            'history' => [Message::assistant("New session created: {$sessionId}")->withUiOnly()],
+            'history' => [Message::assistant(Lang::t('chat.sessions.created', ['session' => $sessionId]))->withUiOnly()],
             'currentSessionId' => $sessionId,
             'currentSessionName' => null,
         ]), null];
@@ -17337,7 +17311,7 @@ final class Chat implements Model
         if ($msg->sessionId === null || $this->inFlight) {
             $row = $msg->sessionId === null
                 ? $report
-                : $report . ' A turn is running here, so this window stayed: open it from /sessions.';
+                : $report . Lang::t('chat.handoff.stayed');
 
             return [$this->mutate(['history' => [...$this->history, Message::assistant($row)->withUiOnly()]]), null];
         }
@@ -17356,7 +17330,7 @@ final class Chat implements Model
             // gets the seed: it is what the next turn must read.
             'history' => [
                 ...($seeded === [] ? [Message::user($msg->seed)] : $seeded),
-                Message::notice('_' . $report . ' The agent reads the summary above on its next turn._'),
+                Message::notice(Lang::t('chat.handoff.landed', ['report' => $report])),
             ],
         ]), null];
     }
@@ -17384,8 +17358,7 @@ final class Chat implements Model
      */
     private function handlePaletteOpenDocs(): array
     {
-        $message = 'Docs: see README.md in this project, or '
-            . 'https://sugarcraft.github.io/lib/sugar-crush.html';
+        $message = Lang::t('chat.docs.pointer', ['url' => 'https://sugarcraft.github.io/lib/sugar-crush.html']);
 
         return [$this->mutate(['history' => [...$this->history, Message::assistant($message)->withUiOnly()]]), null];
     }
@@ -17867,13 +17840,11 @@ final class Chat implements Model
             $name = $session?->name ?? $id;
             // A session re-adopted at launch (roadmap 4.3-3) was not started
             // by this run: "is now running" read as if it had just begun.
-            $notices[] = Message::notice(sprintf(
+            $notices[] = Message::notice(Lang::t(
                 $previous === \SugarCraft\Crush\Sessions\BackgroundSupervisor::ADOPTED_STATUS
-                    ? "Background session %s ('%s') was re-adopted from an earlier run and is %s."
-                    : "Background session %s ('%s') is now %s.",
-                $id,
-                $name,
-                $status,
+                    ? 'chat.background.readopted'
+                    : 'chat.background.status',
+                ['id' => $id, 'name' => $name, 'status' => $status],
             ));
             if ($session !== null && $session->isSettled()) {
                 $announcements[] = $session->announcement();
@@ -17888,8 +17859,8 @@ final class Chat implements Model
         $replies = $this->inFlight ? [] : $this->drainMainMailbox();
         if ($replies !== []) {
             $notices[] = Message::notice(count($replies) === 1
-                ? 'A sub-agent sent the agent a message; it goes to the agent now.'
-                : sprintf('Sub-agents sent the agent %d messages; they go to the agent now.', count($replies)));
+                ? Lang::t('chat.background.reply.one')
+                : Lang::t('chat.background.reply.other', ['count' => count($replies)]));
             $announcements = [...$announcements, ...$replies];
         }
 
@@ -17901,8 +17872,8 @@ final class Chat implements Model
 
         if ($announcements !== [] && $this->inFlight) {
             $notices[] = Message::notice(count($announcements) === 1
-                ? 'Its result goes to the agent as soon as this turn finishes.'
-                : sprintf('Their %d results go to the agent as soon as this turn finishes.', count($announcements)));
+                ? Lang::t('chat.background.after_turn.one')
+                : Lang::t('chat.background.after_turn.other', ['count' => count($announcements)]));
         }
 
         $polled = $this->mutate([
@@ -18939,11 +18910,7 @@ final class Chat implements Model
      */
     private function outputLengthStoppedNotice(): Message
     {
-        return Message::notice(
-            'The provider stopped this reply at its output limit, so the text above may end mid-thought. '
-            . 'Raise "maxOutputTokens" in ~/.sugar-crush/config.json for a longer single reply, '
-            . 'or ask for the remainder in your next message.'
-        );
+        return Message::notice(Lang::t('chat.turn.output_limit'));
     }
 
     /**
@@ -18970,11 +18937,7 @@ final class Chat implements Model
      */
     private function stepsTruncatedNotice(): Message
     {
-        return Message::notice(
-            'This turn used all of its tool steps before the work was done, so the reply above describes where it '
-            . 'stopped — what is finished and what remains — not a finished answer. Say "continue" to pick it up '
-            . 'from there, or raise "maxToolSteps" in ~/.sugar-crush/config.json for longer agentic turns.'
-        );
+        return Message::notice(Lang::t('chat.turn.steps_exhausted'));
     }
 
     /**
@@ -18991,13 +18954,10 @@ final class Chat implements Model
      */
     private function loopGuardStoppedNotice(string $toolName): Message
     {
-        return Message::notice(sprintf(
-            'This turn was ended by the repeat-call loop guard: the model called %s %d times with the same arguments '
-            . 'and got the same result each time. The reply above describes where it stopped. Point it at a different '
-            . 'approach, or say "continue" once something has changed.',
-            self::quoteDraftForNotice($toolName),
-            Backend\ToolCallLoopGuard::END_TURN_AT,
-        ));
+        return Message::notice(Lang::t('chat.turn.loop_guard', [
+            'tool' => self::quoteDraftForNotice($toolName),
+            'count' => Backend\ToolCallLoopGuard::END_TURN_AT,
+        ]));
     }
 
     /**
@@ -19020,12 +18980,7 @@ final class Chat implements Model
      */
     private function unpricedModelNotice(string $model): Message
     {
-        return Message::notice(
-            'This app has no price on file for model "' . $model . '", so this turn billed $0.00 '
-            . 'as a lower bound, not as a free call — spend totals and the spend cap are under-counted '
-            . 'until a rate exists. Declare one under "modelPrices" in ~/.sugar-crush/config.json '
-            . '(USD per 1M tokens, keys "input" and "output") to price it.'
-        );
+        return Message::notice(Lang::t('chat.turn.unpriced_model', ['model' => $model]));
     }
 
     /**
@@ -19057,12 +19012,7 @@ final class Chat implements Model
     private function idleCompactionPromptResponse(string $inputText, int $tokenCount): array
     {
         $limit = $this->contextTokenLimit();
-        $response = "This session has been idle for over an hour and has grown to "
-            . "~{$tokenCount} estimated tokens, past its {$limit}-token context "
-            . "window. Run /compact to shrink the context before continuing. Sending "
-            . "another message instead will not send it as-is: the next turn is over "
-            . "the automatic-compaction tier, so older exchanges are summarized first, "
-            . "and the turn is refused outright if that does not free enough.";
+        $response = Lang::t('chat.compact.idle_advisory', ['tokens' => $tokenCount, 'limit' => $limit]);
 
         // UI-only, both: the prompt was held back, not sent - see
         // foregroundBlockedResponse() for the same rule.
@@ -19089,7 +19039,7 @@ final class Chat implements Model
         if ($afterTheme === '') {
             return $this->sessionResponse(
                 $inputText,
-                "Current theme: {$this->themeName}. Available: " . implode(', ', Theme::names()) . '.'
+                Lang::t('chat.theme.current', ['theme' => $this->themeName, 'available' => implode(', ', Theme::names())])
             );
         }
 
@@ -19102,7 +19052,7 @@ final class Chat implements Model
         $this->onConfigChange?->__invoke('theme', $afterTheme);
 
         $next = $this->mutate([
-            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant("Theme set to '{$afterTheme}'.")->withUiOnly()],
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant(Lang::t('chat.theme.set', ['theme' => $afterTheme]))->withUiOnly()],
             'inputBuf' => '',
             'inFlight' => false,
             'themeName' => $afterTheme,

@@ -16,6 +16,7 @@ use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\CancelledWorkflowReportMsg;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Tests\Support\DrivesWorkflowRunsTrait;
@@ -276,7 +277,7 @@ final class WorkflowControlMidRunTest extends TestCase
 
         [$once] = $running->update(new KeyMsg(KeyType::Escape, ''));
         [$cancelled] = $once->update(new KeyMsg(KeyType::Escape, ''));
-        self::assertSame(Chat::WORKFLOW_CANCELLED_NOTICE, self::last($cancelled)->content);
+        self::assertSame(Lang::t('chat.workflow.cancelled'), self::last($cancelled)->content);
 
         $resolved = null;
         $settled = $this->settle($cancelled, $async, $resolved);
