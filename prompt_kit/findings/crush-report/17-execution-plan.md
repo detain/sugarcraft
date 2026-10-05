@@ -239,24 +239,19 @@ Remainders of partially landed W9 steps, for rescheduling.
 | i | N-P4c remainder (the nested-instruction cap `TruncatesOutput::DEFAULT_MAX_INSTRUCTION_BYTES`; the spill capture bounds `ToolOutputSpill::CAPTURE_BYTES` / `MIN_CAP_BYTES`) | `src/Tools/Concerns/TruncatesOutput.php`, `src/Support/ToolOutputSpill.php`, `src/Config/Settings/Definitions/ToolSettings.php` | — | SETTINGS (generated) | — | S |
 | j | N-P4g remainder (`permissions.autoStrikeLimit`/`autoTotalLimit` in `PermissionSettings`; `terminalBackground`, `sessionRetentionDays`, `maxCostUsd` (rewrite README's "deliberately not persisted" `/budget` contract), `mcp.enabled`, `debug.skills\|commands\|rules\|stream`, each with its ENVIRONMENT "Settings key" cell; `sessions.autoTitle`, `expandToolOutput` and the prompt-suggestion history, which need readers) | `src/Config/Settings/Definitions/{PermissionSettings,InterfaceSettings}.php`, `src/Permissions/PermissionGate.php`, `src/Cli/Bootstrap.php`, `src/Host/TitleService.php`, skill/command/rule loaders | BS: `reportPrunedSessions`, `mcpClient`, `chat` | ENVIRONMENT settings-key cells; README `/budget` | — | M |
 
-### W10 (order: a … j)
+### W10 (order: a, b, g, i, j)
+
+Remainders of partially landed W10 steps, for rescheduling.
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 3.I-3, 5.11-2 (incl. security findings force Ask in `auto`), 3.I-2 remainder (a `ToolBuildContext::$readLedger` built in `Bootstrap::unfilteredTools` in place of `ReadLedger::forContext()`'s WeakMap; the Chat-native tool path carrying the read ledger back from its per-call child; README Capabilities clause on the staleness refusal) | `src/Permissions/PermissionGate.php`, `src/Hooks/BuiltIn/ProtectFilesHook.php`, `src/Renderer.php`, `src/Cli/Bootstrap.php`, new `src/Tools/BuiltIn/ApplyPatch.php`, `src/Tools/Edit/PatchParser.php`, `src/Permissions/{ExecReviewer,ReviewVerdict}.php`, `src/Config/Settings/Definitions/Permissions.php` | BS: `permissionGate` | PERMISSIONS write-capable list, "What auto classifies", circuit breaker; HOOKS protect-files path table | — | L |
-| b | 5.7-2 | new `src/Tools/BuiltIn/{PlanExitTool,AskUserTool}.php`, `src/Cli/NonInteractive.php` | — | PERMISSIONS "`Ask` needs somewhere to ask" | — | M |
-| c | 4.5 | `src/Runtime.php`, `src/Tools/BuiltIn/TaskTool.php` (new `withBoard` method), new `src/Agents/Board/**`, `src/Tools/BuiltIn/{BoardReadTool,BoardPostTool}.php`, `src/Hooks/BuiltIn/BoardNoticeHook.php`, `src/Tools/SharesBoard.php`, `src/Cli/Bootstrap.php` | RT: `executeConcurrently` `ledger`. TT: class (new method only). BS: `hooks` (BoardNoticeHook). **R-STATE** (board dir), **R-HOOKS** | ARCHITECTURE "Sessions and state" | — | M |
-| d | P-E3 | `src/Chat.php`, `src/Tools/BuiltIn/TaskTool.php`, `src/Commands/KeyBindingRegistry.php` | Chat: `route` Ctrl+X b arm. TT: `execute`. **R-KEYBIND** | README "Keys" | — | M |
-| e | 5.14c, 5.14d | new `src/Host/Commands/{Handoff,NewRule}*.php`, `builtin-commands/NNNN-{handoff,new-rule}.php`, `src/Commands/RulesCommand.php`, `src/Chat.php` | Chat: `handlePaletteNewSession` | COMMANDS "`/rules`" | — | M |
-| f | 5.14i, 5.14l, 3.C remainder (a compact `MenuBar` tab strip below ~101 columns, which the Todo tab pushed past) | `src/Chat.php`, `src/Host/TurnController.php`, `src/Skills/SkillRegistry.php`, new `src/Support/AiCommentWatcher.php`, `src/Skills/SkillMentions.php` | Chat: `subscriptions`, `completeMention`. TC: `userTurnMessage` | SKILLS "Invoking a skill"; SETTINGS (generated) | — | M |
-| g | N-P5 | `src/Tui/Settings/**`, `src/Config/Settings/SettingsWriter.php` | — | README "Settings files" (project-shared tier) | — | S |
-| h | 5.9-1, 5.9-2 (D12) | `src/Cli/{ParsedArgs,Subcommands,Help}.php`, `src/McpMessage.php`, `src/ToolResult.php`, new `src/Acp/**`, `src/Cli/Acp.php` | **R-CLI** | README "Subcommands"; SERVER.md "ACP" | — | L |
-| i | LIVE-0.1, LIVE-X31b, LIVE-A15b, LIVE-A15v, LIVE-A21b, LIVE-CH, 15b-14-1 | new `scripts/provider-cache-live-probe.php`, new `src/Lang.php`, `lang/en.php`, `tests/LangParityTest.php`, root `LOCALES.md` | — | — | candy-core I18n (use) | M |
-| j | 4.4 | `src/Tools/BuiltIn/TaskTool.php`, new `src/Tools/BuiltIn/{SendMessageTool,SubagentsTool,InterruptAgentTool}.php` | TT: `setup` (reply-tool filter) | AGENTS_AUTHORING; README Capabilities (generated) | — | M–L |
+| a | 3.I-2 remainder (the Chat-native tool path carrying the read ledger back from its per-call child: `Chat::forkToolCalls()` → child `storeToolResult()` payload → the parent's collector `merge()`s it, through a `Chat::withReadLedger(ReadLedger)` — only embedders reach `registerTool()` today) | `src/Chat.php`, `src/Tools/ReadLedger.php` | Chat: `forkToolCalls`, `storeToolResult`, `waitForToolChildrenAsync`/`collectToolResult`. **CS** | — | — | S |
+| b | 5.7-2 remainder (a question-aware permission modal for `AskUser`/`PlanExit`: footer wording and number keys for the choices in `Renderer::renderPermissionPrompt`/`Chat::handlePermissionKey`; `ApprovalVerdict::fromReply(Once, $note)` keeping the note so a server client can answer with `once` + text; a `tool:<name>` ask source in `PendingAsk` instead of `hook:unknown`) | `src/Renderer.php`, `src/Chat.php`, `src/Permissions/ApprovalVerdict.php`, `src/Permissions/PendingAsk.php` | Chat: `handlePermissionKey`. **R-KEYBIND** | PERMISSIONS "The model's own questions" | — | S |
+| g | N-P5 remainder (`permissionRules` edited in the view, validated by the launch's strict parser exposed from `Bootstrap::permissionRules()` and called from `SettingsWriter::typeRefusal()`; "open the file in `$EDITOR`" from the view; settings-profile import/export; `SettingsSavePreview`'s turn-running note passed from `App::previewSettings()`; the web `settings.set` offering the project-shared tier) | `src/Tui/Settings/**`, `src/Config/Settings/SettingsWriter.php`, `src/Cli/Bootstrap.php`, `src/App/App.php`, `src/Protocol/Methods/SettingsMethods.php` | BS: `permissionRules`. **R-KEYBIND**, **R-CMDS** | SETTINGS editor section; README "Keys" `Ctrl+,` row | sugar-crush-web (protocol types) | M |
+| i | LIVE-X31b, LIVE-A15b, LIVE-A15v, LIVE-A21b, LIVE-CH (blocked on credentials: `ANTHROPIC_API_KEY`; AWS `bedrock:InvokeModel`(+`WithResponseStream`) and Claude Sonnet 4.6 model access; `GCP_PROJECT_ID` and application-default credentials) | `scripts/provider-cache-live-probe.php`, `prompt_kit/findings/crush-report/live-checks.md` | — | — | — | S |
+| j | 4.4 remainder (a reader for mailbox `followup` mode: `AgentInbox` takes only mid-run modes and controls, so only `SendMessage`'s run-card followups reach a conversation's next run) | `src/Agents/Live/AgentInbox.php`, `src/Tools/BuiltIn/TaskTool.php` | TT: `setup` | AGENTS_AUTHORING "Messages between agents" (P-D1 `followup` sentence) | — | S |
 
-LIVE-0.1 and LIVE-X31b need no code. The W2 integrator may run them early: `cached_tokens` on skynet2 with `--enable-cache-report`, and one tool-calling `anthropic` request.
-
-LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credentials are still missing, the group records them as blocked.
+Run the blocked live checks from `sugar-crush/` with `php scripts/provider-cache-live-probe.php --check=<ID>` once the credentials exist.
 
 ### W11: i18n (order: a, b, c, d)
 
@@ -282,7 +277,7 @@ LIVE-A15v and LIVE-A21b need GCP credentials, and this host has none. If credent
    - reassemble.
 7. Push.
 
-## 5. Step index (35 steps)
+## 5. Step index (20 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -295,44 +290,32 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 
 **Safety and self-management**
 - 3.B-5 remainder (`/context` cache-break line, `Compactor::describe()` in receipts) S · 3.B-5 · W9-b
-- 3.C remainder (compact menu strip) S · 3.C · W10-f
-- 3.I-2 remainder (`ToolBuildContext` ledger field, Chat-native path ledger carry, README clause) S · 3.I-2 · W10-a
-- 3.I-3 M · 3.I-1, DH-TOOLS · W10-a
+- 3.I-2 remainder (Chat-native path ledger carry) S · 3.I-2 · W10-a
 
 **Sub-agents**
-- 4.4 M–L · P-D1, P-D3, 4.3-2, 4.7-1 · W10-j
-- 4.5 M · RELAY · W10-c
+- 4.4 remainder (mailbox `followup` reader) S · 4.4 · W10-j
 - 4.6-2 remainder (TaskList hook trio, CAS, pid-keyed connection) M · 4.6-2, R-HOOKS · W9-g
 
 **Memory, codebase understanding, UX, integrations**
-- 5.7-2 M · 5.7-1, 1.C-2 · W10-b
-- 5.9-1 M · — · W10-h
-- 5.9-2 M · 5.9-1, O-2g · W10-h
-- 5.11-2 (incl. security findings force Ask in `auto`) M · 1.C-2, N-P2 · W10-a
-- 5.14c M · 2.5, P-A1 · W10-e
-- 5.14d S · 0.8 · W10-e
-- 5.14i M · 1.A-2 · W10-f
-- 5.14l S–M · O-2g · W10-f
+- 5.7-2 remainder (question-aware modal, note on `once`, ask source) S · 5.7-2 · W10-b
 
 **Settings**
 - N-P4b remainder (live apply, deferred keys) S–M · N-P4b · W9-h
 - N-P4c remainder (instruction cap, spill capture bounds) S · N-P4c · W9-i
 - N-P4d remainder (standing rules, repo map, env, nudges, notices, project notes) M · N-P4d · W9-h
 - N-P4g remainder (breaker limits, env-backed keys, keys without readers) M · N-P4g · W9-j
-- N-P5 S · N-P1, N-P2, N-P3 · W10-g
+- N-P5 remainder (`permissionRules` editing, `$EDITOR`, profiles, turn-running note, web shared tier) M · N-P5 · W10-g
 
 **Sessions and agent view**
-- P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
 
 **Deferred and live checks**
-- 15b-14-1 S · — · W10-i
 - 15b-14-2 M · all roadmap steps · W11-a
 - 15b-14-3 S–M · all roadmap steps · W11-b
 - 15b-14-4a L · all roadmap steps · W11-c
 - 15b-14-4b L · all roadmap steps · W11-d
-- LIVE-0.1, LIVE-X31b, LIVE-A15b, LIVE-A15v, LIVE-A21b, LIVE-CH · W10-i
+- LIVE-X31b, LIVE-A15b, LIVE-A15v, LIVE-A21b, LIVE-CH (blocked on credentials) · W10-i
 
 **Subsumed (no separate work):**
 - 3.B-1 is 1.B-1 + 1.B-2 + 0.2 (RefTag is in 3.B-2).

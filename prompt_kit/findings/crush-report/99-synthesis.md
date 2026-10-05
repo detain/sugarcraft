@@ -29,18 +29,14 @@
 
 # Part I — Key findings
 
-1. **Sub-agents are partly closed off.** The model has no messaging tools (4.4), and the team task hooks (`TaskCreated`, `TaskCompleted`, `TeammateIdle`) never fire (4.6-2 remainder).
-2. **Requested features still open:** the agent view's background attach (P-E3), the shared board (4.5), and the remaining constants promoted to settings (the N-P4b/c/d/g remainders, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
+1. **Sub-agents are partly closed off.** The team task hooks (`TaskCreated`, `TaskCompleted`, `TeammateIdle`) never fire (4.6-2 remainder), and a mailbox `followup` has no reader outside `SendMessage`'s run cards (4.4 remainder).
+2. **Requested features still open:** the remaining constants promoted to settings (the N-P4b/c/d/g remainders) and the settings editor's last polish (N-P5 remainder). They are designed in Appendices N–P and scheduled in Appendix R.
 
 ---
 
 # Part II — Open problems and their steps
 
-Severity is the user impact on the live default path.
-
-| # | Severity | Problem | Steps |
-|---|---|---|---|
-| 1 | High | Plan mode cannot end itself: no plan exit or user question over the frame channel | 5.7-2 |
+None is open on the live default path. The remaining steps (Parts III, V and VI) complete or polish features that work today.
 
 ---
 
@@ -87,28 +83,22 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 |---|---|---|---|
 | 3.A | **Workspace checkpoints**: optionally capture after each write step (`EngineBackend::runTurn`) | M | CC OC Kilo Cline Zed dsh |
 | 3.B | **Agent self-pruning tools** (the user's headline request). `Prune` and `Compress` are live (3.B-3, 3.B-4), with `/compress`, `/decompress`, `/recompress` and `/compact --self`. What remains (3.B-5): a `/context` line for the cache-break telemetry, and `Compactor::describe()` naming the pruned targets in `Prune`'s and `/sweep`'s receipts and `/context`'s pruned list. **Full design: Appendix D §13.2.** | S | DCP |
-| 3.C | Todo list: a compact menu strip below ~101 columns | S | 8 reports |
-| 3.I | Optional `ApplyPatch`, refusing a stale file through the session read ledger like `Edit` | M | OC Kilo Cline Zed Claw nano dsh |
+| 3.I | The session read ledger on the Chat-native tool path (an embedder's `registerTool()` callbacks): carry it back from the per-call child, as the engine path does | S | OC Kilo Cline Zed Claw nano dsh |
 
 ## 4.x — sub-agents and orchestration
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 4.3 | **Background Task** settle: a settled result is injected via steer when a turn is running (it waits for the turn's end today), and the announce stats line carries the resume id | S | Claw nano dsh Goose Kilo OC |
-| 4.4 | **Messaging tools** on the dormant `Mailbox`: `SendMessage{to, text, mode: steer\|followup\|note}` (steer a running child, wake an idle one, cold-resume a stored one via `SuspendedDelegations`), child→parent replies, `Subagents{list\|wait\|cancel}`, `InterruptAgent`; delivery at step boundaries through the 1.C seam; untrusted-peer framing | M–L | Claw dsh Kilo Goose nano |
-| 4.5 | **Shared board** for parallel children (Kilo): `BoardRead`/`BoardPost` with INFO/ASK/RESULT/HOLD/VETO, notice appended to the next tool result | M | Kilo |
+| 4.4 | **Messaging tools**: a reader for mailbox `followup` mode (only `SendMessage`'s run-card followups reach a conversation's next run) | S | Claw dsh Kilo Goose nano |
 | 4.6 | **Teams**: the `Team` tool is live; `TaskCreated`/`TaskCompleted`/`TeammateIdle` dispatched from `TaskList`, a revision compare-and-swap on complete/fail, a pid-keyed SQLite connection, and `Team` granted to the built-in teammates remain | M | CC Cline dsh |
-| 4.8 | Sub-agents as stored child sessions: navigable in the tab strip, typable into, promotable to background (opencode Ctrl+B) | L | OC |
 
 ## 5.x — memory, codebase understanding, UX, integrations
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 5.4 | **Dream pass over skills**: the dream pass edits memory notes only; letting it edit skills waits on a user decision (an unattended `SKILL.md` writer persists injected text) | S–M | nano |
-| 5.7 | **Plan mode**: `PlanExit` + `ask_user` tools over the 1.C channel | M | OC Kilo Cline dsh |
-| 5.9 | **ACP mode** (`sugarcrush acp`): stdio JSON-RPC so Zed, JetBrains and Neovim can host sugar-crush; reuse `McpMessage` framing | L | Zed |
-| 5.11 | LLM exec reviewer / smart-approve for `auto` mode (title backend, JSON verdict, untrusted transcript; the 3-strike breaker exists); security findings force Ask even in auto | M | Goose Claw dsh OH |
-| 5.14 | Small UX: `/handoff` (new session seeded with a summary); `/newrule`; watch-files `AI!` comments; `$skill` per-turn injection (a session-scoped Ctrl+S picker exists) | S each | many |
+| 5.7 | **Plan mode**: a question-aware permission modal for `AskUser`/`PlanExit` (footer, number keys for choices), a `once` answer keeping its note, and a `tool:<name>` ask source | S | OC Kilo Cline dsh |
 | 5.15 | Settings pane, configurable behaviours, server mode, web UI, session management, live agent lines and agent view | — | **Part V** |
 
 ---
@@ -244,7 +234,7 @@ The report lists **about 45 hard-coded constants**, each with file:line and a pr
 
 **Phases** (full class, test and doc list in N §5):
 - **P4 — promote the remaining hard-coded constants (L, incremental).**
-- **P5 — polish (S).**
+- **P5 — polish (S):** `permissionRules` editing behind the launch's strict parser, opening the file in `$EDITOR`, settings-profile import/export, the save preview's turn-running note, and the web `settings.set` project-shared tier.
 
 ## V.2 Server mode (Appendix O, §0–§6, §8)
 
@@ -259,9 +249,7 @@ The report lists **about 45 hard-coded constants**, each with file:line and a pr
    - `Bootstrap` holds more than 25 static, root-sensitive caches. So one server process handles **one project root**, and `serve` runs each other root in a workspace-host child process behind its gateway.
 3. **Background mode:** the server re-adopts background daemons at boot through `BackgroundSupervisor::reconnect` (O-4b), as the TUI launch already does.
 4. **TLS** through a reverse proxy in v1.
-5. **Later phases:**
-   - An attached TUI (`sugarcrush attach`) still runs slash commands and compaction on its own copy of the transcript, and shows a turn another client starts only when it re-attaches: server-logic commands go to `command.exec`, local compaction is skipped, and foreign `message.*`/`turn.*`/`session.updated` events are applied live.
-   - `sugarcrush acp` is an Agent Client Protocol stdio adapter (about 8 methods) so Zed and JetBrains can host sugar-crush.
+5. **Later phase:** an attached TUI (`sugarcrush attach`) still runs slash commands and compaction on its own copy of the transcript, and shows a turn another client starts only when it re-attaches: server-logic commands go to `command.exec`, local compaction is skipped, and foreign `message.*`/`turn.*`/`session.updated` events are applied live.
 
 ## V.3 `sugar-crush-web` (Appendix O §7)
 
@@ -290,18 +278,16 @@ The report lists **about 45 hard-coded constants**, each with file:line and a pr
 - **B — live lines (M).**
 - **C — read-only agent view (M).**
 - **D — direct chat and controls (M–L).**
-- **E — background (M):** `Ctrl+X b` sends a running agent to the background (P-E3).
 
 ## V.5 How the new features fit the Part III roadmap
 
-These features are scheduled in Appendix R together with Part III:
-- The agent view's remaining control (P-E3) runs in W10.
+These features are scheduled in Appendix R together with Part III.
 
 ---
 
 # Part VI — Code-audit status and live checks
 
-The five code audits have one open finding (Appendix Q): **15b-14**, sugar-crush has no i18n (Low). It is deferred by decision until after the roadmap: 15b-14-1 runs in W10 and 15b-14-2…4b in W11 (Appendix R).
+The five code audits have one open finding (Appendix Q): **15b-14**, sugar-crush has no i18n (Low). It is deferred by decision until after the roadmap: 15b-14-2…4b run in W11 (Appendix R), on the `Lang` facade and `lang/en.php` already in place.
 
 **Corrections to earlier assumptions:**
 - Argument-scoped **permission rules** are implemented (`PermissionRule::matches`/`matchesShellSubject`, fail-closed on `$(…)`, backticks and redirects).
@@ -310,9 +296,8 @@ The five code audits have one open finding (Appendix Q): **15b-14**, sugar-crush
 
 | ID | Check | Status |
 |---|---|---|
-| LIVE-0.1 | `cached_tokens` before/after a write step on skynet2 (SGLang `--enable-cache-report`) | runnable |
-| LIVE-X31b | one tool-calling `anthropic` request after the `/v1` fix | runnable |
-| LIVE-A15b | Bedrock prompt-cache marks: creation tokens > 0, then read tokens > 0 | `~/.aws/credentials` present; model access unverified |
+| LIVE-X31b | one tool-calling `anthropic` request after the `/v1` fix | blocked: no `ANTHROPIC_API_KEY` (the wiring answers a dummy key with 401, not 404) |
+| LIVE-A15b | Bedrock prompt-cache marks: creation tokens > 0, then read tokens > 0 | blocked: the `~/.aws` IAM user lacks `bedrock:InvokeModel` on the Claude Sonnet 4.6 inference profile |
 | LIVE-A15v | Vertex prompt-cache marks (override the outdated default model) | blocked: no GCP credentials |
 | LIVE-A21b | Gemini 2.5 output budget with `thinkingConfig` | blocked: no GCP credentials |
-| LIVE-CH | cache-health notice after **three** consecutive replies with zero buckets | Bedrock maybe; Vertex blocked |
+| LIVE-CH | cache-health notice after **three** consecutive replies with zero buckets | blocked: as LIVE-A15b (Bedrock) and LIVE-A15v (Vertex) |
