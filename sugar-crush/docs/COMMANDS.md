@@ -556,6 +556,16 @@ editor opens on. An editor that fails to start or exits non-zero leaves the
 draft unchanged and says so in the status line, and so does an empty file. It
 has no key binding: Ctrl+G is already the shell's group-input chord.
 
+`/share [md|html|json|text] [path]` exports the session's transcript to a
+local file and names it in the reply: by default
+`~/.sugar-crush/exports/<session-id>-<UTC timestamp>.<ext>` (the file `0600`,
+the directory `0700`), or a path inside the project — a path that leaves the
+project is refused, and an existing directory gets the default file name. The
+format is the argument, else the path's extension, else Markdown. Nothing is
+uploaded: `SUGARCRUSH_SHARE_UPLOAD_URL` names an upload host, but the uploader
+has no backend yet, so the reply says the upload did not happen beside the
+local path ([`ENVIRONMENT.md`](ENVIRONMENT.md)).
+
 What keeps the table honest is not this page — no guard counts the rows here. It
 is `Commands\SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`,
 which fails if a row `CommandRegistry::slashCommands()` advertises has no arm to

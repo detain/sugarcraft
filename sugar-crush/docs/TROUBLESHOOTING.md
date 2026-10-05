@@ -266,7 +266,7 @@ not a launch failure.
 
 `/memory import claude|opencode` is wired (`Host\Commands\MemoryCommand::import()`): it writes
 the foreign tree into the `agent` scope — which the prompt never folds: only
-`project`-scope entries reach the `<project-memory>` block (see above) — and
+`user` and `project` notes reach the `<project-memory>` block (see above) — and
 then records a
 `.sugar-crush/memory/.imported-<target>` sentinel; while that sentinel exists a
 re-run answers "already imported" instead of duplicating every entry, so delete
@@ -420,6 +420,46 @@ closes a flooded turn, names where the complete text went —
 says `full text not kept` when it went to the null device.
 
 ---
+
+## "This turn was NOT sent" — the context is full
+
+The block tier refused the prompt: even after compacting, the history is over
+`compaction.blockPercent` (95%) of the model's window. Send it again — each
+attempt keeps one fewer recent exchange — or free the context: `/compact`,
+`/sweep`, `/clear` (the session and its checkpoints survive), or a new session.
+`/context` shows what is filling the window. A notice saying the session
+compacted several times in a row and is still over the tier is the thrash
+breaker: compaction cannot help (one huge exchange, or huge tool output the
+compactor must keep), so clear or start over. Moving the tiers is
+[`SETTINGS.md`](SETTINGS.md#compaction-thresholds); the mechanics are in
+[`CONTEXT.md`](CONTEXT.md).
+
+## A sub-agent call is refused or stops early
+
+- **"N sub-agents are already running in this session"** — the session-wide
+  cap (`subagentMaxActive`, 8) is full. The call is refused rather than queued,
+  because a parent waiting on its children already holds a seat; the model is
+  told not to retry at once.
+- **The agent has no `Task`** — it is at the deepest level
+  (`subagentMaxDepth`, 3), or its preset's `tools:` list leaves `Task` out.
+- **Stopped at its step cap** — `subagentMaxTurns` (200) or the preset's
+  `maxTurns`; the result carries a resume id that continues it.
+- **Stopped at 90% of its window** — its own context filled; the result
+  carries the partial output and a resume id.
+- **An `isolation: worktree` run is refused** — the project is not a git
+  checkout, or `git worktree add` failed; the reason is in the result.
+
+See [`AGENTS.md`](AGENTS.md).
+
+## Every `Bash` call is refused
+
+With `bashSandbox` set to `on` or `no-network`, a command runs only inside
+bubblewrap, and when the sandbox cannot start — `bwrap` missing, a host that is
+not Linux, or a kernel policy that blocks unprivileged user namespaces (Ubuntu
+24.04's AppArmor default: `setting up uid map: Permission denied`) — every
+`Bash` call is refused with the reason rather than run unsandboxed. Install
+bubblewrap, allow its user namespaces, or set `bashSandbox` back to `off`. See
+[`PERMISSIONS.md`](PERMISSIONS.md#sandbox).
 
 ## Terminal and display problems
 
