@@ -1112,8 +1112,8 @@ finishes. A lone `!` is an ordinary prompt.
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
 `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
 `/exit` (`/quit`) `/fork` `/goal` `/grind` `/handoff` `/help` `/init` `/keys`
-`/layout` `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions` `/pruning`
-`/recompress` `/redo` `/rename` `/rewind` `/rules` `/sessions`
+`/layout` `/mcp` `/memory` `/model` `/newrule` `/notices` `/pane` `/permissions`
+`/pruning` `/recompress` `/redo` `/rename` `/rewind` `/rules` `/sessions`
 `/settings` (`/config`) `/share` `/sweep` `/theme` `/undo` `/websearch`
 `/workflow`.
 <!-- commands:roster:end -->

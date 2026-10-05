@@ -40,6 +40,7 @@ final class SlashDispatchTest extends TestCase
     private const TURN_STARTING_COMMANDS = [
         'init' => 'a canned AGENTS.md-writing prompt (roadmap 5.14e)',
         'compress' => 'the manual trigger the model\'s Compress tool is offered on (roadmap 3.B-4)',
+        'newrule' => 'a canned prompt drafting a project rule into .sugar-crush/rules/ (roadmap 5.14d)',
     ];
 
     private string $sandbox = '';
@@ -143,10 +144,16 @@ final class SlashDispatchTest extends TestCase
      * (`slashVisible: false`), because "palette-only" has to mean something —
      * if `/new` had quietly grown a handler, the registry flag would be lying
      * in the other direction.
+     *
+     * `/new` is driven WITH an argument since `/newrule` (roadmap 5.14d): a
+     * bare `/new` is now a prefix of a slash-visible row, so Enter completes
+     * the popup into `/newrule ` rather than submitting, and the argument is
+     * what closes the popup. A handler taking text would still claim
+     * `/new session`, so the control discriminates exactly as before.
      */
     public function testADraftThatIsNotACommandDoesGoToTheModel(): void
     {
-        foreach (['hello there', '/definitely-not-a-command', '/new', '/docs'] as $draft) {
+        foreach (['hello there', '/definitely-not-a-command', '/new session', '/docs'] as $draft) {
             $next = $this->submit($draft);
 
             $this->assertTrue($next->inFlight, "{$draft} must be sent to the model");

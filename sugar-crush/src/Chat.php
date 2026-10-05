@@ -17064,6 +17064,24 @@ final class Chat implements Model
     }
 
     /**
+     * `/newrule [focus]` (roadmap 5.14d) — a command that STARTS A TURN, as
+     * {@see handleInitCommand()} does: the canned
+     * {@see \SugarCraft\Crush\Host\Commands\NewRulePrompt} re-enters
+     * {@see submit()} as the draft, naming the rule files already in the
+     * project tier. The Write it ends in lands on the policy surface, which
+     * the protect-files hook asks about in every mode (step 0.8b).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleNewRuleCommand(string $text): array
+    {
+        return $this->withInputBuf(\SugarCraft\Crush\Host\Commands\NewRulePrompt::prompt(
+            self::commandArgument($text),
+            \SugarCraft\Crush\Host\Commands\NewRulePrompt::existingRules($this->projectRoot()),
+        ))->submit();
+    }
+
+    /**
      * @return array{0: self, 1: ?\Closure}
      */
     private function handlePaletteOpenDocs(): array

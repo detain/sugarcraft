@@ -19,6 +19,11 @@ use SugarCraft\Crush\Context\RulesState;
  *   /rules           — list every pack with the state it is in and why
  *   /rules <name>    — flip that pack and report which way it went
  *
+ * Writing a rule is not this command's: `/newrule` (roadmap 5.14d,
+ * {@see \SugarCraft\Crush\Host\Commands\NewRulePrompt}) has the agent draft
+ * one into the project tier, through the always-asked policy write path. The
+ * listing's footer points there.
+ *
  * This is a SugarCraft architecture type, not a port - charmbracelet/crush has
  * no `RulesCommand` symbol, so the repo's "Mirrors charmbracelet/..." convention
  * does not apply. The idiom it copies is {@see AgentsCommand}: a final class
@@ -145,7 +150,8 @@ final class RulesCommand
         if ($packs === []) {
             echo "\n  No rule packs found.\n";
             echo "  A pack is one markdown file in ~/.sugar-crush/rulebooks/ (or ~/.sugar-crush/rules/),\n";
-            echo "  named by its filename: terse.md is toggled with /rules terse.\n\n";
+            echo "  named by its filename: terse.md is toggled with /rules terse.\n";
+            echo "  /newrule has the agent draft a project rule from this conversation.\n\n";
 
             return 0;
         }
@@ -164,7 +170,8 @@ final class RulesCommand
         echo "\n  Rule packs (session only — nothing here is written to config):\n\n";
         echo $table->render() . "\n\n";
         echo "  /rules <name> toggles one. A pack marked frontmatter is disabled by its\n";
-        echo "  own file and stays out of the prompt either way.\n\n";
+        echo "  own file and stays out of the prompt either way. /newrule has the agent\n";
+        echo "  draft a project rule (.sugar-crush/rules/) from this conversation.\n\n";
 
         return 0;
     }

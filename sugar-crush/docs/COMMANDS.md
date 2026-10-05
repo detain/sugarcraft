@@ -328,6 +328,7 @@ edit it by hand.
 | `/decompress` | ✓ | | `[bN]` | Send a compressed section in full again (no argument: list the sections) |
 | `/recompress` | ✓ | | `[bN]` | Restore the summary of a section /decompress took back |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
+| `/newrule` | ✓ | | `[focus]` | Have the agent draft a project rule from this conversation |
 | `/pane` | ✓ | | `dock <left\|right>\|toggle [name]` | Dock a pane to a side, or toggle its docked state |
 | `/layout` | ✓ | | `reset` | Reset the pane layout to the launch default |
 | `/pane-dock-left` | | | — | Dock the focused pane to the left |
@@ -626,6 +627,26 @@ to take — see
 the rule that `disabledRules` is not layered like most keys is written down. This
 page documents the command; that one documents the config. Nothing here is
 restated from it.
+
+**Adding a rule: `/newrule [focus]`.** `/rules` never writes a file; `/newrule`
+is how a rule gets written from inside a session. It is a canned prompt, like
+`/init` — it starts a turn, so the spend cap and the UserPromptSubmit hook judge
+it as typed prose — asking the agent to distil what the conversation
+established into ONE new file in the project tier, `<root>/.sugar-crush/rules/`
+(`Host\Commands\NewRulePrompt`): `name` and `description` frontmatter, a
+`## Brief overview`, then only the sections the conversation supports
+(communication style, development workflow, coding best practices, project
+context, other guidelines). The prompt forbids invented preferences, a recap of
+the conversation and overwriting an existing rule file, and names the files
+already there so the model picks a free name; the optional focus says what the
+rule should cover. **The write is always asked about.** `.sugar-crush/rules` is
+on the policy surface the `protect-files` hook asks about on every write in
+every permission mode, `bypass-permissions` included, and the "always" answer
+cannot remember it ([`HOOKS.md`](HOOKS.md)) — so you approve the exact file the
+model drafted, every time, and a headless `-p` run with nobody to ask refuses
+it. The new file is a project rule, so `/rules` does not list or toggle it: it
+is the repository's voice, read with the rest of the project tier from the next
+prompt build on, and a commit away from every other checkout.
 
 ## See also
 
