@@ -2257,6 +2257,14 @@ final class Bootstrap
             \SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog::defaultRoot(),
         );
 
+        // Roadmap 4.6-2: teams. The manager is the per-user team store
+        // (TeamManager's default base path), the one the `Team` tool opens in the
+        // process that runs each call; the registry on disk is what they
+        // share, so building it here reads and opens nothing until asked —
+        // no team's SQLite task list is opened in this process before a
+        // turn forks from it.
+        $manager->setTeamManager(new \SugarCraft\Crush\Agents\TeamManager());
+
         return $manager;
     }
 

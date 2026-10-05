@@ -20,11 +20,36 @@ use SugarCraft\Crush\Support\HomeDirectory;
  *
  * while TeamManager's own registry is stored at:
  *     ~/.sugar-crush/teams/registry.json
+ *
+ * THE REGISTRY ON DISK IS THE TRUTH, not this object (roadmap 4.6-2). The
+ * `Team` tool runs in a turn's forked child, a background teammate in its own
+ * daemon, and the launch's {@see AgentManager} holds a third instance, so a
+ * team one of them creates must be visible to the others. Every lookup that
+ * misses, every listing and every write re-reads `registry.json` first, and a
+ * write publishes the re-read map plus its own change — so two processes that
+ * each create a team keep both, instead of the second save erasing the first.
+ * (The re-read and the publish are not one locked step: two writes landing in
+ * the same instant can still lose one, which a later create of the same id
+ * repairs. Team creation runs at human rate.)
+ *
+ * CONSTRUCTION DOES NO I/O, and registered teams are built lazily. A `Team`
+ * opens its SQLite task list when constructed, and the launch builds this
+ * manager in the host process before any turn forks: building every
+ * registered team there would hand each forked child an SQLite connection
+ * opened by its parent, which SQLite forbids. So the host reads nothing
+ * until asked, and a team is constructed in the process that uses it.
  */
 final class TeamManager
 {
-    /** @var array<string, Team> */
+    /** @var array<string, Team> teams already constructed in this process */
     private array $teams = [];
+
+    /**
+     * Registered team metadata, keyed by team ID — what the registry holds.
+     *
+     * @var array<string, array{name: string, leadAgentId: string, createdAt: string}>
+     */
+    private array $meta = [];
 
     /** @var array<string, TeamConfig> keyed by team ID */
     private array $teamConfigs = [];
@@ -35,7 +60,6 @@ final class TeamManager
         private readonly string $basePath = '~/.sugar-crush/teams',
     ) {
         $this->registryPath = $this->expandPath($this->basePath) . '/registry.json';
-        $this->loadRegistry();
     }
 
     // -------------------------------------------------------------------------
@@ -53,7 +77,8 @@ final class TeamManager
         string $leadAgentId,
         ?TeamConfig $config = null,
     ): Team {
-        if (isset($this->teams[$teamId])) {
+        $this->refresh();
+        if (isset($this->meta[$teamId])) {
             throw new \InvalidArgumentException(sprintf('Team "%s" already exists.', $teamId));
         }
 
@@ -83,6 +108,11 @@ final class TeamManager
         );
 
         $this->teams[$teamId] = $team;
+        $this->meta[$teamId] = [
+            'name' => $name,
+            'leadAgentId' => $leadAgentId,
+            'createdAt' => $team->createdAt->format(\DateTimeImmutable::ATOM),
+        ];
         $this->teamConfigs[$teamId] = $config;
         $this->saveRegistry();
 
@@ -94,21 +124,33 @@ final class TeamManager
     // -------------------------------------------------------------------------
 
     /**
-     * Return all registered teams.
+     * Return all registered teams, as the registry on disk has them now.
      *
      * @return Team[]
      */
     public function getTeams(): array
     {
-        return array_values($this->teams);
+        $this->refresh();
+
+        $teams = [];
+        foreach (array_keys($this->meta) as $teamId) {
+            $teams[] = $this->build((string) $teamId);
+        }
+
+        return $teams;
     }
 
     /**
-     * Fetch a team by its ID.
+     * Fetch a team by its ID — re-reading the registry when this process has
+     * not seen it, so a team another process created is found.
      */
     public function getTeam(string $teamId): ?Team
     {
-        return $this->teams[$teamId] ?? null;
+        if (!isset($this->meta[$teamId])) {
+            $this->refresh();
+        }
+
+        return isset($this->meta[$teamId]) ? $this->build($teamId) : null;
     }
 
     /**
@@ -116,6 +158,10 @@ final class TeamManager
      */
     public function getTeamConfig(string $teamId): ?TeamConfig
     {
+        if (!isset($this->meta[$teamId])) {
+            $this->refresh();
+        }
+
         return $this->teamConfigs[$teamId] ?? null;
     }
 
@@ -124,7 +170,9 @@ final class TeamManager
      */
     public function teamCount(): int
     {
-        return count($this->teams);
+        $this->refresh();
+
+        return count($this->meta);
     }
 
     // -------------------------------------------------------------------------
@@ -140,12 +188,17 @@ final class TeamManager
      * idle, dispatch the TeammateIdle hook and, if it isn't blocked, hand the
      * teammate the next unblocked task in its team's queue (if any).
      *
+     * The `Team` tool's `claim` with no task named is this method (roadmap
+     * 4.6-2), which is what gives it a production caller. $ownerPid is the
+     * process the claim is recorded against for crash recovery
+     * ({@see TaskList::releaseOrphanedClaims()}); null records this one.
+     *
      * @return string|null The ID of the task just claimed, or null if the team/teammate
      *                      was not found, the hook blocked, or no unblocked task exists.
      */
-    public function handleTeammateIdle(string $teamId, string $teammateId): ?string
+    public function handleTeammateIdle(string $teamId, string $teammateId, ?int $ownerPid = null): ?string
     {
-        $team = $this->teams[$teamId] ?? null;
+        $team = $this->getTeam($teamId);
         if ($team === null) {
             return null;
         }
@@ -158,7 +211,7 @@ final class TeamManager
         }
 
         foreach ($taskList->getUnblockedTasks($teammateId) as $task) {
-            if ($taskList->claimTask($task->id, $teammateId)) {
+            if ($taskList->claimTask($task->id, $teammateId, null, $ownerPid)) {
                 return $task->id;
             }
         }
@@ -175,7 +228,11 @@ final class TeamManager
      */
     public function hasTeam(string $teamId): bool
     {
-        return isset($this->teams[$teamId]);
+        if (!isset($this->meta[$teamId])) {
+            $this->refresh();
+        }
+
+        return isset($this->meta[$teamId]);
     }
 
     /**
@@ -188,12 +245,13 @@ final class TeamManager
      */
     public function removeTeam(string $teamId): ?Team
     {
-        if (!isset($this->teams[$teamId])) {
+        $this->refresh();
+        if (!isset($this->meta[$teamId])) {
             return null;
         }
 
-        $team = $this->teams[$teamId];
-        unset($this->teams[$teamId], $this->teamConfigs[$teamId]);
+        $team = $this->build($teamId);
+        unset($this->teams[$teamId], $this->meta[$teamId], $this->teamConfigs[$teamId]);
         $this->saveRegistry();
 
         return $team;
@@ -209,35 +267,16 @@ final class TeamManager
      */
     public function reloadTeam(string $teamId): ?Team
     {
-        $registry = $this->loadRegistryData();
-        if (!isset($registry[$teamId])) {
+        $this->refresh();
+        if (!isset($this->meta[$teamId])) {
             return null;
         }
 
-        $meta = $registry[$teamId];
+        // A fresh instance over the on-disk state, not the one this process
+        // may already hold.
+        unset($this->teams[$teamId]);
 
-        $config = isset($meta['config'])
-            ? new TeamConfig(
-                maxTeammates: $meta['config']['maxTeammates'] ?? 5,
-                defaultTimeoutSeconds: $meta['config']['defaultTimeoutSeconds'] ?? 600,
-                allowPeerMessaging: $meta['config']['allowPeerMessaging'] ?? true,
-                autoAssignTasks: $meta['config']['autoAssignTasks'] ?? true,
-                inboxPath: $meta['config']['inboxPath'] ?? '~/.sugar-crush/teams/',
-            )
-            : new TeamConfig();
-
-        $team = new Team(
-            id: $teamId,
-            name: $meta['name'],
-            leadAgentId: $meta['leadAgentId'],
-            createdAt: new \DateTimeImmutable($meta['createdAt']),
-            maxTeammates: $config->maxTeammates,
-        );
-
-        $this->teams[$teamId] = $team;
-        $this->teamConfigs[$teamId] = $config;
-
-        return $team;
+        return $this->build($teamId);
     }
 
     // -------------------------------------------------------------------------
@@ -245,41 +284,63 @@ final class TeamManager
     // -------------------------------------------------------------------------
 
     /**
-     * Load the registry of team metadata from disk.
+     * Re-read the registry from disk and make it this manager's view.
      *
-     * Re-hydrates all previously persisted teams into memory so they can be
-     * inspected and resumed without re-creating their on-disk state.
+     * Teams no longer registered are forgotten; teams this process already
+     * constructed and still registered keep their instance (and its in-memory
+     * teammate roster). Entries missing a required field are skipped.
      */
-    private function loadRegistry(): void
+    private function refresh(): void
     {
-        $registry = $this->loadRegistryData();
-        foreach ($registry as $teamId => $meta) {
-            if (!isset($meta['name'], $meta['leadAgentId'], $meta['createdAt'])) {
+        $meta = [];
+        $configs = [];
+        foreach ($this->loadRegistryData() as $teamId => $entry) {
+            if (!\is_array($entry) || !isset($entry['name'], $entry['leadAgentId'], $entry['createdAt'])) {
                 continue;
             }
 
-            $config = isset($meta['config'])
-                ? new TeamConfig(
-                    maxTeammates: $meta['config']['maxTeammates'] ?? 5,
-                    defaultTimeoutSeconds: $meta['config']['defaultTimeoutSeconds'] ?? 600,
-                    allowPeerMessaging: $meta['config']['allowPeerMessaging'] ?? true,
-                    autoAssignTasks: $meta['config']['autoAssignTasks'] ?? true,
-                    inboxPath: $meta['config']['inboxPath'] ?? '~/.sugar-crush/teams/',
-                )
-                : new TeamConfig();
-
-            // Re-hydrate without re-creating task/mailbox storage
-            $team = new Team(
-                id: $teamId,
-                name: $meta['name'],
-                leadAgentId: $meta['leadAgentId'],
-                createdAt: new \DateTimeImmutable($meta['createdAt']),
-                maxTeammates: $config->maxTeammates,
-            );
-
-            $this->teams[$teamId] = $team;
-            $this->teamConfigs[$teamId] = $config;
+            $teamId = (string) $teamId;
+            $meta[$teamId] = [
+                'name' => (string) $entry['name'],
+                'leadAgentId' => (string) $entry['leadAgentId'],
+                'createdAt' => (string) $entry['createdAt'],
+            ];
+            $config = \is_array($entry['config'] ?? null) ? $entry['config'] : null;
+            $configs[$teamId] = $config === null
+                ? new TeamConfig()
+                : new TeamConfig(
+                    maxTeammates: (int) ($config['maxTeammates'] ?? 5),
+                    defaultTimeoutSeconds: (int) ($config['defaultTimeoutSeconds'] ?? 600),
+                    allowPeerMessaging: (bool) ($config['allowPeerMessaging'] ?? true),
+                    autoAssignTasks: (bool) ($config['autoAssignTasks'] ?? true),
+                    inboxPath: (string) ($config['inboxPath'] ?? '~/.sugar-crush/teams/'),
+                );
         }
+
+        $this->meta = $meta;
+        $this->teamConfigs = $configs;
+        $this->teams = array_intersect_key($this->teams, $meta);
+    }
+
+    /**
+     * The Team for a registered ID, constructed on first use in this process.
+     */
+    private function build(string $teamId): Team
+    {
+        if (isset($this->teams[$teamId])) {
+            return $this->teams[$teamId];
+        }
+
+        $meta = $this->meta[$teamId];
+        $config = $this->teamConfigs[$teamId] ?? new TeamConfig();
+
+        return $this->teams[$teamId] = new Team(
+            id: $teamId,
+            name: $meta['name'],
+            leadAgentId: $meta['leadAgentId'],
+            createdAt: new \DateTimeImmutable($meta['createdAt']),
+            maxTeammates: $config->maxTeammates,
+        );
     }
 
     /**
@@ -298,7 +359,9 @@ final class TeamManager
      */
     private function loadRegistryData(): array
     {
-        if (!file_exists($this->registryPath)) {
+        // is_file, not file_exists: a directory squatting on the path is no
+        // registry, and reading one only raises a notice.
+        if (!is_file($this->registryPath)) {
             return [];
         }
 
@@ -348,8 +411,9 @@ final class TeamManager
     /**
      * Persist the current team registry to disk.
      *
-     * Writes the full in-memory team map to registry.json, creating
-     * the parent directory if it does not already exist.
+     * Writes the registered-team map to registry.json, creating the parent
+     * directory if it does not already exist. Callers {@see refresh()} first,
+     * so the map written is the disk's plus their own change.
      *
      * @throws \RuntimeException When the file cannot be written.
      */
@@ -359,12 +423,12 @@ final class TeamManager
         // itself, at 0700 derived from the requested file mode (the pre-M2
         // 0755 came from this line).
         $data = [];
-        foreach ($this->teams as $teamId => $team) {
+        foreach ($this->meta as $teamId => $meta) {
             $config = $this->teamConfigs[$teamId] ?? new TeamConfig();
             $data[$teamId] = [
-                'name' => $team->name,
-                'leadAgentId' => $team->leadAgentId,
-                'createdAt' => $team->createdAt->format(\DateTimeImmutable::ATOM),
+                'name' => $meta['name'],
+                'leadAgentId' => $meta['leadAgentId'],
+                'createdAt' => $meta['createdAt'],
                 'config' => [
                     'maxTeammates' => $config->maxTeammates,
                     'defaultTimeoutSeconds' => $config->defaultTimeoutSeconds,

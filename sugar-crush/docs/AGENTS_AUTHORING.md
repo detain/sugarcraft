@@ -393,10 +393,38 @@ here rather than marketed as delegation.
 
 ## Teams and worktrees
 
-`src/Agents/` also holds `TeamManager`, `Team`, `Teammate`, `TeamConfig`,
-`Mailbox`, `TeamMessage`, `WorktreeManager`, `WorktreeConfig` and
-`PathJail`/`PathJailConfig`. `~/.sugar-crush/teams` exists on disk in a
-launched install. `SUGARCRUSH_WORKTREES_DIR` re-points the worktree base path
+A team is a shared task board that background sub-agents work through, and
+the `Team` tool is how the model drives one. The lead `create`s a team, `add`s
+tasks (each with the full prompt and optional `blocked_by` ids), and staffs it
+by starting teammates with `Task` and `background: true`. A teammate `claim`s
+a task — a named one, or with no task named the next one whose blockers have
+all completed — works it, and `complete`s it with a result or `fail`s it;
+`list` shows every task's status, owner, blockers and revision, and `message`
+/ `inbox` carry notes between teammates through the team's `Mailbox`. The
+rules underneath are `TaskList`'s:
+
+- Dependencies stay acyclic: an `add` or `depend` that would close a loop is
+  refused, naming the loop.
+- Claims are compare-and-swap on the task's revision. Pass the `revision` you
+  last saw and a claim, `release` or `complete` is refused if anything wrote
+  the task since.
+- A claim is recorded against the session that made it (the TUI process, or a
+  background teammate's daemon). When that session dies mid-task, the next
+  `list` or `claim` puts the task back to pending and says so.
+- A team takes at most `max_teammates` teammates working at once (default 5).
+
+A teammate needs `Team` in its grant to claim for itself. A preset that
+declares no `tools:` has it; the six built-in definitions do not, so with
+those the lead claims on the teammate's behalf and completes the task from its
+report. The launch's `AgentManager` holds a `TeamManager` over the same store,
+`~/.sugar-crush/teams` (a registry plus one task database and mailbox per
+team), and the registry on disk is what every process shares.
+`HookEvent`'s `TaskCreated`, `TaskCompleted` and `TeammateIdle` still never
+fire: see [`HOOKS.md`](HOOKS.md).
+
+`src/Agents/` also holds `Teammate`, `TeamConfig`, `TeamMessage`,
+`WorktreeManager`, `WorktreeConfig` and
+`PathJail`/`PathJailConfig`. `SUGARCRUSH_WORKTREES_DIR` re-points the worktree base path
 (default `.sugar-crush/worktrees/`) — see [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
 An `isolation: worktree` preset runs in a **git worktree of its own**. The

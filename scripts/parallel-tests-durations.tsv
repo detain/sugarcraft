@@ -238,6 +238,7 @@ sugar-crush/tests/Tools/WorkflowToolTest.php	1.256	14
 sugar-crush/tests/Chat/ToolChildReapTest.php	1.253	5
 sugar-crush/tests/Chat/EngineAskModalTest.php	1.250	11
 sugar-crush/tests/Tools/BuiltIn/TaskToolLedgerTest.php	1.250	6
+sugar-crush/tests/Tools/BuiltIn/TeamToolTest.php	1.250	14
 sugar-crush/tests/Backend/EngineBackendEmptyReplyTest.php	1.235	7
 sugar-crush/tests/Tools/TaskToolProgressFramesTest.php	1.216	14
 sugar-crush/tests/Backend/StepPressureCheckTest.php	1.200	5
