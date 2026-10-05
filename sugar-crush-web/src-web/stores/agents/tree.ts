@@ -208,7 +208,9 @@ export function buildTree(runs: AgentRun[], root?: string | ((run: AgentRun) => 
 /**
  * Whether $run was started by tool call $call: its beats name the call
  * (`parentCallId`) — or, when a beat names none, a `Task` call that asked
- * the same agent for the same description.
+ * the same agent for the same description. The engine names the call on
+ * every beat now; the fallback is for beats a session's event log recorded
+ * before it did, which carry an empty `parentCallId` for good.
  */
 export function startedBy(run: AgentRun, call: { toolCallId: string; name: string; arguments: Record<string, unknown> }): boolean {
   if (run.parentCallId !== '') return run.parentCallId === call.toolCallId

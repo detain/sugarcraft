@@ -63,7 +63,29 @@ final class BashTimeoutTest extends TestCase
     {
         $method = new \ReflectionMethod(Bash::class, 'timeoutSeconds');
 
-        self::assertSame($expected, $method->invoke(null, $raw));
+        self::assertSame($expected, $method->invoke(new Bash(), $raw));
+    }
+
+    /** W9 integration: the default and the ceiling are the bashTimeoutSeconds / bashMaxTimeoutSeconds settings. */
+    public function testTheBoundsAreSettingsAppliedPerTurn(): void
+    {
+        $method = new \ReflectionMethod(Bash::class, 'timeoutSeconds');
+        $bash = \SugarCraft\Crush\Tools\ToolLimits::fromConfig([
+            \SugarCraft\Crush\Tools\ToolLimits::BASH_TIMEOUT_KEY => 30,
+            \SugarCraft\Crush\Tools\ToolLimits::BASH_MAX_TIMEOUT_KEY => 1800,
+        ])->applyTo(new Bash());
+        self::assertInstanceOf(Bash::class, $bash);
+
+        self::assertSame(['default' => 30, 'max' => 1800], $bash->timeoutBounds());
+        self::assertSame(30, $method->invoke($bash, null), 'no timeout asked: the configured default');
+        self::assertSame(1200, $method->invoke($bash, 1200), 'under the raised ceiling: as asked');
+        self::assertSame(1800, $method->invoke($bash, 5000), 'over it: clamped to the configured ceiling');
+        self::assertStringContainsString('default 30, max 1800', $bash->description());
+        self::assertSame(1800, $bash->inputSchema()['properties']['timeout']['maximum']);
+
+        $lowered = (new Bash())->withTimeoutBounds(null, 60);
+        self::assertSame(['default' => 60, 'max' => 60], $lowered->timeoutBounds(), 'a default above the ceiling is the ceiling');
+        self::assertSame(['default' => 120, 'max' => 600], \SugarCraft\Crush\Tools\ToolLimits::fromConfig([])->applyTo(new Bash())->timeoutBounds());
     }
 
     public function testAFastCommandIsUntouchedByTheDefaultBound(): void

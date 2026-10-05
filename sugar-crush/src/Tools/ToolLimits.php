@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tools;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingType;
+use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
@@ -86,6 +87,15 @@ final readonly class ToolLimits
     /** Silence an `interactive: true` Bash run may keep before it is stopped. */
     public const INTERACTIVE_IDLE_KEY = 'bashInteractiveIdleSeconds';
 
+    /** The window share one tool result may take before it is spilled ({@see \SugarCraft\Crush\Support\ToolOutputSpill::forModel()}). */
+    public const SPILL_WINDOW_PERCENT_KEY = 'toolSpillWindowPercent';
+
+    /** Bash's `timeout` default, in seconds (W9 integration of the N-P4c remainder). */
+    public const BASH_TIMEOUT_KEY = 'bashTimeoutSeconds';
+
+    /** Bash's `timeout` ceiling, in seconds. */
+    public const BASH_MAX_TIMEOUT_KEY = 'bashMaxTimeoutSeconds';
+
     /** Wall-clock budget of the chat-native path's forked tool children. */
     public const PARALLEL_TIMEOUT_KEY = 'chatToolTimeoutSeconds';
 
@@ -108,6 +118,7 @@ final readonly class ToolLimits
         self::READ_MAX_BYTES_KEY,
         self::READ_PAGE_LINES_KEY,
         self::READ_PAGE_BYTES_KEY,
+        self::SPILL_WINDOW_PERCENT_KEY,
         self::GLOB_MAX_MATCHES_KEY,
         self::WEB_FETCH_MAX_BYTES_KEY,
         self::WEB_FETCH_TIMEOUT_KEY,
@@ -115,6 +126,8 @@ final readonly class ToolLimits
         self::WEB_SEARCH_TIMEOUT_KEY,
         self::WEB_SEARCH_ENDPOINT_KEY,
         self::INTERACTIVE_IDLE_KEY,
+        self::BASH_TIMEOUT_KEY,
+        self::BASH_MAX_TIMEOUT_KEY,
         self::PARALLEL_TIMEOUT_KEY,
     ];
 
@@ -240,6 +253,14 @@ final readonly class ToolLimits
             return $maxBytes === null && $pageLines === null && $pageBytes === null
                 ? $tool
                 : $tool->withReadLimits($maxBytes, $pageLines, $pageBytes);
+        }
+
+        if ($tool instanceof Bash) {
+            $default = $this->int(self::BASH_TIMEOUT_KEY);
+            $max = $this->int(self::BASH_MAX_TIMEOUT_KEY);
+            if ($default !== null || $max !== null) {
+                $tool = $tool->withTimeoutBounds($default, $max);
+            }
         }
 
         if ($tool instanceof Glob && ($maxMatches = $this->int(self::GLOB_MAX_MATCHES_KEY)) !== null) {

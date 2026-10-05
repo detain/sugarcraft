@@ -85,6 +85,7 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::READ_MAX_BYTES_KEY => Read::DEFAULT_MAX_BYTES,
             ToolLimits::READ_PAGE_LINES_KEY => Read::PAGE_LINES,
             ToolLimits::READ_PAGE_BYTES_KEY => Read::PAGE_BYTES,
+            ToolLimits::SPILL_WINDOW_PERCENT_KEY => \SugarCraft\Crush\Support\ToolOutputSpill::WINDOW_SHARE_PERCENT,
             ToolLimits::GLOB_MAX_MATCHES_KEY => Glob::DEFAULT_MAX_MATCHES,
             ToolLimits::WEB_FETCH_MAX_BYTES_KEY => WebFetch::MAX_WIRE_BYTES,
             ToolLimits::WEB_FETCH_TIMEOUT_KEY => WebFetch::READ_TIMEOUT_SECONDS,
@@ -92,6 +93,8 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::WEB_SEARCH_TIMEOUT_KEY => WebSearch::DEFAULT_TIMEOUT_SECONDS,
             ToolLimits::WEB_SEARCH_ENDPOINT_KEY => null,
             ToolLimits::INTERACTIVE_IDLE_KEY => (new \ReflectionClassConstant(Bash::class, 'INTERACTIVE_IDLE_CEILING_SECONDS'))->getValue(),
+            ToolLimits::BASH_TIMEOUT_KEY => Bash::DEFAULT_TIMEOUT_SECONDS,
+            ToolLimits::BASH_MAX_TIMEOUT_KEY => Bash::MAX_TIMEOUT_SECONDS,
             ToolLimits::PARALLEL_TIMEOUT_KEY => Chat::PARALLEL_TOOL_TIMEOUT_SECONDS,
         ];
         self::assertSame(ToolLimits::KEYS, array_keys($expected));
@@ -113,6 +116,7 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::READ_MAX_BYTES_KEY,
             ToolLimits::READ_PAGE_LINES_KEY,
             ToolLimits::READ_PAGE_BYTES_KEY,
+            ToolLimits::SPILL_WINDOW_PERCENT_KEY,
         ];
         // The endpoint is Egress, pinned by WebSearchEndpointSettingTest.
         foreach (array_diff(ToolLimits::KEYS, [ToolLimits::WEB_SEARCH_ENDPOINT_KEY]) as $key) {

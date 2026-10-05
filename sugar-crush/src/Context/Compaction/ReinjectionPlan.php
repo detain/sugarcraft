@@ -54,7 +54,13 @@ use SugarCraft\Crush\Util\TokenEstimate;
  * tool rows it condensed, {@see FilesTouched}). Skills: the Skill calls
  * still in the conversation ({@see SkillTool::invokedIn()}), then the roster
  * the turn-context rows carry ({@see TurnContextBlock::invokedSkillsIn()}),
- * which outlives the calls it was built from.
+ * which outlives the calls it was built from. The plan: the newest of those
+ * files that is a plan-mode plan — a `.md` directly in
+ * {@see \SugarCraft\Crush\Permissions\PermissionGate::PLANS_DIR} (roadmap
+ * 5.7-1) — is restored as its own `<plan>` part after the files, outside
+ * their five, and is the first thing the budget pays for: a plan is what a
+ * plan-mode turn was written to keep, and the reason it lives on disk at all
+ * is that a compaction would fold it away in the transcript.
  *
  * SAFETY. Only files inside the project root are re-read (a path outside it
  * was reached through a tool call the person approved; re-reading it silently
@@ -288,7 +294,7 @@ final readonly class ReinjectionPlan
 
     /**
      * The re-injection's text for the turn-context row — its {@see MARKER}
-     * line, the skill bodies, then the files; with nothing to restore, the
+     * line, the skill bodies, the files, then the plan; with nothing to restore, the
      * marker line alone, which still answers the cycle. Reads the files and loads the skills NOW: call it only where
      * I/O is allowed (the engine's turn, never a render loop).
      *
@@ -303,8 +309,13 @@ final readonly class ReinjectionPlan
             $budget = min($budget, intdiv($window * self::MAX_WINDOW_PERCENT, 100));
         }
 
+        [$planPath, $filePaths] = $this->splitPlan($root);
+        [$plan, $planReferenced] = $planPath === null ? [[], []] : $this->renderFiles($root, $budget, [$planPath], 'plan');
+        foreach ($plan as $part) {
+            $budget -= TokenEstimate::ofText($part);
+        }
         [$skills, $budget] = $this->renderSkills($tools, $budget);
-        [$files, $referenced] = $this->renderFiles($root, $budget);
+        [$files, $referenced] = $this->renderFiles($root, $budget, $filePaths, 'file');
 
         $parts = [...$skills, ...$files];
         if ($referenced !== []) {
@@ -314,6 +325,14 @@ final readonly class ReinjectionPlan
                 PromptFence::escape(implode(', ', $referenced)),
             );
         }
+        array_push($parts, ...$plan);
+        if ($planReferenced !== []) {
+            $parts[] = sprintf(
+                'Your plan (over %d tokens, not restored; Read it before you go on): %s',
+                self::MAX_FILE_TOKENS,
+                PromptFence::escape($planReferenced[0]),
+            );
+        }
         // Stamped even with nothing to restore: the cycle is answered either
         // way, so the next step neither looks again nor re-polls git for it.
         if ($parts === []) {
@@ -321,10 +340,11 @@ final readonly class ReinjectionPlan
         }
 
         return sprintf(
-            '%s (cycle %s): the skills you had loaded and the files you were working on, re-read from disk now. '
+            '%s (cycle %s): the skills you had loaded and the files you were working on%s, re-read from disk now. '
             . 'They are current; read a file again only for a part not shown here.',
             self::MARKER,
             $this->cycle,
+            $planPath === null ? '' : ', with your plan',
         ) . "\n\n" . implode("\n\n", $parts);
     }
 
@@ -372,9 +392,44 @@ final readonly class ReinjectionPlan
     }
 
     /**
+     * The newest of {@see files()} that is a plan-mode plan, and the rest in
+     * their order. A plan is a `.md` that resolves directly into
+     * {@see \SugarCraft\Crush\Permissions\PermissionGate::PLANS_DIR} under
+     * the project root — the one write plan mode allows. Older plans stay
+     * ordinary files.
+     *
+     * @return array{0: ?string, 1: list<string>}
+     */
+    private function splitPlan(?string $root): array
+    {
+        $base = $root ?? (getcwd() ?: '.');
+        $realRoot = realpath($base);
+        $plansDir = $realRoot === false ? false : realpath($realRoot . '/' . \SugarCraft\Crush\Permissions\PermissionGate::PLANS_DIR);
+        if ($realRoot === false || $plansDir === false || !str_starts_with($plansDir, rtrim($realRoot, '/') . '/')) {
+            return [null, $this->files];
+        }
+
+        $plan = null;
+        $files = [];
+        foreach ($this->files as $path) {
+            $real = $plan === null ? realpath(str_starts_with($path, '/') ? $path : $base . '/' . $path) : false;
+            if ($real !== false && \dirname($real) === $plansDir && str_ends_with($real, '.md')) {
+                $plan = $path;
+
+                continue;
+            }
+            $files[] = $path;
+        }
+
+        return [$plan, $files];
+    }
+
+    /**
+     * @param list<string> $paths most recently touched first
+     * @param string       $tag   the element each inlined file is wrapped in
      * @return array{0: list<string>, 1: list<string>} the inlined files and the referenced paths
      */
-    private function renderFiles(?string $root, int $budget): array
+    private function renderFiles(?string $root, int $budget, array $paths, string $tag): array
     {
         $base = $root ?? (getcwd() ?: '.');
         $realRoot = realpath($base);
@@ -385,7 +440,7 @@ final readonly class ReinjectionPlan
 
         $inlined = [];
         $referenced = [];
-        foreach ($this->files as $path) {
+        foreach ($paths as $path) {
             if (\count($inlined) + \count($referenced) >= self::MAX_FILES) {
                 break;
             }
@@ -409,8 +464,8 @@ final readonly class ReinjectionPlan
             }
 
             $budget -= $tokens;
-            $inlined[] = sprintf('<file path="%s">', self::attribute($path)) . "\n"
-                . PromptFence::escape($content) . "\n</file>";
+            $inlined[] = sprintf('<%s path="%s">', $tag, self::attribute($path)) . "\n"
+                . PromptFence::escape($content) . "\n</{$tag}>";
         }
 
         return [$inlined, $referenced];

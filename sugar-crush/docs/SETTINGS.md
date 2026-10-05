@@ -199,6 +199,10 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `compaction.autoTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
 | `compaction.blockTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
 | `compaction.modelTokenCaps` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `forModel()` | yes |
+| `contextPruning.minContextTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
+| `contextPruning.maxContextTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
+| `contextPruning.nudgeFrequency` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
+| `contextPruning.iterationNudgeThreshold` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
 | `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createCustom()` → each provider's `contextWindow()` | **no** |
 | `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
 | `allowedTools` | `Bootstrap::tools()` → `filterToolSet()` | **no** |
@@ -211,6 +215,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `readMaxBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
 | `readPageLines` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
 | `readPageBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
+| `toolSpillWindowPercent` | `Runtime::settle()` → `ToolOutputSpill::forModel()`, per large result | **no** |
 | `globMaxMatches` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
 | `webFetchMaxBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
 | `webFetchTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
@@ -218,6 +223,8 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `webSearchTimeoutSeconds` | `WebSearch::__construct()`, at launch and for `/websearch` | yes |
 | `webSearchEndpoint` | `WebSearch::__construct()`, at launch and for `/websearch` | **no** |
 | `bashInteractiveIdleSeconds` | `CapturesProcessOutput::runCapturedInteractive()`, as the run starts | yes |
+| `bashTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn | yes |
+| `bashMaxTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn | yes |
 | `chatToolTimeoutSeconds` | `Chat::waitForToolChildrenAsync()`, as a batch starts | yes |
 | `instructions` | `Bootstrap::forcedInstructions()` | **no** |
 | `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | **no** |
@@ -225,7 +232,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `disabledSkills` | `Bootstrap::chat()` → `skillRegistry()` | yes |
 | `enabledSkills` | `Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()` | **no** |
 | `subagentModel` | `Bootstrap::agentManager()` | **no** |
-| `subagentMaxTurns` | `EngineExecutor::execute()` → `defaultMaxTurns()`, as each run starts | **no** |
+| `subagentMaxTurns` | `TaskTool` (engine path) and `EngineExecutor::execute()` → `EngineExecutor::defaultMaxTurns()`, as each run starts | **no** |
 | `subagentMaxConcurrent` | `Bootstrap::agentPoolConfig()` → `AgentPoolConfig::withSettings()` | **no** |
 | `subagentMaxDepth` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `TaskTool::withDelegationLimits()` | **no** |
 | `subagentMaxActive` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `TaskTool::withDelegationLimits()` | **no** |
@@ -253,7 +260,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these seventy-four, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these eighty-one, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -946,6 +953,11 @@ project-settable.
 | `compaction.autoTokens` | Context & Compaction | int | `150000` | P U C | — | restart | tuning |
 | `compaction.blockTokens` | Context & Compaction | int | unset (no cap) | P U C | — | restart | tuning |
 | `compaction.modelTokenCaps` | Context & Compaction | object | `{}` | P U C | — | restart | tuning |
+| `contextPruning.minContextTokens` | Context & Compaction | int | `60000` | P U C | — | restart | tuning |
+| `contextPruning.maxContextTokens` | Context & Compaction | int | `120000` | P U C | — | restart | tuning |
+| `contextPruning.nudgeFrequency` | Context & Compaction | int | `5` | P U C | — | restart | tuning |
+| `contextPruning.iterationNudgeThreshold` | Context & Compaction | int | `10` | P U C | — | restart | tuning |
+| `contextPruning.compress` | Context & Compaction | enum | `manual` | C | — | restart | tuning |
 | `symbolMap.enabled` | Context & Compaction | bool | `true` | C | `SUGARCRUSH_DISABLE_SYMBOL_MAP` | restart | narrowing |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `SUGARCRUSH_CONTEXT_PRUNING` | next turn | tuning |
@@ -966,6 +978,7 @@ project-settable.
 | `readMaxBytes` | Tools | int | `1048576` | U C | — | next turn | spend |
 | `readPageLines` | Tools | int | `2000` | U C | — | next turn | spend |
 | `readPageBytes` | Tools | int | `51200` | U C | — | next turn | spend |
+| `toolSpillWindowPercent` | Tools | int | `30` | U C | — | next turn | spend |
 | `globMaxMatches` | Tools | int | `1000` | P U C | — | next turn | tuning |
 | `webFetchMaxBytes` | Tools | int | `2097152` | P U C | — | next turn | tuning |
 | `webFetchTimeoutSeconds` | Tools | int | `30` | P U C | — | next turn | tuning |
@@ -973,6 +986,8 @@ project-settable.
 | `webSearchTimeoutSeconds` | Tools | int | `30` | P U C | — | restart | tuning |
 | `webSearchEndpoint` | Tools | URL | unset: no default; WebSearch refuses every call until one is set | U C | `SUGARCRUSH_SEARCH_ENDPOINT` | restart | egress |
 | `bashInteractiveIdleSeconds` | Tools | number | `8` | P U C | — | next turn | tuning |
+| `bashTimeoutSeconds` | Tools | int | `120` | P U C | — | next turn | tuning |
+| `bashMaxTimeoutSeconds` | Tools | int | `600` | P U C | — | next turn | tuning |
 | `chatToolTimeoutSeconds` | Tools | int | `30` | P U C | — | next turn | tuning |
 | `memory.promptMaxEntries` | Memory & Rules | int | `40` | C | — | next turn | prompt |
 | `memory.promptMaxBytes` | Memory & Rules | int | `4096` | C | — | next turn | prompt |
@@ -1009,6 +1024,7 @@ project-settable.
 | `toolOutputPreviewLines` | Interface | int | `10` | P U C | — | live | cosmetic |
 | `maxCheckpoints` | Interface | int | `100` | U C | — | live | tuning |
 | `lintCommands` | Hooks & MCP | object | `{}` | U C | — | restart | exec |
+| `hooksDefaultTimeoutSeconds` | Hooks & MCP | number | `60` | C | — | restart | tuning |
 | `claudeMcpBinary` | Hooks & MCP | path | unset | C | — | next launch | exec |
 | `claudeMcpArgs` | Hooks & MCP | list | unset | C | — | next launch | exec |
 | `claudeMcpEnv` | Hooks & MCP | object | unset | C | — | next launch | security |
@@ -1096,15 +1112,16 @@ Saved is not applied: see the next section for when each key takes effect.
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints` |
-| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `chatToolTimeoutSeconds`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
-| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `symbolMap.enabled`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `lintCommands`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
+| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `symbolMap.enabled`, `contextWindow`, `permissionMode`, `permissionRules`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
 `parallelToolDeadlineSeconds`, `maxToolSteps`, `toolOutputCapBytes`,
 `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
-`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
-`bashInteractiveIdleSeconds`, `chatToolTimeoutSeconds`, `embeddingModel`,
+`toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
+`webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `embeddingModel`,
 `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `theme`,
 `statusLine`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`,
 `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
@@ -1225,7 +1242,7 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only eleven of the seventy-four layered keys have an
+  They do not cover it: only eleven of the eighty-one layered keys have an
   env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`, `webSearchEndpoint`,
   `mouse`, `mouseClicks`, `connectTimeoutSeconds`). `maxOutputTokens`,
@@ -1235,11 +1252,14 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
   `compaction.toolOutputChars`, `compaction.reminderTokens`,
   `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
+  `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
+  `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
   `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`,
   `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
   `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
-  `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
-  `webSearchMaxResults`, `webSearchTimeoutSeconds`, `bashInteractiveIdleSeconds`,
+  `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
+  `webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
+  `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
   `chatToolTimeoutSeconds`, `instructions`, `disabledRules`, `embeddingModel`,
   `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxTurns`,
   `subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,

@@ -19,11 +19,12 @@ It ships as a Composer package. The pre-built bundle is committed under
 `dist/`, and a one-class PHP shim tells `sugarcrush serve` where it is, so
 PHP users get the UI from `composer require` alone and never need Node.
 
-> **Status: MVP (roadmap O-5b).** One session at a time, with everything a
-> turn needs: the sessions sidebar, a virtualised transcript (Markdown, code,
+> **Status: multi-session (roadmap O-5b, O-6a/b/c).** Everything a turn
+> needs — the sessions sidebar, a virtualised transcript (Markdown, code,
 > reasoning folds), tool cards with diffs, permission cards, a composer that
-> queues, steers or interrupts, and a status bar. Multi-pane layouts, the
-> settings form and the agent/background panels arrive with O-6.
+> queues, steers or interrupts, and a status bar — plus tabs and a tiled grid
+> of live sessions, a server-wide approvals drawer, the schema-driven settings
+> form, and the agent, todo, background, workflow and memory panels.
 
 ## Install
 
@@ -92,6 +93,10 @@ documents the protocol and the UI).
   add, edit, delete.
 - **Command palette** (Ctrl+K / ⌘K): sessions, slash commands, panels, new
   session, theme.
+- **Settings** (the *settings* link in the top bar): a form generated from
+  `settings.schema` — your tier or a trusted project's, each value's
+  provenance, env and flag locks, apply-mode badges — with a diff preview of
+  the file before anything is saved (`settings.preview`, then `settings.set`).
 
 ## Developing the UI
 
@@ -119,10 +124,17 @@ src-web/
               hello + resume, watchdog, reconnect), reconnect.ts (backoff),
               cursor.ts (gap-free seq cursor), auth.ts (login, tickets)
   stores/     connection, sessions, session (one per session id, the
-              reducer in reducer.ts), approvals, layout, settings
+              reducer in reducer.ts), approvals, layout, settings (theme,
+              notifications), settings/ (the settings form: fields,
+              serverSettings), agents/ (agent tree, todos, background,
+              workflows, memory, panels)
   components/ SessionSidebar, Transcript (virtualised), TranscriptItem,
               MessageMarkdown, ReasoningFold, ToolCard, DiffView,
-              PermissionCard, Composer, QueueStrip, StatusBar, ConnectionBanner
+              PermissionCard, Composer, QueueStrip, StatusBar,
+              ConnectionBanner; grid/ (tabs, tiles), approvals/ (drawer),
+              settings/ (SettingsView, fields, preview), agents/ (tree,
+              agent view), panels/ (side panels, command palette)
+  lib/        markdown, diff, format, highlight (lazy)
   views/      DashboardView, SessionView, LoginView
 ```
 

@@ -117,7 +117,7 @@ final class MemoryCommand implements HostCommand
         $lines[] = '`/memory` — Show this help text';
         $lines[] = '';
         $lines[] = 'Scopes: `project` (default), `user`, `agent`. Project and user notes reach the prompt '
-            . '(user notes first, at most ' . MemoryBlock::USER_MAX_ENTRIES . '); '
+            . '(user notes first, at most ' . MemoryBlock::empty()->withSettings()->limits()['userMaxEntries'] . '); '
             . 'agent-scope notes are listable but never reach the prompt.';
         $lines[] = 'History: every change to the home memory directory is a git commit (when `git` is on PATH); '
             . 'a restore is a new commit, so it can be undone the same way.';

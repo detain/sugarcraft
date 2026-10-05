@@ -79,6 +79,8 @@ final class ToolOutputSpill
      * The largest share of the model's context window ONE tool result may take
      * before {@see forModel()} spills it, in percent. A result past it is a
      * third of the window replayed into every following request of the turn.
+     * The default of the `toolSpillWindowPercent` setting, which
+     * {@see forModel()} reads when a result is large enough to be judged.
      */
     public const WINDOW_SHARE_PERCENT = 30;
 
@@ -238,6 +240,9 @@ final class ToolOutputSpill
      *
      * @param array<string, mixed> $arguments the call's arguments
      * @param \Closure(): int     $windowTokens asked only when the result is big enough to matter
+     * @param ?int                $windowSharePercent the share; null reads the
+     *        `toolSpillWindowPercent` setting (else {@see WINDOW_SHARE_PERCENT}),
+     *        only when the result is big enough to matter
      */
     public static function forModel(
         ToolResult $result,
@@ -245,6 +250,7 @@ final class ToolOutputSpill
         array $arguments,
         string $sessionId,
         \Closure $windowTokens,
+        ?int $windowSharePercent = null,
     ): ToolResult {
         $content = self::adopt($result->content(), $sessionId);
 
@@ -255,7 +261,10 @@ final class ToolOutputSpill
                 $window = 0;
             }
 
-            $limitTokens = $window > 0 ? intdiv($window * self::WINDOW_SHARE_PERCENT, 100) : 0;
+            $share = $windowSharePercent
+                ?? \SugarCraft\Crush\Tools\ToolLimits::current()->int(\SugarCraft\Crush\Tools\ToolLimits::SPILL_WINDOW_PERCENT_KEY)
+                ?? self::WINDOW_SHARE_PERCENT;
+            $limitTokens = $window > 0 ? intdiv($window * $share, 100) : 0;
             if ($limitTokens > 0 && strlen($content) > $limitTokens && TokenEstimate::ofText($content) > $limitTokens) {
                 $readsSpill = $toolName === 'Read'
                     && is_string($arguments['file_path'] ?? null)

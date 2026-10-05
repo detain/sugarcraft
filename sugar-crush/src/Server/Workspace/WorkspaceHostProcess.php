@@ -135,7 +135,7 @@ final class WorkspaceHostProcess
         // The root's workspace — built HERE, in the process that serves it,
         // which is the whole point: its statics are this root's alone.
         $workspace = Bootstrap::workspace($root);
-        $hub = SessionHub::new($workspace, $config->maxOpenSessions);
+        $hub = SessionHub::new($workspace, $config->maxOpenSessions, \SugarCraft\Crush\Context\CompactorConfig::fromSettings(Bootstrap::readUserConfig()));
         $dispatcher = Dispatcher::new(ServerContext::new($hub, $config, \is_string($settings['version'] ?? null) ? $settings['version'] : 'unknown', $loop));
 
         $socket = @\stream_socket_client('unix://' . $settings['socket'], $errno, $errstr, self::CONNECT_TIMEOUT_SECONDS);

@@ -210,6 +210,49 @@ final class ReinjectionPlanTest extends TestCase
         $this->assertStringNotContainsString('<skill', $plan->render($this->root, []), 'no Skill tool, no bodies');
     }
 
+    /**
+     * The plan-mode plan (roadmap 5.7-1) is restored as its own part after the
+     * files, outside their five; an older plan, or a Markdown file anywhere
+     * else, is an ordinary file.
+     */
+    public function testTheNewestPlanIsRestoredAsItsOwnPartAfterTheFiles(): void
+    {
+        mkdir($this->root . '/.sugar-crush/plans', 0o700, true);
+        mkdir($this->root . '/.sugar-crush/plans/nested', 0o700, true);
+        file_put_contents($this->root . '/.sugar-crush/plans/old.md', "# Old plan\n");
+        file_put_contents($this->root . '/.sugar-crush/plans/retry.md', "# Retry backoff\n1. Edit src/a.php\n");
+        file_put_contents($this->root . '/.sugar-crush/plans/nested/deep.md', "# Not a plan\n");
+        file_put_contents($this->root . '/src/a.php', "<?php\n");
+
+        $plan = ReinjectionPlan::pendingIn([
+            new AssistantMessage(StateSummaryTemplate::ROW_PREFIX . 'x'),
+            self::call('c1', 'Write', ['file_path' => '.sugar-crush/plans/old.md']),
+            self::call('c2', 'Read', ['file_path' => 'src/a.php']),
+            self::call('c3', 'Write', ['file_path' => '.sugar-crush/plans/nested/deep.md']),
+            self::call('c4', 'Edit', ['file_path' => '.sugar-crush/plans/retry.md']),
+        ], null);
+        $this->assertNotNull($plan);
+
+        $text = $plan->render($this->root, []);
+        $this->assertStringContainsString('the files you were working on, with your plan, re-read from disk now', $text);
+        $this->assertStringContainsString("<plan path=\".sugar-crush/plans/retry.md\">\n# Retry backoff\n", $text);
+        $this->assertSame(1, substr_count($text, '<plan path='), 'only the newest plan is the plan');
+        $this->assertStringContainsString('<file path=".sugar-crush/plans/old.md">', $text, 'an older plan is an ordinary file');
+        $this->assertStringContainsString('<file path=".sugar-crush/plans/nested/deep.md">', $text, 'a nested Markdown file is not a plan');
+        $this->assertGreaterThan(strrpos($text, '<file path='), strpos($text, '<plan path='), 'the plan comes after the files');
+    }
+
+    public function testWithoutAPlanTheHeaderNamesNone(): void
+    {
+        file_put_contents($this->root . '/src/a.php', "<?php\n");
+        $plan = ReinjectionPlan::pendingIn([new AssistantMessage(StateSummaryTemplate::ROW_PREFIX . 'x'), self::call('c1', 'Read', ['file_path' => 'src/a.php'])], null);
+        $this->assertNotNull($plan);
+
+        $text = $plan->render($this->root, []);
+        $this->assertStringNotContainsString('<plan', $text);
+        $this->assertStringNotContainsString('your plan', $text);
+    }
+
     public function testNothingToRestoreStillStampsTheCycle(): void
     {
         $plan = ReinjectionPlan::pendingIn([new AssistantMessage(StateSummaryTemplate::ROW_PREFIX . 'x')], null);

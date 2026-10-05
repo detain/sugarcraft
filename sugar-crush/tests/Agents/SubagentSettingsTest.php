@@ -135,6 +135,28 @@ final class SubagentSettingsTest extends TestCase
         self::assertStringContainsString('(step cap 3)', (string) $again->error?->getMessage());
     }
 
+    /** W9 integration: a `Task` delegation with no `maxTurns` stops at the saved cap too. */
+    public function testATaskRunWithNoPresetCapStopsAtTheSavedOne(): void
+    {
+        Bootstrap::writeUserConfig([EngineExecutor::MAX_TURNS_SETTINGS_KEY => 2]);
+
+        $script = [];
+        for ($step = 1; $step <= 6; $step++) {
+            $script[] = new CompleteResponse(content: '', toolCalls: [new ToolCall('call_' . $step, 'probe', ['step' => $step])]);
+        }
+        $tools = [self::probe()];
+        $manager = new \SugarCraft\Crush\Agents\AgentManager(new ScriptedProvider([]), new \SugarCraft\Crush\Skills\SkillRegistry(), toolRegistry: $tools, toolUniverse: $tools);
+        $manager->register(RosterAgent::named('coder', ['probe']));
+        $provider = new ScriptedProvider($script);
+        $task = (new TaskTool($manager, suspended: new \SugarCraft\Crush\Agents\SuspendedDelegations($this->dir . '/suspended')))
+            ->withEngine(EngineBackend::new($provider, 'm')->withTools($tools));
+
+        $task->execute(['description' => 'Loop', 'prompt' => 'loop until stopped', 'agent' => 'coder']);
+
+        self::assertCount(3, $provider->requests, 'two tool steps at the saved cap, then the closing summary request — not 200 steps');
+        self::assertStringContainsString('budget of 2 tool steps', (string) $provider->requests[2]->messages[\count($provider->requests[2]->messages) - 1]->content());
+    }
+
     public function testThePoolConfigTakesTheFanOutSetting(): void
     {
         $config = new AgentPoolConfig(workerProvider: ['type' => 'echo']);

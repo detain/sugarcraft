@@ -72,6 +72,17 @@ final class ContextSettings implements SettingDefinitionSet
             ->withHelp($help)
             ->withReaderSymbol(CompactorConfig::class . '::fromSettings')
             ->withReadBy($readBy);
+        $nudge = static fn (string $key, int $default, string $label, string $help): SettingDefinition => SettingDefinition::new($key, SettingType::Int, $default)
+            ->withCategory(SettingCategory::Context)
+            ->withRiskClass(RiskClass::Tuning)
+            ->withLayered()
+            ->withProjectSettable()
+            ->withApplyMode(ApplyMode::Restart)
+            ->withRange(1)
+            ->withLabel($label)
+            ->withHelp($help)
+            ->withReaderSymbol(CompactorConfig::class . '::nudgePolicy')
+            ->withReadBy($readBy . ' → `nudgePolicy()`, the engine\'s step loop');
         $cap = static fn (string $key, ?int $default, string $label, string $help): SettingDefinition => SettingDefinition::new($key, SettingType::Int, $default)
             ->withCategory(SettingCategory::Context)
             ->withRiskClass(RiskClass::Tuning)
@@ -107,6 +118,26 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withHelp('{"<model>" or "<provider>/<model>": {"reminderTokens", "autoTokens", "blockTokens"}} overriding the three caps; 0 clears one.')
                 ->withReaderSymbol(CompactorConfig::class . '::fromSettings')
                 ->withReadBy($readBy . ' → `forModel()`'),
+            // Roadmap 3.B-4 / N-P4b: the model's context reminders. Read with
+            // the compaction keys and handed to the engine's step loop through
+            // `CompactorConfig::nudgePolicy()`; a min above the max is ignored
+            // as a pair, so neither half of a typo moves alone.
+            $nudge(CompactorConfig::SETTING_NUDGE_MIN_TOKENS, $defaults->nudgeMinContextTokens, 'Reminders from (tokens)', 'Context size below which the model is never reminded to prune; must not exceed the hard-reminder size.'),
+            $nudge(CompactorConfig::SETTING_NUDGE_MAX_TOKENS, $defaults->nudgeMaxContextTokens, 'Hard reminder at (tokens)', 'Context size above which the newest row carries the stronger "prune now" reminder.'),
+            $nudge(CompactorConfig::SETTING_NUDGE_FREQUENCY, $defaults->nudgeFrequency, 'Rows between reminders', 'New rows a reminder waits for after the last one, so it does not repeat on every step.'),
+            $nudge(CompactorConfig::SETTING_NUDGE_ITERATIONS, $defaults->nudgeIterationThreshold, 'Reminder after tool results', 'Tool results since the last prompt after which a long tool loop is reminded to prune.'),
+            // Whether the model's Compress is offered unprompted. config.json
+            // only, like contextPruning.mode: DCP #611 — under pressure a model
+            // compresses content still needed — so only the person turns it on.
+            SettingDefinition::new(CompactorConfig::SETTING_COMPRESS, SettingType::Enum, \SugarCraft\Crush\Tools\BuiltIn\Compress::MODE_DEFAULT)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withApplyMode(ApplyMode::Restart)
+                ->withEnumValues(CompactorConfig::COMPRESS_MODES)
+                ->withLabel('Model compression')
+                ->withHelp('manual offers Compress only on a turn you start with /compress, one call; auto offers it on every turn where the model may prune.')
+                ->withReaderSymbol(CompactorConfig::class . '::offersCompressUnprompted')
+                ->withReadBy('`EngineBackend::gatedLedgerTools()` → `CompactorConfig::offersCompressUnprompted()`'),
             // Roadmap N-P4d: the persisted form of SUGARCRUSH_DISABLE_SYMBOL_MAP.
             // config.json only, like the env switch it mirrors; captured once
             // per session, so it applies to the next one.

@@ -129,8 +129,10 @@ re-prefills the whole conversation behind it.
   (`Context\Compaction\ReinjectionPlan`): the bodies of the skills the Skill tool loaded, re-loaded
   through it (5,000 tokens each, 25,000 in all, oldest dropped first), and up to five of the files
   the agent read or edited, most recent first, re-read from disk (5,000 tokens each; a larger one is
-  named as a referenced file; only files inside the project, never binary), the whole within 10% of
-  the context window; an open todo list is re-shown beside it. The compaction is recognised off the
+  named as a referenced file; only files inside the project, never binary), then the newest
+  plan-mode plan among those files (a `.md` directly in `.sugar-crush/plans/`) as its own `<plan>`
+  part, outside the five and paid for first, the whole within 10% of the context window; an open
+  todo list is re-shown beside it. The compaction is recognised off the
   history (`ReinjectionPlan::pendingIn()`) and the row stamps its cycle, so it happens once, with no
   flag across the fork and no file I/O on the render loop. Every row also carries the roster of
   skills loaded this session (`TurnContextBlock::withInvokedSkills()`), which is how a skill whose

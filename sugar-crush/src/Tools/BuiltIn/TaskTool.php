@@ -194,7 +194,7 @@ use SugarCraft\Crush\Usage;
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
  * carries across the fork.
  */
-final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, StreamsActivity, \SugarCraft\Crush\Tools\RelaysPermissionAsks
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine, PromptGuidance, SharesSiblingSpend, StreamsActivity, \SugarCraft\Crush\Tools\RelaysPermissionAsks, \SugarCraft\Crush\Tools\TakesToolCallId
 {
     /**
      * Step cap for a preset that declares no `maxTurns`. 200 since
@@ -204,7 +204,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * so the two cannot drift. The `subagentMaxTurns` setting (roadmap N-P4f)
      * is resolved over that default by
      * {@see \SugarCraft\Crush\Agents\EngineExecutor::defaultMaxTurns()}, which
-     * the workflow path reads; this class still reads the constant.
+     * both paths read as each run starts.
      */
     public const DEFAULT_MAX_TURNS = \SugarCraft\Crush\Agents\EngineExecutor::DEFAULT_MAX_TURNS;
 
@@ -994,7 +994,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     ->mutate(['slotRoot' => $this->slotRoot]);
             }
         }
-        $maxTurns = max(1, $subAgent->agent->maxTurns ?? self::DEFAULT_MAX_TURNS);
+        $maxTurns = max(1, $subAgent->agent->maxTurns ?? \SugarCraft\Crush\Agents\EngineExecutor::defaultMaxTurns());
 
         // Roadmap 3.B-5 (DCP §13.2 I): the run manages its OWN context — an
         // EPHEMERAL ledger, private to this delegation: its refs number only

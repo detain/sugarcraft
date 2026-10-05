@@ -543,11 +543,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          * ({@see \SugarCraft\Crush\Cli\Bootstrap}'s prompt-budget report) and
          * from {@see \SugarCraft\Crush\Chat}'s own compactor: three readers
          * that agreed only because each happened to default to
-         * {@see CompactorConfig::new()}. No settings key feeds compaction
-         * budgets, so null resolves to that same {@see CompactorConfig::new()}
-         * — the source Bootstrap's notice prices against — explicitly, here,
-         * where a future settings key or a Chat's configured compactor
-         * arrives through {@see withCompactorConfig()}.
+         * {@see CompactorConfig::new()}. The `compaction.*` and
+         * `contextPruning.*` settings keys (roadmap N-P4b) feed it now: a
+         * launch hands its session's config through
+         * {@see withCompactorConfig()}, and null resolves to
+         * {@see CompactorConfig::fromSettings()} over the merged user config
+         * at each read ({@see compactorConfig()}) — the same keys
+         * `Bootstrap::chat()` reads, so `-p`, a server session and an
+         * embedder price their turns as the TUI does.
          */
         private readonly ?CompactorConfig $compactorConfig = null,
         /**
@@ -1547,6 +1550,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 $this->turnTools($onReasoning, $onHeartbeat, $onEvent, $spentSoFarUsd, $contextLedger, $app, \SugarCraft\Crush\Tools\BuiltIn\Compress::isTriggered(array_values($messages))),
                 $preCompact,
                 $messages,
+                $this->compactorConfig()->offersCompressUnprompted(),
             ))
             ->withMessages($messages);
 
@@ -1757,7 +1761,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // after a successful Prune / Compress (the cooldown).
             if ($this->contextLedger !== null) {
                 [$anchorTokens, $anchorRows] = $pressureAnchor;
-                $nudge = \SugarCraft\Crush\Context\Pruning\NudgePolicy::new()->decide(
+                $nudge = $this->compactorConfig()->nudgePolicy()->decide(
                     $anchorTokens !== null
                         ? $anchorTokens + \SugarCraft\Crush\Context\ContextPressure::ofMessages(\array_slice($app->messages, $anchorRows))
                         : \SugarCraft\Crush\Context\ContextPressure::ofMessages($app->messages),
@@ -3011,7 +3015,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * offered only on a turn the person started with `/compress`
      * ({@see \SugarCraft\Crush\Tools\BuiltIn\Compress::isTriggered()}), and
      * that turn may make one successful call. On every other turn it is left
-     * out, so its schema is never sent.
+     * out, so its schema is never sent — unless the person set
+     * `contextPruning.compress: auto` ($unprompted,
+     * {@see CompactorConfig::offersCompressUnprompted()}): then a `Compress`
+     * {@see turnTools()} bound (the pruning mode's `auto`, where `Prune` is
+     * offered too) stays on every turn, with no one-call allowance.
      *
      * @param list<Tool>                                     $tools
      * @param \Closure(string $trigger, string $focus): ?string $preCompact
@@ -3019,7 +3027,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *
      * @return list<Tool>
      */
-    private static function gatedLedgerTools(array $tools, \Closure $preCompact, array $messages = []): array
+    private static function gatedLedgerTools(array $tools, \Closure $preCompact, array $messages = [], bool $unprompted = false): array
     {
         $triggered = \SugarCraft\Crush\Tools\BuiltIn\Compress::isTriggered(array_values($messages));
         $budget = 1;
@@ -3037,10 +3045,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $gated = [];
         foreach ($tools as $tool) {
             if ($tool instanceof \SugarCraft\Crush\Tools\BuiltIn\Compress) {
-                if (!$triggered) {
+                if ($triggered) {
+                    $tool = $tool->withAllowance($allowance);
+                } elseif (!$unprompted) {
                     continue;
                 }
-                $tool = $tool->withAllowance($allowance);
             }
             $gated[] = $tool instanceof \SugarCraft\Crush\Tools\MutatesContextLedger
                 ? $tool->withCompactionGate($preCompact)

@@ -95,6 +95,9 @@ final class SessionFeed
     /** @var array<string, array<string, mixed>> sub-agent id => its latest activity */
     private array $subagents = [];
 
+    /** A run's identity fields a later beat leaves empty, kept from an earlier one. */
+    private const SUBAGENT_STICKY_FIELDS = ['task', 'description', 'name', 'parentCallId', 'model'];
+
     /** @var array<string, int> delta type => bytes streamed into the current part */
     private array $offsets = [];
 
@@ -492,7 +495,18 @@ final class SessionFeed
             case SessionEvent::SUBAGENT_FINISHED:
                 $id = $event->data['id'] ?? null;
                 if (\is_string($id) || \is_int($id)) {
-                    $this->subagents[(string) $id] = $event->data;
+                    // A progress beat names no task (only `started` carries
+                    // it) and may leave the other identity fields empty, so
+                    // the run keeps what its earlier beats said: a snapshot's
+                    // tree then shows what each run was asked to do.
+                    $data = $event->data;
+                    $previous = $this->subagents[(string) $id] ?? [];
+                    foreach (self::SUBAGENT_STICKY_FIELDS as $field) {
+                        if (($data[$field] ?? '') === '' && \is_string($previous[$field] ?? null) && $previous[$field] !== '') {
+                            $data[$field] = $previous[$field];
+                        }
+                    }
+                    $this->subagents[(string) $id] = $data;
                 }
                 break;
 

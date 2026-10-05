@@ -133,6 +133,18 @@ final class MemoryImportCommandTest extends TestCase
         $this->assertFileDoesNotExist($this->sentinel('gemini'));
     }
 
+    /** W9-h: the help line states the user-note cap that applies, not the constant. */
+    public function testTheHelpLineNamesTheConfiguredUserNoteCap(): void
+    {
+        $this->assertStringContainsString('(user notes first, at most ' . MemoryBlock::USER_MAX_ENTRIES . ')', $this->reply('/memory'));
+
+        $home = (string) getenv('HOME');
+        mkdir($home . '/.sugar-crush', 0700, true);
+        file_put_contents($home . '/.sugar-crush/config.json', json_encode([MemoryBlock::SETTING_USER_MAX_ENTRIES => 2]));
+
+        $this->assertStringContainsString('(user notes first, at most 2)', $this->reply('/memory'));
+    }
+
     // ── 2. happy paths ───────────────────────────────────────────────────────
 
     public function testOpencodeHappyPathWritesAgentScopeWithTag(): void

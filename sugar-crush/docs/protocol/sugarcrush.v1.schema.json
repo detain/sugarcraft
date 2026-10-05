@@ -291,6 +291,24 @@
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "origin": {
+                    "type": "object",
+                    "properties": {
+                        "agentId": {
+                            "type": "string"
+                        },
+                        "agentName": {
+                            "type": "string"
+                        },
+                        "parentCallId": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "agentId"
+                    ],
+                    "description": "The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own."
                 }
             },
             "required": [
@@ -3886,6 +3904,24 @@
                         "additionalProperties": {
                             "type": "string"
                         }
+                    },
+                    "origin": {
+                        "type": "object",
+                        "properties": {
+                            "agentId": {
+                                "type": "string"
+                            },
+                            "agentName": {
+                                "type": "string"
+                            },
+                            "parentCallId": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "agentId"
+                        ],
+                        "description": "The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own."
                     },
                     "sessionId": {
                         "$ref": "#/$defs/SessionId"

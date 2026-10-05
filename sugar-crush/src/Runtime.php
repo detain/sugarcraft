@@ -469,11 +469,12 @@ final class Runtime
      *    prompt while listing them would spend a judgement that class cannot
      *    make. "Did the working tree move" and "may this call be denied
      *    without asking" are different questions, and the answers differ.
-     *    The no-ask tools — `Memory`, `Prune`, `Todo`, `Compress` — diverge
-     *    too, for the opposite reason: they move no file, so they are
-     *    read-only here, but the gate classes them no-ask rather than read,
-     *    because each writes harness-owned state (memory notes, the context
-     *    ledger, the todo list).
+     *    The no-ask tools — `Memory`, `Prune`, `Todo`, `Compress`, `Recall`,
+     *    `Team` — diverge too, for the opposite reason: they move no file, so
+     *    they are read-only here, but the gate classes them no-ask rather than
+     *    read, because each touches only harness-owned state (memory notes,
+     *    the context ledger, the todo list, the session's own rows, the
+     *    per-user team store).
      *
      *    NEITHER THE NAMES NOR THE DIVERGENCE ARE ASSERTED HERE ANY MORE, and
      *    that is the second correction to this bullet. It first stated the
@@ -2133,7 +2134,7 @@ final class Runtime
             if ($heartbeat !== null && $tool instanceof \SugarCraft\Crush\Tools\AcceptsHeartbeat) {
                 $pid = getmypid();
                 $lastBeat = 0.0;
-                $result = $tool->executeWithHeartbeat($args ?? [], static function () use ($heartbeat, $pid, &$lastBeat): void {
+                $result = $tool->executeWithHeartbeat(self::argumentsFor($tool, $toolCall, $args ?? []), static function () use ($heartbeat, $pid, &$lastBeat): void {
                     $now = microtime(true);
                     if ($now - $lastBeat < 1.0 || getmypid() !== $pid) {
                         return;
@@ -2142,7 +2143,7 @@ final class Runtime
                     $heartbeat();
                 });
             } else {
-                $result = $tool->execute($args ?? []);
+                $result = $tool->execute(self::argumentsFor($tool, $toolCall, $args ?? []));
             }
         } catch (\Throwable $e) {
             $result = self::executionFailure($tool, $toolCall, $e);
@@ -3568,10 +3569,29 @@ final class Runtime
     private function executeGuarded(Tool $tool, ToolCall $toolCall, array $args): ToolResult
     {
         try {
-            return $tool->execute($args);
+            return $tool->execute(self::argumentsFor($tool, $toolCall, $args));
         } catch (\Throwable $e) {
             return self::executionFailure($tool, $toolCall, $e);
         }
+    }
+
+    /**
+     * The arguments $tool executes with: the model's, plus — for a tool that
+     * declares {@see \SugarCraft\Crush\Tools\TakesToolCallId} — the call's
+     * own id under `id`, overwriting any the model sent. Applied after the
+     * gate, so hooks and the permission check judge exactly what the model
+     * asked for.
+     *
+     * @param array<string, mixed> $args
+     * @return array<string, mixed>
+     */
+    private static function argumentsFor(Tool $tool, ToolCall $toolCall, array $args): array
+    {
+        if ($tool instanceof \SugarCraft\Crush\Tools\TakesToolCallId) {
+            $args['id'] = $toolCall->id();
+        }
+
+        return $args;
     }
 
     private static function executionFailure(Tool $tool, ToolCall $toolCall, \Throwable $e): ToolResult

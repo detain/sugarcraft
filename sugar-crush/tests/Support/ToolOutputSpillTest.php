@@ -238,6 +238,30 @@ final class ToolOutputSpillTest extends TestCase
         self::assertSame($medium, ToolOutputSpill::forModel($medium, 'Bash', [], 'sess', $window));
     }
 
+    /** W9 integration: the window share is the toolSpillWindowPercent setting. */
+    public function testTheWindowShareIsASetting(): void
+    {
+        $medium = new ToolResult('c', str_repeat('x', 50_000));
+        $window = static fn (): int => 200_000;
+
+        self::assertSame($medium, ToolOutputSpill::forModel($medium, 'Bash', [], 'sess', $window, 30), 'under 30% of the window');
+        self::assertNotSame($medium, ToolOutputSpill::forModel($medium, 'Bash', [], 'sess', $window, 5), 'over 5% of it: previewed');
+
+        $home = sys_get_temp_dir() . '/sc_spill_share_' . bin2hex(random_bytes(4));
+        $prior = getenv('HOME');
+        mkdir($home . '/.sugar-crush', 0o700, true);
+        file_put_contents($home . '/.sugar-crush/config.json', json_encode([\SugarCraft\Crush\Tools\ToolLimits::SPILL_WINDOW_PERCENT_KEY => 5]));
+        putenv('HOME=' . $home);
+        try {
+            self::assertNotSame($medium, ToolOutputSpill::forModel($medium, 'Bash', [], 'sess', $window), 'the saved 5% applies');
+        } finally {
+            $prior === false ? putenv('HOME') : putenv('HOME=' . $prior);
+            @unlink($home . '/.sugar-crush/config.json');
+            @rmdir($home . '/.sugar-crush');
+            @rmdir($home);
+        }
+    }
+
     public function testReadingASpillFileIsBoundedWithoutSavingItAgain(): void
     {
         $saved = (string) ToolOutputSpill::store(str_repeat("saved line\n", 3000));

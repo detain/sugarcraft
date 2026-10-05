@@ -337,7 +337,9 @@ final class TranscriptProjector
             'mode' => $ask->mode,
             'options' => $ask->suggestions,
             'alwaysScope' => $ask->alwaysScope,
-        ];
+            // P-E2: the delegated run that asked, when a sub-agent's question
+            // was relayed up; absent for the turn's own.
+        ] + ($ask->origin === null ? [] : ['origin' => $ask->origin->toArray()]);
     }
 
     /**

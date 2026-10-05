@@ -204,7 +204,7 @@ carried onto the `Agent` row and read by nothing after that:
 |---|---|
 | `name`, `description`, `initialPrompt` | Live: the roster entry and the sub-agent's prompt. |
 | `tools`, `disallowedTools` | Live: see [How a grant is enforced](#how-a-grant-is-enforced). |
-| `skills`, `mcpServers`, `maxTurns` | Live on the delegated run. With no `maxTurns` a run stops at 200 steps; the `subagentMaxTurns` setting moves that default for workflow-stage agents (a `Task` delegation still takes 200). |
+| `skills`, `mcpServers`, `maxTurns` | Live on the delegated run. With no `maxTurns` a run stops at 200 steps; the `subagentMaxTurns` setting moves that default for `Task` delegations and workflow-stage agents alike. |
 | `model` | Live: see [Which model a delegation runs on](#which-model-a-delegation-runs-on). |
 | `effort` | Live: sent with every request of the run as its reasoning effort. |
 | `permissionMode` | Live, narrow-only: when stricter than the session's mode, a second gate judges every call ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). |

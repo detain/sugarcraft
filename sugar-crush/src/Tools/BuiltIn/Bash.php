@@ -67,6 +67,12 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      *
      * $sandbox is the `bashSandbox` setting's jail (roadmap 5.12); null — the
      * default — runs commands exactly as before.
+     *
+     * $defaultTimeoutSeconds and $maxTimeoutSeconds are the `timeout`
+     * parameter's default and ceiling — the `bashTimeoutSeconds` and
+     * `bashMaxTimeoutSeconds` settings, applied per turn through
+     * {@see \SugarCraft\Crush\Tools\ToolLimits::applyTo()} and
+     * {@see withTimeoutBounds()}; the constants when unset.
      */
     public function __construct(
         private ?string $root = null,
@@ -76,7 +82,32 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         private string $commitAttribution = '',
         private string $prAttribution = '',
         private ?Bubblewrap $sandbox = null,
+        private int $defaultTimeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
+        private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
     ) {}
+
+    /**
+     * This tool with the `timeout` parameter's default and ceiling replaced
+     * (null keeps that one), every other field kept — the
+     * {@see withGitGuidance()} rebuild. A ceiling below 1 is 1, and a default
+     * above the ceiling is the ceiling: a call is never left unbounded, and
+     * the default never promises more than the ceiling allows.
+     */
+    public function withTimeoutBounds(?int $defaultSeconds, ?int $maxSeconds): self
+    {
+        $max = max(1, $maxSeconds ?? $this->maxTimeoutSeconds);
+
+        return new self(...array_replace(get_object_vars($this), [
+            'maxTimeoutSeconds' => $max,
+            'defaultTimeoutSeconds' => min($max, max(1, $defaultSeconds ?? $this->defaultTimeoutSeconds)),
+        ]));
+    }
+
+    /** @return array{default: int, max: int} the `timeout` parameter's bounds */
+    public function timeoutBounds(): array
+    {
+        return ['default' => $this->defaultTimeoutSeconds, 'max' => $this->maxTimeoutSeconds];
+    }
 
     /**
      * This tool with its sandbox replaced (null runs unconfined), every other
@@ -181,8 +212,8 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 'Every command is bounded by `timeout` seconds (default %d, max %d): past it the '
                 . 'command and everything it started are killed, and the output it produced so far '
                 . 'comes back with a line saying it timed out — raise it for a long build or test run.',
-                self::DEFAULT_TIMEOUT_SECONDS,
-                self::MAX_TIMEOUT_SECONDS,
+                $this->defaultTimeoutSeconds,
+                $this->maxTimeoutSeconds,
             )
             . ($this->sandbox === null ? '' : ' ' . $this->sandbox->describe($this->writableRoot()));
     }
@@ -302,11 +333,11 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 'type' => 'integer',
                 'description' => sprintf(
                     'Seconds the command may run before it and every process it started are killed. Default %d, maximum %d; larger values are clamped.',
-                    self::DEFAULT_TIMEOUT_SECONDS,
-                    self::MAX_TIMEOUT_SECONDS,
+                    $this->defaultTimeoutSeconds,
+                    $this->maxTimeoutSeconds,
                 ),
                 'minimum' => 1,
-                'maximum' => self::MAX_TIMEOUT_SECONDS,
+                'maximum' => $this->maxTimeoutSeconds,
             ],
         ],
         'required' => ['command', 'description'],
@@ -384,7 +415,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // the real middle of a large log. The RESULT is still clipped to
         // $maxOutputBytes by truncateMerged() below.
         $maxBytes = $this->captureBound($this->maxOutputBytes);
-        $timeout = self::timeoutSeconds($args['timeout'] ?? null);
+        $timeout = $this->timeoutSeconds($args['timeout'] ?? null);
         $interactive = ($args['interactive'] ?? false) === true;
 
         // The sandbox (roadmap 5.12) is a PREFIX on the same shell string, so
@@ -421,7 +452,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             $run['stderr'] = ltrim($run['stderr'] . "\n" . sprintf(
                 '[timed out after %d s: the command and its process group were killed; pass a larger `timeout` (max %d) if it needs longer]',
                 $timeout,
-                self::MAX_TIMEOUT_SECONDS,
+                $this->maxTimeoutSeconds,
             ), "\n");
         }
 
@@ -455,24 +486,24 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
     /**
      * The model's `timeout` as the seconds this call may run: a positive
      * number (or a numeric string, the shape a lax tool-call parser hands
-     * over) rounded up and clamped to MAX; zero, a negative or anything
-     * non-numeric is the default — never "no bound".
+     * over) rounded up and clamped to the ceiling; zero, a negative or
+     * anything non-numeric is the default — never "no bound".
      */
-    private static function timeoutSeconds(mixed $raw): int
+    private function timeoutSeconds(mixed $raw): int
     {
         if (is_string($raw) && preg_match('/^\s*\d+(\.\d+)?\s*$/', $raw) === 1) {
             $raw = (float) $raw;
         }
         if (!is_int($raw) && !is_float($raw)) {
-            return self::DEFAULT_TIMEOUT_SECONDS;
+            return $this->defaultTimeoutSeconds;
         }
         if (is_nan((float) $raw) || $raw <= 0) {
-            return self::DEFAULT_TIMEOUT_SECONDS;
+            return $this->defaultTimeoutSeconds;
         }
         if (is_infinite((float) $raw)) {
-            return self::MAX_TIMEOUT_SECONDS;
+            return $this->maxTimeoutSeconds;
         }
 
-        return min(self::MAX_TIMEOUT_SECONDS, (int) ceil((float) $raw));
+        return min($this->maxTimeoutSeconds, (int) ceil((float) $raw));
     }
 }

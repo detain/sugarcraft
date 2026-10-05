@@ -645,6 +645,33 @@ YAML;
         $this->assertSame(ScriptHook::DEFAULT_TIMEOUT_SECONDS, $result[0]['timeout']);
     }
 
+    /** W9 integration: the missing-timeout default is the hooksDefaultTimeoutSeconds setting. */
+    public function testTheMissingTimeoutDefaultIsASetting(): void
+    {
+        $this->assertSame(15.0, ScriptHook::defaultTimeoutSeconds([ScriptHook::DEFAULT_TIMEOUT_SETTING => 15]));
+        $this->assertSame(2.5, ScriptHook::defaultTimeoutSeconds([ScriptHook::DEFAULT_TIMEOUT_SETTING => 2.5]));
+        foreach ([0, -1, 7200, 'soon', true, null] as $refused) {
+            $this->assertSame(ScriptHook::DEFAULT_TIMEOUT_SECONDS, ScriptHook::defaultTimeoutSeconds([ScriptHook::DEFAULT_TIMEOUT_SETTING => $refused]), var_export($refused, true));
+        }
+
+        $home = $this->tempDir . '/home';
+        $prior = getenv('HOME');
+        mkdir($home . '/.sugar-crush', 0o700, true);
+        file_put_contents($home . '/.sugar-crush/config.json', json_encode([ScriptHook::DEFAULT_TIMEOUT_SETTING => 20]));
+        putenv('HOME=' . $home);
+        try {
+            $result = HookConfig::parse("hooks:\n  PreToolUse:\n    - name: g\n      command: 'guard.sh'\n    - name: h\n      command: 'h.sh'\n      timeout: 5\n");
+        } finally {
+            $prior === false ? putenv('HOME') : putenv('HOME=' . $prior);
+            unlink($home . '/.sugar-crush/config.json');
+            rmdir($home . '/.sugar-crush');
+            rmdir($home);
+        }
+
+        $this->assertSame(20.0, $result[0]['timeout'], 'no timeout: the saved default');
+        $this->assertSame(5.0, $result[1]['timeout'], 'the entry\'s own timeout still wins');
+    }
+
     /**
      * @return array<string, array{0: string}>
      */

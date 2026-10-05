@@ -142,6 +142,37 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     public const DEFAULT_TIMEOUT_SECONDS = 60.0;
 
+    /** The settings key that replaces {@see DEFAULT_TIMEOUT_SECONDS} for an entry with no `timeout:`. */
+    public const DEFAULT_TIMEOUT_SETTING = 'hooksDefaultTimeoutSeconds';
+
+    /**
+     * The bound an entry with no `timeout:` gets: the
+     * `hooksDefaultTimeoutSeconds` setting from `config.json` when it holds a
+     * value its schema accepts (a positive finite number of seconds, at most an
+     * hour), else {@see DEFAULT_TIMEOUT_SECONDS}. Read by
+     * {@see HookConfig::parse()}, so it applies to hook files loaded after the
+     * save — the next launch.
+     *
+     * @param ?array<string, mixed> $config the already-read config; null reads
+     *        it, and an unreadable one costs the default, never the hook's bound
+     */
+    public static function defaultTimeoutSeconds(?array $config = null): float
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+
+        $seconds = \SugarCraft\Crush\Tools\ToolLimits::honoured($config, self::DEFAULT_TIMEOUT_SETTING);
+
+        return (\is_int($seconds) || \is_float($seconds)) && is_finite((float) $seconds) && $seconds > 0
+            ? (float) $seconds
+            : self::DEFAULT_TIMEOUT_SECONDS;
+    }
+
     /**
      * Longest one {@see drain()} `stream_select()` waits before the deadline is
      * re-checked.

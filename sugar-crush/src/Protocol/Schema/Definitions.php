@@ -64,6 +64,11 @@ final class Definitions
                 'mode' => Schema::string(),
                 'options' => Schema::arrayOf(Schema::enum(['once', 'always', 'reject'])),
                 'alwaysScope' => Schema::map(Schema::string()),
+                'origin' => Schema::object([
+                    'agentId' => Schema::string(),
+                    'agentName' => Schema::string(),
+                    'parentCallId' => Schema::string(),
+                ], ['agentId'])->describe('The delegated run that asked, when a sub-agent\'s question was relayed; absent for the turn\'s own.'),
             ], ['askId', 'toolCallId', 'tool', 'arguments', 'options']),
             self::QUEUE_ENTRY => Schema::object([
                 'queueId' => Schema::string(32),

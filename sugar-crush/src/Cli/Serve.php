@@ -504,7 +504,7 @@ final class Serve
     private static function protocol(ServerConfig $config, LoopInterface $loop): Dispatcher
     {
         $workspace = Bootstrap::workspace($config->root);
-        $hub = SessionHub::new($workspace, $config->maxOpenSessions);
+        $hub = SessionHub::new($workspace, $config->maxOpenSessions, \SugarCraft\Crush\Context\CompactorConfig::fromSettings(Bootstrap::readUserConfig()));
 
         return Dispatcher::new(ServerContext::new($hub, $config, Help::versionString(), $loop));
     }

@@ -60,7 +60,11 @@ use SugarCraft\Crush\Util\TokenEstimate;
  * manual" — DCP #611: under pressure a model compresses content still
  * needed). The tool is offered only on a turn the person started with
  * `/compress [focus]` ({@see triggerPrompt()}, {@see isTriggered()}), and that
- * turn may make exactly ONE successful call ({@see withAllowance()}). Bound by
+ * turn may make exactly ONE successful call ({@see withAllowance()}). The
+ * person can opt out of that in `config.json` with `contextPruning.compress:
+ * auto` ({@see \SugarCraft\Crush\Context\CompactorConfig::offersCompressUnprompted()}):
+ * then it is offered on every turn where the model may prune — the pruning
+ * mode's `auto`, beside `Prune` — with no per-turn allowance. Bound by
  * {@see \SugarCraft\Crush\Backend\EngineBackend}'s turn like `Prune`
  * ({@see MutatesContextLedger}), PreCompact-gated, and never
  * {@see \SugarCraft\Crush\Tools\ParallelSafe}.

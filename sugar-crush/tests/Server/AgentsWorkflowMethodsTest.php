@@ -60,6 +60,8 @@ final class AgentsWorkflowMethodsTest extends TestCase
         self::assertSame('review the parser', $items[0]['task'], 'the task survives a beat that leaves it empty');
         self::assertSame('review', $items[0]['description']);
         self::assertSame('c1', $items[0]['parentCallId']);
+        $snapshot = $this->fixture->context->feed($sessionId)?->subagents() ?? [];
+        self::assertSame('review the parser', $snapshot[0]['task'] ?? null, 'the feed\'s own tree — a snapshot\'s — keeps the task too');
 
         $this->fixture->backend->emit(self::beat(SubAgentActivity::OP_FINISHED, 'run-1', 3, outcome: SubAgentActivity::OUTCOME_COMPLETE));
         $this->fixture->run(0.08);

@@ -23,6 +23,7 @@ use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\Sandbox\Bubblewrap;
+use SugarCraft\Crush\Support\ToolOutputSpill;
 use SugarCraft\Crush\Tools\ToolLimits;
 
 /**
@@ -153,6 +154,18 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp('Bytes one Read page may hold, line numbers included, whatever `limit` asks for.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
+            // Spend, so user tier only like the caps above: a larger share
+            // is more of one result replayed into every later request.
+            SettingDefinition::new(ToolLimits::SPILL_WINDOW_PERCENT_KEY, SettingType::Int, ToolOutputSpill::WINDOW_SHARE_PERCENT)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(5, 90)
+                ->withLabel('Tool result window share (%)')
+                ->withHelp('Largest share of the context window one tool result may take; past it the result is saved to a file and the model shown its start and end.')
+                ->withReaderSymbol(ToolOutputSpill::class . '::forModel')
+                ->withReadBy('`Runtime::settle()` → `ToolOutputSpill::forModel()`, per large result'),
             SettingDefinition::new(ToolLimits::GLOB_MAX_MATCHES_KEY, SettingType::Int, Glob::DEFAULT_MAX_MATCHES)
                 ->withCategory(SettingCategory::Tools)
                 ->withRiskClass(RiskClass::Tuning)
@@ -230,6 +243,32 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp('Seconds an `interactive: true` Bash run may print nothing before it is stopped as waiting for a keystroke.')
                 ->withReaderSymbol(Bash::class . '::runCapturedInteractive')
                 ->withReadBy('`CapturesProcessOutput::runCapturedInteractive()`, as the run starts'),
+            // Bash's `timeout` bounds: time, not spend — the command's output
+            // is capped either way — so a trusted project may set them like
+            // the idle ceiling above. A default over the ceiling is lowered to
+            // it by `Bash::withTimeoutBounds()`.
+            SettingDefinition::new(ToolLimits::BASH_TIMEOUT_KEY, SettingType::Int, Bash::DEFAULT_TIMEOUT_SECONDS)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(1, 3600)
+                ->withLabel('Bash timeout (s)')
+                ->withHelp('Seconds a Bash command may run when the model passes no `timeout`; never above the Bash ceiling.')
+                ->withReaderSymbol(Bash::class . '::withTimeoutBounds')
+                ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn'),
+            SettingDefinition::new(ToolLimits::BASH_MAX_TIMEOUT_KEY, SettingType::Int, Bash::MAX_TIMEOUT_SECONDS)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(1, 3600)
+                ->withLabel('Bash timeout ceiling (s)')
+                ->withHelp('The largest `timeout` a Bash command may ask for; larger values are clamped to it.')
+                ->withReaderSymbol(Bash::class . '::withTimeoutBounds')
+                ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn'),
             SettingDefinition::new(ToolLimits::PARALLEL_TIMEOUT_KEY, SettingType::Int, Chat::PARALLEL_TOOL_TIMEOUT_SECONDS)
                 ->withCategory(SettingCategory::Tools)
                 ->withRiskClass(RiskClass::Tuning)

@@ -351,7 +351,7 @@ final class HookConfig
                 // because the substituted value is a SECURITY bound.
                 $timeout = \array_key_exists('timeout', $config)
                     ? $config['timeout']
-                    : ScriptHook::DEFAULT_TIMEOUT_SECONDS;
+                    : ScriptHook::defaultTimeoutSeconds();
                 if (
                     is_bool($timeout)
                     || (!is_int($timeout) && !is_float($timeout))

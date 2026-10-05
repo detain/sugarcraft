@@ -54,9 +54,9 @@ final class SubagentSettings implements SettingDefinitionSet
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withRange(1)
                 ->withLabel('Sub-agent max turns')
-                ->withHelp('Step cap for a workflow-stage or `executeAgents` sub-agent whose preset declares no `maxTurns`.')
+                ->withHelp('Step cap for a sub-agent — a `Task` delegation, a workflow stage or an `executeAgents` run — whose preset declares no `maxTurns`.')
                 ->withReaderSymbol(EngineExecutor::class . '::defaultMaxTurns')
-                ->withReadBy('`EngineExecutor::execute()` → `defaultMaxTurns()`, as each run starts'),
+                ->withReadBy('`TaskTool` (engine path) and `EngineExecutor::execute()` → `EngineExecutor::defaultMaxTurns()`, as each run starts'),
             SettingDefinition::new(AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY, SettingType::Int, AgentPoolConfig::DEFAULT_MAX_CONCURRENT)
                 ->withCategory(SettingCategory::Subagents)
                 ->withRiskClass(RiskClass::Spend)

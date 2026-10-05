@@ -43,6 +43,18 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withHelp('Post-edit lint command per file extension ({"php": "…", "js": false}); `php -l` is built in.')
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `LintRunner::withCommands()`'),
+            // The bound a hook entry with no `timeout:` gets. config.json only:
+            // a hook run is a SECURITY bound (a stuck hook freezes the CLI), so
+            // no repository may raise it for the operator.
+            SettingDefinition::new(\SugarCraft\Crush\Hooks\ScriptHook::DEFAULT_TIMEOUT_SETTING, SettingType::Float, \SugarCraft\Crush\Hooks\ScriptHook::DEFAULT_TIMEOUT_SECONDS)
+                ->withCategory(SettingCategory::HooksMcp)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withApplyMode(ApplyMode::Restart)
+                ->withRange(1.0, 3600.0)
+                ->withLabel('Hook timeout (s)')
+                ->withHelp('Seconds a hook entry with no `timeout:` may run before it is killed and counted as a refusal.')
+                ->withReaderSymbol(\SugarCraft\Crush\Hooks\ScriptHook::class . '::defaultTimeoutSeconds')
+                ->withReadBy('`HookConfig::parse()` → `ScriptHook::defaultTimeoutSeconds()`, as each hook file loads'),
             SettingDefinition::new('claudeMcpBinary', SettingType::Path)
                 ->withCategory(SettingCategory::HooksMcp)
                 ->withRiskClass(RiskClass::Exec)

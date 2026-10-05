@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\Pruning\CompressionBlock;
 use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Context\Pruning\NudgePolicy;
@@ -135,6 +136,52 @@ final class InTurnCompressionTest extends TestCase
             $this->assertTrue($message instanceof ToolResultMessage || $message instanceof UserMessage);
         }
         $this->assertNotSame([], $reply->contextLedger?->nudges, 'the anchor is kept for the next turn');
+    }
+
+    /** W9 integration: `contextPruning.compress: auto` offers Compress unprompted — where Prune is offered. */
+    public function testCompressAutoOffersTheToolOnEveryTurnWhereTheModelPrunes(): void
+    {
+        $config = CompactorConfig::fromSettings([CompactorConfig::SETTING_COMPRESS => 'auto']);
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'hi')], contextWindow: 1_000_000);
+
+        $this->engine($provider)->withCompactorConfig($config)->withContextLedger(self::auto())->complete(self::history('just a question'));
+
+        $offered = self::offered($provider->requests[0]);
+        $this->assertContains('Compress', $offered, 'auto: no /compress needed');
+        $this->assertContains('Prune', $offered);
+
+        $manual = new ScriptedProvider([new CompleteResponse(content: 'hi')], contextWindow: 1_000_000);
+        $this->engine($manual)->withCompactorConfig($config)
+            ->withContextLedger(ContextLedger::new()->withDefaultMode(PruningMode::Manual))
+            ->complete(self::history('just a question'));
+        $this->assertNotContains('Compress', self::offered($manual->requests[0]), 'never where the model may not prune');
+    }
+
+    /** W9 integration: the reminder thresholds are the contextPruning.* settings. */
+    public function testTheReminderThresholdsAreSettings(): void
+    {
+        $step = 0;
+        $provider = new ScriptedProvider([
+            static function (CompleteRequest $request) use (&$step): CompleteResponse {
+                $step++;
+
+                return $step <= 2
+                    ? new CompleteResponse(content: '', toolCalls: [new ToolCall("c{$step}", 'Read', ['file_path' => "{$step}.php"])])
+                    : new CompleteResponse(content: 'done');
+            },
+        ], contextWindow: 1_000_000);
+
+        $this->engine($provider, str_repeat('source line here ', 15_000))
+            ->withCompactorConfig(CompactorConfig::fromSettings([
+                CompactorConfig::SETTING_NUDGE_MIN_TOKENS => 400_000,
+                CompactorConfig::SETTING_NUDGE_MAX_TOKENS => 500_000,
+            ]))
+            ->withContextLedger(self::auto())
+            ->complete([Message::user('read everything')]);
+
+        foreach ($provider->requests[2]->messages as $message) {
+            $this->assertStringNotContainsString(NudgePolicy::OPEN, $message->content(), 'under the configured minimum, no reminder');
+        }
     }
 
     // ── harness ─────────────────────────────────────────────────────────

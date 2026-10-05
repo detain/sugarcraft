@@ -49,7 +49,7 @@ hooks:
       command: ./hooks/confirm-deploy.sh
       description: Ask before anything touches production
       disabled: false                 # optional; true keeps it out of the chain
-      timeout: 30                     # optional seconds; default 60
+      timeout: 30                     # optional seconds; default 60 (hooksDefaultTimeoutSeconds)
   PostToolUse:
     - matcher: 'Read|Write/Edit'
       command: ./hooks/log-touch.sh
@@ -811,8 +811,9 @@ a kilobyte apiece still arrive as one bounded note on the result.
 
 ### The timeout
 
-**A hook run is bounded, drain and reap together.** 60 seconds by default;
-`timeout:` on the entry overrides it, and anything that is not a **positive
+**A hook run is bounded, drain and reap together.** 60 seconds by default —
+the `hooksDefaultTimeoutSeconds` setting in your own `config.json` moves that
+default (1 to 3600 s; a project file cannot); `timeout:` on the entry overrides it, and anything that is not a **positive
 finite** number is refused at load rather than read as "no timeout".
 
 That last word is the whole guard, and it was one word short. `0`, `-1` and
