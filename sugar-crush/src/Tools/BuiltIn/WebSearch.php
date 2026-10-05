@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\Tools\ToolLimits;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
@@ -41,6 +42,16 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
     /** Bounds the redirect target echoed in the refusal; it is remote text. */
     private const MAX_LOCATION_ECHO_BYTES = 256;
 
+    /** Seconds one search request may take — the default of `webSearchTimeoutSeconds`. */
+    public const DEFAULT_TIMEOUT_SECONDS = 30;
+
+    /** Results one digest lists — the default of `webSearchMaxResults`. */
+    public const DEFAULT_MAX_RESULTS = 10;
+
+    private int $timeout;
+
+    private int $maxResults;
+
     /**
      * Null when nothing configured one — and then every search fails loudly
      * (see {@see unconfiguredRefusal()}) rather than falling back anywhere.
@@ -68,6 +79,13 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
      * user's queries to one maintainer's box; the honest default for a
      * third-party data flow is none.
      *
+     * $timeout and $maxResults, when not passed, are the `webSearchTimeoutSeconds`
+     * and `webSearchMaxResults` settings (roadmap N-P4c), else
+     * {@see DEFAULT_TIMEOUT_SECONDS} / {@see DEFAULT_MAX_RESULTS}. Read HERE,
+     * at construction, rather than rebound per turn like the other tools'
+     * bounds, because `/websearch` builds its own instance and must honour
+     * the same keys — so they apply from the next launch.
+     *
      * The two trailing seams mirror {@see WebFetch}'s: production passes
      * neither and gets WebFetch's system resolver and its full range list
      * (audit F-W3 — this class used to keep its own shorter copy of both);
@@ -79,11 +97,14 @@ class WebSearch implements Tool, ParallelSafe, BuildsFromCatalog
      */
     public function __construct(
         ?string $endpoint = null,
-        private int $timeout = 30,
-        private int $maxResults = 10,
+        ?int $timeout = null,
+        ?int $maxResults = null,
         ?callable $resolveAddresses = null,
         ?callable $isBlockedAddress = null,
     ) {
+        $limits = $timeout === null || $maxResults === null ? ToolLimits::current() : null;
+        $this->timeout = $timeout ?? $limits?->int(ToolLimits::WEB_SEARCH_TIMEOUT_KEY) ?? self::DEFAULT_TIMEOUT_SECONDS;
+        $this->maxResults = $maxResults ?? $limits?->int(ToolLimits::WEB_SEARCH_MAX_RESULTS_KEY) ?? self::DEFAULT_MAX_RESULTS;
         $configured = $endpoint ?? getenv('SUGARCRUSH_SEARCH_ENDPOINT');
         $this->endpoint = is_string($configured) && trim($configured) !== '' ? $configured : null;
         $this->resolveAddresses = $resolveAddresses === null

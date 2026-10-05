@@ -53,9 +53,10 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      * expensive half: stopping at 1,000 entries means the walk ENDS there,
      * instead of collecting the whole tree and discarding nearly all of it. 1,000
      * paths is also about what the byte cap admits, so the two agree rather
-     * than one silently pre-empting the other.
+     * than one silently pre-empting the other. The default of the
+     * `globMaxMatches` setting (roadmap N-P4c, {@see withMaxMatches()}).
      */
-    private const DEFAULT_MAX_MATCHES = 1000;
+    public const DEFAULT_MAX_MATCHES = 1000;
 
     /**
      * $skillNudge turns a skill's `paths:` frontmatter into a live signal
@@ -88,6 +89,25 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         // Audit F-J5: LAST for the same positional-argument reason.
         private ?AgentPathJail $worktreeJail = null,
     ) {}
+
+    /**
+     * This tool collecting at most $maxMatches paths a call, every other
+     * field kept — how the `globMaxMatches` setting (roadmap N-P4c)
+     * reaches the Glob built once at launch:
+     * {@see \SugarCraft\Crush\Tools\ToolLimits::applyTo()} rebinds the turn's
+     * copy. The byte cap still bounds the result whatever the count allows.
+     *
+     * @throws \InvalidArgumentException for a cap below 1 — 0 means "no count
+     *         cap" to the walk, which no setting may ask for
+     */
+    public function withMaxMatches(int $maxMatches): self
+    {
+        if ($maxMatches < 1) {
+            throw new \InvalidArgumentException('Glob match cap must be at least 1.');
+        }
+
+        return new self(...array_replace(get_object_vars($this), ['maxMatches' => $maxMatches]));
+    }
 
     /**
      * The directory this instance is confined to: the injected sub-agent

@@ -140,8 +140,41 @@ trait TruncatesOutput
      * property of the DEFAULT caps of the tools that do, which is also why it
      * is asserted over the shipped set rather than imposed by construction —
      * see the reasoning on `CALLER_BUDGET_DIVISOR`.
+     *
+     * PUBLIC SINCE ROADMAP N-P4c, so the `toolOutputCapBytes` and
+     * `mcpResultCapBytes` settings name this number as their default
+     * instead of restating it ({@see \SugarCraft\Crush\Tools\ToolLimits}).
+     * It is still the cap every tool is BUILT with; a set key replaces it
+     * per turn through {@see withMaxOutputBytes()}.
      */
-    private const DEFAULT_MAX_OUTPUT_BYTES = 65536;
+    public const DEFAULT_MAX_OUTPUT_BYTES = 65536;
+
+    /**
+     * This tool with its result cap replaced, every other field kept — how
+     * the `toolOutputCapBytes` / `mcpResultCapBytes` settings (roadmap
+     * N-P4c) reach tools built once at launch: {@see
+     * \SugarCraft\Crush\Tools\ToolLimits::applyTo()} rebinds the turn's
+     * copy, from `EngineBackend::turnTools()`.
+     *
+     * The rebuild is {@see RebindsWorktreeJail}'s: a user whose properties are
+     * all constructor-promoted, `$maxOutputBytes` among them, is rebuilt
+     * through {@see get_object_vars()} by name, so a field added later is
+     * carried too and a non-promoted one fails loudly ("Unknown named
+     * parameter") instead of being dropped. A user with no `$maxOutputBytes`
+     * — `Read` (its bound is `$maxBytes`, a per-file read bound with settings
+     * of its own), `Edit`, `Write`, and the prompt's `EnvironmentBlock` — has
+     * no result cap for this to replace and is returned unchanged, as is a
+     * tool already at $maxOutputBytes.
+     */
+    public function withMaxOutputBytes(int $maxOutputBytes): static
+    {
+        $fields = get_object_vars($this);
+        if (!\array_key_exists('maxOutputBytes', $fields) || $fields['maxOutputBytes'] === $maxOutputBytes) {
+            return $this;
+        }
+
+        return new self(...array_replace($fields, ['maxOutputBytes' => $maxOutputBytes]));
+    }
 
     /**
      * Clip $output to $maxBytes and append a marker naming what was dropped.

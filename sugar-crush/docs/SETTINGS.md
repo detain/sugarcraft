@@ -206,6 +206,18 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `bashSandbox` | `Bash::fromCatalog()` → `Bubblewrap::fromSetting()` | **no** |
 | `testCommand` | `Bootstrap::hooks()` → `TestRunner::withCommand()` | **no** |
 | `autoTest` | `Bootstrap::hooks()` → `AutoTestHook` | **no** |
+| `toolOutputCapBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
+| `mcpResultCapBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
+| `readMaxBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
+| `readPageLines` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
+| `readPageBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |
+| `globMaxMatches` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
+| `webFetchMaxBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
+| `webFetchTimeoutSeconds` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | yes |
+| `webSearchMaxResults` | `WebSearch::__construct()`, at launch and for `/websearch` | yes |
+| `webSearchTimeoutSeconds` | `WebSearch::__construct()`, at launch and for `/websearch` | yes |
+| `bashInteractiveIdleSeconds` | `CapturesProcessOutput::runCapturedInteractive()`, as the run starts | yes |
+| `chatToolTimeoutSeconds` | `Chat::waitForToolChildrenAsync()`, as a batch starts | yes |
 | `instructions` | `Bootstrap::forcedInstructions()` | **no** |
 | `disabledRules` | `Bootstrap::chat()` → `RulesState::new()` | **no** |
 | `embeddingModel` | `EngineBackend::completeAsync()` | **no** |
@@ -1049,8 +1061,11 @@ Saved is not applied: see the next section for when each key takes effect.
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
-`parallelToolDeadlineSeconds`, `maxToolSteps`, `embeddingModel`, `theme`,
-`statusLine`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
+`parallelToolDeadlineSeconds`, `maxToolSteps`, `toolOutputCapBytes`,
+`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
+`bashInteractiveIdleSeconds`, `chatToolTimeoutSeconds`, `embeddingModel`,
+`theme`, `statusLine`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the
@@ -1177,11 +1192,15 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `compaction.toolOutputChars`, `compaction.reminderTokens`,
   `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
   `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`,
-  `bashSandbox`, `testCommand`, `autoTest`, `instructions`, `disabledRules`,
-  `embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
-  `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `theme`,
-  `statusLine`, `layout`, `notify`, `lintCommands`, `providerRetryAttempts` and
-  `providerRetryBaseBackoffMs` have none.
+  `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
+  `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+  `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
+  `webSearchMaxResults`, `webSearchTimeoutSeconds`, `bashInteractiveIdleSeconds`,
+  `chatToolTimeoutSeconds`, `instructions`, `disabledRules`, `embeddingModel`,
+  `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`,
+  `attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
+  `lintCommands`, `providerRetryAttempts` and `providerRetryBaseBackoffMs` have
+  none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.

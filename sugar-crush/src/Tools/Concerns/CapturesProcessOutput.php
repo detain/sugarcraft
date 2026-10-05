@@ -360,6 +360,11 @@ trait CapturesProcessOutput
      * to send. Bounded refusal is the whole contract — an unbounded wait is
      * the hang Phase 9 exists to end, and a "success" laundered from a
      * frozen screen would be the second lie.
+     *
+     * The default of `bashInteractiveIdleSeconds` (roadmap N-P4c),
+     * which is read when an interactive run starts
+     * ({@see \SugarCraft\Crush\Tools\ToolLimits::current()}); the setting's
+     * range keeps it a bound, never "wait forever".
      */
     private const INTERACTIVE_IDLE_CEILING_SECONDS = 8.0;
 
@@ -412,7 +417,9 @@ trait CapturesProcessOutput
      */
     private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null, ?float $timeoutSeconds = null, ?\Closure $onWait = null): array
     {
-        $idle = $idleCeilingSec ?? self::INTERACTIVE_IDLE_CEILING_SECONDS;
+        $idle = $idleCeilingSec
+            ?? \SugarCraft\Crush\Tools\ToolLimits::current()->seconds(\SugarCraft\Crush\Tools\ToolLimits::INTERACTIVE_IDLE_KEY)
+            ?? self::INTERACTIVE_IDLE_CEILING_SECONDS;
 
         if (!ProcessContainment::interactiveAvailable()) {
             return self::interactiveRefusal(

@@ -35,24 +35,26 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
      * nudge reserves below are figured from. A page never exceeds it, but the
      * default page ({@see PAGE_BYTES}) is far smaller, so at the shipped
      * default this is the bound a caller-supplied `maxBytes` lowers rather
-     * than the size a read comes back at.
+     * than the size a read comes back at. The `readMaxBytes` setting
+     * replaces it per turn (roadmap N-P4c, {@see withReadLimits()}).
      */
-    private const DEFAULT_MAX_BYTES = 1024 * 1024;
+    public const DEFAULT_MAX_BYTES = 1024 * 1024;
 
     /**
      * Lines one call returns when the caller names no `limit` (audit 0.12).
      * Paging by line rather than by byte is what lets a model ask for "the next
-     * window" and know exactly where it starts.
+     * window" and know exactly where it starts. The default of
+     * `readPageLines` ({@see withReadLimits()}).
      */
-    private const PAGE_LINES = 2000;
+    public const PAGE_LINES = 2000;
 
     /**
      * Bytes one page may hold, line prefixes included, whatever `limit` asks
      * for: 50 KiB, so a call costs a bounded slice of context instead of the
      * whole 1 MiB ceiling. The effective page is the smaller of this and
-     * $maxBytes.
+     * $maxBytes. The default of `readPageBytes` ({@see withReadLimits()}).
      */
-    private const PAGE_BYTES = 50 * 1024;
+    public const PAGE_BYTES = 50 * 1024;
 
     /**
      * The largest single fread(). A file is scanned in blocks this size (or
@@ -91,7 +93,36 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         // Edit and Write can refuse to act on a file that changed since. Null
         // records nothing.
         private ?ReadLedger $readLedger = null,
+        // Roadmap N-P4c: the page a call returns when it names no `limit`,
+        // and the bytes any page may hold — the `readPageLines` /
+        // `readPageBytes` settings, through withReadLimits().
+        private int $pageLines = self::PAGE_LINES,
+        private int $pageByteLimit = self::PAGE_BYTES,
     ) {}
+
+    /**
+     * This tool with its read bound and page size replaced, every other field
+     * kept — how the `read*` settings (roadmap N-P4c) reach the Read
+     * built once at launch: {@see \SugarCraft\Crush\Tools\ToolLimits::applyTo()}
+     * rebinds the turn's copy. A null leaves that bound as it is; a bound
+     * below 1 is refused rather than read as "no bound", because
+     * {@see readPage()} hands $maxBytes to fread(), which throws on it.
+     *
+     * @throws \InvalidArgumentException for a bound below 1
+     */
+    public function withReadLimits(?int $maxBytes = null, ?int $pageLines = null, ?int $pageBytes = null): self
+    {
+        foreach ([$maxBytes, $pageLines, $pageBytes] as $bound) {
+            if ($bound !== null && $bound < 1) {
+                throw new \InvalidArgumentException('Read limits must be at least 1.');
+            }
+        }
+
+        return new self(...array_replace(get_object_vars($this), array_filter(
+            ['maxBytes' => $maxBytes, 'pageLines' => $pageLines, 'pageByteLimit' => $pageBytes],
+            static fn (?int $bound): bool => $bound !== null,
+        )));
+    }
 
     /** The read ledger this instance records into, or null. */
     public function readLedger(): ?ReadLedger
@@ -205,7 +236,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         return 'Read a file from the local filesystem, one page at a time. Every line comes back '
             . 'as `N: text`; the `N: ` prefix is the 1-based line number and is NOT part of the '
             . 'file, so leave it out of an Edit\'s old_string. A page is at most '
-            . number_format(self::PAGE_LINES) . ' lines and ' . number_format($this->pageBytes())
+            . number_format($this->pageLines) . ' lines and ' . number_format($this->pageBytes())
             . ' bytes; pass `offset` (the first line to return) and `limit` (how many lines) to '
             . 'read another window. When more of the file remains, the result ends with '
             . '"[lines a-b of N — call Read with offset=b+1 to continue]", so a result without '
@@ -252,7 +283,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
             'limit' => [
                 'type' => 'integer',
                 'minimum' => 1,
-                'description' => 'The most lines to return (default ' . number_format(self::PAGE_LINES)
+                'description' => 'The most lines to return (default ' . number_format($this->pageLines)
                     . '). A page is also bounded in bytes, so it may stop earlier.',
             ],
             'description' => [
@@ -362,7 +393,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
         try {
             clearstatcache(true, $path);
             $observed = null;
-            $content = $this->readPage($path, $offset ?? 1, $limit ?? self::PAGE_LINES, $observed);
+            $content = $this->readPage($path, $offset ?? 1, $limit ?? $this->pageLines, $observed);
             restore_error_handler();
 
             // Roadmap 3.I-2: what the model now holds of this file — the stat
@@ -556,12 +587,13 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, ParallelSafe, Ca
     }
 
     /**
-     * The bytes one page may hold: {@see PAGE_BYTES}, or $maxBytes when the
+     * The bytes one page may hold: the instance's page size ({@see PAGE_BYTES}
+     * unless `readPageBytes` replaced it), or $maxBytes when the
      * instance was built with a smaller ceiling.
      */
     private function pageBytes(): int
     {
-        return min(self::PAGE_BYTES, $this->maxBytes);
+        return min($this->pageByteLimit, $this->maxBytes);
     }
 
     /**

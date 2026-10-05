@@ -2904,6 +2904,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * `off`, `Prune` in `manual` — the tool is left out of the turn, so its
      * schema is never sent.
      *
+     * Roadmap N-P4c: every tool first passes through
+     * {@see \SugarCraft\Crush\Tools\ToolLimits::applyTo()} with the bounds the
+     * merged config sets now (output caps, Read's page, Glob's count,
+     * WebFetch's timeout and memory bound), so a saved limit reaches the
+     * tools the launch built from the next turn on. Unset keys leave each
+     * tool as it was built.
+     *
      * @param \Closure(): float $spentSoFarUsd
      *
      * @return list<Tool>
@@ -2948,9 +2955,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             };
         }
 
+        $limits = \SugarCraft\Crush\Tools\ToolLimits::fromConfig(self::userConfig());
+
         $bound = null;
         $tools = [];
         foreach ($this->tools as $tool) {
+            $tool = $limits->applyTo($tool);
             if ($tool instanceof \SugarCraft\Crush\Tools\MutatesContextLedger) {
                 if ($ledgerRead !== null && $ledgerApply !== null && ($modelPrunes || $tool instanceof \SugarCraft\Crush\Tools\BuiltIn\Compress)) {
                     $tools[] = $tool->withLedger($ledgerRead, $ledgerApply);

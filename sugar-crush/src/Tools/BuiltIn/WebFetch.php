@@ -77,15 +77,23 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
     use TruncatesOutput;
 
     private const MAX_REDIRECTS = 3;
-    private const READ_TIMEOUT_SECONDS = 30;
+
+    /**
+     * Seconds a stalled socket read may wait — the default of the
+     * `webFetchTimeoutSeconds` setting (roadmap N-P4c,
+     * {@see withFetchLimits()}).
+     */
+    public const READ_TIMEOUT_SECONDS = 30;
     private const READ_CHUNK_BYTES = 65536;
 
     /**
      * How much of a body is ever held in memory. This is a MEMORY bound, not
      * the result bound: it is kept well above the output cap so the marker
      * can usually report a body's real size instead of "at least the cap".
+     * The default of the `webFetchMaxBytes` setting (roadmap N-P4c,
+     * {@see withFetchLimits()}).
      */
-    private const MAX_WIRE_BYTES = 2 * 1024 * 1024;
+    public const MAX_WIRE_BYTES = 2 * 1024 * 1024;
 
     private const BLOCKED_HOSTNAMES = [
         'localhost',
@@ -166,12 +174,16 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
      *                                                                caller with no next tool call to Read it
      *                                                                from — the `@url` mention (roadmap 5.8),
      *                                                                which attaches the page to the user's turn
+     * @param int                                   $timeoutSeconds   per-read socket timeout ({@see READ_TIMEOUT_SECONDS})
+     * @param int                                   $maxWireBytes     the memory bound on a body ({@see MAX_WIRE_BYTES})
      */
     public function __construct(
         ?callable $resolveAddresses = null,
         ?callable $isBlockedAddress = null,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
         private bool $saveOverflow = true,
+        private int $timeoutSeconds = self::READ_TIMEOUT_SECONDS,
+        private int $maxWireBytes = self::MAX_WIRE_BYTES,
     ) {
         $this->resolveAddresses = $resolveAddresses === null
             ? static fn (string $host): array => self::resolveViaSystemDns($host)
@@ -190,6 +202,33 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
     public function isParallelSafe(): bool
     {
         return true;
+    }
+
+    /**
+     * This tool with its socket timeout and its memory bound replaced, every
+     * other field kept — how the `webFetch*` settings (roadmap N-P4c)
+     * reach the WebFetch built once at launch:
+     * {@see \SugarCraft\Crush\Tools\ToolLimits::applyTo()} rebinds the turn's
+     * copy. A null leaves that bound as it is. The result cap is
+     * `toolOutputCapBytes`, through {@see withMaxOutputBytes()}.
+     *
+     * @throws \InvalidArgumentException for a bound below 1 — neither may
+     *         mean "unbounded"
+     */
+    public function withFetchLimits(?int $timeoutSeconds = null, ?int $maxWireBytes = null): self
+    {
+        if (($timeoutSeconds !== null && $timeoutSeconds < 1) || ($maxWireBytes !== null && $maxWireBytes < 1)) {
+            throw new \InvalidArgumentException('WebFetch limits must be at least 1.');
+        }
+
+        return new self(
+            $this->resolveAddresses,
+            $this->isBlockedAddress,
+            maxOutputBytes: $this->maxOutputBytes,
+            saveOverflow: $this->saveOverflow,
+            timeoutSeconds: $timeoutSeconds ?? $this->timeoutSeconds,
+            maxWireBytes: $maxWireBytes ?? $this->maxWireBytes,
+        );
     }
 
     public static function fromCatalog(ToolBuildContext $context): self
@@ -215,7 +254,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
             . 'it is not for local files. It follows at most 3 redirects and re-checks each '
             . 'redirect target against the same localhost and private/link-local refusals, '
             . 'resolving a relative Location against the URL that sent it, and applies a '
-            . '30-second timeout per read. The result holds at most '
+            . $this->timeoutSeconds . '-second timeout per read. The result holds at most '
             . number_format($this->resultCap()) . ' bytes; a longer body is cut short and '
             . 'ends with a "[truncated: N of M bytes omitted ...]" marker naming how much is '
             . 'missing. A 2xx body is returned as-is; any other status is put on a first '
@@ -393,12 +432,12 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
 
     /**
      * The result cap in force. A non-positive configured cap cannot mean
-     * "unbounded": the wire read stops at MAX_WIRE_BYTES regardless, so that
+     * "unbounded": the wire read stops at $maxWireBytes regardless, so that
      * is the most that could honestly be returned.
      */
     private function resultCap(): int
     {
-        return $this->maxOutputBytes > 0 ? $this->maxOutputBytes : self::MAX_WIRE_BYTES;
+        return $this->maxOutputBytes > 0 ? $this->maxOutputBytes : $this->maxWireBytes;
     }
 
     /**
@@ -409,7 +448,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
      */
     private function wireBound(): int
     {
-        return max(self::MAX_WIRE_BYTES, $this->saveOverflow ? $this->captureBound($this->resultCap()) ?? 0 : 0);
+        return max($this->maxWireBytes, $this->saveOverflow ? $this->captureBound($this->resultCap()) ?? 0 : 0);
     }
 
     /**
@@ -571,7 +610,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
 
         $context = stream_context_create([
             'http' => [
-                'timeout' => self::READ_TIMEOUT_SECONDS,
+                'timeout' => $this->timeoutSeconds,
                 'ignore_errors' => true,
                 'max_redirects' => 0,
                 'header' => "Host: $hostHeader\r\n",

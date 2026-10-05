@@ -318,8 +318,10 @@ final class Chat implements Model
      * A tool call that never returns (e.g. a hung shell command) would
      * otherwise leave the parent blocked forever waiting on pcntl_waitpid();
      * past this deadline, stragglers are SIGKILLed and reported as timeouts.
+     * The default of `chatToolTimeoutSeconds` (roadmap
+     * N-P4c), read when a batch starts.
      */
-    private const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
+    public const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
 
     /**
      * How long {@see reapKilledToolChildren()} spends collecting a batch of
@@ -6875,7 +6877,7 @@ final class Chat implements Model
         $loop = Loop::get();
         $settled = false;
         $timer = null;
-        $deadline = microtime(true) + self::PARALLEL_TOOL_TIMEOUT_SECONDS;
+        $deadline = microtime(true) + (\SugarCraft\Crush\Tools\ToolLimits::current()->int(\SugarCraft\Crush\Tools\ToolLimits::PARALLEL_TIMEOUT_KEY) ?? self::PARALLEL_TOOL_TIMEOUT_SECONDS);
 
         $timer = $loop->addPeriodicTimer(0.05, function () use (&$pendingIndexes, $jobs, $deadline, $cancellation, $collect, $loop, &$settled, &$timer, $deferred): void {
             if ($settled) {
