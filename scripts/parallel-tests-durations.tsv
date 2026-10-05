@@ -358,6 +358,7 @@ sugar-crush/tests/Tools/ReadLedgerStalenessTest.php	0.400	18
 sugar-crush/tests/Memory/DreamPassTest.php	0.400	9
 sugar-crush/tests/Backend/LiveLedgerFrameTest.php	0.400	9
 sugar-crush/tests/Backend/InTurnCompressionTest.php	0.400	3
+sugar-crush/tests/Chat/CompressCommandsTest.php	0.400	5
 sugar-crush/tests/Tools/BuiltIn/EditTest.php	0.398	15
 sugar-crush/tests/Cli/BootstrapClaudeMcpGrantTest.php	0.394	10
 sugar-crush/tests/Config/TrustKeyDocumentationDriftTest.php	0.394	12

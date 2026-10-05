@@ -1064,11 +1064,11 @@ finishes. A lone `!` is an ordinary prompt.
 
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
-`/compact` `/context` (`/tokens`) `/diff` `/editor` `/exit` (`/quit`) `/fork`
-`/help` `/init` `/keys` `/layout` `/mcp` `/memory` `/model` `/notices` `/pane`
-`/permissions` `/pruning` `/redo` `/rename` `/rewind` `/rules` `/sessions`
-`/settings` (`/config`) `/share` `/sweep` `/theme` `/undo` `/websearch`
-`/workflow`.
+`/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
+`/exit` (`/quit`) `/fork` `/help` `/init` `/keys` `/layout` `/mcp` `/memory`
+`/model` `/notices` `/pane` `/permissions` `/pruning` `/recompress` `/redo`
+`/rename` `/rewind` `/rules` `/sessions` `/settings` (`/config`) `/share`
+`/sweep` `/theme` `/undo` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
@@ -1122,7 +1122,12 @@ state rows and an active step summary — and the total is the estimate after
 it. `/sweep` prunes the tool outputs since your last prompt (`/sweep 5`: the
 last five), and `/pruning auto|manual|off` sets how much happens on its own for
 this session (default from `contextPruning.mode`); the transcript keeps every
-row either way. Token figures are script-weighted estimates (`~`); the cache
+row either way. `/compress [focus]` asks the model to compress the most
+significant closed part of the conversation into its own summary (the
+`Compress` tool, offered only on that turn); the transcript marks each such
+section with a `▣ Compressed b3 · <topic> · −41K +2.4K` row, the status bar adds
+what the ledger takes out (`−52K pruned`), and `/decompress b3` /
+`/recompress b3` send the section in full again or restore the summary. Token figures are script-weighted estimates (`~`); the cache
 figures are the provider's own. A part a backend cannot report — a command backend assembles no
 prompt of its own — prints as "not measured", never as zero. It is read-only,
 local and calls no model.

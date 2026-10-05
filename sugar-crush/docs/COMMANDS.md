@@ -324,6 +324,9 @@ edit it by hand.
 | `/context` | ✓ | | — | Show what fills the context window: prompt layers, tools, history, cache |
 | `/sweep` | ✓ | | `[n]` | Prune the tool outputs since your last prompt (or the last n) from what the model sees |
 | `/pruning` | ✓ | | `[auto\|manual\|off\|default]` | Show or set how this session prunes its context: auto, manual or off |
+| `/compress` | ✓ | | `[focus]` | Ask the model to compress a closed part of the conversation into a summary |
+| `/decompress` | ✓ | | `[bN]` | Send a compressed section in full again (no argument: list the sections) |
+| `/recompress` | ✓ | | `[bN]` | Restore the summary of a section /decompress took back |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
 | `/pane` | ✓ | | `dock <left\|right>\|toggle [name]` | Dock a pane to a side, or toggle its docked state |
 | `/layout` | ✓ | | `reset` | Reset the pane layout to the launch default |

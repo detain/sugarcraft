@@ -2858,9 +2858,22 @@ final class Renderer
         $used = self::formatTokenCount($chat->contextTokens());
         $limit = self::formatTokenCount($chat->contextTokenLimit());
 
-        $forms = [
+        // Roadmap 3.B-4 (DCP §13.2 H, `ctx 38% (−52K pruned)`): what the
+        // session's ledger takes out of what the model is sent — prunes and
+        // compressed sections — beside the figure for the rows themselves.
+        // Read from the runner's memory copy, never the store.
+        $freed = $chat->contextLedgerView()?->freedTokens() ?? 0;
+        $pruned = $freed > 0 ? '−' . self::formatTokenCount($freed) : '';
+
+        $forms = $pruned === '' ? [
             "~{$used} / {$limit} context ({$percent}%)",
             "~{$used}/{$limit} ({$percent}%)",
+            "{$percent}% context",
+        ] : [
+            "~{$used} / {$limit} context ({$percent}%, {$pruned} pruned)",
+            "~{$used}/{$limit} ({$percent}% {$pruned} pruned)",
+            "~{$used}/{$limit} ({$percent}%)",
+            "{$percent}% ({$pruned})",
             "{$percent}% context",
         ];
         foreach ($forms as $form) {
@@ -3828,6 +3841,9 @@ final class Renderer
     {
         // Roadmap 1.B-2: a row the model reads but the user does not - a
         // turn's step record ({@see Message::$userVisible}) - is not painted.
+        // Roadmap 3.B-4: where each section the model compressed starts, read
+        // off the WHOLE history — a step's opening row is a hidden one.
+        $sections = $ledger === null ? [] : self::compressedSectionStarts($history, $ledger);
         $history = array_filter($history, static fn(Message $msg): bool => $msg->userVisible);
         if ($history === []) {
             return '_(empty conversation — type a question and press Enter)_';
@@ -3867,6 +3883,18 @@ final class Renderer
         ));
         $blocks = [];
         foreach ($history as $key => $msg) {
+            // Roadmap 3.B-4: a section the model compressed is marked above
+            // its first row — the person still reads every row; the model
+            // reads the block's summary in their place.
+            foreach ($sections as $start => $starting) {
+                if ($start > $key) {
+                    break;
+                }
+                foreach ($starting as $section) {
+                    $blocks[] = self::compressedSectionRow($section, $theme, $width);
+                }
+                unset($sections[$start]);
+            }
             if (Chat::isCompactionBoundary($msg)) {
                 $blocks[] = $boundaryRule;
 
@@ -3901,6 +3929,72 @@ final class Renderer
             };
         }
         return implode("\n\n", $blocks);
+    }
+
+    /**
+     * Each active section the model compressed (roadmap 3.B-4), by the index
+     * in $history of the row it starts at, in order: a prompt by its bytes and
+     * occurrence ({@see \SugarCraft\Crush\Context\Pruning\ContextLedger::userRowKey()}),
+     * a step by the row that issued or answered its first call. A section
+     * whose first row is gone is not marked.
+     *
+     * @param array<int, Message> $history
+     * @return array<int, list<\SugarCraft\Crush\Context\Pruning\CompressionBlock>>
+     */
+    private static function compressedSectionStarts(array $history, \SugarCraft\Crush\Context\Pruning\ContextLedger $ledger): array
+    {
+        $ranges = $ledger->activeRangeBlocks();
+        if ($ranges === []) {
+            return [];
+        }
+        $prompts = [];
+        $calls = [];
+        $seen = [];
+        foreach ($history as $index => $row) {
+            if ($row->role === Role::User && !$row->uiOnly && !\SugarCraft\Crush\Context\TurnContextBlock::isTurnContext($row)) {
+                $occurrence = $seen[$row->content] = ($seen[$row->content] ?? 0) + 1;
+                $prompts[\SugarCraft\Crush\Context\Pruning\ContextLedger::userRowKey($row->content, $occurrence)] ??= $index;
+            }
+            foreach ($row->toolCalls as $call) {
+                if ($call instanceof \SugarCraft\Crush\ToolCall && $call->id !== null) {
+                    $calls['s:' . $call->id] ??= $index;
+                }
+            }
+            foreach ($row->toolResults as $result) {
+                if ($result instanceof \SugarCraft\Crush\ToolResult && $result->id !== null) {
+                    $calls['s:' . $result->id] ??= $index;
+                }
+            }
+        }
+
+        $starts = [];
+        foreach ($ranges as $block) {
+            $index = $prompts[(string) $block->fromKey] ?? $calls[(string) $block->fromKey] ?? null;
+            if ($index !== null) {
+                $starts[$index][] = $block;
+            }
+        }
+        ksort($starts);
+
+        return $starts;
+    }
+
+    /**
+     * `▣ Compressed b3 · Auth system exploration · −41.0K +2.4K` — one dim
+     * row, clipped to the pane, never wrapped.
+     */
+    private static function compressedSectionRow(\SugarCraft\Crush\Context\Pruning\CompressionBlock $block, Theme $theme, int $width): string
+    {
+        return self::dim($theme)->render(Width::truncate(
+            sprintf(
+                '▣ Compressed %s · %s · −%s +%s',
+                $block->label(),
+                self::oneLine((string) $block->topic),
+                \SugarCraft\Crush\Util\TokenCount::compact($block->compressedTokens),
+                \SugarCraft\Crush\Util\TokenCount::compact($block->summaryTokens),
+            ),
+            max(1, $width),
+        ));
     }
 
     /**

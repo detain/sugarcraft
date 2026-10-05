@@ -107,11 +107,11 @@ final class SlashMenuTabCompletionTest extends TestCase
     // =====================================================================
 
     /**
-     * The user's exact sequence: a partial "/comp" showing one match, then Tab.
+     * The user's exact sequence: a partial "/compa" showing one match, then Tab.
      */
     public function testTabExpandsAPartialSlashCommandThroughTheShell(): void
     {
-        $app = $this->press($this->shell(), $this->type('/comp'));
+        $app = $this->press($this->shell(), $this->type('/compa'));
 
         // Precondition, or the assertion below would prove nothing: the popup
         // really is showing, and the draft really is still the partial name.
@@ -119,7 +119,7 @@ final class SlashMenuTabCompletionTest extends TestCase
             static fn (object $spec): string => $spec->name,
             $app->chat->slashMenuMatches(),
         ));
-        $this->assertSame('/comp', $app->chat->inputBuf);
+        $this->assertSame('/compa', $app->chat->inputBuf);
 
         $app = $this->press($app, [self::tab()]);
 
@@ -159,7 +159,7 @@ final class SlashMenuTabCompletionTest extends TestCase
      */
     public function testTheCompletedDraftClosesThePopupSoTheNextTabCyclesPanes(): void
     {
-        $app = $this->press($this->shell(), [...$this->type('/comp'), self::tab()]);
+        $app = $this->press($this->shell(), [...$this->type('/compa'), self::tab()]);
 
         $this->assertSame([], $app->chat->slashMenuMatches());
 
@@ -220,9 +220,9 @@ final class SlashMenuTabCompletionTest extends TestCase
         ];
 
         foreach ($modified as $label => $key) {
-            $app = $this->press($this->press($this->shell(), $this->type('/comp')), [$key]);
+            $app = $this->press($this->press($this->shell(), $this->type('/compa')), [$key]);
 
-            $this->assertSame('/comp', $app->chat->inputBuf, $label);
+            $this->assertSame('/compa', $app->chat->inputBuf, $label);
         }
     }
 
@@ -259,7 +259,7 @@ final class SlashMenuTabCompletionTest extends TestCase
     {
         $handler = new KeyboardHandler();
 
-        $showing = $this->press($this->shell(), $this->type('/comp'));
+        $showing = $this->press($this->shell(), $this->type('/compa'));
         $this->assertNull(
             $handler->handleKeyMsg(self::tab(), $showing),
             'the shell must let Tab fall through to the popup',
@@ -291,19 +291,19 @@ final class SlashMenuTabCompletionTest extends TestCase
      * swallows an unclaimed Tab, with a "/" draft behind it -- the popup's
      * data source is inputBuf alone, so `slashMenuMatches()` is still
      * non-empty in every one of them and a shell keyed on THAT yields.
-     * Measured on the broken build: `/comp`, Ctrl+P, Tab left pane=chat,
-     * inputBuf='/comp' and the palette open -- nothing happened at all,
+     * Measured on the broken build: `/compa`, Ctrl+P, Tab left pane=chat,
+     * inputBuf='/compa' and the palette open -- nothing happened at all,
      * where pre-W4 that Tab cycled the pane.
      */
     public function testTabIsNotADeadKeyWhileAChatModalOwnsTheKeyboard(): void
     {
         $palette = $this->press(
-            $this->press($this->shell(), $this->type('/comp')),
+            $this->press($this->shell(), $this->type('/compa')),
             [new KeyMsg(KeyType::Char, 'p', ctrl: true)],
         );
         $this->assertNotNull($palette->chat->palette(), 'fixture: the palette must be open');
 
-        $reference = $this->shell()->withChat(new Chat(inputBuf: '/comp', keyHelp: 0));
+        $reference = $this->shell()->withChat(new Chat(inputBuf: '/compa', keyHelp: 0));
 
         foreach (['palette' => $palette, 'keyHelp' => $reference] as $label => $app) {
             $this->assertNotSame([], $app->chat->slashMenuMatches(), "{$label}: fixture, the popup's data is there");
@@ -312,7 +312,7 @@ final class SlashMenuTabCompletionTest extends TestCase
             $next = $this->press($app, [self::tab()]);
 
             $this->assertSame(Pane::Chat->next(), $next->pane, "{$label}: Tab was a dead key");
-            $this->assertSame('/comp', $next->chat->inputBuf, "{$label}: and it must not have completed");
+            $this->assertSame('/compa', $next->chat->inputBuf, "{$label}: and it must not have completed");
         }
 
         // The modal itself survived the Tab in the one case that is reachable
@@ -328,7 +328,7 @@ final class SlashMenuTabCompletionTest extends TestCase
     public function testTabReachesAnOpenSessionPicker(): void
     {
         $picker = $this->shell()->withChat(new Chat(
-            inputBuf: '/comp',
+            inputBuf: '/compa',
             sessionPicker: SessionPicker::new([]),
         ));
         $this->assertFalse($picker->chat->sessionPicker()?->showsChildren(), 'fixture: children start hidden');
@@ -337,7 +337,7 @@ final class SlashMenuTabCompletionTest extends TestCase
 
         $this->assertSame(Pane::Chat, $next->pane, 'Tab must not cycle the pane while the picker is up');
         $this->assertTrue($next->chat->sessionPicker()?->showsChildren(), 'the picker took the Tab');
-        $this->assertSame('/comp', $next->chat->inputBuf, 'and it must not have completed');
+        $this->assertSame('/compa', $next->chat->inputBuf, 'and it must not have completed');
     }
 
     /**
@@ -362,7 +362,7 @@ final class SlashMenuTabCompletionTest extends TestCase
         $next = $this->press($blocked, [self::tab()]);
 
         $this->assertSame(Pane::Chat->next(), $next->pane, 'Tab was a dead key with the prompt up');
-        $this->assertSame('/comp', $next->chat->inputBuf);
+        $this->assertSame('/compa', $next->chat->inputBuf);
         $this->assertNotNull($next->chat->pendingPermission(), 'and the prompt is still waiting');
     }
 
@@ -379,7 +379,7 @@ final class SlashMenuTabCompletionTest extends TestCase
         }
         $this->assertTrue($chat->inFlight, 'fixture: a turn must be running');
 
-        $app = $this->press($this->shell()->withChat($chat), [...$this->type('/comp'), self::tab()]);
+        $app = $this->press($this->shell()->withChat($chat), [...$this->type('/compa'), self::tab()]);
 
         $this->assertSame('/compact ', $app->chat->inputBuf);
         $this->assertSame(Pane::Chat, $app->pane);
@@ -399,7 +399,7 @@ final class SlashMenuTabCompletionTest extends TestCase
      */
     public function testTheShellKeepsTabWhileOneOfItsOwnViewsOwnsTheKeyboard(): void
     {
-        $typed = $this->press($this->shell(), $this->type('/comp'));
+        $typed = $this->press($this->shell(), $this->type('/compa'));
         $this->assertTrue($typed->chat->slashMenuOwnsTab(), 'fixture: Chat would otherwise take this Tab');
 
         $states = [
@@ -430,7 +430,7 @@ final class SlashMenuTabCompletionTest extends TestCase
             // undocked, so the cycle folds them to Chat -- still a MOVE, the
             // anti-dead-key claim of this test.
             $this->assertSame($app->cyclePaneFocus(1)->pane, $next->pane, "{$label}: Tab must still cycle panes");
-            $this->assertSame('/comp', $next->chat->inputBuf, "{$label}: and must not complete");
+            $this->assertSame('/compa', $next->chat->inputBuf, "{$label}: and must not complete");
         }
 
         MenuBar::closeMenu();
@@ -451,12 +451,12 @@ final class SlashMenuTabCompletionTest extends TestCase
      */
     public function testTabFromADockPaneCyclesFocusEvenWithThePopupOpen(): void
     {
-        $app = $this->press($this->shell(), $this->type('/comp'))->withPane(Pane::Files);
+        $app = $this->press($this->shell(), $this->type('/compa'))->withPane(Pane::Files);
         $this->assertTrue($app->chat->slashMenuOwnsTab(), 'fixture: Chat WOULD complete this Tab in Chat mode');
 
         $next = $this->press($app, [self::tab()]);
 
-        $this->assertSame('/comp', $next->chat->inputBuf, 'the docked pane must not complete');
+        $this->assertSame('/compa', $next->chat->inputBuf, 'the docked pane must not complete');
         $this->assertSame(Pane::Chat, $next->pane, 'Tab cycles to Chat: Files is the only docked pane');
 
         // ... and back in Chat mode the same still-open popup takes Tab as completion.
@@ -510,7 +510,7 @@ final class SlashMenuTabCompletionTest extends TestCase
         $this->assertNotNull(
             (new KeyboardHandler())->handleKeyMsg(
                 $shiftTab,
-                $this->press($this->shell(), $this->type('/comp')),
+                $this->press($this->shell(), $this->type('/compa')),
             ),
             'the shell did not claim Shift+Tab with the popup up',
         );
@@ -527,9 +527,9 @@ final class SlashMenuTabCompletionTest extends TestCase
         // ...and it never reaches the input box, popup showing or not.
         $this->assertSame('', $empty->chat->inputBuf);
 
-        $showing = $this->press($this->press($this->shell(), $this->type('/comp')), [$shiftTab]);
+        $showing = $this->press($this->press($this->shell(), $this->type('/compa')), [$shiftTab]);
         $this->assertSame(Pane::Files, $showing->pane);
-        $this->assertSame('/comp', $showing->chat->inputBuf, 'Shift+Tab typed a character into the draft');
+        $this->assertSame('/compa', $showing->chat->inputBuf, 'Shift+Tab typed a character into the draft');
     }
 
     /**
@@ -594,10 +594,10 @@ final class SlashMenuTabCompletionTest extends TestCase
             ->withHooks($hooks)
             ->withSize(100, 30);
 
-        foreach ([...$this->type('hi'), new KeyMsg(KeyType::Enter), ...$this->type('/comp')] as $key) {
+        foreach ([...$this->type('hi'), new KeyMsg(KeyType::Enter), ...$this->type('/compa')] as $key) {
             [$chat] = $chat->update($key);
         }
-        $this->assertSame('/comp', $chat->inputBuf, 'fixture: the draft must survive to the prompt');
+        $this->assertSame('/compa', $chat->inputBuf, 'fixture: the draft must survive to the prompt');
 
         [$blocked] = $chat->update(new AssistantMsg(
             Message::assistant('running')->withToolCalls([

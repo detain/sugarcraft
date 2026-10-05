@@ -214,8 +214,8 @@ final class CommandRegistryTest extends TestCase
         // test: r@0 then e@3 is a strictly increasing run that covers every
         // needle character from position 0, so `/rul`-typo popup widening is the
         // intended behaviour, not an accident of the new P6.S3 row.
-        $this->assertSame(['redo', 'rename', 'rewind', 'rules'], self::names(CommandRegistry::filter('RE')));
-        $this->assertSame(['redo', 'rename', 'rewind', 'rules'], self::names(CommandRegistry::filter('re')));
+        $this->assertSame(['recompress', 'redo', 'rename', 'rewind', 'rules'], self::names(CommandRegistry::filter('RE')));
+        $this->assertSame(['recompress', 'redo', 'rename', 'rewind', 'rules'], self::names(CommandRegistry::filter('re')));
     }
 
     public function testFilterDropsCandidatesThatOnlyPartiallyMatch(): void

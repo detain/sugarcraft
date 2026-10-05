@@ -708,7 +708,9 @@ final class RendererTest extends TestCase
         // testSlashMenuHighlightsTheMatchedRunOfTheTypedPrefix() for the SGR.
         $plain = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $out);
 
-        $this->assertStringContainsString('▸ /redo', $plain);
+        // `/recompress` (roadmap 3.B-4) sorts first among the `re` matches.
+        $this->assertStringContainsString('▸ /recompress', $plain);
+        $this->assertStringContainsString('/redo', $plain);
         $this->assertStringContainsString('/rewind', $plain);
         // The unselected row is present but not marked as selected.
         $this->assertStringNotContainsString('▸ /rewind', $plain);

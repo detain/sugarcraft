@@ -719,7 +719,8 @@ final class KeyBindingDriftTest extends TestCase
             // actually lived — is driven through `App::update()` in
             // `App\SlashMenuTabCompletionTest`.
             'chat.slash-complete' => function (array $k): void {
-                $chat = $this->chat([], '/comp');
+                // `/compa`, not `/comp`: `/compress` (roadmap 3.B-4) shares `comp`.
+                $chat = $this->chat([], '/compa');
                 $this->assertSame(
                     ['compact'],
                     array_map(static fn (object $spec): string => $spec->name, $chat->slashMenuMatches()),

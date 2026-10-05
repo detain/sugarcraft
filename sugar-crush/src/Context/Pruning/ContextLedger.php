@@ -599,6 +599,26 @@ final readonly class ContextLedger
         return $this->syncAgainst($callIds, $contextRows);
     }
 
+    /**
+     * Estimated tokens this ledger takes out of what the model is sent: every
+     * prune, every dropped `<turn-context>` row, and every ACTIVE block's
+     * replaced rows less its summary — the status bar's `−52K pruned`.
+     */
+    public function freedTokens(): int
+    {
+        $tokens = array_sum($this->droppedContextRows);
+        foreach ($this->prunes as $entry) {
+            $tokens += $entry->tokens;
+        }
+        foreach ($this->blocks as $block) {
+            if ($block->active) {
+                $tokens += max(0, $block->compressedTokens - $block->summaryTokens);
+            }
+        }
+
+        return $tokens;
+    }
+
     public function isEmpty(): bool
     {
         return $this->prunes === [] && $this->droppedContextRows === [] && $this->blocks === [] && $this->nudges === [];

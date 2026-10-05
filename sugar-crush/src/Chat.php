@@ -11533,6 +11533,47 @@ final class Chat implements Model
     }
 
     /**
+     * `/compress [focus]` (roadmap 3.B-4): send the manual trigger
+     * ({@see \SugarCraft\Crush\Tools\BuiltIn\Compress::triggerPrompt()}) as
+     * the user's turn — the one turn the model is offered `Compress` on, it
+     * being manual by default — or, in a session whose pruning mode cannot
+     * compress, say why without starting one.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleCompressCommand(string $inputText): array
+    {
+        $refusal = \SugarCraft\Crush\Tools\BuiltIn\Compress::refusalFor($this->sessionContextLedger()->effectiveMode());
+        if ($refusal !== null) {
+            return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::reply($inputText, $refusal));
+        }
+
+        return $this->withInputBuf(
+            \SugarCraft\Crush\Tools\BuiltIn\Compress::triggerPrompt(self::commandArgument($inputText)),
+        )->submit();
+    }
+
+    /**
+     * `/decompress [bN]` (roadmap 3.B-4) — {@see \SugarCraft\Crush\Host\Commands\DecompressHostCommand}.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleDecompressCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\DecompressHostCommand(), $inputText);
+    }
+
+    /**
+     * `/recompress [bN]` (roadmap 3.B-4) — {@see \SugarCraft\Crush\Host\Commands\RecompressHostCommand}.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleRecompressCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Crush\Host\Commands\RecompressHostCommand(), $inputText);
+    }
+
+    /**
      * This session's context ledger as its next turn would start from it
      * (roadmap 2.2-2) — {@see \SugarCraft\Crush\Host\Commands\CommandContext::contextLedger()},
      * the one the ledger commands read, over this model's runner and store.

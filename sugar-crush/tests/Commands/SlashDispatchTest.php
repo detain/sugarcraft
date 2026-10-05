@@ -39,6 +39,7 @@ final class SlashDispatchTest extends TestCase
      */
     private const TURN_STARTING_COMMANDS = [
         'init' => 'a canned AGENTS.md-writing prompt (roadmap 5.14e)',
+        'compress' => 'the manual trigger the model\'s Compress tool is offered on (roadmap 3.B-4)',
     ];
 
     private string $sandbox = '';
