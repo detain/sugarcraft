@@ -29,8 +29,7 @@
 
 # Part I — Key findings
 
-1. **Sub-agents are partly closed off.** The team task hooks (`TaskCreated`, `TaskCompleted`, `TeammateIdle`) never fire (4.6-2 remainder), and a mailbox `followup` has no reader outside `SendMessage`'s run cards (4.4 remainder).
-2. **Requested features still open:** the remaining constants promoted to settings (the N-P4b/c/d/g remainders) and the settings editor's last polish (N-P5 remainder). They are designed in Appendices N–P and scheduled in Appendix R.
+1. **The scheduled work left is i18n and the live checks.** sugar-crush has no i18n yet (15b-14, W11), and five live provider checks wait on credentials (Part VI). Parts III and V still list unscheduled polish (2.9, 3.A, 4.3, the agent view's remaining items).
 
 ---
 
@@ -75,30 +74,23 @@ These are the recommendations from all twelve reports, de-duplicated and grouped
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 2.9 | **Absolute thresholds** on by default (DCP's 50k/100k "smart zone"; on a 1M window, 70% is far past the point where quality holds) with their settings keys and a thrash-breaker that cannot refuse every prompt under a cap; an absolute term in the step-level `ContextBudget` | S | DCP |
-| 2.11 | **Memory flush before the host's compactions**: the silent Memory-only step already runs before an in-turn compaction; `/compact` and the automatic 85% tier do not flush yet, and the once-per-cycle count does not span turns | S | Claw |
 
 ## 3.x — safety net and agent self-management
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 3.A | **Workspace checkpoints**: optionally capture after each write step (`EngineBackend::runTurn`) | M | CC OC Kilo Cline Zed dsh |
-| 3.B | **Agent self-pruning tools** (the user's headline request). `Prune` and `Compress` are live (3.B-3, 3.B-4), with `/compress`, `/decompress`, `/recompress` and `/compact --self`. What remains (3.B-5): a `/context` line for the cache-break telemetry, and `Compactor::describe()` naming the pruned targets in `Prune`'s and `/sweep`'s receipts and `/context`'s pruned list. **Full design: Appendix D §13.2.** | S | DCP |
-| 3.I | The session read ledger on the Chat-native tool path (an embedder's `registerTool()` callbacks): carry it back from the per-call child, as the engine path does | S | OC Kilo Cline Zed Claw nano dsh |
 
 ## 4.x — sub-agents and orchestration
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
 | 4.3 | **Background Task** settle: a settled result is injected via steer when a turn is running (it waits for the turn's end today), and the announce stats line carries the resume id | S | Claw nano dsh Goose Kilo OC |
-| 4.4 | **Messaging tools**: a reader for mailbox `followup` mode (only `SendMessage`'s run-card followups reach a conversation's next run) | S | Claw dsh Kilo Goose nano |
-| 4.6 | **Teams**: the `Team` tool is live; `TaskCreated`/`TaskCompleted`/`TeammateIdle` dispatched from `TaskList`, a revision compare-and-swap on complete/fail, a pid-keyed SQLite connection, and `Team` granted to the built-in teammates remain | M | CC Cline dsh |
 
 ## 5.x — memory, codebase understanding, UX, integrations
 
 | # | Item | Effort | Sources |
 |---|---|---|---|
-| 5.4 | **Dream pass over skills**: the dream pass edits memory notes only; letting it edit skills waits on a user decision (an unattended `SKILL.md` writer persists injected text) | S–M | nano |
-| 5.7 | **Plan mode**: a question-aware permission modal for `AskUser`/`PlanExit` (footer, number keys for choices), a `once` answer keeping its note, and a `tool:<name>` ask source | S | OC Kilo Cline dsh |
 | 5.15 | Settings pane, configurable behaviours, server mode, web UI, session management, live agent lines and agent view | — | **Part V** |
 
 ---
@@ -219,11 +211,7 @@ Keep sugar-crush's richer `<env>` and repo map; only move the volatile parts out
 
 **Behaviour that should become settings.**
 
-The report lists **about 45 hard-coded constants**, each with file:line and a proposed key, type, default and tier. The ones still hard-coded:
-- the standing-rule budget, the repo-map switch and size, the environment block's diff caps, skill path nudges, the launch-notice limit and the project-note cap (N-P4d);
-- the nested-instruction cap and the spill capture bounds (N-P4c);
-- the auto-mode breaker limits, the terminal background, session retention, the spend cap, the MCP switch and the `debug.*` flags (N-P4g);
-- live apply of the `compaction.*` keys, the idle-compaction offer and the summary mode (N-P4b).
+The report lists **about 45 hard-coded constants**, each with file:line and a proposed key, type, default and tier.
 
 **Recommended design:**
 - **The `SettingsSchema` registry** (`SettingDefinition` rows, `src/Config/Settings/`) drives the editor form, and `LayeredSettings`' tier rosters are derived from it.
@@ -231,10 +219,6 @@ The report lists **about 45 hard-coded constants**, each with file:line and a pr
   - **Built from libraries already in the dependency tree:** `candy-forms` (fields, groups, validators, `hydrate`), `candy-fuzzy`, `candy-focus`, `candy-mouse`, `sugar-veil`, `candy-sprinkles`, `candy-layout`, `candy-core` (`AtomicJsonFile`, i18n).
   - **Optional additions:** `sugar-diff` for the save preview and `sugar-toast` for feedback. The report advises against `sugar-dash`, because it would pull `candy-pty` into the runtime.
 - Store keys **flat with dots** (`"compaction.autoPercent"`), because `LayeredSettings::merge` only merges one level deep.
-
-**Phases** (full class, test and doc list in N §5):
-- **P4 — promote the remaining hard-coded constants (L, incremental).**
-- **P5 — polish (S):** `permissionRules` editing behind the launch's strict parser, opening the file in `$EDITOR`, settings-profile import/export, the save preview's turn-running note, and the web `settings.set` project-shared tier.
 
 ## V.2 Server mode (Appendix O, §0–§6, §8)
 
@@ -9291,30 +9275,13 @@ Columns:
 - **Hotspot regions**: listed only where another group in the same wave also touches that file.
 - **Order**: the integration cherry-pick order for the wave.
 
-#### W9 (order: a, b, g, h, i, j)
+#### W10 (order: i)
 
-Remainders of partially landed W9 steps, for rescheduling.
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| a | 2.11 remainder (the host's compactions flush too: run `Context\Compaction\MemoryFlush` before `/compact` and the automatic 85% tier, in `EngineBackend::summariseInChild()` or a backend method `Chat` calls before `summariseAsync`; once per cycle across turns through a `ContextLedger` cycle counter) | `src/Backend/EngineBackend.php`, `src/Context/Pruning/ContextLedger.php`, `src/Host/CompactionService.php` | EB: `summariseInChild`/`summaryReply` | MEMORY "Memory flush before compaction" (drop the "do not flush yet" sentence) | — | S–M |
-| b | 3.B-5 remainder (a `/context` line for the cache-break telemetry through a public `EngineBackend::cacheBreaks()` accessor; `Compactor::describe()` naming pruned targets in `Prune::receipt()`, `/sweep`'s receipt and `/context`'s pruned list) | `src/Backend/EngineBackend.php`, `src/Commands/ContextCommand.php`, `src/Context/ContextBreakdown.php`, `src/Tools/BuiltIn/Prune.php` | — | — | — | S |
-| g | 4.6-2 remainder (`TaskCreated`/`TaskCompleted`/`TeammateIdle` dispatched through a `HookDispatcher` over the launch's `HookRegistry`, handed to the catalog-built `Team` → `TeamManager` → `TaskList`; `TaskList::getConnection()` keyed by pid; `completeTask`/`failTask` revision compare-and-swap; the duplicate-id warning on a concurrent `add`; built-in teammates granted `Team`) | `src/Agents/{TaskList,TeamManager,Team,AgentManager}.php`, `src/Tools/BuiltIn/TeamTool.php`, `src/Cli/Bootstrap.php` | BS: `hooks`. **R-HOOKS** | HOOKS event table + dormancy paragraph (`DocFigureProseDriftTest::testHookEventsTableSurvivesTheLiveEnumAndDispatchSites`) | — | M |
-| h | N-P4b remainder (`Chat::applySettings()` arm rebuilding the compactor on a `compaction.*` save, then the keys apply live; `compaction.idleOfferSeconds`, `compaction.mode llm\|heuristic\|off`, the thrash breaker's `REFILL_LIMIT`), N-P4d remainder (`rules.standingMaxBytes`, `repoMap.enabled`/`repoMap.maxBytes`, `env.gitDiffAfterWrites`/`env.diffMaxBytes`, `skills.pathNudges`, `notices.transcriptLimit`, `memory.projectNoteMaxBytes` — each with its read site) | `src/Chat.php`, `src/Runtime.php`, `src/Context/{IdleCompactionPolicy,RepoMapBlock,EnvironmentBlock,ProjectMemoryWriter}.php`, `src/Skills/SkillPathNudge.php`, `src/Cli/Bootstrap.php`, `src/Config/Settings/Definitions/{ContextSettings,MemoryRuleSettings}.php` | RT: `systemPromptSections`, `repoMapSnapshot`, `environmentSnapshot`. BS: launch-notice constants | MEMORY caps; PROMPT_ENGINEERING; SETTINGS (generated) | — | M |
-| i | N-P4c remainder (the nested-instruction cap `TruncatesOutput::DEFAULT_MAX_INSTRUCTION_BYTES`; the spill capture bounds `ToolOutputSpill::CAPTURE_BYTES` / `MIN_CAP_BYTES`) | `src/Tools/Concerns/TruncatesOutput.php`, `src/Support/ToolOutputSpill.php`, `src/Config/Settings/Definitions/ToolSettings.php` | — | SETTINGS (generated) | — | S |
-| j | N-P4g remainder (`permissions.autoStrikeLimit`/`autoTotalLimit` in `PermissionSettings`; `terminalBackground`, `sessionRetentionDays`, `maxCostUsd` (rewrite README's "deliberately not persisted" `/budget` contract), `mcp.enabled`, `debug.skills\|commands\|rules\|stream`, each with its ENVIRONMENT "Settings key" cell; `sessions.autoTitle`, `expandToolOutput` and the prompt-suggestion history, which need readers) | `src/Config/Settings/Definitions/{PermissionSettings,InterfaceSettings}.php`, `src/Permissions/PermissionGate.php`, `src/Cli/Bootstrap.php`, `src/Host/TitleService.php`, skill/command/rule loaders | BS: `reportPrunedSessions`, `mcpClient`, `chat` | ENVIRONMENT settings-key cells; README `/budget` | — | M |
-
-#### W10 (order: a, b, g, i, j)
-
-Remainders of partially landed W10 steps, for rescheduling.
+The blocked live checks.
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
 |---|---|---|---|---|---|---|
-| a | 3.I-2 remainder (the Chat-native tool path carrying the read ledger back from its per-call child: `Chat::forkToolCalls()` → child `storeToolResult()` payload → the parent's collector `merge()`s it, through a `Chat::withReadLedger(ReadLedger)` — only embedders reach `registerTool()` today) | `src/Chat.php`, `src/Tools/ReadLedger.php` | Chat: `forkToolCalls`, `storeToolResult`, `waitForToolChildrenAsync`/`collectToolResult`. **CS** | — | — | S |
-| b | 5.7-2 remainder (a question-aware permission modal for `AskUser`/`PlanExit`: footer wording and number keys for the choices in `Renderer::renderPermissionPrompt`/`Chat::handlePermissionKey`; `ApprovalVerdict::fromReply(Once, $note)` keeping the note so a server client can answer with `once` + text; a `tool:<name>` ask source in `PendingAsk` instead of `hook:unknown`) | `src/Renderer.php`, `src/Chat.php`, `src/Permissions/ApprovalVerdict.php`, `src/Permissions/PendingAsk.php` | Chat: `handlePermissionKey`. **R-KEYBIND** | PERMISSIONS "The model's own questions" | — | S |
-| g | N-P5 remainder (`permissionRules` edited in the view, validated by the launch's strict parser exposed from `Bootstrap::permissionRules()` and called from `SettingsWriter::typeRefusal()`; "open the file in `$EDITOR`" from the view; settings-profile import/export; `SettingsSavePreview`'s turn-running note passed from `App::previewSettings()`; the web `settings.set` offering the project-shared tier) | `src/Tui/Settings/**`, `src/Config/Settings/SettingsWriter.php`, `src/Cli/Bootstrap.php`, `src/App/App.php`, `src/Protocol/Methods/SettingsMethods.php` | BS: `permissionRules`. **R-KEYBIND**, **R-CMDS** | SETTINGS editor section; README "Keys" `Ctrl+,` row | sugar-crush-web (protocol types) | M |
 | i | LIVE-X31b, LIVE-A15b, LIVE-A15v, LIVE-A21b, LIVE-CH (blocked on credentials: `ANTHROPIC_API_KEY`; AWS `bedrock:InvokeModel`(+`WithResponseStream`) and Claude Sonnet 4.6 model access; `GCP_PROJECT_ID` and application-default credentials) | `scripts/provider-cache-live-probe.php`, `prompt_kit/findings/crush-report/live-checks.md` | — | — | — | S |
-| j | 4.4 remainder (a reader for mailbox `followup` mode: `AgentInbox` takes only mid-run modes and controls, so only `SendMessage`'s run-card followups reach a conversation's next run) | `src/Agents/Live/AgentInbox.php`, `src/Tools/BuiltIn/TaskTool.php` | TT: `setup` | AGENTS_AUTHORING "Messages between agents" (P-D1 `followup` sentence) | — | S |
 
 Run the blocked live checks from `sugar-crush/` with `php scripts/provider-cache-live-probe.php --check=<ID>` once the credentials exist.
 
@@ -9342,7 +9309,7 @@ Run the blocked live checks from `sugar-crush/` with `php scripts/provider-cache
    - reassemble.
 7. Push.
 
-### 5. Step index (20 steps)
+### 5. Step index (9 steps)
 
 Fields are: ID · size · depends on (besides same-region predecessors) · wave-group.
 
@@ -9351,25 +9318,14 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 **Foundations**
 
 **Context engine**
-- 2.11 remainder (host-side flush) S · 2.11 · W9-a
 
 **Safety and self-management**
-- 3.B-5 remainder (`/context` cache-break line, `Compactor::describe()` in receipts) S · 3.B-5 · W9-b
-- 3.I-2 remainder (Chat-native path ledger carry) S · 3.I-2 · W10-a
 
 **Sub-agents**
-- 4.4 remainder (mailbox `followup` reader) S · 4.4 · W10-j
-- 4.6-2 remainder (TaskList hook trio, CAS, pid-keyed connection) M · 4.6-2, R-HOOKS · W9-g
 
 **Memory, codebase understanding, UX, integrations**
-- 5.7-2 remainder (question-aware modal, note on `once`, ask source) S · 5.7-2 · W10-b
 
 **Settings**
-- N-P4b remainder (live apply, deferred keys) S–M · N-P4b · W9-h
-- N-P4c remainder (instruction cap, spill capture bounds) S · N-P4c · W9-i
-- N-P4d remainder (standing rules, repo map, env, nudges, notices, project notes) M · N-P4d · W9-h
-- N-P4g remainder (breaker limits, env-backed keys, keys without readers) M · N-P4g · W9-j
-- N-P5 remainder (`permissionRules` editing, `$EDITOR`, profiles, turn-running note, web shared tier) M · N-P5 · W10-g
 
 **Sessions and agent view**
 
