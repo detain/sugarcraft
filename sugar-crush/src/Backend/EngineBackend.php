@@ -125,6 +125,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public const COMPLETE_TIMEOUT_SECONDS = 120;
 
     /**
+     * Roadmap 4.7-2: the context-window share at which a delegated run
+     * ({@see completeTranscript()}) is told to wrap up or hand off — Zed's
+     * `TOKEN_USAGE_WARNING_THRESHOLD`. Measured on a request as SENT, after
+     * the step's own relief (2.2-1 / 2.4-1) had its go, so it fires only when
+     * that relief could not keep the run under its step budget.
+     */
+    public const SUB_AGENT_WRAP_UP_PERCENT = 80;
+
+    /** Points past the wrap-up share at which a run already told is stopped (80 → 90). */
+    public const WRAP_UP_STOP_MARGIN = 10;
+
+    /** The one user row a run gets at its wrap-up share (`%1$d` used, stopped at `%2$d`). */
+    public const WRAP_UP_NUDGE = 'This run has used about %1$d%% of its context window. Wrap up now: finish what you are '
+        . 'doing and give your final report. If the task cannot be finished, hand off instead: report what is done, '
+        . 'what remains, and what whoever continues needs to know. At %2$d%% the run is stopped.';
+
+    /** Why a run past its stop share ended — the failure a delegating Task reports, resume id beside it. */
+    public const WRAP_UP_STOPPED = 'it is nearing the end of its context window (%d%% used) and was stopped; '
+        . 'resume it to have it wrap up or hand off its work';
+
+    /**
      * The smallest `turnIdleTimeoutSeconds` honoured. Below it the watchdog
      * would kill a provider's ordinary time-to-first-token on a loaded
      * server, and it must stay above every silence the engine itself
@@ -618,6 +639,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          */
         private readonly ?TurnInbox $turnInbox = null,
         /**
+         * Roadmap 4.7-2: the context-window share at which a turn tells the
+         * model to wrap up or hand off, and {@see WRAP_UP_STOP_MARGIN} points
+         * past it is stopped. Null — not chosen — is the entry point's
+         * default: on for {@see completeTranscript()}, the delegated runs'
+         * entry, at {@see SUB_AGENT_WRAP_UP_PERCENT}; off for the session's
+         * own turns. 0 is off. @see withWrapUpAt()
+         */
+        private readonly ?int $wrapUpAtPercent = null,
+        /**
          * Step 1.A-2: the session's prompt memo — the PerSession system-prompt
          * layers (static `<env>`, repo map, project memory, standing
          * instruction slab) read once per session and frozen until a refresh
@@ -1075,6 +1105,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} on the run it
      * delegates; null takes it off.
      */
+    /**
+     * Roadmap 4.7-2 (Zed's sub-agent context guard): once a request this
+     * backend's turn SENT used $percent of the context window or more, the
+     * model is told once to wrap up or hand off; a request at
+     * {@see WRAP_UP_STOP_MARGIN} points past it after that stops the run.
+     * 0 turns it off; {@see completeTranscript()} uses
+     * {@see SUB_AGENT_WRAP_UP_PERCENT} unless this chose otherwise.
+     */
+    public function withWrapUpAt(int $percent): self
+    {
+        return $this->mutate(['wrapUpAtPercent' => max(0, min(100, $percent))]);
+    }
+
     public function withTurnInbox(?TurnInbox $inbox): self
     {
         return $this->mutate(['turnInbox' => $inbox]);
@@ -1313,6 +1356,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * {@see runTurn()}), which is how a delegated run can report its step,
      * context pressure and spend while it works.
      *
+     * Roadmap 4.7-2: every caller of this method is a delegated run (a Task
+     * sub-agent, a workflow or pool agent), so the context guard is ON here
+     * unless {@see withWrapUpAt()} chose otherwise — at
+     * {@see SUB_AGENT_WRAP_UP_PERCENT} of the window the run is told to wrap
+     * up or hand off, and ten points later it is stopped. The stop is a
+     * failure ({@see WRAP_UP_STOPPED}) on purpose: it arrives as a
+     * {@see TurnInterrupted} with the transcript, so the delegating Task
+     * reports it with the run's partial output and the resume id (4.7-1) —
+     * resuming it is the hand-off.
+     *
      * @param list<TypedMessage> $messages
      *
      * @throws TurnInterrupted
@@ -1320,10 +1373,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null, ?callable $onToken = null, ?callable $onStep = null): TranscriptTurn
     {
         $transcript = $messages;
+        $engine = $this->wrapUpAtPercent === null ? $this->withWrapUpAt(self::SUB_AGENT_WRAP_UP_PERCENT) : $this;
 
         try {
             // P-D1: a delegated run's mailbox, when TaskTool bound one.
-            $reply = $this->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, $onStep, inbox: $this->turnInbox);
+            $reply = $engine->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, $onStep, inbox: $this->turnInbox);
         } catch (\Throwable $failure) {
             throw new TurnInterrupted($transcript, $failure);
         }
@@ -1555,6 +1609,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // @region step-top
             $assistant = null;
             $toolResults = [];
+            // 4.7-2: this step's sent request, as the observer below measures it.
+            $sentPressure = null;
 
             // Roadmap 1.C-3: what the user sent while the turn ran is read
             // HERE, at the step boundary, ahead of the step's request — the
@@ -1754,11 +1810,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     ]);
                 $wireRows = $runApp->messages;
                 $mayRelieve = !($pruneTried && $summaryTried);
-                $observeRequest = static function (\SugarCraft\Crush\Providers\CompleteRequest $request) use ($contextBudget, $wireRows, $pressureAnchor, $onStep, $step, $maxSteps, $mayRelieve): void {
+                $observeRequest = static function (\SugarCraft\Crush\Providers\CompleteRequest $request) use ($contextBudget, $wireRows, $pressureAnchor, $onStep, $step, $maxSteps, $mayRelieve, &$sentPressure): void {
                     $pressure = \SugarCraft\Crush\Context\ContextPressure::measure($contextBudget, $request, $wireRows, $pressureAnchor[0], $pressureAnchor[1]);
                     if ($mayRelieve && $pressure->isOverBudget()) {
                         throw new \SugarCraft\Crush\Context\Pruning\StepOverBudget($pressure);
                     }
+                    // 4.7-2: what the step actually sent, relief and all.
+                    $sentPressure = $pressure;
                     if ($onStep !== null) {
                         $onStep(new \SugarCraft\Crush\Events\StepStarted($step + 1, $maxSteps, $pressure));
                     }
@@ -2281,6 +2339,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             if ($stopRequested !== null && $stopRequested()) {
                 $stoppedSoftly = true;
                 break;
+            }
+
+            // Roadmap 4.7-2 (Zed's sub-agent context guard): judged on the
+            // request this step SENT — after its prune and summary had their
+            // go — so it fires only when that relief could not hold the run
+            // under its budget. At the wrap-up share the model is told once,
+            // in a row the next step sends, to wrap up or hand off; a request
+            // past the stop share after that ends the run as a failure with
+            // its transcript (TurnInterrupted, via completeTranscript()), so
+            // the delegating Task returns its partial output and resume id.
+            $wrapUpAt = $this->wrapUpAtPercent ?? 0;
+            $sentPercent = $sentPressure?->percentOfWindow();
+            if ($wrapUpAt > 0 && $sentPercent !== null) {
+                $stopAt = min(100, $wrapUpAt + self::WRAP_UP_STOP_MARGIN);
+                if (($wrapUpNudged ?? false) && $sentPercent >= $stopAt) {
+                    throw new \RuntimeException(sprintf(self::WRAP_UP_STOPPED, $sentPercent));
+                }
+                if (!($wrapUpNudged ?? false) && $sentPercent >= $wrapUpAt) {
+                    $wrapUpNudged = true;
+                    $app = $app->withMessages([...$app->messages, new UserMessage(sprintf(self::WRAP_UP_NUDGE, $sentPercent, $stopAt))]);
+                }
             }
             // @endregion after-step
         }

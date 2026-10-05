@@ -120,6 +120,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withTurnInbox(null),
                 ['turnInbox'],
             ],
+            // Roadmap 4.7-2: the context share a run is told to wrap up at.
+            'withWrapUpAt' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withWrapUpAt(70),
+                ['wrapUpAtPercent'],
+            ],
             // Step 0.16: the per-turn cap on concurrent delegated runs.
             'withMaxConcurrentDelegations' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withMaxConcurrentDelegations(9),
@@ -295,6 +300,7 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             contextLedger: \SugarCraft\Crush\Context\Pruning\ContextLedger::new()->withRefsAssigned([new \SugarCraft\Crush\Messages\ToolResultMessage('populated', 'x')]),
             reasoningEffort: 'xhigh',
             turnInbox: self::blank(\SugarCraft\Crush\Backend\MailboxTurnInbox::class),
+            wrapUpAtPercent: 50,
         );
     }
 

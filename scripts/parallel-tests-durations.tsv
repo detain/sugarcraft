@@ -446,6 +446,7 @@ sugar-crush/tests/Memory/AutoMemoryConsolidatorTest.php	0.200	9
 sugar-crush/tests/Hooks/ScriptHookJsonStdoutTest.php	0.200	27
 sugar-crush/tests/Context/Pruning/NudgePolicyTest.php	0.200	9
 sugar-crush/tests/Backend/PostCompactionReinjectionTest.php	0.200	2
+sugar-crush/tests/Backend/SubAgentWrapUpNudgeTest.php	0.200	3
 sugar-crush/tests/Cli/BootstrapUserConfigTest.php	0.199	16
 sugar-crush/tests/Cli/BootstrapMcpLivenessTest.php	0.198	11
 sugar-crush/tests/Tui/Components/AgentDashboardPaneTest.php	0.196	38
