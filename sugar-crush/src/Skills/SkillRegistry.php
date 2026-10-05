@@ -442,6 +442,19 @@ final class SkillRegistry
     }
 
     /**
+     * The skill a user may invoke by $name — registered, not disabled, and
+     * `user-invocable` — or null. The lookup a `$name` mention resolves
+     * through ({@see SkillMentions}, roadmap 5.14l), on the same two filters
+     * {@see getUserInvocable()} lists by.
+     */
+    public function userInvocable(string $name): ?Skill
+    {
+        $skill = $this->get($name);
+
+        return $skill !== null && $this->isUserInvocable($name) ? $skill : null;
+    }
+
+    /**
      * Check if a skill is auto-invocable (not disabled for model invocation).
      */
     public function isAutoInvocable(string $skillName): bool

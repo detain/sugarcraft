@@ -1021,10 +1021,16 @@ final class TurnController
      * answers `@session:`, and a URL a permission rule denies `WebFetch` is
      * refused rather than fetched.
      *
+     * The `$name` skill mentions (roadmap 5.14l) are resolved first, against
+     * $skills: each user-invocable skill named attaches its SKILL.md body for
+     * this turn only ({@see \SugarCraft\Crush\Skills\SkillMentions}). No
+     * registry, no skill mentions — a `$` is then just text.
+     *
      * $resolveMentions is false for text the user did not type — a command
      * file's expansion (repository-authored, with its own `@` include form
      * that a trust tier may just have REFUSED) and a background session's
-     * announcement (the model's answer, quoted).
+     * announcement (the model's answer, quoted). Neither kind of mention is
+     * resolved in it.
      *
      * @return array{0: Message, 1: list<Message>}
      */
@@ -1034,22 +1040,30 @@ final class TurnController
         string $root,
         SessionStore|EnhancedSessionStore|null $store,
         ?PermissionGate $gate,
+        ?\SugarCraft\Crush\Skills\SkillRegistry $skills = null,
     ): array {
         $message = Message::user($text);
-        if (!$resolveMentions || !str_contains($text, '@')) {
+        if (!$resolveMentions) {
             return [$message, []];
         }
 
-        $resolved = FileMentions::resolve($text, $root);
-        $context = ContextMentions::new($root)
-            ->withSessionStore(static fn () => $store)
-            ->withUrlPolicy(static fn (string $url): ?string => $gate?->ruleDecision(
-                new ToolCall('WebFetch', ['url' => $url]),
-            ) === PermissionDecision::Deny
-                ? 'a permission rule denies WebFetch for it.'
-                : null)
-            ->resolve($text);
-        foreach ([...$resolved['attachments'], ...$context['attachments']] as $attachment) {
+        $skilled = $skills !== null && str_contains($text, '$')
+            ? \SugarCraft\Crush\Skills\SkillMentions::new($skills)->resolve($text)
+            : ['attachments' => [], 'notices' => []];
+        $resolved = ['attachments' => [], 'notices' => []];
+        $context = ['attachments' => [], 'notices' => []];
+        if (str_contains($text, '@')) {
+            $resolved = FileMentions::resolve($text, $root);
+            $context = ContextMentions::new($root)
+                ->withSessionStore(static fn () => $store)
+                ->withUrlPolicy(static fn (string $url): ?string => $gate?->ruleDecision(
+                    new ToolCall('WebFetch', ['url' => $url]),
+                ) === PermissionDecision::Deny
+                    ? 'a permission rule denies WebFetch for it.'
+                    : null)
+                ->resolve($text);
+        }
+        foreach ([...$skilled['attachments'], ...$resolved['attachments'], ...$context['attachments']] as $attachment) {
             $message = $attachment->type === AttachmentType::Image
                 ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
                 : $message->attachFile($attachment->path, $attachment->data);
@@ -1057,7 +1071,7 @@ final class TurnController
 
         return [$message, array_map(
             static fn (string $notice): Message => Message::notice($notice),
-            [...$resolved['notices'], ...$context['notices']],
+            [...$skilled['notices'], ...$resolved['notices'], ...$context['notices']],
         )];
     }
 

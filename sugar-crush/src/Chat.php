@@ -10696,7 +10696,8 @@ final class Chat implements Model
      * 5.8) are resolved beside the files by
      * {@see \SugarCraft\Crush\Attachments\ContextMentions}: this session's
      * store answers `@session:`, and a URL a permission rule denies `WebFetch`
-     * is refused rather than fetched.
+     * is refused rather than fetched. A `$name` skill mention (roadmap 5.14l)
+     * is answered by the workspace's skill registry — the launch's.
      *
      * @return array{0: Message, 1: list<Message>}
      */
@@ -10708,6 +10709,7 @@ final class Chat implements Model
             $this->projectRoot(),
             $this->sessionStore,
             $this->permissionGate(),
+            $this->workspace?->skills,
         );
     }
 

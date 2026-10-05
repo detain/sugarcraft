@@ -493,8 +493,34 @@ The parallel carrier is the sub-agent path: an agent definition may list
 apply them — but nothing in `src/` or `bin/` calls `executeSubAgent()`, so that
 carrier is a seam with no production caller, in the same standing as
 `App::applySkillsToSystemPrompt()` and `App::dispatchSkill()` above. On today's
-binary the on-demand body arrives only through the `Skill` tool, and the standing
-body only through the canonical `enabledSkills` path.
+binary the on-demand body arrives through the `Skill` tool when the model asks
+for it, or through a `$name` mention (below) when you do; the standing body only
+through the canonical `enabledSkills` path.
+
+### `$name` in a prompt: one skill for one turn
+
+Type `$name` in a prompt — `$security-audit the auth module` — and that skill's
+body rides **this turn only**, attached to your message the way an `@file`
+mention attaches a file (`Skills\SkillMentions`, resolved by
+`Host\TurnController::userTurnMessage()` against the launch's registry). It sits
+between the other doors: `enabledSkills` puts a body in every turn's system
+prompt, the Ctrl+S picker enables a skill for the session, and the model loads
+one on demand with the `Skill` tool.
+
+- **The registry is the gate, not the `$`.** A token is a mention only when
+  `SkillRegistry::userInvocable()` answers it — registered, not disabled, and
+  `user-invocable` — so `$HOME`, `$1` or `$PATH` in a pasted shell line stay
+  plain text. A name that *is* a skill but is disabled, or marked
+  `user-invocable: false`, gets a notice saying so instead. A `$` inside a
+  `` `code span` `` or a fenced block is never a mention, and neither is one in
+  a command file's expansion (text you did not type).
+- **What is attached** is the skill's `SKILL.md` body, frontmatter stripped,
+  read by `SkillLoader::loadSkillBody()` — the same bounded read the `Skill`
+  tool does — as a file snapshot on your row, so it survives a resume. A body
+  that names `$ARGUMENTS` gets the rest of your prompt (the mentions taken out)
+  there, as the tool substitutes its `args`; any other body is attached
+  unchanged, because your prompt already says what to do with it.
+- **At most three** skills per prompt; each one past that gets a notice.
 
 ---
 
