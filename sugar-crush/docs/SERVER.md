@@ -827,6 +827,79 @@ What an attached window does NOT yet route to the server: slash commands
 and a turn another client starts on the same session shows up only when the
 window next attaches.
 
+## Editors (`sugarcrush acp`)
+
+`sugarcrush acp` makes sugar-crush an [Agent Client
+Protocol](https://agentclientprotocol.com) agent: an editor that hosts agents
+over stdio — Zed, JetBrains IDEs, Neovim through an ACP plugin — starts it as a
+child process and speaks newline-delimited JSON-RPC 2.0 on its stdin and
+stdout. It needs no server, port or token: the editor *is* the client. In Zed,
+for example:
+
+```json
+{
+  "agent_servers": {
+    "SugarCrush": { "command": "sugarcrush", "args": ["acp"] }
+  }
+}
+```
+
+Every session runs through the same `Host\SessionHub` and `SessionHost` as
+`serve`'s, on the same ReactPHP loop, so a turn the editor starts is the turn
+the TUI would run: same provider, tools, hooks, permission gate, transcript
+and session store (an `acp` session shows up in `session list` and can be
+reopened in the TUI with `--resume`).
+
+| ACP | sugar-crush |
+|---|---|
+| `initialize` | protocol version `1`; `promptCapabilities.embeddedContext: true`; no auth methods |
+| `authenticate` | accepted, nothing to do — the editor started this process as its own user |
+| `session/new {cwd}` | a new session in `cwd` — the project root. The first session fixes the root for the process; a session naming another directory is refused (start another `sugarcrush acp`). `mcpServers` is not used: the project's own `.mcp.json` applies, under its trust gate |
+| `session/prompt` | the prompt is submitted to the session; answered with `stopReason` once the session is idle again |
+| `session/cancel` | the turn is asked to stop at its next step boundary, and the prompt is answered with the stop reason it ends on |
+| `session/update` (agent → editor) | `agent_message_chunk` ← `assistant.delta`, `agent_thought_chunk` ← `reasoning.delta`, `tool_call` ← `tool.started`, `tool_call_update` ← `tool.finished`, `plan` ← `todo.updated` |
+| `session/request_permission` (agent → editor) | every permission question a turn asks; see below |
+
+**Prompts.** Text blocks are sent as written. A linked file (`resource_link`)
+becomes an `@path` mention, resolved and attached as a typed one is; an
+embedded resource — an editor's unsaved buffer — is sent as a `<file path>`
+block carrying the editor's text. A built-in slash command runs as it does
+over `serve`, its output sent back as message chunks; one only a screen can run
+(`/help`, say) is answered with a `refusal` saying so.
+
+**Stop reasons.** `end_turn`, `max_tokens` (the provider's length stop),
+`max_turn_requests` (the step budget, or the spend cap), `cancelled`, and
+`refusal` for a prompt the session would not take (the spend cap reached, an
+empty prompt) — its reason is sent as a message chunk first. A turn that fails
+answers the prompt with a JSON-RPC error carrying the failure.
+
+**Permissions.** A question becomes a `session/request_permission` request
+naming the tool call (its title, kind, file locations and arguments) with one
+option per answer the question offers: `allow_once`, `allow_always` (only when
+the permission gate alone asked — as in the TUI, an `always` is remembered for
+the rest of the session) and `reject_once`. A `cancelled` outcome, an error
+answer or an option the question did not offer all reject. Nothing blocks while
+a question is open: the turn's child waits on its own channel and every other
+message is still read. Sessions start in the permission mode the launch
+resolves (`--permission-mode`, `SUGARCRUSH_PERMISSION_MODE`, the
+`permissionMode` key), else `default`, so writes and shell commands ask.
+
+**Ids are echoed exactly.** ACP clients send integer ids and JSON-RPC requires
+a response to carry the id as sent, so every message is read with
+`McpMessage::parsePreservingId()` (decision D12; MCP's own traffic is
+unchanged).
+
+**Stdout is the protocol and nothing else.** Anything PHP would print is
+redirected to stderr, which an editor shows as the agent's log; launch
+warnings go there too. Closing stdin — the editor quitting or dropping the
+agent — closes every session (a running turn is cancelled, its lock released)
+and exits `0`; so do `SIGINT` and `SIGTERM`. `acp` exits `2` for an operand or
+`--output-format json`.
+
+What `acp` does not use: the editor's `fs/*` and `terminal/*` methods (the
+agent's own tools read and write the project, behind its own permission gate
+and checkpoints), image and audio prompt blocks, and `session/load`.
+
 ## Web UI
 
 The browser UI is the [`sugar-crush-web`](https://github.com/sugarcraft/sugar-crush-web)

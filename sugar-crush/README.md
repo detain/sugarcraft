@@ -574,6 +574,7 @@ sugarcrush serve status|stop|logs|url|token
                                      # the running server: stop [--force], logs [-f], token [--rotate]
 sugarcrush attach [<session>]        # the TUI on a session of the running server — turns run there
                                      #   [--url URL]
+sugarcrush acp                       # an Agent Client Protocol agent on stdio, for an editor to start
 sugarcrush completion bash|zsh|fish  # a shell completion script on stdout
 ```
 
@@ -597,7 +598,11 @@ runs the usual screen over it — the server runs the turns and their tools,
 this terminal streams them and answers their permission questions, and
 quitting leaves a running turn running. Its
 transport, auth flow, background mode and security model are in
-[docs/SERVER.md](docs/SERVER.md). `doctor` is the sharpest case — it is a health check for an install
+[docs/SERVER.md](docs/SERVER.md). `acp` is the verb an editor runs rather than
+a person: Zed, JetBrains or Neovim starts it and speaks the Agent Client
+Protocol on its stdin and stdout — sessions open in the editor's project root,
+turns run here with this install's provider and tools, and the editor answers
+their permission questions ([docs/SERVER.md](docs/SERVER.md#editors-sugarcrush-acp)). `doctor` is the sharpest case — it is a health check for an install
 that may be broken, so it must not require the thing it is diagnosing. A
 config whose `permissionMode` is unusable makes the launch refuse to start
 (exit `2`, above); `doctor` still runs, names that as the failing check, and

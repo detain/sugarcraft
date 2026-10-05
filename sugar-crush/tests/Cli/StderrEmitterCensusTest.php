@@ -57,7 +57,9 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — nineteen sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — twenty sites. The channel that census describes.
+ *     (Roadmap 5.9: `Acp::stderr()`, `acp`'s one funnel — stdout is the
+ *     editor's protocol, so everything else goes here.)
  *     (O-3a: `Serve::stderr()`, `serve`'s one funnel for its startup lines,
  *     request log and stop notice. E710: `Subcommands::mcpImportLine()` joined it — the import verb's
  *     notes and post-read failures, one funnel site, stderr-only by design.
@@ -284,6 +286,11 @@ final class StderrEmitterCensusTest extends TestCase
      */
     private const DIRECT_SITES = [
         'bin/sugarcrush' => 2,
+        // Roadmap 5.9: `acp`'s one funnel (Acp::stderr()) for whatever PHP
+        // would have printed onto the protocol, and the launch warnings.
+        // Stderr alone: stdout is the editor's JSON-RPC stream, and an editor
+        // shows an agent's stderr as its log.
+        'src/Cli/Acp.php' => 1,
         // O-8a: `attach`'s fail(), the one line saying why it could not reach
         // a server. Stderr alone: it is written before any TUI or session
         // exists, and the verb then exits 1.
@@ -815,7 +822,7 @@ final class StderrEmitterCensusTest extends TestCase
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15,
         'sixteen' => 16, 'seventeen' => 17,
-        'eighteen' => 18, 'nineteen' => 19,
+        'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23, 'twenty-four' => 24,
         'twenty-five' => 25,
         'twenty-six' => 26,

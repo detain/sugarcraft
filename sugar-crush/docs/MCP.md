@@ -658,14 +658,16 @@ Git itself, hooks included, runs under three guarantees:
   `git rev-parse --local-env-vars` lists are removed. Every call runs against
   the contained root.
 
-`sugarcrush --help` lists exactly seven under its **Subcommands** heading —
+`sugarcrush --help` lists exactly eight under its **Subcommands** heading —
 `doctor`, `models`, `session list|delete`, `mcp list|import`, `serve`,
-`attach`, `completion bash|zsh|fish` — and none of those but `attach` needs a
-provider, an API key or a terminal; five answer and exit, and `serve` runs until it is stopped.
-`attach` runs the TUI on a session of a running `serve`, whose turns run there.
+`attach`, `acp`, `completion bash|zsh|fish` — and none of those but `attach`
+and `acp` needs a provider, an API key or a terminal; five answer and exit, and
+`serve` runs until it is stopped. `attach` runs the TUI on a session of a
+running `serve`, whose turns run there; `acp` runs turns for an editor that
+started it, speaking the Agent Client Protocol on stdio.
 
-Seven is the subcommand count, not the count of bare words argv treats specially:
-`run` is an eighth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
+Eight is the subcommand count, not the count of bare words argv treats specially:
+`run` is a ninth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
 `sugarcrush run "<prompt>"` in the help's Usage block), but it is an alias for
 `-p` and therefore a turn of conversation rather than a question about the
 install.

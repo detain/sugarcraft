@@ -53,7 +53,7 @@ Usage:
 Subcommands (none of them opens the TUI or needs a provider, an API key or a
 terminal; each answers and exits except serve, which runs until stopped — and
 attach, which is the exception to both: it runs the TUI on a running server's
-session):
+session; acp runs turns for an editor, until the editor disconnects):
   doctor                 Check this installation and report every problem it
                          finds: PHP version, the extensions the session store
                          and serve need, the config file, the permission
@@ -157,6 +157,14 @@ session):
                          on. Exits 1 if no server answers.
       --url <url>        Attach to the server at <url> (the address serve
                          prints) instead.
+  acp                    Run as an Agent Client Protocol agent: the editor
+                         (Zed, JetBrains, Neovim) starts it and speaks
+                         JSON-RPC on its stdin and stdout. Sessions open in
+                         the editor's project root, turns run here with this
+                         install's provider and tools, and the editor answers
+                         their permission questions. Not for a terminal: stdout
+                         carries only the protocol (everything else goes to
+                         stderr). Exits 0 when the editor closes stdin.
   completion bash|zsh|fish
                          Write a shell completion script to stdout, e.g.
                          eval "$(sugarcrush completion bash)".

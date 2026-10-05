@@ -20,7 +20,10 @@ use SugarCraft\Crush\Util\Exporter;
  * {@see Serve} — the one verb that keeps running rather than answering, and
  * still constructs no `Program`; `attach` is Appendix O §4.9, its body in
  * {@see Attach} — the one verb that DOES run the TUI, over a running server's
- * session, and only once it has connected).
+ * session, and only once it has connected; `acp` is roadmap 5.9, its body in
+ * {@see Acp} — the one verb whose stdin and stdout belong to another
+ * program, an editor speaking the Agent Client Protocol, and which runs turns
+ * without a screen).
  *
  * EVERY ONE ANSWERS WITHOUT A SESSION. `bin/sugarcrush` dispatches these in the
  * same pre-flight place it dispatches `--help` and `--version`, before
@@ -93,6 +96,7 @@ final class Subcommands
             'session'    => self::session($args),
             'serve'      => Serve::run($args),
             'attach'     => Attach::run($args),
+            'acp'        => Acp::run($args),
             'mcp'        => self::mcp($args),
             'completion' => self::completion($args),
             // Unreachable: ArgvParser only ever stores a ParsedArgs::SUBCOMMANDS
@@ -1464,6 +1468,7 @@ final class Subcommands
      */
     private const SUBCOMMAND_DESCRIPTIONS = [
         'run' => 'Run a single prompt and exit (alias for --prompt)',
+        'acp' => 'Run as an Agent Client Protocol agent for an editor',
         'attach' => 'Run the TUI on a session of a running server',
         'completion' => 'Emit a shell completion script',
         'doctor' => 'Report on this installation and exit',

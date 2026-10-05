@@ -52,7 +52,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['attach', 'completion', 'doctor', 'mcp', 'models', 'serve', 'session'];
+    public const SUBCOMMANDS = ['acp', 'attach', 'completion', 'doctor', 'mcp', 'models', 'serve', 'session'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag

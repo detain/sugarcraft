@@ -113,6 +113,7 @@ sugar-crush/tests/Renderer/RenderMemoTest.php	3.638	28
 sugar-crush/tests/Integration/BinSugarcrushAutoloadGuardTest.php	3.629	35
 sugar-crush/tests/Session/CheckpointRefLifecycleTest.php	3.612	9
 sugar-crush/tests/Sessions/BackgroundReconnectAfterRestartTest.php	3.600	13
+sugar-crush/tests/Acp/AcpPermissionBridgeTest.php	3.600	6
 sugar-crush/tests/Chat/CustomCommandShellAsyncTest.php	3.562	10
 sugar-crush/tests/MCP/StdioMcpServerTest.php	3.502	19
 sugar-crush/tests/Session/SessionQueryTest.php	3.500	14
@@ -139,6 +140,7 @@ sugar-crush/tests/Tools/BuiltIn/AtomicEditWriteTest.php	2.885	21
 sugar-crush/tests/Host/SessionHostTest.php	2.800	10
 sugar-crush/tests/Chat/AutomaticCompactionModelSummaryTest.php	2.777	37
 sugar-crush/tests/Tui/TextSelectionCandyMouseTest.php	2.680	4
+sugar-crush/tests/Acp/AcpPromptStreamTest.php	2.600	9
 sugar-crush/tests/Support/NonBlockingVocabularyTest.php	2.569	25
 sugar-crush/tests/Integration/ParallelDeadlineExemptionTest.php	2.542	1
 sugar-crush/tests/Tools/CapturedProcessDeadlineTest.php	2.539	5
@@ -167,6 +169,7 @@ sugar-crush/tests/Providers/ClaudeCodeStreamJsonTest.php	2.127	15
 sugar-crush/tests/Cli/NonInteractiveRefusalDocumentTest.php	2.123	15
 sugar-crush/tests/Providers/PromptStabilityTest.php	2.117	16
 sugar-crush/tests/Server/DrainTest.php	2.100	4
+sugar-crush/tests/Acp/AcpHandshakeTest.php	2.100	9
 sugar-crush/tests/Cli/BootstrapHookFileTest.php	2.091	41
 sugar-crush/tests/Support/DuplicatedDocBlockLineTest.php	2.082	4
 sugar-crush/tests/Session/SessionForkTest.php	2.073	10
@@ -701,6 +704,7 @@ sugar-crush/tests/Tools/BuiltIn/PruneToolTest.php	0.050	8
 sugar-crush/tests/Renderer/PruneBadgeTest.php	0.050	2
 sugar-crush/tests/Tools/BuiltIn/TodoToolTest.php	0.050	15
 sugar-crush/tests/Tools/Edit/PatchParserTest.php	0.050	16
+sugar-crush/tests/MCP/McpMessageIdPreservingTest.php	0.050	4
 sugar-crush/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.048	3
 sugar-crush/tests/Tui/ComponentTest.php	0.047	22
 sugar-crush/tests/Cli/RulesStateWiringTest.php	0.047	5

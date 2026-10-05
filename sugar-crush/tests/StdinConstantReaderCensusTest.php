@@ -184,6 +184,13 @@ use PHPUnit\Framework\TestCase;
  *    `main()`, so closing THIS process's descriptor 0 never reaches it; a
  *    host started with descriptor 0 closed reads no config and exits 2.
  *
+ *  - `sugar-crush/src/Cli/Acp.php` — DEGRADES, IN ITS OWN PROCESS ONLY
+ *    (roadmap 5.9). `run()` hands `\STDIN` — the editor's half of the ACP
+ *    connection — to a `ReadableResourceStream`, whose constructor throws on
+ *    a closed handle, so `run()` checks `\defined('STDIN') &&
+ *    \is_resource(\STDIN)` first and, with descriptor 0 closed, says so on
+ *    stderr and exits 1. Nothing in the TUI or the suite's runner calls
+ *    `run()`; the suite drives `serve()` with its own streams.
  *  - `sugar-crush/src/Cli/NonInteractive.php` — FIXED (E338); the row is
  *    rewritten rather than dropped, because what it records is why the guard
  *    it now describes is shaped the way it is. WHAT THIS ROW SAID: "DEGRADES
@@ -382,6 +389,7 @@ final class StdinConstantReaderCensusTest extends TestCase
         'candy-core/src/WorkerPool.php' => ['php://fd/0'],
         'candy-mosaic/src/Detect.php' => ['STDIN'],
         'sugar-crush/src/Agents/ProcessExecutor.php' => ['STDIN'],
+        'sugar-crush/src/Cli/Acp.php' => ['STDIN'],
         'sugar-crush/src/Cli/NonInteractive.php' => ['STDIN'],
         'sugar-crush/src/Hooks/BuiltIn/BashEscapeDenyHook.php' => ['/dev/stdin'],
         'sugar-crush/src/Server/Workspace/WorkspaceHostProcess.php' => ['STDIN'],
