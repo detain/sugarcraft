@@ -17412,6 +17412,38 @@ final class Chat implements Model
             );
         }
 
+        // The watch-files poll (roadmap 5.14i): `AI!` / `AI?` comments saved
+        // into the project become a prompt. Declared only when the user turned
+        // `watchFiles` on AND the chat is idle — no turn, an empty box,
+        // nothing queued, no modal, a writable session — so a found comment
+        // is never sent over a draft or into a running turn. Every one of
+        // those conditions is re-read at each reconcile, and the tick is
+        // dropped the moment one fails, which is what lets the closure trust
+        // the state it was armed in. The prompt arrives as the
+        // InitialPromptMsg a typed-on-the-command-line prompt does: the box
+        // takes it and submit() sends it, through the same pipeline as Enter.
+        if (!$this->inFlight
+            && $this->inputBuf === ''
+            && $this->queuedPrompts === []
+            && $this->keyHelp === null
+            && $this->pendingPermission === null
+            && $this->palette === null
+            && $this->sessionPicker === null
+            && !$this->readOnlySession
+            && \SugarCraft\Crush\Support\AiCommentWatcher::enabled($this->workspace?->userConfig ?? [])
+        ) {
+            $watcher = \SugarCraft\Crush\Support\AiCommentWatcher::shared($this->projectRoot());
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                \SugarCraft\Crush\Support\AiCommentWatcher::SUBSCRIPTION,
+                \SugarCraft\Crush\Support\AiCommentWatcher::POLL_SECONDS,
+                static function () use ($watcher): ?\SugarCraft\Core\Msg {
+                    $prompt = $watcher->poll();
+
+                    return $prompt === null ? null : new InitialPromptMsg($prompt);
+                },
+            );
+        }
+
         return $subscriptions;
     }
 

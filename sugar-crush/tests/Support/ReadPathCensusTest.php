@@ -681,6 +681,15 @@ final class ReadPathCensusTest extends TestCase
                 . 'pass a jailed root — recorded as a gap rather than given a boundary with no anchor',
             'NAMES_ONLY — the same, in the chunked variant',
         ],
+        'Support/AiCommentWatcher.php|file_get_contents' => [
+            'PATH_JAIL — the watch-files poll (roadmap 5.14i) reads a project file its own walk found: '
+                . 'a symlink is refused, the path re-resolved through PathJail against the root, and '
+                . 'nothing over MAX_FILE_BYTES is read; only user-tier `watchFiles` arms it',
+        ],
+        'Support/AiCommentWatcher.php|scandir' => [
+            'NAMES_ONLY — the watch-files walk of the project root (roadmap 5.14i), capped at MAX_FILES; '
+                . 'no symlink is followed, and the gate is on the later read',
+        ],
         'Support/AtomicFileWriter.php|fopen' => [
             'SELF_LOCATED — the uniquely-named temp this writer creates beside the '
                 . 'target and renames onto it; the path is dirname(target) plus a '

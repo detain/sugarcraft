@@ -542,6 +542,7 @@ final class LayeredSettings
         'statusLine',
         'layout',
         'notify',
+        'watchFiles',
         'queueMode',
         'mouse',
         'mouseClicks',

@@ -18,6 +18,7 @@ use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Support\AiCommentWatcher;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\TerminalNotifier;
 
@@ -90,6 +91,16 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp('off, bell (BEL) or osc9 (a desktop notification): sent when a turn ends and when the agent waits for an approval.')
                 ->withReaderSymbol(TerminalNotifier::class . '::fromConfig')
                 ->withReadBy('`Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()`'),
+            // Roadmap 5.14i. USER-only: it makes comments in the repository's
+            // files prompts the agent acts on, so a checkout may never turn it on.
+            SettingDefinition::new(AiCommentWatcher::SETTINGS_KEY, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Prompt)
+                ->withLayered()
+                ->withLabel('Watch files for AI comments')
+                ->withHelp('Send a prompt when a saved file holds a comment ending in AI! (make a change) or AI? (answer a question); plain AI comments ride along as context. Polled while the chat is idle; only comments saved after launch fire, each once.')
+                ->withReaderSymbol(AiCommentWatcher::class . '::enabled')
+                ->withReadBy('`Chat::subscriptions()` → `AiCommentWatcher::enabled()`'),
             SettingDefinition::new('queueMode', SettingType::Enum, QueueMode::Steer->value)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Tuning)

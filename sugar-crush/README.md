@@ -276,7 +276,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these eighty-two keys are layered — `provider`, `models`, `titleModel`,
+Only these eighty-three keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
@@ -297,10 +297,10 @@ Only these eighty-two keys are layered — `provider`, `models`, `titleModel`,
 `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
 `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
 `attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
-`queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`,
-`paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints`,
-`lintCommands`, `connectTimeoutSeconds`, `providerRetryAttempts`,
-`providerRetryBaseBackoffMs`.
+`watchFiles`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`,
+`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`,
+`maxCheckpoints`, `lintCommands`, `connectTimeoutSeconds`,
+`providerRetryAttempts`, `providerRetryBaseBackoffMs`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -337,7 +337,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, forty keys are **never** taken from a project file:
+Even for a trusted project, forty-one keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -409,7 +409,9 @@ set that one); `enabledSkills`, because it names skills whose full bodies
 ride the system prompt every turn — the `instructions` argument applied to
 skills, where a checkout could make any skill it ships standing,
 authoritative prompt text (the `disabledSkills` a project *may* set only ever
-removes one); and
+removes one); `watchFiles`, because it turns an `AI!` comment saved into the
+repository's files into a prompt the agent acts on, and a checkout must not be
+able to make its own text your next instruction; and
 `allowedTools`, for a reason worth spelling
 out because on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
