@@ -116,6 +116,18 @@ re-prefills the whole conversation behind it.
   alone) still appends the row to each wire request itself.
   Payload bytes are already `PromptFence`-escaped by `EnvironmentBlock`, and the row neutralises its
   own fence name inside them, so a commit subject spelling the closer cannot end the row early.
+- **Re-injection after a compaction (roadmap 2.6).** The first step after a compaction — the
+  host's (its `[summary] ` rows) or a step summary the turn wrote (the ledger's harness block) —
+  re-polls git and adds to that step's `<turn-context>` row what the compaction took out of view
+  (`Context\Compaction\ReinjectionPlan`): the bodies of the skills the Skill tool loaded, re-loaded
+  through it (5,000 tokens each, 25,000 in all, oldest dropped first), and up to five of the files
+  the agent read or edited, most recent first, re-read from disk (5,000 tokens each; a larger one is
+  named as a referenced file; only files inside the project, never binary), the whole within 10% of
+  the context window; an open todo list is re-shown beside it. The compaction is recognised off the
+  history (`ReinjectionPlan::pendingIn()`) and the row stamps its cycle, so it happens once, with no
+  flag across the fork and no file I/O on the render loop. Every row also carries the roster of
+  skills loaded this session (`TurnContextBlock::withInvokedSkills()`), which is how a skill whose
+  Skill call a compaction hid is still re-injected.
 - **Files changed since the model read them.** `Tools\ReadLedger` (roadmap 3.I-2) is the
   session's read ledger: for each file, the stat signature and an `xxh128` hash of the bytes `Read`
   showed the model (hashed during the line-count pass, so it costs no second read) or that `Edit` and

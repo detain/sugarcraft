@@ -40,6 +40,9 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
      */
     public const ARGUMENTS_PLACEHOLDER = '$ARGUMENTS';
 
+    /** The first bytes of every body this tool returns, before the skill's name. */
+    public const RESULT_PREFIX = '## Skill: ';
+
     public function __construct(
         private SkillRegistry $registry,
         private ?SkillLoader $loader = null,
@@ -149,9 +152,64 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
 
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: "## Skill: {$skill->name}\n\n{$body}",
+            content: self::RESULT_PREFIX . "{$skill->name}\n\n{$body}",
             isError: false,
         );
+    }
+
+    /**
+     * The skills $messages show this tool loading (roadmap 2.6): one entry
+     * per skill name, most recently invoked first, with the `args` of that
+     * latest call. A call whose result came back an error loaded nothing,
+     * so it is left out; a call with no result in $messages (a replayed
+     * history that kept only the call) is kept — the call is the only
+     * evidence there is, as {@see \SugarCraft\Crush\Context\TurnContextBlock::recentlyModifiedIn()}
+     * reasons for Edit/Write.
+     *
+     * What a compaction must not lose: a loaded skill's body is the
+     * instructions the model was following, and the summary that replaces
+     * the call's result keeps at most a line about it. The engine re-loads
+     * these bodies after a compaction
+     * ({@see \SugarCraft\Crush\Context\Compaction\ReinjectionPlan}).
+     *
+     * @param iterable<mixed> $messages typed engine messages
+     * @return list<array{name: string, args: string}>
+     */
+    public static function invokedIn(iterable $messages): array
+    {
+        /** @var array<string, array{name: string, args: string}> $calls callId => call, in call order */
+        $calls = [];
+        /** @var array<string, true> $failed */
+        $failed = [];
+
+        foreach ($messages as $message) {
+            if ($message instanceof \SugarCraft\Crush\Messages\AssistantMessage) {
+                foreach ($message->toolCalls() ?? [] as $call) {
+                    if (!$call instanceof \SugarCraft\Crush\Tools\ToolCall || $call->name() !== 'Skill') {
+                        continue;
+                    }
+                    $name = $call->arguments()['name'] ?? null;
+                    $args = $call->arguments()['args'] ?? '';
+                    if (!\is_string($name) || trim($name) === '') {
+                        continue;
+                    }
+                    unset($calls[$call->id()]);
+                    $calls[$call->id()] = ['name' => trim($name), 'args' => \is_string($args) ? $args : ''];
+                }
+            } elseif ($message instanceof \SugarCraft\Crush\Messages\ToolResultMessage && $message->isError()) {
+                $failed[$message->toolCallId()] = true;
+            }
+        }
+
+        $invoked = [];
+        foreach (array_reverse($calls, true) as $id => $call) {
+            if (isset($failed[(string) $id]) || isset($invoked[$call['name']])) {
+                continue;
+            }
+            $invoked[$call['name']] = $call;
+        }
+
+        return array_values($invoked);
     }
 
     /**

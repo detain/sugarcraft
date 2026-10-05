@@ -1586,23 +1586,43 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // The stale-read paragraph (3.I-2) is re-read on every step,
             // reused row or not: it is a stat per read file, and a file that
             // changed under a read-only step must say so before the next.
-            $turnContext = $turnContext === null || $lastAssistant === null || Runtime::stepRequestedAWrite($lastAssistant->toolCalls())
+            //
+            // Roadmap 2.6: the first step after a compaction — the host's
+            // (its `[summary] ` rows) or one this turn made (the ledger's
+            // step-summary block) — re-injects what the compaction took out
+            // of view: the files the agent was working on, re-read now, and
+            // the skill bodies it had loaded, on this row, with the git half
+            // re-polled whatever the last step did. Read HERE, in the turn's
+            // own process, never on the host's render loop; recognised off
+            // the history, so no flag crosses the fork. One-shot: the row
+            // stamps the compaction's cycle, and a later step's row, built
+            // without it, supersedes it.
+            $reinjection = \SugarCraft\Crush\Context\Compaction\ReinjectionPlan::pendingIn($app->messages, $contextLedger ?? $app->contextLedger);
+            $turnContext = $turnContext === null || $lastAssistant === null || $reinjection !== null || Runtime::stepRequestedAWrite($lastAssistant->toolCalls())
                 ? $runtime->turnContext($app)
                 : $turnContext->withRecentlyModifiedFiles(TurnContextBlock::recentlyModifiedIn($app->messages))
                     ->withChangedSinceRead(\SugarCraft\Crush\Tools\ReadLedger::in($app->tools)?->notice() ?? '');
             $turnContext = $turnContext->withContextPercent(
                 $this->contextPercentAtStepTop($app->messages, $pressureAnchor ?? [null, 0], $contextWindow),
-            );
-            if ($turnContext->changedSince($app->messages)) {
-                $app = $app->withMessages([...$app->messages, $turnContext->message()]);
+            )->withInvokedSkills(\SugarCraft\Crush\Context\Compaction\ReinjectionPlan::skillNamesIn($app->messages));
+            $contextRow = $reinjection === null
+                ? $turnContext
+                : $turnContext->withReinjection($reinjection->render($app->root ?? $this->root, $app->tools, $contextWindow ?? 0));
+            if ($contextRow->changedSince($app->messages)) {
+                $app = $app->withMessages([...$app->messages, $contextRow->message()]);
             }
 
             // Roadmap 3.C: the todo list is re-shown between steps too, not
             // only at dispatch (Host\TurnRunner), so a turn running past
             // TodoReminder::INTERVAL_STEPS steps still sees it. The row rides
             // the transcript back as a hidden user row, like the one above.
+            // Roadmap 2.6: and right after a compaction, whatever its age —
+            // the copy the model last saw may be in what was condensed.
             $todos = \SugarCraft\Crush\Todo\TodoReminder::latestIn($app->messages);
-            if ($todos !== null && \SugarCraft\Crush\Todo\TodoReminder::due($todos, $app->messages)) {
+            if ($todos !== null && (
+                \SugarCraft\Crush\Todo\TodoReminder::due($todos, $app->messages)
+                || ($reinjection !== null && $todos->hasOpenItems())
+            )) {
                 $app = $app->withMessages([...$app->messages, new UserMessage(\SugarCraft\Crush\Todo\TodoReminder::render($todos))]);
             }
 
@@ -1871,6 +1891,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         // moved; the next figure is a fresh estimate until a
                         // response re-anchors it.
                         $pressureAnchor = [null, 0];
+
+                        // Roadmap 2.6: a step summary just took the rows the
+                        // model read files and skills from out of view — the
+                        // request this step now sends re-injects them, as
+                        // the step-top row does after a host compaction.
+                        $reinjection = \SugarCraft\Crush\Context\Compaction\ReinjectionPlan::pendingIn($app->messages, $contextLedger);
+                        if ($reinjection !== null) {
+                            $turnContext = $runtime->turnContext($app)
+                                ->withContextPercent($turnContext?->contextPercent())
+                                ->withInvokedSkills(\SugarCraft\Crush\Context\Compaction\ReinjectionPlan::skillNamesIn($app->messages));
+                            $contextRow = $turnContext->withReinjection($reinjection->render($app->root ?? $this->root, $app->tools, $contextWindow ?? 0));
+                            $reinjected = [];
+                            if ($contextRow->changedSince($app->messages)) {
+                                $reinjected[] = $contextRow->message();
+                            }
+                            $todos = \SugarCraft\Crush\Todo\TodoReminder::latestIn($app->messages);
+                            if ($todos !== null && $todos->hasOpenItems()) {
+                                $reinjected[] = new UserMessage(\SugarCraft\Crush\Todo\TodoReminder::render($todos));
+                            }
+                            $app = $app->withMessages([...$app->messages, ...$reinjected]);
+                        }
                     }
                 } catch (\Throwable $failure) {
                     // 2.7-2: a continuation is best effort — the reply it was
