@@ -141,6 +141,48 @@ final readonly class Compress implements Tool, BuildsFromCatalog, MutatesContext
         return new self($this->read, $this->apply, $this->gate, $allowance);
     }
 
+    /**
+     * The second line of a `/compact --self` prompt (roadmap 3.B-4, Kilo's
+     * legacy self-compaction): the trigger asks for ONE range over the whole
+     * closed conversation, and the person previews the summary before it
+     * applies ({@see \SugarCraft\Crush\Context\Pruning\CompressPreviewHook}).
+     */
+    public const SELF_MARKER = '[compact --self]';
+
+    private const SELF_TEXT = "Manual trigger received: use the Compress tool now, exactly once, with ONE range from the "
+        . 'oldest ref in your context to the last row before this message, so your summary stands in for the whole '
+        . 'conversation so far. Write it as the hand-over a fresh session would need: the user\'s requests (quote the '
+        . 'latest verbatim), what was done and decided, the files and functions involved, errors and how they were '
+        . 'fixed, and what is still pending. The person reviews your summary before it applies. After the call, '
+        . 'reply briefly with what you compressed, then stop.';
+
+    /** The user turn `/compact --self [focus]` sends. */
+    public static function selfCompactionPrompt(string $focus = ''): string
+    {
+        $focus = trim($focus);
+
+        return self::TRIGGER . "\n" . self::SELF_MARKER . "\n" . self::SELF_TEXT
+            . ($focus === '' ? '' : "\n\nFocus from the user:\n" . $focus);
+    }
+
+    /**
+     * Whether the newest prompt in $messages is a `/compact --self` trigger —
+     * the turn whose Compress call the person previews.
+     *
+     * @param list<mixed> $messages typed messages
+     */
+    public static function isSelfCompaction(array $messages): bool
+    {
+        for ($i = \count($messages) - 1; $i >= 0; $i--) {
+            $message = $messages[$i] ?? null;
+            if ($message instanceof UserMessage && !TurnContextBlock::isTurnContext($message) && !CompressionBlock::isSummaryRow($message)) {
+                return str_starts_with(RefTag::stripFrom($message->content()), self::TRIGGER . "\n" . self::SELF_MARKER);
+            }
+        }
+
+        return false;
+    }
+
     /** The user turn `/compress [focus]` sends. */
     public static function triggerPrompt(string $focus = ''): string
     {

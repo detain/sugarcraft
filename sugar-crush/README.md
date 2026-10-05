@@ -1424,6 +1424,14 @@ when the summaries arrive. If the call fails, or the model answers with somethin
 unusable, the compaction still happens on the heuristic and the transcript says
 which one did it.
 
+`/compact --self [focus]` is the other way round (Kilo's legacy form): the turn's
+own model writes the summary with its `Compress` tool — one range over the whole
+closed conversation — and **you preview it** in the permission modal before it
+applies; refusing leaves the conversation as it was. Nothing is rewritten: the
+transcript keeps every row and marks the section, the model reads the summary in
+its place, and `/decompress` takes it back. A later compression that covers it
+nests it by reference rather than summarising the summary again.
+
 Sessions get a name automatically: after the first exchange a **cheap
 small-model backend** (supplied separately from the conversation backend, so
 naming never costs a second tool-capable agent turn) generates a title, which

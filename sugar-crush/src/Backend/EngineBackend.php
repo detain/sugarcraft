@@ -1442,6 +1442,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
             return \SugarCraft\Crush\Host\CompactionService::preCompactRefusal($verdict);
         };
+        // Roadmap 3.B-4: `/compact --self` — the person previews the model's
+        // summary before its Compress call applies (a question on this turn's
+        // own copy of the chain; no other turn's call is previewed).
+        if (\SugarCraft\Crush\Tools\BuiltIn\Compress::isSelfCompaction(array_values($messages))) {
+            $compactionHooks->register(new \SugarCraft\Crush\Context\Pruning\CompressPreviewHook());
+        }
         // Its observe-only pair, once a step summary was applied (3.D-2):
         // `compact_summary` is what the model now reads in place of the rows.
         // Nothing it says is read back, and a chain that throws costs nothing.

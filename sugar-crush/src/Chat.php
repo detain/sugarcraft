@@ -12428,6 +12428,21 @@ final class Chat implements Model
      */
     private function handleCompactCommand(string $inputText): array
     {
+        // Roadmap 3.B-4: `/compact --self [focus]` (Kilo's legacy form) — the
+        // MODEL writes the summary with its own Compress call, and the person
+        // previews it before it applies; no summariser, no rewrite of rows.
+        $argument = self::commandArgument($inputText);
+        if ($argument === '--self' || str_starts_with($argument, '--self ')) {
+            $refusal = \SugarCraft\Crush\Tools\BuiltIn\Compress::refusalFor($this->sessionContextLedger()->effectiveMode());
+            if ($refusal !== null) {
+                return $this->applyCommandResult(\SugarCraft\Crush\Host\Commands\CommandResult::reply($inputText, $refusal));
+            }
+
+            return $this->withInputBuf(
+                \SugarCraft\Crush\Tools\BuiltIn\Compress::selfCompactionPrompt(substr($argument, \strlen('--self'))),
+            )->submit();
+        }
+
         $scheduled = $this->scheduleModelCompaction($inputText);
         if ($scheduled !== null) {
             return $scheduled;

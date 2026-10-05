@@ -184,7 +184,11 @@ re-prefills the whole conversation behind it.
   16K tokens. Compress is MANUAL by default: it is offered only on a turn you
   start with `/compress [focus]`, whose prompt opens `<compress triggered
   manually>`, and that turn may make one successful call. `/decompress bN` and
-  `/recompress bN` take a block back and restore it.
+  `/recompress bN` take a block back and restore it. `/compact --self [focus]`
+  sends the same trigger with a `[compact --self]` line asking for ONE range
+  over the whole closed conversation, written as a hand-over; on that turn the
+  call is put to the person as a question showing the summary
+  (`Context\Pruning\CompressPreviewHook`), so it applies only once read.
 - **Context reminders.** In the `auto` mode, once the context passes 60K tokens
   the model is reminded to manage it (`Context\Pruning\NudgePolicy`): a
   `<context-reminder>` block — one fixed text per kind: a turn's prompt, a run
