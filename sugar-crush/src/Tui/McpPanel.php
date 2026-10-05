@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui;
 use SugarCraft\Crush\Cli\Bootstrap;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 
 /**
  * E689: the operator-facing `/mcp` panel — what this project's `.mcp.json`
@@ -51,11 +52,28 @@ final class McpPanel
      * The operator pain this answers is real: a cold panel used to name only
      * the OAuth verb, which reads as "MCP means registering credentials",
      * while in fact a declared http remote with no auth starts on its own.
+     * A Lang key ({@see guidanceAdd()} renders it).
      */
-    public const GUIDANCE_ADD = '  Add servers: declare them under "mcpServers" in the .mcp.json above.';
+    public const GUIDANCE_ADD = 'tui.mcp.guidance_add';
 
-    /** E709: second half — the zero-auth truth and where the recipe lives. */
-    public const GUIDANCE_RECIPE = '  No-auth http remotes just work — recipe: docs/MCP.md, "' . self::GUIDANCE_SECTION . '".';
+    /**
+     * E709: second half — the zero-auth truth and where the recipe lives. A
+     * Lang key ({@see guidanceRecipe()} renders it); the section name stays
+     * the English heading of the English page it points at.
+     */
+    public const GUIDANCE_RECIPE = 'tui.mcp.guidance_recipe';
+
+    /** The first guidance row, as the panel prints it. */
+    public static function guidanceAdd(): string
+    {
+        return '  ' . Lang::t(self::GUIDANCE_ADD);
+    }
+
+    /** The second guidance row, as the panel prints it. */
+    public static function guidanceRecipe(): string
+    {
+        return '  ' . Lang::t(self::GUIDANCE_RECIPE, ['section' => self::GUIDANCE_SECTION]);
+    }
 
     /**
      * Render the inventory as transcript lines.
@@ -82,20 +100,20 @@ final class McpPanel
         $live = $status === Bootstrap::MCP_TRUSTED && $liveness !== [];
 
         $out = "\n";
-        $out .= self::line('  **MCP Project Config**', $width);
-        $out .= self::line('  Path: ' . (string) $inventory['path'], $width);
+        $out .= self::line('  ' . Lang::t('tui.mcp.title'), $width);
+        $out .= self::line('  ' . Lang::t('tui.mcp.path', ['path' => (string) $inventory['path']]), $width);
 
-        $out .= self::line('  Status: ' . match ($status) {
-            Bootstrap::MCP_ABSENT => 'none — this project declares no .mcp.json.',
-            Bootstrap::MCP_OUTSIDE_TREE => 'IGNORED — the config resolves outside the checkout tree.',
-            Bootstrap::MCP_UNTRUSTED => 'present but NOT TRUSTED — servers stay hidden until this root is opted in.',
-            Bootstrap::MCP_TRUSTED => 'trusted — the servers below would start on launch.',
+        $out .= self::line('  ' . Lang::t('tui.mcp.status', ['status' => match ($status) {
+            Bootstrap::MCP_ABSENT => Lang::t('tui.mcp.status.absent'),
+            Bootstrap::MCP_OUTSIDE_TREE => Lang::t('tui.mcp.status.outside_tree'),
+            Bootstrap::MCP_UNTRUSTED => Lang::t('tui.mcp.status.untrusted'),
+            Bootstrap::MCP_TRUSTED => Lang::t('tui.mcp.status.trusted'),
             default => $status,
-        }, $width);
+        }]), $width);
 
         $error = $inventory['error'] ?? null;
         if (is_string($error) && $error !== '') {
-            $out .= self::line('  Config ' . $error . '.', $width);
+            $out .= self::line('  ' . Lang::t('tui.mcp.config_error', ['error' => $error]), $width);
         }
 
         $servers = $inventory['servers'] ?? [];
@@ -105,9 +123,9 @@ final class McpPanel
         $declared = [];
         if ($status === Bootstrap::MCP_TRUSTED) {
             if ($servers === []) {
-                $out .= self::line('  Servers: none declared.', $width);
+                $out .= self::line('  ' . Lang::t('tui.mcp.servers_none'), $width);
             } else {
-                $out .= self::line('  Servers (' . count($servers) . '):', $width);
+                $out .= self::line('  ' . Lang::t('tui.mcp.servers_count', ['count' => count($servers)]), $width);
                 foreach ($servers as $server) {
                     $name = (string) $server['name'];
                     $declared[$name] = true;
@@ -124,7 +142,7 @@ final class McpPanel
                 }
             }
         } elseif ($status !== Bootstrap::MCP_ABSENT) {
-            $out .= self::line('  Servers: not listed (discovery refused before parsing).', $width);
+            $out .= self::line('  ' . Lang::t('tui.mcp.servers_not_listed'), $width);
         }
 
         // E709: teach the surface when there is nothing to teach ABOUT. The
@@ -138,8 +156,8 @@ final class McpPanel
         // law keeps holding over them.
         if ($status === Bootstrap::MCP_ABSENT
             || ($status === Bootstrap::MCP_TRUSTED && $servers === [])) {
-            $out .= self::line(self::GUIDANCE_ADD, $width);
-            $out .= self::line(self::GUIDANCE_RECIPE, $width);
+            $out .= self::line(self::guidanceAdd(), $width);
+            $out .= self::line(self::guidanceRecipe(), $width);
         }
 
         if ($live) {
@@ -150,8 +168,7 @@ final class McpPanel
                 }
             }
             $out .= self::line(
-                '  Live in this process: ' . $started . ' of ' . count($servers)
-                    . " declared (other sessions' servers are not visible here)",
+                '  ' . Lang::t('tui.mcp.live', ['started' => $started, 'declared' => count($servers)]),
                 $width,
             );
 
@@ -164,8 +181,7 @@ final class McpPanel
             foreach ($liveness as $name => $row) {
                 if (!isset($declared[(string) $name])) {
                     $out .= self::line(
-                        '  Started but no longer declared: ' . (string) $name
-                            . ' (' . (int) $row['tools'] . ' tools)',
+                        '  ' . Lang::t('tui.mcp.undeclared', ['name' => (string) $name, 'tools' => (int) $row['tools']]),
                         $width,
                     );
                 }
@@ -173,7 +189,7 @@ final class McpPanel
 
             if ($configChangedSinceLaunch === true) {
                 $out .= self::line(
-                    '  Config: changed since launch — restart sugar-crush to apply (reload is not implemented)',
+                    '  ' . Lang::t('tui.mcp.config_changed'),
                     $width,
                 );
             }
@@ -205,26 +221,26 @@ final class McpPanel
     private static function livenessSuffix(?array $row): string
     {
         if ($row === null) {
-            return ' · not up';
+            return ' · ' . Lang::t('tui.mcp.liveness.not_up');
         }
 
         $up = $row['up'];
         if ($up === null) {
-            return ' · state unknown';
+            return ' · ' . Lang::t('tui.mcp.liveness.state_unknown');
         }
 
         $label = match ([$row['transport'], $up]) {
-            ['stdio', true] => 'up',
+            ['stdio', true] => Lang::t('tui.mcp.liveness.up'),
             // E699: a spawned child that is running reads exactly like the
             // stdio one — deliberately NO new label, the suffix vocabulary
             // is pinned by the docs and the panel adds a transport, not a word.
-            ['claude-mcp', true] => 'up',
-            ['http', true] => 'ready',
-            ['git', true] => 'ready (in-process)',
-            default => 'exited',
+            ['claude-mcp', true] => Lang::t('tui.mcp.liveness.up'),
+            ['http', true] => Lang::t('tui.mcp.liveness.ready'),
+            ['git', true] => Lang::t('tui.mcp.liveness.ready_in_process'),
+            default => Lang::t('tui.mcp.liveness.exited'),
         };
 
-        return ' · ' . $label . ' ' . (int) $row['tools'] . ' tools';
+        return ' · ' . $label . ' ' . Lang::t('tui.mcp.liveness.tools', ['count' => (int) $row['tools']]);
     }
 
     /**

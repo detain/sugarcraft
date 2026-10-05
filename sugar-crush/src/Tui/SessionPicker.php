@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Forms\TextInput\TextInput;
@@ -391,21 +392,21 @@ final class SessionPicker
     private function groupOf(array $row): string
     {
         if ($row['archived'] ?? false) {
-            return 'Archived';
+            return Lang::t('tui.picker.group.archived');
         }
         if ($row['pinned'] ?? false) {
-            return 'Pinned';
+            return Lang::t('tui.picker.group.pinned');
         }
         $at = self::timestamp($row['lastActivity'] ?? '');
         if ($at === null) {
-            return 'Earlier';
+            return Lang::t('tui.picker.group.earlier');
         }
         $day = date('Y-m-d', $at);
         if ($day === date('Y-m-d', $this->now)) {
-            return 'Today';
+            return Lang::t('tui.picker.group.today');
         }
         if ($day === date('Y-m-d', $this->now - 86400)) {
-            return 'Yesterday';
+            return Lang::t('tui.picker.group.yesterday');
         }
 
         return date('j M Y', $at);
@@ -413,10 +414,12 @@ final class SessionPicker
 
     private static function groupRank(string $label): int
     {
+        // The headings arrive translated (groupOf()), so they are compared
+        // translated: the rank is the same in every locale.
         return match ($label) {
-            'Pinned' => 0,
-            'Earlier' => 2,
-            'Archived' => 3,
+            Lang::t('tui.picker.group.pinned') => 0,
+            Lang::t('tui.picker.group.earlier') => 2,
+            Lang::t('tui.picker.group.archived') => 3,
             default => 1,
         };
     }
@@ -444,10 +447,10 @@ final class SessionPicker
         $age = max(0, $this->now - $at);
 
         return match (true) {
-            $age < 60 => 'now',
-            $age < 3600 => intdiv($age, 60) . 'm',
-            $age < 86400 => intdiv($age, 3600) . 'h',
-            $age < 7 * 86400 => intdiv($age, 86400) . 'd',
+            $age < 60 => Lang::t('tui.picker.age.now'),
+            $age < 3600 => Lang::t('tui.picker.age.minutes', ['count' => intdiv($age, 60)]),
+            $age < 86400 => Lang::t('tui.picker.age.hours', ['count' => intdiv($age, 3600)]),
+            $age < 7 * 86400 => Lang::t('tui.picker.age.days', ['count' => intdiv($age, 86400)]),
             date('Y', $at) === date('Y', $this->now) => date('j M', $at),
             default => date("M'y", $at),
         };
@@ -804,7 +807,7 @@ final class SessionPicker
             ' ' => [$self, $selected !== null ? 'preview' : null, null],
             'escape' => [$self, 'close', null],
             'ctrl+b' => $self->currentBranch === null && $self->branchFilter === null
-                ? [$self->mutate(['notice' => 'Not on a git branch here, so there is nothing to filter by.']), 'browse', null]
+                ? [$self->mutate(['notice' => Lang::t('tui.picker.notice.no_branch')]), 'browse', null]
                 : [$self->withBranchFilter($self->branchFilter === null ? $self->currentBranch : null), 'browse', null],
             '/' => [$self->mutate(['filtering' => true, 'preview' => null]), SessionListAction::Filter, null],
             'tab' => [$self->withShowChildren(!$self->showChildren), SessionListAction::ToggleChildren, null],
@@ -857,10 +860,10 @@ final class SessionPicker
             return [$this, null, null];
         }
         if ($selected['sessionId'] === $this->currentSessionId) {
-            return [$this->mutate(['notice' => 'This is the session on screen; switch to another before deleting it.']), 'browse', null];
+            return [$this->mutate(['notice' => Lang::t('tui.picker.notice.delete_current')]), 'browse', null];
         }
         if (($selected['status'] ?? null) === 'running' || ($selected['live'] ?? false)) {
-            return [$this->mutate(['notice' => 'That session is still running; stop it before deleting it.']), 'browse', null];
+            return [$this->mutate(['notice' => Lang::t('tui.picker.notice.delete_running')]), 'browse', null];
         }
 
         return [$this->mutate(['armedDeleteId' => $selected['sessionId'], 'preview' => null]), 'browse', null];
@@ -873,7 +876,7 @@ final class SessionPicker
             return [$this, null, null];
         }
         if ($selected['sessionId'] === $this->currentSessionId) {
-            return [$this->mutate(['notice' => 'This is the session on screen; switch to another before archiving it.']), 'browse', null];
+            return [$this->mutate(['notice' => Lang::t('tui.picker.notice.archive_current')]), 'browse', null];
         }
 
         return [$this, SessionListAction::Archive, null];
@@ -1089,11 +1092,11 @@ final class SessionPicker
         if ($lines === []) {
             $lines[] = Style::new()
                 ->foreground($theme->shellMuted)
-                ->render($this->query !== '' ? '  (no sessions match)' : '  (no sessions)');
+                ->render('  ' . Lang::t($this->query !== '' ? 'tui.picker.empty_match' : 'tui.picker.empty'));
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' sessions '))
+            ->border(Border::rounded()->withTitle(' ' . Lang::t('tui.picker.box_title') . ' '))
             ->borderForeground($theme->shellPrimary)
             ->padding(0, 1)
             ->width($width);
@@ -1107,23 +1110,23 @@ final class SessionPicker
     /** Title (count, filter, branch), a rule, and the key hints for the current mode. */
     private function renderHeader(int $width, Theme $theme): string
     {
-        $title = ' session picker · ' . count($this->visible) . ' shown';
+        $title = ' ' . Lang::t('tui.picker.title', ['count' => count($this->visible)]);
         if ($this->showArchived) {
-            $title .= ' · +archived';
+            $title .= ' · ' . Lang::t('tui.picker.title_archived');
         }
         if ($this->branchFilter !== null) {
-            $title .= ' · branch: ' . $this->branchFilter;
+            $title .= ' · ' . Lang::t('tui.picker.title_branch', ['branch' => $this->branchFilter]);
         }
         if ($this->filtering || $this->query !== '') {
             $title .= ' · / ' . $this->query . ($this->filtering ? '▏' : '');
         }
 
         $hints = match (true) {
-            $this->renameId !== null => ' ↵ save · esc cancel',
-            $this->armedDeleteId !== null => ' d delete · D with children · any other key cancels',
-            $this->filtering => ' type to filter · ↑↓ move · ↵ open · ^E rename · ^D delete · ^F pin · esc clear',
+            $this->renameId !== null => ' ' . Lang::t('tui.picker.hints.rename'),
+            $this->armedDeleteId !== null => ' ' . Lang::t('tui.picker.hints.armed_delete'),
+            $this->filtering => ' ' . Lang::t('tui.picker.hints.filtering'),
             // Esc first so a narrow box keeps the way out.
-            default => ' ↑↓ browse · ↵ open · esc close · / filter · r rename · d delete · p pin · f fork · x archive · a archived · ⇥ children · space preview',
+            default => ' ' . Lang::t('tui.picker.hints.browse'),
         };
 
         // Themed, like its twin in renderFooter(): an unstyled rule would be
@@ -1155,12 +1158,12 @@ final class SessionPicker
         if ($this->armedDeleteId === $row['sessionId']) {
             $children = (int) ($row['children'] ?? 0);
             $subagents = (int) ($row['subagents'] ?? 0);
-            $text = $marker . 'press d again to delete "' . Width::truncate($row['sessionName'], 24) . '"';
+            $text = $marker . Lang::t('tui.picker.confirm_delete', ['name' => Width::truncate($row['sessionName'], 24)]);
             if ($subagents > 0) {
-                $text .= ' (+' . $subagents . ' sub-agent)';
+                $text .= ' ' . Lang::t('tui.picker.confirm_delete_subagents', ['count' => $subagents]);
             }
             if ($children - $subagents > 0) {
-                $text .= ' · D also deletes ' . ($children - $subagents) . ' branch' . ($children - $subagents === 1 ? '' : 'es');
+                $text .= ' · ' . Lang::t($children - $subagents === 1 ? 'tui.picker.confirm_delete_branch' : 'tui.picker.confirm_delete_branches', ['count' => $children - $subagents]);
             }
 
             $cluster = $selected ? $this->actionSegments($width, $theme) : [];
@@ -1173,7 +1176,7 @@ final class SessionPicker
         }
 
         if ($this->renameId === $row['sessionId'] && $this->renameInput !== null) {
-            $label = $marker . 'rename: ';
+            $label = $marker . Lang::t('tui.picker.rename_label') . ' ';
             $room = max(1, $width - Width::string($label));
             // Width counts characters; a wide title can still overrun, so the
             // painted run is cut by cells as well.
@@ -1191,7 +1194,7 @@ final class SessionPicker
         }
         if ($width >= 56) {
             $turns = (int) ($row['turns'] ?? 0);
-            $columns[] = [9, $turns . ($turns === 1 ? ' turn' : ' turns'), true];
+            $columns[] = [9, Lang::t($turns === 1 ? 'tui.picker.turn' : 'tui.picker.turns', ['count' => $turns]), true];
         }
         if ($width >= 68) {
             $model = trim(($row['provider'] ?? '') . '/' . ($row['model'] ?? ''), '/');
@@ -1265,9 +1268,9 @@ final class SessionPicker
     private static function badge(array $row): string
     {
         return match (true) {
-            ($row['live'] ?? false) || ($row['status'] ?? null) === 'running' => '⠋ live',
-            ($row['kind'] ?? 'main') === 'background' => '⧗ bg',
-            (int) ($row['subagents'] ?? 0) > 0 => '+' . (int) $row['subagents'] . ' ag',
+            ($row['live'] ?? false) || ($row['status'] ?? null) === 'running' => '⠋ ' . Lang::t('tui.picker.badge.live'),
+            ($row['kind'] ?? 'main') === 'background' => '⧗ ' . Lang::t('tui.picker.badge.background'),
+            (int) ($row['subagents'] ?? 0) > 0 => Lang::t('tui.picker.badge.subagents', ['count' => (int) $row['subagents']]),
             ($row['kind'] ?? 'main') === 'branch' => '⑂',
             default => '',
         };
@@ -1329,7 +1332,7 @@ final class SessionPicker
             $parts[] = $branch;
         }
         $preview = $session['summary'] ?? '';
-        $parts[] = $preview !== '' ? '"' . $preview . '"' : '(no prompt yet)';
+        $parts[] = $preview !== '' ? '"' . $preview . '"' : Lang::t('tui.picker.no_prompt');
 
         return $footer . "\n" . Style::new()
             ->foreground($theme->shellForeground)

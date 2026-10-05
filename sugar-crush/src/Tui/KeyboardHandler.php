@@ -9,6 +9,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\App\SelectSkillMsg;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Tui\Commands\CancelAgentCmd;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
@@ -926,7 +927,7 @@ final class KeyboardHandler
                 'b' => [
                     ($run = $app->chat?->agentLive()->get($target)) === null || $run->isFinished() || (string) $run->parentAgentId !== ''
                         ? $app
-                        : $app->withStatus(sprintf('Moving %s to the background at its next step — the turn goes on without it.', $run->name)),
+                        : $app->withStatus(Lang::t('tui.agent.backgrounding', ['name' => $run->name])),
                     new \SugarCraft\Crush\AgentControlMsg(\SugarCraft\Crush\AgentControlMsg::BACKGROUND, [$target]),
                 ],
                 default => [$app, null],

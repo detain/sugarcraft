@@ -5839,18 +5839,21 @@ final class DocFigureProseDriftTest extends TestCase
         }
         self::assertIsString($suffix, 'McpPanel::livenessSuffix() vanished — the page\'s suffix table lost its generator');
 
+        // The arms name lang/en.php keys (15b-14-4b); the page quotes the
+        // English the keys resolve to, so the labels are read from there.
+        $en = self::englishCatalogue();
         $labels = [];
-        preg_match_all("/\['\w+', true\] => '([^']+)'/", $suffix, $arms);
-        foreach ($arms[1] as $label) {
-            $labels[] = $label;
+        preg_match_all("/\['[\w-]+', true\] => Lang::t\('([^']+)'\)/", $suffix, $arms);
+        foreach ($arms[1] as $key) {
+            $labels[] = $en[$key] ?? $key;
         }
-        preg_match_all("/return ' \x{00B7} ([^'\$]+?)';/u", $suffix, $fixed);
-        foreach ($fixed[1] as $label) {
-            $labels[] = $label;
+        preg_match_all("/return ' \x{00B7} ' \. Lang::t\('([^']+)'\);/u", $suffix, $fixed);
+        foreach ($fixed[1] as $key) {
+            $labels[] = $en[$key] ?? $key;
         }
-        preg_match("/default => '([^']+)'/", $suffix, $down);
+        preg_match("/default => Lang::t\('([^']+)'\)/", $suffix, $down);
         self::assertSame(1, isset($down[1]) ? 1 : 0, 'the exited fallback arm left — one label is unminted');
-        $labels[] = $down[1];
+        $labels[] = $en[$down[1]] ?? $down[1];
         $labels = array_values(array_unique($labels));
         self::assertSame(
             ['up', 'ready', 'ready (in-process)', 'not up', 'state unknown', 'exited'],
@@ -5867,8 +5870,9 @@ final class DocFigureProseDriftTest extends TestCase
             );
         }
 
-        foreach (['  Live in this process: ', '  Started but no longer declared: '] as $sentence) {
-            self::assertStringContainsString("'" . $sentence . "'", $panel, "the panel literal for \"{$sentence}\" moved");
+        foreach (['tui.mcp.live' => '  Live in this process: ', 'tui.mcp.undeclared' => '  Started but no longer declared: '] as $key => $sentence) {
+            self::assertStringContainsString("'  ' . Lang::t('{$key}'", $panel, "the panel row for \"{$sentence}\" moved");
+            self::assertStringStartsWith(ltrim($sentence), $en[$key] ?? '', "the catalogue sentence for \"{$sentence}\" moved");
             self::assertStringContainsString(
                 $sentence === '  Live in this process: ' ? 'Live in this process: K of M declared' : trim($sentence),
                 $raw,
@@ -5911,7 +5915,8 @@ final class DocFigureProseDriftTest extends TestCase
         $panel = self::sourceOf('Tui/McpPanel.php');
 
         $needle = 'Config: changed since launch — restart sugar-crush to apply (reload is not implemented)';
-        self::assertStringContainsString("'  " . $needle . "'", $panel, 'the panel literal moved — the page quotes it');
+        self::assertStringContainsString("'  ' . Lang::t('tui.mcp.config_changed')", $panel, 'the panel row moved — the page quotes it');
+        self::assertSame($needle, self::englishCatalogue()['tui.mcp.config_changed'] ?? null, 'the catalogue sentence moved — the page quotes it');
         self::assertStringContainsString($needle, $prose, 'MCP.md no longer quotes the panel sentence byte-for-byte');
 
         self::assertSame(
@@ -6586,6 +6591,17 @@ final class DocFigureProseDriftTest extends TestCase
         }
 
         return $out;
+    }
+
+    /**
+     * lang/en.php, read directly: the docs quote English, so a pin on a
+     * translated surface reads the English catalogue whatever the locale.
+     *
+     * @return array<string, string>
+     */
+    private static function englishCatalogue(): array
+    {
+        return require \dirname(__DIR__, 2) . '/lang/en.php';
     }
 
     private static function sourceOf(string $relative): string

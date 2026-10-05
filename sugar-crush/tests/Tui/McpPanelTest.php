@@ -77,9 +77,9 @@ final class McpPanelTest extends TestCase
         $root = $this->makeRoot();
         $out = McpPanel::render(Bootstrap::mcpServerInventory($root));
 
-        self::assertStringContainsString(McpPanel::GUIDANCE_ADD, $out);
+        self::assertStringContainsString(McpPanel::guidanceAdd(), $out);
         self::assertStringContainsString('mcpServers', $out, 'the hint must name the actual key');
-        self::assertStringContainsString(McpPanel::GUIDANCE_RECIPE, $out);
+        self::assertStringContainsString(McpPanel::guidanceRecipe(), $out);
         self::assertStringContainsString(McpPanel::GUIDANCE_SECTION, $out, 'the panel must point at the docs section by name');
         self::assertStringNotContainsString('   - ', $out, 'guidance lines are two-space rows, never server rows');
     }
@@ -99,7 +99,7 @@ final class McpPanelTest extends TestCase
 
         $cold = McpPanel::render(Bootstrap::mcpServerInventory($empty));
         self::assertStringContainsString('Servers: none declared.', $cold);
-        self::assertStringContainsString(McpPanel::GUIDANCE_ADD, $cold, 'a trusted-but-empty file is still a cold surface');
+        self::assertStringContainsString(McpPanel::guidanceAdd(), $cold, 'a trusted-but-empty file is still a cold surface');
 
         $named = 'kestrel-' . bin2hex(random_bytes(4));
         file_put_contents($empty . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
@@ -107,12 +107,12 @@ final class McpPanelTest extends TestCase
         ], JSON_THROW_ON_ERROR));
         $warm = McpPanel::render(Bootstrap::mcpServerInventory($empty), 140);
         self::assertStringContainsString($named, $warm);
-        self::assertStringNotContainsString(McpPanel::GUIDANCE_ADD, $warm, 'a server list stands the hint down');
+        self::assertStringNotContainsString(McpPanel::guidanceAdd(), $warm, 'a server list stands the hint down');
 
         $refused = $this->makeRoot();
         file_put_contents($refused . '/' . Bootstrap::MCP_CONFIG_FILENAME, '{"mcpServers":{}}');
         $out = McpPanel::render(Bootstrap::mcpServerInventory($refused));
-        self::assertStringNotContainsString(McpPanel::GUIDANCE_ADD, $out, 'a refusal state teaches the opt-in, not the recipe');
+        self::assertStringNotContainsString(McpPanel::guidanceAdd(), $out, 'a refusal state teaches the opt-in, not the recipe');
     }
 
     /**

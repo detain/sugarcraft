@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui;
 use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Sprinkles\Bar\Segment;
 use SugarCraft\Sprinkles\Bar\StatusBar as BarStatusBar;
 use SugarCraft\Sprinkles\Layout;
@@ -911,7 +912,7 @@ final class Renderer
 
         if ($a->error !== null && $a->error !== '') {
             return Style::new()->foreground($theme->shellError)->bold()
-                ->render(' error: ' . $a->error);
+                ->render(' ' . Lang::t('tui.status.error', ['error' => $a->error]));
         }
 
         if ($a->status !== null && $a->status !== '') {
@@ -1833,12 +1834,12 @@ final class Renderer
         $segments = [
             Segment::of($a->provider->name(), Style::new()->foreground($theme->shellSuccess)),
             Segment::of(self::modelLabel($a), Style::new()->foreground($theme->shellWarning)),
-            Segment::of('[Tab] Switch Pane'),
+            Segment::of(Lang::t('tui.status.switch_pane')),
         ];
 
         if ($a->error) {
             $segments[] = Segment::of(
-                'error: ' . $a->error,
+                Lang::t('tui.status.error', ['error' => $a->error]),
                 Style::new()->foreground($theme->shellError)->bold(),
             );
         } elseif ($a->status) {
@@ -1928,7 +1929,7 @@ final class Renderer
         $lines = explode("\n", $frame);
 
         if ($side === null) {
-            $hint = Width::truncate(' release here to cancel ', max(0, $centerTo - $centerFrom - 1));
+            $hint = Width::truncate(' ' . Lang::t('tui.dock.release_to_cancel') . ' ', max(0, $centerTo - $centerFrom - 1));
             $row = $bandTop + intdiv($paneRows, 2);
 
             if ($hint !== '' && isset($lines[$row])) {
@@ -1950,7 +1951,7 @@ final class Renderer
         }
 
         $st = Style::new()->foreground($theme->shellPrimary)->bold();
-        $label = Width::truncate(' ' . $pane->icon() . ' dock ' . $pane->label() . ' ' . strtolower($side->name) . ' ', max(0, $inner - 2));
+        $label = Width::truncate(' ' . $pane->icon() . ' ' . Lang::t($side === Side::Left ? 'tui.dock.label_left' : 'tui.dock.label_right', ['pane' => $pane->label()]) . ' ', max(0, $inner - 2));
         $top = "\u{250F}\u{2501}" . $label . str_repeat("\u{2501}", max(0, $inner - 1 - Width::string($label))) . "\u{2513}";
         $bottom = "\u{2517}" . str_repeat("\u{2501}", $inner) . "\u{251B}";
         $last = $bandTop + $paneRows - 1;

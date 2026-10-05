@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
+use SugarCraft\Crush\Lang;
+
 /**
  * Represents the type of terminal multiplexer detected in the environment.
  *
@@ -35,9 +37,9 @@ enum MultiplexerType: string
     public function description(): string
     {
         return match ($this) {
-            self::None => 'No multiplexer (in-process rendering)',
-            self::Tmux => 'tmux multiplexer',
-            self::ITerm2 => 'iTerm2 (macOS)',
+            self::None => Lang::t('tui.multiplexer.none'),
+            self::Tmux => Lang::t('tui.multiplexer.tmux'),
+            self::ITerm2 => Lang::t('tui.multiplexer.iterm2'),
         };
     }
 }
