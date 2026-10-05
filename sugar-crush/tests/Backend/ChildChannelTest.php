@@ -226,8 +226,9 @@ final class ChildChannelTest extends TestCase
         $channel = $this->channel($child, $written);
 
         self::assertTrue($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
-        self::assertSame('Bash(sed * | sort * | uniq *)', $written[0]['alwaysScope']['pattern'] ?? null, 'the frame names the scope');
+        self::assertSame('Bash(sed *), Bash(sort *), Bash(uniq *)', $written[0]['alwaysScope']['pattern'] ?? null, 'the frame names the scope, one grant per part');
         self::assertTrue($channel->ask(new ToolCall('c2', 'Bash', ['command' => 'sed x g | sort -u | uniq -c']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertTrue($channel->ask(new ToolCall('c2b', 'Bash', ['command' => 'sort a && sed -n 2p g']), ForkChannelEofIsUnansweredTest::gateAsk())->permits(), 'another shape of the same parts');
         self::assertCount(1, $written, 'a call the grant covers was asked again');
 
         self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c3', 'Bash', ['command' => 'sed x | sh']), 'reply' => 'reject']);

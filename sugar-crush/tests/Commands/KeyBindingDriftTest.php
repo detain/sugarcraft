@@ -1521,7 +1521,7 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame('make *', $editing->inputBuf);
                 [$granted, $cmd] = $editing->update(new KeyMsg(KeyType::Enter));
                 $this->assertNull($granted->pendingPermission(), 'Enter saves it and allows the call');
-                $this->assertSame(['rule:Bash(make *)' => true], $granted->permissionGrants());
+                $this->assertSame(['rule:Bash(make)' => true, 'rule:Bash(make *)' => true], $granted->permissionGrants(), '"any arguments" includes none');
                 $this->reapReleasedBatch($cmd);
             },
             'permission.deny' => fn(array $k) => $this->assertPermissionAnsweredBy($k[0]),

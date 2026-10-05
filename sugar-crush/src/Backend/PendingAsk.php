@@ -116,8 +116,9 @@ final class PendingAsk
             $patterns = \SugarCraft\Crush\Permissions\SessionPermissionMemo::patternsFor($call->name(), $call->arguments(), $projectRoot);
             if ($patterns !== []) {
                 // What `always` will remember, for a client to show (the web
-                // card's label) — the same pattern the TUI's `a` row names.
-                $scope['pattern'] = $patterns[\count($patterns) - 1];
+                // card's label) — the same text the TUI's `a` row names: one
+                // pattern, or a comma-separated list for a per-part grant.
+                $scope['pattern'] = \SugarCraft\Crush\Permissions\SessionPermissionMemo::scopeOf($call->name(), $call->arguments(), $projectRoot);
             }
         }
         $alwaysAsks = $gateOnly ? '' : self::alwaysAsksReason($call->name(), $ask);

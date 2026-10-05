@@ -565,9 +565,11 @@ asked about — the `askId` is a hash of the call's id, tool and arguments.
   ([`PERMISSIONS.md`](PERMISSIONS.md)): `always` on `git status` answers an
   open `git status --short`, never an open `git push`; a leading in-project
   `cd <dir> &&` is a no-op there too, and a pipeline or chain is remembered
-  per segment (`Bash(sed * | sort * | uniq *)`). The event's `alwaysScope`
-  carries what `always` would remember as `pattern` (absent when it is the
-  exact call). A question that grant covers arriving later in the same turn
+  one grant per part (`Bash(npm test *), Bash(tail *)`), so a later line
+  made of the same commands — or of read-only ones — is covered whatever its
+  shape. The event's `alwaysScope` carries what `always` would remember as
+  `pattern` — one pattern, or a comma-separated list for a per-part grant —
+  (absent when it is the exact call). A question that grant covers arriving later in the same turn
   is answered without being put. A question a hook asked, or a security
   finding under `auto`, is put every time and offers no `always`. Grants are saved with the session and come back
   when the session is opened again.

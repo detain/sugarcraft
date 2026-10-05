@@ -691,7 +691,9 @@ final class PermissionGate
      * `Allow`s, so {@see PermissionRule::matches()} applies the permissive
      * arm: every command of a chain must match, a substitution or a writing
      * redirection grants nothing, and an unknowable subject (a declaration)
-     * never matches. Judged on {@see SessionPermissionMemo::grantArguments()} —
+     * never matches. Failing that, a `Bash` chain joined by `|`/`&&`/`||` is
+     * covered when each of its commands is, by some grant or the read-only
+     * set ({@see SessionPermissionMemo::coversBySegments()}). Judged on {@see SessionPermissionMemo::grantArguments()} —
      * the call without a leading in-project `cd <dir> &&`, the form the grant
      * was remembered in — and only here: the configured rules and the mode
      * above judged the line as written.
@@ -712,7 +714,14 @@ final class PermissionGate
             }
         }
 
-        return false;
+        // Per part (user decision 2026-10-11): a chain each command of which
+        // a DIFFERENT grant — or the read-only set — covers.
+        return $argumentsKnown && SessionPermissionMemo::coversBySegments(
+            $this->sessionRules,
+            $call,
+            $projectRoot,
+            $this->readOnlyAutoAllow(),
+        );
     }
 
     private function actionToDecision(PermissionAction $action): PermissionDecision

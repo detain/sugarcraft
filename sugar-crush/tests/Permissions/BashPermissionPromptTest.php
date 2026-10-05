@@ -116,9 +116,9 @@ final class BashPermissionPromptTest extends TestCase
 
         [$editing] = $asking->update(new KeyMsg(KeyType::Char, 'e'));
         self::assertSame(\SugarCraft\Crush\Permissions\PermissionPromptStage::EditingScope, $editing->permissionStage());
-        self::assertSame('sed * | sort * | uniq *', $editing->inputBuf);
+        self::assertSame('sed *, sort *, uniq *', $editing->inputBuf, 'one pattern per part');
         $flat = (string) preg_replace('/\s+/u', ' ', str_replace('│', ' ', self::plain($editing)));
-        self::assertStringContainsString('Always allow (Bash): sed * | sort * | uniq *', $flat);
+        self::assertStringContainsString('Always allow (Bash): sed *, sort *, uniq *', $flat);
 
         // A scope that does not cover the call is refused, and says why.
         [$refused] = self::retype($editing, 'grep *')->update(new KeyMsg(KeyType::Enter));
@@ -158,16 +158,16 @@ final class BashPermissionPromptTest extends TestCase
     }
 
     /**
-     * A chain is generalised SEGMENT BY SEGMENT, operators kept; the `cd`
-     * (not stripped here — no project root) stays literal.
+     * A chain is remembered ONE GRANT PER PART (user decision 2026-10-11);
+     * the `cd` (not stripped here — no project root) is remembered exactly.
      */
-    public function testAlwaysOnAChainNamesThePerSegmentPattern(): void
+    public function testAlwaysOnAChainNamesOneGrantPerPart(): void
     {
         [$asking] = $this->asking(self::bash(self::CHAIN, 'List workspace lib directories'));
 
-        $scope = 'Bash(cd /home/sites/sugarcraft && ls * | head * && echo * && git log *)';
+        $scope = 'Bash(cd /home/sites/sugarcraft), Bash(ls *), Bash(head *), Bash(echo *), Bash(git log *)';
         self::assertSame($scope, $asking->permissionAlwaysScope());
-        self::assertStringContainsString('always allow Bash(cd /home/sites/sugarcraft &&', self::plain($asking), 'the `a` row names it (wrapped)');
+        self::assertStringContainsString('always allow Bash(cd /home/sites/sugarcraft), Bash(ls *)', self::plain($asking), 'the `a` row names them (wrapped)');
     }
 
     /** A chain no segment of which can be generalised is remembered exactly. */
@@ -279,7 +279,7 @@ final class BashPermissionPromptTest extends TestCase
         $out = self::plain($asking->withSize(100, 40));
         self::assertStringContainsString('$ cd sub && ls', $out);
         self::assertStringContainsString("Agent's note: List sub", $out);
-        self::assertSame('Bash(cd sub && ls *)', $asking->permissionAlwaysScope());
+        self::assertSame('Bash(cd sub), Bash(ls *)', $asking->permissionAlwaysScope());
     }
 
     // =====================================================================

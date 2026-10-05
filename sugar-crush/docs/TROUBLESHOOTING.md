@@ -227,8 +227,12 @@ identical to having no gate at all except for `ProtectFilesHook`,
 `config.json`, or pass `--permission-mode default`.
 
 **Every edit asks.** That is the TUI's default mode, `default`. `a` on the
-prompt remembers a pattern for the rest of the session (`e` edits it first,
-`/permissions revoke` takes it back); for a
+prompt remembers a pattern for the rest of the session — for a pipeline or
+chain one per part, so a later line made of the same commands is covered
+whatever its shape (`e` edits it first, `/permissions revoke` takes it back).
+A line that still asks after `a` has a part no grant names, or is a `for`
+loop, a `;` list or a pipe into `sh`/`xargs`/`awk`, which are remembered only
+as their whole shape. For a
 standing choice set `permissionMode` to `accept-edits` (edits inside the
 project run unprompted, shell commands still ask) or add `permissionRules`
 allow entries. A sub-agent's questions come up in the same modal, naming the

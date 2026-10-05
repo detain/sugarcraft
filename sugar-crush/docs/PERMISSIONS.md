@@ -184,7 +184,8 @@ against, so the two cannot drift.
 **The commands.** `ls`, `pwd`, `cat`, `head`, `tail` (`-f` included), `wc`,
 `file` (not `-C`), `stat`, `du`, `df`, `tree` (not `-o`/`-R`), `echo`,
 `printf` (not `-v`), `true`, `false`, `which`, `whereis`, `type`, `id`,
-`whoami`, `date` (display forms only), `uname`, `env` and `printenv` **with no
+`whoami`, `date` (display forms only), `uname`, `nproc`, `free`, `uptime`,
+`env` and `printenv` **with no
 arguments** (`env rm x` runs `rm`), `grep`/`egrep`/`fgrep`, `rg` (not
 `--pre`), `ag` (not `--pager`), `find` (not `-exec`, `-execdir`, `-ok`,
 `-okdir`, `-delete`, `-fprint*`, `-fls`), `sort` (not `-o`, `-T`,
@@ -616,7 +617,9 @@ Its limits, stated because each one is real:
   `Allow Bash(git *)` plus `Allow Bash(grep *)` does not grant
   `git log | grep x` — rules are first-match-wins and no single rule covers
   both commands, so spell such a pipeline as its own rule:
-  `Allow Bash(git log * | grep *)`. A pattern written around `|`, `&&`, `||`
+  `Allow Bash(git log * | grep *)`. (The session's own `a` grants are
+  different: they only answer the mode's question, so they may cover a line
+  part by part — see [`Ask` needs somewhere to ask](#ask-needs-somewhere-to-ask).) A pattern written around `|`, `&&`, `||`
   or `;` is matched **by structure**: the line must have the same operators
   in the same order (`a | b` is not `a && b`; a newline, `&` or subshell
   matches none), each command must match its own segment, and a segment
@@ -676,28 +679,45 @@ situations, not two:
   - `a` remembers a **pattern** for the rest of the session — at once, no
     second confirm: the modal's `a` row names the scope before you press it,
     and a transcript row says what was allowed afterwards (`Allowed
-    Bash(sed * | sort * | uniq *) for this session — /permissions to review
-    or revoke`). `/permissions` lists the session's grants, numbered, and
-    `/permissions revoke <n>` (or `all`) takes them back. What is remembered
+    Bash(npm test *), Bash(tail *) for this session — /permissions to review
+    or revoke`). `/permissions` lists the session's grants, numbered — each
+    part of a per-part grant on its own row — and `/permissions revoke <n>`
+    (or `all`) takes them back, one part at a time if you like. What is remembered
     (`Permissions\SessionPermissionMemo`): `git status` → `Bash(git status)`
     and `Bash(git status *)`, an `Edit` → that path, a `WebFetch` → that host,
     a tool with no subject argument (`mcp__*`, `Task`) → the tool. A
-    **pipeline or chain** is generalised **per segment**, its operators kept:
-    `sed -n 1,5p f | sort | uniq` → `Bash(sed * | sort * | uniq *)`, which
-    covers `sed x | sort -u | uniq -c` (and `sort` with no arguments) but not
-    `sed x | sort | uniq | sh`, `sed x && sort | uniq` or a line with a
-    substitution; `make && make test` → `Bash(make * && make test *)`, which
-    does not cover `make && rm -rf build`. Some segments are kept **literally**
-    in their place rather than generalised: launchers and interpreters on
-    inline code (`bash -c`, `sudo`, `env`, `xargs`, `find`, `awk`, `perl`,
-    `python3 -c`, …), destructive commands (`rm`, `mv`, `cp`, `chmod`,
-    `chown`, `dd`, `tee`, …), a `curl`/`wget` piped into something, a segment
-    with a writing redirection (`sort a > out.txt` — the target stays
-    literal), a `cd`, and a shell reserved word (`for …; do …; done`) — so
-    `rm -f a.txt && ls` remembers `Bash(rm -f a.txt && ls *)`. A simple
-    destructive command (`rm -rf build`) and a line none of whose segments can
-    be generalised (`find . | xargs rm`) are remembered exactly; so is one with
-    a substitution, a newline, a background `&` or a subshell.
+    **pipeline or chain** joined by `|`, `&&` and `||` is remembered **one
+    grant per part**: `npm test 2>&1 | tail -20` → `Bash(npm test *)` and
+    `Bash(tail *)` (each with its bare form), and the `a` row says so
+    (`always allow Bash(npm test *), Bash(tail *) (this session)`). A later
+    `Bash` line is then covered when it splits — failing closed — into
+    commands joined only by `|`, `&&` and `||`, **every one** of which is
+    covered by some remembered part or is a [read-only
+    command](#read-only-shell-commands-run-unasked): so a later
+    `cd /repo && npm test | tail -5`, or `npm test && git status`, runs
+    unasked, while `npm test && rm -rf build`, `npm test | sh`,
+    `npm test > out.txt`, `npm test; ls` (a `;` or newline list is covered
+    per part only when every part is read-only) and anything with a
+    substitution still ask. A part that cannot be generalised is remembered
+    as **that exact part**: a destructive command (`rm -f a.txt`, `mv`,
+    `cp`, `chmod`, `dd`, `tee`, …), a part with a writing redirection
+    (`sort a > out.txt` — the redirection is part of the grant), a
+    `curl`/`wget` piped on, a `cd`, an assignment in front — so
+    `make && rm -f a.txt` remembers `Bash(make *)` and `Bash(rm -f a.txt)`,
+    and covers `make test && rm -f a.txt` but not `rm -f b.txt && make`. A
+    line with a **launcher or an interpreter that runs inline or piped-in
+    code** (`sh`, `bash -c`, `xargs`, `env`, `find`, `awk`, `perl`,
+    `php -r`, `python3 -c`, …) or a shell reserved word (`for …; do …;
+    done`), and a `;` list, keep the **whole-shape** grant instead — its
+    operators kept, each command matched against its own segment:
+    `git status | sh` → `Bash(git status * | sh)`, which covers
+    `git status -s | sh` and never `cat x | sh` (a remembered `sh` on its
+    own would run whatever a later pipe fed it); `make; make test` →
+    `Bash(make *; make test *)`. Whole-shape grants remembered before this
+    change keep working. A simple destructive command (`rm -rf build`) and a
+    line none of whose segments can be generalised (`find . | xargs rm`) are
+    remembered exactly; so is one with a substitution, a newline, a
+    background `&` or a subshell.
     "Exactly" is the command as it runs:
     `Bash`'s `description` (the model's caption, rewritten on every call) and
     `timeout` are not part of it, so the identical command re-run under a new
@@ -710,8 +730,9 @@ situations, not two:
     `cd /repo && git status --short` remembers `Bash(git status *)`, and a
     later `git status`, `cd /repo && git status` or `cd /repo/sub && git
     status` is covered. What follows the `cd` is judged as usual —
-    `cd /repo && git log -3 | head` remembers `Bash(git log * | head *)`.
-    Anything else is not stripped (a `cd` that stays is a literal segment): a
+    `cd /repo && git log -3 | head` remembers `Bash(git log *)` and
+    `Bash(head *)`.
+    Anything else is not stripped (a `cd` that stays is an exact part): a
     `cd` out of the project (`cd /etc && …`, `cd ../.. && …`, a symlink
     pointing out), an expansion (`cd $HOME`, `cd "$(…)"`), `cd -`, bare `cd`,
     `pushd`, `cd x; …`, `cd x || …` — and with `CDPATH` set, a bare relative
@@ -721,12 +742,16 @@ situations, not two:
     *) (this session)`, `this exact command`, or `this exact command without
     the leading cd`).
   - `e` **edits the scope** before it is remembered: the draft box is
-    prefilled with what `a` would remember (`sed * | sort * | uniq *`, or the
-    command itself where that is exact) and `Enter` saves your version as the
+    prefilled with what `a` would remember — one pattern, or for a per-part
+    grant a **comma-separated list** (`npm test *, tail *`; a comma followed
+    by a space separates, so `sed -n 1,5p` stays one) — or the command
+    itself where that is exact, and `Enter` saves your version as the
     session grant and allows the call. Write `sort` for "sort with no
-    arguments" and `sort *` for "any arguments". It must be a well-formed
-    pattern that covers the call in front of you, or the modal says why and
-    stays open; `Esc` goes back to the question. This is how you grant
+    arguments" and `sort *` for "any arguments" (which includes none). It
+    must be well-formed, every pattern in it must match some part of the call
+    in front of you, and together (with the read-only commands) they must
+    cover it, or the modal says why and stays open; `Esc` goes back to the
+    question. A whole-shape pattern (`sed * | sort | uniq`) can be typed too. This is how you grant
     something broader than the suggestion (`rm *`, which is never suggested)
     or narrower.
     A grant covers later calls of the **same turn** — the parent answers the
@@ -736,8 +761,8 @@ situations, not two:
     engine's. The patterns reach every later turn's gate through
     `PermissionGate::withSessionRules()`, which consults them **only to
     answer an `Ask`** — a configured `Deny`, Plan mode, `dont-ask` and the
-    `rm -rf /` breaker still win, and an `Allow` pattern still needs every
-    command of a line to match. Grants belong to the **session**: they are
+    `rm -rf /` breaker still win, and a line is covered only when every
+    command of it is (by one pattern, or part by part as above). Grants belong to the **session**: they are
     saved with it (the `permissionGrants` key of the session row's metadata)
     and come back when you reopen it — `--resume`, `--continue`, the picker,
     a tab — and another session starts from its own (a `/branch` starts from

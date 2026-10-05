@@ -694,7 +694,9 @@ final class PermissionRule
      * `Allow Bash(grep *)` does not grant `git log | grep x`, because rules are
      * first-match-wins and no one rule covers both commands; spell such a
      * pipeline as its own rule — which {@see allowCoversShellStructure()}
-     * matches segment by segment.
+     * matches segment by segment. (A session's remembered grants, which only
+     * ever answer an `Ask`, may cover a line part by part:
+     * {@see SessionPermissionMemo::coversBySegments()}.)
      */
     private static function allowCoversShellSubject(ShellWords $parsed, string $argumentPattern): bool
     {

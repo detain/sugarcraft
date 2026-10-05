@@ -4280,9 +4280,11 @@ final class Chat implements Model
         $remembered = null;
         if ($reply === PermissionReply::Always) {
             $remembered = $scope !== null
-                ? \SugarCraft\Crush\Permissions\SessionPermissionMemo::patternFromScope(
+                ? \SugarCraft\Crush\Permissions\SessionPermissionMemo::scopeLabel(
                     $scope,
                     $request->pendingAsk?->tool ?? $request->toolCall->name,
+                    $request->pendingAsk?->arguments ?? $request->toolCall->arguments,
+                    $this->projectRoot(),
                 )
                 : $this->permissionAlwaysScope();
         }
@@ -4956,7 +4958,8 @@ final class Chat implements Model
         [$tool, $arguments] = $request->pendingAsk !== null
             ? [$request->pendingAsk->tool, $request->pendingAsk->arguments]
             : [$request->toolCall->name, $request->toolCall->arguments];
-        if (\SugarCraft\Crush\Permissions\SessionPermissionMemo::patternFromScope($scope, $tool) === null) {
+        if (\SugarCraft\Crush\Permissions\SessionPermissionMemo::patternFromScope($scope, $tool) === null
+            && \SugarCraft\Crush\Permissions\SessionPermissionMemo::scopePatterns($scope, $tool) === null) {
             return Lang::t('chat.permission.scope_invalid');
         }
 

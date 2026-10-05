@@ -654,7 +654,7 @@ final class PermissionsCommandTest extends TestCase
     {
         $grants = \SugarCraft\Crush\Permissions\SessionPermissionMemo::new()
             ->withGrant('Bash', ['command' => 'git status'])
-            ->withGrant('Bash', ['command' => 'sed -n 1,5p f | sort | uniq'])
+            ->withGrant('Bash', ['command' => 'npm test 2>&1 | tail -5'])
             ->grants();
 
         return (new Chat(
@@ -670,7 +670,7 @@ final class PermissionsCommandTest extends TestCase
         $next = $this->submit($this->chatWithGrants('/permissions'));
         $text = $next->history[\count($next->history) - 1]->content;
 
-        self::assertStringContainsString("  1. Bash(git status *)\n  2. Bash(sed * | sort * | uniq *)", $text);
+        self::assertStringContainsString("  1. Bash(git status *)\n  2. Bash(npm test *)\n  3. Bash(tail *)", $text, 'a per-part grant is listed part by part');
         self::assertStringContainsString('/permissions revoke <n>', $text);
         self::assertStringContainsString('Session grants: none', $this->report(new PermissionGate(PermissionMode::Default)));
     }
@@ -678,14 +678,17 @@ final class PermissionsCommandTest extends TestCase
     public function testRevokeTakesOneGrantBackAndAllTakesThemAll(): void
     {
         $one = $this->submit($this->chatWithGrants('/permissions revoke 1'));
-        self::assertSame(['rule:Bash(sed * | sort * | uniq *)' => true], $one->permissionGrants());
+        self::assertSame(
+            ['rule:Bash(npm test)' => true, 'rule:Bash(npm test *)' => true, 'rule:Bash(tail)' => true, 'rule:Bash(tail *)' => true],
+            $one->permissionGrants(),
+        );
         self::assertStringContainsString('Revoked Bash(git status *)', $one->history[\count($one->history) - 1]->content);
 
         $all = $this->submit($this->chatWithGrants('/permissions revoke all'));
         self::assertSame([], $all->permissionGrants());
 
         $bad = $this->submit($this->chatWithGrants('/permissions revoke 9'));
-        self::assertCount(2, \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($bad->permissionGrants())->entries(), 'nothing revoked');
+        self::assertCount(3, \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($bad->permissionGrants())->entries(), 'nothing revoked');
         self::assertStringContainsString('Usage: `/permissions revoke <n>`', $bad->history[\count($bad->history) - 1]->content);
     }
 

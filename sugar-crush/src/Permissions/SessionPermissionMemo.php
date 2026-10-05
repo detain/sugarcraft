@@ -18,7 +18,8 @@ use SugarCraft\Crush\ToolCall;
  * | tool                                  | grant                              |
  * |---------------------------------------|------------------------------------|
  * | `Bash`, one simple command            | its command prefix: `git status` → `Bash(git status)` + `Bash(git status *)`; `ls -la` → `Bash(ls)` + `Bash(ls *)` |
- * | `Bash`, a pipeline or chain           | the same prefix PER SEGMENT, operators kept: `sed -n 1,5p f \| sort \| uniq` → `Bash(sed * \| sort * \| uniq *)` |
+ * | `Bash`, a pipeline or chain (`\|` `&&` `\|\|`) | ONE GRANT PER PART: `npm test 2>&1 \| tail -20` → `Bash(npm test)` + `Bash(npm test *)` + `Bash(tail)` + `Bash(tail *)` ({@see segmentPatterns()}) |
+ * | `Bash`, a `;` list, or a chain with a launcher / inline code | the WHOLE SHAPE, prefix per segment, operators kept: `make; make test` → `Bash(make *; make test *)` ({@see compoundScope()}) |
  * | `Read`/`Edit`/`Write`/`Glob`/`Grep`/`Lsp` | that exact path: `Edit(src/A.php)` |
  * | `WebFetch`                            | that host: `WebFetch(domain:example.com)` |
  * | `WebSearch`, `Skill`                  | that exact subject                 |
@@ -44,8 +45,13 @@ use SugarCraft\Crush\ToolCall;
  * either: `rm a.txt` is remembered as exactly that. The user can still grant
  * a broader scope by writing it ({@see withPattern()}, the modal's `e`).
  *
- * A PIPELINE OR CHAIN (`|` `&&` `||` `;`) is generalised segment by segment
- * ({@see compoundScope()}), its operators kept, into a pattern
+ * A PIPELINE OR CHAIN joined by `|` `&&` `||` is remembered PART BY PART
+ * (user decision 2026-10-11, {@see segmentPatterns()}), and a later line is
+ * covered when each of its commands is covered by some part or is read-only
+ * ({@see coversBySegments()}) — the model re-shapes the same commands every
+ * time, so a grant on the whole shape was never seen again. Otherwise (a `;`
+ * list, a launcher or inline code anywhere) the line is generalised segment
+ * by segment ({@see compoundScope()}), its operators kept, into a pattern
  * {@see PermissionRule}'s `Allow` arm matches by STRUCTURE: a later line is
  * covered only when it has the same operators in the same order and each
  * command matches its segment (`x *` covering `x` with no arguments). A
@@ -148,8 +154,25 @@ final class SessionPermissionMemo
     /** Commands that fetch from the network: kept literal when their output is piped on. */
     private const FETCHERS = ['curl', 'wget'];
 
-    /** The operators a per-segment grant may be written around ({@see compoundScope()}). */
+    /** The operators a whole-shape grant may be written around ({@see compoundScope()}). */
     private const STRUCTURE_OPERATORS = ['|', '&&', '||', ';'];
+
+    /**
+     * The operators a line may join its commands with to be remembered, and
+     * covered, PART BY PART ({@see segmentPatterns()}, {@see coversBySegments()}).
+     * Not `;` or a newline: a list of unrelated commands is remembered as its
+     * whole shape, and covered per part only when every part is read-only.
+     */
+    private const SEGMENT_OPERATORS = ['|', '&&', '||'];
+
+    /**
+     * Shell reserved words: they head a "command" the tokeniser splits off a
+     * compound statement, so a line with one is never judged per part.
+     */
+    private const RESERVED_WORDS = [
+        'if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'until', 'do', 'done', 'case', 'esac',
+        'select', 'function', 'coproc', '{', '}', '!', '[[', ']]', '((',
+    ];
 
     /** `<tool> <subcommand>` pairs whose NEXT word picks what they do too (`npm run build`). */
     private const THIRD_WORD_PAIRS = ['npm run', 'pnpm run', 'yarn run', 'docker compose'];
@@ -274,20 +297,175 @@ final class SessionPermissionMemo
      */
     public function withPattern(string $scope, string $tool, array $arguments, ?string $projectRoot = null): ?self
     {
-        $pattern = self::patternFromScope($scope, $tool);
-        if ($pattern === null) {
+        $patterns = self::scopeGrant($scope, $tool, $arguments, $projectRoot);
+        if ($patterns === null) {
             return null;
         }
-        $rule = new PermissionRule($pattern, PermissionAction::Allow);
-        if ($rule->toolNamePattern() !== $tool || self::escape($tool) !== $tool
-            || !$rule->matches(new ToolCall($tool, self::grantArguments($tool, $arguments, $projectRoot)), true, $projectRoot)) {
+        $merged = array_values(array_unique([...$this->patterns, ...$patterns]));
+
+        return $merged === $this->patterns ? $this : new self($merged, $this->calls);
+    }
+
+    /**
+     * The patterns a scope the USER wrote grants for this call, or null when
+     * it is refused (see {@see withPattern()}). The scope is ONE pattern
+     * (`sed * | sort * | uniq *`) or a COMMA-SEPARATED LIST of them, one per
+     * part of the line (`git log *, head *, echo *` — what the editor is
+     * prefilled with for a per-part grant; a comma must be followed by a
+     * space to separate, so `sed -n 1,5p` stays one). Read whole first, then
+     * as a list. A simple-command pattern ending ` *` also grants its bare
+     * form (`git status *` covers `git status` — "any arguments" includes
+     * none), as a suggested grant always has.
+     *
+     * @param array<string, mixed> $arguments
+     *
+     * @return list<string>|null
+     */
+    private static function scopeGrant(string $scope, string $tool, array $arguments, ?string $projectRoot): ?array
+    {
+        if (self::escape($tool) !== $tool) {
             return null;
         }
-        if (in_array($pattern, $this->patterns, true)) {
-            return $this;
+        $call = new ToolCall($tool, self::grantArguments($tool, $arguments, $projectRoot));
+        // What each written pattern must match at least one of — the call,
+        // or one command of it — so no part of the scope is a typo that
+        // quietly grants something else.
+        $readings = [$call];
+        $command = $call->arguments['command'] ?? null;
+        if ($tool === 'Bash' && is_string($command)) {
+            $parsed = ShellWords::parse($command);
+            foreach (\count($parsed->sources) > 1 ? $parsed->sources : [] as $source) {
+                $readings[] = new ToolCall('Bash', ['command' => trim($source)]);
+            }
         }
 
-        return new self([...$this->patterns, $pattern], $this->calls);
+        $candidates = [];
+        $list = self::scopePatterns($scope, $tool);
+        if ($list !== null && \count($list) > 1) {
+            $candidates[] = $list;
+        }
+        $whole = self::patternFromScope($scope, $tool);
+        if ($whole !== null) {
+            $candidates[] = [$whole];
+        }
+
+        foreach ($candidates as $patterns) {
+            $granted = [];
+            foreach ($patterns as $pattern) {
+                $rule = new PermissionRule($pattern, PermissionAction::Allow);
+                if ($rule->toolNamePattern() !== $tool) {
+                    continue 2;
+                }
+                $bare = self::bareSibling($rule);
+                $own = $bare === null ? [$rule] : [$rule, new PermissionRule($bare, PermissionAction::Allow)];
+                $useful = false;
+                foreach ($own as $candidate) {
+                    foreach ($readings as $reading) {
+                        $useful = $useful || $candidate->matches($reading, true, $projectRoot);
+                    }
+                }
+                if (!$useful) {
+                    continue 2;
+                }
+                if ($bare !== null) {
+                    $granted[] = $bare;
+                }
+                $granted[] = $pattern;
+            }
+            $granted = array_values(array_unique($granted));
+            $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow), $granted);
+            foreach ($rules as $rule) {
+                if ($rule->matches($call, true, $projectRoot)) {
+                    return $granted;
+                }
+            }
+            if (self::coversBySegments($rules, $call, $projectRoot, ReadOnlyCommands::autoAllowEnabled())) {
+                return $granted;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * `Tool(x)` for a `Tool(x *)` whose `x` is one simple command (no
+     * operator), else null.
+     */
+    private static function bareSibling(PermissionRule $rule): ?string
+    {
+        $argument = $rule->argumentPattern();
+        if ($argument === null || !str_ends_with($argument, ' *') || strlen($argument) < 3) {
+            return null;
+        }
+        $bare = substr($argument, 0, -2);
+        if (ShellWords::parse($bare)->operators !== []) {
+            return null;
+        }
+        $pattern = $rule->toolNamePattern() . '(' . $bare . ')';
+
+        return PermissionRule::isWellFormedPattern($pattern) ? $pattern : null;
+    }
+
+    /**
+     * A scope the user typed read as a COMMA-SEPARATED LIST (a comma
+     * followed by whitespace separates), each part a well-formed pattern for
+     * $tool — or null when it is empty or any part is not.
+     *
+     * @return list<string>|null
+     */
+    public static function scopePatterns(string $scope, string $tool): ?array
+    {
+        $patterns = [];
+        foreach (preg_split('/,\s+/', trim($scope)) ?: [] as $part) {
+            $pattern = self::patternFromScope($part, $tool);
+            if ($pattern === null) {
+                return null;
+            }
+            $patterns[] = $pattern;
+        }
+
+        return $patterns === [] ? null : $patterns;
+    }
+
+    /**
+     * How a scope the user wrote reads once remembered — the {@see scopeOf()}
+     * spelling of what {@see withPattern()} would grant for this call — or
+     * null when it would be refused.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public static function scopeLabel(string $scope, string $tool, array $arguments, ?string $projectRoot = null): ?string
+    {
+        $patterns = self::scopeGrant($scope, $tool, $arguments, $projectRoot);
+
+        return $patterns === null ? null : self::describePatterns($patterns);
+    }
+
+    /**
+     * Patterns as one line the user reads: a `Tool(x)` granted beside its
+     * `Tool(x *)` is the same grant and is not repeated —
+     * `Bash(git log *), Bash(head *)`.
+     *
+     * @param list<string> $patterns
+     */
+    private static function describePatterns(array $patterns): string
+    {
+        return implode(', ', self::shownPatterns($patterns));
+    }
+
+    /**
+     * $patterns without each `Tool(x)` whose `Tool(x *)` is there too.
+     *
+     * @param list<string> $patterns
+     *
+     * @return list<string>
+     */
+    private static function shownPatterns(array $patterns): array
+    {
+        return array_values(array_filter(
+            $patterns,
+            static fn (string $p): bool => !(str_ends_with($p, ')') && in_array(substr($p, 0, -1) . ' *)', $patterns, true)),
+        ));
     }
 
     /**
@@ -322,9 +500,13 @@ final class SessionPermissionMemo
         }
         $patterns = self::patternsFor($tool, $arguments, $projectRoot);
         if ($patterns !== []) {
-            $rule = new PermissionRule($patterns[\count($patterns) - 1], PermissionAction::Allow);
+            $shown = self::shownPatterns($patterns);
+            $halves = array_map(
+                static fn (string $p): ?string => (new PermissionRule($p, PermissionAction::Allow))->argumentPattern(),
+                $shown,
+            );
 
-            return $rule->argumentPattern();
+            return in_array(null, $halves, true) ? null : implode(', ', $halves);
         }
         $subject = self::grantArguments($tool, $arguments, $projectRoot)[$subjectName] ?? null;
         if (!is_string($subject) || trim($subject) === '' || str_contains($subject, "\n")) {
@@ -456,7 +638,88 @@ final class SessionPermissionMemo
             }
         }
 
-        return false;
+        return self::coversBySegments($this->rules(), $call, $projectRoot, ReadOnlyCommands::autoAllowEnabled());
+    }
+
+    /**
+     * PER-PART COVERAGE (user decision 2026-10-11): does a `Bash` line split
+     * — fail closed — into simple commands joined only by `|`, `&&` and
+     * `||`, EVERY ONE of which is covered on its own by one of $rules (a
+     * remembered segment grant such as `Bash(git log *)`) or, with
+     * $readOnlyCovers, is a read-only command ({@see ReadOnlyCommands})?
+     *
+     * Where one {@see PermissionRule} must cover every command of a line
+     * (its `Allow` arm's intersection), this lets DIFFERENT grants cover
+     * different commands: `a` on `npm test 2>&1 | tail -20` remembers
+     * `Bash(npm test *)` and `Bash(tail *)`, and a later
+     * `cd /repo && npm test | tail -5` is covered. Refused outright, so the
+     * mode's question stands:
+     *
+     * - a line that does not parse completely, or holds a command or process
+     *   substitution or a `${…}` expansion anywhere;
+     * - any other joining operator — `;`, a newline, a background `&`, `|&`,
+     *   a subshell — (a `;` or newline line runs unasked only when EVERY
+     *   part is read-only, which the mode itself settles);
+     * - a command that is only redirections, or that opens with a shell
+     *   reserved word (`for`, `do`, `if`, `{` …: the tokeniser does not
+     *   parse compound statements);
+     * - a second `cd` that is not absolute (the first moved the directory
+     *   the read-only set judges a relative one against).
+     *
+     * Each command is judged by its own source text, redirections included,
+     * through the same matcher a whole line is — so `echo x > f` needs a
+     * grant that spells `> f`, and a `sh` the pipe feeds needs a grant for
+     * exactly `sh`.
+     *
+     * @param list<PermissionRule> $rules
+     */
+    public static function coversBySegments(array $rules, ToolCall $call, ?string $projectRoot, bool $readOnlyCovers): bool
+    {
+        $command = $call->name === 'Bash' ? ($call->arguments['command'] ?? null) : null;
+        if (!is_string($command) || ($rules === [] && !$readOnlyCovers)) {
+            return false;
+        }
+        $parsed = ShellWords::parse($command);
+        if (!$parsed->complete || \count($parsed->commands) < 2
+            || \count($parsed->commands) !== \count($parsed->operators) + 1
+            || \count($parsed->sources) !== \count($parsed->commands)
+            || $parsed->substitutions !== [] || $parsed->parameterExpansions !== []) {
+            return false;
+        }
+        foreach ($parsed->operators as $operator) {
+            if (!in_array($operator, self::SEGMENT_OPERATORS, true)) {
+                return false;
+            }
+        }
+
+        $root = $projectRoot === '' ? null : $projectRoot;
+        $changedDirectory = false;
+        foreach ($parsed->commands as $index => $words) {
+            $program = $words[0] ?? null;
+            if ($program === null || in_array($program, self::RESERVED_WORDS, true)) {
+                return false;
+            }
+            if ($program === 'cd') {
+                if ($changedDirectory && !str_starts_with((string) ($words[1] ?? ''), '/')) {
+                    return false;
+                }
+                $changedDirectory = true;
+            }
+            $source = trim($parsed->sources[$index]);
+            $segment = new ToolCall('Bash', ['command' => $source]);
+            $covered = $readOnlyCovers && ReadOnlyCommands::autoAllows($source, $root);
+            foreach ($covered ? [] : $rules as $rule) {
+                if ($rule->matches($segment, true, $projectRoot)) {
+                    $covered = true;
+                    break;
+                }
+            }
+            if (!$covered) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -476,7 +739,7 @@ final class SessionPermissionMemo
     {
         $patterns = self::patternsFor($tool, $arguments, $projectRoot);
         if ($patterns !== []) {
-            return $patterns[\count($patterns) - 1];
+            return self::describePatterns($patterns);
         }
 
         return self::exactScopeOf($tool, $arguments, $projectRoot);
@@ -587,6 +850,10 @@ final class SessionPermissionMemo
             if ($prefix !== null) {
                 return [$name . '(' . $prefix . ')', $name . '(' . $prefix . ' *)'];
             }
+            $segments = self::segmentPatterns($subject, $projectRoot);
+            if ($segments !== null) {
+                return $segments;
+            }
             $structure = self::compoundScope($subject);
 
             return $structure === null ? [] : [$name . '(' . $structure . ')'];
@@ -622,6 +889,91 @@ final class SessionPermissionMemo
         }
 
         return self::segmentPrefix($parsed->commands[0], $parsed->expandable[0] ?? []);
+    }
+
+    /**
+     * What "always" remembers for a PIPELINE or CHAIN joined only by `|`,
+     * `&&` and `||`: ONE GRANT PER PART (user decision 2026-10-11), so a
+     * later line of a different shape made of the same commands is covered
+     * ({@see coversBySegments()}). `cd /repo && git log -3 | head -5 && echo x`
+     * → `Bash(git log)`, `Bash(git log *)`, `Bash(head)`, `Bash(head *)`,
+     * `Bash(echo)`, `Bash(echo *)`.
+     *
+     * Each part keeps what {@see segmentPrefix()} keeps, as the pair a
+     * simple command gets (bare and ` *`); a part that cannot be
+     * generalised — a destructive command (`rm a.txt`), one with a writing
+     * redirection (`sort a > out.txt`), a `curl`/`wget` piped on, a `cd`, an
+     * assignment in front, an expandable program name — is remembered as
+     * that EXACT part, escaped.
+     *
+     * Null — the line keeps its whole-shape grant ({@see compoundScope()}) or
+     * the exact call — when it is not such a line (one command; `;`, a
+     * newline, `&`, a subshell; a substitution or `${…}`; a parse failure),
+     * or when a part is a launcher or an interpreter that runs inline or
+     * piped-in code (`sh`, `bash -c`, `xargs rm`, `env`, `find`, `awk`,
+     * `php -r`, `python3` …) or a shell reserved word: covered on its own, an
+     * exact `sh` or `xargs rm` would run whatever a later pipe fed it, so
+     * those lines stay remembered as their whole shape (`Bash(ls * | sh)`).
+     * The parts must, together, cover the line they came from, or this is
+     * null too.
+     *
+     * @return list<string>|null
+     */
+    private static function segmentPatterns(string $command, ?string $projectRoot): ?array
+    {
+        $parsed = ShellWords::parse($command);
+        if (!$parsed->complete || count($parsed->commands) < 2
+            || count($parsed->commands) !== count($parsed->operators) + 1
+            || count($parsed->sources) !== count($parsed->commands)
+            || $parsed->substitutions !== [] || $parsed->parameterExpansions !== []) {
+            return null;
+        }
+        foreach ($parsed->operators as $operator) {
+            if (!in_array($operator, self::SEGMENT_OPERATORS, true)) {
+                return null;
+            }
+        }
+
+        $writes = [];
+        foreach ($parsed->redirections as $redirection) {
+            if (!ShellWords::isInertRedirection($redirection)) {
+                $writes[$redirection['command']] = true;
+            }
+        }
+
+        $patterns = [];
+        foreach ($parsed->commands as $index => $words) {
+            $words = array_values(array_filter($words, static fn (mixed $w): bool => is_string($w) && $w !== ''));
+            $program = $words[0] ?? null;
+            if ($program === null || in_array($program, self::RESERVED_WORDS, true)
+                || in_array($program, self::LAUNCHERS, true)) {
+                return null;
+            }
+            $prefix = isset($writes[$index]) ? null : self::segmentPrefix($parsed->commands[$index], $parsed->expandable[$index] ?? []);
+            if ($prefix === null && in_array($program, self::INTERPRETERS, true)) {
+                return null;
+            }
+            if ($prefix !== null && in_array($program, self::FETCHERS, true) && ($parsed->operators[$index] ?? null) === '|') {
+                $prefix = null;
+            }
+            if ($prefix !== null) {
+                $patterns[] = 'Bash(' . $prefix . ')';
+                $patterns[] = 'Bash(' . $prefix . ' *)';
+                continue;
+            }
+            $source = trim((string) preg_replace('/\s+/', ' ', $parsed->sources[$index]));
+            if ($source === '' || !PermissionRule::isWellFormedPattern('Bash(' . self::escape($source) . ')')) {
+                return null;
+            }
+            $patterns[] = 'Bash(' . self::escape($source) . ')';
+        }
+        $patterns = array_values(array_unique($patterns));
+
+        $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow), $patterns);
+
+        return self::coversBySegments($rules, new ToolCall('Bash', ['command' => $command]), $projectRoot, false)
+            ? $patterns
+            : null;
     }
 
     /**

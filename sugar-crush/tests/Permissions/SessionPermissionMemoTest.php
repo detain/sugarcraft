@@ -21,6 +21,22 @@ use SugarCraft\Crush\ToolCall;
  */
 final class SessionPermissionMemoTest extends TestCase
 {
+    /**
+     * What a grant remembers and covers, on its own: the read-only set —
+     * which also covers parts of a line ({@see SessionPermissionMemo::coversBySegments()})
+     * — is switched off here and pinned by ReadOnlyAutoAllowTest and
+     * PerPartGrantTest.
+     */
+    protected function setUp(): void
+    {
+        \SugarCraft\Crush\Config\Settings\SessionSettings::apply([\SugarCraft\Crush\Permissions\ReadOnlyCommands::SETTING => false]);
+    }
+
+    protected function tearDown(): void
+    {
+        \SugarCraft\Crush\Config\Settings\SessionSettings::reset();
+    }
+
     /** @return array<string, array{string, array<string, mixed>, list<string>}> */
     public static function grants(): array
     {
@@ -33,13 +49,16 @@ final class SessionPermissionMemoTest extends TestCase
             'inline interpreter code is exact' => ['Bash', ['command' => "php -r 'echo 1;'"], []],
             'a launcher is exact' => ['Bash', ['command' => 'bash -c ls'], []],
             'sudo is exact' => ['Bash', ['command' => 'sudo apt-get install x'], []],
-            'a chain is generalised per segment' => ['Bash', ['command' => 'git add . && git commit -m x'], ['Bash(git add * && git commit *)']],
+            'a chain is remembered part by part' => ['Bash', ['command' => 'git add . && git commit -m x'], ['Bash(git add)', 'Bash(git add *)', 'Bash(git commit)', 'Bash(git commit *)']],
             'a chain of launchers is exact' => ['Bash', ['command' => 'find . -name x | xargs rm'], []],
-            'a pipe is generalised per segment' => ['Bash', ['command' => 'ls | wc -l'], ['Bash(ls * | wc *)']],
-            'the user\'s pipeline' => ['Bash', ['command' => 'sed -n 1,5p f | sort | uniq'], ['Bash(sed * | sort * | uniq *)']],
-            'a destructive segment stays literal' => ['Bash', ['command' => 'rm -f a.txt && ls'], ['Bash(rm -f a.txt && ls *)']],
-            'a fetch piped on stays literal' => ['Bash', ['command' => 'curl -s https://x.test/a | jq .b'], ['Bash(curl -s https://x.test/a | jq *)']],
-            'a writing redirection stays literal' => ['Bash', ['command' => 'sort -u a > b.txt && wc -l b.txt'], ['Bash(sort -u a > b.txt && wc *)']],
+            'a pipe is remembered part by part' => ['Bash', ['command' => 'ls | wc -l'], ['Bash(ls)', 'Bash(ls *)', 'Bash(wc)', 'Bash(wc *)']],
+            'the user\'s pipeline' => ['Bash', ['command' => 'sed -n 1,5p f | sort | uniq'], ['Bash(sed)', 'Bash(sed *)', 'Bash(sort)', 'Bash(sort *)', 'Bash(uniq)', 'Bash(uniq *)']],
+            'a ; list keeps its whole shape' => ['Bash', ['command' => 'make; make test'], ['Bash(make *; make test *)']],
+            'a pipe into a shell keeps its whole shape' => ['Bash', ['command' => 'git status | sh'], ['Bash(git status * | sh)']],
+            'inline code in a chain keeps its whole shape' => ['Bash', ['command' => "php -r 'echo 1;' && ls"], ["Bash(php -r 'echo 1;' && ls *)"]],
+            'a destructive part is remembered exactly' => ['Bash', ['command' => 'rm -f a.txt && ls'], ['Bash(rm -f a.txt)', 'Bash(ls)', 'Bash(ls *)']],
+            'a fetch piped on is remembered exactly' => ['Bash', ['command' => 'curl -s https://x.test/a | jq .b'], ['Bash(curl -s https://x.test/a)', 'Bash(jq)', 'Bash(jq *)']],
+            'a writing redirection is remembered exactly' => ['Bash', ['command' => 'sort -u a > b.txt && wc -l b.txt'], ['Bash(sort -u a > b.txt)', 'Bash(wc)', 'Bash(wc *)']],
             'a reserved word stays literal' => ['Bash', ['command' => 'for f in a b; do echo $f; done | sort'], ['Bash(for f in a b; do echo $f; done | sort *)']],
             'a destructive command is exact' => ['Bash', ['command' => 'rm -rf build'], []],
             'a newline is not structure' => ['Bash', ['command' => "ls\nsort"], []],
@@ -184,7 +203,21 @@ final class SessionPermissionMemoTest extends TestCase
     public function testAUserWrittenScopeIsRememberedOnlyWhenItCoversTheCallAndNamesTheTool(): void
     {
         $asked = ['command' => 'sed -n 1,5p f | sort | uniq'];
-        self::assertSame('sed * | sort * | uniq *', SessionPermissionMemo::editableScopeOf('Bash', $asked));
+        self::assertSame('sed *, sort *, uniq *', SessionPermissionMemo::editableScopeOf('Bash', $asked), 'one pattern per part');
+        self::assertSame(
+            ['Bash(sed)', 'Bash(sed *)', 'Bash(sort)', 'Bash(sort *)'],
+            SessionPermissionMemo::new()->withPattern('sed *, sort *', 'Bash', ['command' => 'sed -n 1,5p f | sort'])?->patterns(),
+            'the per-part list the editor starts from is saved as one grant per part',
+        );
+        self::assertNull(
+            SessionPermissionMemo::new()->withPattern('sed *, grep *', 'Bash', ['command' => 'sed -n 1,5p f | sort']),
+            'a list that leaves a part uncovered still asks',
+        );
+        self::assertNull(
+            SessionPermissionMemo::new()->withPattern('sed *, sort *, rm *', 'Bash', ['command' => 'sed -n 1,5p f | sort']),
+            'every listed pattern must match a part of this call — no typo grants something else',
+        );
+        // The whole-shape form still works when typed.
 
         $memo = SessionPermissionMemo::new()->withPattern('sed * | sort | uniq', 'Bash', $asked);
         self::assertNotNull($memo);
@@ -201,9 +234,9 @@ final class SessionPermissionMemoTest extends TestCase
             'the whole pattern may be typed too',
         );
         self::assertSame(
-            ['Bash(rm *)'],
+            ['Bash(rm)', 'Bash(rm *)'],
             SessionPermissionMemo::new()->withPattern('rm *', 'Bash', ['command' => 'rm a.txt'])?->patterns(),
-            'broader than the suggestion, because the user wrote it',
+            'broader than the suggestion, because the user wrote it — "any arguments" includes none',
         );
     }
 

@@ -127,7 +127,11 @@ final class AlwaysAllowReliabilityTest extends TestCase
         [$asking] = $chat->update(new ToolEventPumpMsg());
         [$granted] = $asking->update(new PermissionReplyMsg(PermissionReply::Always));
 
-        self::assertSame(['rule:Bash(sed * | sort * | uniq *)'], $store->permissionGrants('sess-a'), 'saved with the session');
+        self::assertSame(
+            ['rule:Bash(sed)', 'rule:Bash(sed *)', 'rule:Bash(sort)', 'rule:Bash(sort *)', 'rule:Bash(uniq)', 'rule:Bash(uniq *)'],
+            $store->permissionGrants('sess-a'),
+            'saved with the session, one grant per part',
+        );
 
         // A later launch on the same session (`--resume sess-a`) starts from it.
         $resumed = Chat::storedPermissionGrants($store, 'sess-a');
