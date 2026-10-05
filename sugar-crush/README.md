@@ -991,6 +991,9 @@ Six panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**,
 menu bar's right end carries a tab for chat plus each dockable pane, and the
 tab tells you the whole state at a glance: muted when the pane is undocked,
 full foreground when it is docked, bold-underlined when it also holds focus.
+Below about a hundred columns each tab shrinks to its icon (`[◫]` for Files)
+so the menus keep their room, the `Currently:` indicator still naming the
+focused pane; on a very narrow terminal the indicator drops its prefix too.
 Clicking a tab toggles docking — docking lands the pane on its home side and
 focuses it; undocking the focused pane hands focus back to chat. Clicking the
 **Chat** tab never hides anything (the center pane is always up); it just

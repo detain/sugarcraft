@@ -100,6 +100,18 @@ final class MenuBar
         Pane::Todo,
     ];
 
+    /**
+     * The strip's three densities, widest first ({@see density()}): every tab
+     * `[icon Label]` beside `Currently: Label`; every tab its icon alone
+     * (`[icon]`) with the indicator still naming the focused pane; and, when
+     * even that would be cut, the indicator's bare label.
+     */
+    private const DENSITY_FULL = 0;
+
+    private const DENSITY_ICONS = 1;
+
+    private const DENSITY_TERSE = 2;
+
     private static int $activeMenu = 0;
 
     /**
@@ -153,7 +165,8 @@ final class MenuBar
         // the zone sentinels are Private-Use cells Width counts as content,
         // and the whole point of the marked twin is that its visible columns
         // land where the painted ones do.
-        $tabsMeasure = self::paneTabs($a, $theme, false);
+        $density = self::density($a, $theme, $cols);
+        $tabsMeasure = self::paneTabs($a, $theme, false, $density);
 
         // The tab strip and the "Currently:" indicator are how the shell is
         // navigated, so when the terminal cannot hold the whole bar it is the
@@ -186,7 +199,39 @@ final class MenuBar
         }
         $output .= ' ';
 
-        return $output . self::paneTabs($a, $theme, $marked);
+        return $output . self::paneTabs($a, $theme, $marked, $density);
+    }
+
+    /**
+     * How dense the tab strip must be to fit $cols (roadmap 3.C remainder).
+     *
+     * The full strip is about ninety cells since the Todo tab, so below
+     * roughly a hundred columns it left room for no menu at all — F10 opened
+     * a dropdown under a title nobody could see — and below ninety-odd it ran
+     * off the edge, where the frame's clip cut the "Currently:" indicator and
+     * then the tabs themselves. So the full strip is kept only while the
+     * FIRST menu still fits beside it; narrower, every tab shrinks to its
+     * icon (the indicator still names the focused pane, and every tab keeps
+     * its click zone); narrower still, the indicator drops its "Currently:"
+     * prefix. Null — a caller measuring the bar on its own — is the full
+     * strip.
+     */
+    private static function density(App $a, Theme $theme, ?int $cols): int
+    {
+        if ($cols === null) {
+            return self::DENSITY_FULL;
+        }
+
+        $first = array_key_first(self::menus());
+        $menu = $first === null ? 0 : Width::string((string) $first) + 3;
+        // One leading cell, the first menu, the cell before the strip.
+        if ($cols >= 2 + $menu + Width::string(self::paneTabs($a, $theme, false, self::DENSITY_FULL))) {
+            return self::DENSITY_FULL;
+        }
+
+        return $cols >= 2 + Width::string(self::paneTabs($a, $theme, false, self::DENSITY_ICONS))
+            ? self::DENSITY_ICONS
+            : self::DENSITY_TERSE;
     }
 
     /**
@@ -206,9 +251,11 @@ final class MenuBar
      * Chat is the center column and always visible, so it only ever shows
      * the two focus states. With `$marked` every label also carries a
      * {@see PANE_TAB_ZONE_PREFIX} click zone — scan-only, for the reason
-     * {@see renderMarked()} gives.
+     * {@see renderMarked()} gives. $density is {@see density()}'s answer: a
+     * narrower one drops each tab's label, then the indicator's prefix, and
+     * changes nothing else.
      */
-    private static function paneTabs(App $a, Theme $theme, bool $marked): string
+    private static function paneTabs(App $a, Theme $theme, bool $marked, int $density = self::DENSITY_FULL): string
     {
         $tabs = ' ';
         foreach (self::PANE_TABS as $pane) {
@@ -224,7 +271,9 @@ final class MenuBar
                 default => Style::new()->foreground($theme->shellMuted),
             };
 
-            $label = $style->render('[' . $pane->icon() . ' ' . $pane->label() . ']');
+            $label = $style->render($density === self::DENSITY_FULL
+                ? '[' . $pane->icon() . ' ' . $pane->label() . ']'
+                : '[' . $pane->icon() . ']');
             $tabs .= $marked
                 ? Mark::zone(self::PANE_TAB_ZONE_PREFIX . $pane->value, $label)
                 : $label;
@@ -232,7 +281,7 @@ final class MenuBar
         }
 
         $current = Style::new()->foreground($theme->shellWarning)
-            ->render('Currently: ' . $a->pane->label());
+            ->render(($density === self::DENSITY_TERSE ? '' : 'Currently: ') . $a->pane->label());
 
         return $tabs . ' ' . $current;
     }
