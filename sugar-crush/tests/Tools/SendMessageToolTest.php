@@ -6,7 +6,11 @@ namespace SugarCraft\Crush\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Agents\Live\AgentInbox;
+use SugarCraft\Crush\Agents\Live\AgentMessage;
 use SugarCraft\Crush\Agents\Live\AgentRunCards;
+use SugarCraft\Crush\Agents\Live\MessageMode;
+use SugarCraft\Crush\Agents\Live\SubAgentTranscriptLog;
 use SugarCraft\Crush\Agents\SuspendedDelegations;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Messages\Message as TypedMessage;
@@ -181,6 +185,43 @@ final class SendMessageToolTest extends TestCase
         $task->execute(self::taskCall(['resume' => $card['resumeId'], 'prompt' => 'again']));
         $again = $provider->requests[2]->messages[\count($provider->requests[2]->messages) - 1];
         self::assertSame('again', $again->content(), 'a followup is delivered once');
+    }
+
+    /**
+     * The mailbox half of the same promise: a `followup` line in an earlier
+     * run's mailbox — the user's, signed under this launch's key — leads the
+     * instruction of the run that continues the conversation, once, and the
+     * run's log records it as an inbox delivery.
+     */
+    public function testAMailboxFollowupLeadsTheRunThatContinuesTheConversation(): void
+    {
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'found two bugs'),
+            new CompleteResponse(content: 'fixed'),
+            new CompleteResponse(content: 'fixed again'),
+        ]);
+        $engine = $this->engine($provider, []);
+        $task = $this->task($engine);
+        $task->execute(self::taskCall());
+        $card = AgentRunCards::runs($this->session)[0];
+
+        $inbox = AgentInbox::forSession($this->session);
+        self::assertNotNull($inbox);
+        $inbox->send($card['runId'], AgentMessage::fromUser('prefer the v2 client', MessageMode::Followup));
+
+        $task->execute(self::taskCall(['resume' => $card['resumeId'], 'prompt' => 'continue']));
+        $last = $provider->requests[1]->messages[\count($provider->requests[1]->messages) - 1];
+        self::assertInstanceOf(UserMessage::class, $last);
+        self::assertSame("<user-message via=\"agent-view\" mode=\"followup\">\nprefer the v2 client\n</user-message>\n\ncontinue", $last->content());
+
+        // A resume continues the log its suspension names: the first run's.
+        $log = (string) file_get_contents(SubAgentTranscriptLog::forRun($this->session, $card['runId'])->path());
+        self::assertStringContainsString('"t":"inbox"', $log, 'the delivery is in the conversation\'s log');
+        self::assertStringContainsString('prefer the v2 client', $log);
+
+        $task->execute(self::taskCall(['resume' => $card['resumeId'], 'prompt' => 'again']));
+        $again = $provider->requests[2]->messages[\count($provider->requests[2]->messages) - 1];
+        self::assertSame('again', $again->content(), 'a mailbox followup is delivered once');
     }
 
     public function testNobodyMessagesASibling(): void

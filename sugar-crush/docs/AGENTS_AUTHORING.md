@@ -375,7 +375,11 @@ the run records they write are harness state, never the project):
   `Task` or `Subagents list` gave it. To a **running** sub-agent a `steer`
   (the default) or `note` goes into its mailbox as `from: parent` and is read
   at its next step boundary; a `followup` is kept for the conversation's next
-  run and leads the instruction of whichever `Task` call resumes it. A
+  run and leads the instruction of whichever `Task` call resumes it. So does
+  a `followup` line in the mailbox of any earlier run of the conversation,
+  from whoever wrote it (`AgentInbox::takeFollowups()`): the run it was sent
+  to never reads it, the resume takes it once, checked like any mailbox line
+  (a user's needs this launch's HMAC) and logged as an inbox delivery. A
   **finished** sub-agent (a background one whose daemon has exited included)
   is continued: the message becomes the `prompt` of a `Task` call with its
   `resume` id, run through the session's own `Task` tool, and the new report

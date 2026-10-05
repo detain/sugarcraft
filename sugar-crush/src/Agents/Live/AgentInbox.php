@@ -173,7 +173,8 @@ final class AgentInbox
     /**
      * Every unread message for $agentId that the running agent reads now
      * ({@see MessageMode::deliveredMidRun()}), oldest first, each handed out
-     * once. Follow-ups and controls stay unread for their own readers.
+     * once. Follow-ups and controls stay unread for their own readers
+     * ({@see takeFollowups()}, {@see takeControls()}).
      *
      * A message that fails validation (a forged or tampered user message, a
      * malformed payload) is consumed and NOT returned. `$onRejected` is told
@@ -200,6 +201,23 @@ final class AgentInbox
     public function takeControls(string $agentId, ?\Closure $onRejected = null): array
     {
         return $this->take($agentId, static fn (MessageMode $mode): bool => $mode === MessageMode::Control, $onRejected);
+    }
+
+    /**
+     * Every unread {@see MessageMode::Followup} message for $agentId, oldest
+     * first, each handed out once and validated exactly as {@see drain()}
+     * validates (roadmap 4.4). A followup is for the conversation's NEXT run,
+     * so the run it was sent to never reads it: the run that continues the
+     * conversation does ({@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} on a
+     * resume), from the mailbox of every earlier run of that conversation.
+     *
+     * @param (\Closure(string $msgId, string $from, string $reason): void)|null $onRejected
+     *
+     * @return list<AgentMessage>
+     */
+    public function takeFollowups(string $agentId, ?\Closure $onRejected = null): array
+    {
+        return $this->take($agentId, static fn (MessageMode $mode): bool => $mode === MessageMode::Followup, $onRejected);
     }
 
     /**

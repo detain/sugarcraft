@@ -1265,6 +1265,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // continues it. They lead the new instruction, each framed by sender
         // like a mailbox message, inside the ONE user turn the resume adds.
         $followups = [];
+        // What the mailbox followups below did, written to the run's log once
+        // it exists: each delivery as an inbox row, each drop as a status.
+        $followupLog = [];
         if ($suspension !== null && $scope !== null) {
             foreach (\SugarCraft\Crush\Agents\Live\AgentRunCards::takeFollowups($scope, $suspension['id']) as $followup) {
                 try {
@@ -1274,6 +1277,45 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 } catch (\InvalidArgumentException) {
                     // A card line no message could carry: dropped, as the
                     // mailbox drops a malformed one.
+                }
+            }
+
+            // And the `followup` lines in the MAILBOX of every earlier run of
+            // this conversation (AgentInbox::takeFollowups()): a mailbox
+            // followup is never read by the run it was sent to, so without
+            // this it waited unread for good. Each is checked like any
+            // mailbox line — a user line needs this launch's HMAC — and
+            // framed by sender as the run's own inbox frames it.
+            $parentName = $this->parentAgentId ?? SendMessageTool::MAIN;
+            foreach (\SugarCraft\Crush\Agents\Live\AgentRunCards::runs($scope) as $card) {
+                if ($card['resumeId'] !== $suspension['id'] || $card['inboxSession'] === '') {
+                    continue;
+                }
+                $earlierInbox = \SugarCraft\Crush\Agents\Live\AgentInbox::forSession($card['inboxSession']);
+                if ($earlierInbox === null) {
+                    continue;
+                }
+                try {
+                    $taken = $earlierInbox->takeFollowups($card['runId'], static function (string $msgId, string $from, string $reason) use (&$followupLog): void {
+                        $followupLog[] = [SubAgentTranscriptLog::T_STATUS, [
+                            'status' => 'inbox',
+                            'outcome' => 'dropped a message',
+                            'error' => sprintf('%s (id %s, claimed sender %s)', $reason, $msgId, $from),
+                        ]];
+                    });
+                } catch (\InvalidArgumentException | \RuntimeException) {
+                    // A card naming no readable mailbox: nothing kept there.
+                    continue;
+                }
+                foreach ($taken as $message) {
+                    $followups[] = \SugarCraft\Crush\Backend\MailboxTurnInbox::frame($message, $parentName);
+                    $followupLog[] = [SubAgentTranscriptLog::T_INBOX, [
+                        'msgId' => $message->msgId,
+                        'from' => $message->from,
+                        'mode' => $message->mode->value,
+                        'text' => $message->text,
+                        'step' => 0,
+                    ]];
                 }
             }
         }
@@ -1304,6 +1346,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             $log = \is_string($savedLog) && SubAgentTranscriptLog::isLogPath($savedLog, $logRoot)
                 ? SubAgentTranscriptLog::at($savedLog)
                 : SubAgentTranscriptLog::forRun($parentSessionId, $subAgent->id, $logRoot);
+            foreach ($followupLog as [$type, $fields]) {
+                $log->append($type, $fields);
+            }
             $log->user($subAgent->task);
         }
         $logPath = $log?->path();
