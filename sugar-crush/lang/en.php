@@ -214,8 +214,9 @@ session; acp runs turns for an editor, until the editor disconnects):
                          the document and writes no file; the renames the
                          translation made are listed on stderr.
   serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <list>]
-        [--allowed-origin <list>] [--web-root <dir>] [--no-web]
-        [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>]
+        [--allowed-ips <list>] [--allowed-origin <list>] [--web-root <dir>]
+        [--no-web] [--allow-bypass] [--allow-root] [--detach]
+        [--parent-pid <pid>]
                          Run the WebSocket + HTTP server the web UI talks to,
                          in the foreground until Ctrl+C. Binds 127.0.0.1:7420
                          by default and prints a sign-in URL whose one-time
@@ -233,6 +234,12 @@ session; acp runs turns for an editor, until the editor disconnects):
       --allowed-host <list>
                          Comma-separated extra host names (or host:port) the
                          server answers to, e.g. a DNS name for this machine.
+                         Repeatable.
+      --allowed-ips <list>
+                         Comma-separated client IPs or CIDR ranges (e.g.
+                         1.2.3.4,10.0.0.0/8) allowed to connect; any other
+                         address is refused 403 before sign-in. Loopback is
+                         always allowed. Unset: no address filter.
                          Repeatable.
       --allowed-origin <list>
                          Comma-separated extra browser origins
@@ -456,6 +463,9 @@ Environment variables:
    SUGARCRUSH_SERVER_ALLOWED_HOSTS
                           Comma-separated extra host names `serve` answers to
                           (--allowed-host wins).
+   SUGARCRUSH_SERVER_ALLOWED_IPS
+                          Comma-separated client IPs or CIDRs `serve` admits
+                          beside loopback (--allowed-ips wins).
    SUGARCRUSH_SERVER_WEB_ROOT
                           Directory `serve` serves the web UI from (--web-root
                           wins).
@@ -705,7 +715,7 @@ TXT,
     'cli.serve.url.no_answer' => 'the server did not answer on {path}',
     'cli.serve.url.one_time_code' => '(one-time code, valid {seconds} s)',
     'cli.serve.url.token_refused' => 'the server refused this token (was it started with a different SUGARCRUSH_SERVER_TOKEN?)',
-    'cli.serve.usage' => 'Usage: sugarcrush serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-origin <origins>] [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>] | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]',
+    'cli.serve.usage' => 'Usage: sugarcrush serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-ips <ips>] [--allowed-origin <origins>] [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>] | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]',
     'cli.serve.workspace_unavailable' => 'cannot open the workspace: {error}',
     'cli.session.accepts' => 'session {action} accepts: {flags}.',
     'cli.session.ambiguous' => 'session {action} {target}: ambiguous id prefix, {count} sessions match',
@@ -2280,4 +2290,11 @@ TXT,
     'tui.tools.newer' => '↑ {count} newer',
     'tui.tools.no_output' => '(no output)',
     // --- end tui/palette (W11-d) ---
+
+    // --- serve remote (feature) ---
+    'serve.ip_refused' => 'this server does not accept connections from {address}; start it with --allowed-ips {address} or add it to server.allowedIps',
+    'serve.ip_refused.log' => 'refused client {address}: not in --allowed-ips / server.allowedIps',
+    'serve.ip_refused.unknown' => 'an unknown address',
+    'serve.allowed_ips.invalid' => 'allowed IP "{entry}" is not an IP address or CIDR range (e.g. 192.0.2.7, 10.0.0.0/8, 2001:db8::/32)',
+    'serve.announce.allowed_ips' => '  allowed IPs:     {ips} (and loopback); everyone else is refused',
 ];

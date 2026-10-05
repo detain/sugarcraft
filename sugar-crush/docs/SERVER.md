@@ -48,6 +48,7 @@ Open the sign-in URL in a browser on the same machine. The code rides in the URL
 | `--port <n>` | `7420` | Port to bind; `0` picks a free one. |
 | `--allow-remote` | off | Permit a non-loopback `--host`. Prints a cleartext warning: there is no built-in TLS. On a wildcard bind (`0.0.0.0`, `::`) the server also answers to this machine's own addresses and its sign-in URLs name them ([Remote access](#remote-access)). |
 | `--allowed-host <list>` | none | Comma-separated extra host names (or `host:port`; an IPv6 address in brackets) the server answers to beside the loopback names and its own addresses — e.g. a DNS name for this machine. Repeats accumulate. |
+| `--allowed-ips <list>` | none — every address | Comma-separated client IPs or CIDR ranges (`1.2.3.4,10.0.0.0/8,2001:db8::/32`) allowed to connect. Any other client is refused `403 ip_refused` before the Host check, sign-in or any credential; loopback is always allowed. Repeats accumulate ([Remote access](#remote-access)). |
 | `--allowed-origin <list>` | none | Comma-separated extra browser origins (`http(s)://host[:port]`) accepted beside the server's own. Repeats accumulate. |
 | `--web-root <dir>` | the installed `sugarcraft/sugar-crush-web` build | Serve the UI from `<dir>`. |
 | `--no-web` | off | API and WebSocket only. |
@@ -72,6 +73,7 @@ the TUI's and does not apply here.
 | `SUGARCRUSH_SERVER_PORT` | `server.port` | Bind port. |
 | `SUGARCRUSH_SERVER_ALLOWED_ORIGINS` | `server.allowedOrigins` | Extra origins (a comma-separated string; the key is a JSON list). |
 | `SUGARCRUSH_SERVER_ALLOWED_HOSTS` | `server.allowedHosts` | Host names (or `host:port`) answered beside the loopback names and the server's own addresses — a reverse proxy's public name (a comma-separated string; the key is a JSON list). |
+| `SUGARCRUSH_SERVER_ALLOWED_IPS` | `server.allowedIps` | Client IPs or CIDRs allowed to connect beside loopback; unset or empty admits every address (a comma-separated string; the key is a JSON list). |
 | `SUGARCRUSH_SERVER_WEB_ROOT` | — | UI directory. |
 | `SUGARCRUSH_SERVER_TOKEN` | — | The owner token, instead of the stored one (≥ 32 characters; for containers). |
 | `SUGARCRUSH_SERVER_DIR` | — | State directory, default `~/.sugar-crush/server`. |
@@ -92,7 +94,8 @@ modes. A non-loopback `server.host` still needs `--allow-remote` on each launch.
   `url` or `token`, a flag belongs to a different action (`serve stop
   --detach`), or a flag value is malformed (a port that is not `0`–`65535`, an
   origin that is not `http(s)://host[:port]`, an allowed host that is not
-  `host[:port]`, a `--parent-pid` that is not a pid);
+  `host[:port]`, an allowed IP that is not an address or CIDR range, a
+  `--parent-pid` that is not a pid);
 - `--host` is not loopback and `--allow-remote` was not given;
 - the permission mode is `bypass-permissions` or `dont-ask` and neither
   `--allow-bypass` nor `server.allowBypass` permits it;
@@ -1019,6 +1022,10 @@ report what it returned:
 
 - **Loopback by default.** `127.0.0.1` only; any other bind needs
   `--allow-remote` and gets a warning box.
+- **Client address allow-list (opt-in).** With `--allowed-ips` /
+  `server.allowedIps` set, a client whose address is not listed (loopback is
+  always admitted) is refused `403 ip_refused` first — before the `Host` and
+  `Origin` checks, the sign-in code and any credential.
 - **`Host` check (DNS rebinding).** Only `127.0.0.1`, `localhost`, `[::1]` (any
   port), the bind address itself when it is not loopback, and
   `server.allowedHosts` are answered; anything else is `421`.
@@ -1120,6 +1127,45 @@ allowed:
 The server log names the refused host the same way. `--allowed-host` (or
 `SUGARCRUSH_SERVER_ALLOWED_HOSTS`, or `server.allowedHosts`) takes a host name,
 which matches on any port, or a `host:port`, which pins the port.
+
+### Limiting who may connect (`--allowed-ips`)
+
+A direct bind answers anyone who can reach the port — they still need the
+sign-in code or the token, but they can try. `--allowed-ips` narrows that to
+the addresses you name:
+
+```sh
+sugarcrush serve --host 0.0.0.0 --allow-remote --allowed-ips 203.0.113.7,10.0.0.0/8
+```
+
+It takes single IPv4 or IPv6 addresses and CIDR ranges, comma-separated;
+repeats accumulate, and `SUGARCRUSH_SERVER_ALLOWED_IPS` or the user-config key
+`server.allowedIps` (a JSON list) say the same when the flag is absent (the
+highest source that is set wins outright). An entry that is neither an address
+nor a range is refused at startup, exit `2`. An IPv4-mapped IPv6 address
+(`::ffff:203.0.113.7`, what a dual-stack `::` bind reports for an IPv4 client)
+counts as the IPv4 address it carries, on either side.
+
+- **Loopback is always allowed** (`127.0.0.0/8`, `::1`), so `serve url`,
+  `sugarcrush attach` and a reverse proxy on this machine keep working.
+- **The client is the TCP peer** — unless that peer is one of
+  `server.trustedProxies`, in which case it is the forwarded
+  `X-Forwarded-For` client the server already believes for rate limiting.
+  Behind a trusted proxy the list therefore filters the real clients, and a
+  proxied request is not admitted merely because the proxy is on loopback.
+- **A refusal comes first** — before the `Host` check, the sign-in code and
+  any credential — for HTTP requests and WebSocket upgrades alike:
+
+```
+HTTP/1.1 403 Forbidden
+{"error":{"kind":"ip_refused","message":"this server does not accept connections from 198.51.100.4; start it with --allowed-ips 198.51.100.4 or add it to server.allowedIps"}}
+```
+
+The server log records `refused client 198.51.100.4: not in --allowed-ips /
+server.allowedIps`, and the startup lines list the admitted ranges. Unset (the
+default) there is no address filter at all. The list is a filter, not
+encryption: over plain HTTP the traffic of an admitted client is still
+cleartext.
 
 ## Behind a reverse proxy (TLS)
 

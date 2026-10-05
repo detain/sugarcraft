@@ -77,7 +77,7 @@ final readonly class ParsedArgs
         ],
         // `serve` (Appendix O §4.7): every flag scoped, none global — a
         // `--port` before the verb is an unknown option, not a server setting.
-        // `--allowed-origin` and `--allowed-host` take a comma-separated list
+        // `--allowed-origin`, `--allowed-host` and `--allowed-ips` take a comma-separated list
         // and, unlike every other value flag here, ACCUMULATE across repeats
         // (self::REPEATABLE_SUBCOMMAND_FLAGS). The management actions'
         // flags (`stop --force`, `logs -f`, `token --rotate`; O-4a) share the
@@ -87,6 +87,7 @@ final readonly class ParsedArgs
             '--allow-remote' => false,
             '--allow-root' => false,
             '--allowed-host' => true,
+            '--allowed-ips' => true,
             '--allowed-origin' => true,
             '--detach' => false,
             '--follow' => false,
@@ -116,7 +117,7 @@ final readonly class ParsedArgs
      * @var array<string, list<string>>
      */
     public const REPEATABLE_SUBCOMMAND_FLAGS = [
-        'serve' => ['--allowed-host', '--allowed-origin'],
+        'serve' => ['--allowed-host', '--allowed-ips', '--allowed-origin'],
     ];
 
     /**

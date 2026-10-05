@@ -1810,6 +1810,8 @@ machine's own addresses and its sign-in URLs name them; any other host name
 needs `--allowed-host` (or `server.allowedHosts`), and plain HTTP beyond
 loopback is cleartext — an SSH tunnel or a TLS reverse proxy is the safer
 route ([Remote access](docs/SERVER.md#remote-access)).
+`--allowed-ips 1.2.3.4,10.0.0.0/8` (or `server.allowedIps`) refuses every
+other client address before sign-in; loopback is always allowed.
 The flags belong to `serve` (before it they are unknown options). `serve
 --detach` runs it in the background instead, printing the URL and pid once the
 port is bound; `serve status`, `stop`, `logs`, `url` (a fresh sign-in link) and

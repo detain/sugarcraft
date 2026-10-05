@@ -83,7 +83,7 @@ final class Serve
      * @var array<string, list<string>>
      */
     public const ACTION_FLAGS = [
-        '' => ['--allow-bypass', '--allow-remote', '--allow-root', '--allowed-host', '--allowed-origin', '--detach', '--host', '--no-web', '--parent-pid', '--port', '--web-root'],
+        '' => ['--allow-bypass', '--allow-remote', '--allow-root', '--allowed-host', '--allowed-ips', '--allowed-origin', '--detach', '--host', '--no-web', '--parent-pid', '--port', '--web-root'],
         'status' => [],
         'stop' => ['--force'],
         'logs' => ['--follow', '-f'],
@@ -1129,6 +1129,7 @@ final class Serve
             'SUGARCRUSH_SERVER_PORT',
             'SUGARCRUSH_SERVER_ALLOWED_ORIGINS',
             'SUGARCRUSH_SERVER_ALLOWED_HOSTS',
+            'SUGARCRUSH_SERVER_ALLOWED_IPS',
             'SUGARCRUSH_SERVER_WEB_ROOT',
             'SUGARCRUSH_SERVER_TOKEN',
             'SUGARCRUSH_SERVER_DIR',
@@ -1203,6 +1204,7 @@ final class Serve
             $static->root() !== null
                 ? Lang::t('cli.serve.announce.web', ['dir' => $static->root()])
                 : Lang::t('cli.serve.announce.web_missing'),
+            ...($config->allowedIps === [] ? [] : [Lang::t('serve.announce.allowed_ips', ['ips' => \implode(', ', $config->allowedIps)])]),
             Lang::t('cli.serve.announce.sign_in', ['url' => \implode("\n                   ", $loginUrls)]),
             $detached
                 ? Lang::t('cli.serve.announce.code_detached', $ttl)

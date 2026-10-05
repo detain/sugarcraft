@@ -17,6 +17,7 @@ use Ratchet\RFC6455\Messaging\Frame;
 use SugarCraft\Crush\Server\Auth\AuthContext;
 use SugarCraft\Crush\Server\Http\ApiController;
 use SugarCraft\Crush\Server\Http\AuthMiddleware;
+use SugarCraft\Crush\Server\Http\ClientAddressGuard;
 use SugarCraft\Crush\Server\Http\HostAndOriginGuard;
 use SugarCraft\Crush\Server\Http\Router;
 use SugarCraft\Crush\Server\Http\StaticFiles;
@@ -36,10 +37,12 @@ use function React\Promise\resolve;
  *     flight and a {@see ServerConfig::MAX_API_BODY_BYTES} body, buffered
  *     before anything reads it;
  *  2. the request log (method, path, status — refusals included);
- *  3. {@see HostAndOriginGuard} — DNS rebinding and cross-site requests;
- *  4. {@see AuthMiddleware} — a credential on everything but health, login
+ *  3. {@see ClientAddressGuard} — `--allowed-ips`, ahead of everything that
+ *     could tell a refused address more than "refused";
+ *  4. {@see HostAndOriginGuard} — DNS rebinding and cross-site requests;
+ *  5. {@see AuthMiddleware} — a credential on everything but health, login
  *     and the static UI;
- *  5. {@see Router} — `/ws`, `/api/*`, the UI.
+ *  6. {@see Router} — `/ws`, `/api/*`, the UI.
  *
  * WHAT A MESSAGE MEANS is the handler's: `sugarcrush serve` hands this the
  * `sugarcrush.v1` {@see \SugarCraft\Crush\Protocol\Dispatcher} (O-3b) over the
@@ -106,6 +109,7 @@ final class Server
             return (string) $this->listener->getAddress();
         }
 
+        $addressGuard = new ClientAddressGuard($this->config, $this->log);
         $guard = new HostAndOriginGuard($this->config, $this->log);
         $authMiddleware = new AuthMiddleware($this->auth, $this->config);
         $api = new ApiController($this->auth, $this->config);
@@ -137,6 +141,7 @@ final class Server
                     return $response;
                 });
             },
+            $addressGuard,
             $guard,
             $authMiddleware,
             $router(...),

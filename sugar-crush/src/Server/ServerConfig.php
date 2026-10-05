@@ -74,6 +74,7 @@ final class ServerConfig
      * @param list<string> $allowedHosts   lower-cased `host` or `host:port`
      * @param list<string> $trustedProxies IPs or CIDRs whose X-Forwarded-* count
      * @param list<string> $interfaceAddresses this machine's own IPs, for a wildcard bind ({@see InterfaceAddresses})
+     * @param list<string> $allowedIps     client IPs/CIDRs admitted beside loopback; empty admits every address ({@see Http\ClientAddressGuard})
      */
     private function __construct(
         public readonly string $host,
@@ -94,6 +95,7 @@ final class ServerConfig
         public readonly float $askTimeoutSeconds = self::DEFAULT_ASK_TIMEOUT_SECONDS,
         public readonly float $drainSeconds = self::DEFAULT_DRAIN_SECONDS,
         public readonly array $interfaceAddresses = [],
+        public readonly array $allowedIps = [],
     ) {
     }
 
@@ -164,6 +166,10 @@ final class ServerConfig
         $hosts = $pick('--allowed-host', 'SUGARCRUSH_SERVER_ALLOWED_HOSTS', 'server.allowedHosts');
         if ($hosts !== null) {
             $config = $config->withAllowedHosts(self::listValue('allowed hosts', $hosts));
+        }
+        $ips = $pick('--allowed-ips', 'SUGARCRUSH_SERVER_ALLOWED_IPS', 'server.allowedIps');
+        if ($ips !== null) {
+            $config = $config->withAllowedIps(self::listValue('allowed IPs', $ips));
         }
         if (isset($userConfig['server.trustedProxies'])) {
             $config = $config->withTrustedProxies(self::listValue('trusted proxies', $userConfig['server.trustedProxies']));
@@ -302,6 +308,27 @@ final class ServerConfig
     public function withInterfaceAddresses(array $addresses): self
     {
         return $this->mutate(interfaceAddresses: InterfaceAddresses::usable($addresses));
+    }
+
+    /**
+     * The client addresses admitted beside loopback ({@see Http\ClientAddressGuard}):
+     * IPs or CIDRs, IPv4-mapped IPv6 ones stored as the IPv4 they carry. An
+     * empty list turns the filter off.
+     *
+     * @param list<string> $ips
+     */
+    public function withAllowedIps(array $ips): self
+    {
+        $normalised = [];
+        foreach ($ips as $ip) {
+            $range = Http\ClientAddress::normaliseRange($ip);
+            if ($range === null) {
+                throw new ServerConfigException(Lang::t('serve.allowed_ips.invalid', ['entry' => \trim($ip)]));
+            }
+            $normalised[] = $range;
+        }
+
+        return $this->mutate(allowedIps: \array_values(\array_unique($normalised)));
     }
 
     /** @param list<string> $proxies */

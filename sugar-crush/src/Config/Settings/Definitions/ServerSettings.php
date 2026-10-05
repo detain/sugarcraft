@@ -74,6 +74,15 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.server.allowedHosts.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            SettingDefinition::new('server.allowedIps', SettingType::StringList, [])
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withEnvVar('SUGARCRUSH_SERVER_ALLOWED_IPS')
+                ->withUi(UiEditability::List)
+                ->withLabel('Server allowed client IPs')
+                ->withHelp('Client IPs or CIDR ranges allowed to connect beside loopback; anyone else is refused 403 before sign-in. Empty: no address filter.')
+                ->withReaderSymbol(ServerConfig::class . '::resolve')
+                ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.trustedProxies', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)

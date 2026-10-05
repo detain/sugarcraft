@@ -121,6 +121,21 @@ final class ServeArgsTest extends TestCase
         self::assertSame(['--port' => '2'], self::parse(['serve', '--port', '1', '--port', '2'])->subcommandFlags, 'other value flags still keep the last');
     }
 
+    public function testAllowedIpsResolveFlagThenVariableThenUserKey(): void
+    {
+        $env = ['SUGARCRUSH_SERVER_ALLOWED_IPS' => '192.0.2.0/24, 2001:DB8::1'];
+        $user = ['server.allowedIps' => ['198.51.100.9']];
+
+        self::assertSame(
+            ['1.2.3.4', '10.0.0.0/8', '203.0.113.7'],
+            self::config(['serve', '--allowed-ips', '1.2.3.4,10.0.0.0/8', '--allowed-ips=::ffff:203.0.113.7'], $env, $user)->allowedIps,
+            'repeats accumulate; a mapped address is its IPv4',
+        );
+        self::assertSame(['192.0.2.0/24', '2001:db8::1'], self::config(['serve'], $env, $user)->allowedIps);
+        self::assertSame(['198.51.100.9'], self::config(['serve'], [], $user)->allowedIps);
+        self::assertSame([], self::config(['serve'])->allowedIps, 'unset: no address filter');
+    }
+
     public function testAWildcardRemoteBindNamesThisMachinesAddressesInItsUrls(): void
     {
         $wildcard = self::config(['serve', '--host', '0.0.0.0', '--allow-remote'])->withInterfaceAddresses(['127.0.0.1', '69.10.33.243', 'fe80::1', '2001:db8::1', '10.0.0.5']);
@@ -169,6 +184,9 @@ final class ServeArgsTest extends TestCase
             'allowed host flag' => [['serve', '--allowed-host', 'http://a.example'], [], [], 'is not a host name'],
             'allowed host port' => [['serve'], ['SUGARCRUSH_SERVER_ALLOWED_HOSTS' => 'a.example:70000'], [], 'is not a host name'],
             'allowed host brackets' => [['serve', '--allowed-host', '[nothex]'], [], [], 'is not a host name'],
+            'allowed ip flag' => [['serve', '--allowed-ips', '1.2.3.4,example.com'], [], [], 'allowed IP "example.com" is not an IP address or CIDR range'],
+            'allowed ip prefix' => [['serve'], ['SUGARCRUSH_SERVER_ALLOWED_IPS' => '10.0.0.0/40'], [], 'is not an IP address or CIDR range'],
+            'allowed ip key type' => [['serve'], [], ['server.allowedIps' => [7]], 'list of strings'],
             'bypass key type' => [['serve'], [], ['server.allowBypass' => 'yes'], 'must be true or false'],
             'list type' => [['serve'], [], ['server.allowedOrigins' => [1]], 'list of strings'],
         ];
