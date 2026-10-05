@@ -10,7 +10,8 @@ use SugarCraft\Crush\Lang;
 
 /**
  * The `chat.` / `host.` catalogue (audit 15b-14, step 15b-14-4a) agrees with
- * its call sites in `src/Chat.php` and `src/Host/**`.
+ * its call sites in `src/Chat.php`, `src/Host/**` and the grant scopes
+ * `src/Permissions/SessionPermissionMemo.php` names for Chat's modal.
  *
  * LangParityTest already proves every literal key src asks for exists. What it
  * cannot see is the other half of a call: the parameters. A call that passes
@@ -80,7 +81,7 @@ final class ChatHostLangCatalogueTest extends TestCase
         }
 
         $unused = array_values(array_diff(array_keys($this->catalogue()), array_keys($asked)));
-        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php or src/Host asks for');
+        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host or SessionPermissionMemo asks for');
     }
 
     public function testTheEnglishRenderingIsTheTextTheLiteralsUsedToSpell(): void
@@ -118,7 +119,9 @@ final class ChatHostLangCatalogueTest extends TestCase
     /** @return array<string, string> path => source */
     private function sources(): array
     {
-        $files = [self::SRC . '/Chat.php'];
+        // SessionPermissionMemo names what a session grant remembers, in the
+        // words Chat's permission modal shows (`this exact command`).
+        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php'];
         $walk = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(self::SRC . '/Host', \FilesystemIterator::SKIP_DOTS),
         );

@@ -14977,7 +14977,7 @@ final class Chat implements Model
                 case $Action::DeleteWithChildren:
                     $target = $picker->armedDeleteId();
                     if ($target === null || $target === $this->currentSessionId) {
-                        return $keep($picker->withNotice(Lang::t('chat.picker.delete_current')));
+                        return $keep($picker->withNotice(Lang::t('tui.picker.notice.delete_current')));
                     }
                     $deleted = $store->deleteSession($target, $action === $Action::DeleteWithChildren);
                     $count = count($deleted);

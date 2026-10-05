@@ -112,9 +112,9 @@ final class LangParityTest extends TestCase
     }
 
     /**
-     * The seeded keys are the ones the settings schema already names (D7), and
-     * each must still say what the literal label says — so moving
-     * SettingCategory::label() onto Lang::t() is a no-op in English.
+     * SettingCategory names each tab's key twice: literally in label() (the
+     * only form the census above can see) and by convention in labelKey(),
+     * which the TUI reads. The two must resolve to the same text.
      */
     public function testSettingCategoryLabelKeysResolveToTheirEnglishLabels(): void
     {

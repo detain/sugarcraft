@@ -5,14 +5,20 @@ declare(strict_types=1);
 /**
  * English source-of-truth catalogue for sugar-crush's `crush` namespace
  * ({@see \SugarCraft\Crush\Lang}). Every other `lang/<locale>.php` carries
- * exactly these keys with the same `{placeholders}` (tests/LangParityTest.php).
+ * exactly these keys with the same `{placeholders}` (tests/LangParityTest.php),
+ * and every literal key `src/` asks for must exist here.
  *
- * The settings tabs are seeded first because their keys already exist:
- * {@see \SugarCraft\Crush\Config\Settings\SettingCategory::labelKey()} names
- * each one, and LangParityTest pins every value here to the literal
- * {@see \SugarCraft\Crush\Config\Settings\SettingCategory::label()} still
- * returns (decision D7), so swapping that method onto Lang::t() changes
- * nothing in English.
+ * Only text a PERSON reads lives here. Text the model reads — the system
+ * prompt, tool descriptions and results, model-visible notices — protocol wire
+ * values and log lines stay English in the code (LOCALES.md, sugar-crush row).
+ * The generated docs read this catalogue but are always English: their
+ * generators render under `Lang::inLocale('en', …)`, whatever the launch
+ * locale is.
+ *
+ * The settings tabs come first; the rest is one block per area, each sorted
+ * by key: `cli.` (the binary and its subcommands), `cmd.`/`keys.`/`settings.`
+ * (the command, key-binding and settings registries), `chat.`/`host.` (the
+ * session's notices, refusals and replies) and `tui.`/`palette.` (the screen).
  */
 return [
     'settings.category.model' => 'Model & Provider',
@@ -653,11 +659,14 @@ TXT,
     'cli.serve.announce.stop' => '  stop:            sugarcrush serve stop',
     'cli.serve.announce.web' => '  web UI:          {dir}',
     'cli.serve.announce.web_missing' => '  web UI:          not installed (composer require sugarcraft/sugar-crush-web)',
+    'cli.serve.config.allowed_host_invalid' => 'allowed host "{host}" is not a host name or host:port (an IPv6 address in brackets)',
     'cli.serve.draining.many' => 'sugarcrush serve: draining ({reason}) — waiting up to {seconds} s for {count} running turns; signal again to stop now',
     'cli.serve.draining.one' => 'sugarcrush serve: draining ({reason}) — waiting up to {seconds} s for {count} running turn; signal again to stop now',
     'cli.serve.failed_to_start' => 'the background server failed to start',
     'cli.serve.flag_not_for_action' => 'sugarcrush serve {action}: {flag} does not apply to this action',
     'cli.serve.flag_not_for_start' => 'sugarcrush serve: {flag} does not apply to starting a server',
+    'cli.serve.host_refused' => 'this server does not answer to host "{host}"; {fix}',
+    'cli.serve.host_refused_fix' => 'start it with --allowed-host {host} or add it to server.allowedHosts',
     'cli.serve.logs.follow_json' => 'sugarcrush serve logs: -f streams text; it does not combine with --output-format json',
     'cli.serve.logs.no_log' => 'no log',
     'cli.serve.logs.no_log_at' => 'sugarcrush serve logs: no log at {path} (only a detached server writes one)',
@@ -1298,6 +1307,7 @@ TXT,
     'settings.scrollWheelLines.label' => 'Wheel step (lines)',
     'settings.secretEnvAllowlist.label' => 'Secret env allowlist',
     'settings.server.allowBypass.label' => 'Server allows bypass modes',
+    'settings.server.allowedHosts.help' => 'Host names (or host:port) the server answers to beside the loopback names and its own addresses, e.g. a reverse proxy\'s.',
     'settings.server.allowedHosts.label' => 'Server allowed hosts',
     'settings.server.allowedOrigins.label' => 'Server allowed origins',
     'settings.server.askTimeoutSeconds.label' => 'Server permission-question timeout',
@@ -1407,9 +1417,11 @@ TXT,
     'chat.permission.answer.once' => 'allowed once',
     'chat.permission.answer.refused' => 'refused',
     'chat.permission.answer.refused_note' => 'refused ({note})',
+    'chat.permission.scope.exact_call' => 'this exact call',
+    'chat.permission.scope.exact_command' => 'this exact command',
+    'chat.permission.scope.exact_command_without_cd' => 'this exact command without the leading cd',
     'chat.permission.subagent_answered' => 'sub-agent {agent} asked to run {tool}: {answer}',
     'chat.picker.archived' => 'Archived. Press a to show archived sessions, u to bring one back.',
-    'chat.picker.delete_current' => 'This is the session on screen; switch to another before deleting it.',
     'chat.picker.delete_hint' => 'Highlight a session and press d twice to delete it; the session on screen cannot be deleted.',
     'chat.picker.deleted' => 'Deleted the session.',
     'chat.picker.deleted_with_children' => 'Deleted the session and {sessions} under it.',
@@ -1928,6 +1940,7 @@ TXT,
     'tui.pane.title.skills' => 'skills',
     'tui.pane.title.todo' => 'todo',
     'tui.pane.title.tools' => 'tools',
+    'tui.permission.agent_note' => 'Agent\'s note: {note}',
     'tui.permission.allow_once' => 'allow once',
     'tui.permission.always_once' => 'allow once — this question is asked every time',
     'tui.permission.always_scope' => 'always allow {scope} (this session) — asks first',
@@ -1948,6 +1961,7 @@ TXT,
     'tui.permission.lead_answer' => 'Your answer:',
     'tui.permission.lead_feedback' => 'What should change?',
     'tui.permission.lead_refusal' => 'Why are you refusing?',
+    'tui.permission.more_command_lines' => '… {count} more lines of this command …',
     'tui.permission.plan_approve' => 'approve the plan; plan mode ends with this turn',
     'tui.permission.plan_feedback' => 'send feedback, keep planning',
     'tui.permission.plan_refuse' => 'refuse the plan',
@@ -1957,6 +1971,7 @@ TXT,
     'tui.permission.reject_and_stop' => 'reject and stop the turn',
     'tui.permission.reject_live' => 'reject (always live)',
     'tui.permission.reject_with_note' => 'reject with a note the agent reads',
+    'tui.permission.run_command' => 'Run this command?',
     'tui.permission.send_answer' => 'send this answer',
     'tui.permission.send_feedback' => 'send this feedback; plan mode stays on',
     'tui.permission.send_note' => 'reject with this note',

@@ -52,4 +52,42 @@ final class Lang extends BaseLang
             T::setLocale($previous);
         }
     }
+
+    /**
+     * Select the process locale from the environment, once, at launch, the
+     * way POSIX ranks it: the first of `LC_ALL`, `LC_MESSAGES`, `LANG` that is
+     * set and non-empty decides — `LANG=de_DE.UTF-8` reads `de-de`, then `de`,
+     * then English per key.
+     *
+     * Nothing else selects one — T starts at `en` and its detection is
+     * opt-in — so without this call every shipped translation stays unseen.
+     * `bin/sugarcrush` makes it before anything is parsed or printed.
+     * Not {@see T::detect()} itself: that one skips a `C` it finds and reads
+     * on, so `LC_ALL=C` under `LANG=de_DE` would pick German, while the
+     * deciding variable naming `C`/`POSIX` (with or without an encoding, e.g.
+     * `C.UTF-8`) means the untranslated messages, English here. So does no
+     * variable at all, or a value that is not a language tag (`en`, `pt-br`,
+     * `zh-hant-tw`): the tag becomes part of a `lang/<tag>.php` path.
+     *
+     * Returns the locale it selected.
+     */
+    public static function useLaunchLocale(): string
+    {
+        $locale = 'en';
+        foreach (['LC_ALL', 'LC_MESSAGES', 'LANG'] as $variable) {
+            $raw = $_SERVER[$variable] ?? \getenv($variable);
+            if (!\is_string($raw) || $raw === '') {
+                continue;
+            }
+            // `fr_FR.UTF-8@euro` → `fr-fr`; `C.UTF-8` → `c`.
+            $tag = \strtolower(\str_replace('_', '-', (string) \preg_replace('/[.@].*$/', '', $raw)));
+            if ($tag !== 'c' && $tag !== 'posix' && \preg_match('/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/', $tag) === 1) {
+                $locale = $tag;
+            }
+            break;
+        }
+        T::setLocale($locale);
+
+        return $locale;
+    }
 }

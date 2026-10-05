@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Server\Http;
 
 use Psr\Http\Message\ServerRequestInterface;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Server\ServerConfig;
 
 /**
@@ -63,12 +64,14 @@ final class HostAndOriginGuard
         if (!$this->answersTo($host)) {
             // The name passed normaliseAuthority()'s pattern: no quote, space
             // or control byte can ride into the message or the log.
-            $fix = \sprintf('start it with --allowed-host %s or add it to server.allowedHosts', $host['name']);
             if ($this->log !== null) {
-                ($this->log)(\sprintf('refused host "%s": %s', $host['name'], $fix));
+                ($this->log)(\sprintf('refused host "%s": start it with --allowed-host %s or add it to server.allowedHosts', $host['name'], $host['name']));
             }
 
-            return Responses::error(421, 'host_refused', \sprintf('this server does not answer to host "%s"; %s', $host['name'], $fix));
+            return Responses::error(421, 'host_refused', Lang::t('cli.serve.host_refused', [
+                'host' => $host['name'],
+                'fix' => Lang::t('cli.serve.host_refused_fix', ['host' => $host['name']]),
+            ]));
         }
 
         if (!self::isStateChanging($request)) {

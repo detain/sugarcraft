@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Server;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Permissions\PermissionMode;
 
 /**
@@ -283,7 +284,7 @@ final class ServerConfig
                 || (\str_starts_with($m[1], '[') && @\inet_pton(\substr($m[1], 1, -1)) === false)
                 || (isset($m[2]) && (int) $m[2] > 65535)
             ) {
-                throw new ServerConfigException(\sprintf('allowed host "%s" is not a host name or host:port (an IPv6 address in brackets)', $host));
+                throw new ServerConfigException(Lang::t('cli.serve.config.allowed_host_invalid', ['host' => $host]));
             }
             $normalised[] = $host;
         }

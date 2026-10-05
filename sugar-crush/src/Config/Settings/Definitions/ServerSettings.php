@@ -71,7 +71,7 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withEnvVar('SUGARCRUSH_SERVER_ALLOWED_HOSTS')
                 ->withUi(UiEditability::List)
                 ->withLabel(Lang::t('settings.server.allowedHosts.label'))
-                ->withHelp('Host names (or host:port) the server answers to beside the loopback names and its own addresses, e.g. a reverse proxy\'s.')
+                ->withHelp(Lang::t('settings.server.allowedHosts.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.trustedProxies', SettingType::StringList, [])

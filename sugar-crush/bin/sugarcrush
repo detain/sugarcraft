@@ -217,7 +217,13 @@ use SugarCraft\Crush\Cli\NonInteractive;
 use SugarCraft\Crush\Cli\PermissionConfigException;
 use SugarCraft\Crush\Cli\Subcommands;
 use SugarCraft\Crush\Diagnostics\TuiErrorLog;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Support\HomeDirectory;
+
+// The locale comes first: everything below — the parser's refusals included —
+// may print user-facing text, and it reads the locale when it does. LC_ALL /
+// LC_MESSAGES / LANG pick it; English when they name none.
+Lang::useLaunchLocale();
 
 // Parse argv first and dispatch before ever touching Program/Bootstrap::chat()
 // — `--help` and `-p`/`run "<prompt>"` must never attach to the TTY or enter

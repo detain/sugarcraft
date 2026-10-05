@@ -6359,7 +6359,7 @@ final class Renderer
         $lines = [];
         if (\is_string($command) && trim($command) !== '') {
             $lines[] = Style::new()->foreground($theme->userLabel)->bold()
-                ->render(self::wrapPermissionText('Run this command?', $inner));
+                ->render(self::wrapPermissionText(Lang::t('tui.permission.run_command'), $inner));
             $lines[] = Style::new()->foreground($theme->assistantLabel)
                 ->render(self::permissionCommandBlock($command, $inner));
         } else {
@@ -6371,7 +6371,7 @@ final class Renderer
 
         $caption = \is_string($caption) ? trim((string) preg_replace('/\s+/u', ' ', self::permissionVisibleOneLine($caption))) : '';
         if ($caption !== '') {
-            $rows = explode("\n", Width::wrap("Agent's note: " . $caption, max(2, $inner)));
+            $rows = explode("\n", Width::wrap(Lang::t('tui.permission.agent_note', ['note' => $caption]), max(2, $inner)));
             if (\count($rows) > 2) {
                 $rows = [$rows[0], Width::truncate($rows[1], max(1, $inner - 1)) . '…'];
             }
@@ -6409,7 +6409,7 @@ final class Renderer
             $hidden = \count($rows) - $head - $tail;
             $rows = [
                 ...\array_slice($rows, 0, $head),
-                Width::truncate("  … {$hidden} more lines of this command …", $inner),
+                Width::truncate('  ' . Lang::t('tui.permission.more_command_lines', ['count' => $hidden]), $inner),
                 ...\array_slice($rows, -$tail),
             ];
         }

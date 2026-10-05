@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Permissions;
 
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\ToolCall;
 
 /**
@@ -284,12 +285,12 @@ final class SessionPermissionMemo
     public static function exactScopeOf(string $tool, array $arguments, ?string $projectRoot = null): string
     {
         if ($tool !== 'Bash') {
-            return 'this exact call';
+            return Lang::t('chat.permission.scope.exact_call');
         }
 
         return self::grantArguments($tool, $arguments, $projectRoot) === $arguments
-            ? 'this exact command'
-            : 'this exact command without the leading cd';
+            ? Lang::t('chat.permission.scope.exact_command')
+            : Lang::t('chat.permission.scope.exact_command_without_cd');
     }
 
     /**
