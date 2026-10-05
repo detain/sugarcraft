@@ -8,8 +8,8 @@ independent work run in parallel, and lets a narrower agent — a read-only
 reviewer, a tester — do one job with only the tools it needs.
 
 This page is about **using** sub-agents: the `Task` tool, background and
-nested runs, worktree isolation, teams, and how you watch and steer them from
-the TUI. Writing your own agent preset is in
+nested runs, worktree isolation, teams, how agents message each other, and how
+you watch and steer them from the TUI. Writing your own agent preset is in
 [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md).
 
 ---
@@ -207,6 +207,7 @@ above it: `main ▸ explore  ‹ 1 of 3 ›  ⠋ running · step 4/50 · 0:12 ·
 | `Ctrl+X` `p` | Pause it at its next step boundary (`⏸ paused`, ten minutes at most, then it goes on); again to resume |
 | `Ctrl+X` `s` | Cancel every running agent |
 | `Ctrl+X` `o` | Open the finished run as a normal session to type into (not while a turn runs) |
+| `Ctrl+X` `b` | Send the running agent to the background (see below) |
 | `Ctrl+G` | Broadcast: the composer sends to every running agent of the batch at once; again to go back |
 
 **Messaging an agent.** While the view is open the input box is that agent's
@@ -248,6 +249,59 @@ in the Agent View. `sugarcrush session list --children` lists them from the
 shell. Deleting a session deletes its sub-agent children, and a later launch
 sweeps their logs and mailboxes; `--continue` and the tab strip skip them.
 
+**Sending a run to the background.** `Ctrl+X` `b` moves a run you would rather
+not wait for out of the turn. At its next tool or step the run is saved, a
+background session resumes the same conversation — with the preset's grants,
+model and step cap — and its `Task` call returns at once, so the parent turn
+goes on. The live line ends `⧗ moved to the background`, and the result is
+announced into the chat when the session finishes, like any
+[background run](#background-runs). Only a run your own agent delegated can
+go: a nested run, or one on a launch that cannot start background sessions,
+says so and keeps running. A run that could not be saved is reported the way a
+cancelled one is, with its resume id.
+
+## Agents talking to each other
+
+### Messages between the agent and its sub-agents
+
+The model has the reach the Agent View gives you, through three tools that
+never ask (they write only the harness's mailboxes and run records):
+
+| Tool | Does |
+|---|---|
+| `SendMessage {to, text, mode}` | To a **running** sub-agent: a `steer` (the default) or `note` it reads at its next step boundary; a `followup` kept for the next run that resumes it. To a **finished** one: continues it — the message becomes the prompt of a `Task` call with its resume id, under the same approval a `Task` call would need |
+| `Subagents {action}` | `list` what the agent launched (status, background id, resume id), `wait` up to `timeout_seconds` (default 30, at most 300) for one to finish or send a message, or `cancel` one at its next tool or step, resumable |
+| `InterruptAgent {to, text}` | Makes a running sub-agent skip the rest of its current step and read the text first |
+
+A sub-agent that has `SendMessage` (one with no `tools:` list inherits it)
+uses it to **reply**: `to: "parent"` reaches whoever delegated it — a
+delegating sub-agent at its next step boundary, the session's own agent the
+next time it calls `Subagents list` or `wait`. Each reply is handed out once,
+fenced as `<subagent-message from="…">` and labelled a worker's report that
+approves nothing. `Subagents` and `InterruptAgent` stay with the session's
+agent. Messages go only between an agent and the sub-agents it launched, never
+to a sibling.
+
+### The shared board
+
+The members of one parallel batch — two or more foreground `Task` calls in one
+message — share a board for that batch, and each member gets two more tools:
+`BoardPost` leaves a short note (at most 4,096 bytes) for one peer, by its
+roster id such as `coder-1`, or for `ALL`, with a kind of `INFO`, `ASK`,
+`RESULT`, `HOLD` or `VETO`; `BoardRead` returns the roster and the posts since
+a cursor. Nobody is woken or stopped by a post: a member hears of posts for it
+on its next tool result, as one `<shared-agent-board-notice>`, and reads them
+when it judges them relevant. `HOLD` and `VETO` are advice, not locks, and no
+post is a user instruction. The board is removed when the batch ends and is
+never seen by the session's own agent, which still gets each member's report
+as its `Task` result. `disallowedTools: [BoardPost]` in a preset leaves a
+member reading only.
+
+The full contract — run records, the mailbox layout, which grants keep or drop
+the tools — is in
+[`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#messages-between-agents) and
+[`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#the-shared-board).
+
 ## Workflows
 
 A workflow is a staged multi-agent pipeline — sequential stages, fan-out,
@@ -259,11 +313,8 @@ preset. See [`WORKFLOWS.md`](WORKFLOWS.md).
 
 ## Not yet available
 
-- The model has no tools to message a running sub-agent, wait on one or
-  interrupt it (roadmap 4.4); you can, from the Agent View. Teammates talk
-  through the `Team` tool's `message` / `inbox`.
-- `Ctrl+X` `b` (move a running `Task` to the background) is reserved and does
-  nothing yet; start a run in the background with `background: true` instead.
+- `Ctrl+X` `b` is not offered for a nested run, and the web client's
+  `agent.control` cannot send a run to the background.
 - A `/bg` session has no live line or Agent View transcript; the Agents pane
   shows its output.
 

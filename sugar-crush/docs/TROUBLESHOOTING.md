@@ -228,8 +228,20 @@ identical to having no gate at all except for `ProtectFilesHook`,
 on the prompt remembers a pattern for the rest of the session; for a
 standing choice set `permissionMode` to `accept-edits` (edits inside the
 project run unprompted, shell commands still ask) or add `permissionRules`
-allow entries. A `Task` sub-agent run in a parallel batch cannot ask yet and
-is refused with a reason — run it alone or allow it by rule.
+allow entries. A sub-agent's questions come up in the same modal, naming the
+agent that asked (a parallel member's are relayed one at a time).
+
+**`Allow Edit(...)` does not cover `ApplyPatch`.** A restrictive `Edit` or
+`Write` rule binds a patch, but an allow does not carry over, because a patch
+can also delete and move files. Add `Allow ApplyPatch(...)` for the same paths.
+See [`PERMISSIONS.md`](PERMISSIONS.md).
+
+**`auto` asks about a call instead of refusing it.** That is a security
+finding — fetched code into a shell, data sent to an endpoint, credentials,
+permissions, or a write to `.git`/`.sugar-crush` policy files — which `auto`
+always puts to you; only an explicit `permissionRules` entry settles one
+without asking. With `autoReview` on, the reviewer can also answer *ask*. See
+[`PERMISSIONS.md`](PERMISSIONS.md#what-auto-classifies).
 
 ---
 
@@ -450,6 +462,24 @@ compactor must keep), so clear or start over. Moving the tiers is
   checkout, or `git worktree add` failed; the reason is in the result.
 
 See [`AGENTS.md`](AGENTS.md).
+
+## An `AI!` comment does nothing
+
+- `watchFiles` is off by default and read only from **your own** settings; a
+  project file cannot turn it on. It is read at launch, so restart after
+  setting it.
+- Only a comment saved **after launch** fires; an `AI!` already in the tree when
+  the TUI started does not. Each one fires once until it is removed from its
+  file.
+- The watcher sends only while the chat is idle — no turn running, an empty
+  input box, nothing queued, no modal open.
+- Files under dot-directories, `vendor/` and `node_modules/`, symlinks, files
+  over 256 KiB, and anything past the first 5,000 files are not watched.
+- It must be a comment (`#`, `//`, `--`, `;`, `/*` or `<!--`, after code on
+  the line is fine) whose text ends (or starts) with `AI!` or `AI?`.
+
+See the README's
+[`AI!` comments](../README.md#prompts-from-your-editor-ai-comments).
 
 ## Every `Bash` call is refused
 

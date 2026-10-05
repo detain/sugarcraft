@@ -145,6 +145,22 @@ A `PreCompact` hook that denies (or asks) skips any compaction, automatic or
 manual, and the in-turn step summary below; `PostCompact` receives the
 summary that was written. See [`HOOKS.md`](HOOKS.md#the-two-compaction-events).
 
+### `/handoff`
+
+`/handoff [focus]` is the way on from a context full of dead ends: instead of
+compacting this session it opens a **new** one that starts from a state
+summary of this one. The summary uses the same fixed headings a compaction
+leaves (`Context\Compaction\StateSummaryTemplate`) — Goal, Constraints,
+Progress, Key decisions, Current work, Next step, Pending tasks, Errors and
+fixes — written by the summary model and steered by the focus, while the files
+read and modified and your latest request are read off the transcript, never
+the model. With no summary model, at the spend cap, or when the model fails,
+the whole block is read off the transcript, so the command always opens a
+session. The new session is a branch of this one (it keeps the todos and the
+checkpoints, so `/rewind` there can step back into the full conversation), and
+its transcript is that one summary, sent on its first turn. See
+[`COMMANDS.md`](COMMANDS.md#the-built-in-commands).
+
 ## Inside a turn: the step budget
 
 The tiers judge once, when you press Enter. A turn can then run hundreds of
@@ -329,6 +345,7 @@ on each later request of the turn.
 | Change how much happens on its own | `/pruning auto\|manual\|off`, `contextPruning.mode` |
 | Move the tiers | `compaction.*Percent`, `compaction.*Tokens`, `compaction.modelTokenCaps` |
 | Summarise with a cheaper model | `summaryModel` / `SUGARCRUSH_SUMMARY_MODEL` |
+| Carry on in a fresh context | `/handoff [focus]` (a new session seeded with a state summary) |
 | Start over | `/clear` (keeps the session and its checkpoints) or **New session** |
 
 ## See also
