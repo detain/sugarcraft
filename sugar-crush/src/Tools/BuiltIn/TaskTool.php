@@ -974,6 +974,32 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         }
         $maxTurns = max(1, $subAgent->agent->maxTurns ?? self::DEFAULT_MAX_TURNS);
 
+        // Roadmap 3.B-5 (DCP §13.2 I): the run manages its OWN context — an
+        // EPHEMERAL ledger, private to this delegation: its refs number only
+        // the run's rows, nothing is persisted with the parent session, and
+        // the parent's ledger (which EngineBackend::turnTools() never hands
+        // down) is never read or written. Only where the run was granted a
+        // ledger tool (`Prune`, `Recall`) — a preset whose `tools:` omits
+        // them runs exactly as before, with no ref tags on its wire — and
+        // only in the configured `auto` mode, the one that lets the model
+        // prune. The delegated prompt stays whole: `Prune` refuses a prompt,
+        // and `Compress` is offered only on a person's `/compress` turn,
+        // which a delegated run never is. A resumed run continues on the
+        // ledger it was suspended with, so its pruned view survives.
+        $runLedger = null;
+        $pruningMode = \SugarCraft\Crush\Context\Pruning\PruningMode::configured();
+        if ($pruningMode->allowsModelPruning()) {
+            foreach ($tools as $tool) {
+                if ($tool instanceof \SugarCraft\Crush\Tools\MutatesContextLedger) {
+                    $runLedger = \SugarCraft\Crush\Context\Pruning\ContextLedger::fromArray($suspension['contextLedger'] ?? null)
+                        ->withDefaultMode($pruningMode);
+                    $engine = $engine->withContextLedger($runLedger);
+
+                    break;
+                }
+            }
+        }
+
         // The roster above is narrowed by tool NAME only, so `Bash(git *)`
         // put all of Bash on the wire. Every call the run makes is held to the
         // preset's whole declaration — argument halves and argument-scoped
@@ -1407,7 +1433,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     // SpendCapBreached IS: the run's own cap check emits it, and
                     // a narrower type here made that emit a TypeError that
                     // surfaced as an unexplained "failed" (audit B4).
-                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($onProgress, $stopIfCancelled, $stopIfControlled, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent, $log, $flushLog): void {
+                    // ContextLedgerChanged too (roadmap 3.B-5): a run on its
+                    // ephemeral ledger reports each prune as it lands, for
+                    // the same reason — it is the run's own view, shown to
+                    // nobody, so it is taken and dropped here.
+                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached|\SugarCraft\Crush\Events\ContextLedgerChanged $event) use ($onProgress, $stopIfCancelled, $stopIfControlled, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent, $log, $flushLog): void {
+                        if ($event instanceof \SugarCraft\Crush\Events\ContextLedgerChanged) {
+                            return;
+                        }
                         // Before the call runs; a throw from a finished
                         // event would only become that call's result.
                         if ($event instanceof ToolStarted) {
@@ -1515,7 +1548,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             $why = $cancelled
                 ? sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc')
                 : sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
-            $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath);
+            $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger);
             $finish(
                 $cancelled ? SubAgent::STATUS_STOPPED : SubAgent::STATUS_FAILED,
                 '',
@@ -1543,7 +1576,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         self::bill($subAgent, $spent, $baseTokens, $baseCost);
         // Saved before the finished frame goes out, so the frame can name
         // the id a later Task call resumes it by (every path below saves).
-        $resume = $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath);
+        // Roadmap 3.B-5: with the ledger the run ended on — its refs fixed
+        // over the transcript saved beside it — so a resume keeps its view.
+        $resume = $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger === null ? null : ($reply->contextLedger ?? $runLedger));
         // P-D1: what the user told the run while it worked, on every return
         // below as on the failure path — the harness's note, so it goes
         // outside the report's fence.
@@ -1781,12 +1816,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * @param list<\SugarCraft\Crush\Messages\Message> $transcript
      * @param string|null $savedId set to the id it was saved under; null when it could not be saved
      * @param string|null $transcriptLog the run's log, which a resume keeps writing (P-C1)
+     * @param \SugarCraft\Crush\Context\Pruning\ContextLedger|null $ledger the run's ephemeral
+     *        ledger (roadmap 3.B-5), which a resume continues on; null when it kept none
      */
-    private function suspend(string $agentName, array $transcript, int $resumes, ?string $id, ?string &$savedId = null, ?string $transcriptLog = null): string
+    private function suspend(string $agentName, array $transcript, int $resumes, ?string $id, ?string &$savedId = null, ?string $transcriptLog = null, ?\SugarCraft\Crush\Context\Pruning\ContextLedger $ledger = null): string
     {
         $savedId = null;
         try {
-            $id = $this->suspendedStore()->save($agentName, $transcript, $resumes, $id, $transcriptLog);
+            $id = $this->suspendedStore()->save($agentName, $transcript, $resumes, $id, $transcriptLog, $ledger);
         } catch (\RuntimeException $unsaved) {
             return 'It CANNOT be resumed (the run could not be saved: ' . $unsaved->getMessage() . '); start a new Task instead';
         }

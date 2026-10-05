@@ -219,4 +219,16 @@ final class CompactorTest extends TestCase
         $this->assertContains('images', $labels);
         $this->assertContains('data',  $labels);
     }
+
+    public function testDescribeCountsPathsByCategoryLargestFirstWithoutTouchingTheFilesystem(): void
+    {
+        $compactor = new Compactor();
+
+        $this->assertSame(
+            'code ×3, config ×1, images ×1',
+            $compactor->describe(['/gone/a.php', 'b.ts', 'c.md', '/nowhere/x.conf', 'logo.png', '']),
+        );
+        $this->assertSame('', $compactor->describe([]));
+        $this->assertSame('other ×2', $compactor->describe(['Makefile', 'LICENSE']));
+    }
 }

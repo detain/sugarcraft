@@ -3887,10 +3887,11 @@ DOC;
         // `WebFetch` joined the divergence in audit F-P6: it moves no file,
         // so it is still read-only HERE, but an outbound fetch whose URL the
         // model composes is not safe to run unasked, so the gate no longer
-        // lists it. `Memory`, `Prune`, `Todo` and `Compress` diverge because
-        // the gate classes them no-ask, not read: each writes harness-owned state.
+        // lists it. `Memory`, `Prune`, `Todo`, `Compress` and `Recall` diverge
+        // because the gate classes them no-ask, not read: each touches only
+        // harness-owned state (`Recall` reads the session's own rows).
         $this->assertSame(
-            ['Compress', 'Memory', 'Prune', 'Skill', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
+            ['Compress', 'Memory', 'Prune', 'Recall', 'Skill', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
@@ -4086,8 +4087,9 @@ DOC;
         // (roadmap 3.B-3) changes only the turn's context ledger — what the
         // model is sent, never a byte on disk. `Todo` (roadmap 3.C) writes
         // nothing at all: it returns the rendered list, and the parent saves
-        // it to the session's metadata row.
-        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress'];
+        // it to the session's metadata row. `Recall` (roadmap 3.B-5) writes
+        // nothing either: it returns rows the turn already holds.
+        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall'];
     }
 
     /**

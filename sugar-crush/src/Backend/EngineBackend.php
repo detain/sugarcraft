@@ -2754,9 +2754,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * setting or `SUGARCRUSH_DISABLE_PROMPT_CACHE` may have turned the marks
      * off, so none of those is ever warned. The notice itself is raised once,
      * by the watch.
+     *
+     * Roadmap 3.B-5 (DCP §13.2 P2-10): every step's split also feeds the
+     * watch's BREAK tracker ({@see CacheHealthWatch::observeReuse()}) — for
+     * every provider that reports one, marks or not — which counts a request
+     * that lost the prefix the one before it had cached, and says so once
+     * when the cache does not recover after a context rewrite. A turn runs
+     * on one backend instance from its first step to its last, so the
+     * instance names the conversation: a delegated run's steps, observed on
+     * the same shared watch, are never compared with its parent's.
      */
     private function observeCacheHealth(?Usage $usage): void
     {
+        $this->cacheHealth->observeReuse($usage, conversation: (string) spl_object_id($this));
+
         if (!$this->provider instanceof MarksPromptCache || !$this->provider->marksPromptCache($this->model)) {
             return;
         }

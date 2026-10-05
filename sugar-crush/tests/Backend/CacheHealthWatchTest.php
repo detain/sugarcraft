@@ -160,6 +160,97 @@ final class CacheHealthWatchTest extends TestCase
         $this->assertSame(['zeroReports' => 0, 'noticed' => false], $watch->state());
     }
 
+    public function testOneBreakAfterARewriteIsCountedButNotSaid(): void
+    {
+        $watch = new CacheHealthWatch();
+
+        $this->assertNull($watch->observeReuse(self::split(0, 5000), 0.0, 'turn'));
+        $this->assertNull($watch->observeReuse(self::split(5000, 6000), 1.0, 'turn'));
+        // A prune rewrote the prefix: the request reads under half of the
+        // 6000 tokens the one before it sent.
+        $this->assertNull($watch->observeReuse(self::split(1000, 4000), 2.0, 'turn'));
+        // …and recovers on the next.
+        $this->assertNull($watch->observeReuse(self::split(4000, 4500), 3.0, 'turn'));
+
+        $this->assertSame(1, $watch->cacheBreaks());
+        $this->assertSame(['from' => 83, 'to' => 25], $watch->lastCacheBreak());
+        $this->assertSame([], RuntimeNoticeSink::drain());
+        $this->assertSame(['zeroReports' => 0, 'noticed' => false, 'reuse' => ['breaks' => 1, 'lastBreak' => ['from' => 83, 'to' => 25], 'breakNoticed' => false]], $watch->state());
+    }
+
+    public function testTwoBreaksInARowAreSaidOnce(): void
+    {
+        $watch = new CacheHealthWatch();
+        $raised = [];
+
+        self::withErrorLogDiscarded(static function () use ($watch, &$raised): void {
+            $raised[] = $watch->observeReuse(self::split(0, 5000), 0.0, 'turn');
+            $raised[] = $watch->observeReuse(self::split(4800, 6000), 1.0, 'turn');
+            $raised[] = $watch->observeReuse(self::split(100, 6500), 2.0, 'turn');
+            $raised[] = $watch->observeReuse(self::split(100, 7000), 3.0, 'turn');
+            $raised[] = $watch->observeReuse(self::split(100, 7500), 4.0, 'turn');
+        });
+
+        $this->assertSame([null, null, null], array_slice($raised, 0, 3));
+        $this->assertIsString($raised[3]);
+        $this->assertStringContainsString('2 requests in a row', $raised[3]);
+        $this->assertNull($raised[4], 'once per session');
+        $this->assertCount(1, RuntimeNoticeSink::drain());
+        $this->assertSame(3, $watch->cacheBreaks());
+    }
+
+    public function testOnlyRequestsOfOneConversationWithinTheIdleWindowAreCompared(): void
+    {
+        $watch = new CacheHealthWatch();
+
+        $watch->observeReuse(self::split(5000, 6000), 0.0, 'parent');
+        $watch->observeReuse(self::split(0, 3000), 1.0, 'sub-agent');
+        $watch->observeReuse(self::split(0, 3000), 2.0 + CacheHealthWatch::BREAK_IDLE_SECONDS, 'sub-agent');
+        $watch->observeReuse(self::split(100, 600), 3.0 + CacheHealthWatch::BREAK_IDLE_SECONDS, 'sub-agent');
+
+        $this->assertSame(0, $watch->cacheBreaks(), 'another conversation, an idle eviction, and a prefix below what is cached at all');
+    }
+
+    public function testACacheThatNeverWorkedIsNotBroken(): void
+    {
+        $watch = new CacheHealthWatch();
+
+        $watch->observeReuse(self::split(0, 5000), 0.0, 'turn');
+        $watch->observeReuse(self::split(0, 6000), 1.0, 'turn');
+
+        $this->assertSame(0, $watch->cacheBreaks(), 'that is the zero streak\'s finding, not a break');
+    }
+
+    public function testTheBreakTallyCrossesTheFork(): void
+    {
+        $child = new CacheHealthWatch();
+        self::withErrorLogDiscarded(static function () use ($child): void {
+            $child->observeReuse(self::split(5000, 6000), 0.0, 'turn');
+            $child->observeReuse(self::split(5900, 6200), 1.0, 'turn');
+            $child->observeReuse(self::split(100, 6500), 2.0, 'turn');
+            $child->observeReuse(self::split(100, 7000), 3.0, 'turn');
+        });
+        RuntimeNoticeSink::drain();
+
+        $parent = new CacheHealthWatch();
+        $parent->adopt($child->state());
+        $parent->adopt(['zeroReports' => 0, 'noticed' => false, 'reuse' => ['breaks' => 'x', 'breakNoticed' => true]]);
+
+        $this->assertSame(2, $parent->cacheBreaks());
+        $this->assertSame(['from' => 2, 'to' => 1], $parent->lastCacheBreak());
+        self::withErrorLogDiscarded(static function () use ($parent): void {
+            $parent->observeReuse(self::split(5000, 6000), 10.0, 'next');
+            $parent->observeReuse(self::split(100, 6500), 11.0, 'next');
+            $parent->observeReuse(self::split(100, 7000), 12.0, 'next');
+        });
+        $this->assertSame([], RuntimeNoticeSink::drain(), 'the child already said it');
+    }
+
+    private static function split(int $read, int $prompt): Usage
+    {
+        return Usage::new(0, 0.0, $prompt - $read, 10, $read, 0);
+    }
+
     private static function zero(): Usage
     {
         return Usage::new(100, 0.0, 80, 20, 0, 0);

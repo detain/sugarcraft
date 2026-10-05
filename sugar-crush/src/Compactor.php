@@ -202,6 +202,35 @@ final class Compactor
     }
 
     /**
+     * $paths counted by {@see categoryFor()} category, largest first and then
+     * by name: `code ×12, config ×3` (roadmap 3.B-5, DCP P2-11 — how a
+     * receipt names many file outputs in one line). Pure: it reads only the
+     * names, never the filesystem, so it describes paths that are gone or
+     * belong to another tree as well as present ones. Empty for no paths.
+     *
+     * @param list<string> $paths
+     */
+    public function describe(array $paths): string
+    {
+        $counts = [];
+        foreach ($paths as $path) {
+            if ($path === '') {
+                continue;
+            }
+            $category = $this->categoryFor($path);
+            $counts[$category] = ($counts[$category] ?? 0) + 1;
+        }
+        uksort($counts, static fn (string $a, string $b): int => [$counts[$b], $a] <=> [$counts[$a], $b]);
+
+        $parts = [];
+        foreach ($counts as $category => $count) {
+            $parts[] = $category . ' ×' . $count;
+        }
+
+        return implode(', ', $parts);
+    }
+
+    /**
      * Threshold in bytes used for compaction decisions.
      *
      * @return positive-int

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Agents;
 
 use SugarCraft\Crush\Attachment;
 use SugarCraft\Crush\AttachmentType;
+use SugarCraft\Crush\Context\Pruning\ContextLedger;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\SystemMessage;
@@ -57,6 +58,14 @@ use SugarCraft\Crush\Usage;
  * human's, the one its child session is built from. The suspension records
  * that log's path, so a resumed run keeps writing the SAME file and the stored
  * session follows the conversation the model continues.
+ *
+ * THE RUN'S OWN LEDGER (roadmap 3.B-5, DCP §13.2 I). A run that prunes its
+ * context does so on an ephemeral {@see ContextLedger} of its own; it is
+ * saved beside the transcript its refs were fixed over, so a resume sends the
+ * same pruned view rather than every output it had already let go. It is
+ * stored as the ledger's own plain-array form ({@see ContextLedger::toArray()})
+ * and rebuilt leniently, so the restorable classes above stay exactly the
+ * transcript's — no ledger value object is ever handed to `unserialize()`.
  */
 final class SuspendedDelegations
 {
@@ -123,12 +132,14 @@ final class SuspendedDelegations
      * @param list<Message> $transcript
      * @param string|null $transcriptLog the run's human-readable log, which a
      *        resume keeps appending to (see the class doc); null for none
+     * @param ContextLedger|null $ledger the run's ephemeral context ledger
+     *        (see the class doc); null for a run that kept none
      *
      * @return string the resume id
      *
      * @throws \RuntimeException when the store directory is unsafe or unwritable
      */
-    public function save(string $agent, array $transcript, int $resumes, ?string $id = null, ?string $transcriptLog = null): string
+    public function save(string $agent, array $transcript, int $resumes, ?string $id = null, ?string $transcriptLog = null, ?ContextLedger $ledger = null): string
     {
         $dir = HookContextFiles::verifiedDirectory($this->dir);
         $this->sweep($dir);
@@ -143,6 +154,7 @@ final class SuspendedDelegations
             'resumes' => $resumes,
             'savedAt' => time(),
             'transcriptLog' => $transcriptLog,
+            'contextLedger' => $ledger?->toArray(),
         ]);
 
         $temp = @tempnam($dir, 'suspending-');
@@ -160,9 +172,12 @@ final class SuspendedDelegations
     }
 
     /**
-     * @return array{agent: string, transcript: list<Message>, resumes: int, transcriptLog: ?string}|null
+     * @return array{agent: string, transcript: list<Message>, resumes: int, transcriptLog: ?string, contextLedger: ?array<string, mixed>}|null
      *         null for an id that is malformed, unknown, expired or unreadable;
-     *         `transcriptLog` is null for a run saved without one (or before P-C1)
+     *         `transcriptLog` is null for a run saved without one (or before P-C1);
+     *         `contextLedger` is the run's ledger in {@see ContextLedger::toArray()}
+     *         form, for {@see ContextLedger::fromArray()}, or null (none kept, or
+     *         saved before roadmap 3.B-5)
      */
     public function load(string $id): ?array
     {
@@ -204,6 +219,7 @@ final class SuspendedDelegations
             'transcript' => array_values($data['transcript']),
             'resumes' => $data['resumes'],
             'transcriptLog' => \is_string($data['transcriptLog'] ?? null) && $data['transcriptLog'] !== '' ? $data['transcriptLog'] : null,
+            'contextLedger' => \is_array($data['contextLedger'] ?? null) ? $data['contextLedger'] : null,
         ];
     }
 

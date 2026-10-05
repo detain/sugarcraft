@@ -182,7 +182,23 @@ re-prefills the whole conversation behind it.
   prune. Outputs of `Task`, `Skill`, `Edit` and `Write` (and `Prune`'s own
   receipts) are never pruned, and a distillation must be shorter than the
   output; such targets are skipped and named in the receipt. A `manual` or
-  `off` session, a sub-agent and a `-p` run are not offered the tool.
+  `off` session and a `-p` run are not offered the tool.
+- **Sub-agents prune their own run.** A `Task` run granted `Prune` (its
+  preset's `tools:` lists it, or names no tools) runs, in the `auto` mode, on
+  an ephemeral ledger of its own: its refs number only its rows, its prunes
+  and reminders never touch the parent's ledger, and nothing of it is kept
+  with the parent session. The delegated prompt is never pruned (`Prune`
+  refuses a prompt, and `Compress` needs a person's `/compress`). The ledger
+  is saved with the run's transcript, so `resume` continues on the same
+  pruned view. A preset that does not grant `Prune` runs with no ledger and no
+  ref tags at all.
+- **Nothing pruned is lost.** `Recall` (`Tools\BuiltIn\Recall`), offered
+  wherever `Prune` is: `{"ref": "r17"}` returns a pruned output word for word
+  (or a call's elided input, or a prompt or result a compressed section stands
+  in for), and `{"ref": "b3"}` every row a compressed section replaced. The
+  original arrives once, as the call's own result; the ledger is unchanged, so
+  nothing already cached is rewritten. A ref still in view in full is refused;
+  at most 5 calls per turn and 40000 bytes per call.
 - **The model compresses, when asked.** `Compress` (`Tools\BuiltIn\Compress`):
   `{"topic": "Auth exploration", "ranges": [{"from": "r12", "to": "r40",
   "summary": "…"}]}` replaces a closed range — prompts, steps and outputs — with
@@ -422,6 +438,13 @@ No other provider marks anything: `openai` and `sglang` cache server-side withou
   are never warned. On the forked TUI path the streak and the "already said" bit ride home on the
   turn's result frame, so the count spans turns. The buckets are also priced (see `modelPrices`
   in `SETTINGS.md`).
+- The same watch also counts cache BREAKS, for every provider that reports a cache split
+  (`CacheHealthWatch::observeReuse()`, opencode-dcp's #614 lesson): within one turn's
+  conversation, a request that reads under half of the prefix the request before it sent —
+  within 240 s, so an idle eviction is not one — lost bytes the provider had cached. One break
+  after a prune or compression is that rewrite's price and is only counted; two in a row means
+  the cache is not recovering, and one `RuntimeNoticeSink` notice says so for the session. A
+  delegated run's requests are another conversation and are never compared with the parent's.
 
 ## Session affinity — the request carries the session
 
