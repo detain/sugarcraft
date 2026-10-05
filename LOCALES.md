@@ -102,6 +102,12 @@ zgh, zh, zu
 Sentinel locales (`C`, `POSIX`) and the special `en_DK` "computer
 English" form fall through to `en` in `T::detect()`.
 
+## Per-library notes
+
+| Lib           | Namespace | Notes |
+| ------------- | --------- | ----- |
+| `sugar-crush` | `crush`   | Only user-facing text (TUI, CLI, command and key-binding descriptions) goes through `Lang::t()`. Tool descriptions, prompt layers and tool errors are read by the model and stay English in every locale. The doc-drift tests compare the docs against English registry text, so they pin `en`. |
+
 ## How to contribute a translation
 
 1. Pick a code from the **Recommended set** (or open an issue first

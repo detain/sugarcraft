@@ -465,6 +465,7 @@ sugar-crush/tests/App/DockDefaultIdentityTest.php	0.225	12
 sugar-crush/tests/Providers/VertexProviderTest.php	0.222	153
 sugar-crush/tests/TerminalSizeFallbackIsolationTest.php	0.218	2
 sugar-crush/tests/Skills/SkillPathNudgeTest.php	0.216	21
+sugar-crush/tests/LangParityTest.php	0.215	7
 sugar-crush/tests/Commands/MemoryImportCommandTest.php	0.206	11
 sugar-crush/tests/Providers/SglangProviderEnvelopeHoldBackTest.php	0.202	11
 sugar-crush/tests/Integration/ParallelExemptJobStatusLostTest.php	0.200	1
