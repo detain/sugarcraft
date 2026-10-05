@@ -970,7 +970,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these eighty-three keys are layered — `provider`, `models`, `titleModel`,
+Only these eighty-six keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
@@ -978,6 +978,7 @@ Only these eighty-three keys are layered — `provider`, `models`, `titleModel`,
 `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
+`compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`,
 `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
 `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
 `contextWindow`, `autoReview`, `secretEnvAllowlist`, `allowedTools`,
@@ -1031,7 +1032,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, forty-one keys are **never** taken from a project file:
+Even for a trusted project, forty-two keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1070,7 +1071,9 @@ answering to the wrong owner; `maxToolSteps`, because it multiplies how many
 billed provider round-trips one turn may fan out — the `maxOutputTokens` money
 axis counted in calls instead of tokens, and a ceiling a checkout can raise is
 still a bill a clone can run up on the operator's credential;
-`toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
+`compaction.refillLimit`, because it is how many automatic compactions that
+bought nothing the thrash breaker lets a session pay for in a row — the same
+argument counted in summarisation calls; `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
 `readPageBytes` and `toolSpillWindowPercent`, the six caps on what one tool
 result may hand the model,
 because every byte a result carries is replayed into each later request of the

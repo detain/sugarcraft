@@ -188,21 +188,24 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
 | `maxToolSteps` | `Bootstrap::backend()`, `Chat::applySettings()` → `resolvedMaxToolSteps()` | **no** |
-| `compaction.reminderPercent` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.autoPercent` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.blockPercent` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.keepRecent` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.summaryUserChars` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.summaryAssistantChars` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.toolOutputChars` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.reminderTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.autoTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.blockTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
-| `compaction.modelTokenCaps` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `forModel()` | yes |
-| `contextPruning.minContextTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
-| `contextPruning.maxContextTokens` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
-| `contextPruning.nudgeFrequency` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
-| `contextPruning.iterationNudgeThreshold` | `Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
+| `compaction.reminderPercent` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.autoPercent` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.blockPercent` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.keepRecent` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.summaryUserChars` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.summaryAssistantChars` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.toolOutputChars` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.reminderTokens` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.autoTokens` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.blockTokens` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` | yes |
+| `compaction.modelTokenCaps` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `forModel()` | yes |
+| `compaction.idleOfferSeconds` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `Chat::shouldPromptIdleCompaction()` → `IdleCompactionPolicy::shouldPrompt()` | yes |
+| `compaction.mode` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `autoCompacts()`, `summarisesWithModel()` | yes |
+| `compaction.refillLimit` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `IdleCompactionPolicy::thrashTripped()` | **no** |
+| `contextPruning.minContextTokens` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
+| `contextPruning.maxContextTokens` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
+| `contextPruning.nudgeFrequency` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
+| `contextPruning.iterationNudgeThreshold` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
 | `contextWindow` | `ProviderFactory::createOpenAI()`, `createAnthropic()`, `createCustom()` → each provider's `contextWindow()` | **no** |
 | `autoReview` | `Bootstrap::permissionGate()` | **no** |
 | `secretEnvAllowlist` | `Bootstrap::tools()` → `installSecretEnvAllowlist()` | **no** |
@@ -262,7 +265,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these eighty-three, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these eighty-six, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -871,9 +874,14 @@ what your `allowedTools` excluded.
 ## Compaction thresholds
 
 The `compaction.*` keys move the tiers every context-usage check is judged by
-(roadmap N-P4b). They are read once, at launch — `Bootstrap::chat()` builds the
-session's `CompactorConfig` from them (`CompactorConfig::fromSettings()`) and
-hands that one instance to every turn — so a change applies at the next launch.
+(roadmap N-P4b). `Bootstrap::chat()` builds the session's `CompactorConfig`
+from them (`CompactorConfig::fromSettings()`) and hands that one instance to
+every turn, and a save from the settings view rebuilds it
+(`Chat::applySettings()`), so in the TUI a change is **live**: the next prompt
+is judged by it. A turn already running keeps the config it was sent with. The
+`contextPruning.*` reminder keys ride the same config into the engine with each
+turn, so they apply from the next turn. A `-p` run reads the keys itself, and a
+server session reads them when it starts.
 
 - **The three percentages** — `compaction.reminderPercent` (70),
   `compaction.autoPercent` (85) and `compaction.blockPercent` (95) — are shares
@@ -910,13 +918,30 @@ under it — that tier stands down for the prompt instead of compacting for
 nothing; it is judged afresh on the next one. Setting `compaction.blockTokens`
 is the one way to let a cap refuse, which is why it is off.
 
+Three more keys replace behaviour that used to be fixed:
+
+- **`compaction.idleOfferSeconds`** (3600) — a session past its whole context
+  window that sat untouched this long is offered `/compact` instead of
+  sending the prompt (`IdleCompactionPolicy::shouldPrompt()`). `0` never
+  offers.
+- **`compaction.mode`** (`llm`) — who writes the summaries. `llm` asks the
+  summary model, with the local heuristic as its fallback; `heuristic` never
+  makes a summarisation call; `off` compacts nothing on its own — no automatic
+  tier and no ahead-of-need summary — while `/compact` still asks the summary
+  model and the blocking tier still refuses a prompt the window cannot take.
+- **`compaction.refillLimit`** (3) — the thrash breaker's limit: how many
+  automatic compactions in a row may come straight back over their tier, with
+  the prompt unsent, before the next prompt is refused instead of compacted
+  again. A user-tier key, not a project one: raised, it lets a session pay for
+  more compactions that buy nothing.
+
 `compaction.modelTokenCaps` overrides the three caps per model:
 `{"qwen3": {"autoTokens": 300000}, "sglang/qwen3": {"reminderTokens": 0}}` — a
 model id, or `provider/model` to pin one deployment (the more specific wins);
 a name left out inherits the top-level cap, and `0` clears it for that model.
-Every `compaction.*` key is tuning a trusted project may set: a repository
-whose exchanges are unusually heavy may move them, and your own
-`settings.json` still outranks it.
+Every `compaction.*` key but `compaction.refillLimit` is tuning a trusted
+project may set: a repository whose exchanges are unusually heavy may move
+them, and your own `settings.json` still outranks it.
 
 ## Every key
 
@@ -946,22 +971,25 @@ project-settable.
 | `parallelToolCalls` | Agent loop | bool | `true` | P U C | `SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS` | next turn | tuning |
 | `parallelToolDeadlineSeconds` | Agent loop | int | `90` | P U C | `SUGARCRUSH_PARALLEL_TOOL_DEADLINE` | next turn | tuning |
 | `maxToolSteps` | Agent loop | int | unset | U C | — | live | spend |
-| `compaction.reminderPercent` | Context & Compaction | int | `70` | P U C | — | restart | tuning |
-| `compaction.autoPercent` | Context & Compaction | int | `85` | P U C | — | restart | tuning |
-| `compaction.blockPercent` | Context & Compaction | int | `95` | P U C | — | restart | tuning |
-| `compaction.keepRecent` | Context & Compaction | int | `10` | P U C | — | restart | tuning |
-| `compaction.summaryUserChars` | Context & Compaction | int | `80` | P U C | — | restart | tuning |
-| `compaction.summaryAssistantChars` | Context & Compaction | int | `100` | P U C | — | restart | tuning |
-| `compaction.toolOutputChars` | Context & Compaction | int | `2000` | P U C | — | restart | tuning |
-| `compaction.reminderTokens` | Context & Compaction | int | `100000` | P U C | — | restart | tuning |
-| `compaction.autoTokens` | Context & Compaction | int | `150000` | P U C | — | restart | tuning |
-| `compaction.blockTokens` | Context & Compaction | int | unset (no cap) | P U C | — | restart | tuning |
-| `compaction.modelTokenCaps` | Context & Compaction | object | `{}` | P U C | — | restart | tuning |
-| `contextPruning.minContextTokens` | Context & Compaction | int | `60000` | P U C | — | restart | tuning |
-| `contextPruning.maxContextTokens` | Context & Compaction | int | `120000` | P U C | — | restart | tuning |
-| `contextPruning.nudgeFrequency` | Context & Compaction | int | `5` | P U C | — | restart | tuning |
-| `contextPruning.iterationNudgeThreshold` | Context & Compaction | int | `10` | P U C | — | restart | tuning |
-| `contextPruning.compress` | Context & Compaction | enum | `manual` | C | — | restart | tuning |
+| `compaction.reminderPercent` | Context & Compaction | int | `70` | P U C | — | live | tuning |
+| `compaction.autoPercent` | Context & Compaction | int | `85` | P U C | — | live | tuning |
+| `compaction.blockPercent` | Context & Compaction | int | `95` | P U C | — | live | tuning |
+| `compaction.keepRecent` | Context & Compaction | int | `10` | P U C | — | live | tuning |
+| `compaction.summaryUserChars` | Context & Compaction | int | `80` | P U C | — | live | tuning |
+| `compaction.summaryAssistantChars` | Context & Compaction | int | `100` | P U C | — | live | tuning |
+| `compaction.toolOutputChars` | Context & Compaction | int | `2000` | P U C | — | live | tuning |
+| `compaction.reminderTokens` | Context & Compaction | int | `100000` | P U C | — | live | tuning |
+| `compaction.autoTokens` | Context & Compaction | int | `150000` | P U C | — | live | tuning |
+| `compaction.blockTokens` | Context & Compaction | int | unset (no cap) | P U C | — | live | tuning |
+| `compaction.modelTokenCaps` | Context & Compaction | object | `{}` | P U C | — | live | tuning |
+| `compaction.idleOfferSeconds` | Context & Compaction | int | `3600` | P U C | — | live | tuning |
+| `compaction.mode` | Context & Compaction | enum | `llm` | P U C | — | live | tuning |
+| `compaction.refillLimit` | Context & Compaction | int | `3` | U C | — | live | spend |
+| `contextPruning.minContextTokens` | Context & Compaction | int | `60000` | P U C | — | next turn | tuning |
+| `contextPruning.maxContextTokens` | Context & Compaction | int | `120000` | P U C | — | next turn | tuning |
+| `contextPruning.nudgeFrequency` | Context & Compaction | int | `5` | P U C | — | next turn | tuning |
+| `contextPruning.iterationNudgeThreshold` | Context & Compaction | int | `10` | P U C | — | next turn | tuning |
+| `contextPruning.compress` | Context & Compaction | enum | `manual` | C | — | next turn | tuning |
 | `symbolMap.enabled` | Context & Compaction | bool | `true` | C | `SUGARCRUSH_DISABLE_SYMBOL_MAP` | restart | narrowing |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `SUGARCRUSH_CONTEXT_PRUNING` | next turn | tuning |
@@ -1141,15 +1169,22 @@ Saved is not applied: see the next section for when each key takes effect.
 <!-- settings:apply:begin -->
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
-| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `theme`, `statusLine`, `layout`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints` |
-| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.mode`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
-| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `symbolMap.enabled`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `watchFiles`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
+| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `theme`, `statusLine`, `layout`, `queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints` |
+| next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `contextPruning.mode`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
+| restart | At the next launch: read once while the session is built | `models`, `titleModel`, `summaryModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `promptCache`, `symbolMap.enabled`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `instructions`, `disabledRules`, `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `notify`, `watchFiles`, `lintCommands`, `hooksDefaultTimeoutSeconds`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `connectTimeoutSeconds` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
 **This session only** accepts `maxOutputTokens`, `parallelToolCalls`,
-`parallelToolDeadlineSeconds`, `maxToolSteps`, `toolOutputCapBytes`,
-`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
-`toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
+`parallelToolDeadlineSeconds`, `maxToolSteps`, `compaction.reminderPercent`,
+`compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
+`compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
+`compaction.toolOutputChars`, `compaction.reminderTokens`,
+`compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
+`compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`,
+`contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
+`contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
+`toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
+`readPageBytes`, `toolSpillWindowPercent`, `globMaxMatches`, `webFetchMaxBytes`,
 `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
 `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `embeddingModel`,
 `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `theme`,
@@ -1162,7 +1197,8 @@ Saved is not applied: see the next section for when each key takes effect.
 pane shell apply them as they write them — and the view saves neither. A live
 key that rebuilds the engine (`maxToolSteps`) is held while a turn runs and
 applied once it has ended; the running turn itself never changes, because it
-read its settings when it started. What the save did shows as a toast in the
+read its settings when it started. The `compaction.*` keys are Chat state and
+apply at once even mid-turn: they judge the next prompt, not the running one. What the save did shows as a toast in the
 top-right corner of the chat, never as a transcript row — a row would be sent
 to the model with every later turn.
 
@@ -1272,7 +1308,7 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only eleven of the eighty-three layered keys have an
+  They do not cover it: only eleven of the eighty-six layered keys have an
   env override (`provider`, `models`, `titleModel`, `summaryModel`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`, `webSearchEndpoint`,
   `mouse`, `mouseClicks`, `connectTimeoutSeconds`). `maxOutputTokens`,
@@ -1282,6 +1318,7 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
   `compaction.toolOutputChars`, `compaction.reminderTokens`,
   `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
+  `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`,
   `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
   `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
   `contextWindow`, `autoReview`, `secretEnvAllowlist`, `allowedTools`,

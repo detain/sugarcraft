@@ -13,6 +13,7 @@ use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\Settings\Validator\ThresholdOrderValidator;
 use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Context\Pruning\PruningMode;
 use SugarCraft\Crush\Context\SymbolMapBlock;
 use SugarCraft\Crush\Providers\ProviderFactory;
@@ -26,12 +27,19 @@ use SugarCraft\Crush\Providers\ProviderFactory;
  * on disk (`"compaction.autoPercent": 80`), Appendix N §5.5's recommendation,
  * so the shallow layer merge never replaces one with another. Each default IS
  * the {@see CompactorConfig} constructor default it describes, read off a
- * fresh {@see CompactorConfig::new()} rather than restated. All are read once
- * at launch (`Bootstrap::chat()` hands the session one config; a backend
- * handed none reads them itself), so they apply at restart. Every one is
- * Tuning a trusted project may set (Appendix N §2.2): a tier moved either way
- * costs the session time or context quality, never a refusal it could not
- * get out of — only the blocking percentage refuses, and it is bounded at 99%.
+ * fresh {@see CompactorConfig::new()} rather than restated. `Bootstrap::chat()`
+ * hands the session one config built from them and a save rebuilds it
+ * (`Chat::applySettings()`), so in the TUI they apply LIVE, to the next
+ * prompt; a backend handed none — `-p`, an embedder — reads them itself, and
+ * a server session reads them when it starts. The `contextPruning.*`
+ * reminders ride the same config into the engine with each dispatch, so
+ * they apply NEXT TURN. Every one but the breaker's limit is Tuning a
+ * trusted project may set (Appendix N §2.2): a tier moved either way costs
+ * the session time or context quality, never a refusal it could not get out
+ * of — only the blocking percentage refuses, it is bounded at 99%, and
+ * `compaction.mode: off` still leaves `/compact` to the person. The
+ * breaker's limit is Spend and the operator's: raised, it lets a session
+ * pay for more compactions that buy nothing.
  */
 final class ContextSettings implements SettingDefinitionSet
 {
@@ -48,13 +56,13 @@ final class ContextSettings implements SettingDefinitionSet
             CompactorConfig::SETTING_AUTO_PERCENT,
             CompactorConfig::SETTING_BLOCK_PERCENT,
         ]);
-        $readBy = '`Bootstrap::chat()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()`';
+        $readBy = '`Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()`';
         $tier = static fn (string $key, int $default, string $label, string $help): SettingDefinition => SettingDefinition::new($key, SettingType::Int, $default)
             ->withCategory(SettingCategory::Context)
             ->withRiskClass(RiskClass::Tuning)
             ->withLayered()
             ->withProjectSettable()
-            ->withApplyMode(ApplyMode::Restart)
+            ->withApplyMode(ApplyMode::Live)
             ->withRange(1, 99)
             ->withValidators($order)
             ->withLabel($label)
@@ -66,7 +74,7 @@ final class ContextSettings implements SettingDefinitionSet
             ->withRiskClass(RiskClass::Tuning)
             ->withLayered()
             ->withProjectSettable()
-            ->withApplyMode(ApplyMode::Restart)
+            ->withApplyMode(ApplyMode::Live)
             ->withRange(1)
             ->withLabel($label)
             ->withHelp($help)
@@ -77,7 +85,7 @@ final class ContextSettings implements SettingDefinitionSet
             ->withRiskClass(RiskClass::Tuning)
             ->withLayered()
             ->withProjectSettable()
-            ->withApplyMode(ApplyMode::Restart)
+            ->withApplyMode(ApplyMode::NextTurn)
             ->withRange(1)
             ->withLabel($label)
             ->withHelp($help)
@@ -88,7 +96,7 @@ final class ContextSettings implements SettingDefinitionSet
             ->withRiskClass(RiskClass::Tuning)
             ->withLayered()
             ->withProjectSettable()
-            ->withApplyMode(ApplyMode::Restart)
+            ->withApplyMode(ApplyMode::Live)
             ->withRange(0)
             ->withLabel($label)
             ->withHelp($help)
@@ -112,12 +120,46 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withRiskClass(RiskClass::Tuning)
                 ->withLayered()
                 ->withProjectSettable()
-                ->withApplyMode(ApplyMode::Restart)
+                ->withApplyMode(ApplyMode::Live)
                 ->withUi(UiEditability::Complex)
                 ->withLabel('Per-model caps')
                 ->withHelp('{"<model>" or "<provider>/<model>": {"reminderTokens", "autoTokens", "blockTokens"}} overriding the three caps; 0 clears one.')
                 ->withReaderSymbol(CompactorConfig::class . '::fromSettings')
                 ->withReadBy($readBy . ' → `forModel()`'),
+            // Roadmap N-P4b remainder: the idle offer, the summary mode and
+            // the thrash breaker, each the constant or behaviour it replaced.
+            SettingDefinition::new(CompactorConfig::SETTING_IDLE_OFFER_SECONDS, SettingType::Int, $defaults->idleOfferSeconds)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(0)
+                ->withLabel('Offer /compact after idle (s)')
+                ->withHelp('A session past its whole context window that sat untouched this long is offered /compact instead of sending the prompt. 0 never offers.')
+                ->withReaderSymbol(IdleCompactionPolicy::class . '::shouldPrompt')
+                ->withReadBy($readBy . ' → `Chat::shouldPromptIdleCompaction()` → `IdleCompactionPolicy::shouldPrompt()`'),
+            SettingDefinition::new(CompactorConfig::SETTING_MODE, SettingType::Enum, $defaults->mode)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnumValues(CompactorConfig::MODES)
+                ->withLabel('Compaction mode')
+                ->withHelp('llm: the summary model writes the summaries (the heuristic is its fallback); heuristic: local one-line summaries, never a model call; off: nothing compacts on its own, /compact still works and the blocking tier still refuses.')
+                ->withReaderSymbol(CompactorConfig::class . '::summarisesWithModel')
+                ->withReadBy($readBy . ' → `autoCompacts()`, `summarisesWithModel()`'),
+            SettingDefinition::new(CompactorConfig::SETTING_REFILL_LIMIT, SettingType::Int, $defaults->refillLimit)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(1)
+                ->withLabel('Thrash breaker limit')
+                ->withHelp('Automatic compactions in a row that may come straight back over their tier, prompt unsent, before the next prompt is refused instead of compacted again.')
+                ->withReaderSymbol(IdleCompactionPolicy::class . '::thrashTripped')
+                ->withReadBy($readBy . ' → `IdleCompactionPolicy::thrashTripped()`'),
             // Roadmap 3.B-4 / N-P4b: the model's context reminders. Read with
             // the compaction keys and handed to the engine's step loop through
             // `CompactorConfig::nudgePolicy()`; a min above the max is ignored
@@ -132,12 +174,12 @@ final class ContextSettings implements SettingDefinitionSet
             SettingDefinition::new(CompactorConfig::SETTING_COMPRESS, SettingType::Enum, \SugarCraft\Crush\Tools\BuiltIn\Compress::MODE_DEFAULT)
                 ->withCategory(SettingCategory::Context)
                 ->withRiskClass(RiskClass::Tuning)
-                ->withApplyMode(ApplyMode::Restart)
+                ->withApplyMode(ApplyMode::NextTurn)
                 ->withEnumValues(CompactorConfig::COMPRESS_MODES)
                 ->withLabel('Model compression')
                 ->withHelp('manual offers Compress only on a turn you start with /compress, one call; auto offers it on every turn where the model may prune.')
                 ->withReaderSymbol(CompactorConfig::class . '::offersCompressUnprompted')
-                ->withReadBy('`EngineBackend::gatedLedgerTools()` → `CompactorConfig::offersCompressUnprompted()`'),
+                ->withReadBy('`Chat::applySettings()`, `EngineBackend::gatedLedgerTools()` → `CompactorConfig::offersCompressUnprompted()`'),
             // Roadmap N-P4d: the persisted form of SUGARCRUSH_DISABLE_SYMBOL_MAP.
             // config.json only, like the env switch it mirrors; captured once
             // per session, so it applies to the next one.

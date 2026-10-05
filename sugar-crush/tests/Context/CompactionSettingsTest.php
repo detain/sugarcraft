@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextCompactor;
+use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Context\Pruning\NudgePolicy;
 
 /**
@@ -169,6 +170,9 @@ final class CompactionSettingsTest extends TestCase
             'contextPruning.nudgeFrequency' => 3,
             'contextPruning.iterationNudgeThreshold' => 7,
             'contextPruning.compress' => 'auto',
+            'compaction.idleOfferSeconds' => 900,
+            'compaction.mode' => 'Heuristic',
+            'compaction.refillLimit' => 5,
         ]);
 
         $this->assertSame([60, 75, 90], [$config->reminderThreshold, $config->backgroundCompactionThreshold, $config->foregroundBlockingThreshold]);
@@ -177,6 +181,7 @@ final class CompactionSettingsTest extends TestCase
         $this->assertSame([80_000, 120_000, 500_000], [$config->reminderTokens, $config->backgroundCompactionTokens, $config->foregroundBlockingTokens]);
         $this->assertTrue($config->reminderTokensSet && $config->backgroundCompactionTokensSet && $config->foregroundBlockingTokensSet);
         $this->assertTrue($config->offersCompressUnprompted());
+        $this->assertSame([900, CompactorConfig::MODE_HEURISTIC, 5], [$config->idleOfferSeconds, $config->mode, $config->refillLimit]);
 
         $nudges = $config->nudgePolicy();
         $this->assertSame([40_000, 90_000, 3, 7], [$nudges->minContextTokens, $nudges->maxContextTokens, $nudges->nudgeFrequency, $nudges->iterationThreshold]);
@@ -288,16 +293,131 @@ final class CompactionSettingsTest extends TestCase
         }
     }
 
-    public function testEveryCompactionKeyIsTuningAProjectMaySetAndAppliesAtRestart(): void
+    /**
+     * N-P4b remainder: a save rebuilds the session's config
+     * (`Chat::applySettings()`), so every `compaction.*` key is live. All but
+     * the breaker's limit are tuning a project may set; that one is spend —
+     * raised, it lets a session pay for more compactions that buy nothing —
+     * and stays the operator's.
+     */
+    public function testEveryCompactionKeyIsLiveAndTuningAProjectMaySetButTheBreakersLimit(): void
     {
+        $seen = 0;
         foreach (SettingsSchema::all() as $definition) {
             if (!str_starts_with($definition->key, 'compaction.')) {
                 continue;
             }
+            $seen++;
+            $this->assertContains($definition->key, CompactorConfig::SETTINGS, "{$definition->key} rebuilds the session's config on a save");
+            $this->assertSame(\SugarCraft\Crush\Config\Settings\ApplyMode::Live, $definition->applyMode, "{$definition->key} applies to the next prompt");
+            if ($definition->key === CompactorConfig::SETTING_REFILL_LIMIT) {
+                $this->assertFalse($definition->projectSettable, 'the breaker limit is the operator\'s');
+                $this->assertSame(\SugarCraft\Crush\Config\Settings\RiskClass::Spend, $definition->riskClass);
+                continue;
+            }
             $this->assertTrue($definition->projectSettable, "{$definition->key} is tuning a project may set");
             $this->assertSame(\SugarCraft\Crush\Config\Settings\RiskClass::Tuning, $definition->riskClass);
-            $this->assertSame(\SugarCraft\Crush\Config\Settings\ApplyMode::Restart, $definition->applyMode, 'read once at launch');
         }
+        $this->assertSame(14, $seen, 'eleven tier keys, the idle offer, the mode and the breaker');
+
+        foreach ([CompactorConfig::SETTING_NUDGE_MIN_TOKENS, CompactorConfig::SETTING_NUDGE_MAX_TOKENS, CompactorConfig::SETTING_NUDGE_FREQUENCY, CompactorConfig::SETTING_NUDGE_ITERATIONS, CompactorConfig::SETTING_COMPRESS] as $key) {
+            $this->assertSame(\SugarCraft\Crush\Config\Settings\ApplyMode::NextTurn, SettingsSchema::byKey($key)?->applyMode, "{$key} reaches the engine with the next dispatch");
+        }
+    }
+
+    // =====================================================================
+    // N-P4b remainder: the idle offer, the mode, the breaker
+    // =====================================================================
+
+    public function testTheNewDefaultsAreTheConstantsAndBehaviourTheyReplaced(): void
+    {
+        $config = CompactorConfig::new();
+
+        $this->assertSame(IdleCompactionPolicy::IDLE_SECONDS, $config->idleOfferSeconds);
+        $this->assertSame(IdleCompactionPolicy::REFILL_LIMIT, $config->refillLimit);
+        $this->assertSame(CompactorConfig::MODE_LLM, $config->mode);
+        $this->assertTrue($config->autoCompacts());
+        $this->assertTrue($config->summarisesWithModel(true));
+        $this->assertTrue($config->summarisesWithModel(false));
+
+        $this->assertSame(IdleCompactionPolicy::IDLE_SECONDS, SettingsSchema::byKey(CompactorConfig::SETTING_IDLE_OFFER_SECONDS)?->default);
+        $this->assertSame(IdleCompactionPolicy::REFILL_LIMIT, SettingsSchema::byKey(CompactorConfig::SETTING_REFILL_LIMIT)?->default);
+        $this->assertSame(CompactorConfig::MODE_LLM, SettingsSchema::byKey(CompactorConfig::SETTING_MODE)?->default);
+        $this->assertSame(CompactorConfig::MODES, SettingsSchema::byKey(CompactorConfig::SETTING_MODE)?->enumValues);
+    }
+
+    public function testTheModeDecidesWhoSummarisesAndWhetherAnythingCompactsOnItsOwn(): void
+    {
+        $heuristic = CompactorConfig::new()->withMode(CompactorConfig::MODE_HEURISTIC);
+        $this->assertTrue($heuristic->autoCompacts());
+        $this->assertFalse($heuristic->summarisesWithModel(true));
+        $this->assertFalse($heuristic->summarisesWithModel(false), '/compact is heuristic too');
+
+        $off = CompactorConfig::new()->withMode(CompactorConfig::MODE_OFF);
+        $this->assertFalse($off->autoCompacts());
+        $this->assertFalse($off->summarisesWithModel(true), 'nothing automatic is summarised');
+        $this->assertTrue($off->summarisesWithModel(false), '/compact still asks the summary model');
+    }
+
+    public function testZeroIdleSecondsNeverOffersAndTheLimitIsTheBreakersThreshold(): void
+    {
+        $idle = new \DateTimeImmutable('@1000');
+        $this->assertTrue(IdleCompactionPolicy::shouldPrompt(200, $idle, 100, 1000 + 61, idleSeconds: 60));
+        $this->assertFalse(IdleCompactionPolicy::shouldPrompt(200, $idle, 100, 1000 + 60, idleSeconds: 60), 'strictly longer than the window');
+        $this->assertFalse(IdleCompactionPolicy::shouldPrompt(200, $idle, 100, 1000 + 999_999, idleSeconds: 0), '0 never offers');
+        $this->assertSame(0, CompactorConfig::fromSettings(['compaction.idleOfferSeconds' => 0])->idleOfferSeconds);
+
+        $this->assertFalse(IdleCompactionPolicy::thrashTripped(4, 5));
+        $this->assertTrue(IdleCompactionPolicy::thrashTripped(5, 5));
+        $this->assertTrue(IdleCompactionPolicy::thrashTripped(1, 0), 'a limit below one counts as one');
+        $this->assertSame(IdleCompactionPolicy::thrashTripped(3), IdleCompactionPolicy::thrashTripped(3, IdleCompactionPolicy::REFILL_LIMIT));
+    }
+
+    /** @return iterable<string, array{array<string, mixed>}> */
+    public static function nonsenseRemainderSettings(): iterable
+    {
+        yield 'negative idle' => [['compaction.idleOfferSeconds' => -1]];
+        yield 'string idle' => [['compaction.idleOfferSeconds' => '60']];
+        yield 'unknown mode' => [['compaction.mode' => 'smart']];
+        yield 'mode not a string' => [['compaction.mode' => 1]];
+        yield 'zero refill' => [['compaction.refillLimit' => 0]];
+        yield 'float refill' => [['compaction.refillLimit' => 2.5]];
+    }
+
+    /**
+     * @dataProvider nonsenseRemainderSettings
+     * @param array<string, mixed> $settings
+     */
+    public function testANonsenseRemainderValueKeepsTheDefault(array $settings): void
+    {
+        $this->assertEquals(CompactorConfig::new(), CompactorConfig::fromSettings($settings));
+    }
+
+    public function testTheConstructorRefusesAnUnknownModeANegativeIdleAndAZeroLimit(): void
+    {
+        foreach ([
+            static fn () => new CompactorConfig(mode: 'smart'),
+            static fn () => new CompactorConfig(idleOfferSeconds: -1),
+            static fn () => new CompactorConfig(refillLimit: 0),
+        ] as $build) {
+            try {
+                $build();
+                $this->fail('accepted nonsense');
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function testEverySettingTheConfigReadsIsInTheRebuildList(): void
+    {
+        $constants = array_filter(
+            (new \ReflectionClass(CompactorConfig::class))->getConstants(),
+            static fn (string $name): bool => str_starts_with($name, 'SETTING_'),
+            ARRAY_FILTER_USE_KEY,
+        );
+
+        $this->assertEqualsCanonicalizing(array_values($constants), CompactorConfig::SETTINGS);
     }
 
     public function testASaveThatBreaksTheTierOrderIsRefused(): void

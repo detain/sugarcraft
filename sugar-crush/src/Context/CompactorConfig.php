@@ -38,7 +38,8 @@ use SugarCraft\Crush\Tools\BuiltIn\Compress;
  * lower figures (50k/100k) as an opt-in. `0` in the settings turns a cap off.
  *
  * The settings keys (`compaction.*`, Appendix N §2.2) are read by
- * {@see fromSettings()}, which `Bootstrap::chat()` hands the session and
+ * {@see fromSettings()}, which `Bootstrap::chat()` hands the session,
+ * `Chat::applySettings()` rebuilds it from on a save (so they apply live), and
  * `EngineBackend::compactorConfig()` falls back to.
  *
  * All values are immutable after construction — use with*() methods
@@ -97,6 +98,58 @@ final readonly class CompactorConfig
 
     /** `contextPruning.compress` values: `manual` = only on a `/compress` turn; `auto` = every `auto`-mode turn. */
     public const COMPRESS_MODES = ['manual', 'auto'];
+
+    /**
+     * The idle offer, the summary mode and the thrash breaker (roadmap N-P4b
+     * remainder) — the three compaction numbers that lived as constants on
+     * {@see IdleCompactionPolicy} and as the implicit "is there a summary
+     * backend" test.
+     */
+    public const SETTING_IDLE_OFFER_SECONDS = 'compaction.idleOfferSeconds';
+    public const SETTING_MODE = 'compaction.mode';
+    public const SETTING_REFILL_LIMIT = 'compaction.refillLimit';
+
+    /** `compaction.mode`: the summary model writes the summaries (the heuristic is its fallback). */
+    public const MODE_LLM = 'llm';
+
+    /** `compaction.mode`: the local one-line heuristic only — no summarisation call is ever made. */
+    public const MODE_HEURISTIC = 'heuristic';
+
+    /**
+     * `compaction.mode`: nothing compacts on its own — no automatic tier and
+     * no ahead-of-need summary. `/compact` still works, on the summary model,
+     * and the blocking tier still refuses a prompt the window cannot take.
+     */
+    public const MODE_OFF = 'off';
+
+    /** Every `compaction.mode` value, the default first. */
+    public const MODES = [self::MODE_LLM, self::MODE_HEURISTIC, self::MODE_OFF];
+
+    /**
+     * Every settings key {@see fromSettings()} reads — the keys a save must
+     * rebuild a session's config for (`Chat::applySettings()`).
+     */
+    public const SETTINGS = [
+        self::SETTING_REMINDER_PERCENT,
+        self::SETTING_AUTO_PERCENT,
+        self::SETTING_BLOCK_PERCENT,
+        self::SETTING_KEEP_RECENT,
+        self::SETTING_SUMMARY_USER_CHARS,
+        self::SETTING_SUMMARY_ASSISTANT_CHARS,
+        self::SETTING_TOOL_OUTPUT_CHARS,
+        self::SETTING_REMINDER_TOKENS,
+        self::SETTING_AUTO_TOKENS,
+        self::SETTING_BLOCK_TOKENS,
+        self::SETTING_MODEL_TOKEN_CAPS,
+        self::SETTING_IDLE_OFFER_SECONDS,
+        self::SETTING_MODE,
+        self::SETTING_REFILL_LIMIT,
+        self::SETTING_NUDGE_MIN_TOKENS,
+        self::SETTING_NUDGE_MAX_TOKENS,
+        self::SETTING_NUDGE_FREQUENCY,
+        self::SETTING_NUDGE_ITERATIONS,
+        self::SETTING_COMPRESS,
+    ];
 
     /**
      * The short names a `compaction.modelTokenCaps` entry uses, mapped to the
@@ -192,6 +245,21 @@ final readonly class CompactorConfig
      *                                      {@see \SugarCraft\Crush\Tools\BuiltIn\Compress::MODE_DEFAULT}):
      *                                      the model's `Compress` only on a `/compress`
      *                                      turn; `auto`: on every turn `Prune` is offered.
+     * @param int $idleOfferSeconds        How long a session past its whole window must
+     *                                      sit untouched before `/compact` is offered
+     *                                      instead of the prompt
+     *                                      ({@see IdleCompactionPolicy::shouldPrompt()});
+     *                                      `0` never offers. Default
+     *                                      {@see IdleCompactionPolicy::IDLE_SECONDS}.
+     * @param string $mode                 Who writes compaction summaries, and whether
+     *                                      anything compacts on its own: one of
+     *                                      {@see MODES} ({@see autoCompacts()},
+     *                                      {@see summarisesWithModel()}).
+     * @param int $refillLimit             Automatic compactions in a row that may come
+     *                                      straight back over their tier, turn unsent,
+     *                                      before the thrash breaker refuses
+     *                                      ({@see IdleCompactionPolicy::thrashTripped()}).
+     *                                      Default {@see IdleCompactionPolicy::REFILL_LIMIT}.
      */
     public function __construct(
         public int $reminderThreshold = 70,
@@ -215,6 +283,9 @@ final readonly class CompactorConfig
         public int $nudgeFrequency = NudgePolicy::NUDGE_FREQUENCY,
         public int $nudgeIterationThreshold = NudgePolicy::ITERATION_THRESHOLD,
         public string $compressMode = Compress::MODE_DEFAULT,
+        public int $idleOfferSeconds = IdleCompactionPolicy::IDLE_SECONDS,
+        public string $mode = self::MODE_LLM,
+        public int $refillLimit = IdleCompactionPolicy::REFILL_LIMIT,
     ) {
         foreach (self::ABSOLUTE_FIELDS as $field) {
             self::assertAbsolute($field, $this->{$field});
@@ -228,6 +299,19 @@ final readonly class CompactorConfig
                 implode(', ', self::COMPRESS_MODES),
                 $compressMode,
             ));
+        }
+        if (!\in_array($mode, self::MODES, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'mode must be one of %s; got "%s".',
+                implode(', ', self::MODES),
+                $mode,
+            ));
+        }
+        if ($idleOfferSeconds < 0) {
+            throw new \InvalidArgumentException(sprintf('idleOfferSeconds must be 0 (never) or more; got %d.', $idleOfferSeconds));
+        }
+        if ($refillLimit < 1) {
+            throw new \InvalidArgumentException(sprintf('refillLimit must be at least 1; got %d.', $refillLimit));
         }
     }
 
@@ -244,6 +328,9 @@ final readonly class CompactorConfig
      * default. `compaction.modelTokenCaps` is `{model: {reminderTokens,
      * autoTokens, blockTokens}}` (a model id or `provider/model`; `0` or null
      * clears that cap for the model); a malformed entry is skipped.
+     * `compaction.idleOfferSeconds` (`0` never offers), `compaction.mode` (one
+     * of {@see MODES}, case-insensitive) and `compaction.refillLimit` (at
+     * least 1) follow the same rule.
      *
      * `fromSettings([])` equals {@see new()}.
      *
@@ -272,6 +359,7 @@ final readonly class CompactorConfig
             'toolOutputMaxChars' => self::SETTING_TOOL_OUTPUT_CHARS,
             'nudgeFrequency' => self::SETTING_NUDGE_FREQUENCY,
             'nudgeIterationThreshold' => self::SETTING_NUDGE_ITERATIONS,
+            'refillLimit' => self::SETTING_REFILL_LIMIT,
         ] as $field => $key) {
             $value = self::intSetting($config, $key, 1);
             if ($value !== null) {
@@ -296,6 +384,16 @@ final readonly class CompactorConfig
         if ($min <= $max) {
             $changes['nudgeMinContextTokens'] = $min;
             $changes['nudgeMaxContextTokens'] = $max;
+        }
+
+        $idle = self::intSetting($config, self::SETTING_IDLE_OFFER_SECONDS, 0);
+        if ($idle !== null) {
+            $changes['idleOfferSeconds'] = $idle;
+        }
+
+        $mode = $config[self::SETTING_MODE] ?? null;
+        if (\is_string($mode) && \in_array(strtolower(trim($mode)), self::MODES, true)) {
+            $changes['mode'] = strtolower(trim($mode));
         }
 
         $compress = $config[self::SETTING_COMPRESS] ?? null;
@@ -331,6 +429,34 @@ final readonly class CompactorConfig
     public function offersCompressUnprompted(): bool
     {
         return $this->compressMode === 'auto';
+    }
+
+    /**
+     * Whether anything compacts without being asked: the automatic tier and
+     * the ahead-of-need summary. False only for `compaction.mode: off`; the
+     * blocking tier and `/compact` do not depend on it.
+     */
+    public function autoCompacts(): bool
+    {
+        return $this->mode !== self::MODE_OFF;
+    }
+
+    /**
+     * Whether a compaction asks the summary model for its summaries rather
+     * than writing the heuristic lines. `heuristic` never asks; `off` asks
+     * only for a compaction the person started (`/compact`), since nothing
+     * else compacts; `llm` always asks.
+     *
+     * @param bool $automatic whether the compaction is the session's own (a
+     *        tier or the ahead-of-need summary) rather than `/compact`
+     */
+    public function summarisesWithModel(bool $automatic): bool
+    {
+        return match ($this->mode) {
+            self::MODE_HEURISTIC => false,
+            self::MODE_OFF => !$automatic,
+            default => true,
+        };
     }
 
     /**
@@ -420,6 +546,28 @@ final readonly class CompactorConfig
     public function withToolOutputMaxChars(int $toolOutputMaxChars): self
     {
         return $this->mutate(['toolOutputMaxChars' => $toolOutputMaxChars]);
+    }
+
+    /** Offer `/compact` after $seconds idle past the window; `0` never offers. */
+    public function withIdleOfferSeconds(int $seconds): self
+    {
+        return $this->mutate(['idleOfferSeconds' => $seconds]);
+    }
+
+    /**
+     * One of {@see MODES}.
+     *
+     * @throws \InvalidArgumentException on any other value
+     */
+    public function withMode(string $mode): self
+    {
+        return $this->mutate(['mode' => $mode]);
+    }
+
+    /** Let the thrash breaker allow $limit refilling compactions in a row. */
+    public function withRefillLimit(int $limit): self
+    {
+        return $this->mutate(['refillLimit' => $limit]);
     }
 
     /**

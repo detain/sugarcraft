@@ -8661,6 +8661,12 @@ final class Chat implements Model
      *    window, `paletteMru`, `maxCheckpoints`) are read through
      *    {@see \SugarCraft\Crush\Config\Settings\UiSettings}, whose held
      *    values every save drops, so the next frame or keystroke reads them.
+     *  - LIVE, Chat state: the `compaction.*` keys (roadmap N-P4b) rebuild
+     *    {@see $compactorConfig} through {@see withCompactorSettings()}, so
+     *    the next prompt is judged by the new tiers, idle offer, summary mode
+     *    and breaker limit. The `contextPruning.*` keys the same config
+     *    carries are NEXT TURN, and rebuild it too: the engine is handed it
+     *    with each dispatch.
      *  - LIVE, engine: {@see ENGINE_SETTINGS} rebuild the backend through
      *    {@see withBackend()} — at once when idle, otherwise parked in
      *    {@see $pendingSettingsApply} for {@see update()} to apply once the
@@ -8697,11 +8703,20 @@ final class Chat implements Model
         $cmds = [];
         $now = $held = $nextTurn = $restart = [];
         $engine = false;
+        $compactor = false;
         $config = null;
 
         foreach ($changed as $key) {
             $mode = \SugarCraft\Crush\Config\Settings\SettingsSchema::byKey($key)?->applyMode
                 ?? \SugarCraft\Crush\Config\Settings\ApplyMode::Restart;
+
+            // Roadmap N-P4b: every key the session's CompactorConfig is read
+            // from rebuilds it, whatever its badge — the `compaction.*` tiers
+            // judge the next prompt (live), the `contextPruning.*` reminders
+            // reach the engine with the next turn's dispatch (next turn).
+            if (\in_array($key, CompactorConfig::SETTINGS, true)) {
+                $compactor = true;
+            }
 
             if ($mode === \SugarCraft\Crush\Config\Settings\ApplyMode::NextTurn) {
                 $nextTurn[] = $key;
@@ -8752,6 +8767,10 @@ final class Chat implements Model
 
         if ($engine) {
             $chat = $chat->withEngineSettings();
+        }
+
+        if ($compactor) {
+            $chat = $chat->withCompactorSettings($config);
         }
 
         if ($held !== []) {
@@ -8823,6 +8842,35 @@ final class Chat implements Model
             ?? (int) (new \ReflectionParameter([Backend\EngineBackend::class, '__construct'], 'maxSteps'))->getDefaultValue();
 
         return $this->withBackend($this->backend->withMaxSteps($steps));
+    }
+
+    /**
+     * Rebuild {@see $compactorConfig} from the merged settings (roadmap
+     * N-P4b), so a saved `compaction.*` key applies to the next prompt.
+     *
+     * Chat state only, and so not held while a turn runs: the running turn's
+     * engine was handed its config at dispatch and keeps it, and the
+     * constructor rebuilds {@see $compactor} from the new config on this
+     * mutate() — `forModel()` included, so the per-model caps still follow
+     * the backend. A summary already requested ahead of need was keyed by the
+     * old config's fingerprint; one that no longer matches is dropped by the
+     * next dispatch, never spliced. Read through
+     * {@see CompactorConfig::fromSettings()}, the launch's own reader, so a
+     * value parses the same either way; it never throws, and an unreadable
+     * settings stack leaves the session as it was.
+     *
+     * @param array<string, mixed>|null $config the merged settings, when the
+     *        caller has already read them
+     */
+    private function withCompactorSettings(?array $config = null): self
+    {
+        try {
+            $config ??= \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+        } catch (\Throwable) {
+            return $this;
+        }
+
+        return $this->mutate(['compactorConfig' => CompactorConfig::fromSettings($config)]);
     }
 
     /**
@@ -10466,7 +10514,18 @@ final class Chat implements Model
         // summary (roadmap 2.10), which rides out beside whatever this returns.
         $postCompact = null;
 
-        if ($this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
+        // `compaction.mode: off` (roadmap N-P4b): nothing compacts on its own,
+        // so the automatic tier is skipped outright — but a prompt the window
+        // cannot take is still refused, by the same blocking test and with the
+        // same refusal the tier gives once compacting has come up short, which
+        // points at `/compact` and `/clear`. Without that arm, `off` would send
+        // a request the provider rejects.
+        $autoCompacts = $this->compactor->config()->autoCompacts();
+        if (!$autoCompacts && $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit)) {
+            return $this->foregroundBlockedResponse($text, $this->history, $tokenCount, $tokenLimit);
+        }
+
+        if ($autoCompacts && $this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
             // THE CIRCUIT BREAKER FIRST, ahead of both routes it can stop, because
             // spending nothing is the entire point (prompt_expand.md §4.23): a test
             // after the parked call would still have paid for the summarization,
@@ -10480,7 +10539,7 @@ final class Chat implements Model
             // "Blocked until": the blocking refusal tells them to free space they
             // have just been shown cannot be freed by the automatic route, which is
             // the older and less actionable of the two facts.
-            if (IdleCompactionPolicy::thrashTripped($this->consecutiveRefillCompactions)) {
+            if (IdleCompactionPolicy::thrashTripped($this->consecutiveRefillCompactions, $this->compactor->config()->refillLimit)) {
                 return $this->thrashBreakerRefusal();
             }
 
@@ -13652,8 +13711,9 @@ final class Chat implements Model
         // Checked here as well as inside buildSummarizationRequest() because the
         // ORDER matters: with no provider at all there is nothing for the spend
         // cap to have prevented, so the offline answer must win over the
-        // cap-reached notice below.
-        if ($this->summaryBackend === null) {
+        // cap-reached notice below. `compaction.mode: heuristic` is the same
+        // answer by choice ({@see compactionSummaryBackend()}).
+        if ($this->compactionSummaryBackend(automatic: false) === null) {
             return null;
         }
 
@@ -13694,6 +13754,22 @@ final class Chat implements Model
         ]);
 
         return [$next, $request['cmd']];
+    }
+
+    /**
+     * The backend a compaction's summaries are asked of, or null for the
+     * heuristic lines: {@see $summaryBackend}, unless `compaction.mode`
+     * (roadmap N-P4b, {@see CompactorConfig::summarisesWithModel()}) says not
+     * to ask — `heuristic` never, `off` only for `/compact`. Every compaction
+     * route reads it here, and only compaction: `/handoff` and auto-memory
+     * use the summary backend for jobs of their own.
+     *
+     * @param bool $automatic a tier's compaction or the ahead-of-need summary,
+     *        rather than one the person started
+     */
+    private function compactionSummaryBackend(bool $automatic): ?Backend
+    {
+        return $this->compactor->config()->summarisesWithModel($automatic) ? $this->summaryBackend : null;
     }
 
     /**
@@ -13742,7 +13818,7 @@ final class Chat implements Model
         };
 
         $request = $this->compactionService()->buildSummarizationRequest(
-            $this->summaryBackend,
+            $this->compactionSummaryBackend(automatic: $parkedSubmission !== null || $background),
             $this->compactor,
             $probeHistory,
             $parkedSubmission,
@@ -13908,7 +13984,8 @@ final class Chat implements Model
         // {@see scheduleModelCompaction()} states: with no provider at all there
         // is nothing the cap can have prevented, so an offline session must get
         // the plain heuristic path rather than be told a model ask was withheld.
-        if ($this->summaryBackend === null) {
+        // `compaction.mode: heuristic` takes that path by choice.
+        if ($this->compactionSummaryBackend(automatic: true) === null) {
             return null;
         }
 
@@ -17799,9 +17876,11 @@ final class Chat implements Model
      * when each wrote both numbers itself. Chat still supplies its own limit:
      * the backend is what it can see, and it must not reach for a Runtime.
      *
-     * Returns true when the session has been idle longer than
-     * {@see IdleCompactionPolicy::IDLE_SECONDS} AND the estimated token count
-     * is past the whole context window {@see contextTokenLimit()} reports.
+     * Returns true when the session has been idle longer than its
+     * `compaction.idleOfferSeconds` ({@see CompactorConfig::$idleOfferSeconds},
+     * default {@see IdleCompactionPolicy::IDLE_SECONDS}; `0` never offers) AND
+     * the estimated token count is past the whole context window
+     * {@see contextTokenLimit()} reports.
      *
      * Called once per turn from submit() (see {@see idleCompactionPromptResponse()})
      * right before a real prompt would be dispatched to the backend.
@@ -17811,7 +17890,14 @@ final class Chat implements Model
      */
     public function shouldPromptIdleCompaction(int $tokenCount, ?\DateTimeImmutable $lastActivityAt = null): bool
     {
-        return $this->contextMeter()->shouldPromptIdleCompaction($tokenCount, $lastActivityAt, $this->contextTokenLimit());
+        // The meter's policy, at this session's `compaction.idleOfferSeconds`
+        // (roadmap N-P4b) rather than the policy's default.
+        return \SugarCraft\Crush\Context\IdleCompactionPolicy::shouldPrompt(
+            $tokenCount,
+            $lastActivityAt,
+            $this->contextTokenLimit(),
+            idleSeconds: $this->compactor->config()->idleOfferSeconds,
+        );
     }
 
     /**

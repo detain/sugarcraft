@@ -74,8 +74,8 @@ above about 176,000 the automatic cap does too. `compaction.modelTokenCaps`
 sets different caps per model (`{"qwen3": {"autoTokens": 300000}}`, matched as
 `provider/model` first, then the model id); a cap of `0` switches that cap
 off. The percentages must ascend (reminder < automatic <
-block), or all three fall back to their defaults. Every `compaction.*` key
-applies on restart; the full list is in
+block), or all three fall back to their defaults. A `compaction.*` key saved
+from the settings view applies to the next prompt; the full list is in
 [`SETTINGS.md`](SETTINGS.md#compaction-thresholds).
 
 Two safeguards keep the tiers from fighting the conversation:
@@ -89,12 +89,14 @@ Two safeguards keep the tiers from fighting the conversation:
 - **A thrash breaker.** After three automatic compactions in a row that each
   left the context over the tier and the turn unsent, the next prompt is
   refused with a notice rather than compacted a fourth time
-  (`IdleCompactionPolicy::REFILL_LIMIT`). `/compact` and `/clear` still work.
+  (`compaction.refillLimit`, default `IdleCompactionPolicy::REFILL_LIMIT`).
+  `/compact` and `/clear` still work.
 
 A block-tier refusal is not a dead end: each further attempt keeps one fewer
 recent exchange, and `/clear` frees the whole context at once. A session that
-has grown past the whole window and sat idle for an hour is offered
-`/compact` when you come back.
+has grown past the whole window and sat idle for an hour
+(`compaction.idleOfferSeconds`; `0` never offers) is offered `/compact` when
+you come back.
 
 ### How the summaries are written
 
@@ -107,7 +109,9 @@ tool can run or ask for permission. It uses the conversation's own model
 unless `SUGARCRUSH_SUMMARY_MODEL` or the `summaryModel` setting names another
 (a cache hit needs the same model, and a bad summary is permanent context
 loss). The spend cap gates it: a capped session compacts on the heuristic and
-says so.
+says so. `compaction.mode` chooses: `llm` (the default) as described here,
+`heuristic` to never make the call, or `off` to compact nothing on its own
+(`/compact` still asks the model, and the block tier still refuses).
 
 **Background summaries.** The summaries the automatic tier needs are
 requested as soon as the session crosses the reminder tier, beside the turn

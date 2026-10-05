@@ -188,6 +188,9 @@ final class ApplySettingsTest extends TestCase
         // N-P4g: the interface keys read through UiSettings apply by the
         // save dropping its held values.
         $handled = ['maxToolSteps', 'theme', 'statusLine', ...\SugarCraft\Crush\Config\Settings\UiSettings::KEYS];
+        // N-P4b: every key the session's CompactorConfig is read from
+        // rebuilds it on a save.
+        $handled = [...$handled, ...\SugarCraft\Crush\Context\CompactorConfig::SETTINGS];
         $ownDoors = array_keys(SettingsWriter::LIVE_COMMAND_KEYS);
         foreach (SettingsSchema::all() as $definition) {
             if ($definition->applyMode !== ApplyMode::Live || \in_array($definition->ui, [UiEditability::ReadOnly, UiEditability::Hidden], true)) {
@@ -208,7 +211,7 @@ final class ApplySettingsTest extends TestCase
         self::assertStringContainsString('restart', (string) $writer->refusal(SettingsTier::Session, 'instructions', ['AGENTS.md']));
         self::assertStringContainsString('config.json', (string) $writer->refusal(SettingsTier::Session, 'permissionMode', 'plan'));
         self::assertNotNull($writer->refusal(SettingsTier::Session, 'trustedProjectHooks', ['/x']), 'trust never goes through a save');
-        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'toolSpillWindowPercent', 'globMaxMatches', 'webFetchMaxBytes', 'webFetchTimeoutSeconds', 'bashInteractiveIdleSeconds', 'bashTimeoutSeconds', 'bashMaxTimeoutSeconds', 'chatToolTimeoutSeconds', 'embeddingModel', 'subagentMaxTurns', 'subagentMaxDepth', 'subagentMaxActive', 'theme', 'statusLine', 'queueMode', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
+        self::assertSame(['maxOutputTokens', 'parallelToolCalls', 'parallelToolDeadlineSeconds', 'maxToolSteps', 'compaction.reminderPercent', 'compaction.autoPercent', 'compaction.blockPercent', 'compaction.keepRecent', 'compaction.summaryUserChars', 'compaction.summaryAssistantChars', 'compaction.toolOutputChars', 'compaction.reminderTokens', 'compaction.autoTokens', 'compaction.blockTokens', 'compaction.modelTokenCaps', 'compaction.idleOfferSeconds', 'compaction.mode', 'compaction.refillLimit', 'contextPruning.minContextTokens', 'contextPruning.maxContextTokens', 'contextPruning.nudgeFrequency', 'contextPruning.iterationNudgeThreshold', 'toolOutputCapBytes', 'mcpResultCapBytes', 'readMaxBytes', 'readPageLines', 'readPageBytes', 'toolSpillWindowPercent', 'globMaxMatches', 'webFetchMaxBytes', 'webFetchTimeoutSeconds', 'bashInteractiveIdleSeconds', 'bashTimeoutSeconds', 'bashMaxTimeoutSeconds', 'chatToolTimeoutSeconds', 'embeddingModel', 'subagentMaxTurns', 'subagentMaxDepth', 'subagentMaxActive', 'theme', 'statusLine', 'queueMode', 'mouse', 'mouseClicks', 'scrollWheelLines', 'doubleEscSeconds', 'paletteMru', 'diffPreviewRows', 'toolOutputPreviewLines', 'maxCheckpoints', 'providerRetryAttempts', 'providerRetryBaseBackoffMs'], SettingsWriter::sessionKeys());
 
         $writer->write(SettingsTier::Session, ['maxOutputTokens' => 100]);
         self::assertSame(['maxOutputTokens' => 100], $writer->current(SettingsTier::Session));

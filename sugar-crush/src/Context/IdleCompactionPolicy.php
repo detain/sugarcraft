@@ -38,7 +38,8 @@ final class IdleCompactionPolicy
      * How long a session must have gone untouched before its size is worth
      * interrupting the user about. One hour: short enough that a session
      * resumed the next morning is caught, long enough that a coffee break is
-     * not.
+     * not. The default of `compaction.idleOfferSeconds` (roadmap N-P4b), which
+     * a session carries on its {@see CompactorConfig}.
      */
     public const IDLE_SECONDS = 3600;
 
@@ -61,6 +62,9 @@ final class IdleCompactionPolicy
      * — see {@see \SugarCraft\Crush\Chat}'s `consecutiveRefillCompactions`
      * property, which owns the measurement, and the comment on it for why the
      * rewrite's own post-state is the only honest reading of the phrase.
+     *
+     * The default of `compaction.refillLimit` (roadmap N-P4b), carried on the
+     * session's {@see CompactorConfig}.
      */
     public const REFILL_LIMIT = 3;
 
@@ -93,13 +97,22 @@ final class IdleCompactionPolicy
      *                      an integer-second rollover between them makes an
      *                      exactly-3,600-second-old timestamp measure 3,601 and
      *                      cross the boundary under test.
+     * @param int $idleSeconds How long counts as idle: the session's
+     *                      `compaction.idleOfferSeconds`
+     *                      ({@see CompactorConfig::$idleOfferSeconds}), else
+     *                      {@see IDLE_SECONDS}. `0` turns the offer off.
      */
     public static function shouldPrompt(
         int $tokenCount,
         ?\DateTimeImmutable $lastActivityAt,
         int $tokenLimit,
         ?int $now = null,
+        int $idleSeconds = self::IDLE_SECONDS,
     ): bool {
+        if ($idleSeconds <= 0) {
+            return false;
+        }
+
         if ($tokenLimit <= 0 || $tokenCount <= $tokenLimit) {
             return false;
         }
@@ -108,7 +121,7 @@ final class IdleCompactionPolicy
             return false;
         }
 
-        return (($now ?? time()) - $lastActivityAt->getTimestamp()) > self::IDLE_SECONDS;
+        return (($now ?? time()) - $lastActivityAt->getTimestamp()) > $idleSeconds;
     }
 
     /**
@@ -125,9 +138,13 @@ final class IdleCompactionPolicy
      * {@see \SugarCraft\Crush\Chat}, because it counts that object's compactions
      * and resets with its thread. This file answers "is that many enough to
      * stop", which is the part two callers must not disagree about.
+     *
+     * @param int $limit the session's `compaction.refillLimit`
+     *                   ({@see CompactorConfig::$refillLimit}), else
+     *                   {@see REFILL_LIMIT}; below 1 counts as 1
      */
-    public static function thrashTripped(int $consecutiveRefills): bool
+    public static function thrashTripped(int $consecutiveRefills, int $limit = self::REFILL_LIMIT): bool
     {
-        return $consecutiveRefills >= self::REFILL_LIMIT;
+        return $consecutiveRefills >= max(1, $limit);
     }
 }
