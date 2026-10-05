@@ -197,6 +197,124 @@ final class TaskListCasAndCycleTest extends TestCase
         $this->assertNull($list->getTask('q'));
     }
 
+    public function testACompletionOnAStaleRevisionIsRefusedAndWritesNothing(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->task('a'));
+        $this->assertTrue($list->claimTask('a', 'mate'));
+        $seen = (int) $list->revision('a');
+
+        // The claim is released and re-taken between the read and the write.
+        $this->assertTrue($list->releaseTask('a', 'mate'));
+        $this->assertTrue($list->claimTask('a', 'other'));
+
+        $this->assertFalse($list->completeTask('a', 'stale result', $seen));
+        $this->assertFalse($list->failTask('a', 'stale error', $seen));
+
+        $task = $list->getTask('a');
+        $this->assertSame(TaskStatus::InProgress, $task?->status);
+        $this->assertSame('other', $task?->assignedTo);
+        $this->assertNull($task?->result);
+        $this->assertNull($task?->error);
+        $this->assertSame($seen + 2, $list->revision('a'), 'a refused finish bumps nothing');
+    }
+
+    public function testACompletionAtTheCurrentRevisionLands(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->task('a'));
+        $list->addTask($this->task('b'));
+        $list->addTask($this->task('c'));
+
+        $this->assertTrue($list->completeTask('a', 'done', $list->revision('a')));
+        $this->assertTrue($list->failTask('b', 'broke', $list->revision('b')));
+        $this->assertTrue($list->completeTask('c', 'no revision named'));
+
+        $this->assertSame(TaskStatus::Completed, $list->getTask('a')?->status);
+        $this->assertSame('done', $list->getTask('a')?->result);
+        $this->assertSame(TaskStatus::Failed, $list->getTask('b')?->status);
+        $this->assertSame('broke', $list->getTask('b')?->error);
+        $this->assertSame(TaskStatus::Completed, $list->getTask('c')?->status);
+    }
+
+    public function testFinishingAMissingTaskStillThrows(): void
+    {
+        $list = new TaskList($this->dbPath);
+
+        try {
+            $list->completeTask('ghost', 'x');
+            $this->fail('completing a missing task must throw');
+        } catch (\SQLite3Exception) {
+        }
+        $this->expectException(\SQLite3Exception::class);
+        $list->failTask('ghost', 'x');
+    }
+
+    // -------------------------------------------------------------------------
+    // Duplicate ids and per-process connections (roadmap 4.6-2)
+    // -------------------------------------------------------------------------
+
+    public function testATakenIdIsReportedCleanlyNotThroughAPrimaryKeyWarning(): void
+    {
+        $first = new TaskList($this->dbPath);
+        // A second instance stands in for a second process: it has no state
+        // of its own beyond the shared database.
+        $second = new TaskList($this->dbPath);
+
+        $this->assertTrue($first->addTaskIfAbsent($this->task('t1')));
+        $this->assertFalse($second->addTaskIfAbsent($this->task('t1')), 'the loser learns the id is taken');
+
+        try {
+            $second->addTask($this->task('t1'));
+            $this->fail('addTask() must refuse a taken id');
+        } catch (\InvalidArgumentException $taken) {
+            $this->assertStringContainsString('"t1" already exists', $taken->getMessage());
+        }
+
+        $this->assertSame('Task t1', $first->getTask('t1')?->title);
+        $this->assertSame(0, $first->revision('t1'), 'the refused inserts wrote nothing');
+    }
+
+    public function testAForkedChildOpensItsOwnConnection(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('needs pcntl');
+        }
+
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->task('before-fork'));
+        $parentPid = (int) getmypid();
+
+        $pid = $this->forkTracked();
+        if ($pid === 0) {
+            $ok = false;
+            try {
+                // Used after the fork exactly as a turn child uses the Team
+                // tool's list: the write must go through a connection this
+                // process opened, and the parent's must be left untouched.
+                $list->addTask($this->task('from-child'));
+                $ok = $list->completeTask('before-fork', 'child finished it');
+                $keys = array_keys((new \ReflectionProperty(TaskList::class, 'connections'))->getValue());
+                $mine = array_filter($keys, static fn (string $k): bool => str_starts_with($k, getmypid() . "\0"));
+                $inherited = array_filter($keys, static fn (string $k): bool => str_starts_with($k, $parentPid . "\0"));
+                $ok = $ok && $mine !== [] && $inherited !== [];
+            } catch (\Throwable) {
+                $ok = false;
+            }
+            \SugarCraft\Crush\Support\ForkedChild::exitNow($ok ? 0 : 1);
+        }
+
+        pcntl_waitpid($pid, $status);
+        $this->forgetForkedChild($pid);
+        $this->assertSame(0, pcntl_wexitstatus($status), 'the child wrote through a connection of its own');
+
+        // And the parent's connection still works after the child exited.
+        $this->assertSame(TaskStatus::Completed, $list->getTask('before-fork')?->status);
+        $this->assertNotNull($list->getTask('from-child'));
+        $list->addTask($this->task('after-fork'));
+        $this->assertNotNull($list->getTask('after-fork'));
+    }
+
     // -------------------------------------------------------------------------
     // Crash recovery
     // -------------------------------------------------------------------------

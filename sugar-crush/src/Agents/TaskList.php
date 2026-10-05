@@ -24,9 +24,10 @@ use SugarCraft\Crush\Support\TimedFileLock;
  *                  marks the completion as contested
  * - TeammateIdle: dispatched when a teammate has no more tasks to work on
  *
- * Concurrency (roadmap 4.6-1):
- * - Every write bumps the row's `revision`, and {@see claimTask()} /
- *   {@see releaseTask()} are compare-and-swap on it: the UPDATE only lands
+ * Concurrency (roadmap 4.6-1, 4.6-2):
+ * - Every write bumps the row's `revision`, and {@see claimTask()},
+ *   {@see releaseTask()}, {@see completeTask()} and {@see failTask()} are
+ *   compare-and-swap on it: the UPDATE only lands
  *   when the row is still at the revision the decision was made on, so a
  *   complete/fail/status write from another process between the read and the
  *   write turns the claim into a refusal instead of being silently undone.
@@ -34,16 +35,22 @@ use SugarCraft\Crush\Support\TimedFileLock;
  * - Dependencies stay acyclic: {@see addTask()} and {@see addDependency()}
  *   refuse an edge that would close a loop (a loop is a set of tasks none of
  *   which can ever be claimed).
+ * - Two inserts of one id do not reach the primary key: the id is checked
+ *   under the write lock, {@see addTaskIfAbsent()} reports a taken one.
+ * - Each process opens its own SQLite connection ({@see db()}), so a list
+ *   built before a fork is safe to use after it.
  * - A claim records the claiming process (pid + kernel start time), and
  *   {@see releaseOrphanedClaims()} puts the tasks of a claimant that died
  *   mid-task back to pending.
  */
 final class TaskList
 {
-    /** @var array<string, \SQLite3> cache of open connections, keyed by dbPath */
+    /**
+     * Open connections, keyed by process id and dbPath — see {@see db()}.
+     *
+     * @var array<string, \SQLite3>
+     */
     private static array $connections = [];
-
-    private readonly \SQLite3 $db;
 
     /**
      * @param string $dbPath Path to the SQLite database file
@@ -66,7 +73,6 @@ final class TaskList
         private readonly ?HookDispatcher $hookDispatcher = null,
         private readonly ?string $projectRoot = null,
     ) {
-        $this->db = $this->getConnection($dbPath);
         $this->migrate();
     }
 
@@ -76,7 +82,7 @@ final class TaskList
 
     private function migrate(): void
     {
-        $this->db->exec(
+        $this->db()->exec(
             <<<'SQL'
             CREATE TABLE IF NOT EXISTS tasks (
                 id              TEXT    NOT NULL PRIMARY KEY,
@@ -103,7 +109,7 @@ final class TaskList
         // A database created before these columns existed gets them added in
         // place; CREATE TABLE IF NOT EXISTS leaves an existing table alone.
         $present = [];
-        $info = $this->db->query('PRAGMA table_info(tasks)');
+        $info = $this->db()->query('PRAGMA table_info(tasks)');
         while ($info !== false && ($column = $info->fetchArray(\SQLITE3_ASSOC)) !== false) {
             $present[(string) $column['name']] = true;
         }
@@ -113,7 +119,7 @@ final class TaskList
             'claim_started' => 'INTEGER',
         ] as $name => $type) {
             if (!isset($present[$name])) {
-                $this->db->exec("ALTER TABLE tasks ADD COLUMN {$name} {$type}");
+                $this->db()->exec("ALTER TABLE tasks ADD COLUMN {$name} {$type}");
             }
         }
     }
@@ -132,10 +138,42 @@ final class TaskList
      * @throws TaskBlockedException When a TaskCreated hook blocks the insertion
      * @throws \InvalidArgumentException When $task's dependencies would close a
      *         cycle (an id may be depended on before it exists, so a later task
-     *         can complete a loop the earlier ones started)
+     *         can complete a loop the earlier ones started), or when a task
+     *         with $task's id already exists — see {@see addTaskIfAbsent()}
      */
     public function addTask(Task $task): string
     {
+        if (!$this->addTaskIfAbsent($task)) {
+            throw new \InvalidArgumentException(sprintf('A task with id "%s" already exists.', $task->id));
+        }
+
+        return $task->id;
+    }
+
+    /**
+     * {@see addTask()}, reporting a taken id as false instead of throwing.
+     *
+     * Two processes that pick the next free id at the same moment pick the
+     * same one, and the second insert used to reach SQLite's primary key: a
+     * PHP warning ("UNIQUE constraint failed") out of `execute()` and a
+     * silently dropped task. The id is now checked under the write lock every
+     * insert takes, so the loser learns it here and can pick again.
+     *
+     * The TaskCreated hook runs before the insert, outside the lock (a hook
+     * may re-enter this list); an id already taken when this is called is
+     * refused before the hook runs, so only a genuine race fires it for an id
+     * that is then not inserted.
+     *
+     * @return bool true when $task was inserted, false when its id was taken
+     * @throws TaskBlockedException When a TaskCreated hook blocks the insertion
+     * @throws \InvalidArgumentException When $task's dependencies would close a cycle
+     */
+    public function addTaskIfAbsent(Task $task): bool
+    {
+        if ($this->revision($task->id) !== null) {
+            return false;
+        }
+
         // Dispatch TaskCreated hook — block aborts the insert
         if ($this->hookDispatcher !== null) {
             $context = $this->makeHookContext($task->teamId, $task->id, $task->title);
@@ -148,46 +186,46 @@ final class TaskList
         $handle = $this->openForWrite();
 
         try {
+            if ($this->revision($task->id) !== null) {
+                return false;
+            }
+
             foreach ($task->dependsOn as $dependency) {
                 $this->refuseCycle($task->id, (string) $dependency);
             }
-        } catch (\InvalidArgumentException $cycle) {
-            $this->closeForWrite($handle);
 
-            throw $cycle;
+            $stmt = $this->db()->prepare(
+                <<<'SQL'
+                INSERT INTO tasks (id, team_id, title, description, prompt, assigned_to,
+                                   status, result, error, created_at, claimed_at,
+                                   completed_at, depends_on)
+                VALUES (:id, :team_id, :title, :description, :prompt, :assigned_to,
+                        :status, :result, :error, :created_at, :claimed_at,
+                        :completed_at, :depends_on)
+                SQL
+            );
+
+            $stmt->bindValue(':id', $task->id, \SQLITE3_TEXT);
+            $stmt->bindValue(':team_id', $task->teamId, \SQLITE3_TEXT);
+            $stmt->bindValue(':title', $task->title, \SQLITE3_TEXT);
+            $stmt->bindValue(':description', $task->description, \SQLITE3_TEXT);
+            $stmt->bindValue(':prompt', $task->prompt, \SQLITE3_TEXT);
+            $stmt->bindValue(':assigned_to', $task->assignedTo, \SQLITE3_TEXT);
+            $stmt->bindValue(':status', $task->status->value, \SQLITE3_TEXT);
+            $stmt->bindValue(':result', $task->result, \SQLITE3_TEXT);
+            $stmt->bindValue(':error', $task->error, \SQLITE3_TEXT);
+            $stmt->bindValue(':created_at', $task->createdAt->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
+            $stmt->bindValue(':claimed_at', $task->claimedAt?->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
+            $stmt->bindValue(':completed_at', $task->completedAt?->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
+            $stmt->bindValue(':depends_on', json_encode($task->dependsOn, JSON_THROW_ON_ERROR), \SQLITE3_TEXT);
+
+            $stmt->execute();
+            $stmt->close();
+        } finally {
+            $this->closeForWrite($handle);
         }
 
-        $stmt = $this->db->prepare(
-            <<<'SQL'
-            INSERT INTO tasks (id, team_id, title, description, prompt, assigned_to,
-                               status, result, error, created_at, claimed_at,
-                               completed_at, depends_on)
-            VALUES (:id, :team_id, :title, :description, :prompt, :assigned_to,
-                    :status, :result, :error, :created_at, :claimed_at,
-                    :completed_at, :depends_on)
-            SQL
-        );
-
-        $stmt->bindValue(':id', $task->id, \SQLITE3_TEXT);
-        $stmt->bindValue(':team_id', $task->teamId, \SQLITE3_TEXT);
-        $stmt->bindValue(':title', $task->title, \SQLITE3_TEXT);
-        $stmt->bindValue(':description', $task->description, \SQLITE3_TEXT);
-        $stmt->bindValue(':prompt', $task->prompt, \SQLITE3_TEXT);
-        $stmt->bindValue(':assigned_to', $task->assignedTo, \SQLITE3_TEXT);
-        $stmt->bindValue(':status', $task->status->value, \SQLITE3_TEXT);
-        $stmt->bindValue(':result', $task->result, \SQLITE3_TEXT);
-        $stmt->bindValue(':error', $task->error, \SQLITE3_TEXT);
-        $stmt->bindValue(':created_at', $task->createdAt->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
-        $stmt->bindValue(':claimed_at', $task->claimedAt?->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
-        $stmt->bindValue(':completed_at', $task->completedAt?->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
-        $stmt->bindValue(':depends_on', json_encode($task->dependsOn, JSON_THROW_ON_ERROR), \SQLITE3_TEXT);
-
-        $stmt->execute();
-        $stmt->close();
-
-        $this->closeForWrite($handle);
-
-        return $task->id;
+        return true;
     }
 
     /**
@@ -199,7 +237,7 @@ final class TaskList
     {
         $handle = $this->openForWrite();
 
-        $stmt = $this->db->prepare(
+        $stmt = $this->db()->prepare(
             'UPDATE tasks SET status = :status, revision = revision + 1 WHERE id = :id'
         );
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
@@ -215,74 +253,100 @@ final class TaskList
     /**
      * Mark a task as completed and store its result.
      *
+     * Compare-and-swap on the task's revision, like {@see claimTask()}: the
+     * UPDATE lands only if the row is still at the revision read under the
+     * write lock — and at $expectedRevision, when the caller passes the
+     * {@see revision()} it decided on. A claim takes the per-task lock rather
+     * than this one, so without the compare a claim, release or orphan sweep
+     * landing between the read and the write would be overwritten by a
+     * completion decided on the row before it.
+     *
      * After completing, dispatches the TaskCompleted hook. If a hook returns
      * a block with continueOnBlock (exit 2), the completion is marked as contested.
+     *
+     * @return bool true when this call completed the task; false when the row
+     *         moved first (nothing is written and no hook fires)
+     * @throws \SQLite3Exception When the task does not exist.
      */
-    public function completeTask(string $taskId, string $result): void
+    public function completeTask(string $taskId, string $result, ?int $expectedRevision = null): bool
     {
-        // Fetch task first to get teamId for the hook context
-        $task = $this->getTask($taskId);
-        $teamId = $task?->teamId ?? '';
-
         $handle = $this->openForWrite();
 
-        $stmt = $this->db->prepare(
-            <<<'SQL'
-            UPDATE tasks
-            SET status = :status, result = :result, completed_at = :completed_at,
-                revision = revision + 1
-            WHERE id = :id
-            SQL
-        );
-        $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
-        $stmt->bindValue(':status', TaskStatus::Completed->value, \SQLITE3_TEXT);
-        $stmt->bindValue(':result', $result, \SQLITE3_TEXT);
-        $stmt->bindValue(':completed_at', (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
-        $stmt->execute();
-        $stmt->close();
+        try {
+            $task = $this->getTaskWithoutLock($taskId);
+            if ($task === null) {
+                throw new \SQLite3Exception("Task not found: {$taskId}");
+            }
 
-        $this->assertTaskFound($taskId, $handle);
-
-        // Release before dispatching: flock() is per open-file-description, so a
-        // hook path that re-enters TaskList (markContested) would fopen() the same
-        // file again and block on the lock this very process still holds.
-        $this->closeForWrite($handle);
+            $landed = $this->finishAt($taskId, TaskStatus::Completed, 'result', $result, $expectedRevision);
+        } finally {
+            // Release before dispatching: flock() is per open-file-description, so a
+            // hook path that re-enters TaskList (markContested) would fopen() the same
+            // file again and block on the lock this very process still holds.
+            $this->closeForWrite($handle);
+        }
 
         // Dispatch TaskCompleted hook (post-action) — block with continueOnBlock marks contested
-        if ($this->hookDispatcher !== null && $teamId !== '') {
-            $context = $this->makeHookContext($teamId, $taskId, '');
+        if ($landed && $this->hookDispatcher !== null && $task->teamId !== '') {
+            $context = $this->makeHookContext($task->teamId, $taskId, $task->title);
             $hookResult = $this->hookDispatcher->dispatchTaskCompleted($context);
             if ($hookResult->isBlock() && $hookResult->shouldContinueOnBlock()) {
                 $this->markContested($taskId);
             }
         }
+
+        return $landed;
     }
 
     /**
      * Mark a task as failed and store its error message.
+     *
+     * The same revision compare-and-swap as {@see completeTask()}.
+     *
+     * @return bool true when this call failed the task; false when the row moved first
+     * @throws \SQLite3Exception When the task does not exist.
      */
-    public function failTask(string $taskId, string $error): void
+    public function failTask(string $taskId, string $error, ?int $expectedRevision = null): bool
     {
         $handle = $this->openForWrite();
 
-        $stmt = $this->db->prepare(
-            <<<'SQL'
-            UPDATE tasks
-            SET status = :status, error = :error, completed_at = :completed_at,
-                revision = revision + 1
-            WHERE id = :id
-            SQL
+        try {
+            if ($this->revision($taskId) === null) {
+                throw new \SQLite3Exception("Task not found: {$taskId}");
+            }
+
+            return $this->finishAt($taskId, TaskStatus::Failed, 'error', $error, $expectedRevision);
+        } finally {
+            $this->closeForWrite($handle);
+        }
+    }
+
+    /**
+     * Write a terminal status iff the row is still at the revision read here
+     * (and at $expectedRevision when given). Caller holds the write lock.
+     *
+     * @param 'result'|'error' $column
+     */
+    private function finishAt(string $taskId, TaskStatus $status, string $column, string $text, ?int $expectedRevision): bool
+    {
+        $revision = $this->revision($taskId);
+        if ($revision === null || ($expectedRevision !== null && $revision !== $expectedRevision)) {
+            return false;
+        }
+
+        $stmt = $this->db()->prepare(
+            "UPDATE tasks SET status = :status, {$column} = :text, completed_at = :completed_at,"
+            . ' revision = revision + 1 WHERE id = :id AND revision = :revision'
         );
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
-        $stmt->bindValue(':status', TaskStatus::Failed->value, \SQLITE3_TEXT);
-        $stmt->bindValue(':error', $error, \SQLITE3_TEXT);
+        $stmt->bindValue(':status', $status->value, \SQLITE3_TEXT);
+        $stmt->bindValue(':text', $text, \SQLITE3_TEXT);
         $stmt->bindValue(':completed_at', (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM), \SQLITE3_TEXT);
+        $stmt->bindValue(':revision', $revision, \SQLITE3_INTEGER);
         $stmt->execute();
         $stmt->close();
 
-        $this->assertTaskFound($taskId, $handle);
-
-        $this->closeForWrite($handle);
+        return $this->db()->changes() === 1;
     }
 
     /**
@@ -295,7 +359,7 @@ final class TaskList
     {
         $handle = $this->openForWrite();
 
-        $stmt = $this->db->prepare('UPDATE tasks SET contested = 1, revision = revision + 1 WHERE id = :id');
+        $stmt = $this->db()->prepare('UPDATE tasks SET contested = 1, revision = revision + 1 WHERE id = :id');
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $stmt->execute();
         $stmt->close();
@@ -344,7 +408,7 @@ final class TaskList
      */
     public function getPendingTasks(): array
     {
-        $result = $this->db->query(
+        $result = $this->db()->query(
             "SELECT * FROM tasks WHERE status = 'pending' ORDER BY created_at ASC"
         );
 
@@ -356,7 +420,7 @@ final class TaskList
      */
     public function getTask(string $taskId): ?Task
     {
-        $stmt = $this->db->prepare('SELECT * FROM tasks WHERE id = :id');
+        $stmt = $this->db()->prepare('SELECT * FROM tasks WHERE id = :id');
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $result = $stmt->execute();
 
@@ -373,7 +437,7 @@ final class TaskList
      */
     public function getTasksByStatus(TaskStatus $status): array
     {
-        $stmt = $this->db->prepare('SELECT * FROM tasks WHERE status = :status ORDER BY created_at ASC');
+        $stmt = $this->db()->prepare('SELECT * FROM tasks WHERE status = :status ORDER BY created_at ASC');
         $stmt->bindValue(':status', $status->value, \SQLITE3_TEXT);
         $result = $stmt->execute();
 
@@ -390,7 +454,7 @@ final class TaskList
      */
     public function getTasksForTeammate(string $teammateId): array
     {
-        $stmt = $this->db->prepare('SELECT * FROM tasks WHERE assigned_to = :assigned_to ORDER BY created_at ASC');
+        $stmt = $this->db()->prepare('SELECT * FROM tasks WHERE assigned_to = :assigned_to ORDER BY created_at ASC');
         $stmt->bindValue(':assigned_to', $teammateId, \SQLITE3_TEXT);
         $result = $stmt->execute();
 
@@ -528,7 +592,7 @@ final class TaskList
     {
         $isAlive ??= self::processAlive(...);
 
-        $stmt = $this->db->prepare(
+        $stmt = $this->db()->prepare(
             'SELECT id, revision, claim_pid, claim_started FROM tasks WHERE status = :status AND claim_pid IS NOT NULL'
         );
         $stmt->bindValue(':status', TaskStatus::InProgress->value, \SQLITE3_TEXT);
@@ -562,13 +626,13 @@ final class TaskList
 
     /**
      * The task's current revision — bumped by every write — or null when the
-     * task does not exist. Pass it back to {@see claimTask()} /
-     * {@see releaseTask()} to make them conditional on nothing having changed
-     * since it was read.
+     * task does not exist. Pass it back to {@see claimTask()},
+     * {@see releaseTask()}, {@see completeTask()} or {@see failTask()} to make
+     * them conditional on nothing having changed since it was read.
      */
     public function revision(string $taskId): ?int
     {
-        $stmt = $this->db->prepare('SELECT revision FROM tasks WHERE id = :id');
+        $stmt = $this->db()->prepare('SELECT revision FROM tasks WHERE id = :id');
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $result = $stmt->execute();
         $row = $result === false ? false : $result->fetchArray(\SQLITE3_ASSOC);
@@ -586,7 +650,7 @@ final class TaskList
         $handle = $this->openForWrite();
 
         try {
-            $stmt = $this->db->prepare(
+            $stmt = $this->db()->prepare(
                 <<<'SQL'
                 UPDATE tasks
                 SET status = :pending, assigned_to = NULL, claimed_at = NULL,
@@ -601,7 +665,7 @@ final class TaskList
             $stmt->execute();
             $stmt->close();
 
-            return $this->db->changes() === 1;
+            return $this->db()->changes() === 1;
         } finally {
             $this->closeForWrite($handle);
         }
@@ -623,7 +687,7 @@ final class TaskList
         $handle = $this->openForWrite();
 
         // Fetch current dependencies
-        $stmt = $this->db->prepare('SELECT depends_on FROM tasks WHERE id = :id');
+        $stmt = $this->db()->prepare('SELECT depends_on FROM tasks WHERE id = :id');
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $result = $stmt->execute();
         $row = $result->fetchArray(\SQLITE3_ASSOC);
@@ -648,7 +712,7 @@ final class TaskList
         }
 
         // Update the depends_on array
-        $updateStmt = $this->db->prepare('UPDATE tasks SET depends_on = :depends_on, revision = revision + 1 WHERE id = :id');
+        $updateStmt = $this->db()->prepare('UPDATE tasks SET depends_on = :depends_on, revision = revision + 1 WHERE id = :id');
         $updateStmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $updateStmt->bindValue(':depends_on', json_encode($deps, JSON_THROW_ON_ERROR), \SQLITE3_TEXT);
         $updateStmt->execute();
@@ -690,22 +754,44 @@ final class TaskList
     // -------------------------------------------------------------------------
 
     /**
-     * @return \SQLite3[]
+     * This process's connection to the task database.
+     *
+     * Resolved per call rather than held on the instance, because a TaskList
+     * built in one process can be used in another: the `Team` tool runs in a
+     * turn's forked child, and a fork inherits every connection its parent
+     * had open. SQLite forbids carrying an open connection across fork() —
+     * the child's handle shares the parent's file descriptors and lock state
+     * (https://www.sqlite.org/howtocorrupt.html §2.6) — so the first call in
+     * a new process opens a connection of its own.
+     */
+    private function db(): \SQLite3
+    {
+        return self::getConnection($this->dbPath);
+    }
+
+    /**
+     * The connection for $dbPath in THIS process, opened on first use.
+     *
+     * Keyed by pid as well as path: an entry a forked child inherited from its
+     * parent is never reused, and never closed either — closing it in the
+     * child would run SQLite's close path on descriptors the parent is still
+     * using. It just stays unused.
      */
     private static function getConnection(string $dbPath): \SQLite3
     {
-        if (!isset(self::$connections[$dbPath])) {
+        $key = (int) \getmypid() . "\0" . $dbPath;
+        if (!isset(self::$connections[$key])) {
             // Ensure parent directory exists
             $dir = \dirname($dbPath);
             if (!\is_dir($dir)) {
                 \mkdir($dir, 0755, true);
             }
 
-            self::$connections[$dbPath] = new \SQLite3($dbPath);
-            self::$connections[$dbPath]->busyTimeout(5000);
+            self::$connections[$key] = new \SQLite3($dbPath);
+            self::$connections[$key]->busyTimeout(5000);
         }
 
-        return self::$connections[$dbPath];
+        return self::$connections[$key];
     }
 
     /** Acquire an exclusive (write) lock on the database file. */
@@ -741,7 +827,7 @@ final class TaskList
      */
     private function assertTaskFound(string $taskId, mixed $fp): void
     {
-        if ($this->db->changes() === 0) {
+        if ($this->db()->changes() === 0) {
             $this->closeForWrite($fp);
             throw new \SQLite3Exception("Task not found: {$taskId}");
         }
@@ -797,7 +883,7 @@ final class TaskList
      */
     private function getTaskWithoutLock(string $taskId): ?Task
     {
-        $stmt = $this->db->prepare('SELECT * FROM tasks WHERE id = :id');
+        $stmt = $this->db()->prepare('SELECT * FROM tasks WHERE id = :id');
         $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
         $result = $stmt->execute();
 
@@ -817,7 +903,7 @@ final class TaskList
         $now = (new \DateTimeImmutable())->format(\DateTimeImmutable::ATOM);
         $started = BackgroundSupervisor::procStartTime($ownerPid);
 
-        $stmt = $this->db->prepare(
+        $stmt = $this->db()->prepare(
             <<<'SQL'
             UPDATE tasks
             SET status = :status, assigned_to = :assigned_to, claimed_at = :claimed_at,
@@ -835,7 +921,7 @@ final class TaskList
         $stmt->execute();
         $stmt->close();
 
-        return $this->db->changes() === 1;
+        return $this->db()->changes() === 1;
     }
 
     /**
@@ -851,7 +937,7 @@ final class TaskList
     private function refuseCycle(string $taskId, string $dependsOn): void
     {
         $edges = [];
-        $result = $this->db->query('SELECT id, depends_on FROM tasks');
+        $result = $this->db()->query('SELECT id, depends_on FROM tasks');
         while ($result !== false && ($row = $result->fetchArray(\SQLITE3_ASSOC)) !== false) {
             $deps = json_decode((string) $row['depends_on'], true);
             $edges[(string) $row['id']] = \is_array($deps) ? array_map('strval', $deps) : [];

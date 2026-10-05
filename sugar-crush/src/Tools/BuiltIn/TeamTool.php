@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\Task;
+use SugarCraft\Crush\Agents\TaskBlockedException;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Agents\TaskStatus;
 use SugarCraft\Crush\Agents\Team;
@@ -65,6 +66,9 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
     /** Team ids and teammate ids name directories, so they stay one safe path segment. */
     private const ID_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/';
+
+    /** How many fresh ids `add` tries when concurrent adds keep taking the next one. */
+    private const ADD_ATTEMPTS = 5;
 
     /** Most unread messages one `inbox` call returns. */
     private const MAX_INBOX = 20;
@@ -243,23 +247,33 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             return self::error('no task ' . implode(', ', $missing) . ' in team "' . $team->id . '"');
         }
 
-        $id = self::nextId($list);
-        $list->addTask(new Task(
-            id: $id,
-            teamId: $team->id,
-            title: $title,
-            description: '',
-            prompt: $prompt,
-            createdAt: new \DateTimeImmutable(),
-            dependsOn: $blockers,
-        ));
-
-        // Two processes adding at once can pick the same next id; the
-        // second insert is then refused by the primary key, and this read
-        // is what tells the two apart.
-        $stored = $list->getTask($id);
-        if ($stored === null || $stored->title !== $title || $stored->prompt !== $prompt) {
-            return self::error('another task took the id ' . $id . ' at the same moment; add it again');
+        // Two processes adding at once pick the same next id; the list
+        // refuses the second insert under its write lock, and the loser
+        // picks again from what is stored now.
+        $id = null;
+        for ($attempt = 0; $attempt < self::ADD_ATTEMPTS && $id === null; $attempt++) {
+            $candidate = self::nextId($list);
+            try {
+                $added = $list->addTaskIfAbsent(new Task(
+                    id: $candidate,
+                    teamId: $team->id,
+                    title: $title,
+                    description: '',
+                    prompt: $prompt,
+                    createdAt: new \DateTimeImmutable(),
+                    dependsOn: $blockers,
+                ));
+            } catch (TaskBlockedException $blocked) {
+                return self::error(sprintf(
+                    'a TaskCreated hook refused "%s"%s',
+                    $title,
+                    $blocked->getMessage() === '' ? '' : ': ' . $blocked->getMessage(),
+                ));
+            }
+            $id = $added ? $candidate : null;
+        }
+        if ($id === null) {
+            return self::error(sprintf('other teammates kept taking the next task id; `add` "%s" again', $title));
         }
 
         return self::ok(sprintf(
@@ -389,7 +403,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
     private function finish(Team $team, array $args, string $action): ToolResult
     {
         $list = $team->getTaskList();
-        [$task, $refusal] = $this->ownedTask($list, $args, $action);
+        [$task, $refusal, $revision] = $this->ownedTask($list, $args, $action);
         if ($task === null) {
             return self::error((string) $refusal);
         }
@@ -399,7 +413,9 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             if ($error === '') {
                 return self::error('`fail` needs the `error` saying why');
             }
-            $list->failTask($task->id, $error);
+            if (!$list->failTask($task->id, $error, $revision)) {
+                return self::error(self::movedUnder($list, $task->id, $revision, 'fail'));
+            }
             $waiting = self::dependents($list, $task->id);
 
             return self::ok(sprintf(
@@ -414,7 +430,9 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             return self::error('`complete` needs the `result`');
         }
         $before = array_map(static fn (Task $t): string => $t->id, $list->getUnblockedTasks(''));
-        $list->completeTask($task->id, $result);
+        if (!$list->completeTask($task->id, $result, $revision)) {
+            return self::error(self::movedUnder($list, $task->id, $revision, 'complete'));
+        }
         $now = array_map(static fn (Task $t): string => $t->id, $list->getUnblockedTasks(''));
         $freed = array_values(array_diff($now, $before));
 
@@ -509,17 +527,22 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
 
     /**
      * The task `task` names, provided `teammate` holds the claim on it (and,
-     * when given, it is still at `revision`).
+     * when given, it is still at `revision`), with the revision that decision
+     * was made on — passed to the write so it lands only on that same row.
      *
-     * @return array{0: ?Task, 1: ?string}
+     * @return array{0: ?Task, 1: ?string, 2: int}
      */
     private function ownedTask(TaskList $list, array $args, string $action): array
     {
         $taskId = self::str($args, 'task');
         $teammate = self::str($args, 'teammate');
+        // The revision is read BEFORE the row: a claim moving between the two
+        // reads then shows up as a revision the write no longer matches,
+        // instead of an ownership check passed on the row before it.
+        $current = (int) $list->revision($taskId);
         $task = $list->getTask($taskId);
         if ($task === null) {
-            return [null, sprintf('`%s` needs the claimed `task`; no task "%s"', $action, $taskId)];
+            return [null, sprintf('`%s` needs the claimed `task`; no task "%s"', $action, $taskId), 0];
         }
         if ($task->status !== TaskStatus::InProgress || $task->assignedTo !== $teammate) {
             return [null, sprintf(
@@ -529,18 +552,33 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
                 $task->assignedTo === null ? '' : ' (assigned to ' . $task->assignedTo . ')',
                 $teammate,
                 $action,
-            )];
+            ), 0];
         }
         $revision = self::revisionArg($args);
         if ($revision === false) {
-            return [null, '`revision` must be a whole number'];
+            return [null, '`revision` must be a whole number', 0];
         }
-        $current = (int) $list->revision($taskId);
         if ($revision !== null && $revision !== $current) {
-            return [null, sprintf('%s has changed since revision %d (it is at %d); `list` it and decide again', $taskId, $revision, $current)];
+            return [null, sprintf('%s has changed since revision %d (it is at %d); `list` it and decide again', $taskId, $revision, $current), 0];
         }
 
-        return [$task, null];
+        return [$task, null, $current];
+    }
+
+    /** Why a complete/fail decided at $revision did not land: the task moved in between. */
+    private static function movedUnder(TaskList $list, string $taskId, int $revision, string $action): string
+    {
+        $task = self::taskOf($list, $taskId);
+
+        return sprintf(
+            '%s changed while you were %s it (revision %d, now %d: %s%s); `list` it and decide again',
+            $taskId,
+            $action === 'fail' ? 'failing' : 'completing',
+            $revision,
+            (int) $list->revision($taskId),
+            $task->status->value,
+            $task->assignedTo === null ? '' : ', assigned to ' . $task->assignedTo,
+        );
     }
 
     /** The crash-recovery sweep, as the line that leads a result (empty when nothing moved). */
