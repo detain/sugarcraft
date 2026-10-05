@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Permissions;
 
+use SugarCraft\Crush\Config\Settings\UiSettings;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\Tools\BuiltIn\ApplyPatch;
 use SugarCraft\Crush\Tools\Catalog\ToolCatalog;
@@ -100,10 +101,17 @@ final class PermissionGate
     private const SCOPED_WRITE_COMMANDS = ['mkdir', 'touch', 'rmdir'];
 
     /**
-     * Circuit-breaker thresholds for Auto mode.
+     * Circuit-breaker thresholds for Auto mode: the DEFAULTS of the
+     * `permissions.autoStrikeLimit` / `permissions.autoTotalLimit` settings
+     * (roadmap N-P4g), which {@see autoBreakerLimits()} resolves. Public so
+     * the schema rows cite them rather than restate them.
      */
-    private const STRIKE_THRESHOLD = 3;
-    private const TOTAL_BLOCK_THRESHOLD = 20;
+    public const STRIKE_THRESHOLD = 3;
+    public const TOTAL_BLOCK_THRESHOLD = 20;
+
+    /** The settings keys behind the two thresholds above. */
+    public const STRIKE_LIMIT_SETTING = 'permissions.autoStrikeLimit';
+    public const TOTAL_LIMIT_SETTING = 'permissions.autoTotalLimit';
 
     /**
      * The {@see SafetyClassifier} categories that are SECURITY FINDINGS
@@ -359,23 +367,51 @@ final class PermissionGate
      * `/permissions` screen that advanced the counters it was displaying would
      * be a safety state changed by looking at it.
      *
-     * THE THRESHOLDS RIDE ALONG deliberately. They are private constants that
-     * {@see evaluateAuto()} compares against, so a display that printed its
-     * own "of 3" would be a second copy of the policy, free to disagree with
-     * the enforced one the day a threshold moves. Handing back the same
-     * constants the evaluator uses makes that disagreement impossible rather
-     * than merely unlikely.
+     * THE THRESHOLDS RIDE ALONG deliberately. They are the values
+     * {@see evaluateAuto()} compares against ({@see autoBreakerLimits()}), so
+     * a display that printed its own "of 3" would be a second copy of the
+     * policy, free to disagree with the enforced one the day a setting moves.
+     * Handing back what the evaluator resolves makes that disagreement
+     * impossible rather than merely unlikely.
      *
      * @return array{consecutiveBlocks: int, totalBlocks: int, lastBlockedCategory: ?string, strikeThreshold: int, totalBlockThreshold: int}
      */
     public function autoBreaker(): array
     {
+        $limits = self::autoBreakerLimits();
+
         return [
             'consecutiveBlocks' => $this->consecutiveBlocks,
             'totalBlocks' => $this->totalBlocks,
             'lastBlockedCategory' => $this->lastBlockedCategory,
-            'strikeThreshold' => self::STRIKE_THRESHOLD,
-            'totalBlockThreshold' => self::TOTAL_BLOCK_THRESHOLD,
+            'strikeThreshold' => $limits['strike'],
+            'totalBlockThreshold' => $limits['total'],
+        ];
+    }
+
+    /**
+     * The two Auto breaker thresholds as this process reads them: the
+     * `permissions.autoStrikeLimit` / `permissions.autoTotalLimit` settings
+     * (roadmap N-P4g), else {@see STRIKE_THRESHOLD} / {@see TOTAL_BLOCK_THRESHOLD}.
+     *
+     * READ ON USE, not captured at construction: the gate is built at launch
+     * (and again by every `withMode()` toggle, `AgentManager` and the session
+     * host), so a value frozen into the instance would make the key apply at
+     * restart only and differ between those builders. The read goes through
+     * {@see UiSettings}, which holds the merged settings until a save in the
+     * settings view drops them, so a turn started after the save — the
+     * forked child evaluates the calls — compares against the new numbers.
+     * USER TIER ONLY (Security): a repository raising them would let a run of
+     * blocked calls go on longer before anyone is asked. A value outside its
+     * range reads as the default, never as "no breaker".
+     *
+     * @return array{strike: int, total: int}
+     */
+    public static function autoBreakerLimits(): array
+    {
+        return [
+            'strike' => UiSettings::int(self::STRIKE_LIMIT_SETTING),
+            'total' => UiSettings::int(self::TOTAL_LIMIT_SETTING),
         ];
     }
 
@@ -714,7 +750,8 @@ final class PermissionGate
 
     /**
      * Auto: everything runs gated by SafetyClassifier; circuit breaker triggers Ask after
-     * 3 consecutive blocks of the same category OR 20 total blocks in the session.
+     * 3 consecutive blocks of the same category OR 20 total blocks in the session
+     * (the defaults; {@see autoBreakerLimits()} reads the settings).
      *
      * Roadmap 5.11-2 splits what a classified call becomes: a security finding
      * ({@see SECURITY_CATEGORIES}) Asks; any other category goes to the
@@ -803,11 +840,12 @@ final class PermissionGate
         }
         ++$this->totalBlocks;
 
-        // Circuit breaker thresholds
-        if ($this->consecutiveBlocks >= self::STRIKE_THRESHOLD) {
+        // Circuit breaker thresholds — the settings, else the constants.
+        $limits = self::autoBreakerLimits();
+        if ($this->consecutiveBlocks >= $limits['strike']) {
             return PermissionDecision::Ask;
         }
-        if ($this->totalBlocks >= self::TOTAL_BLOCK_THRESHOLD) {
+        if ($this->totalBlocks >= $limits['total']) {
             return PermissionDecision::Ask;
         }
 

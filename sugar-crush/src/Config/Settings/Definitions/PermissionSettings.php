@@ -14,6 +14,7 @@ use SugarCraft\Crush\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Config\Settings\UiEditability;
 use SugarCraft\Crush\Config\Settings\Validator\AbsolutePathValidator;
+use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 
 /**
@@ -62,6 +63,31 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withLabel('Auto mode reviewer')
                 ->withHelp('Under auto, a call the safety classifier flags (other than a security finding, which always asks) is reviewed by the title model, which allows it, asks you or denies it.')
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
+            // Roadmap N-P4g: Auto's circuit breaker, promoted from the gate's
+            // constants. User tier only (Security): a repository raising them
+            // would let a run of blocked calls go on longer before a person
+            // is asked. Read on use through UiSettings, so the next turn after
+            // a save compares against the new numbers.
+            SettingDefinition::new(PermissionGate::STRIKE_LIMIT_SETTING, SettingType::Int, PermissionGate::STRIKE_THRESHOLD)
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(1, 100)
+                ->withLabel('Auto breaker: blocks in a row')
+                ->withHelp('Under auto, this many blocked calls of one category in a row turn the next one into a question.')
+                ->withReaderSymbol(PermissionGate::class . '::autoBreakerLimits')
+                ->withReadBy('`PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()`'),
+            SettingDefinition::new(PermissionGate::TOTAL_LIMIT_SETTING, SettingType::Int, PermissionGate::TOTAL_BLOCK_THRESHOLD)
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withRange(1, 1000)
+                ->withLabel('Auto breaker: blocks in total')
+                ->withHelp('Under auto, once this many calls have been blocked in a session every further block asks you instead.')
+                ->withReaderSymbol(PermissionGate::class . '::autoBreakerLimits')
+                ->withReadBy('`PermissionGate::evaluateAuto()`, `autoBreaker()` → `autoBreakerLimits()`'),
             SettingDefinition::new('secretEnvAllowlist', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Permissions)
                 ->withRiskClass(RiskClass::Security)

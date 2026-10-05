@@ -25,6 +25,11 @@ namespace SugarCraft\Crush\Config\Settings;
  * range, not one of the enum's values) reads as the definition's default —
  * the same tolerance every other settings reader has: a bad hand edit costs
  * that one knob, never the launch.
+ *
+ * Not only the Interface tab reads through it: any reader that runs often and
+ * wants a save to reach it without a restart may — the Auto breaker's limits
+ * (`PermissionGate::autoBreakerLimits()`), for one. {@see KEYS} lists only the
+ * keys badged live, which a save applies by dropping the held values.
  */
 final class UiSettings
 {

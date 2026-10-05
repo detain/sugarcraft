@@ -509,6 +509,8 @@ final class LayeredSettings
         'env.diffMaxBytes',
         'contextWindow',
         'autoReview',
+        'permissions.autoStrikeLimit',
+        'permissions.autoTotalLimit',
         'secretEnvAllowlist',
         'allowedTools',
         'disabledTools',

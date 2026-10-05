@@ -396,7 +396,10 @@ passed.
 
 `auto` classifies each call through `SafetyClassifier` and keeps counters on
 the gate instance: three consecutive blocks of one category, or twenty blocks in
-total, escalate to `Ask`. A block is a denied flagged call — the classifier's
+total, escalate to `Ask`. Both numbers are settings —
+`permissions.autoStrikeLimit` and `permissions.autoTotalLimit`, read from your
+own settings files only (a project file cannot raise them) and compared against
+from the next turn after a save; a value out of range reads as the default. A block is a denied flagged call — the classifier's
 own deny or the exec reviewer's; a security finding's question, a reviewer's
 question and an `mcp__*` question are not blocks and leave the counters as
 they were, and a reviewer's allow breaks a run of blocks the way a safe call

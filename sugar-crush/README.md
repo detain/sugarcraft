@@ -970,7 +970,7 @@ there — [`docs/SETTINGS.md`](docs/SETTINGS.md#when-a-change-takes-effect) list
 them, and says when every other key a save changes applies.
 
 <!-- settings:layered:begin -->
-Only these ninety-five keys are layered — `provider`, `models`, `titleModel`,
+Only these ninety-seven keys are layered — `provider`, `models`, `titleModel`,
 `summaryModel`, `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
 `maxToolSteps`, `compaction.reminderPercent`, `compaction.autoPercent`,
@@ -982,23 +982,24 @@ Only these ninety-five keys are layered — `provider`, `models`, `titleModel`,
 `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
 `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
 `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
-`env.diffMaxBytes`, `contextWindow`, `autoReview`, `secretEnvAllowlist`,
-`allowedTools`, `disabledTools`, `bashSandbox`, `testCommand`, `autoTest`,
-`toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
-`readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`,
-`toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`,
-`webFetchMaxBytes`, `webFetchTimeoutSeconds`, `webSearchMaxResults`,
-`webSearchTimeoutSeconds`, `webSearchEndpoint`, `bashInteractiveIdleSeconds`,
-`bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`,
-`skills.pathNudges`, `instructions`, `disabledRules`, `embeddingModel`,
-`disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxTurns`,
-`subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,
-`includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `theme`,
-`statusLine`, `layout`, `notify`, `watchFiles`, `queueMode`, `mouse`,
-`mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
-`diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints`, `lintCommands`,
-`disabledMcpServers`, `connectTimeoutSeconds`, `providerRetryAttempts`,
-`providerRetryBaseBackoffMs`.
+`env.diffMaxBytes`, `contextWindow`, `autoReview`,
+`permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
+`secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`,
+`testCommand`, `autoTest`, `toolOutputCapBytes`, `mcpResultCapBytes`,
+`readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`,
+`toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
+`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
+`webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`,
+`bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
+`chatToolTimeoutSeconds`, `skills.pathNudges`, `instructions`, `disabledRules`,
+`embeddingModel`, `disabledSkills`, `enabledSkills`, `subagentModel`,
+`subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`,
+`subagentMaxActive`, `includeGitInstructions`, `attribution`, `lsp`,
+`autoCommit`, `theme`, `statusLine`, `layout`, `notify`, `watchFiles`,
+`queueMode`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`,
+`paletteMru`, `diffPreviewRows`, `toolOutputPreviewLines`, `maxCheckpoints`,
+`lintCommands`, `disabledMcpServers`, `connectTimeoutSeconds`,
+`providerRetryAttempts`, `providerRetryBaseBackoffMs`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1035,7 +1036,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, forty-five keys are **never** taken from a project file:
+Even for a trusted project, forty-seven keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1099,7 +1100,10 @@ out of model-visible output — a project-tier `["*"]` would read every key in
 the operator's shell back through one `env` call; `autoReview`, because every
 flagged `auto` call it reviews is a paid request on the operator's title model —
 the money axis again, and a checkout must not be able to switch a per-call
-charge on; `contextWindow`,
+charge on; `permissions.autoStrikeLimit` and `permissions.autoTotalLimit`,
+because they decide how many blocked calls `auto` lets the model make before a
+person is asked, and a checkout raising them would buy its own commands more
+attempts at the gate; `contextWindow`,
 `extraBody`, `thinkingBudget` and `promptCache`, the four provider-shaping
 keys, because each moves the bill — an inflated window switches
 auto-compaction off so requests grow until the server refuses them, an extra
