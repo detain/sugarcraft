@@ -135,7 +135,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: stretch;
   gap: 0.5rem;
-  padding: 0.3rem 0.5rem 0;
+  /* The right end stays clear for the side panels' opener, which floats over
+     this row (SidePanels.vue `.opener`): without the room it covers the
+     layout buttons. */
+  padding: 0.3rem 7rem 0 0.5rem;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   min-width: 0;

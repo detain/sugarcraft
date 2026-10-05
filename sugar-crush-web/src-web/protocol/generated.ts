@@ -83,6 +83,12 @@ export interface PendingAsk {
   mode?: string
   options: ("once" | "always" | "reject")[]
   alwaysScope?: Record<string, string>
+  /** The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own. */
+  origin?: {
+    agentId: string
+    agentName?: string
+    parentCallId?: string
+  }
 }
 
 export type PermissionMode = "default" | "accept-edits" | "plan" | "auto" | "dont-ask" | "bypass-permissions"
@@ -153,6 +159,25 @@ export interface Usage {
 
 /** Every method: its params and its result. */
 export interface Methods {
+  /** Cancel, pause or resume a delegated run. */
+  "agents.control": {
+    params: {
+      sessionId: SessionId
+      /** A delegated run's id, as its `subagent.*` events name it. */
+      agentId: string
+      verb: "cancel" | "pause" | "resume"
+      /** What a resumed FINISHED run is told; the default asks it to continue. */
+      text?: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      agentId: string
+      /** queued: in the running run's mailbox, read at its next step; resuming: a finished run is being continued. */
+      status: "queued" | "resuming"
+      msgId?: string
+    }
+  }
   /** The agents a turn can delegate to. */
   "agents.list": {
     params: Record<string, unknown>
@@ -167,6 +192,23 @@ export interface Methods {
       }[]
     }
   }
+  /** Message a delegated run: into its mailbox while it runs, as a follow-up once it finished. */
+  "agents.message": {
+    params: {
+      sessionId: SessionId
+      /** A delegated run's id, as its `subagent.*` events name it. */
+      agentId: string
+      text: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      agentId: string
+      /** queued: in the running run's mailbox, read at its next step; resuming: a finished run is being continued. */
+      status: "queued" | "resuming"
+      msgId?: string
+    }
+  }
   /** The sub-agents a session's turns have delegated to, with their latest activity. */
   "agents.subtree": {
     params: {
@@ -174,6 +216,41 @@ export interface Methods {
     }
     result: {
       items: Record<string, unknown>[]
+    }
+  }
+  /** A delegated run's own transcript, read from a byte offset. */
+  "agents.transcript": {
+    params: {
+      sessionId: SessionId
+      /** A delegated run's id, as its `subagent.*` events name it. */
+      agentId: string
+      offset?: number
+      limit?: number
+    }
+    result: {
+      agentId: string
+      /** Where the next page starts: just past the last whole line read. */
+      offset: number
+      items: ({
+        t: "user" | "assistant" | "tool_call" | "tool_result" | "thinking" | "inbox" | "status"
+        ts?: number
+        text?: string
+        callId?: string
+        tool?: string
+        args?: Record<string, unknown>
+        ok?: boolean
+        content?: string
+        truncated?: boolean
+        status?: string
+        outcome?: string
+        error?: string
+        from?: string
+        mode?: string
+        msgId?: string
+        step?: number
+      })[]
+      more: boolean
+      finished: boolean
     }
   }
   /** Send a settled background session's result into a session as a prompt. */
@@ -246,8 +323,13 @@ export interface Methods {
     params: {
       sessionIds?: SessionId[]
       foreground?: SessionId | null
+      /** Narrate every followed session that is not in front, instead of streaming it. */
+      narrate?: boolean
     }
-    result: Record<string, unknown>
+    result: {
+      /** The followed sessions this client now hears as narration. */
+      narrated: SessionId[]
+    }
   }
   /** Run a slash command in a session (command files, and the built-ins that run headless). */
   "command.exec": {
@@ -673,46 +755,106 @@ export interface Methods {
     }
     result: {
       scope: "effective" | "user" | "project"
+      /** Effective: key => {value, source, sourceLabel, sourcePath, shadowed, locked, lockReason}. A tier: the file's own object. */
       values: Record<string, unknown>
+      /** Effective only: the files behind the layers, and whether each was read. */
+      files?: {
+        role: string
+        path: string
+        status: string
+        note: string
+      }[]
     }
   }
-  /** Every setting: type, default, help, and whether a client may write it. */
+  /** What a save would write — the target file's diff, when each change applies, and what blocks it — without writing. */
+  "settings.preview": {
+    params: {
+      scope?: "user" | "project"
+      set?: Record<string, unknown>
+      unset?: string[]
+      key?: string
+      value?: unknown
+      reset?: boolean
+    }
+    result: {
+      scope: string
+      path: string | null
+      canSave: boolean
+      /** key (`*` for the tier) => why the save is refused */
+      refusals: Record<string, string>
+      changes: ({
+        key: string
+        action: "set" | "reset"
+        value?: unknown
+        applies: string
+        appliesLabel: string
+      })[]
+      applySummary: string
+      notes: string[]
+      /** The target file's JSON, before and after, as unified-diff hunks; secrets masked. */
+      diff: string
+    }
+  }
+  /** Every setting: type, default, help, apply mode, and whether a client may write it; and the tiers a save can target. */
   "settings.schema": {
     params: Record<string, unknown>
     result: {
-      items: {
+      items: ({
         key: string
         type: string
         default?: unknown
+        defaultText?: string
         group: string
         label: string
         help?: string
         enum?: unknown[]
+        /** The choices a pick-one field offers (the enum, or the launch's list: themes, providers…). */
+        options?: string[]
         min?: number
         max?: number
         riskClass: string
-        applies: string
+        applies: "live" | "next-turn" | "restart" | "frozen"
+        appliesLabel?: string
+        ui?: "easy" | "list" | "complex" | "read-only" | "hidden"
+        layered?: boolean
         projectSettable?: boolean
+        /** The environment variable that, when set, locks the key. */
+        envVar?: string
+        cliFlag?: string
         sensitive: boolean
         writableRemotely: boolean
-      }[]
+        /** Why a client may not write the key; absent when it may. */
+        remoteRefusal?: string
+      })[]
+      /** The tiers a save can target, and whether each can be written now. */
+      tiers?: ({
+        scope: "user" | "project"
+        label: string
+        path?: string
+        writable: boolean
+        refusal?: string
+      })[]
     }
   }
-  /** Write an allowlisted setting to the user tier or a trusted project. */
+  /** Write allowlisted settings to the user tier or a trusted project, in one write. */
   "settings.set": {
     params: {
-      key: string
+      key?: string
       value?: unknown
-      scope?: "user" | "project"
       reset?: boolean
+      set?: Record<string, unknown>
+      unset?: string[]
+      scope?: "user" | "project"
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
     }
     result: {
-      key: string
+      key?: string
       scope: string
       written: string
       applies?: string
+      changed: string[]
+      appliesByKey?: Record<string, string>
     }
   }
   /** A session's todo list, as its Todo tool last wrote it. */
@@ -742,6 +884,91 @@ export interface Methods {
       total: number
       isError: boolean
       more: boolean
+    }
+  }
+  /** The workflows /workflow run can start. */
+  "workflow.list": {
+    params: Record<string, unknown>
+    result: {
+      available: boolean
+      items: {
+        name: string
+      }[]
+    }
+  }
+  /** Pause a workflow run before its next stage. */
+  "workflow.pause": {
+    params: {
+      workflowId: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      workflowId: string
+      status: "draft" | "pending" | "running" | "paused" | "resuming" | "completed" | "failed" | "cancelled"
+    }
+  }
+  /** Resume a paused workflow run in a session. */
+  "workflow.resume": {
+    params: {
+      sessionId: SessionId
+      workflowId: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      rows: {
+        role: string
+        content: string
+        uiOnly: boolean
+      }[]
+      effects: string[]
+    }
+  }
+  /** Run a workflow in a session, as /workflow run does: it occupies the session's turn. */
+  "workflow.run": {
+    params: {
+      sessionId: SessionId
+      name: string
+      /** Context values for the run; each a string, number or boolean with no whitespace. */
+      vars?: Record<string, unknown>
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      rows: {
+        role: string
+        content: string
+        uiOnly: boolean
+      }[]
+      effects: string[]
+    }
+  }
+  /** The workflow runs a session's transcript holds: /workflow reports and Workflow tool calls. */
+  "workflow.runs": {
+    params: {
+      sessionId: SessionId
+    }
+    result: {
+      items: ({
+        source: "command" | "tool"
+        name: string
+        status: string
+        running: boolean
+        workflowId?: string
+        toolCallId?: string
+        report?: string
+      })[]
+    }
+  }
+  /** A workflow run's status. */
+  "workflow.status": {
+    params: {
+      workflowId: string
+    }
+    result: {
+      workflowId: string
+      status: "draft" | "pending" | "running" | "paused" | "resuming" | "completed" | "failed" | "cancelled"
     }
   }
   /** Stop a workspace host; refused while one of its turns runs, unless force. */
@@ -790,8 +1017,11 @@ export type MethodResult<M extends MethodName> = Methods[M]['result']
 
 /** The scope each method needs. */
 export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
+  "agents.control": "write",
   "agents.list": "read",
+  "agents.message": "write",
   "agents.subtree": "read",
+  "agents.transcript": "read",
   "bg.inject": "write",
   "bg.list": "read",
   "bg.output": "read",
@@ -831,10 +1061,17 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "session.subscribe": "read",
   "session.unsubscribe": "read",
   "settings.get": "read",
+  "settings.preview": "admin",
   "settings.schema": "read",
   "settings.set": "admin",
   "todo.get": "read",
   "tool.output": "read",
+  "workflow.list": "read",
+  "workflow.pause": "write",
+  "workflow.resume": "write",
+  "workflow.run": "write",
+  "workflow.runs": "read",
+  "workflow.status": "read",
   "workspace.close": "write",
   "workspace.list": "read",
   "workspace.open": "write",
@@ -842,6 +1079,8 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
 
 /** The methods that accept an `idempotencyKey`. */
 export const IDEMPOTENT_METHODS: readonly MethodName[] = [
+  "agents.control",
+  "agents.message",
   "bg.inject",
   "bg.spawn",
   "bg.stop",
@@ -861,6 +1100,9 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "session.send",
   "session.setMode",
   "settings.set",
+  "workflow.pause",
+  "workflow.resume",
+  "workflow.run",
   "workspace.close",
   "workspace.open",
 ]
@@ -888,6 +1130,8 @@ export interface Events {
   "assistant.narration": {
     partId: string
     tail: string
+    /** Byte offset into the part where the tail starts; the next delta continues at offset + its byte length. */
+    offset?: number
   }
   /** A background session settled; bg.output reads its answer, bg.inject sends it to a session. */
   "bg.completed": BackgroundSession
@@ -915,6 +1159,26 @@ export interface Events {
     content: string
     createdAt?: number
   }
+  /** A question was put in an open session: permission.requested with its sessionId, for every client, following the session or not. */
+  "permission.asked": {
+    askId: string
+    toolCallId: string
+    tool: string
+    arguments: Record<string, unknown>
+    reason?: string
+    /** `gate`, or `hook:<names>` */
+    source?: string
+    mode?: string
+    options: ("once" | "always" | "reject")[]
+    alwaysScope?: Record<string, string>
+    /** The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own. */
+    origin?: {
+      agentId: string
+      agentName?: string
+      parentCallId?: string
+    }
+    sessionId: SessionId
+  }
   /** A tool call is waiting for an answer (permission.respond). */
   "permission.requested": PendingAsk
   /** A question was answered or cancelled. */
@@ -922,6 +1186,13 @@ export interface Events {
     askId: string
     reply?: "once" | "always" | "reject"
     note?: string
+    cancelled?: boolean
+  }
+  /** A question of an open session was answered or cancelled (permission.resolved, for every client). */
+  "permission.settled": {
+    sessionId: SessionId
+    askId: string
+    reply?: "once" | "always" | "reject"
     cancelled?: boolean
   }
   /** Streamed reasoning text. */
@@ -956,7 +1227,7 @@ export interface Events {
   "session.status": {
     status: "idle" | "busy" | "waiting_permission"
   }
-  /** A session was renamed or its mode changed. */
+  /** A session was renamed, its mode changed, or its status changed (idle, busy, waiting_permission). */
   "session.updated": SessionSummary
   /** The session spend cap stopped the turn. */
   "spend_cap.breached": {
@@ -966,33 +1237,110 @@ export interface Events {
   }
   /** A delegated sub-agent finished. */
   "subagent.finished": {
+    v?: number
     id: string
     op: string
     name?: string | null
+    /** The delegated prompt; carried on started only. */
     task?: string | null
-    parentCallId?: string | null
+    seq?: number
     tail?: unknown
+    tokens?: number
+    cost?: number
+    lines?: number
+    model?: string
+    context?: number
+    calls?: {
+      id: string
+      label: string
+      state: string
+      at?: number
+    }[]
+    parentCallId?: string | null
+    parentAgentId?: string | null
+    description?: string
+    items?: Record<string, unknown>[]
+    stats?: Record<string, number>
     outcome?: unknown
+    error?: string | null
+    resumeId?: string | null
+    transcriptLog?: string | null
+    parentSessionId?: string | null
+    childSessionId?: string | null
   }
   /** A delegated sub-agent made progress. */
   "subagent.progress": {
+    v?: number
     id: string
     op: string
     name?: string | null
+    /** The delegated prompt; carried on started only. */
     task?: string | null
-    parentCallId?: string | null
+    seq?: number
     tail?: unknown
+    tokens?: number
+    cost?: number
+    lines?: number
+    model?: string
+    context?: number
+    calls?: {
+      id: string
+      label: string
+      state: string
+      at?: number
+    }[]
+    parentCallId?: string | null
+    parentAgentId?: string | null
+    description?: string
+    items?: Record<string, unknown>[]
+    stats?: Record<string, number>
     outcome?: unknown
+    error?: string | null
+    resumeId?: string | null
+    transcriptLog?: string | null
+    parentSessionId?: string | null
+    childSessionId?: string | null
   }
   /** A delegated sub-agent started. */
   "subagent.started": {
+    v?: number
     id: string
     op: string
     name?: string | null
+    /** The delegated prompt; carried on started only. */
     task?: string | null
-    parentCallId?: string | null
+    seq?: number
     tail?: unknown
+    tokens?: number
+    cost?: number
+    lines?: number
+    model?: string
+    context?: number
+    calls?: {
+      id: string
+      label: string
+      state: string
+      at?: number
+    }[]
+    parentCallId?: string | null
+    parentAgentId?: string | null
+    description?: string
+    items?: Record<string, unknown>[]
+    stats?: Record<string, number>
     outcome?: unknown
+    error?: string | null
+    resumeId?: string | null
+    transcriptLog?: string | null
+    parentSessionId?: string | null
+    childSessionId?: string | null
+  }
+  /** A Todo call rewrote the session's todo list; carries the whole list. */
+  "todo.updated": {
+    toolCallId?: string
+    items: ({
+      content: string
+      status: "pending" | "in_progress" | "completed" | "cancelled"
+    })[]
   }
   /** A tool call finished (content capped; tool.output has the rest). */
   "tool.finished": {
@@ -1074,8 +1422,10 @@ export const EVENT_KINDS: { readonly [E in EventName]: { readonly durable: boole
   "bg.status": { durable: false, scope: "server" },
   "compaction.completed": { durable: true, scope: "session" },
   "message.created": { durable: true, scope: "session" },
+  "permission.asked": { durable: false, scope: "server" },
   "permission.requested": { durable: true, scope: "session" },
   "permission.resolved": { durable: true, scope: "session" },
+  "permission.settled": { durable: false, scope: "server" },
   "reasoning.delta": { durable: false, scope: "session" },
   "server.overflow": { durable: false, scope: "server" },
   "server.shutdown": { durable: false, scope: "server" },
@@ -1088,6 +1438,7 @@ export const EVENT_KINDS: { readonly [E in EventName]: { readonly durable: boole
   "subagent.finished": { durable: true, scope: "session" },
   "subagent.progress": { durable: false, scope: "session" },
   "subagent.started": { durable: true, scope: "session" },
+  "todo.updated": { durable: true, scope: "session" },
   "tool.finished": { durable: true, scope: "session" },
   "tool.started": { durable: true, scope: "session" },
   "turn.completed": { durable: true, scope: "session" },

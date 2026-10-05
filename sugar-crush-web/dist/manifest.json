@@ -1,11 +1,20 @@
 {
   "index.html": {
-    "file": "assets/index-DjTTsqq7.js",
+    "file": "assets/index-D-MSJXrJ.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
+    "dynamicImports": [
+      "src-web/lib/highlight.ts"
+    ],
     "css": [
-      "assets/index-BYSTOfk9.css"
+      "assets/index-CjAY3Jkl.css"
     ]
+  },
+  "src-web/lib/highlight.ts": {
+    "file": "assets/highlight-BtINwOZG.js",
+    "name": "highlight",
+    "src": "src-web/lib/highlight.ts",
+    "isDynamicEntry": true
   }
 }
