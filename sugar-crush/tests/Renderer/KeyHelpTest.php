@@ -1638,7 +1638,7 @@ final class KeyHelpTest extends TestCase
      * `$tool` is the name the ASK is about, and therefore the key an
      * {@see \SugarCraft\Crush\Permissions\PermissionReply::Always} answer writes
      * into `permissionGrants` — which is the property
-     * {@see testTheSessionGrantTakesASecondDeliberateKeystroke()} measures, and
+     * {@see testTheSessionGrantIsOneKeystrokeWhereItIsOffered()} measures, and
      * which {@see testTypingAtALivePromptIsSwallowedUntilEnterReArmsIt()} reads
      * back for every row of its table.
      *
@@ -1838,9 +1838,10 @@ final class KeyHelpTest extends TestCase
      * other, measured on this fixture: Once leaves `inFlight` true, hands back a
      * Cmd, appends the running placeholder and grants nothing; Reject clears
      * `inFlight`, hands back no Cmd and writes a denial line; Always is Once plus
-     * `permissionGrants['bash']` — and Always now takes two keystrokes to reach,
-     * which is {@see testTheSessionGrantTakesASecondDeliberateKeystroke()}'s
-     * subject rather than this one's.
+     * `permissionGrants['bash']` — and how Always is reached (one keystroke,
+     * where it is offered) is
+     * {@see testTheSessionGrantIsOneKeystrokeWhereItIsOffered()}'s subject
+     * rather than this one's.
      */
     public function testAKeyThePromptActsOnReachesItAndYApprovesRatherThanRefuses(): void
     {

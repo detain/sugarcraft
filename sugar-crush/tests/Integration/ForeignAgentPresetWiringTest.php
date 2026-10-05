@@ -475,6 +475,11 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // session's own mode through SessionHost::permissionMode().
                 'Acp/AcpServer.php',
                 'Agents/Agent.php',
+                // NOT an Agent reader: Chat applies a slash command's
+                // SetPermissionMode effect (`/permissions mode …`) through
+                // CommandEffect::permissionMode() — the mode the USER typed,
+                // routed through the same togglePermissionMode() as Alt+M.
+                'Chat.php',
                 // O-3a: NOT Agent readers — the needle also matches another
                 // class's own `$permissionMode`. `serve` reads its ParsedArgs
                 // flag and ServerConfig's launch mode; ServerConfig reads its

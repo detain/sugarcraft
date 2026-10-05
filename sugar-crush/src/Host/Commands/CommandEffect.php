@@ -99,7 +99,6 @@ final class CommandEffect
         ]);
     }
 
-    /** @return list<Message> {@see self::restoreCheckpoint()}'s rows */
     /** The session's "always" grants become $grants ({@see grants()}). */
     public static function setPermissionGrants(\SugarCraft\Crush\Permissions\SessionPermissionMemo $grants): self
     {
@@ -126,6 +125,7 @@ final class CommandEffect
         return $mode instanceof \SugarCraft\Crush\Permissions\PermissionMode ? $mode : null;
     }
 
+    /** @return list<Message> {@see self::restoreCheckpoint()}'s rows */
     public function messages(): array
     {
         return $this->data['messages'] ?? [];
