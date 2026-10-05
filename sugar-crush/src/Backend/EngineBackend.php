@@ -2907,9 +2907,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * Roadmap N-P4c: every tool first passes through
      * {@see \SugarCraft\Crush\Tools\ToolLimits::applyTo()} with the bounds the
      * merged config sets now (output caps, Read's page, Glob's count,
-     * WebFetch's timeout and memory bound), so a saved limit reaches the
-     * tools the launch built from the next turn on. Unset keys leave each
-     * tool as it was built.
+     * WebFetch's timeout and memory bound, and — roadmap N-P4f — the
+     * session's `Task` its delegation depth and concurrency caps), so a saved
+     * limit reaches the tools the launch built from the next turn on. Unset
+     * keys leave each tool as it was built.
      *
      * @param \Closure(): float $spentSoFarUsd
      *

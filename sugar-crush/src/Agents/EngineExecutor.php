@@ -61,14 +61,46 @@ final class EngineExecutor implements ExecutorInterface
      * steps, and running out mid-task ends the stage with no final report.
      * The cap is a runaway bound, not a budget; the stage's wall-clock
      * `timeout` is what bounds its time.
+     *
+     * The default of the `subagentMaxTurns` setting (roadmap N-P4f), which
+     * {@see defaultMaxTurns()} resolves.
      */
     public const DEFAULT_MAX_TURNS = 200;
+
+    /** The settings key that replaces {@see DEFAULT_MAX_TURNS} (roadmap N-P4f). */
+    public const MAX_TURNS_SETTINGS_KEY = 'subagentMaxTurns';
 
     /** At most one streamed append per this many seconds; a tool call flushes at once. */
     public const STREAM_FLUSH_SECONDS = 0.25;
 
     /** A tool line in the live stream is one line, capped here. */
     private const TOOL_LINE_MAX = 120;
+
+    /**
+     * The step cap for a delegated run whose preset declares no `maxTurns`:
+     * the `subagentMaxTurns` setting when the merged config sets a value its
+     * schema definition accepts, else {@see DEFAULT_MAX_TURNS}. Read when the
+     * run starts, so a save applies to the next delegation. A preset's own
+     * `maxTurns` still wins; this is only the default.
+     *
+     * @param ?array<string, mixed> $config the already-read merged config;
+     *                                      null reads it (and an unreadable
+     *                                      one costs the default, never the run)
+     */
+    public static function defaultMaxTurns(?array $config = null): int
+    {
+        if ($config === null) {
+            try {
+                $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            } catch (\Throwable) {
+                $config = [];
+            }
+        }
+
+        $turns = \SugarCraft\Crush\Tools\ToolLimits::honoured($config, self::MAX_TURNS_SETTINGS_KEY);
+
+        return \is_int($turns) ? $turns : self::DEFAULT_MAX_TURNS;
+    }
 
     /**
      * @param ?AgentManager $grantManager the manager whose
@@ -216,7 +248,7 @@ final class EngineExecutor implements ExecutorInterface
             $request->tools ?? $this->engine->tools(),
             static fn (Tool $tool): bool => !$tool instanceof DelegatesToEngine,
         ));
-        $maxTurns = max(1, $agent->agent->maxTurns ?? self::DEFAULT_MAX_TURNS);
+        $maxTurns = max(1, $agent->agent->maxTurns ?? self::defaultMaxTurns());
 
         $guard = ParentProcessGuard::capture('workflow that dispatched it');
 

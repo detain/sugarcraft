@@ -3100,17 +3100,19 @@ final class Bootstrap
     /**
      * The pool configuration this launch hands {@see \SugarCraft\Crush\Chat}
      * (E652). Everything else on {@see \SugarCraft\Crush\Agents\AgentPoolConfig}
-     * keeps its documented default; this method exists to carry the ONE field
-     * only the launch can answer: which provider the forked workers inherit.
+     * keeps its documented default; this method exists to carry what only the
+     * launch can answer: which provider the forked workers inherit, and the
+     * `subagentMaxConcurrent` setting (roadmap N-P4f) — the pool width and the
+     * engine's per-batch `Task` cap, read from the merged config here.
      *
      * @param ?string $providerName The provider a mid-session switch moved to
      *        (N-P3a); null keeps the launch's own selection.
      */
     private static function agentPoolConfig(?string $providerName = null): \SugarCraft\Crush\Agents\AgentPoolConfig
     {
-        return new \SugarCraft\Crush\Agents\AgentPoolConfig(
+        return (new \SugarCraft\Crush\Agents\AgentPoolConfig(
             workerProvider: self::workerProviderSpec($providerName),
-        );
+        ))->withSettings(self::readUserConfig());
     }
 
     /**

@@ -198,11 +198,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 {
     /**
      * Step cap for a preset that declares no `maxTurns`. 200 since
-     * WAVE_PLAN_2 §5 (was 50), alongside the main loop's 1000; it must read
-     * the same as {@see \SugarCraft\Crush\Agents\EngineExecutor::DEFAULT_MAX_TURNS},
-     * the workflow path's copy of the same default.
+     * WAVE_PLAN_2 §5 (was 50), alongside the main loop's 1000. It IS
+     * {@see \SugarCraft\Crush\Agents\EngineExecutor::DEFAULT_MAX_TURNS}, the
+     * workflow path's default, by reference rather than by a second literal,
+     * so the two cannot drift. The `subagentMaxTurns` setting (roadmap N-P4f)
+     * is resolved over that default by
+     * {@see \SugarCraft\Crush\Agents\EngineExecutor::defaultMaxTurns()}, which
+     * the workflow path reads; this class still reads the constant.
      */
-    public const DEFAULT_MAX_TURNS = 200;
+    public const DEFAULT_MAX_TURNS = \SugarCraft\Crush\Agents\EngineExecutor::DEFAULT_MAX_TURNS;
 
     /**
      * The tool's wire name — also how a display surface recognises a

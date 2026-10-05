@@ -225,6 +225,10 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `disabledSkills` | `Bootstrap::chat()` → `skillRegistry()` | yes |
 | `enabledSkills` | `Bootstrap::backend()`, `backendFor()` → `promptEnabledSkills()` | **no** |
 | `subagentModel` | `Bootstrap::agentManager()` | **no** |
+| `subagentMaxTurns` | `EngineExecutor::execute()` → `defaultMaxTurns()`, as each run starts | **no** |
+| `subagentMaxConcurrent` | `Bootstrap::agentPoolConfig()` → `AgentPoolConfig::withSettings()` | **no** |
+| `subagentMaxDepth` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `TaskTool::withDelegationLimits()` | **no** |
+| `subagentMaxActive` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `TaskTool::withDelegationLimits()` | **no** |
 | `includeGitInstructions` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | yes |
 | `attribution` | `Bootstrap::tools()` → `Bash::withGitGuidance()` | **no** |
 | `lsp` | `Bootstrap::lspClient()` → `LspLauncher::fromConfig()` | **no** |
@@ -961,6 +965,10 @@ project-settable.
 | `disabledSkills` | Skills | list | `[]` | P U C | — | restart | narrowing |
 | `enabledSkills` | Skills | list | `[]` | U C | — | restart | prompt |
 | `subagentModel` | Sub-agents | string | unset | U C | — | restart | spend |
+| `subagentMaxTurns` | Sub-agents | int | `200` | U C | — | next turn | spend |
+| `subagentMaxConcurrent` | Sub-agents | int | `5` | U C | — | restart | spend |
+| `subagentMaxDepth` | Sub-agents | int | `3` | U C | — | next turn | spend |
+| `subagentMaxActive` | Sub-agents | int | `8` | U C | — | next turn | spend |
 | `includeGitInstructions` | Git & Automation | bool | `true` | P U C | — | restart | narrowing |
 | `attribution` | Git & Automation | object | unset | U C | — | restart | prompt |
 | `lsp` | Git & Automation | object | unset | U C | — | restart | exec |
@@ -1066,7 +1074,8 @@ Saved is not applied: see the next section for when each key takes effect.
 `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
 `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
 `bashInteractiveIdleSeconds`, `chatToolTimeoutSeconds`, `embeddingModel`,
-`theme`, `statusLine`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
+`subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `theme`,
+`statusLine`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the
@@ -1198,10 +1207,11 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
   `webSearchMaxResults`, `webSearchTimeoutSeconds`, `bashInteractiveIdleSeconds`,
   `chatToolTimeoutSeconds`, `instructions`, `disabledRules`, `embeddingModel`,
-  `disabledSkills`, `enabledSkills`, `subagentModel`, `includeGitInstructions`,
-  `attribution`, `lsp`, `autoCommit`, `theme`, `statusLine`, `layout`, `notify`,
-  `lintCommands`, `providerRetryAttempts` and `providerRetryBaseBackoffMs` have
-  none.
+  `disabledSkills`, `enabledSkills`, `subagentModel`, `subagentMaxTurns`,
+  `subagentMaxConcurrent`, `subagentMaxDepth`, `subagentMaxActive`,
+  `includeGitInstructions`, `attribution`, `lsp`, `autoCommit`, `theme`,
+  `statusLine`, `layout`, `notify`, `lintCommands`, `providerRetryAttempts` and
+  `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.

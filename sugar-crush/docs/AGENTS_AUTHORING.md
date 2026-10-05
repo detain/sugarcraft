@@ -204,7 +204,7 @@ carried onto the `Agent` row and read by nothing after that:
 |---|---|
 | `name`, `description`, `initialPrompt` | Live: the roster entry and the sub-agent's prompt. |
 | `tools`, `disallowedTools` | Live: see [How a grant is enforced](#how-a-grant-is-enforced). |
-| `skills`, `mcpServers`, `maxTurns` | Live on the delegated run. |
+| `skills`, `mcpServers`, `maxTurns` | Live on the delegated run. With no `maxTurns` a run stops at 200 steps; the `subagentMaxTurns` setting moves that default for workflow-stage agents (a `Task` delegation still takes 200). |
 | `model` | Live: see [Which model a delegation runs on](#which-model-a-delegation-runs-on). |
 | `effort` | Live: sent with every request of the run as its reasoning effort. |
 | `permissionMode` | Live, narrow-only: when stricter than the session's mode, a second gate judges every call ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). |
@@ -349,10 +349,13 @@ one":
   `AgentManager` bound it refuses rather than fabricating, and a call can
   never widen what the named agent declared. A sub-agent with no `tools:`
   list inherits `Task` and can delegate in turn, down to three levels below
-  the session's agent (`TaskTool::MAX_DELEGATION_DEPTH`); one session runs at
-  most eight delegated runs at once across every level and process
-  (`TaskTool::MAX_CONCURRENT_AGENTS`), and the call past that is refused, not
-  queued.
+  the session's agent (`TaskTool::MAX_DELEGATION_DEPTH`, the
+  `subagentMaxDepth` setting); one session runs at most eight delegated runs
+  at once across every level and process (`TaskTool::MAX_CONCURRENT_AGENTS`,
+  the `subagentMaxActive` setting), and the call past that is refused, not
+  queued. One batch's `Task` calls run at most five at a time
+  (`AgentPoolConfig::$maxConcurrent`, the `subagentMaxConcurrent` setting).
+  All three are user-tier settings ([`SETTINGS.md`](SETTINGS.md)).
 - **`/agents` is inspect-only.** `AgentsCommand::execute()` lists the agents
   currently *working* (normally none) and, with a name, shows one agent's
   details. It does not start anything.

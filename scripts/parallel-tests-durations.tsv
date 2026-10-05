@@ -366,6 +366,7 @@ sugar-crush/tests/Tools/TaskToolOutputFenceTest.php	0.450	6
 sugar-crush/tests/RepoMap/PhpSymbolExtractorTest.php	0.450	9
 sugar-crush/tests/Tui/SessionPickerActionsTest.php	0.450	22
 sugar-crush/tests/Server/TokenReloadTest.php	0.450	2
+sugar-crush/tests/Agents/SubagentSettingsTest.php	0.450	14
 sugar-crush/tests/Support/ForkedChildTest.php	0.449	2
 sugar-crush/tests/Workspace/ShadowGarbageCollectorTest.php	0.448	3
 sugar-crush/tests/Backend/EngineBackendHeartbeatThreadingTest.php	0.445	4

@@ -9,6 +9,7 @@ use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Config\Settings\SettingType;
 use SugarCraft\Crush\Tools\BuiltIn\Glob;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
+use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 
@@ -34,6 +35,10 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * A JSON number with no fractional part (`4096.0`) counts as the whole number
  * it spells; a quoted `"4096"` does not, for the reason
  * {@see \SugarCraft\Crush\Config\Settings\Validator\RangeValidator} gives.
+ *
+ * The same rebind hands the session's `Task` its delegation caps (roadmap
+ * N-P4f, {@see DELEGATION_KEYS}): how deep delegated runs may nest and how
+ * many may run at once.
  *
  * Bounds read where a turn-time rebind cannot reach — the search tool's,
  * built per use by `/websearch` too, and the two process-wait bounds read
@@ -84,7 +89,19 @@ final readonly class ToolLimits
     /** Wall-clock budget of the chat-native path's forked tool children. */
     public const PARALLEL_TIMEOUT_KEY = 'chatToolTimeoutSeconds';
 
-    /** Every key this class resolves. */
+    /**
+     * How many levels below the session a delegated run may be (roadmap
+     * N-P4f) — {@see TaskTool::MAX_DELEGATION_DEPTH}.
+     */
+    public const SUBAGENT_MAX_DEPTH_KEY = 'subagentMaxDepth';
+
+    /**
+     * Delegated runs one session may have going at once, every level counted
+     * (roadmap N-P4f) — {@see TaskTool::MAX_CONCURRENT_AGENTS}.
+     */
+    public const SUBAGENT_MAX_ACTIVE_KEY = 'subagentMaxActive';
+
+    /** The tool bounds this class resolves (roadmap N-P4c, N-P4e). */
     public const KEYS = [
         self::OUTPUT_CAP_KEY,
         self::MCP_RESULT_CAP_KEY,
@@ -101,6 +118,12 @@ final readonly class ToolLimits
         self::PARALLEL_TIMEOUT_KEY,
     ];
 
+    /** The delegation caps {@see applyTo()} hands the session's `Task` (roadmap N-P4f). */
+    public const DELEGATION_KEYS = [
+        self::SUBAGENT_MAX_DEPTH_KEY,
+        self::SUBAGENT_MAX_ACTIVE_KEY,
+    ];
+
     /** @param array<string, int|float|string> $values every key that is set and honoured */
     private function __construct(private array $values)
     {
@@ -110,7 +133,7 @@ final readonly class ToolLimits
     public static function fromConfig(array $config): self
     {
         $values = [];
-        foreach (self::KEYS as $key) {
+        foreach ([...self::KEYS, ...self::DELEGATION_KEYS] as $key) {
             $value = self::honoured($config, $key);
             if ($value !== null) {
                 $values[$key] = $value;
@@ -190,6 +213,19 @@ final readonly class ToolLimits
      */
     public function applyTo(Tool $tool): Tool
     {
+        // The session's own Task only (depth 0): a nested copy was handed its
+        // caps by the run that delegated it ({@see TaskTool::nestedFor()}).
+        // A key left unset takes the shipped cap, not an embedder's — the
+        // tool exposes no reader for the one it was built with.
+        if ($tool instanceof TaskTool) {
+            $depth = $this->int(self::SUBAGENT_MAX_DEPTH_KEY);
+            $active = $this->int(self::SUBAGENT_MAX_ACTIVE_KEY);
+
+            return $tool->delegationDepth() > 0 || ($depth === null && $active === null)
+                ? $tool
+                : $tool->withDelegationLimits($depth ?? TaskTool::MAX_DELEGATION_DEPTH, $active ?? TaskTool::MAX_CONCURRENT_AGENTS);
+        }
+
         if ($tool instanceof McpToolBridge) {
             $cap = $this->int(self::MCP_RESULT_CAP_KEY);
 

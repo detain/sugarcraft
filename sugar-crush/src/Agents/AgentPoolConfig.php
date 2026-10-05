@@ -14,12 +14,22 @@ namespace SugarCraft\Crush\Agents;
  */
 final readonly class AgentPoolConfig
 {
+    /**
+     * The settings key that replaces {@see $maxConcurrent}'s default (roadmap
+     * N-P4f): how many `Task` members of one batch run at once (decision D10),
+     * and the width of every pool built from this config.
+     */
+    public const MAX_CONCURRENT_SETTINGS_KEY = 'subagentMaxConcurrent';
+
+    /** {@see $maxConcurrent}'s default, named so the setting can cite it. */
+    public const DEFAULT_MAX_CONCURRENT = 5;
+
     public function __construct(
         /**
          * Maximum number of agents allowed to run concurrently in the pool.
          * Defaults to 5, matching Claude Code's default.
          */
-        public int $maxConcurrent = 5,
+        public int $maxConcurrent = self::DEFAULT_MAX_CONCURRENT,
 
         /**
          * Default timeout in seconds for each agent execution.
@@ -88,6 +98,25 @@ final readonly class AgentPoolConfig
          */
         public ?array $workerProvider = null,
     ) {}
+
+    /**
+     * This config with the settings that shape it applied (roadmap N-P4f):
+     * `subagentMaxConcurrent` replaces {@see $maxConcurrent} when $config
+     * sets a value its schema definition accepts; anything else leaves the
+     * config as it is. `Bootstrap::agentPoolConfig()` passes the merged
+     * config, so every pool a launch builds — and the engine's per-batch
+     * `Task` cap — honours it.
+     *
+     * @param array<string, mixed> $config the merged config
+     */
+    public function withSettings(array $config): self
+    {
+        $maxConcurrent = \SugarCraft\Crush\Tools\ToolLimits::honoured($config, self::MAX_CONCURRENT_SETTINGS_KEY);
+
+        return \is_int($maxConcurrent) && $maxConcurrent !== $this->maxConcurrent
+            ? $this->withMaxConcurrent($maxConcurrent)
+            : $this;
+    }
 
     /**
      * Create a new config with a different maxConcurrent value.
