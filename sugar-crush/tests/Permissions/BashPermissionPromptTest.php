@@ -189,6 +189,24 @@ final class BashPermissionPromptTest extends TestCase
         self::assertStringNotContainsString('always allow', $out);
     }
 
+    /** The modal names the mode that asked and how to change it; a narrow box gets the short form. */
+    public function testTheModalSaysWhichModeAskedAndHowToChangeIt(): void
+    {
+        [$wide] = $this->asking(self::bash('git status', 'Status'));
+        self::assertStringContainsString('mode: default · Alt+M plan · /permissions mode <name>', self::plain($wide));
+
+        [$narrow] = $this->asking(self::bash('git status', 'Status'), null, 50);
+        $out = self::plain($narrow);
+        self::assertStringContainsString('mode: default · /permissions mode', $out);
+        self::assertStringNotContainsString('Alt+M plan', $out);
+        self::assertFitsWidth($out, 50);
+
+        foreach ([30, 20] as $cols) {
+            [$tiny] = $this->asking(self::bash('git status', 'Status'), null, $cols);
+            self::assertFitsWidth(self::plain($tiny), $cols);
+        }
+    }
+
     /** Wrapped to the box, elided in the MIDDLE (the tail is where `| sh` lives), never wider than the terminal. */
     public function testALongMultiLineCommandIsElidedInTheMiddleAndFitsTheTerminal(): void
     {

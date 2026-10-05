@@ -191,6 +191,13 @@ final class PermissionGate
     private ?PermissionMode $toggledFrom = null;
 
     /**
+     * The mode this gate's line of switches STARTED in — the launch's
+     * (`--permission-mode`, the env, the settings file) — carried by
+     * {@see withMode()}. Null on the launch's own gate, which is its own.
+     */
+    private ?PermissionMode $launchMode = null;
+
+    /**
      * The interactive session's "always allow" grants (roadmap 1.C-2) — see
      * {@see withSessionRules()}. Not a constructor parameter, and not
      * readonly: it is set only on a CLONE, so the gate a launch built is never
@@ -288,8 +295,21 @@ final class PermissionGate
         $gate = new self($mode, $this->rules, $this->classifier, $source ?? $this->modeSource, $this->reviewer);
         $gate->sessionRules = $this->sessionRules;
         $gate->toggledFrom = $this->mode;
+        $gate->launchMode = $this->launchMode();
 
         return $gate;
+    }
+
+    /**
+     * The mode the session was LAUNCHED in, however often it was switched
+     * since. `/permissions mode` may switch back to `bypass-permissions` or
+     * `dont-ask` only when the launch chose it: an in-session switch that
+     * stops every question is a decision for the command line, not for a
+     * transcript the model is writing into.
+     */
+    public function launchMode(): PermissionMode
+    {
+        return $this->launchMode ?? $this->mode;
     }
 
     /**

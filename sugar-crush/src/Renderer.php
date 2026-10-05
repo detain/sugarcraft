@@ -6259,6 +6259,19 @@ final class Renderer
                     ->render(self::wrapPermissionText(Lang::t($label, $option[2] ?? []), max(1, $inner - Width::string($keys) - 1)));
         }
 
+        // Which mode asked, and how to change it, for a question about a call
+        // (not the model's own questions): one faint row, the short form on a
+        // narrow box, clipped rather than wrapped.
+        $mode = $question === null ? self::permissionModeName($chat) : null;
+        if ($mode !== null) {
+            $hint = Lang::t('tui.permission.mode_hint', ['mode' => $mode]);
+            if (Width::of($hint) > $inner) {
+                $hint = Lang::t('tui.permission.mode_hint_short', ['mode' => $mode]);
+            }
+            $lines[] = '';
+            $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(Width::truncate($hint, $inner));
+        }
+
         return Style::new()
             ->border(Border::rounded()->withTitle(match ($question) {
                 \SugarCraft\Crush\Tools\BuiltIn\AskUserTool::NAME => ' ' . Lang::t('tui.permission.title_ask') . ' ',
@@ -6269,6 +6282,21 @@ final class Renderer
             ->padding(1, 2)
             ->width($inner)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * The permission mode the question on screen was asked under — the
+     * engine ask's own `mode`, else the session gate's — or null without one.
+     */
+    private static function permissionModeName(Chat $chat): ?string
+    {
+        $mode = $chat->pendingPermission()?->pendingAsk?->mode ?? '';
+        if ($mode === '') {
+            $mode = $chat->currentPermissionMode()?->value ?? '';
+        }
+        $mode = self::permissionVisibleOneLine($mode);
+
+        return $mode === '' ? null : $mode;
     }
 
     /**

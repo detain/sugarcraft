@@ -500,9 +500,9 @@ final class PermissionsCommandTest extends TestCase
      *
      * So the property asserted is no longer about bytes. IT IS ABOUT LINES:
      * this report is built one line per fact and joined with `"\n"`, so its
-     * line count is `count($rules) + 8` — mode, description, blank, one rules
-     * line, one line per rule, blank, breaker, blank, the (here empty) session
-     * grants line — for EVERY possible config.
+     * line count is `count($rules) + 9` — mode, description, how to change
+     * it, blank, one rules line, one line per rule, blank, breaker, blank, the
+     * (here empty) session grants line — for EVERY possible config.
      * Nothing a caller supplies may change it. That is a property the
      * `untrusted()` call cannot satisfy on its own, which is exactly what makes
      * it worth asserting.
@@ -518,7 +518,7 @@ final class PermissionsCommandTest extends TestCase
         $text = $this->report(new PermissionGate($mode, $rules, new SafetyClassifier(), $modeSource));
 
         self::assertSame(
-            count($rules) + 8,
+            count($rules) + 9,
             substr_count($text, "\n") + 1,
             'a configured value forged a report line — the report must be one line per fact, always',
         );
@@ -687,5 +687,46 @@ final class PermissionsCommandTest extends TestCase
         $bad = $this->submit($this->chatWithGrants('/permissions revoke 9'));
         self::assertCount(2, \SugarCraft\Crush\Permissions\SessionPermissionMemo::fromGrants($bad->permissionGrants())->entries(), 'nothing revoked');
         self::assertStringContainsString('Usage: `/permissions revoke <n>`', $bad->history[\count($bad->history) - 1]->content);
+    }
+
+    // ── switching the mode in-session ────────────────────────────────────
+
+    public function testTheReportSaysHowToChangeTheMode(): void
+    {
+        $text = $this->report(new PermissionGate(PermissionMode::Default));
+
+        self::assertStringContainsString('Change it between turns: `/permissions mode <default|accept-edits|plan|auto>`, or Alt+M to toggle plan.', $text);
+    }
+
+    public function testModeSwitchesTheSessionsGateAndTellsTheModelOnce(): void
+    {
+        $next = $this->submit($this->chat(new PermissionGate(PermissionMode::Default), '/permissions mode accept-edits'));
+
+        self::assertSame(PermissionMode::AcceptEdits, $next->currentPermissionMode());
+        $contents = array_map(static fn (Message $m): string => $m->content, $next->history);
+        self::assertContains('Permission mode: `default` → `accept-edits` for this session\'s next turns.', $contents);
+        $notices = array_filter($next->history, static fn (Message $m): bool => !$m->uiOnly && str_starts_with($m->content, Chat::MODE_NOTICE_PREFIX));
+        self::assertCount(1, $notices, 'the model is told once, as Alt+M tells it');
+    }
+
+    public function testANeverAskingModeIsRefusedUnlessTheSessionWasLaunchedInIt(): void
+    {
+        $refused = $this->submit($this->chat(new PermissionGate(PermissionMode::Default), '/permissions mode bypass-permissions'));
+        self::assertSame(PermissionMode::Default, $refused->currentPermissionMode());
+        self::assertStringContainsString('launched in `default`', $refused->history[\count($refused->history) - 1]->content);
+
+        // Launched in it: switching away and back again is allowed.
+        $away = (new PermissionGate(PermissionMode::BypassPermissions))->withMode(PermissionMode::Plan);
+        self::assertSame(PermissionMode::BypassPermissions, $away->launchMode());
+        $back = $this->submit($this->chat($away, '/permissions mode bypass-permissions'));
+        self::assertSame(PermissionMode::BypassPermissions, $back->currentPermissionMode());
+    }
+
+    public function testAnUnknownModeShowsUsageAndChangesNothing(): void
+    {
+        $next = $this->submit($this->chat(new PermissionGate(PermissionMode::Default), '/permissions mode yolo'));
+
+        self::assertSame(PermissionMode::Default, $next->currentPermissionMode());
+        self::assertStringContainsString('Usage: `/permissions mode <name>`. This session is in `default` and can switch to: default, accept-edits, plan, auto.', $next->history[\count($next->history) - 1]->content);
     }
 }

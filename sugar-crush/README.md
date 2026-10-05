@@ -455,7 +455,7 @@ By task (every command, with its arguments, is in
 | Context | `/context`, `/compact [--self] [focus]`, `/sweep [n]`, `/pruning [mode]`, `/compress [focus]`, `/decompress [bN]`, `/recompress [bN]` |
 | Working | `/goal <condition>`, `/grind <condition>`, `/btw <question>`, `/init [focus]`, `/editor [text]`, `/websearch <query>`, `/workflow …` |
 | Agents | `/agents [name\|run id]` |
-| Configuration | `/settings [search]`, `/model [provider [model]]`, `/theme`, `/permissions`, `/rules [name]`, `/newrule [focus]`, `/memory …`, `/mcp …`, `/budget [amount\|off]` |
+| Configuration | `/settings [search]`, `/model [provider [model]]`, `/theme`, `/permissions [mode <name> \| revoke <n\|all>]`, `/rules [name]`, `/newrule [focus]`, `/memory …`, `/mcp …`, `/budget [amount\|off]` |
 | Interface | `/pane …`, `/layout reset`, `/keys`, `/help`, `/notices`, `/exit` |
 
 `/permissions` answers, in the transcript, what this session is actually gated
@@ -466,7 +466,12 @@ circuit breaker stands. Every line is read off the launch's live
 screen that disagrees with the gate is worse than no screen. It is READ-ONLY in
 the strong sense — `PermissionGate::evaluate()` moves the Auto strike counters,
 so opening this must not, and does not, go anywhere near it. To CHANGE the
-mode, relaunch with `--permission-mode`, set `$SUGARCRUSH_PERMISSION_MODE`, or
+mode for this session, type `/permissions mode <name>` between turns
+(`default`, `accept-edits`, `plan` or `auto`; `bypass-permissions` and
+`dont-ask` only when the session was launched in that mode) or press `Alt+M`
+to toggle `plan` — the report says so, and so does every permission prompt
+(`mode: default · Alt+M plan · /permissions mode <name>`). To change it for
+every launch, use `--permission-mode`, `$SUGARCRUSH_PERMISSION_MODE`, or
 edit `permissionMode` in `~/.sugar-crush/config.json` — or in
 `~/.sugar-crush/settings.json`, which is read for `permissionMode` and
 `permissionRules` too and which `config.json` outranks where both set a key.
@@ -475,8 +480,8 @@ read for one round: rules written in the file that was not named still load,
 so a reader who followed the sentence and saw no change had been sent to edit
 the wrong file. Below the policy it lists the session's **grants** — what
 `a` remembered at a permission prompt, numbered — and `/permissions revoke
-<n>` (or `revoke all`) takes them back; that is the only thing it changes.
-Every other spelling is answered locally — `/permissions rules` and
+<n>` (or `revoke all`) takes them back. Those two subcommands are the only
+things it changes. Every other spelling is answered locally — `/permissions rules` and
 `/permissions --help` get the same screen. Unlike `/keys`, it is never
 handed to the model: a question about the local gate answered by the one
 participant that cannot see it comes back fluent and wrong.

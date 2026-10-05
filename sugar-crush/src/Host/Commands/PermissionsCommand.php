@@ -27,9 +27,11 @@ use SugarCraft\Crush\Permissions\PermissionMode;
  * The report is READ-ONLY, in the strong sense: see {@see report()} for the
  * accessors it is built on and why reaching for {@see PermissionGate::evaluate()}
  * here would have been a bug rather than a shortcut. It also lists the
- * session's "always" grants, numbered, and ONE subcommand changes them:
- * `/permissions revoke <n>|all` takes grants back (the transcript row `a`
- * leaves points here). Any other argument is ignored: the report is total.
+ * session's "always" grants, numbered, and how to change things. Two
+ * subcommands do: `/permissions revoke <n>|all` takes grants back (the
+ * transcript row `a` leaves points here) and `/permissions mode <name>`
+ * switches the mode for the session's next turns. Any other argument is
+ * ignored: the report is total.
  */
 final class PermissionsCommand implements HostCommand
 {
@@ -38,6 +40,9 @@ final class PermissionsCommand implements HostCommand
         $words = preg_split('/\s+/', trim(CommandText::argument($text))) ?: [];
         if (strtolower($words[0] ?? '') === 'revoke') {
             return self::revoke($context, $text, $words[1] ?? '');
+        }
+        if (strtolower($words[0] ?? '') === 'mode') {
+            return self::switchMode($context, $text, strtolower($words[1] ?? ''));
         }
 
         return CommandResult::reply(
@@ -64,6 +69,58 @@ final class PermissionsCommand implements HostCommand
         $lines[] = Lang::t('host.permissions.revoke_hint');
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * `/permissions mode <name>`: run this session's next turns in <name> —
+     * the in-session way to reach `accept-edits` or `auto` that `Alt+M`
+     * (plan only) does not give. Applied through the same switch `Alt+M`
+     * uses (between turns, the model told once). `bypass-permissions` and
+     * `dont-ask` stop every question, so they are refused unless the session
+     * was LAUNCHED in that mode ({@see PermissionGate::launchMode()}).
+     */
+    private static function switchMode(CommandContext $context, string $text, string $name): CommandResult
+    {
+        $gate = $context->permissionGate;
+        if ($gate === null) {
+            return CommandResult::reply($text, Lang::t('host.permissions.no_gate'));
+        }
+        $mode = PermissionMode::tryFrom($name);
+        if ($mode === null) {
+            return CommandResult::reply($text, Lang::t('host.permissions.mode_usage', [
+                'mode' => $gate->mode()->value,
+                'modes' => implode(', ', array_map(static fn (PermissionMode $m): string => $m->value, self::switchableModes($gate))),
+            ]));
+        }
+        if (!in_array($mode, self::switchableModes($gate), true)) {
+            return CommandResult::reply($text, Lang::t('host.permissions.mode_refused', [
+                'mode' => $mode->value,
+                'launch' => $gate->launchMode()->value,
+            ]));
+        }
+        if ($mode === $gate->mode()) {
+            return CommandResult::reply($text, Lang::t('host.permissions.mode_unchanged', ['mode' => $mode->value]));
+        }
+
+        return CommandResult::reply($text, Lang::t('host.permissions.mode_switched', [
+            'from' => $gate->mode()->value,
+            'mode' => $mode->value,
+        ]))->withEffect(CommandEffect::setPermissionMode($mode));
+    }
+
+    /**
+     * The modes `/permissions mode` may switch to: every mode that still asks
+     * or refuses, plus a never-asking one only when the launch chose it.
+     *
+     * @return list<PermissionMode>
+     */
+    public static function switchableModes(PermissionGate $gate): array
+    {
+        return array_values(array_filter(
+            PermissionMode::cases(),
+            static fn (PermissionMode $m): bool => !in_array($m, [PermissionMode::BypassPermissions, PermissionMode::DontAsk], true)
+                || $m === $gate->launchMode(),
+        ));
     }
 
     /**
@@ -164,6 +221,9 @@ final class PermissionsCommand implements HostCommand
                     : self::reportField($gate->modeSource()),
             ]),
             $mode->description(),
+            Lang::t('host.permissions.mode_change', [
+                'modes' => implode('|', array_map(static fn (PermissionMode $m): string => $m->value, self::switchableModes($gate))),
+            ]),
             '',
         ];
 

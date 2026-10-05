@@ -25,5 +25,7 @@ final readonly class PermissionModeToggledMsg implements Msg
 {
     public function __construct(
         public ?PermissionMode $mode = null,
+        /** How `/permissions` names where the switch came from; null: `Alt+M`'s. */
+        public ?string $source = null,
     ) {}
 }

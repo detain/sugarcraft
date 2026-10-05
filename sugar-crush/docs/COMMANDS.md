@@ -319,7 +319,7 @@ edit it by hand.
 | `/mcp` | ✓ | | `<list\|add\|remove\|login> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
 | `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
-| `/permissions` | ✓ | ✓ | — | Show this session's permission mode, its source, and the rules it decides by |
+| `/permissions` | ✓ | ✓ | `[mode <name> \| revoke <n\|all>]` | Show this session's permission mode, its rules and its grants; switch the mode or revoke a grant |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
 | `/context` | ✓ | | — | Show what fills the context window: prompt layers, tools, history, cache |
 | `/sweep` | ✓ | | `[n]` | Prune the tool outputs since your last prompt (or the last n) from what the model sees |

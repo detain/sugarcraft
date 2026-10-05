@@ -12527,7 +12527,7 @@ final class Chat implements Model
         if ($mode !== null) {
             // Through the one switch Alt+M uses, so the gate is replaced in
             // both places a turn reads it and the model is told.
-            [$next] = $next->togglePermissionMode(new PermissionModeToggledMsg($mode));
+            [$next] = $next->togglePermissionMode(new PermissionModeToggledMsg($mode, self::MODE_COMMAND_SOURCE));
         }
         // AFTER the mutate: naming `inputBuf` rebuilds the draft with the caret
         // at the end, so a captured offset is re-applied to the rebuilt draft.
@@ -17141,6 +17141,9 @@ final class Chat implements Model
     /** How `/permissions` names a mode set by {@see togglePermissionMode()}. */
     public const MODE_SWITCH_SOURCE = 'Alt+M, this session';
 
+    /** How `/permissions` names a mode set by `/permissions mode`. */
+    public const MODE_COMMAND_SOURCE = '/permissions mode, this session';
+
     /**
      * The opening words of the model-visible row a mode switch appends — what
      * {@see togglePermissionMode()} recognises as a switch the model has not
@@ -17214,7 +17217,7 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        $next = $gate->withMode($target, self::MODE_SWITCH_SOURCE);
+        $next = $gate->withMode($target, $msg->source ?? self::MODE_SWITCH_SOURCE);
         if ($this->hooks?->hook(
             \SugarCraft\Crush\Hooks\HookEvent::PreToolUse->value,
             \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook::NAME,

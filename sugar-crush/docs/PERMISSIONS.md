@@ -30,11 +30,18 @@ Four places, highest first:
 
 In the TUI the mode can also be switched **while the session runs**:
 `Alt+M` toggles `plan` — into it from any mode, and back out to the mode it
-was entered from (`default` when the session started in `plan`). The switch
+was entered from (`default` when the session started in `plan`) — and
+`/permissions mode <name>` switches to any of `default`, `accept-edits`,
+`plan` and `auto` (`bypass-permissions` and `dont-ask`, which never put a
+question to you, only when the session was launched in that mode —
+`PermissionGate::launchMode()`). Every permission prompt names the mode that
+asked and both ways to change it (`mode: default · Alt+M plan · /permissions
+mode <name>`, shortened on a narrow terminal), and so does `/permissions`. The switch
 replaces the gate in both places a turn reads it — the hook chain's
 `PermissionGateHook` and the engine backend's copy — keeping your rules and
 the session's "always allow" grants (`PermissionGate::withMode()`), and
-`/permissions` then names the source as `Alt+M, this session`. It applies
+`/permissions` then names the source as `Alt+M, this session` (or
+`/permissions mode, this session`). It applies
 between turns only: a running turn keeps the gate it forked with, so `Alt+M`
 mid-turn is refused with a notice. Nothing is written to a settings file; the
 next launch starts from the four places above. The agent is told once, by a
