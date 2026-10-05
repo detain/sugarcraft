@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0e5b0902dc312d73366a840e079cd5bf",
+    "content-hash": "44e71570da194a57bb6c7bcafc8da71a",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -5949,7 +5949,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "8f4ec1dec707562ce03d97ef9dd4ec83779aecc4"
+                "reference": "c8c4d5a526652f20b57bdf6e47c1bbcb5d8bb342"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
@@ -5975,6 +5975,7 @@
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/sugar-diff": "dev-master",
                 "sugarcraft/sugar-mcp": "dev-master",
+                "sugarcraft/sugar-toast": "dev-master",
                 "sugarcraft/sugar-veil": "dev-master",
                 "symfony/yaml": "^7.4"
             },
@@ -6039,6 +6040,87 @@
                 "issues": "https://github.com/sugarcraft/sugar-crush/issues",
                 "source": "https://github.com/sugarcraft/sugar-crush",
                 "docs": "https://sugarcraft.github.io/lib/sugar-crush.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-crush-web",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-crush-web",
+                "reference": "d884e93b35857ddcf4e50fd22d6e143689a569dc"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\CrushWeb\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\CrushWeb\\Tests\\": "tests/"
+                }
+            },
+            "archive": {
+                "exclude": [
+                    "/node_modules",
+                    "/src-web",
+                    "/public",
+                    "/e2e",
+                    "/package.json",
+                    "/package-lock.json",
+                    "/.nvmrc",
+                    "/index.html",
+                    "/env.d.ts",
+                    "/vite.config.ts",
+                    "/tsconfig.json",
+                    "/tsconfig.app.json",
+                    "/tsconfig.node.json",
+                    "/eslint.config.js",
+                    "/scripts",
+                    "/playwright.config.ts",
+                    "/tsconfig.vitest.json",
+                    "/tsconfig.e2e.json",
+                    "/playwright-report",
+                    "/test-results"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Browser UI for sugar-crush's WebSocket server mode, shipped as a pre-built Vite + Vue 3 bundle with a one-class PHP shim that locates it. `sugarcrush serve` serves it on the same port, so PHP users need no Node.",
+            "homepage": "https://github.com/sugarcraft/sugar-crush-web",
+            "keywords": [
+                "ai",
+                "crush",
+                "sugarcraft",
+                "sugarcrush",
+                "vite",
+                "vue",
+                "web-ui",
+                "websocket"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-crush-web/issues",
+                "source": "https://github.com/sugarcraft/sugar-crush-web",
+                "docs": "https://sugarcraft.github.io/lib/sugar-crush-web.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -8526,6 +8608,7 @@
         "sugarcraft/sugar-charts": 20,
         "sugarcraft/sugar-crumbs": 20,
         "sugarcraft/sugar-crush": 20,
+        "sugarcraft/sugar-crush-web": 20,
         "sugarcraft/sugar-dash": 20,
         "sugarcraft/sugar-diff": 20,
         "sugarcraft/sugar-gallery": 20,
