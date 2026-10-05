@@ -83,7 +83,7 @@ final class SendMessageToolTest extends TestCase
         });
         $engine = $this->engine($provider, [$probe]);
 
-        $result = $this->task($engine)->execute(self::call());
+        $result = $this->task($engine)->execute(self::taskCall());
 
         self::assertInstanceOf(ToolResult::class, $sent);
         self::assertFalse($sent->isError(), $sent->content());
@@ -102,7 +102,7 @@ final class SendMessageToolTest extends TestCase
         ]);
         $engine = $this->engine($provider, [SubagentsTool::new(), \SugarCraft\Crush\Tools\BuiltIn\InterruptAgentTool::new()]);
 
-        $result = $this->task($engine)->execute(self::call());
+        $result = $this->task($engine)->execute(self::taskCall());
 
         self::assertFalse($result->isError(), $result->content());
         $offered = self::toolNames($provider->requests[0]);
@@ -124,7 +124,7 @@ final class SendMessageToolTest extends TestCase
             new CompleteResponse(content: 'fixed both'),
         ]);
         $engine = $this->engine($provider, [], new PermissionGate(PermissionMode::BypassPermissions));
-        $this->task($engine)->execute(self::call());
+        $this->task($engine)->execute(self::taskCall());
         $card = AgentRunCards::runs($this->session)[0];
         self::assertSame('complete', $card['status']);
         self::assertMatchesRegularExpression('/^[0-9a-f]{16}$/', $card['resumeId']);
@@ -143,7 +143,7 @@ final class SendMessageToolTest extends TestCase
     {
         $provider = new ScriptedProvider([new CompleteResponse(content: 'found two bugs')]);
         $engine = $this->engine($provider, [], new PermissionGate(PermissionMode::Default));
-        $this->task($engine)->execute(self::call());
+        $this->task($engine)->execute(self::taskCall());
         $card = AgentRunCards::runs($this->session)[0];
 
         $result = $this->main($engine)->execute(['id' => 'm1', 'to' => $card['resumeId'], 'text' => 'now fix them']);
@@ -163,7 +163,7 @@ final class SendMessageToolTest extends TestCase
         ]);
         $engine = $this->engine($provider, []);
         $task = $this->task($engine);
-        $task->execute(self::call());
+        $task->execute(self::taskCall());
         $card = AgentRunCards::runs($this->session)[0];
 
         $kept = $this->main($engine)->execute(['id' => 'm1', 'to' => $card['runId'], 'text' => 'use the new API', 'mode' => 'followup']);
@@ -172,13 +172,13 @@ final class SendMessageToolTest extends TestCase
         self::assertStringContainsString('Kept for sub-agent', $kept->content());
         self::assertCount(1, $provider->requests, 'a followup wakes nothing');
 
-        $task->execute(self::call(['resume' => $card['resumeId'], 'prompt' => 'continue']));
+        $task->execute(self::taskCall(['resume' => $card['resumeId'], 'prompt' => 'continue']));
         $last = $provider->requests[1]->messages[\count($provider->requests[1]->messages) - 1];
         self::assertInstanceOf(UserMessage::class, $last);
         self::assertStringStartsWith("<parent-message from=\"main\" mode=\"followup\">\nuse the new API\n</parent-message>", $last->content());
         self::assertStringEndsWith("\n\ncontinue", $last->content());
 
-        $task->execute(self::call(['resume' => $card['resumeId'], 'prompt' => 'again']));
+        $task->execute(self::taskCall(['resume' => $card['resumeId'], 'prompt' => 'again']));
         $again = $provider->requests[2]->messages[\count($provider->requests[2]->messages) - 1];
         self::assertSame('again', $again->content(), 'a followup is delivered once');
     }
@@ -251,7 +251,7 @@ final class SendMessageToolTest extends TestCase
      *
      * @return array<string, string>
      */
-    private static function call(array $overrides = []): array
+    private static function taskCall(array $overrides = []): array
     {
         return $overrides + ['id' => 'call_1', 'agent' => 'coder', 'prompt' => 'look around', 'description' => 'look'];
     }

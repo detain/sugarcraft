@@ -252,7 +252,7 @@ final class HandoffCommandTest extends TestCase
 
     public function testTheSystemPromptNamesEveryModelHeading(): void
     {
-        $prompt = HandoffHostCommand::systemPrompt();
+        $prompt = HandoffHostCommand::summaryInstructions();
 
         foreach (StateSummaryTemplate::MODEL_HEADINGS as $heading) {
             self::assertStringContainsString('## ' . $heading, $prompt);

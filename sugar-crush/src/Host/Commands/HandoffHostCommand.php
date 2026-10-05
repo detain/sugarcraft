@@ -146,13 +146,13 @@ final class HandoffHostCommand implements HostCommand
         }
 
         return [
-            Message::system(self::systemPrompt()),
+            Message::system(self::summaryInstructions()),
             Message::user($content . "\n\nWrite the state block now. Do not call any tool."),
         ];
     }
 
     /** {@see PROMPT} with its heading list filled in. */
-    public static function systemPrompt(): string
+    public static function summaryInstructions(): string
     {
         $lines = array_map(
             static fn (string $heading): string => '  ## ' . $heading . (self::HEADING_NOTES[$heading] ?? ''),

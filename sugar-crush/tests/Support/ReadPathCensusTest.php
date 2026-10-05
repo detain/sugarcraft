@@ -135,6 +135,13 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — removeTree() lists the same directory to unlink it; a link is unlinked, '
                 . 'never followed',
         ],
+        'Agents/Board/Board.php|fopen' => [
+            'SELF_LOCATED — create() makes the batch\'s board file `x` (exclusive) under a 0077 umask at the '
+                . 'path Support\\ToolIpcFiles::reserve() named in the per-uid runtime directory',
+            'SELF_LOCATED — post() reopens that same board file `r+` to append under flock()',
+            'SELF_LOCATED — entries() reopens that same board file `r` under a shared flock(); every line is '
+                . 'shape-checked as untrusted peer text',
+        ],
         'Agents/DelegationSlots.php|fopen' => [
             'SELF_LOCATED — a `slot-<n>.lock` seat file in the per-scope directory this class made '
                 . 'inside the PrivateDir-verified per-uid base; opened only to flock() it, nothing is read',
@@ -302,6 +309,10 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — tail(): server.log in the verified state dir, which a detached '
                 . 'server writes; lstat-checked as a regular file before it is opened',
             'SELF_LOCATED — follow(): the same log, re-opened at the offset already printed',
+        ],
+        'Host/Commands/NewRulePrompt.php|glob' => [
+            'NAMES_ONLY — existingRules() lists the `*.md` names in the project\'s own `.sugar-crush/rules/` '
+                . 'so the /newrule prompt can name the taken ones; nothing is read',
         ],
         'Host/TurnController.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file (roadmap O-2g takePayload()), named by '

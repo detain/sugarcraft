@@ -39,7 +39,7 @@ final class PermissionGateReadOnlyInspectionTest extends TestCase
      * call and never move the breaker (roadmap 5.11-2) — so the names say
      * what each one IS rather than what the constants were first written as.
      */
-    private const INTO_SHELL = 'git push --force origin main';
+    private const FORCE_PUSH_TO_MAIN = 'git push --force origin main';
     private const EXTERNAL_ENDPOINT = 'terraform destroy';
 
     private function autoGate(): PermissionGate
@@ -152,8 +152,8 @@ final class PermissionGateReadOnlyInspectionTest extends TestCase
     {
         $gate = $this->autoGate();
 
-        $this->block($gate, self::INTO_SHELL);
-        $this->block($gate, self::INTO_SHELL);
+        $this->block($gate, self::FORCE_PUSH_TO_MAIN);
+        $this->block($gate, self::FORCE_PUSH_TO_MAIN);
 
         $breaker = $gate->autoBreaker();
 
@@ -171,8 +171,8 @@ final class PermissionGateReadOnlyInspectionTest extends TestCase
     {
         $gate = $this->autoGate();
 
-        $this->block($gate, self::INTO_SHELL);
-        $this->block($gate, self::INTO_SHELL);
+        $this->block($gate, self::FORCE_PUSH_TO_MAIN);
+        $this->block($gate, self::FORCE_PUSH_TO_MAIN);
         $gate->evaluate(new ToolCall('Bash', ['command' => 'ls -la']));
 
         $breaker = $gate->autoBreaker();
@@ -202,8 +202,8 @@ final class PermissionGateReadOnlyInspectionTest extends TestCase
     {
         $gate = $this->autoGate();
 
-        $this->block($gate, self::INTO_SHELL);
-        $this->block($gate, self::INTO_SHELL);
+        $this->block($gate, self::FORCE_PUSH_TO_MAIN);
+        $this->block($gate, self::FORCE_PUSH_TO_MAIN);
 
         $before = $gate->autoBreaker();
 
@@ -218,7 +218,7 @@ final class PermissionGateReadOnlyInspectionTest extends TestCase
 
         self::assertSame(
             PermissionDecision::Ask,
-            $this->block($gate, self::INTO_SHELL),
+            $this->block($gate, self::FORCE_PUSH_TO_MAIN),
             'the third same-category block must still escalate — the gate was inspected, not driven',
         );
     }
@@ -243,14 +243,14 @@ final class PermissionGateReadOnlyInspectionTest extends TestCase
         for ($n = 1; $n < $strike; $n++) {
             self::assertSame(
                 PermissionDecision::Deny,
-                $this->block($gate, self::INTO_SHELL),
+                $this->block($gate, self::FORCE_PUSH_TO_MAIN),
                 "block {$n} is below the reported threshold of {$strike} and must still be a refusal",
             );
         }
 
         self::assertSame(
             PermissionDecision::Ask,
-            $this->block($gate, self::INTO_SHELL),
+            $this->block($gate, self::FORCE_PUSH_TO_MAIN),
             "block {$strike} is the reported threshold and must escalate to a prompt",
         );
     }
@@ -269,7 +269,7 @@ final class PermissionGateReadOnlyInspectionTest extends TestCase
 
         self::assertGreaterThan($strike, $total, 'fixture: the total must be the binding limit here');
 
-        $commands = [self::INTO_SHELL, self::EXTERNAL_ENDPOINT];
+        $commands = [self::FORCE_PUSH_TO_MAIN, self::EXTERNAL_ENDPOINT];
 
         for ($n = 1; $n < $total; $n++) {
             self::assertSame(

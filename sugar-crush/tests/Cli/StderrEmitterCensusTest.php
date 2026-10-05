@@ -210,7 +210,7 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — THIRTY-ONE call sites in `src/Cli/Bootstrap.php`, each producing a
+ * it — THIRTY-THREE call sites in `src/Cli/Bootstrap.php`, each producing a
  * distinct `sugarcrush: ` line, against a channel-4 credit of six for that
  * file. Off by roughly five times, in the blind direction.
  *
@@ -498,7 +498,11 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const PREFIXED_WRITER_SITES = [
-        'src/Cli/Bootstrap.php' => 31,
+        // +2 in step 5.11-2: autoReview's two once-per-process warnings (a
+        // non-boolean value; on with no provider to review with). Stderr
+        // only: the user's config is off, the session is intact and auto
+        // mode keeps its old deny-and-strike answer.
+        'src/Cli/Bootstrap.php' => 33,
     ];
 
     /**
@@ -1599,7 +1603,7 @@ final class StderrEmitterCensusTest extends TestCase
                 . 'without the sibling census noticing; do not bump either number until you know which.',
         );
         self::assertSame(1, $direct, 'the number of warnings that go to stderr and bypass the once-guard moved');
-        self::assertSame(6, $once, 'the number of stderr-only, once-per-process warnings moved');
+        self::assertSame(8, $once, 'the number of stderr-only, once-per-process warnings moved');
         self::assertSame(
             self::PREFIXED_WRITER_SITES['src/Cli/Bootstrap.php'],
             $direct + $once + $seam,

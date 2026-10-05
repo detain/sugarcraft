@@ -228,12 +228,14 @@ final class BoardTest extends TestCase
         $a = $board->forMember('a-1');
         $board->discard();
 
+        $caught = null;
         try {
             $a->post(Board::ALL, BoardKind::Result, 'late');
-            $this->fail('a post to a removed board was accepted');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('the board is gone', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'a post to a removed board was accepted');
+        $this->assertStringContainsString('the board is gone', $caught->getMessage());
         $this->assertFileDoesNotExist($board->path());
         $this->assertSame([], $a->entries());
     }

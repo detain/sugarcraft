@@ -345,7 +345,12 @@ final class ParallelBoardNoticeTest extends TestCase
      */
     private static function manager(array $registry, Agent $agent): AgentManager
     {
-        $manager = new AgentManager(new ScriptedProvider([]), new SkillRegistry(), toolRegistry: $registry, toolUniverse: $registry);
+        $manager = new AgentManager(
+            new ScriptedProvider([]),
+            new SkillRegistry(),
+            toolRegistry: $registry,
+            toolUniverse: $registry,
+        );
         $manager->register($agent);
 
         return $manager;

@@ -26,7 +26,7 @@ final class SettingsEditorNarrowTest extends TestCase
         return SettingsSources::fromLaunch('/nonexistent-root', null, null, null, ['SUGARCRUSH_PROVIDER' => 'dev-sglang']);
     }
 
-    private static function plain(SettingsEditor $editor, int $cols, int $rows): string
+    private static function plain(SettingsEditor $editor, int $cols = 120, int $rows = 30): string
     {
         return Ansi::strip($editor->view(Theme::default(), $cols, $rows));
     }

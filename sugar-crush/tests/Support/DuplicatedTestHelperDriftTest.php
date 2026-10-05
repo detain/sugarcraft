@@ -220,6 +220,10 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'runBounded' =>
             'The timeout message names what each caller was waiting for - a worker stop in one '
             . 'file, a child reap in the other. The bound and the wait are identical.',
+        'testItIsRefusedMidTurn' =>
+            'The /handoff and /newrule suites (5.14c, 5.14d) each pin that their own slash '
+            . 'command is refused while a turn runs; the typed command is the one token that '
+            . 'differs, and it is each file\'s subject, not a drifted copy.',
         'writeScript' =>
             'Different temp-name prefixes, and they must stay different for the same reason as '
             . '`isRaw` above.',
@@ -2616,7 +2620,6 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'FLOODING_STDERR_BYTES' => 'The two shutdown suites flood the same byte count.',
         'GENERATION' => 'The two live-inbox suites (engine asks, live step frames) stamp their fixture events with the same turn generation; any value works, and the shared one keeps the fixtures reading alike.',
         'HANDSHAKE_BOUND_SECONDS' => 'The two LSP handshake-waiting suites pin the same bound.',
-        'INTO_SHELL' => 'Both permission-gate suites feed the same command string to the classifier.',
         'LIB_SCOPE' => 'The census suites scope their walks to the same vendor path.',
         'MARKER' => 'The two image suites use the same private-use-area sentinel; the unrelated MARKER strings are the drift polity.',
         'MAX_COLS' => 'The two status-bar suites (spend segment, and the served-model segment with the read-only marker) sweep the same bar over the same 1..200 widths; the widest width is one statement about the bar, so the copies must move together.',
