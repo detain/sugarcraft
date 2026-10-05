@@ -226,18 +226,6 @@ Columns:
 - **Hotspot regions**: listed only where another group in the same wave also touches that file.
 - **Order**: the integration cherry-pick order for the wave.
 
-### W5 (order: a, b, c, d, e, f, g, h, i, j)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| d | O-5a (scaffold; no protocol types) | new `sugar-crush-web/**` skeleton, root `composer.json`, `PROJECT_NAMES.md`, `docs/MATCHUPS.md`, root `README.md` lib table, `docs/index.html`, `docs/_data/sugar-crush-web.*`, `docs/lib/` (generated), `codecov.yml`, `scripts/bootstrap-org-repos.sh`, `.github/workflows/web.yml`, `media/icons/sugar-crush-web.png` | — | root README lib table only | root force-all; sugar-crush-web | M |
-
-### W8 (order: a, b, c, d, e, f, g, h, i, j)
-
-| G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
-|---|---|---|---|---|---|---|
-| c | O-5b | `sugar-crush-web/src-web/**`, `sugar-crush-web/e2e/**`, `sugar-crush-web/dist/**`, `src/Providers/EchoProvider.php` | — | sugar-crush-web README; SERVER.md "Web UI" | sugar-crush-web | L |
-
 ### W9 (order: a, b, c, d, e, f, g, h, i, j)
 
 | G | Steps | Owned files | Hotspot regions (shared) | Shared-doc overlaps | Cross-lib | Size |
@@ -348,8 +336,6 @@ Fields are: ID · size · depends on (besides same-region predecessors) · wave-
 - P-E3 M · 4.3-2, P-D3 · W10-d
 
 **Server and web**
-- O-5a M · — · W5-d
-- O-5b L · O-5a, O-3c · W8-c
 - O-6a L · O-5b · W9-c
 - O-6b M · O-5b, N-P2 · W9-d
 - O-6c L · O-5b, P-B2, 4.3-2, 3.C · W9-e

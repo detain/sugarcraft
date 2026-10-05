@@ -34,7 +34,7 @@
    - Preset `isolation` is inert (4.9).
    - The model has no messaging tools (4.4).
    - `TeamManager` is dormant (4.6-2).
-3. **Requested features still open:** the `sugar-crush-web` UI over the server protocol (O-5b, O-6), the agent view's hard cancel, approval relay and board (P-E), and the remaining constants promoted to settings (N-P4b–g, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
+3. **Requested features still open:** the `sugar-crush-web` multi-session UI (O-6), the agent view's hard cancel, approval relay and board (P-E), and the remaining constants promoted to settings (N-P4b–g, N-P5). They are designed in Appendices N–P and scheduled in Appendix R.
 
 ---
 
@@ -277,35 +277,15 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 
 ## V.3 `sugar-crush-web` (Appendix O §7)
 
-**Stack:** Vite + Vue 3 + TypeScript + Pinia + vue-router.
+**What exists:** the composer package `sugarcraft/sugar-crush-web` (Vite + Vue 3 + TypeScript + Pinia + vue-router), a one-class PHP shim (`SugarCraft\CrushWeb\Assets::distPath`) and a **committed `dist/`** that the Node CI job (`web.yml`) checks against the source. `sugarcrush serve` serves it on the same port, so PHP users need no Node. The single-session UI is live:
+- protocol types generated from `docs/protocol/sugarcrush.v1.schema.json` (`npm run gen:protocol`), a client that reconnects with backoff 0.5 s→15 s with jitter and resumes from its seq cursor;
+- a sessions sidebar, a virtualised transcript with markdown and reasoning folds, tool cards with diffs, permission cards, a composer with queue / steer / interrupt, and a status bar with context, spend, model and permission mode;
+- vitest, plus Playwright end-to-end tests against a real `serve` on the offline `EchoProvider`, whose `::tool <Name> <json>` prompts drive real tool calls.
 
-**Packaging:**
-- It ships as a **composer package** `sugarcraft/sugar-crush-web` with a one-class PHP shim (`SugarCraft\CrushWeb\Assets::distPath`) and a **committed `dist/`**.
-- `sugarcrush serve` serves the UI on the same port, so PHP users need no Node.
-- `scripts/affected-libs.php` discovers it through `composer.json` + `phpunit.xml`, and splitsh sync works unchanged.
-- A Node CI job (`web.yml`) checks that `dist/` matches the source.
-
-**Code layout:**
-- TypeScript lives in `src-web/`.
-- `protocol/` holds the generated types from `docs/protocol/sugarcrush.v1.schema.json`, the client, reconnect logic (backoff 0.5 s→15 s with jitter) and the seq cursor.
-- Pinia stores: connection, sessions, session, approvals, layout, settings.
-
-**UI:**
-- a sessions sidebar;
-- tabs **and** a tiled multi-pane grid for watching several sessions at once;
-- a virtualised transcript with markdown, code and reasoning folds;
-- tool cards with diffs;
-- permission cards plus a **cross-session approvals drawer** with browser notifications;
-- a composer with queue / steer / interrupt;
-- a status bar showing context %, spend and cap, model and permission mode;
-- a sub-agent tree, background tasks, workflows, a memory panel and a command palette;
-- a **settings form generated from the server's settings schema** — the same `SettingsSchema` as V.1, so the TUI and the web share one source of truth.
-
-**Testing:** vitest, plus Playwright end-to-end tests against the offline `EchoProvider` with scripted tool calls.
-
-**Server and web phases** (O §9): 0 spikes (S) → 1 bidirectional fork channel and TUI approvals (L) → 2 Host extraction (L) → 3 server and protocol (L) → 4 daemon and background agents (M) → 5 web MVP (L) → 6 multi-session polish (L) → 7 multi-root workspace hosts (M–L) → 8 `attach` and ACP (M–L).
-
-**Effort:** about 7–9 weeks for one engineer to reach phase 6, and about 9–11 weeks through phase 8.
+**Still to build** (O-6, phase 6 of O §9):
+- tabs **and** a tiled multi-pane grid for watching several sessions at once, and a **cross-session approvals drawer** with browser notifications (O-6a);
+- a **settings form generated from the server's settings schema** — the same `SettingsSchema` as V.1, so the TUI and the web share one source of truth (O-6b);
+- a sub-agent tree, background tasks, workflows, a memory panel and a command palette (O-6c).
 
 ## V.4 Sessions, live agent lines, agent view and direct chat (Appendix P)
 
@@ -329,7 +309,7 @@ It adds **about 30 future knobs** that the Part III roadmap will create: Bash ti
 ## V.5 How the new features fit the Part III roadmap
 
 These features are scheduled in Appendix R together with Part III:
-- The web MVP (W8) and multi-session web (W9) build on the protocol.
+- The multi-session web (W9) builds on the protocol and the single-session UI.
 - The agent view's remaining controls (P-E) run W9–W10.
 
 ---
