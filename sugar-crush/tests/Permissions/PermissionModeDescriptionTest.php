@@ -90,6 +90,9 @@ final class PermissionModeDescriptionTest extends TestCase
             'Edit tool' => ['Edit', ['file_path' => './x']],
             'Write outside root' => ['Write', ['file_path' => '/etc/hosts']],
             'Write into .git' => ['Write', ['file_path' => './.git/hooks/pre-commit']],
+            // Roadmap 5.7-1: the one write plan mode allows, and a policy
+            // path (`.sugar-crush`) to every other mode.
+            'Write a plan file' => ['Write', ['file_path' => './.sugar-crush/plans/plan.md']],
             'Bash exploring' => ['Bash', ['command' => 'git log --oneline']],
             'Bash mkdir scoped' => ['Bash', ['command' => 'mkdir ./notes']],
             'Bash rm scoped' => ['Bash', ['command' => 'rm ./a']],
@@ -124,7 +127,7 @@ final class PermissionModeDescriptionTest extends TestCase
             'default' => [
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $K, 'WebFetch with query' => $K,
                 'WebSearch' => $K, 'Write tool' => $K, 'Edit tool' => $K,
-                'Write outside root' => $K, 'Write into .git' => $K,
+                'Write outside root' => $K, 'Write into .git' => $K, 'Write a plan file' => $K,
                 'Bash exploring' => $K, 'Bash mkdir scoped' => $K, 'Bash rm scoped' => $K,
                 'Bash rm unscoped' => $K, 'Bash redirecting' => $K, 'Bash fetching' => $K,
                 'Bash into shell' => $K, 'MCP tool' => $K,
@@ -141,7 +144,7 @@ final class PermissionModeDescriptionTest extends TestCase
             'accept-edits' => [
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $K, 'WebFetch with query' => $K,
                 'WebSearch' => $K, 'Write tool' => $A, 'Edit tool' => $A,
-                'Write outside root' => $K, 'Write into .git' => $K,
+                'Write outside root' => $K, 'Write into .git' => $K, 'Write a plan file' => $K,
                 'Bash exploring' => $K, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $K,
                 'Bash rm unscoped' => $K, 'Bash redirecting' => $K, 'Bash fetching' => $K,
                 'Bash into shell' => $K, 'MCP tool' => $K,
@@ -150,16 +153,18 @@ final class PermissionModeDescriptionTest extends TestCase
             //  read-only commands (`git log`, `grep`, `ls` …) with no output
             //  redirection or substitution. Any other shell command is denied —
             //  a destructive `rm` and an outbound `curl` included — as is every
-            //  write through Write, Edit or an MCP tool. WebFetch and
-            //  WebSearch ask."
+            //  write through Write, Edit or an MCP tool, except a Markdown
+            //  plan written into .sugar-crush/plans. WebFetch and WebSearch
+            //  ask."
             //
-            // Every Bash cell but `Bash exploring` was ALLOW before audit F-P2
+            // `Write a plan file` is the one write cell that allows (roadmap
+            // 5.7-1). Every Bash cell but `Bash exploring` was ALLOW before audit F-P2
             // (only the redirect was denied): `rm`, `mkdir`, `curl` and a
             // pipe-into-shell all ran under the mode that promises no changes.
             'plan' => [
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $K, 'WebFetch with query' => $K,
                 'WebSearch' => $K, 'Write tool' => $D, 'Edit tool' => $D,
-                'Write outside root' => $D, 'Write into .git' => $D,
+                'Write outside root' => $D, 'Write into .git' => $D, 'Write a plan file' => $A,
                 'Bash exploring' => $A, 'Bash mkdir scoped' => $D, 'Bash rm scoped' => $D,
                 'Bash rm unscoped' => $D, 'Bash redirecting' => $D, 'Bash fetching' => $D,
                 'Bash into shell' => $D, 'MCP tool' => $D,
@@ -176,7 +181,7 @@ final class PermissionModeDescriptionTest extends TestCase
             'auto' => [
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A, 'WebFetch with query' => $D,
                 'WebSearch' => $A, 'Write tool' => $A, 'Edit tool' => $A,
-                'Write outside root' => $D, 'Write into .git' => $D,
+                'Write outside root' => $D, 'Write into .git' => $D, 'Write a plan file' => $D,
                 'Bash exploring' => $A, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $A,
                 'Bash rm unscoped' => $A, 'Bash redirecting' => $A, 'Bash fetching' => $A,
                 'Bash into shell' => $D, 'MCP tool' => $K,
@@ -186,7 +191,7 @@ final class PermissionModeDescriptionTest extends TestCase
             'dont-ask' => [
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $D, 'WebFetch with query' => $D,
                 'WebSearch' => $D, 'Write tool' => $D, 'Edit tool' => $D,
-                'Write outside root' => $D, 'Write into .git' => $D,
+                'Write outside root' => $D, 'Write into .git' => $D, 'Write a plan file' => $D,
                 'Bash exploring' => $D, 'Bash mkdir scoped' => $D, 'Bash rm scoped' => $D,
                 'Bash rm unscoped' => $D, 'Bash redirecting' => $D, 'Bash fetching' => $D,
                 'Bash into shell' => $D, 'MCP tool' => $D,
@@ -198,7 +203,7 @@ final class PermissionModeDescriptionTest extends TestCase
             'bypass-permissions' => [
                 'Read' => $A, 'Grep' => $A, 'Lsp' => $A, 'WebFetch' => $A, 'WebFetch with query' => $A,
                 'WebSearch' => $A, 'Write tool' => $A, 'Edit tool' => $A,
-                'Write outside root' => $A, 'Write into .git' => $A,
+                'Write outside root' => $A, 'Write into .git' => $A, 'Write a plan file' => $A,
                 'Bash exploring' => $A, 'Bash mkdir scoped' => $A, 'Bash rm scoped' => $A,
                 'Bash rm unscoped' => $A, 'Bash redirecting' => $A, 'Bash fetching' => $A,
                 'Bash into shell' => $A, 'MCP tool' => $A,
@@ -249,6 +254,7 @@ final class PermissionModeDescriptionTest extends TestCase
                 ['a destructive `rm`', 'Bash rm scoped'],
                 ['an outbound `curl`', 'Bash fetching'],
                 ['every write through Write, Edit or an MCP tool', 'MCP tool'],
+                ['except a Markdown plan written into .sugar-crush/plans', 'Write a plan file'],
                 ['WebFetch and WebSearch ask', 'WebFetch'],
             ],
             'auto' => [

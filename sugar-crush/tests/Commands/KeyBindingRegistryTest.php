@@ -306,11 +306,14 @@ final class KeyBindingRegistryTest extends TestCase
      * `.resume` and `.stop-all` went live, and the Agent View's `Ctrl+X`
      * chords arrived — `agentview.cancel`, `.pause`, `.stop-all` and
      * `.open-session` live, `agentview.background` dormant until 4.3.
+     *
+     * 123 -> 124 live (124 -> 125 all) with plan mode's toggle (roadmap
+     * 5.7-1, decision D8): `chat.plan-mode`, `Alt+M`.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(124, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(123, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(125, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(124, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(1, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(12, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

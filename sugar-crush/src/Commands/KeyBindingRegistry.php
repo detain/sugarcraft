@@ -480,6 +480,8 @@ final class KeyBindingRegistry
             // Roadmap P-B3: the one-row live agents strip above the input
             // takes the keyboard; its own keys are the `Agents strip` rows.
             KeyBinding::new('chat.agents-strip', 'Alt+↓', 'Focus the live agents strip', $c),
+            // Roadmap 5.7-1 (decision D8): Shift+Tab stays `shell.pane-prev`.
+            KeyBinding::new('chat.plan-mode', 'Alt+M', 'Toggle plan mode (between turns)', $c),
             // E744: with a draft selection held this chord COPIES first and the
             // next press quits (Chat's Ctrl+C arm). The nuance stays out of the
             // description — renderKeyHelp() clips long text and KeyHelpTest

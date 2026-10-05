@@ -149,10 +149,14 @@ enum PermissionMode: string
             // PermissionGate's read-only allow-list, and denies the rest. The
             // `rm` and `curl` clauses stay because they are the two a user
             // would most reasonably wonder about.
+            //
+            // Roadmap 5.7-1 added the one write the mode exists to make: the
+            // plan itself, a Markdown file directly in `.sugar-crush/plans`.
             self::Plan => 'Reads run, and so does a shell command made only of known read-only commands '
                 . '(`git log`, `grep`, `ls` …) with no output redirection or substitution. Any other shell '
                 . 'command is denied — a destructive `rm` and an outbound `curl` included — as is every write '
-                . 'through Write, Edit or an MCP tool. WebFetch and WebSearch ask.',
+                . 'through Write, Edit or an MCP tool, except a Markdown plan written into .sugar-crush/plans. '
+                . 'WebFetch and WebSearch ask.',
             // The classifier's reach is spelled out because it widened (audit
             // F-P3(b)): it used to read shell commands only, so a Write into
             // `.git/hooks`, a WebFetch carrying `?k=SECRET` and every MCP call

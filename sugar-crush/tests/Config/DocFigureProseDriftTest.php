@@ -3110,12 +3110,12 @@ final class DocFigureProseDriftTest extends TestCase
         $segment = substr($archRaw, $start, $end - $start);
 
         self::assertSame(1, preg_match('/sections — (\w+) slots/', $segment, $word), 'the paragraph no longer spells its slot count beside the word "slots"');
-        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13];
         self::assertArrayHasKey($word[1], $words, "the spelled slot count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         preg_match_all('/^(\d+)\. /m', $segment, $ordinals);
         self::assertSame(range(1, $words[$word[1]]), $ordinals[1] === [] ? [] : array_map('intval', $ordinals[1]), 'the numbered list is no longer exactly 1..N with N the spelled slot count');
-        self::assertSame(1, preg_match('/^12\. `EnvironmentBlock` LAST/m', $segment), 'item twelve is no longer EnvironmentBlock LAST — the volatility-last ordering claim rots with it');
+        self::assertSame(1, preg_match('/^' . $words[$word[1]] . '\. `EnvironmentBlock` LAST/m', $segment), 'the last item is no longer EnvironmentBlock LAST — the volatility-last ordering claim rots with it');
 
         // The roster is the doc's own vocabulary: the short symbol as the list
         // backticks it => the declared type it must resolve to. Every
@@ -3134,6 +3134,7 @@ final class DocFigureProseDriftTest extends TestCase
             'PromptFence' => 'SugarCraft\Crush\Context\PromptFence',
             'MemoryBlock' => 'SugarCraft\Crush\Context\MemoryBlock',
             'SkillMatcher' => 'SugarCraft\Crush\Skills\SkillMatcher',
+            'PlanModeSection' => 'SugarCraft\Crush\Context\Sections\PlanModeSection',
             'EnvironmentBlock' => 'SugarCraft\Crush\Context\EnvironmentBlock',
         ];
 
@@ -5535,15 +5536,16 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $root = \dirname(__DIR__, 2);
         $raw = (string) file_get_contents($root . '/docs/PROMPT_ENGINEERING.md');
-        $start = strpos($raw, '## The twelve slots, in order of record');
-        self::assertIsInt($start, 'the twelve-slots heading moved — the count word lives in its own text');
+        self::assertSame(1, preg_match('/^## The (\w+) slots, in order of record$/m', $raw, $heading, PREG_OFFSET_CAPTURE), 'the slots heading moved — the count word lives in its own text');
+        $start = $heading[0][1];
         $end = strpos($raw, "\n## ", $start + 5);
         self::assertIsInt($end, 'no heading follows the slots section — the window became the page tail');
         $window = substr($raw, $start, $end - $start);
 
         self::assertSame(1, preg_match('/there are (\w+) slots:/', $window, $word), 'the intro no longer spells the slot count beside "slots:"');
-        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13];
         self::assertArrayHasKey($word[1], $words, "spelled count '{$word[1]}' outside the pinned map — extend it deliberately");
+        self::assertSame($word[1], $heading[1][0], 'the heading and the intro spell the slot count differently');
         preg_match_all('/^(\d+)\. \*\*/m', $window, $ordinals);
         self::assertSame(range(1, $words[$word[1]]), array_map('intval', $ordinals[1]), 'the numbered list stopped being exactly 1..N with N the spelled count');
 
@@ -5570,7 +5572,7 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertCount(3, \SugarCraft\Crush\Context\Stability::cases(), 'Stability grew a tier — every per-item stability label in the list needs re-reading, starting with this partition');
 
-        self::assertSame(1, preg_match('/^12\. \*\*Environment\*\* \(`EnvironmentBlock`\).*\*\*LAST\*\*/m', $window), 'item twelve is no longer Environment LAST — the P3.S1 invariant this page exists to carry has moved');
+        self::assertSame(1, preg_match('/^' . $words[$word[1]] . '\. \*\*Environment\*\* \(`EnvironmentBlock`\).*\*\*LAST\*\*/m', $window), 'the last item is no longer Environment LAST — the P3.S1 invariant this page exists to carry has moved');
         self::assertTrue(method_exists('SugarCraft\Crush\Runtime', 'systemPromptSections'), 'the intro cites Runtime::systemPromptSections() — gone');
         foreach (['basePrompt', 'toolGuidanceSection'] as $method) {
             self::assertTrue(method_exists('SugarCraft\Crush\Runtime', $method), "slot prose cites Runtime::{$method}() — gone");
@@ -6480,14 +6482,15 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringNotContainsString('its only emitter today is the skill nudge', $prose, 'PROMPT_ENGINEERING.md still calls the skill nudge the only <system-reminder> emitter');
         self::assertSame(
             1,
-            preg_match('/its emitters today are the (\w+) path nudges, (.*?), both on the tool-output side/', $prose, $claim),
+            preg_match('/its emitters today are the (\w+) path nudges, (.*?), both on the tool-output side, and the plan-mode contract (.*?), in the system prompt itself/s', $prose, $claim),
             'the <system-reminder> emitter sentence was reworded out from under this arm',
         );
-        preg_match_all('/`(\w+)`/', $claim[2], $named);
-        $listed = $named[1];
+        preg_match_all('/`(\w+)`/', $claim[2], $nudges);
+        preg_match_all('/`(\w+)`/', $claim[3], $sections);
+        $listed = [...$nudges[1], ...$sections[1]];
         sort($listed);
         self::assertSame($emitters, $listed, 'the emitter sentence no longer names exactly the src/ classes that open <system-reminder>');
-        self::assertSame(count($emitters), ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4][$claim[1]] ?? -1, "the emitter sentence spells {$claim[1]} — src/ has " . count($emitters));
+        self::assertSame(count($nudges[1]), ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4][$claim[1]] ?? -1, "the emitter sentence spells {$claim[1]} path nudges and names " . count($nudges[1]));
     }
 
     /**

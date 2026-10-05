@@ -2176,6 +2176,11 @@ final class Chat implements Model
             return [$this->lastEscapeAt === null ? $this : $this->mutate(['lastEscapeAt' => null]), null];
         }
 
+        // Roadmap 5.7-1: `Alt+M`, or any other door, switching the mode.
+        if ($msg instanceof PermissionModeToggledMsg) {
+            return $this->togglePermissionMode($msg);
+        }
+
         // Roadmap P-B3: `c` (or `x` on a running run) on the live agents
         // strip. Only a call the turn on screen is still running is named,
         // and only that call stops (1.C-4b) — the turn carries on.
@@ -3365,6 +3370,10 @@ final class Chat implements Model
                 => [$this->withInputCursor($this->wordLeftOffset()), null],
             $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && $msg->rune === 'f'
                 => [$this->withInputCursor($this->wordRightOffset()), null],
+            // Roadmap 5.7-1 (decision D8): `Alt+M` toggles plan mode.
+            // Shift+Tab stays the shell's backward pane cycle.
+            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 'm'
+                => $this->togglePermissionMode(new PermissionModeToggledMsg()),
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the real SessionStore listing — see
             // cycleSessionTab()'s docblock for the decode/routing chain a
@@ -16573,6 +16582,147 @@ final class Chat implements Model
         return $this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend
             ? $this->backend->permissionGate()
             : null;
+    }
+
+    /**
+     * The mode this session's gate runs in, or null without a gate — what the
+     * status bar's mode badge reads ({@see Renderer}).
+     */
+    public function currentPermissionMode(): ?\SugarCraft\Crush\Permissions\PermissionMode
+    {
+        return $this->permissionGate()?->mode();
+    }
+
+    /** How `/permissions` names a mode set by {@see togglePermissionMode()}. */
+    public const MODE_SWITCH_SOURCE = 'Alt+M, this session';
+
+    /**
+     * The opening words of the model-visible row a mode switch appends — what
+     * {@see togglePermissionMode()} recognises as a switch the model has not
+     * been sent yet.
+     */
+    public const MODE_NOTICE_PREFIX = 'The permission mode changed from ';
+
+    /**
+     * Switch the session's permission mode (roadmap 5.7-1): `Alt+M`'s toggle
+     * into and out of `plan`, or the exact mode a {@see PermissionModeToggledMsg}
+     * names.
+     *
+     * THE GATE IS REPLACED WHERE IT IS READ, in both of Chat's collaborators:
+     * the hook chain's {@see \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook}
+     * (re-registered under its reserved name — the chain is the launch's
+     * shared one, so the engine's next turn, Chat's own tool path and a later
+     * provider switch all read the new gate) and the engine backend's own
+     * copy, which the per-turn wiring layers session grants onto. The new gate
+     * keeps the rules and the session's "always" grants
+     * ({@see \SugarCraft\Crush\Permissions\PermissionGate::withMode()}).
+     *
+     * BETWEEN TURNS ONLY. A running turn forked with the old gate and keeps
+     * it, so a switch now would show one mode while the turn obeyed another;
+     * it is refused with a notice instead.
+     *
+     * THE MODEL IS TOLD, once. The switch appends a model-visible system row
+     * (it reaches the provider as a `<system-notice>`) naming the old mode,
+     * the new one and what the new one allows. A switch made before anything
+     * was sent SUPERSEDES the previous unsent notice rather than stacking a
+     * second one — plan → default → plan before the next message sends
+     * nothing at all (Cline's mode-notice tracker, Kilo's superseding
+     * agent-switch reminder). In `plan` the prompt also carries
+     * {@see \SugarCraft\Crush\Context\Sections\PlanModeSection}.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function togglePermissionMode(PermissionModeToggledMsg $msg): array
+    {
+        $gate = $this->permissionGate();
+        if ($gate === null) {
+            return [$this->mutate(['history' => [...$this->history, Message::notice(
+                'This session runs without a permission gate, so there is no mode to switch.',
+            )]]), null];
+        }
+
+        if ($this->inFlight) {
+            return [$this->mutate(['history' => [...$this->history, Message::notice(
+                'The permission mode does not change while a turn runs: the turn keeps the mode it started '
+                . 'with. Switch after it ends, or Esc Esc to cancel it now.',
+            )]]), null];
+        }
+
+        $current = $gate->mode();
+        $plan = \SugarCraft\Crush\Permissions\PermissionMode::Plan;
+        $back = $gate->toggledFrom();
+        $target = $msg->mode ?? ($current === $plan
+            ? ($back !== null && $back !== $plan ? $back : \SugarCraft\Crush\Permissions\PermissionMode::Default)
+            : $plan);
+        if ($target === $current) {
+            return [$this, null];
+        }
+
+        $next = $gate->withMode($target, self::MODE_SWITCH_SOURCE);
+        if ($this->hooks?->hook(
+            \SugarCraft\Crush\Hooks\HookEvent::PreToolUse->value,
+            \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook::NAME,
+        ) instanceof \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook) {
+            $this->hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook($next));
+        }
+
+        $chat = $this;
+        if ($this->backend instanceof \SugarCraft\Crush\Backend\EngineBackend && $this->backend->permissionGate() !== null) {
+            $chat = $chat->withBackend($this->backend->withPermissionGate($next));
+        }
+
+        [$history, $from] = self::withoutUnsentModeNotice($this->history, $current);
+        $history[] = $from === $target
+            ? Message::notice("Back to `{$target->value}` before anything was sent, so the agent is not told about the switch.")
+            : Message::system(self::modeChangeNotice($from, $target));
+
+        return [$chat->mutate(['history' => $history]), null];
+    }
+
+    /**
+     * $history without its newest model-visible row when that row is a mode
+     * switch the model has not been sent yet, and the mode that unsent switch
+     * started from — else $history unchanged and `$current`.
+     *
+     * @param list<Message> $history
+     * @return array{0: list<Message>, 1: \SugarCraft\Crush\Permissions\PermissionMode}
+     */
+    private static function withoutUnsentModeNotice(array $history, \SugarCraft\Crush\Permissions\PermissionMode $current): array
+    {
+        for ($i = \count($history) - 1; $i >= 0; $i--) {
+            $row = $history[$i];
+            if ($row->uiOnly) {
+                continue;
+            }
+
+            if ($row->role === Role::System
+                && str_starts_with($row->content, self::MODE_NOTICE_PREFIX)
+                && preg_match('/^' . preg_quote(self::MODE_NOTICE_PREFIX, '/') . '`([a-z-]+)`/', $row->content, $m) === 1
+                && ($was = \SugarCraft\Crush\Permissions\PermissionMode::tryFrom($m[1])) !== null) {
+                array_splice($history, $i, 1);
+
+                return [array_values($history), $was];
+            }
+
+            break;
+        }
+
+        return [$history, $current];
+    }
+
+    /**
+     * The model-visible row for a switch from $from to $to: which mode now
+     * governs, that it supersedes earlier switches, and what it allows —
+     * {@see \SugarCraft\Crush\Permissions\PermissionMode::description()},
+     * the sentence `/permissions` shows, measured against the gate.
+     */
+    public static function modeChangeNotice(
+        \SugarCraft\Crush\Permissions\PermissionMode $from,
+        \SugarCraft\Crush\Permissions\PermissionMode $to,
+    ): string {
+        return self::MODE_NOTICE_PREFIX . "`{$from->value}` to `{$to->value}`. This supersedes every earlier "
+            . 'permission-mode notice: earlier turns ran under the previous mode and do not show what is '
+            . "allowed now. Under `{$to->value}`: " . $to->description();
     }
 
     /**

@@ -618,7 +618,7 @@ results that answer it, so each result stays paired with its own call.
 ### The system prompt, in assembly order
 
 `Runtime::systemPromptSections()` returns the prompt as an ordered list of
-sections — twelve slots, though a session that qualifies none of the optional
+sections — thirteen slots, though a session that qualifies none of the optional
 ones assembles fewer — and `buildSystemPrompt()` folds that list into the
 string the model receives. The order of record, each layer named as the code
 names it:
@@ -649,7 +649,12 @@ names it:
 11. `SkillMatcher::listForPrompt()` — name + description for every discovered
     auto-invocable skill, each line badged with its tier (`[built-in]`,
     `[user]`, `[project]`), fenced `<available-skills>` behind its preamble;
-12. `EnvironmentBlock` LAST — its static half: cwd, git-repo flag, platform,
+12. `PlanModeSection` — the plan-mode contract, a `<system-reminder>` present
+    only while the turn's gate is in `plan` mode (roadmap 5.7-1): what runs,
+    what the gate refuses, and that the one write is a Markdown plan in
+    `.sugar-crush/plans/`. PerTurn and directly ahead of the last slot, so
+    switching the mode moves only the prompt's tail;
+13. `EnvironmentBlock` LAST — its static half: cwd, git-repo flag, platform,
     OS, PHP, model, date, memoized per session. The git status, log and diffs
     left the system prompt at step 1.A-1 for the `<turn-context>` row below.
 

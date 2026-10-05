@@ -28,6 +28,21 @@ Four places, highest first:
 4. The shipped default, which depends on the path: **`default` in the TUI**,
    **`bypass-permissions` for `-p` and background sessions**.
 
+In the TUI the mode can also be switched **while the session runs**:
+`Alt+M` toggles `plan` — into it from any mode, and back out to the mode it
+was entered from (`default` when the session started in `plan`). The switch
+replaces the gate in both places a turn reads it — the hook chain's
+`PermissionGateHook` and the engine backend's copy — keeping your rules and
+the session's "always allow" grants (`PermissionGate::withMode()`), and
+`/permissions` then names the source as `Alt+M, this session`. It applies
+between turns only: a running turn keeps the gate it forked with, so `Alt+M`
+mid-turn is refused with a notice. Nothing is written to a settings file; the
+next launch starts from the four places above. The agent is told once, by a
+system row in the conversation naming the old mode, the new one and what the
+new one allows; a second switch before anything is sent replaces that row
+instead of adding one, and switching straight back removes it. Any mode other
+than `default` is shown on the status bar.
+
 An **unrecognised** value stops the launch with exit 2 rather than being
 ignored: silently discarding a mode you set on purpose would run the session
 under one you did not choose. An empty value counts as unset.
@@ -143,7 +158,7 @@ rule — see [Rules](#rules).
 |---|---|---|---|
 | `default` | Allow | Ask | Ask |
 | `accept-edits` | Allow | `Edit`/`Write` inside the project root Allow; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
-| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write`/unhinted `mcp__*` Deny | Ask |
+| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.sugar-crush/plans/` Allow; every other `Edit`/`Write` and unhinted `mcp__*` Deny | Ask |
 | `auto` | gated by `SafetyClassifier`, with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash` by command, `Edit`/`Write` by target); unhinted `mcp__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
@@ -292,6 +307,17 @@ the repository's own `.git/config`, which can name a program
 config the way running `git` in it by hand does. Note also that rules are
 evaluated **before** the mode: an explicit allow rule such as
 `Allow Bash(git *)` overrides `plan`, so `git push --force` runs under it.
+
+**The plan itself is the one write `plan` allows.** `Write` or `Edit` of a
+`.md` file directly in `.sugar-crush/plans/` (`PermissionGate::PLANS_DIR`) is
+allowed; a nested path, another extension, or a target that resolves outside
+that directory through a symlink is an ordinary write and denied. In `plan`
+the system prompt also carries the plan-mode contract
+(`Context\Sections\PlanModeSection`, a `<system-reminder>` slot just ahead of
+`<env>`): what runs, what is refused, where the plan goes, and that the user
+approves a plan by leaving the mode — so the model is told what the gate
+enforces instead of finding out one denied call at a time. The tool list is
+the same in every mode; only the gate's answers change.
 
 A `Bash` **declaration** — a name with no arguments, which is what a workflow
 stage's `tools:` list is — is still allowed under `plan`: it has no command to

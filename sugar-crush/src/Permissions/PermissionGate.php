@@ -28,8 +28,9 @@ use SugarCraft\Crush\Tools\McpToolBridge;
  *                shell primitives (`mkdir`/`touch`/`rmdir`) on contained
  *                paths auto-Allow; everything else — `rm`/`mv`/`cp`, WebFetch,
  *                protected and out-of-root paths — Ask (audit F-P4)
- * - Plan:        reads and provably read-only `Bash` Allow; every other `Bash`
- *                and every other write Deny
+ * - Plan:        reads and provably read-only `Bash` Allow; `Write`/`Edit` of a
+ *                Markdown plan directly under {@see PLANS_DIR} Allow (roadmap
+ *                5.7-1); every other `Bash` and every other write Deny
  * - Auto:        everything runs gated by SafetyClassifier (Bash by command,
  *                Edit/Write by path, WebFetch by what its URL carries), and
  *                `mcp__*` Asks unless its trusted server declared it
@@ -105,6 +106,22 @@ final class PermissionGate
     private ?string $lastBlockedCategory = null;
 
     /**
+     * Where plan mode may write its plan (roadmap 5.7-1), relative to the
+     * project root: a `.md` file directly in this directory is the one write
+     * {@see evaluatePlan()} allows. Kilo and opencode carve out the same kind
+     * of directory; without it a plan could only be written into the
+     * transcript, where compaction can fold it away.
+     */
+    public const PLANS_DIR = '.sugar-crush/plans';
+
+    /**
+     * The mode this gate was switched away from by {@see withMode()}, so a
+     * toggle that leaves `plan` returns to the mode it entered from rather
+     * than to a guess. Null on a gate built by its constructor.
+     */
+    private ?PermissionMode $toggledFrom = null;
+
+    /**
      * The interactive session's "always allow" grants (roadmap 1.C-2) — see
      * {@see withSessionRules()}. Not a constructor parameter, and not
      * readonly: it is set only on a CLONE, so the gate a launch built is never
@@ -152,6 +169,35 @@ final class PermissionGate
     public function modeSource(): ?string
     {
         return $this->modeSource;
+    }
+
+    /**
+     * This gate's rules, classifier and session grants under `$mode` — the
+     * runtime mode switch (roadmap 5.7-1, `Alt+M`).
+     *
+     * A NEW GATE, never a mutation: the turn already forked keeps the gate
+     * it started with, and every holder of this one keeps its mode. The
+     * Auto circuit breaker starts fresh, because its counters measure blocks
+     * under the mode they were recorded in. `$source` names the switch for
+     * `/permissions` ({@see modeSource()}); {@see toggledFrom()} remembers
+     * this gate's mode so a toggle can return to it.
+     */
+    public function withMode(PermissionMode $mode, ?string $source = null): self
+    {
+        $gate = new self($mode, $this->rules, $this->classifier, $source ?? $this->modeSource);
+        $gate->sessionRules = $this->sessionRules;
+        $gate->toggledFrom = $this->mode;
+
+        return $gate;
+    }
+
+    /**
+     * The mode {@see withMode()} switched away from to make this gate, or
+     * null when it was built directly.
+     */
+    public function toggledFrom(): ?PermissionMode
+    {
+        return $this->toggledFrom;
     }
 
     /**
@@ -419,7 +465,7 @@ final class PermissionGate
         return match ($this->mode) {
             PermissionMode::Default => $this->evaluateDefault($call),
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call, $projectRoot),
-            PermissionMode::Plan => $this->evaluatePlan($call, $argumentsKnown),
+            PermissionMode::Plan => $this->evaluatePlan($call, $argumentsKnown, $projectRoot),
             PermissionMode::Auto => $commitAutoStrikes
                 ? $this->evaluateAuto($call, $projectRoot)
                 : $this->autoDeclarationDecision(),
@@ -667,11 +713,20 @@ final class PermissionGate
      * legitimate use of it, and each real call is still judged here when it
      * arrives. A real call whose `command` is missing or empty has nothing
      * read-only about it and is Denied.
+     *
+     * THE ONE WRITE (roadmap 5.7-1): `Write` or `Edit` of a `.md` file
+     * directly in {@see PLANS_DIR} — see {@see isPlanFile()}. Without it the
+     * plan the mode exists to produce had nowhere to live but the transcript.
      */
-    private function evaluatePlan(ToolCall $call, bool $argumentsKnown): PermissionDecision
+    private function evaluatePlan(ToolCall $call, bool $argumentsKnown, ?string $projectRoot = null): PermissionDecision
     {
         // Reads are always allowed in Plan mode
         if ($this->isReadOnlyTool($call)) {
+            return PermissionDecision::Allow;
+        }
+
+        if (in_array($call->name, self::EDIT_TOOLS, true) && $argumentsKnown
+            && self::isPlanFile($call->arguments['file_path'] ?? null, $projectRoot)) {
             return PermissionDecision::Allow;
         }
 
@@ -692,6 +747,62 @@ final class PermissionGate
 
         // Default: ask
         return PermissionDecision::Ask;
+    }
+
+    /**
+     * Does `$path` name a Markdown plan directly in {@see PLANS_DIR}?
+     *
+     * Judged the way {@see WritePathScope::of()} judges a write target. With
+     * a root, the path is resolved as the tool resolves it
+     * ({@see \SugarCraft\Crush\Tools\PathJail::resolveForCreate()}, symlinks
+     * followed), so `.sugar-crush/plans` linked elsewhere, or a `plans/x.md`
+     * that is itself a link out, resolves outside and is not a plan file.
+     * Without one only a relative, lexically contained spelling counts.
+     * Either way the file must sit directly in the directory and end `.md`:
+     * a nested path or another extension is an ordinary write, Denied.
+     */
+    private static function isPlanFile(mixed $path, ?string $projectRoot): bool
+    {
+        if (!is_string($path) || $path === '' || str_contains($path, "\0") || str_starts_with($path, '~')) {
+            return false;
+        }
+
+        if ($projectRoot === null || $projectRoot === '') {
+            if (!WritePathScope::isContainedRelativePath($path)) {
+                return false;
+            }
+            $segments = [];
+            foreach (explode('/', $path) as $segment) {
+                if ($segment === '' || $segment === '.') {
+                    continue;
+                }
+                if ($segment === '..') {
+                    array_pop($segments);
+                    continue;
+                }
+                $segments[] = $segment;
+            }
+            $relative = implode('/', $segments);
+        } else {
+            $rootReal = realpath($projectRoot);
+            $resolved = \SugarCraft\Crush\Tools\PathJail::resolveForCreate($projectRoot, $path);
+            if ($rootReal === false || $resolved === null) {
+                return false;
+            }
+            $prefix = rtrim($rootReal, '/') . '/';
+            if (!str_starts_with($resolved, $prefix)) {
+                return false;
+            }
+            $relative = substr($resolved, strlen($prefix));
+        }
+
+        $dir = self::PLANS_DIR . '/';
+        if (!str_starts_with($relative, $dir)) {
+            return false;
+        }
+        $name = substr($relative, strlen($dir));
+
+        return $name !== '.md' && !str_contains($name, '/') && str_ends_with(strtolower($name), '.md');
     }
 
     /**

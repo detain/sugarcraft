@@ -4600,6 +4600,17 @@ final class Runtime
                     . ltrim($listing, "\n") . "\n</available-skills>",
         );
 
+        // Roadmap 5.7-1: the plan-mode contract, only while this turn's gate
+        // is in `plan` mode. Read off the hook chain's gate — the one the turn
+        // actually decides by, swapped by the TUI's Alt+M toggle before the
+        // turn forks — and placed directly ahead of <env>, so a mode switch
+        // moves only the prompt's tail and every cached slot ahead of it
+        // stays byte-identical. Any other mode, or no gate, adds no slot.
+        $gateHook = $this->hookManager->hook(HookEvent::PreToolUse->value, PermissionGateHook::NAME);
+        if ($gateHook instanceof PermissionGateHook && $gateHook->gate()->mode() === \SugarCraft\Crush\Permissions\PermissionMode::Plan) {
+            $sections[] = new \SugarCraft\Crush\Context\Sections\PlanModeSection();
+        }
+
         // <env> LAST (P3.S1). Since step 1.A-1 the appended block is the
         // STATIC half only — the git status and diff bodies that change on
         // every write left message 0 for the `<turn-context>` row run()

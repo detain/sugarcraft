@@ -2135,6 +2135,12 @@ final class Renderer
         // away, this does not. Absent on a writable session, so every bar
         // width the sweeps pin is unchanged there.
         $marker = $chat->isReadOnlySession() ? self::readOnlyMarker($chat) : '';
+        // The permission-mode badge (roadmap 5.7-1) rides directly behind
+        // it, claimed before everything else for the same reason: the mode
+        // decides what every tool call does, and the notice that announced a
+        // switch scrolls away. Absent in `default` mode and without a gate,
+        // so every bar width the sweeps pin is unchanged there.
+        $marker .= self::modeBadge($chat, $chat->cols() - Width::of($marker));
         $cols = $chat->cols() - Width::of($marker);
 
         // The "Ctrl+P menu" hint is the live path's only affordance for
@@ -2344,6 +2350,40 @@ final class Renderer
         }
 
         return self::fitStatusBar($marker . $bar, $chat->cols());
+    }
+
+    /**
+     * The status bar's permission-mode badge (roadmap 5.7-1), with its
+     * trailing separator: the widest of {@see modeBadgeForms()} that leaves
+     * the rest of the bar the floor {@see readOnlyMarker()} leaves it, else
+     * the narrowest. '' in `default` mode and for a chat without a gate —
+     * the mode a session starts in says nothing worth a column.
+     */
+    private static function modeBadge(Chat $chat, int $room): string
+    {
+        $mode = $chat->currentPermissionMode();
+        if ($mode === null || $mode === \SugarCraft\Crush\Permissions\PermissionMode::Default) {
+            return '';
+        }
+
+        $restFloor = Width::of(' · ')
+            + Width::of(self::contextIndicator($chat, 0))
+            + Width::of(self::stripZoneMarkers(self::fitProcessingHint($chat, 0)));
+
+        return self::firstFitting(self::modeBadgeForms($mode), $room - $restFloor);
+    }
+
+    /**
+     * The badge's forms, widest first. `plan` names its way out, because a
+     * mode that refuses every edit is the one a user most needs to leave.
+     *
+     * @return list<string>
+     */
+    public static function modeBadgeForms(\SugarCraft\Crush\Permissions\PermissionMode $mode): array
+    {
+        return $mode === \SugarCraft\Crush\Permissions\PermissionMode::Plan
+            ? ['plan mode (Alt+M to leave) · ', 'plan mode · ', 'plan · ']
+            : [$mode->value . ' mode · ', $mode->value . ' · '];
     }
 
     /**

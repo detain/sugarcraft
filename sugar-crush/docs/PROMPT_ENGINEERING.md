@@ -10,10 +10,10 @@ a doc that does not exist.
 For the assembly-order list in the architecture survey see `docs/ARCHITECTURE.md` ("The system
 prompt, in assembly order"); this page is the *why* beside that *what*.
 
-## The twelve slots, in order of record
+## The thirteen slots, in order of record
 
 `Runtime::systemPromptSections()` returns an ordered list of `PromptSection`s, base first and the
-static `<env>` block last. Counted from the live method, there are twelve slots:
+static `<env>` block last. Counted from the live method, there are thirteen slots:
 
 1. **Base identity** (`Runtime::basePrompt()`) — the Static heredoc that opens every prompt.
    Unfenced, because it is harness voice with no untrusted input. For the DeepSeek-V4, Qwen3.8
@@ -80,12 +80,19 @@ static `<env>` block last. Counted from the live method, there are twelve slots:
     opened with a provenance badge from `SkillOrigin::badge()` — `[built-in]`, `[user]`,
     `[project]`, plus `foreign: claude` or `foreign: opencode` for another tool's format
     (audit 15d-02). `SkillPathNudge` uses the same helper at its own entry cap, without the badge.
-12. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The P3.S1 invariant. Since
+12. **Plan mode** (`PlanModeSection`) — fenced `system-reminder`, present only while the turn's
+    permission gate is in `plan` mode (read off the hook chain's `PermissionGateHook`, which the TUI's
+    `Alt+M` toggle swaps between turns; roadmap 5.7-1). It states what the gate enforces — read-only
+    shell, every change refused, the one write a Markdown plan in `.sugar-crush/plans/` — so the
+    model is told rather than finding out one denied call at a time. PerTurn, and placed directly
+    ahead of `<env>` so a mode switch moves only the prompt's tail; the tool list is deliberately
+    the same in every mode for the same cache reason.
+13. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The P3.S1 invariant. Since
     step 1.A-1 it is the *static* half only — working directory, git-repo flag, platform, OS, PHP,
     model and date, every line frozen at capture or constant (`EnvironmentBlock::withVolatile()`)
     — so it is PerSession. The git section moved to the `<turn-context>` row (next section).
 
-Slots 1–3 are the Static prefix; 4–9 are PerSession; 10–11 are PerTurn; 12 is PerSession again —
+Slots 1–3 are the Static prefix; 4–9 are PerSession; 10–12 are PerTurn; 13 is PerSession again —
 the static `<env>` half, kept last because the slot order is the documented one. A section whose
 `render()` returns the empty string folds out of both wire forms — an absent layer adds no bytes,
 no empty fence and no dangling separator.
@@ -500,7 +507,8 @@ reason each stays out:
   anything that writes there; if a reminder channel is ever needed the non-spoofable appended
   system role is preferred — and note the roster defangs the tag inside fenced sections precisely
   because the emitted channel exists (its emitters today are the two path nudges,
-  `SkillPathNudge` and `RulePathNudge`, both on the tool-output side).
+  `SkillPathNudge` and `RulePathNudge`, both on the tool-output side, and the plan-mode contract
+  `PlanModeSection`, in the system prompt itself — none of them inside a user turn).
 - **Keyword and intent triggers are built but not applied.** Every rule carries its `paths:` /
   `keywords:` / `description` triggers into its `Rule` object, and only the first is consulted.
   The `paths:` half shipped (P6.S5b): the splice in `Runtime::systemPromptSections()` skips every

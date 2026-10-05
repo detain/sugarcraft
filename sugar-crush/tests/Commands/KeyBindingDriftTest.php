@@ -993,6 +993,19 @@ final class KeyBindingDriftTest extends TestCase
                 [$cancelled] = $armed->update($k[1]);
                 $this->assertFalse($cancelled->inFlight);
             },
+            // Roadmap 5.7-1: Alt+M puts the session's gate into plan mode and
+            // a second press brings it back to the mode it left.
+            'chat.plan-mode' => function (array $k): void {
+                $gate = new \SugarCraft\Crush\Permissions\PermissionGate(\SugarCraft\Crush\Permissions\PermissionMode::Default);
+                $chat = (new Chat(
+                    backend: \SugarCraft\Crush\Backend\EngineBackend::new(new \SugarCraft\Crush\Tests\Support\ScriptedProvider([]), 'm')
+                        ->withPermissionGate($gate),
+                ))->withSize(100, 30);
+                [$planning] = $chat->update($k[0]);
+                $this->assertSame(\SugarCraft\Crush\Permissions\PermissionMode::Plan, $planning->currentPermissionMode());
+                [$back] = $planning->update($k[0]);
+                $this->assertSame(\SugarCraft\Crush\Permissions\PermissionMode::Default, $back->currentPermissionMode());
+            },
             'chat.quit' => function (array $k): void {
                 [, $cmd] = $this->chat()->update($k[0]);
                 $this->assertNotNull($cmd, 'Ctrl+C must return a quit Cmd');

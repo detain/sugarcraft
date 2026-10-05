@@ -94,7 +94,8 @@ final class ArchitectureAssemblyOrderTest extends TestCase
         9 => ['memory', 'MemoryBlock'],
         10 => ['skill-body', 'full bodies'],
         11 => ['skill-listing', 'listForPrompt'],
-        12 => ['env', 'LAST'],
+        12 => ['plan-mode', 'PlanModeSection'],
+        13 => ['env', 'LAST'],
     ];
 
     // Canary bytes are absurd tokens, never prose: each one is the ONLY place
@@ -152,14 +153,14 @@ final class ArchitectureAssemblyOrderTest extends TestCase
         $tokens = $this->assembledTokens();
         $documented = $this->documentedSlotItems();
 
-        // The page's list must be the twelve consecutive items the code
+        // The page's list must be the thirteen consecutive items the code
         // produces — membership and position together. assertSame on two
         // string lists prints the first divergence, which is exactly the
         // diagnostic a reordered slot needs.
         self::assertSame(
             array_keys(self::DOC_SLOT_PINS),
             array_keys($documented),
-            'the ARCHITECTURE.md assembly list must number exactly items 1..12 in ascending order; '
+            'the ARCHITECTURE.md assembly list must number exactly items 1..13 in ascending order; '
             . 'a renumbered, inserted, or deleted slot changes this sequence and the page and code '
             . 'have to be corrected together',
         );
@@ -174,7 +175,7 @@ final class ArchitectureAssemblyOrderTest extends TestCase
             );
         }
 
-        // array_column walks the const in file order, which is slot order 1..12.
+        // array_column walks the const in file order, which is slot order 1..13.
         $expected = array_column(self::DOC_SLOT_PINS, 0);
 
         self::assertSame(
@@ -198,7 +199,7 @@ final class ArchitectureAssemblyOrderTest extends TestCase
         $tokens = $this->assembledTokens();
 
         self::assertSame('env', end($tokens), 'the volatile EnvironmentBlock must stay the LAST section');
-        self::assertCount(12, $tokens, 'every documented slot is wired in this fixture, so the list length is itself pinned');
+        self::assertCount(\count(self::DOC_SLOT_PINS), $tokens, 'every documented slot is wired in this fixture, so the list length is itself pinned');
     }
 
     // -------------------------------------------------------------------------
@@ -271,9 +272,16 @@ final class ArchitectureAssemblyOrderTest extends TestCase
 
         $app = $fixture->app()->withTools([new Read()]);
 
+        // Slot 12 joins the list only while the turn's gate is in plan mode
+        // (roadmap 5.7-1), so the chain carries a plan-mode gate.
+        $hooks = new HookManager(new HookRegistry());
+        $hooks->register(new \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook(
+            new \SugarCraft\Crush\Permissions\PermissionGate(\SugarCraft\Crush\Permissions\PermissionMode::Plan),
+        ));
+
         $runtime = new Runtime(
             $app->provider,
-            new HookManager(new HookRegistry()),
+            $hooks,
             new EnvironmentBlock($fixture->root(), $app->model, new DateTimeImmutable('2026-01-15 12:00:00 UTC'), 'linux'),
         );
 
@@ -319,6 +327,9 @@ final class ArchitectureAssemblyOrderTest extends TestCase
         }
         if ($section instanceof EnvironmentBlock) {
             return 'env';
+        }
+        if ($section instanceof \SugarCraft\Crush\Context\Sections\PlanModeSection) {
+            return 'plan-mode';
         }
 
         $body = $section->render();
