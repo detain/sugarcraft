@@ -669,7 +669,7 @@ Git itself, hooks included, runs under three guarantees:
   the contained root.
 
 `sugarcrush --help` lists exactly eight under its **Subcommands** heading —
-`doctor`, `models`, `session list|delete`, `mcp list|import`, `serve`,
+`doctor`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|import`, `serve`,
 `attach`, `acp`, `completion bash|zsh|fish` — and none of those but `attach`
 and `acp` needs a provider, an API key or a terminal; five answer and exit, and
 `serve` runs until it is stopped. `attach` runs the TUI on a session of a

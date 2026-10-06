@@ -21,7 +21,13 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    one) its "Acting vs. asking" section closes with a per-family paragraph (`FamilyPrompt::of()`):
    a family lead plus Aider's `lazy` and `overeager` reminders, restated without emphasis. Every
    other model gets the heredoc unchanged. The family is resolved once per session and model, so
-   the paragraph never moves inside a cached prefix.
+   the paragraph never moves inside a cached prefix. Its "Tool use" section keeps Bash for what
+   only a shell can do (builds, tests, git, project scripts): reads and searches go to Read
+   (offset/limit), Grep, Glob, Lsp and RepoMap, which run without an approval prompt, while a
+   shell line that cannot be proven read-only waits for the user. It asks for one simple command
+   per Bash call, independent calls sent as one batch, and no leading `cd` to the project root —
+   every Bash call already starts there (`ProcessContainment::cdGuard()`), as the Bash tool's own
+   description also says.
 2. **Maxims** (`MaximsSection`) — the `core.maxims` voice layer, directly behind the base identity
    and ahead of every derived layer. Static and unfenced: its bytes are class constants.
 3. **Tool guidance** (`Runtime::toolGuidanceSection()`) — appended only when at least one wired

@@ -776,7 +776,11 @@ situations, not two:
     remembers `Bash(vendor/bin/phpunit *)` and `Bash(tail *)` — the
     commands, never the loop syntax — and a later loop of another shape over
     other values running those commands (or read-only ones) is covered, its
-    header held to the [loop rules](#sed-and-loops). A loop whose body holds a
+    header held to the [loop rules](#sed-and-loops). A body command with a
+    writing redirection (`cat "$f" > out.txt`) gets no read-only cover — only
+    a grant that spells the redirection covers it — and a background `&`
+    anywhere in a compound line refuses per-part cover, as it does for a
+    flat one. A loop whose body holds a
     command that would be remembered exactly (`rm "$f"`, a writing
     redirection) is remembered as the exact call: a grant on `rm "$f"` would
     cover the same text in any later loop, over any list.

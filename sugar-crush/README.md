@@ -57,7 +57,7 @@ under [`docs/`](docs/) for the full detail.
 |---|---|
 | [`docs/SETTINGS.md`](docs/SETTINGS.md) | Every settings key, the four file tiers plus the session tier, the settings view (its project-shared tier and narrow layout included), when a change applies |
 | [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | Every environment variable, including provider credentials and the shell-out backends |
-| [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) | The six permission modes, plan mode, `AskUser` and `PlanExit`, the `auto` classifier and its reviewer, rules (and how they bind `ApplyPatch`), the four `trustedProject*` keys, the Bash sandbox |
+| [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) | The six permission modes, plan mode, `AskUser` and `PlanExit`, the `auto` classifier and its reviewer, rules (and how they bind `ApplyPatch`), read-only shell lines that run unasked, per-part "always" grants and `/permissions`, the four `trustedProject*` keys, the Bash sandbox |
 | [`docs/CONTEXT.md`](docs/CONTEXT.md) | The context engine: pruning, `Prune`/`Compress`/`Recall`, compaction tiers, background summaries, re-injection, overflow recovery |
 | [`docs/AGENTS.md`](docs/AGENTS.md) | Sub-agents: `Task`, background and nested runs, worktree isolation, teams, messaging between agents, the shared board, the live agent lines, the agents strip and the Agent View |
 | [`docs/AGENTS_AUTHORING.md`](docs/AGENTS_AUTHORING.md) | Writing an agent preset: where it goes, its frontmatter, how grants are enforced, the shared board and the messaging tools in detail |
@@ -67,7 +67,7 @@ under [`docs/`](docs/) for the full detail.
 | [`docs/SKILLS.md`](docs/SKILLS.md) | Writing a skill, where skills load from, how they reach the model, `$name` mentions |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
 | [`docs/MCP.md`](docs/MCP.md) | MCP servers: `.mcp.json`, the trust gate, auth, serving your own |
-| [`docs/SERVER.md`](docs/SERVER.md) | `sugarcrush serve`, the `sugarcrush.v1` protocol, the web UI, `sugarcrush attach`, editors through `sugarcrush acp` |
+| [`docs/SERVER.md`](docs/SERVER.md) | `sugarcrush serve`, remote access (`--allowed-host`, `--allowed-ips`), picking a new session's directory (`--allow-dir-browse`), the `sugarcrush.v1` protocol, the web UI, `sugarcrush attach`, editors through `sugarcrush acp` |
 | [`docs/PROMPT_ENGINEERING.md`](docs/PROMPT_ENGINEERING.md) | How the system prompt and the turn-context row are assembled, and why |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What runs where: the binary, the bootstrap, `Chat`, the engine, sessions |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |

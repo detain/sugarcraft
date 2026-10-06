@@ -44,7 +44,7 @@ which is the whole of the next warning.
 The order in it is deliberate, and its size is whatever `wc -l bin/sugarcrush`
 says today — this sentence used to carry a line count and quotes none on
 purpose (E686: the figure rotted within rounds). `--help`, `--version` and the eight
-subcommands (`doctor`, `models`, `session list|delete`, `mcp list`,
+subcommands (`doctor`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list`,
 `serve`, `attach`, `acp`, `completion bash|zsh|fish`) are answered **before** `Program`, `Bootstrap::app()`
 or `NonInteractive` is reached, because every one of them but `attach` and `acp` is a question about
 the *install* rather than a turn of conversation: they must answer on a machine
