@@ -1,0 +1,163 @@
+scanned 2166 sugar-crush php files (vendor + caches excluded)
+
+=== candy-core (SugarCraft\Core) ===
+  referencing files: 373  (src=109, tests=260, other=4)
+  distinct symbols imported: 46
+    - KeyType  x176
+    - Msg\KeyMsg  x176
+    - Util\Width  x76
+    - Msg  x56
+    - AsyncCmd  x50
+    - Util\Ansi  x42
+    - MouseButton  x27
+    - Msg\MouseClickMsg  x24
+    - MouseAction  x24
+    - Msg\MouseReleaseMsg  x22
+    - BatchMsg  x22
+    - Msg\WindowSizeMsg  x20
+    - Util\Color  x15
+    - Util\Sanitize  x15
+    - Msg\MouseWheelMsg  x14
+    - I18n\T  x11
+    - Msg\BackgroundColorMsg  x9
+    - Msg\PasteMsg  x9
+    - Msg\MouseMotionMsg  x8
+    - InputReader  x8
+    - View  x7
+    - Util\AtomicJsonFile  x7
+    - RawMsg  x7
+    - Util\ColorProfile  x6
+    - MouseMode  x5
+    - Program  x5
+    - Cmd  x5
+    - Model  x4
+    - ProgramOptions  x4
+    - Util\Tty  x4
+    ... +16 more
+  src entry points: src/RuntimeNoticePumpMsg.php, src/SideQuestionAnsweredMsg.php, src/BackgroundSessionSpawnedMsg.php, src/TranscriptFlushMsg.php, src/CancelAgentRunMsg.php, src/BackgroundSessionStoppedMsg.php, src/SessionTitledMsg.php, src/Renderer.php +101 more
+  other: examples/echo-chat.php, examples/agent-dashboard.php, examples/permission-prompt.php, examples/edit-diff.php
+
+=== candy-forms (SugarCraft\Forms) ===
+  referencing files: 11  (src=5, tests=6, other=0)
+  distinct symbols imported: 9
+    - ItemList\LoadMoreMsg  x4
+    - TextArea\TextArea  x3
+    - Field\Input  x3
+    - ItemList\ItemList  x2
+    - Field  x2
+    - Field\Confirm  x2
+    - Field\Select  x2
+    - TextInput\TextInput  x1
+    - ItemList\Item  x1
+  src entry points: src/Chat.php, src/Tui/SessionPicker.php, src/Tui/SessionRow.php, src/Tui/Settings/SettingsEditor.php, src/Tui/Settings/SettingsFieldFactory.php
+
+=== candy-sprinkles (SugarCraft\Sprinkles) ===
+  referencing files: 45  (src=29, tests=16, other=0)
+  distinct symbols imported: 6
+    - Style  x35
+    - Border  x16
+    - Bar\Segment  x2
+    - Table\Table  x1
+    - Layout  x1
+    - Position  x1
+  src entry points: src/Renderer.php, src/Commands/TranscriptTable.php, src/Tui/DirectoryPicker/DirectoryPicker.php, src/Tui/SessionPicker.php, src/Tui/AgentStrip.php, src/Tui/AgentActivityLine.php, src/Tui/Renderer.php, src/Tui/TextSelection.php +21 more
+
+=== candy-shine (SugarCraft\Shine) ===
+  referencing files: 6  (src=3, tests=3, other=0)
+  distinct symbols imported: 1
+    - Render\SectionStream  x1
+  src entry points: src/Renderer.php, src/Tui/DiffGutter.php, src/Theme.php
+
+=== candy-fuzzy (SugarCraft\Fuzzy) ===
+  referencing files: 8  (src=5, tests=3, other=0)
+  distinct symbols imported: 4
+    - MatchResult  x5
+    - Matcher\SmithWatermanMatcher  x5
+    - Highlighter  x2
+    - Matcher\CharFold  x1
+  src entry points: src/Renderer.php, src/Commands/CommandRegistry.php, src/Chat.php, src/Tui/SessionPicker.php, src/Tui/Settings/SettingsSearch.php
+
+=== sugar-veil (SugarCraft\Veil) ===
+  referencing files: 3  (src=3, tests=0, other=0)
+  distinct symbols imported: 2
+    - Position  x2
+    - Veil  x2
+  src entry points: src/Renderer.php, src/Tui/Components/AgentDashboardPane.php, src/Chat.php
+
+=== sugar-mcp (SugarCraft\Mcp) ===
+  referencing files: 17  (src=7, tests=10, other=0)
+  distinct symbols imported: 3
+    - RequestIdSequence  x3
+    - ArgumentShape  x2
+    - ExchangeLock  x2
+  src entry points: src/LSP/LspConnection.php, src/MCP/HttpMcpServer.php, src/MCP/ClaudeCodeMcpServer.php, src/ClaudeCodeMcpClient.php, src/LSP/LspExchangeLock.php, src/MCP/StdioMcpServer.php, src/Protocol/JsonRpc.php
+
+=== sugar-diff (SugarCraft\Diff) ===
+  referencing files: 1  (src=1, tests=0, other=0)
+  distinct symbols imported: 3
+    - Diff  x1
+    - DiffOptions  x1
+    - LineKind  x1
+  src entry points: src/Tui/Settings/SettingsSavePreview.php
+
+=== sugar-toast (SugarCraft\Toast) ===
+  referencing files: 2  (src=2, tests=0, other=0)
+  distinct symbols imported: 0
+  NONE - namespace appears only as an inline FQN or not at all
+  src entry points: src/Renderer.php, src/Chat.php
+
+=== candy-mosaic (SugarCraft\Mosaic) ===
+  referencing files: 21  (src=5, tests=16, other=0)
+  distinct symbols imported: 8
+    - Mosaic  x11
+    - ImageLayer  x4
+    - ImageSource  x1
+    - Capability  x1
+    - Renderer\HalfBlockRenderer  x1
+    - Renderer\SixelRenderer  x1
+    - TmuxPassthroughDecorator  x1
+    - Detect  x1
+  src entry points: src/Renderer.php, src/ToolResult.php, src/Tools/BuiltIn/Doctor.php, src/Message.php, src/Chat.php
+
+=== candy-mouse (SugarCraft\Mouse) ===
+  referencing files: 32  (src=8, tests=24, other=0)
+  distinct symbols imported: 8
+    - Zone  x19
+    - Mark  x9
+    - Sentinel  x9
+    - Scanner  x3
+    - MouseEvent  x2
+    - ZoneClickTracker  x2
+    - Selection  x2
+    - SelectionRange  x2
+  src entry points: src/Renderer.php, src/App/App.php, src/Chat.php, src/Tui/AgentStrip.php, src/Tui/Renderer.php, src/Tui/TextSelection.php, src/Tui/AgentViewHeader.php, src/Tui/Components/MenuBar.php
+
+=== candy-layout (SugarCraft\Layout) ===
+  referencing files: 20  (src=6, tests=14, other=0)
+  distinct symbols imported: 3
+    - Dock\Side  x14
+    - Dock\DockLayout  x10
+    - Region  x1
+  src entry points: src/Cli/Bootstrap.php, src/App/App.php, src/Tui/Renderer.php, src/Tui/Pane.php, src/Tui/PaneDragController.php, src/Config/LayeredSettings.php
+
+=== candy-focus (SugarCraft\Focus) ===
+  referencing files: 2  (src=1, tests=1, other=0)
+  distinct symbols imported: 1
+    - FocusRing  x1
+  src entry points: src/Tui/Pane.php
+
+=== candy-kit (SugarCraft\Kit) ===
+  referencing files: 1  (src=0, tests=1, other=0)
+  distinct symbols imported: 0
+  NONE - namespace appears only as an inline FQN or not at all
+
+=== candy-pty (SugarCraft\Pty) ===
+  referencing files: 10  (src=3, tests=7, other=0)
+  distinct symbols imported: 5
+    - Libc  x2
+    - Posix\PosixPtySystem  x2
+    - Posix\PosixTermios  x2
+    - Spawn  x1
+    - Pty  x1
+  src entry points: src/Workflows/WorkflowEngine.php, src/Support/ProcessContainment.php, src/Tools/Concerns/CapturesProcessOutput.php
+
