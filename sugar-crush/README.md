@@ -2141,14 +2141,18 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**16,416 tests / 316,514 assertions, 0 failures, 1 skipped** — the whole of
+**21,147 tests / 405,833 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-21m07s. Measured 2026-10-03, after the second library-fix round against
+29m44s. Measured 2026-10-05, at the end of the `crush_report.md` roadmap —
+its eleven waves, the remainder wave, i18n, and the serve and permission
+follow-ups (remote-access flags, directory browsing, read-only shell lines
+and per-part grants) — which added 4,731 tests. Before that, 16,416/316,514
+on 2026-10-03, after the second library-fix round against
 `crush_libs.md` (slash commands admitted on any anchored full-query alignment,
 MCP error codes, `/proc` starttime reads, the LSP note journal, and ending the
-HTTP MCP session when a start fails after the handshake) added 12 tests. Before
-that, 16,404/316,385 earlier on 2026-10-03, after the first library-fix round
+HTTP MCP session when a start fails after the handshake) added 12 tests, in
+21m07s; 16,404/316,385 earlier on 2026-10-03, after the first library-fix round
 and its sugar-crush follow-ups (full-query palette and slash-command
 matching, `TextSelection` on candy-mouse, malformed zone markup in `scanRoot`,
 the terminal-background agreement with candy-sprinkles, MCP/LSP exchange-lock
