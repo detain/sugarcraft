@@ -81,7 +81,9 @@ final class ForkChannelIdleTimerSuspendedTest extends TestCase
      */
     private function runScaled(ScriptedProvider $provider): array
     {
-        $loop = new ScaledClockLoop();
+        // Clock from the first frame: the child's startup is host cost, not
+        // silence, and under CI load it alone could cross 240 ms of wall time.
+        $loop = ScaledClockLoop::startingAtFirstFrame();
         $previous = Loop::get();
         Loop::set($loop);
         $finished = [];

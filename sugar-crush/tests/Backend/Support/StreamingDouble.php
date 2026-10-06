@@ -14,7 +14,10 @@ use SugarCraft\Crush\Tools\ToolCall;
 /**
  * A streaming provider whose pre-answer chunks all carry `content: ''` — one
  * shape per family member, plus a `silent` shape that emits nothing at all and
- * is the known-positive control.
+ * is the known-positive control, and `announced-silent` — one reasoning chunk
+ * on entry, then nothing — the same control for a {@see ScaledClockLoop} whose
+ * clock starts at the first frame (an entirely silent child would never start
+ * that clock, so it could never cross the ceiling on it).
 
  *
  * ## Where this class came from
@@ -60,13 +63,17 @@ final class StreamingDouble implements ProviderInterface
             return;
         }
 
+        if ($this->shape === 'announced-silent') {
+            yield new CompleteResponse(content: '', reasoning: 'on it ');
+        }
+
         for ($i = 0; $i < $this->chunks; $i++) {
             if ($this->pauseMicros > 0) {
                 // A guaranteed LOWER bound on real elapsed time, which is what
                 // makes "the clock crossed the ceiling" unflakeable.
                 usleep($this->pauseMicros);
             }
-            if ($this->shape === 'silent') {
+            if ($this->shape === 'silent' || $this->shape === 'announced-silent') {
                 continue;
             }
 

@@ -112,15 +112,19 @@ use SugarCraft\Crush\Tools\ToolCall;
  *     20 ms sleep would have to take twelve times as long as asked before a
  *     surviving turn could be reported as killed.
  *
- * That margin covers the gaps BETWEEN chunks, which is not the whole story and
- * is stated so nobody reads it as if it were. The tightest interval here is the
- * FIRST one — fork, `App`/`Runtime` construction, config reads, provider entry
- * — and no `usleep()` bounds it, so it is whatever this box happens to cost.
- * MEASURED on an idle host (PHP 8.3.6): the file's four forks contribute on the
- * order of 50 ms of overhead in total against the same 240 ms real ceiling, so
- * the margin is real today. It is nonetheless the term that degrades first
- * under load, and it is the one to suspect if a `survived` assertion here ever
- * flakes.
+ * That margin covers the gaps BETWEEN chunks. The FIRST interval — fork,
+ * `App`/`Runtime` construction, config reads, provider entry — has no
+ * `usleep()` bounding it; it is whatever the host costs, and it is the term
+ * that degraded first: on CI's loaded 4-shard runners it alone crossed the
+ * 240 ms real ceiling, and all three survival tests went red together with the
+ * turn killed before it had streamed a byte. So the clock tests run on
+ * {@see ScaledClockLoop::startingAtFirstFrame()}: the clock starts at the
+ * child's first frame and scales only silence between frames — the thing the
+ * ceiling measures. The silent control keeps its meaning on that clock by
+ * announcing itself once on entry (`announced-silent`) and then saying nothing
+ * for the whole ceiling. A build that stopped announcing reasoning would leave
+ * the clock unstarted until the answer, and the survival tests then fail their
+ * "the clock never reached the idle ceiling" check rather than pass.
  *
  * PHP 8.3.6 on this host.
  */
@@ -243,8 +247,9 @@ final class ReasoningProgressTest extends TestCase
 
     /**
      * The KNOWN-POSITIVE control for the three tests above (rule 15): the same
-     * loop, the same scale, the same fork, and a provider that emits nothing at
-     * all until it answers. That turn MUST be killed — otherwise the ceiling is
+     * loop, the same scale, the same fork, and a provider that announces itself
+     * once (starting the first-frame clock) and then emits nothing until it
+     * answers. That turn MUST be killed — otherwise the ceiling is
      * not being reached in this harness and every "it survived" above is a
      * measurement of a dead timer rather than of the fix.
      *
@@ -258,7 +263,7 @@ final class ReasoningProgressTest extends TestCase
         $thoughts = [];
         $tokens = [];
         $run = $this->runOnScaledClock(
-            new StreamingDouble(self::THINK_CHUNKS, self::CHUNK_PAUSE_MICROS, 'silent', 'the answer'),
+            new StreamingDouble(self::THINK_CHUNKS, self::CHUNK_PAUSE_MICROS, 'announced-silent', 'the answer'),
             $tokens,
             $thoughts,
         );
@@ -738,7 +743,7 @@ final class ReasoningProgressTest extends TestCase
     {
         $backend = EngineBackend::new($provider, 'scaled');
 
-        $loop = new ScaledClockLoop();
+        $loop = ScaledClockLoop::startingAtFirstFrame();
         $this->previousLoop = Loop::get();
         Loop::set($loop);
 

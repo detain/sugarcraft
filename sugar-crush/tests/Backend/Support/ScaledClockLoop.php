@@ -18,6 +18,13 @@ use React\EventLoop\TimerInterface;
  * `real elapsed x VIRTUAL_SECONDS_PER_REAL_SECOND`, so the 120-second idle
  * ceiling the code arms unchanged is crossed in 240 ms of wall time.
  *
+ * {@see startingAtFirstFrame()} additionally holds the clock at zero until the
+ * first read listener is dispatched, so the fork-to-first-frame interval —
+ * forking, building `App`/`Runtime`, reaching the provider — is never scaled.
+ * That interval is whatever the host costs under load, not a gap between
+ * frames, and at 500x a 0.3 s startup on a busy CI runner is 150 virtual
+ * seconds: past a 120 s ceiling before the code under test streamed anything.
+ *
  * Two properties this deliberately keeps:
  *
  *   - `run()` has its own REAL ceiling, so a regression that stops the promise
@@ -76,15 +83,35 @@ final class ScaledClockLoop implements LoopInterface
 
     private float $highWater = 0.0;
 
+    /** True until the first read listener runs, for {@see startingAtFirstFrame()}. */
+    private bool $held = false;
+
     public function __construct()
     {
         $this->startNs = (float) hrtime(true);
         $this->timers = new \SplObjectStorage();
     }
 
-    /** Virtual seconds since this loop was constructed. */
+    /**
+     * A loop whose virtual clock reads zero until the first read listener is
+     * dispatched — the first frame off the child's socket — and runs scaled
+     * from then on. Timers armed before that are due relative to that moment.
+     */
+    public static function startingAtFirstFrame(): self
+    {
+        $loop = new self();
+        $loop->held = true;
+
+        return $loop;
+    }
+
+    /** Virtual seconds since this loop was constructed (or, held, since the first frame). */
     public function now(): float
     {
+        if ($this->held) {
+            return 0.0;
+        }
+
         $seconds = ((float) hrtime(true) - $this->startNs) / 1e9 * self::VIRTUAL_SECONDS_PER_REAL_SECOND;
         if ($seconds > $this->highWater) {
             $this->highWater = $seconds;
@@ -228,6 +255,10 @@ final class ScaledClockLoop implements LoopInterface
         foreach ($read as $stream) {
             $key = (int) $stream;
             if (isset($this->readStreams[$key])) {
+                if ($this->held) {
+                    $this->held = false;
+                    $this->startNs = (float) hrtime(true);
+                }
                 ($this->readStreams[$key][1])($stream, $this);
             }
             if ($this->stopped) {
