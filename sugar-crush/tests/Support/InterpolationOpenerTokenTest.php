@@ -191,6 +191,23 @@ final class InterpolationOpenerTokenTest extends TestCase
             . 'records what the SCANNER reports so the row and the scanner cannot drift apart; '
             . 'this sentence records what is actually true.',
         ],
+        // Not PHP walkers at all — the selection reads a dispatch on a brace
+        // and cannot see that the stream is a shell argument, not PHP tokens.
+        'src/Permissions/AwkCommand.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
+            'A `switch` on the characters of an awk PROGRAM (`case \'{\'` / `case \'}\'`), '
+            . 'tracking action-block depth to judge it read-only. Its input is a shell '
+            . 'argument, never token_get_all() output, so no PHP opener token can reach it: '
+            . 'the gap is in the selection, not in the walker.',
+        ],
+        'src/Permissions/SedCommand.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
+            'Compares each parsed sed SCRIPT command against `{` and `}` to track block '
+            . 'nesting. Its input is a shell argument, never token_get_all() output, so no '
+            . 'PHP opener token can reach it: the gap is in the selection, not in the walker.',
+        ],
     ];
 
     /**

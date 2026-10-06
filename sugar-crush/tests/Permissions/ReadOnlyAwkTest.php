@@ -23,6 +23,8 @@ use SugarCraft\Crush\ToolCall;
  */
 final class ReadOnlyAwkTest extends TestCase
 {
+    use ReadOnlyGateTrait;
+
     private string $base = '';
 
     private string $root = '';
@@ -47,11 +49,6 @@ final class ReadOnlyAwkTest extends TestCase
     private function decide(PermissionGate $gate, string $command): PermissionDecision
     {
         return $gate->evaluate(new ToolCall('Bash', ['command' => str_replace('{root}', $this->root, $command)]), $this->root);
-    }
-
-    private function gate(PermissionMode $mode = PermissionMode::Default): PermissionGate
-    {
-        return (new PermissionGate($mode))->withReadOnlyAutoAllow(true);
     }
 
     /** @return array<string, array{string}> */

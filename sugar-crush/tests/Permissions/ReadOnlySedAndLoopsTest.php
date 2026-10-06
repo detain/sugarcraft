@@ -34,6 +34,8 @@ use SugarCraft\Crush\ToolCall;
  */
 final class ReadOnlySedAndLoopsTest extends TestCase
 {
+    use ReadOnlyGateTrait;
+
     private string $base = '';
 
     private string $root = '';
@@ -53,11 +55,6 @@ final class ReadOnlySedAndLoopsTest extends TestCase
         @rmdir($this->root . '/sugar-crush');
         @rmdir($this->root);
         @rmdir($this->base);
-    }
-
-    private function gate(PermissionMode $mode = PermissionMode::Default, array $rules = []): PermissionGate
-    {
-        return (new PermissionGate($mode, $rules))->withReadOnlyAutoAllow(true);
     }
 
     private function decide(PermissionGate $gate, string $command): PermissionDecision

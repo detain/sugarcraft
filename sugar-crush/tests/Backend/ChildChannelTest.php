@@ -215,24 +215,25 @@ final class ChildChannelTest extends TestCase
     /**
      * The per-turn memo remembers what the PARENT remembers — a pattern, not
      * the exact call — so a later call of the same turn (a parallel member's
-     * included) the grant covers is not put again.
+     * included) the grant covers is not put again. The chain leads with `make`
+     * because a read-only `sed` now runs unasked and would never be put.
      */
     public function testAlwaysRemembersThePatternTheParentRemembers(): void
     {
         [$parent, $child] = $this->pair();
-        $first = ['command' => 'sed -n 1,5p f | sort | uniq', 'description' => 'count'];
+        $first = ['command' => 'make -C f | sort | uniq', 'description' => 'count'];
         self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c1', 'Bash', $first), 'reply' => 'always']);
         $written = [];
         $channel = $this->channel($child, $written);
 
         self::assertTrue($channel->ask(new ToolCall('c1', 'Bash', $first), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
-        self::assertSame('Bash(sed *), Bash(sort *), Bash(uniq *)', $written[0]['alwaysScope']['pattern'] ?? null, 'the frame names the scope, one grant per part');
-        self::assertTrue($channel->ask(new ToolCall('c2', 'Bash', ['command' => 'sed x g | sort -u | uniq -c']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
-        self::assertTrue($channel->ask(new ToolCall('c2b', 'Bash', ['command' => 'sort a && sed -n 2p g']), ForkChannelEofIsUnansweredTest::gateAsk())->permits(), 'another shape of the same parts');
+        self::assertSame('Bash(make *), Bash(sort *), Bash(uniq *)', $written[0]['alwaysScope']['pattern'] ?? null, 'the frame names the scope, one grant per part');
+        self::assertTrue($channel->ask(new ToolCall('c2', 'Bash', ['command' => 'make x g | sort -u | uniq -c']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::assertTrue($channel->ask(new ToolCall('c2b', 'Bash', ['command' => 'sort a && make -s g']), ForkChannelEofIsUnansweredTest::gateAsk())->permits(), 'another shape of the same parts');
         self::assertCount(1, $written, 'a call the grant covers was asked again');
 
-        self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c3', 'Bash', ['command' => 'sed x | sh']), 'reply' => 'reject']);
-        self::assertFalse($channel->ask(new ToolCall('c3', 'Bash', ['command' => 'sed x | sh']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
+        self::send($parent, ['kind' => ChildChannel::ASK_REPLY, 'askId' => PendingAsk::askId('c3', 'Bash', ['command' => 'make x | sh']), 'reply' => 'reject']);
+        self::assertFalse($channel->ask(new ToolCall('c3', 'Bash', ['command' => 'make x | sh']), ForkChannelEofIsUnansweredTest::gateAsk())->permits());
         self::assertCount(2, $written);
     }
 

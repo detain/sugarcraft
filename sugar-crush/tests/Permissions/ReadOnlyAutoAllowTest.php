@@ -40,6 +40,8 @@ use SugarCraft\Crush\ToolCall;
  */
 final class ReadOnlyAutoAllowTest extends TestCase
 {
+    use ReadOnlyGateTrait;
+
     use HomeSandboxTrait;
 
     private string $base = '';
@@ -63,11 +65,6 @@ final class ReadOnlyAutoAllowTest extends TestCase
         UiSettings::forget();
         $this->restoreHomeSandbox();
         $this->removeTree($this->base);
-    }
-
-    private function gate(PermissionMode $mode = PermissionMode::Default): PermissionGate
-    {
-        return (new PermissionGate($mode))->withReadOnlyAutoAllow(true);
     }
 
     private function decide(PermissionGate $gate, string $command): PermissionDecision
