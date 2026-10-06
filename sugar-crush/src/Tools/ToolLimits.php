@@ -247,14 +247,21 @@ final readonly class ToolLimits
         // The session's own Task only (depth 0): a nested copy was handed its
         // caps by the run that delegated it ({@see TaskTool::nestedFor()}).
         // A key left unset takes the shipped cap, not an embedder's — the
-        // tool exposes no reader for the one it was built with.
+        // tool exposes no reader for the one it was built with. A width of 0
+        // means NO cap, the same verdict `subagentMaxConcurrent` gives, so a
+        // session can lift a cap an embedder wired in without deleting keys.
         if ($tool instanceof TaskTool) {
             $depth = $this->int(self::SUBAGENT_MAX_DEPTH_KEY);
             $active = $this->int(self::SUBAGENT_MAX_ACTIVE_KEY);
 
-            return $tool->delegationDepth() > 0 || ($depth === null && $active === null)
-                ? $tool
-                : $tool->withDelegationLimits($depth ?? TaskTool::MAX_DELEGATION_DEPTH, $active ?? TaskTool::MAX_CONCURRENT_AGENTS);
+            if ($tool->delegationDepth() > 0 || ($depth === null && $active === null)) {
+                return $tool;
+            }
+
+            return $tool->withDelegationLimits(
+                $depth ?? TaskTool::MAX_DELEGATION_DEPTH,
+                $active === null ? TaskTool::MAX_CONCURRENT_AGENTS : ($active < 1 ? null : $active),
+            );
         }
 
         if ($tool instanceof McpToolBridge) {

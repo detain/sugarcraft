@@ -158,7 +158,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             'properties' => [
                 'action' => ['type' => 'string', 'enum' => self::ACTIONS, 'description' => 'What to do'],
                 'team' => $string('Team id (letters, digits, - and _); every action but a team-less `list` needs it'),
-                'max_teammates' => ['type' => 'integer', 'description' => '`create`: most teammates working at once (default 5)'],
+                'max_teammates' => ['type' => 'integer', 'description' => '`create`: most teammates working at once; 0 or omitted means no cap'],
                 'auto_assign' => ['type' => 'boolean', 'description' => '`create`: whether `claim` with no task names the next one (default true); false makes every teammate claim by name'],
                 'timeout_seconds' => ['type' => 'integer', 'description' => '`create`: how long a claim may be held before `list` marks it overdue and the lead may release it (default 600; 0 never)'],
                 'title' => $string('`add`: one-line task title'),
@@ -233,10 +233,12 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         $config = new TeamConfig();
         if (array_key_exists('max_teammates', $args)) {
             $max = $args['max_teammates'];
-            if (!is_int($max) || $max < 1 || $max > 50) {
-                return self::error('`max_teammates` must be a whole number from 1 to 50');
+            if (!is_int($max) || $max < 0 || $max > 50) {
+                return self::error('`max_teammates` must be a whole number from 0 (no cap) to 50');
             }
-            $config = $config->withMaxTeammates($max);
+            // 0 spells "no cap" the way the settings keys do; null is what
+            // TeamConfig carries when nobody sized the team.
+            $config = $config->withMaxTeammates($max === 0 ? null : $max);
         }
         if (array_key_exists('auto_assign', $args)) {
             if (!is_bool($args['auto_assign'])) {
@@ -255,11 +257,11 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
         $teams->createTeam($teamId, $teamId, self::LEAD, $config);
 
         return self::ok(sprintf(
-            'Team "%s" created (lead "%s", at most %d teammates%s%s). `add` its tasks, then start each teammate with Task'
+            'Team "%s" created (lead "%s", %s%s%s). `add` its tasks, then start each teammate with Task'
             . ' and `background: true`.',
             $teamId,
             self::LEAD,
-            $config->maxTeammates,
+            $config->maxTeammates === null ? 'no teammate cap' : 'at most ' . $config->maxTeammates . ' teammates',
             $config->autoAssignTasks ? '' : ', tasks claimed by name only',
             $config->defaultTimeoutSeconds > 0 ? ', claims overdue after ' . self::duration($config->defaultTimeoutSeconds) : '',
         ));
@@ -397,7 +399,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             }
         }
         $max = $teams->getTeamConfig($team->id)?->maxTeammates ?? $team->maxTeammates;
-        if (!isset($working[$teammate]) && $teammate !== $team->leadAgentId && \count($working) >= $max) {
+        if ($max !== null && !isset($working[$teammate]) && $teammate !== $team->leadAgentId && \count($working) >= $max) {
             return self::error($recovered . sprintf(
                 '%d teammates are already working in team "%s", its limit; wait for one to complete',
                 \count($working),

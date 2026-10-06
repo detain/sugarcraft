@@ -21,15 +21,21 @@ final readonly class AgentPoolConfig
      */
     public const MAX_CONCURRENT_SETTINGS_KEY = 'subagentMaxConcurrent';
 
-    /** {@see $maxConcurrent}'s default, named so the setting can cite it. */
-    public const DEFAULT_MAX_CONCURRENT = 5;
-
     public function __construct(
         /**
-         * Maximum number of agents allowed to run concurrently in the pool.
-         * Defaults to 5, matching Claude Code's default.
+         * Maximum number of agents allowed to run concurrently in the pool, or
+         * null for NO cap: a batch of ten `Task` calls forks ten children and
+         * nothing waits for a seat.
+         *
+         * Null is the default because a cap nobody asked for is still a cap.
+         * This field shipped at 5 (Claude Code's default), which throttled
+         * every session on the theory that fanning out costs the operator
+         * provider calls — but the fan-out is already the operator's choice,
+         * made per batch, so the bound belongs to whoever states it. Set
+         * `subagentMaxConcurrent` (or pass 0 there for the same verdict as
+         * leaving it unset) to have one.
          */
-        public int $maxConcurrent = self::DEFAULT_MAX_CONCURRENT,
+        public ?int $maxConcurrent = null,
 
         /**
          * Default timeout in seconds for each agent execution.
@@ -107,21 +113,28 @@ final readonly class AgentPoolConfig
      * config, so every pool a launch builds — and the engine's per-batch
      * `Task` cap — honours it.
      *
+     * A value below 1 means NO cap, the same verdict as leaving the key
+     * unset: `0` is how an operator spells "unlimited" in a settings file
+     * without deleting the line.
+     *
      * @param array<string, mixed> $config the merged config
      */
     public function withSettings(array $config): self
     {
         $maxConcurrent = \SugarCraft\Crush\Tools\ToolLimits::honoured($config, self::MAX_CONCURRENT_SETTINGS_KEY);
 
-        return \is_int($maxConcurrent) && $maxConcurrent !== $this->maxConcurrent
-            ? $this->withMaxConcurrent($maxConcurrent)
-            : $this;
+        if (!\is_int($maxConcurrent)) {
+            return $this;
+        }
+
+        return $this->withMaxConcurrent($maxConcurrent < 1 ? null : $maxConcurrent);
     }
 
     /**
-     * Create a new config with a different maxConcurrent value.
+     * Create a new config with a different maxConcurrent value. Null, the
+     * default, imposes no cap ({@see $maxConcurrent}).
      */
-    public function withMaxConcurrent(int $maxConcurrent): self
+    public function withMaxConcurrent(?int $maxConcurrent): self
     {
         return new self(
             maxConcurrent: $maxConcurrent,

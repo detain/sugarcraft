@@ -620,26 +620,27 @@ final class DocFigureProseDriftTest extends TestCase
                 $defaults[$parameter->getName()] = $parameter->getDefaultValue();
             }
         }
-        self::assertSame(5, $defaults['maxConcurrent'] ?? null, 'Workflow::$maxConcurrent default moved');
+        // array_key_exists, not `??`: the value the guard wants IS null, which
+        // the coalescing operator would read as a missing key.
+        self::assertArrayHasKey('maxConcurrent', $defaults, 'Workflow::$maxConcurrent no longer defaults at all');
+        self::assertNull($defaults['maxConcurrent'], 'Workflow::$maxConcurrent is no longer the opt-in width it shipped as');
         self::assertSame(3600, $defaults['timeout'] ?? null, 'Workflow::$timeout default moved');
 
         $workflowDoc = (string) $constructor->getDocComment();
         self::assertSame(
             1,
-            preg_match('/\(default (\d+)\)\.\s*\n\s*\*\s*@param int\s+\$timeout\s+Per-stage timeout in seconds \(default (\d+) = 1 hour\)/s', $workflowDoc, $m),
-            'the @param block no longer spells both defaults with the hour gloss',
+            preg_match('/null \(the default\) sets no cap\.\s*\n\s*\*\s*@param int\s+\$timeout\s+Per-stage timeout in seconds \(default (\d+) = 1 hour\)/s', $workflowDoc, $m),
+            'the @param block no longer spells the no-cap width next to the timeout default and its hour gloss',
         );
-        self::assertSame((int) $m[1], $defaults['maxConcurrent'], '@param default drifted from the signature');
-        self::assertSame((int) $m[2], $defaults['timeout'], '@param default drifted from the signature');
+        self::assertSame((int) $m[1], $defaults['timeout'], '@param default drifted from the signature');
 
         $workflowsDoc = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/WORKFLOWS.md');
         self::assertSame(
             1,
-            preg_match('/Defaults are `Workflow`\'s own: `maxConcurrent: (\d+)`, `timeout: (\d+)`,/', $workflowsDoc, $m),
-            'docs/WORKFLOWS.md no longer mirrors Workflow\'s own defaults',
+            preg_match('/Defaults are `Workflow`\'s own: `maxConcurrent` unset \(no cap[^)]*\), `timeout: (\d+)`,/', $workflowsDoc, $m),
+            'docs/WORKFLOWS.md no longer mirrors Workflow\'s own defaults — the width must read as unset/no cap',
         );
-        self::assertSame((int) $m[1], $defaults['maxConcurrent'], 'docs maxConcurrent figure drifted from the signature');
-        self::assertSame((int) $m[2], $defaults['timeout'], 'docs timeout figure drifted from the signature');
+        self::assertSame((int) $m[1], $defaults['timeout'], 'docs timeout figure drifted from the signature');
 
         // WF-1: the engine's per-task fallback is no longer a literal of its
         // own (the old 300, which no bound ever read) but the workflow's
@@ -1219,15 +1220,24 @@ final class DocFigureProseDriftTest extends TestCase
         $poolDoc = (string) $maxConcurrent->getDocComment();
         self::assertSame(
             1,
-            preg_match('/Defaults to (\d+), matching/', $poolDoc, $m),
-            'the pool-width docblock no longer states its default with the external provenance clause',
+            preg_match('/null for NO cap/', $poolDoc),
+            'the pool-width docblock no longer names null as the no-cap value the signature agrees to',
         );
-        self::assertSame(self::promotedParamDefault(AgentPoolConfig::class, 'maxConcurrent'), (int) $m[1], 'prose default drifted from the promoted parameter default');
+        // The live default is null, which promotedParamDefault() cannot carry
+        // (it casts to int, folding null to 0), so read the raw value here.
+        self::assertNull(self::rawPromotedDefault(AgentPoolConfig::class, 'maxConcurrent'), 'the promoted default is no longer the uncapped null the docblock describes');
         self::assertStringContainsString(
-            'matching Claude Code',
+            'Claude Code',
             $poolDoc,
             'the external-provenance label must stay labeled — an external premise may not be silently internalized into a pinned in-repo fact (E686)',
         );
+        // The 5 survives only as the figure this shipped AT, never as a default.
+        self::assertSame(
+            1,
+            preg_match('/shipped at (\d+) \(Claude Code\'s default\)/', $poolDoc, $m),
+            'the retired width must stay stated as history beside its external source',
+        );
+        self::assertNull(self::rawPromotedDefault(AgentPoolConfig::class, 'maxConcurrent'), 'the historical figure must not double as the live default');
     }
 
     /**
@@ -5811,6 +5821,22 @@ final class DocFigureProseDriftTest extends TestCase
         foreach ((new \ReflectionClass($class))->getConstructor()->getParameters() as $param) {
             if ($param->getName() === $parameter && $param->isDefaultValueAvailable()) {
                 return (int) $param->getDefaultValue();
+            }
+        }
+
+        self::fail("{$class}::__construct() no longer promotes \${$parameter} with a default — the prose default lost its referent");
+    }
+
+    /**
+     * The same read without the int cast, for a default whose whole meaning is
+     * null — `promotedParamDefault()` would fold it to 0, which is a number and
+     * so exactly the wrong verdict for an opt-in cap.
+     */
+    private static function rawPromotedDefault(string $class, string $parameter): mixed
+    {
+        foreach ((new \ReflectionClass($class))->getConstructor()->getParameters() as $param) {
+            if ($param->getName() === $parameter && $param->isDefaultValueAvailable()) {
+                return $param->getDefaultValue();
             }
         }
 

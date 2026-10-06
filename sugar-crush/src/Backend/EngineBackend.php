@@ -578,9 +578,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         /**
          * Step 0.16: how many delegated runs (`Task` members of one parallel
          * group) each turn's {@see Runtime} may have alive at once — the rest
-         * queue for a slot. Null takes
-         * {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}'s
-         * default (5). @see withMaxConcurrentDelegations()
+         * queue for a slot. Null — the default — caps nothing:
+         * {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent} is
+         * itself null. @see withMaxConcurrentDelegations()
          */
         private readonly ?int $maxConcurrentDelegations = null,
         /**
@@ -1204,8 +1204,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     /**
      * The same engine, capping each turn's concurrent delegated runs at
      * $slots (clamped to at least 1) — see {@see $maxConcurrentDelegations}.
-     * Null restores the {@see \SugarCraft\Crush\Agents\AgentPoolConfig}
-     * default.
+     * Null caps nothing — the {@see \SugarCraft\Crush\Agents\AgentPoolConfig}
+     * default is itself uncapped.
      */
     public function withMaxConcurrentDelegations(?int $slots): self
     {

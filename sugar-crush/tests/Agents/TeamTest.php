@@ -154,7 +154,7 @@ final class TeamTest extends TestCase
             createdAt: new \DateTimeImmutable(),
         );
 
-        $this->assertSame(5, $team->maxTeammates);
+        $this->assertNull($team->maxTeammates, 'a team nobody sized has no cap');
     }
 
     // -------------------------------------------------------------------------

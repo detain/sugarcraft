@@ -73,13 +73,21 @@ final class ParallelTaskFanOutCapTest extends TestCase
         );
     }
 
-    public function testTheDefaultCapIsTheAgentPoolConfigDefault(): void
+    /**
+     * The default imposes NO cap (AgentPoolConfig::$maxConcurrent is null), so
+     * a batch wider than the width this shipped at (5) runs its whole width at
+     * once — every member alive together, none queued.
+     */
+    public function testTheDefaultRunsTheWholeBatchAtOnce(): void
     {
-        $width = (new AgentPoolConfig())->maxConcurrent;
-        $names = array_map(static fn(int $i): string => "d{$i}", range(0, $width));
+        $this->assertNull((new AgentPoolConfig())->maxConcurrent, 'the shipped default caps nothing');
+
+        // Seven members: more than the retired default of 5, so a regression
+        // back to any finite cap would drop maxOverlap below this figure.
+        $names = array_map(static fn(int $i): string => "d{$i}", range(0, 6));
         $this->runGroup(null, array_map(fn(string $n): Tool => $this->member($n, 0.5, exempt: true), $names));
 
-        $this->assertSame($width, $this->maxOverlap($names));
+        $this->assertSame(count($names), $this->maxOverlap($names), 'an uncapped batch runs all seven at once');
     }
 
     public function testASecondsScaleSiblingIsNeverQueuedBehindADelegationSlot(): void

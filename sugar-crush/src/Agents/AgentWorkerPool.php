@@ -266,7 +266,16 @@ final class AgentWorkerPool
     private int $resultDirOwnerPid;
 
     public function __construct(
-        private readonly int $maxConcurrent = 5,
+        /**
+         * How many agents may be in flight at once, or null for no cap — the
+         * queue drains straight into `$active` and every agent is dispatched.
+         *
+         * Null is the default so a pool built without an opinion runs the batch
+         * its caller asked for; see
+         * {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}, which
+         * this mirrors and which `subagentMaxConcurrent` overrides.
+         */
+        private readonly ?int $maxConcurrent = null,
         ?ExecutorInterface $executor = null,
         /**
          * The provider spec handed to the DEFAULT executor this pool builds.
@@ -564,8 +573,10 @@ final class AgentWorkerPool
         $executor = $this->executor ?? $this->createDefaultExecutor();
 
         while ($this->queue !== [] || $this->active !== []) {
-            // Fill up to maxConcurrent slots
-            while (count($this->active) < $this->maxConcurrent && $this->queue !== []) {
+            // Fill up to maxConcurrent slots; a null cap fills all of them.
+            while ($this->queue !== []
+                && ($this->maxConcurrent === null || count($this->active) < $this->maxConcurrent)
+            ) {
                 $agent = array_shift($this->queue);
                 if ($agent === null) {
                     break;
@@ -1189,9 +1200,9 @@ final class AgentWorkerPool
     }
 
     /**
-     * Returns the configured concurrency limit.
+     * Returns the configured concurrency limit, or null when the pool has none.
      */
-    public function getMaxConcurrent(): int
+    public function getMaxConcurrent(): ?int
     {
         return $this->maxConcurrent;
     }
@@ -2396,9 +2407,9 @@ final class AgentWorkerPool
             . 'hits the same failure, runs sequentially in the parent instead of concurrently. '
             . 'Unlike a build without pcntl this is a runtime resource limit and may clear on '
             . 'its own; if it does not, raise the process limit (RLIMIT_NPROC) or lower '
-            . 'maxConcurrent, currently %d.',
+            . 'maxConcurrent, currently %s.',
             $errno === 0 ? 'no errno was reported' : pcntl_strerror($errno) . ' (errno ' . $errno . ')',
-            $this->maxConcurrent,
+            $this->maxConcurrent === null ? 'unlimited' : (string) $this->maxConcurrent,
         ));
     }
 

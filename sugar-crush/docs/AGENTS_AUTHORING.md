@@ -452,11 +452,13 @@ one":
   never widen what the named agent declared. A sub-agent with no `tools:`
   list inherits `Task` and can delegate in turn, down to three levels below
   the session's agent (`TaskTool::MAX_DELEGATION_DEPTH`, the
-  `subagentMaxDepth` setting); one session runs at most eight delegated runs
-  at once across every level and process (`TaskTool::MAX_CONCURRENT_AGENTS`,
-  the `subagentMaxActive` setting), and the call past that is refused, not
-  queued. One batch's `Task` calls run at most five at a time
-  (`AgentPoolConfig::$maxConcurrent`, the `subagentMaxConcurrent` setting).
+  `subagentMaxDepth` setting); one session runs every delegated run it is
+  asked for across every level and process unless `subagentMaxActive` names a
+  seat count (`TaskTool::MAX_CONCURRENT_AGENTS`, null by default), and the call
+  past a cap you set is refused, not
+  queued. One batch's `Task` calls likewise run at most
+  `AgentPoolConfig::$maxConcurrent` (the `subagentMaxConcurrent` setting) at a
+  time when that is set — null by default, so a batch runs its whole width.
   All three are user-tier settings ([`SETTINGS.md`](SETTINGS.md)).
 - **`/agents` is inspect-only.** `AgentsCommand::execute()` lists the agents
   currently *working* (normally none) and, with a name, shows one agent's

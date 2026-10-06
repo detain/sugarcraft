@@ -357,7 +357,8 @@ final class AgentManager
      * a terminal state.
      *
      * Pending counts as working: a sub-agent queued behind
-     * {@see AgentWorkerPool}'s concurrency limit is work the user asked for
+     * {@see AgentWorkerPool}'s concurrency limit — when a cap is set; the
+     * limit is opt-in — is work the user asked for
      * and is waiting on, and reporting it as idle would make a saturated pool
      * look like an empty one.
      */

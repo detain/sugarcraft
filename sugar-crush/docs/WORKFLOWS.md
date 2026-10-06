@@ -61,7 +61,7 @@ description: >                   # optional
   Review the change, fan out fixers, then verify.
 
 config:                          # optional
-  maxConcurrent: 3               # positive int; bounds a parallel stage
+  maxConcurrent: 3               # whole number >= 1, or 0 for no cap
   timeout: 900                   # positive int; per-stage seconds
 
 stages:                          # a LIST, never a map
@@ -82,7 +82,8 @@ stages:                          # a LIST, never a map
         retries: 0               # per agent in a parallel stage
 ```
 
-Defaults are `Workflow`'s own: `maxConcurrent: 5`, `timeout: 3600`,
+Defaults are `Workflow`'s own: `maxConcurrent` unset (no cap — every task of a
+parallel stage is dispatched at once), `timeout: 3600`,
 `stopOnFirstFailure: false`.
 
 ### `timeout` is a per-stage wall-clock budget
@@ -97,8 +98,8 @@ any other failed stage, so the run stops there.
   each step gets what the steps before it left, not a fresh allowance. A step
   reached with nothing left is settled `timed_out` without being started.
 - A **parallel** stage's agents all run against the same budget, queue time
-  included: an agent still waiting for one of the `maxConcurrent` slots when the
-  budget runs out never starts.
+  included: when `maxConcurrent` bounds the stage, an agent still waiting for
+  one of those slots when the budget runs out never starts.
 - A PHP task's own `timeout()` (below) bounds that one agent from its dispatch;
   the stage's budget still applies, and whichever expires first wins.
 
@@ -166,7 +167,8 @@ of these rather than loading a workflow that quietly does less:
   thrown away, so the author's `first:` meant nothing.
 - **two stages with the same name** — stage names are how `{{name.output}}`
   interpolates, so duplicates make every reference ambiguous.
-- `config:` not a map, or `maxConcurrent`/`timeout` not a positive integer.
+- `config:` not a map; `maxConcurrent` not a whole number >= 0 (0 means no cap);
+  `timeout` not a positive integer.
 - `retries:` not a whole number of at least 0 (`retries: -1`, `retries: lots`).
 - `parallel: true` with `agents:` that is not a list.
 - any key present but of the wrong type. The check is `array_key_exists()`, not

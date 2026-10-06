@@ -44,7 +44,7 @@ final class WorkflowTest extends TestCase
         $this->assertSame('Simple Workflow', $wf->name);
         $this->assertSame('A minimal workflow.', $wf->description);
         $this->assertSame([], $wf->stages);
-        $this->assertSame(5, $wf->maxConcurrent);
+        $this->assertNull($wf->maxConcurrent, 'the DTO default matches the no-cap default');
         $this->assertSame(3600, $wf->timeout);
         $this->assertSame(WorkflowStatus::Draft, $wf->workflowStatus);
     }

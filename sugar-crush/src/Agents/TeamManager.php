@@ -400,7 +400,13 @@ final class TeamManager
             $configs[$teamId] = $config === null
                 ? new TeamConfig()
                 : new TeamConfig(
-                    maxTeammates: (int) ($config['maxTeammates'] ?? 5),
+                    // Fail-open by verdict: a non-int stored maxTeammates (a quoted
+                    // "5" from a hand-edited registry) becomes no-cap where the old
+                    // `(int)` cast honoured it — the registry is app-written, so
+                    // anything not a clean int is read as "no cap" deliberately.
+                    maxTeammates: isset($config['maxTeammates']) && is_int($config['maxTeammates'])
+                        ? $config['maxTeammates']
+                        : null,
                     defaultTimeoutSeconds: (int) ($config['defaultTimeoutSeconds'] ?? 600),
                     allowPeerMessaging: (bool) ($config['allowPeerMessaging'] ?? true),
                     autoAssignTasks: (bool) ($config['autoAssignTasks'] ?? true),

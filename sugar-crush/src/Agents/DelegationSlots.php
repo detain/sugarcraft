@@ -24,16 +24,15 @@ use SugarCraft\Crush\Support\PrivateDir;
  * with a reason the model reads, as Claude Code refuses past its limit. Waiting
  * would deadlock: a parent holds its seat while it waits on the children it
  * delegated, so a full tree of waiting parents could never be served (Zed's
- * note on rate-limit permits held across tool calls is the same trap).
+ * note on rate-limit permits held across tool calls is the same trap). Because
+ * a refusal is what a full tree costs, the cap is opt-in: $max null (or below
+ * 1) enforces nothing.
  *
  * Keyed by $scope — the session the runs belong to — under a per-uid 0700
  * directory, so two sessions never share seats and a stranger cannot hold one.
  */
 final class DelegationSlots
 {
-    /** The default number of seats: OpenClaw's 8 concurrent children. */
-    public const DEFAULT_MAX_CONCURRENT = 8;
-
     /** Name stem of the per-uid directory under the temp root. */
     public const DIR_PREFIX = 'sugar_crush_slots_';
 
@@ -46,17 +45,17 @@ final class DelegationSlots
 
     /**
      * Take a free seat of $scope's $max, or null when all are taken. Also
-     * null — no cap enforced — when the slot directory cannot be made
-     * private: a cap that cannot be kept safely is not kept at all, rather
-     * than turning every delegation into a refusal.
+     * null — no cap enforced — when $max is null or below 1, and when the slot
+     * directory cannot be made private: a cap that cannot be kept safely is not
+     * kept at all, rather than turning every delegation into a refusal.
      *
      * @param string|null $root the temp root; null is the system temp dir
      * @return DelegationSlot|false|null the seat; false when every seat is
-     *         taken; null when no cap can be enforced here
+     *         taken; null when no cap is enforced here
      */
-    public static function acquire(string $scope, int $max, ?string $root = null): DelegationSlot|false|null
+    public static function acquire(string $scope, ?int $max, ?string $root = null): DelegationSlot|false|null
     {
-        if ($max < 1 || !\function_exists('posix_getuid')) {
+        if ($max === null || $max < 1 || !\function_exists('posix_getuid')) {
             return null;
         }
 
@@ -99,9 +98,14 @@ final class DelegationSlots
     /**
      * How many of $scope's first $max seats are held right now — a probe for
      * tests and diagnostics; it takes and drops each free seat to find out.
+     * A null $max caps nothing, so nothing is held.
      */
-    public static function held(string $scope, int $max, ?string $root = null): int
+    public static function held(string $scope, ?int $max, ?string $root = null): int
     {
+        if ($max === null) {
+            return 0;
+        }
+
         $taken = [];
         while (count($taken) < $max && ($slot = self::acquire($scope, $max, $root)) instanceof DelegationSlot) {
             $taken[] = $slot;

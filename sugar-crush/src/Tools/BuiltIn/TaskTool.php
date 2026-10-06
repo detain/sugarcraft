@@ -101,14 +101,15 @@ use SugarCraft\Crush\Usage;
  * turn ({@see AgentManager::systemPromptFor()}), and `maxTurns` as the step
  * cap. The pool path stays as the unbound fallback.
  *
- * DELEGATION NESTS, TO A FIXED DEPTH AND A FIXED WIDTH (roadmap 4.7-3). A
+ * DELEGATION NESTS, TO A FIXED DEPTH AND AN OPT-IN WIDTH (roadmap 4.7-3). A
  * sub-agent that inherits the whole tool set keeps `Task`, so it can delegate
  * in turn — down to {@see MAX_DELEGATION_DEPTH} levels below the session's own
  * agent (Claude Code's default of 3); the agent at the last level gets no
  * `Task` at all, as Zed and OpenClaw withhold their spawn tool from leaves.
  * Across every level, every parallel member and every background agent, one
- * session runs at most {@see MAX_CONCURRENT_AGENTS} delegated runs at once
- * (OpenClaw's 8) — a seat in {@see \SugarCraft\Crush\Agents\DelegationSlots}
+ * session may run at most {@see MAX_CONCURRENT_AGENTS} delegated runs at once
+ * when that cap is set (null, the default, sets none) — a seat in
+ * {@see \SugarCraft\Crush\Agents\DelegationSlots}
  * held for the run's life — and a run that finds none free is refused, never
  * queued, since a parent waiting on its children already holds a seat. A
  * nested run's frames reach the Agents pane through the delegating run's own
@@ -259,9 +260,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
     /**
      * Delegated runs one session may have going at once, every level, member
-     * and background agent counted (roadmap 4.7-3) — OpenClaw's 8.
+     * and background agent counted (roadmap 4.7-3), or null for NO cap.
+     *
+     * Null is the default: a run that finds no seat free is refused rather
+     * than queued ({@see \SugarCraft\Crush\Agents\DelegationSlots}), so a cap
+     * nobody asked for turns a wide batch into an error the model has to work
+     * around. Set `subagentMaxActive` to have one — OpenClaw's 8 was the number
+     * this shipped at.
      */
-    public const MAX_CONCURRENT_AGENTS = \SugarCraft\Crush\Agents\DelegationSlots::DEFAULT_MAX_CONCURRENT;
+    public const MAX_CONCURRENT_AGENTS = null;
 
     /**
      * @param \Closure(): void|null $heartbeat see {@see DelegatesToEngine}
@@ -284,7 +291,8 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      *        0 for the session's own agent, 1 for a sub-agent it delegated to
      *        (roadmap 4.7-3, {@see nestedFor()})
      * @param int $maxDelegationDepth the deepest level a delegated run may be
-     * @param int $maxConcurrentAgents the session's seats ({@see \SugarCraft\Crush\Agents\DelegationSlots})
+     * @param ?int $maxConcurrentAgents the session's seats, or null for no cap
+     *        ({@see \SugarCraft\Crush\Agents\DelegationSlots})
      * @param string|null $parentAgentId the delegating run's id, when nested
      * @param string|null $delegationScope the session the seats are counted
      *        for; null is the engine's session id
@@ -311,7 +319,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         private string $backgroundDirectory = '',
         private int $delegationDepth = 0,
         private int $maxDelegationDepth = self::MAX_DELEGATION_DEPTH,
-        private int $maxConcurrentAgents = self::MAX_CONCURRENT_AGENTS,
+        private ?int $maxConcurrentAgents = self::MAX_CONCURRENT_AGENTS,
         private ?string $parentAgentId = null,
         private ?string $delegationScope = null,
         private ?string $slotRoot = null,
@@ -378,13 +386,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     /**
      * The same tool under other nesting caps (roadmap 4.7-3): delegated runs
      * at most $maxDepth levels deep, at most $maxConcurrent of them at once in
-     * the session. The settings rows that set them are N-P4f's.
+     * the session. A null $maxConcurrent caps nothing. The settings rows that
+     * set them are N-P4f's.
      *
-     * @throws \InvalidArgumentException for a cap below 1
+     * @throws \InvalidArgumentException for a depth cap below 1
      */
-    public function withDelegationLimits(int $maxDepth, int $maxConcurrent): self
+    public function withDelegationLimits(int $maxDepth, ?int $maxConcurrent): self
     {
-        if ($maxDepth < 1 || $maxConcurrent < 1) {
+        if ($maxDepth < 1 || ($maxConcurrent !== null && $maxConcurrent < 1)) {
             throw new \InvalidArgumentException('Delegation caps must be at least 1.');
         }
 
@@ -1163,7 +1172,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // never read again: it is a local so that it lives exactly as long
         // as this call.
         $scope = $this->delegationScope ?? $engine->sessionId();
-        $seat = $scope === null ? null : \SugarCraft\Crush\Agents\DelegationSlots::acquire($scope, $this->maxConcurrentAgents, $this->slotRoot);
+        $seat = $scope === null || $this->maxConcurrentAgents === null
+            ? null
+            : \SugarCraft\Crush\Agents\DelegationSlots::acquire($scope, $this->maxConcurrentAgents, $this->slotRoot);
         if ($seat === false) {
             $why = sprintf(
                 '%d sub-agents are already running in this session, which is its limit (background agents and'

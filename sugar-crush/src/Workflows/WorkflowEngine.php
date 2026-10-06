@@ -1808,13 +1808,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param array $stage          Stage array from Workflow::$stages.
      * @param array $context        Current workflow context for interpolation.
      * @param list<array{key: string, result: AgentResult}> $dispatched Out: each step's agent, as it settles.
-     * @param int   $maxConcurrent Maximum agents that may run concurrently.
+     * @param ?int  $maxConcurrent The workflow's concurrency width, carried for
+     *                             call-site symmetry: a pipeline's steps run one
+     *                             at a time by definition, so nothing here reads
+     *                             it (null, the workflow default, caps nothing
+     *                             wherever it is read).
      * @param int   $stageTimeout  Workflow::$timeout — the budget for the whole
      *                             pipeline: each step gets what the steps
      *                             before it left, not a fresh allowance.
      * @return StageResult
      */
-    private function executePipelineStage(array $stage, array $context, array &$dispatched, int $maxConcurrent, int $stageTimeout): StageResult
+    private function executePipelineStage(array $stage, array $context, array &$dispatched, ?int $maxConcurrent, int $stageTimeout): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -2159,8 +2163,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * Execute a 'parallel' type stage and return its StageResult.
      *
      * Builds SubAgents from all tasks in the stage, then runs them concurrently
-     * via AgentWorkerPool::executeAll(). Respects the workflow's maxConcurrent
-     * setting to control how many agents run at once.
+     * via AgentWorkerPool::executeAll(). The workflow's maxConcurrent setting
+     * controls how many agents run at once; null — the default — runs them all.
      *
      * This method is part of the parallel() primitive implementation which spans
      * five files:

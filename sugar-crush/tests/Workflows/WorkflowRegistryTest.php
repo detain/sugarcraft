@@ -941,13 +941,16 @@ PHP);
     }
 
     /**
-     * `maxConcurrent: 0` is the compounding case: AgentWorkerPool's dispatch
-     * loop is `while (count($active) < $max)`, which at 0 never runs, so
-     * executeAll() yields nothing and executeParallelStage() maps "no failures
-     * among zero results" onto Completed — a parallel stage reporting success
-     * having executed nothing at all.
+     * `maxConcurrent: 0` is the author's spelling of "no cap", the same verdict
+     * `subagentMaxConcurrent` and `max_teammates` give for 0. It reaches the
+     * pool as null, never as the literal 0: AgentWorkerPool's dispatch loop is
+     * `while (count($active) < $max)`, which at 0 never runs, so executeAll()
+     * yields nothing and executeParallelStage() maps "no failures among zero
+     * results" onto Completed — a parallel stage reporting success having
+     * executed nothing at all. A negative names no width at all, so it is still
+     * refused rather than quietly clamped to a serial run.
      */
-    public function testAZeroMaxConcurrentIsRejected(): void
+    public function testAZeroMaxConcurrentMeansNoCap(): void
     {
         [$userDir] = $this->twoTierDirs();
         file_put_contents(
@@ -955,12 +958,39 @@ PHP);
             "name: zero-concurrency\nstages: []\nconfig:\n  maxConcurrent: 0\n",
         );
 
+        $workflow = (new WorkflowRegistry($userDir))->load('zero-concurrency');
+
+        $this->assertNull($workflow->maxConcurrent);
+    }
+
+    public function testANegativeMaxConcurrentIsRejected(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+        file_put_contents(
+            $userDir . '/negative-concurrency.yaml',
+            "name: negative-concurrency\nstages: []\nconfig:\n  maxConcurrent: -1\n",
+        );
+
         $registry = new WorkflowRegistry($userDir);
 
         $this->expectException(WorkflowLoadException::class);
-        $this->expectExceptionMessage('"config.maxConcurrent" must be at least 1, got 0');
+        $this->expectExceptionMessage('"config.maxConcurrent" must be 0 (no cap) or at least 1, got -1');
 
-        $registry->load('zero-concurrency');
+        $registry->load('negative-concurrency');
+    }
+
+    /** Omitting the key caps nothing either — the width is opt-in. */
+    public function testAnAbsentMaxConcurrentMeansNoCap(): void
+    {
+        [$userDir] = $this->twoTierDirs();
+        file_put_contents(
+            $userDir . '/no-concurrency.yaml',
+            "name: no-concurrency\nstages: []\n",
+        );
+
+        $workflow = (new WorkflowRegistry($userDir))->load('no-concurrency');
+
+        $this->assertNull($workflow->maxConcurrent);
     }
 
     public function testAConfigThatIsNotAMapIsRejected(): void

@@ -768,8 +768,10 @@ final class Runtime
      *                                group may have alive at once; the rest
      *                                queue in {@see executeConcurrently()}.
      *                                Null — the default — takes
-     *                                {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}'s
-     *                                default (5); values below 1 clamp to 1.
+     *                                {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent},
+     *                                which is itself null: no cap. A value
+     *                                below 1 clamps to 1; null is the only
+     *                                way to ask for no cap.
      * @param ?\SugarCraft\Crush\Support\ToolCallIdAllocator $toolCallIds step 0.2:
      *                                the per-turn id ledger every step's tool
      *                                calls are rewritten through before they
@@ -2199,15 +2201,17 @@ final class Runtime
      * process limit returns -1 and that call degrades to running in-process,
      * right where the fan-out loop stands.
      *
-     * DELEGATED RUNS ARE CAPPED (step 0.16). That argument does not apply to an
-     * {@see ExemptFromParallelDeadline} member (a `Task`): the deadline never
+     * DELEGATED RUNS MAY BE CAPPED (step 0.16). That argument does not apply to
+     * an {@see ExemptFromParallelDeadline} member (a `Task`): the deadline never
      * kills one, so waiting in a queue costs it nothing but time. What it does
      * cost to run them all at once is real — every member is a whole agentic
      * run billing the provider in parallel, and a model that asks for twenty
-     * Tasks in one step would otherwise get twenty concurrent sub-agents. So at
-     * most {@see $maxConcurrentDelegations} of them run at a time (default
-     * {@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}, 5); the
-     * rest wait queued in phase 3 and are forked, in provider order, as running
+     * Tasks in one step gets twenty concurrent sub-agents. That fan-out is the
+     * point of the batch, so nothing caps it unless the session says so: at
+     * most {@see $maxConcurrentDelegations} run at a time when that is set
+     * ({@see \SugarCraft\Crush\Agents\AgentPoolConfig::$maxConcurrent}, which
+     * `subagentMaxConcurrent` overrides, defaults to no cap); the rest wait
+     * queued in phase 3 and are forked, in provider order, as running
      * ones exit. Non-delegated siblings are never queued behind them. An
      * operator who hits trouble with the rest has the whole-feature switch
      * (see the constructor's $parallelToolCalls).
@@ -2396,11 +2400,14 @@ final class Runtime
 
         try {
             // @region fork
-            // DELEGATION SLOTS (step 0.16). At most this many delegated runs
-            // (ExemptFromParallelDeadline members) are alive at once; the rest
-            // are marked `queued` here and forked by phase 3 as slots free.
-            // Seconds-scale siblings never wait on a slot — see the docblock.
-            $delegationSlots = max(1, $this->maxConcurrentDelegations ?? (new \SugarCraft\Crush\Agents\AgentPoolConfig())->maxConcurrent);
+            // DELEGATION SLOTS (step 0.16). When a cap is set, at most that
+            // many delegated runs (ExemptFromParallelDeadline members) are
+            // alive at once and the rest are marked `queued` here and forked by
+            // phase 3 as slots free. Seconds-scale siblings never wait on a
+            // slot — see the docblock. A null cap forks the whole batch now.
+            $delegationSlots = $this->maxConcurrentDelegations === null
+                ? null
+                : max(1, $this->maxConcurrentDelegations);
             $runningDelegations = static function (array $jobs): int {
                 $running = 0;
                 foreach ($jobs as $job) {
@@ -2515,7 +2522,7 @@ final class Runtime
                     continue;
                 }
 
-                if ($job['tool'] instanceof ExemptFromParallelDeadline && $runningDelegations($jobs) >= $delegationSlots) {
+                if ($job['tool'] instanceof ExemptFromParallelDeadline && $delegationSlots !== null && $runningDelegations($jobs) >= $delegationSlots) {
                     $jobs[$index]['queued'] = true;
                     // Its ToolStarted went out at gate time, so without this
                     // the member reads as a run in progress while it waits
@@ -2658,7 +2665,7 @@ final class Runtime
                     if (!($job['queued'] ?? false)) {
                         continue;
                     }
-                    if ($runningDelegations($jobs) >= $delegationSlots) {
+                    if ($delegationSlots !== null && $runningDelegations($jobs) >= $delegationSlots) {
                         break;
                     }
                     $jobs[$index]['queued'] = false;

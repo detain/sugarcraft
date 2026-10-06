@@ -19,8 +19,9 @@ final class AgentPoolConfigTest extends TestCase
 
     public function testDefaultMaxConcurrent(): void
     {
+        // Null, not a number: a fan-out the operator never sized is not capped.
         $config = new AgentPoolConfig();
-        $this->assertSame(5, $config->maxConcurrent);
+        $this->assertNull($config->maxConcurrent);
     }
 
     public function testDefaultTimeoutSeconds(): void

@@ -83,14 +83,16 @@ questions are relayed through the turn one at a time.
 ### Parallel and nested runs
 
 Several `Task` calls in one assistant message run **in parallel**, each in its
-own forked process (with `ext-pcntl`), at most `subagentMaxConcurrent` (5) at
-once; the rest wait on a `◌ queued:` row.
+own forked process (with `ext-pcntl`). Nothing caps the width unless you set
+`subagentMaxConcurrent` (0 or unset — the default — means no cap); with a cap,
+the calls past it wait on a `◌ queued:` row.
 
 **Delegation nests.** A sub-agent whose preset lists no `tools:` inherits
 `Task` too, so it can delegate in turn, up to `subagentMaxDepth` (3) levels
 below your own agent; the agent at the last level gets no `Task`. A session
-runs at most `subagentMaxActive` (8) delegated runs at once, counting every
-level, parallel member and background agent; the call past that is refused at
+runs every delegated run it is asked for, counting every level, parallel member
+and background agent, unless you set `subagentMaxActive` to a seat count — the
+default is no cap. Past a cap you set, the call is refused at
 once with a reason the model reads ("do not retry this call right away"),
 never queued, because a parent waiting on its children already holds a seat.
 
@@ -153,7 +155,8 @@ teammates and the `lead`.
   `release` a compare-and-swap: it is refused if anyone wrote the task since.
 - A task claimed by a session that has died goes back to pending at the next
   `list` or `claim`.
-- A team takes at most `max_teammates` working at once (default 5).
+- A team takes at most `max_teammates` working at once; omit it (or pass `0`)
+  and the team has no cap.
 - `auto_assign: false` on `create` makes every claim name its task.
 - A claim held past the team's `timeout_seconds` (default 600; `0` never) is
   marked overdue on `list`, and the lead may `release` it.

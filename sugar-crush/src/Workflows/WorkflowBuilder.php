@@ -25,7 +25,7 @@ final class WorkflowBuilder
     private string $description = '';
     /** @var array<int, array{name: string, type: string, tasks?: array<int, mixed>}> */
     private array $stages = [];
-    private int $maxConcurrent = 5;
+    private ?int $maxConcurrent = null;
     private int $timeout = 3600;
     private bool $stopOnFirstFailure = false;
 
@@ -157,9 +157,11 @@ final class WorkflowBuilder
     }
 
     /**
-     * Set the maximum number of stages that may run concurrently.
+     * Set the maximum number of stages that may run concurrently. Null, the
+     * default, sets no cap: every task of a parallel stage is dispatched at
+     * once.
      */
-    public function maxConcurrent(int $n): self
+    public function maxConcurrent(?int $n): self
     {
         $this->maxConcurrent = $n;
         return $this;

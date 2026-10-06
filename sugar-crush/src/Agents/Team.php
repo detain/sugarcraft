@@ -29,11 +29,12 @@ final class Team
         public readonly string $leadAgentId,
         public readonly \DateTimeImmutable $createdAt,
         /**
-         * Maximum number of teammates allowed in this team (excluding the lead).
-         * Mirrors TeamConfig::$maxTeammates — passed through by TeamManager at
-         * construction time so addTeammate() can enforce the cap directly.
+         * Maximum number of teammates allowed in this team (excluding the lead),
+         * or null for no cap. Mirrors TeamConfig::$maxTeammates — passed through
+         * by TeamManager at construction time so addTeammate() can enforce the
+         * cap directly.
          */
-        public readonly int $maxTeammates = 5,
+        public readonly ?int $maxTeammates = null,
         /**
          * The chain the task list raises `TaskCreated`, `TaskCompleted` and
          * `TeammateIdle` through (roadmap 4.6-2) — the launch's, handed down
@@ -66,10 +67,10 @@ final class Team
     /**
      * Add a teammate to this team.
      *
-     * Enforces the $maxTeammates cap for genuinely new teammates; re-adding a
-     * teammate that already occupies a slot (e.g. an immutable withXxx()
-     * replacement of the same id) is always allowed since it does not grow
-     * the team.
+     * Enforces the $maxTeammates cap — when there is one — for genuinely new
+     * teammates; re-adding a teammate that already occupies a slot (e.g. an
+     * immutable withXxx() replacement of the same id) is always allowed since
+     * it does not grow the team.
      *
      * @throws \InvalidArgumentException When the teammate's teamId does not match this team's id.
      * @throws \RuntimeException When the team is already at its maxTeammates capacity.
@@ -85,7 +86,7 @@ final class Team
         }
 
         $isNewSlot = !isset($this->teammates[$teammate->id]);
-        if ($isNewSlot && count($this->teammates) >= $this->maxTeammates) {
+        if ($isNewSlot && $this->maxTeammates !== null && count($this->teammates) >= $this->maxTeammates) {
             throw new \RuntimeException(sprintf(
                 'Team "%s" has reached its maximum of %d teammates.',
                 $this->id,

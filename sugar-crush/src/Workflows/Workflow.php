@@ -19,7 +19,7 @@ final readonly class Workflow
      * @param string                $name                Human-readable workflow name.
      * @param string                $description         Brief description of what the workflow does.
      * @param array                 $stages              Ordered list of raw stage-task arrays built by WorkflowBuilder.
-     * @param int                   $maxConcurrent       Maximum number of stages that may run concurrently (default 5).
+     * @param ?int                  $maxConcurrent       Maximum number of stages that may run concurrently; null (the default) sets no cap.
      * @param int                   $timeout             Per-stage timeout in seconds (default 3600 = 1 hour).
      * @param WorkflowStatus        $workflowStatus      Current lifecycle status (default Draft).
      * @param bool                  $stopOnFirstFailure When true, a parallel stage stops on first agent failure.
@@ -28,7 +28,7 @@ final readonly class Workflow
         public string         $name,
         public string         $description,
         public array          $stages = [],
-        public int            $maxConcurrent = 5,
+        public ?int           $maxConcurrent = null,
         public int            $timeout = 3600,
         public WorkflowStatus $workflowStatus = WorkflowStatus::Draft,
         public bool           $stopOnFirstFailure = false,

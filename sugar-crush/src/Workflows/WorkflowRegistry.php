@@ -1000,7 +1000,8 @@ final class WorkflowRegistry
      * a parallel agent's `type`/`name`/`prompt`) are strings if present;
      * `tools` is a list of strings; `retries` (on a stage or a parallel agent)
      * is a whole number >= 0; a parallel stage's `agents` is a list of maps;
-     * `config` is a map whose `maxConcurrent`/`timeout` are whole numbers >= 1.
+     * `config` is a map whose `maxConcurrent` is a whole number >= 0 (0 = no
+     * cap) and whose `timeout` is a whole number >= 1.
      *
      * "Is a list" means `array_is_list()`. It used to mean `is_array()`, which
      * is a different claim: `stages: {a: {...}}`, `tools: {a: Read}` and a
@@ -1246,7 +1247,7 @@ final class WorkflowRegistry
             // wrote, and isset() reported it absent so it silently took the
             // default the docblock says it must be a whole number instead of.
             if (array_key_exists('maxConcurrent', $data['config'])) {
-                $builder = $builder->maxConcurrent($this->requirePositiveInt(
+                $builder = $builder->maxConcurrent($this->requireWidthOrUnlimited(
                     $data['config']['maxConcurrent'],
                     'config.maxConcurrent',
                     $yamlPath,
@@ -1310,11 +1311,13 @@ final class WorkflowRegistry
      * A `config:` value as a count of things, at least 1.
      *
      * The `(int)` casts this replaces were the quietest defect in the loader.
-     * `maxConcurrent: [1,2]` cast to 1, `timeout: abc` cast to 0, and
-     * `maxConcurrent: 0` was taken literally — which
-     * {@see \SugarCraft\Crush\Agents\AgentWorkerPool::executeAll()} turns into a
-     * `while (count($active) < 0)` that never runs, so it yields no results at
-     * all, and {@see WorkflowEngine::executeParallelStage()} maps "no failures
+     * `maxConcurrent: [1,2]` cast to 1 and `timeout: abc` cast to 0; and in the
+     * pre-no-cap era, when `maxConcurrent` still routed through this validator
+     * rather than {@see self::requireWidthOrUnlimited()}, `maxConcurrent: -1`
+     * was taken literally — which
+     * {@see \SugarCraft\Crush\Agents\AgentWorkerPool::executeAll()}'s
+     * `while (count($active) < $maxConcurrent)` never runs against, so it yields
+     * no results at all, and {@see WorkflowEngine::executeParallelStage()} maps "no failures
      * among zero results" onto Completed. A repo-shipped `config: {maxConcurrent:
      * 0}` plus one parallel stage therefore reported a stage complete having
      * executed nothing. Refusing the value at load time is the only place that
@@ -1349,6 +1352,48 @@ final class WorkflowRegistry
         }
 
         return $int;
+    }
+
+    /**
+     * A `config.maxConcurrent` value as a width: a whole number >= 1, or 0 for
+     * NO cap (null).
+     *
+     * `requirePositiveInt()` cannot serve here. Its whole point is that a
+     * literal 0 reaching {@see \SugarCraft\Crush\Agents\AgentWorkerPool} means
+     * "dispatch nothing", which a parallel stage reports as Completed — a
+     * silent no-op. Now that the pool's no-cap value is null, 0 is the spelling
+     * an author reaches for when they mean unlimited (it is what
+     * `subagentMaxConcurrent` and `max_teammates` accept for the same verdict),
+     * so the loader translates it instead of refusing it. A negative number is
+     * still refused: it names no width, and clamping it to 1 would run a stage
+     * the author asked to stop.
+     *
+     * @return ?int the width, or null when the author asked for no cap
+     *
+     * @throws WorkflowLoadException When the value is not a whole number >= 0.
+     */
+    private function requireWidthOrUnlimited(mixed $value, string $key, string $yamlPath): ?int
+    {
+        $int = null;
+        if (is_int($value)) {
+            $int = $value;
+        } elseif (is_string($value) && preg_match('/^-?\d+$/', trim($value)) === 1) {
+            $int = (int) trim($value);
+        }
+
+        if ($int === null) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} \"{$key}\" must be a whole number, got " . get_debug_type($value)
+            );
+        }
+
+        if ($int < 0) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} \"{$key}\" must be 0 (no cap) or at least 1, got {$int}"
+            );
+        }
+
+        return $int === 0 ? null : $int;
     }
 
     /**

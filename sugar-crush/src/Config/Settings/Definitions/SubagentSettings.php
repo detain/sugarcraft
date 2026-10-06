@@ -58,13 +58,14 @@ final class SubagentSettings implements SettingDefinitionSet
                 ->withHelp('Step cap for a sub-agent — a `Task` delegation, a workflow stage or an `executeAgents` run — whose preset declares no `maxTurns`.')
                 ->withReaderSymbol(EngineExecutor::class . '::defaultMaxTurns')
                 ->withReadBy('`TaskTool` (engine path) and `EngineExecutor::execute()` → `EngineExecutor::defaultMaxTurns()`, as each run starts'),
-            SettingDefinition::new(AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY, SettingType::Int, AgentPoolConfig::DEFAULT_MAX_CONCURRENT)
+            SettingDefinition::new(AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY, SettingType::Int)
                 ->withCategory(SettingCategory::Subagents)
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
-                ->withRange(1, 16)
+                ->withRange(0)
                 ->withLabel(Lang::t('settings.subagentMaxConcurrent.label'))
-                ->withHelp('`Task` calls of one batch that run at once (the rest wait for a free slot), and the width of every agent pool.')
+                ->withHelp('`Task` calls of one batch that run at once (the rest wait for a free slot), and the width of every agent pool. Unset — the default — or 0 sets no cap.')
+                ->withDefaultText('no cap')
                 ->withReaderSymbol(AgentPoolConfig::class . '::withSettings')
                 ->withReadBy('`Bootstrap::agentPoolConfig()` → `AgentPoolConfig::withSettings()`'),
             SettingDefinition::new(ToolLimits::SUBAGENT_MAX_DEPTH_KEY, SettingType::Int, TaskTool::MAX_DELEGATION_DEPTH)
@@ -77,14 +78,15 @@ final class SubagentSettings implements SettingDefinitionSet
                 ->withHelp('Levels below the session a delegated run may be; a run at the last level gets no `Task`. 1 lets sub-agents delegate no further.')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `TaskTool::withDelegationLimits()`'),
-            SettingDefinition::new(ToolLimits::SUBAGENT_MAX_ACTIVE_KEY, SettingType::Int, TaskTool::MAX_CONCURRENT_AGENTS)
+            SettingDefinition::new(ToolLimits::SUBAGENT_MAX_ACTIVE_KEY, SettingType::Int)
                 ->withCategory(SettingCategory::Subagents)
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
                 ->withApplyMode(ApplyMode::NextTurn)
-                ->withRange(1, 32)
+                ->withRange(0)
                 ->withLabel(Lang::t('settings.subagentMaxActive.label'))
-                ->withHelp('Delegated runs one session may have going at once, every level, member and background agent counted; past it a `Task` call is refused.')
+                ->withHelp('Delegated runs one session may have going at once, every level, member and background agent counted; past it a `Task` call is refused. Unset — the default — or 0 sets no cap.')
+                ->withDefaultText('no cap')
                 ->withReaderSymbol(ToolLimits::class . '::applyTo')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `TaskTool::withDelegationLimits()`'),
         ];

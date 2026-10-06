@@ -464,7 +464,8 @@ compactor must keep), so clear or start over. Moving the tiers is
 ## A sub-agent call is refused or stops early
 
 - **"N sub-agents are already running in this session"** — the session-wide
-  cap (`subagentMaxActive`, 8) is full. The call is refused rather than queued,
+  cap (`subagentMaxActive`) is full; it caps nothing until you set it, so this
+  message means you did. The call is refused rather than queued,
   because a parent waiting on its children already holds a seat; the model is
   told not to retry at once.
 - **The agent has no `Task`** — it is at the deepest level

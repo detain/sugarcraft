@@ -30,7 +30,7 @@ final class WorkflowBuilderTest extends TestCase
             ->name('test-workflow')
             ->build();
 
-        $this->assertSame(5, $workflow->maxConcurrent);
+        $this->assertNull($workflow->maxConcurrent, 'a built workflow has no width cap');
         $this->assertSame(3600, $workflow->timeout);
     }
 

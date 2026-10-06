@@ -16,10 +16,12 @@ final readonly class TeamConfig
 {
     public function __construct(
         /**
-         * Maximum number of teammates allowed in a team (excluding the lead).
-         * Defaults to 5.
+         * Maximum number of teammates allowed in a team (excluding the lead),
+         * or null for no cap — the default. A team the model sizes itself
+         * (`max_teammates` on the Team tool's `create`) is the operator's
+         * stated limit; nothing is imposed when none was stated.
          */
-        public int $maxTeammates = 5,
+        public ?int $maxTeammates = null,
 
         /**
          * How long, in seconds, a teammate may hold a claimed task before
@@ -53,7 +55,7 @@ final readonly class TeamConfig
     /**
      * Create a new config with a different maxTeammates value.
      */
-    public function withMaxTeammates(int $maxTeammates): self
+    public function withMaxTeammates(?int $maxTeammates): self
     {
         return new self(
             maxTeammates: $maxTeammates,

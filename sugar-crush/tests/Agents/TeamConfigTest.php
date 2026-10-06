@@ -18,8 +18,10 @@ final class TeamConfigTest extends TestCase
 
     public function testDefaultMaxTeammates(): void
     {
+        // Null: a team the lead sizes with `max_teammates` gets that cap; one
+        // nobody sized runs however many teammates it is given.
         $config = new TeamConfig();
-        $this->assertSame(5, $config->maxTeammates);
+        $this->assertNull($config->maxTeammates);
     }
 
     public function testDefaultTimeoutSeconds(): void

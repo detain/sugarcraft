@@ -70,12 +70,20 @@ final class SubagentSettingsTest extends TestCase
     {
         self::assertSame(EngineExecutor::DEFAULT_MAX_TURNS, TaskTool::DEFAULT_MAX_TURNS, 'one default for both delegation paths');
         self::assertSame(200, EngineExecutor::DEFAULT_MAX_TURNS);
-        self::assertSame(AgentPoolConfig::DEFAULT_MAX_CONCURRENT, (new AgentPoolConfig())->maxConcurrent);
+        self::assertNull((new AgentPoolConfig())->maxConcurrent, 'the pool ships uncapped');
+        self::assertNull(TaskTool::MAX_CONCURRENT_AGENTS, 'the session ships uncapped');
 
         self::assertSame(EngineExecutor::DEFAULT_MAX_TURNS, SettingsSchema::byKey(EngineExecutor::MAX_TURNS_SETTINGS_KEY)?->default);
-        self::assertSame(AgentPoolConfig::DEFAULT_MAX_CONCURRENT, SettingsSchema::byKey(AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY)?->default);
         self::assertSame(TaskTool::MAX_DELEGATION_DEPTH, SettingsSchema::byKey(ToolLimits::SUBAGENT_MAX_DEPTH_KEY)?->default);
-        self::assertSame(TaskTool::MAX_CONCURRENT_AGENTS, SettingsSchema::byKey(ToolLimits::SUBAGENT_MAX_ACTIVE_KEY)?->default);
+
+        // The two width keys deliberately have NO default: unset caps nothing,
+        // and the table says so rather than printing a number nobody chose.
+        foreach ([AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY, ToolLimits::SUBAGENT_MAX_ACTIVE_KEY] as $key) {
+            $definition = SettingsSchema::byKey($key);
+            self::assertNull($definition?->default, $key);
+            self::assertSame('no cap', $definition?->defaultText, $key);
+            self::assertSame(0, $definition?->min, $key . ' accepts 0 as the no-cap spelling');
+        }
     }
 
     public function testEveryKeyIsSpendAndUserTierOnly(): void
@@ -165,9 +173,17 @@ final class SubagentSettingsTest extends TestCase
         self::assertSame(3, $set->maxConcurrent);
         self::assertSame(['type' => 'echo'], $set->workerProvider, 'every other field is kept');
 
-        foreach ([0, 17, '3', null] as $refused) {
+        // The old 1..16 range capped what an operator could even ask for; the
+        // floor moved to 0 (no cap) and the ceiling is gone.
+        $wide = $config->withSettings([AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY => 64]);
+        self::assertSame(64, $wide->maxConcurrent);
+
+        foreach (['3', null, 'many', -4] as $refused) {
             self::assertSame($config, $config->withSettings([AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY => $refused]), var_export($refused, true));
         }
+
+        // 0 is how an operator spells "no cap" without deleting the line.
+        self::assertNull($config->withSettings([AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY => 0])->maxConcurrent);
     }
 
     /** The launch's pool — and so the engine's per-batch Task cap — reads it. */
@@ -175,7 +191,7 @@ final class SubagentSettingsTest extends TestCase
     {
         $launch = new \ReflectionMethod(Bootstrap::class, 'agentPoolConfig');
 
-        self::assertSame(AgentPoolConfig::DEFAULT_MAX_CONCURRENT, $launch->invoke(null)->maxConcurrent);
+        self::assertNull($launch->invoke(null)->maxConcurrent, 'an unset key leaves the launch uncapped');
 
         Bootstrap::writeUserConfig([AgentPoolConfig::MAX_CONCURRENT_SETTINGS_KEY => 2]);
         self::assertSame(2, $launch->invoke(null)->maxConcurrent);

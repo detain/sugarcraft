@@ -31,6 +31,23 @@ final class UiOnlyWireFilterTest extends TestCase
 {
     private string $capture = '';
 
+    /**
+     * TIME-BOMB RECORD: the whole-body "does not contain" scan used to search
+     * the bare literal `/permissions` — but the wire embeds a live git-state
+     * snapshot, and a merged commit subject gained that literal (0295fcb7d),
+     * so the ambient repo state eventually accused the test. A per-process
+     * uniqid sentinel cannot occur in ambient state, which keeps the whole-
+     * body scan (scoping it down to the conversation rows alone would be the
+     * weaker fix) and still accuses any leaked ui-only row, since the same
+     * sentinel-bearing row is the one the EXPECTED pin proves stripped.
+     */
+    private static ?string $sentinel = null;
+
+    private static function sentinel(): string
+    {
+        return self::$sentinel ??= 'uio-' . uniqid((string) getmypid(), true);
+    }
+
     protected function setUp(): void
     {
         $this->capture = sys_get_temp_dir() . '/uionly_stdin_' . uniqid((string) getmypid(), true) . '.json';
@@ -48,7 +65,7 @@ final class UiOnlyWireFilterTest extends TestCase
     {
         return [
             Message::assistant('HELP-LISTING')->withUiOnly(),
-            Message::user('/permissions')->withUiOnly(),
+            Message::user(self::sentinel() . ' /permissions')->withUiOnly(),
             Message::assistant('PERMISSIONS-REPORT')->withUiOnly(),
             Message::user('first question'),
             Message::notice('QUEUED-NOTICE'),
@@ -80,7 +97,7 @@ final class UiOnlyWireFilterTest extends TestCase
 
         $this->assertCount(1, $requests);
         $body = (string) $requests[0]['request']->getBody();
-        foreach (['HELP-LISTING', '/permissions', 'PERMISSIONS-REPORT', 'QUEUED-NOTICE'] as $uiOnly) {
+        foreach (['HELP-LISTING', self::sentinel() . ' /permissions', 'PERMISSIONS-REPORT', 'QUEUED-NOTICE'] as $uiOnly) {
             $this->assertStringNotContainsString($uiOnly, $body);
         }
         $conversation = array_values(array_filter(

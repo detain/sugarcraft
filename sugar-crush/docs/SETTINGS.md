@@ -1076,9 +1076,9 @@ project-settable.
 | `enabledSkills` | Skills | list | `[]` | U C | — | restart | prompt |
 | `subagentModel` | Sub-agents | string | unset | U C | — | restart | spend |
 | `subagentMaxTurns` | Sub-agents | int | `200` | U C | — | next turn | spend |
-| `subagentMaxConcurrent` | Sub-agents | int | `5` | U C | — | restart | spend |
+| `subagentMaxConcurrent` | Sub-agents | int | no cap | U C | — | restart | spend |
 | `subagentMaxDepth` | Sub-agents | int | `3` | U C | — | next turn | spend |
-| `subagentMaxActive` | Sub-agents | int | `8` | U C | — | next turn | spend |
+| `subagentMaxActive` | Sub-agents | int | no cap | U C | — | next turn | spend |
 | `includeGitInstructions` | Git & Automation | bool | `true` | P U C | — | restart | narrowing |
 | `attribution` | Git & Automation | object | unset | U C | — | restart | prompt |
 | `lsp` | Git & Automation | object | unset | U C | — | restart | exec |
