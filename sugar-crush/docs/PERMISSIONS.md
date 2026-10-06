@@ -32,9 +32,12 @@ In the TUI the mode can also be switched **while the session runs**:
 `Alt+M` toggles `plan` — into it from any mode, and back out to the mode it
 was entered from (`default` when the session started in `plan`) — and
 `/permissions mode <name>` switches to any of `default`, `accept-edits`,
-`plan` and `auto` (`bypass-permissions` and `dont-ask`, which never put a
-question to you, only when the session was launched in that mode —
-`PermissionGate::launchMode()`). Every permission prompt names the mode that
+`plan` and `auto`, plus `bypass-permissions` since the 2026-10-06 ruling —
+the command is typed by the human with their own hands, so the switch is by
+construction the user's explicit choice; it prints a loud warning and keeps
+only the deny-rule + `rm -rf /` floor. `dont-ask`, which answers every
+question by silently denying, switches only when the session was launched in
+it — `PermissionGate::launchMode()`. Every permission prompt names the mode that
 asked and both ways to change it (`mode: default · Alt+M plan · /permissions
 mode <name>`, shortened on a narrow terminal), and so does `/permissions`. The switch
 replaces the gate in both places a turn reads it — the hook chain's
