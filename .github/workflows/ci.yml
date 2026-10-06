@@ -439,14 +439,12 @@ jobs:
       # ReadmeSuiteFigureDriftTest::testArtifactIsNotStaleAgainstTheLiveEnumeration
       # re-derives `tests` LIVE from `phpunit --list-tests` inside this very
       # suite at every merge. The double lock means adding tests without
-      # refreshing BOTH artifacts cannot go green. --timeout 600 per shard: the
-      # worst LPT bucket is ~140s at K=4 and ~280s at K=2 (594 CPU-seconds,
-      # measured k4c4 sumTime=594.2s); 600 keeps >=2x headroom on the slowest
-      # legit shard without letting a hung shard run past the serial baseline.
-      # Verified green in-sandbox at exactly this shape: K=4 on 4 cpus, wall
-      # 152s (vs 559.6s serial), conservation PASS — shards summed to
-      # 11438 tests / 175211 assertions / 1 skip / 0 fail / 0 err, byte-equal
-      # to the pinned figure.
+      # refreshing BOTH artifacts cannot go green. --timeout 1200 per shard:
+      # the suite outgrew 600. At 21,147 tests the LPT buckets are ~443s at K=4
+      # (durations from the serial run), and measured CI shard walls ranged
+      # 330-600s on 2026-10-06 — two shards were killed at exactly 600s while
+      # still passing. 1200 restores ~2x headroom on the slowest legit shard
+      # and still bounds a hung one well under the ~30 min serial run.
       - name: Run tests (sugar-crush — sharded, E671)
         if: matrix.lib == 'sugar-crush'
         run: |
@@ -460,7 +458,7 @@ jobs:
           bash scripts/parallel-tests.sh "$K" \
             --durations scripts/parallel-tests-durations.tsv \
             --against-json sugar-crush/tests/Config/Support/suite-figure.json \
-            --out "$OUT" --timeout 600 || RC=$?
+            --out "$OUT" --timeout 1200 || RC=$?
           if [ "$RC" -ne 0 ]; then
             echo "sharded run failed rc=$RC (per-shard tails are printed inline by the harness)"
             exit "$RC"
@@ -711,10 +709,10 @@ jobs:
       # Codecov upload, the detain/sugarcraft Codacy upload and the split-repo
       # Codacy mirror downstream are untouched and cannot tell merged from
       # serial. test-merge-clover.php runs FIRST: a merger regression must fail
-      # in seconds, not after a full-suite wall. --timeout 900 per shard: the
-      # worst LPT bucket is ~280s at K=2 and pcov overhead is ~1.5x — 900 keeps
-      # headroom while still bounding a hung shard under the old serial
-      # coverage wall (~10 min without coverage, more with instrumentation).
+      # in seconds, not after a full-suite wall. --timeout 1800 per shard: the
+      # K=4 buckets are ~443s and pcov overhead is up to ~2x on a slow runner —
+      # shards were killed at 900s on 2026-10-05 — so 1800 keeps headroom while
+      # still bounding a hung shard.
       # The engine is still pcov (setup-php above); only the report SHAPE
       # (K files merged) changed, and merge-clover.php refuses missing or
       # malformed shard reports fail-closed.
@@ -731,7 +729,7 @@ jobs:
           bash scripts/parallel-tests.sh "$K" \
             --durations scripts/parallel-tests-durations.tsv \
             --against-json sugar-crush/tests/Config/Support/suite-figure.json \
-            --out "$OUT" --timeout 900 --clover
+            --out "$OUT" --timeout 1800 --clover
           php scripts/merge-clover.php "$OUT" "$K" sugar-crush/coverage.xml
 
       - name: Upload coverage to Codecov
