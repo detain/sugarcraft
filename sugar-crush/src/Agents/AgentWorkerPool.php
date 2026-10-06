@@ -912,7 +912,13 @@ final class AgentWorkerPool
         }
 
         $result = $executor->execute(self::withTimeout($agent, $bound), $request);
-        if ($result->status !== AgentStatus::TimedOut) {
+        // The budget caused a TimedOut only if the budget is actually spent:
+        // the bound is ceil(remaining), so a run the bound stopped returns at
+        // or past the deadline. One that times out sooner (its own failure,
+        // or an executor that settles TimedOut at once) keeps its own error —
+        // attributing it to a budget with time left was a wrong report, and
+        // made the wording depend on how long the earlier work had taken.
+        if ($result->status !== AgentStatus::TimedOut || hrtime(true) < $deadlineNs) {
             return $result;
         }
 
