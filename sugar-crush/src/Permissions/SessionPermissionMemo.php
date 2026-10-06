@@ -742,6 +742,10 @@ final class SessionPermissionMemo
      */
     private static function coversCompoundLine(array $rules, ShellWords $parsed, array $items, string $command, ?string $projectRoot, bool $readOnlyCovers): bool
     {
+        if (in_array('&', $parsed->operators, true)) {
+            // A background job, at any depth: outside the per-part operators.
+            return false;
+        }
         $root = $projectRoot === '' ? null : $projectRoot;
         // The loop's own words (`for f in .env`) are in no body command's
         // source, so the auto-allow's two whole-line refusals are made here.

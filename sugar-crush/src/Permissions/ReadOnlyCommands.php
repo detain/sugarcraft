@@ -372,7 +372,8 @@ final class ReadOnlyCommands
      * one is never covered by a grant: it moves every later iteration.
      *
      * Redirections on the statement itself (`done > out`, `fi 2> f`) must be
-     * inert — no command of the body carries them, so no grant can cover them.
+     * inert — no command of the body carries them, so no grant can cover them
+     * — and a body that writes a file anywhere gets no read-only cover at all.
      *
      * @param array<string, mixed>               $item   a non-`simple` node of {@see ShellCompound::parse()}
      * @param \Closure(array<string, mixed>): bool $covers a grant covers this `simple` node
@@ -380,9 +381,18 @@ final class ReadOnlyCommands
     public static function compoundIsCovered(ShellWords $parsed, array $item, ?string $projectRoot, bool $readOnlyCovers, \Closure $covers): bool
     {
         $structural = ShellCompound::structuralIndices([$item]);
+        $commands = array_column(ShellCompound::simpleCommands([$item]), 'index');
         foreach ($parsed->redirections as $redirection) {
-            if (in_array($redirection['command'], $structural, true) && !ShellWords::isInertRedirection($redirection)) {
+            if (ShellWords::isInertRedirection($redirection)) {
+                continue;
+            }
+            if (in_array($redirection['command'], $structural, true)) {
                 return false;
+            }
+            // A body command that writes a file is no read-only command: only
+            // a grant that spells the redirection may cover it.
+            if (in_array($redirection['command'], $commands, true)) {
+                $readOnlyCovers = false;
             }
         }
         $changedDirectory = false;

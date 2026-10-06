@@ -230,6 +230,7 @@ final class PerPartGrantTest extends TestCase
             'for f in a; do cd "$f"; vendor/bin/phpunit; done',
             'for f in a; do vendor/bin/phpunit "$f"; done; npm test',
             'until false; do vendor/bin/phpunit; done',
+            'for f in a; do vendor/bin/phpunit "$f" & echo started; done',
         ] as $later) {
             self::assertSame(PermissionDecision::Ask, $this->decide($gate, $later), $later);
             self::assertFalse($memo->allows('Bash', ['command' => $later], $this->root), $later);
@@ -252,6 +253,7 @@ final class PerPartGrantTest extends TestCase
         self::assertSame(PermissionDecision::Allow, $this->decide($this->gate($memo), $line));
         self::assertSame(PermissionDecision::Ask, $this->decide($this->gate($memo, false), $line));
         self::assertSame(PermissionDecision::Ask, $this->decide($this->gate($memo), 'for f in .env a; do npm test; cat "$f"; done'));
+        self::assertSame(PermissionDecision::Ask, $this->decide($this->gate($memo), 'for f in a; do npm test; cat "$f" > out.txt; done'), 'a writing redirection is no read-only part');
     }
 
     public function testARefusalStillWins(): void
