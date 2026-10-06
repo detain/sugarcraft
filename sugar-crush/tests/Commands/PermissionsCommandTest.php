@@ -698,7 +698,7 @@ final class PermissionsCommandTest extends TestCase
     {
         $text = $this->report(new PermissionGate(PermissionMode::Default));
 
-        self::assertStringContainsString('Change it between turns: `/permissions mode <default|accept-edits|plan|auto>`, or Alt+M to toggle plan.', $text);
+        self::assertStringContainsString('Change it between turns: `/permissions mode <default|accept-edits|plan|auto|bypass-permissions>`, or Alt+M to toggle plan.', $text);
     }
 
     public function testModeSwitchesTheSessionsGateAndTellsTheModelOnce(): void
@@ -710,19 +710,47 @@ final class PermissionsCommandTest extends TestCase
         self::assertContains('Permission mode: `default` → `accept-edits` for this session\'s next turns.', $contents);
         $notices = array_filter($next->history, static fn (Message $m): bool => !$m->uiOnly && str_starts_with($m->content, Chat::MODE_NOTICE_PREFIX));
         self::assertCount(1, $notices, 'the model is told once, as Alt+M tells it');
+        // The bypass warning belongs to bypass alone: an ordinary switch
+        // replies with the plain confirmation line and nothing else.
+        $switchRows = array_values(array_filter(
+            $next->history,
+            static fn (Message $m): bool => str_starts_with($m->content, 'Permission mode: `default` → `accept-edits`'),
+        ));
+        self::assertCount(1, $switchRows);
+        self::assertStringNotContainsString('bypass-permissions', $switchRows[0]->content, 'no warning rides an ordinary switch');
     }
 
-    public function testANeverAskingModeIsRefusedUnlessTheSessionWasLaunchedInIt(): void
+    public function testBypassSwitchesByHumanChoiceAndDontAskStaysLaunchOnly(): void
     {
-        $refused = $this->submit($this->chat(new PermissionGate(PermissionMode::Default), '/permissions mode bypass-permissions'));
-        self::assertSame(PermissionMode::Default, $refused->currentPermissionMode());
-        self::assertStringContainsString('launched in `default`', $refused->history[\count($refused->history) - 1]->content);
+        // The 2026-10-06 ruling: `/permissions mode …` is typed by the human
+        // with their own hands, so switching INTO bypass is the explicit
+        // choice — allowed from any mode at any time between turns, through
+        // the same setPermissionMode effect Alt+M uses, with a loud warning
+        // beside the confirmation line.
+        $toBypass = $this->submit($this->chat(new PermissionGate(PermissionMode::Default), '/permissions mode bypass-permissions'));
+        self::assertSame(PermissionMode::BypassPermissions, $toBypass->currentPermissionMode(), 'the switch carries the setPermissionMode effect from a default launch');
+        $switchRows = array_values(array_filter(
+            $toBypass->history,
+            static fn (Message $m): bool => str_starts_with($m->content, 'Permission mode: `default` → `bypass-permissions`'),
+        ));
+        self::assertCount(1, $switchRows, 'the command replies once');
+        $bypassReply = $switchRows[0]->content;
+        self::assertStringContainsString("for this session's next turns.", $bypassReply);
+        self::assertStringContainsString('⚠ `bypass-permissions` gates nothing', $bypassReply, 'the confirmation carries the second, warned line');
+        self::assertStringContainsString('Switch back with `/permissions mode default`', $bypassReply);
 
-        // Launched in it: switching away and back again is allowed.
+        // Launched in bypass: the away-and-back path keeps working, warning included.
         $away = (new PermissionGate(PermissionMode::BypassPermissions))->withMode(PermissionMode::Plan);
         self::assertSame(PermissionMode::BypassPermissions, $away->launchMode());
         $back = $this->submit($this->chat($away, '/permissions mode bypass-permissions'));
         self::assertSame(PermissionMode::BypassPermissions, $back->currentPermissionMode());
+
+        // `dont-ask` keeps the old refusal: its failure mode is a silent
+        // Deny, invisible breakage the warning line cannot make safe.
+        $refused = $this->submit($this->chat(new PermissionGate(PermissionMode::Default), '/permissions mode dont-ask'));
+        self::assertSame(PermissionMode::Default, $refused->currentPermissionMode());
+        self::assertStringContainsString('answers every question by silently denying', $refused->history[\count($refused->history) - 1]->content);
+        self::assertStringContainsString('launched in `default`', $refused->history[\count($refused->history) - 1]->content);
     }
 
     public function testAnUnknownModeShowsUsageAndChangesNothing(): void
@@ -730,6 +758,6 @@ final class PermissionsCommandTest extends TestCase
         $next = $this->submit($this->chat(new PermissionGate(PermissionMode::Default), '/permissions mode yolo'));
 
         self::assertSame(PermissionMode::Default, $next->currentPermissionMode());
-        self::assertStringContainsString('Usage: `/permissions mode <name>`. This session is in `default` and can switch to: default, accept-edits, plan, auto.', $next->history[\count($next->history) - 1]->content);
+        self::assertStringContainsString('Usage: `/permissions mode <name>`. This session is in `default` and can switch to: default, accept-edits, plan, auto, bypass-permissions.', $next->history[\count($next->history) - 1]->content);
     }
 }

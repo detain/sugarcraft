@@ -30,8 +30,9 @@ use SugarCraft\Crush\Permissions\PermissionMode;
  * session's "always" grants, numbered, and how to change things. Two
  * subcommands do: `/permissions revoke <n>|all` takes grants back (the
  * transcript row `a` leaves points here) and `/permissions mode <name>`
- * switches the mode for the session's next turns. Any other argument is
- * ignored: the report is total.
+ * switches the mode for the session's next turns — any mode except
+ * `dont-ask`, which stays launch-only (see {@see switchableModes()} for the
+ * ruling on both). Any other argument is ignored: the report is total.
  */
 final class PermissionsCommand implements HostCommand
 {
@@ -75,9 +76,12 @@ final class PermissionsCommand implements HostCommand
      * `/permissions mode <name>`: run this session's next turns in <name> —
      * the in-session way to reach `accept-edits` or `auto` that `Alt+M`
      * (plan only) does not give. Applied through the same switch `Alt+M`
-     * uses (between turns, the model told once). `bypass-permissions` and
-     * `dont-ask` stop every question, so they are refused unless the session
-     * was LAUNCHED in that mode ({@see PermissionGate::launchMode()}).
+     * uses (between turns, the model told once). `bypass-permissions` is
+     * reachable from here too (owner ruling 2026-10-06, see
+     * {@see switchableModes()}): the command is typed by the human with their
+     * own hands, so the switch IS the explicit choice, and it prints a loud
+     * warning beside the confirmation line. `dont-ask` stays refused unless
+     * the session was LAUNCHED in that mode ({@see PermissionGate::launchMode()}).
      */
     private static function switchMode(CommandContext $context, string $text, string $name): CommandResult
     {
@@ -102,15 +106,33 @@ final class PermissionsCommand implements HostCommand
             return CommandResult::reply($text, Lang::t('host.permissions.mode_unchanged', ['mode' => $mode->value]));
         }
 
-        return CommandResult::reply($text, Lang::t('host.permissions.mode_switched', [
+        $switched = Lang::t('host.permissions.mode_switched', [
             'from' => $gate->mode()->value,
             'mode' => $mode->value,
-        ]))->withEffect(CommandEffect::setPermissionMode($mode));
+        ]);
+        if ($mode === PermissionMode::BypassPermissions) {
+            // The ruling that opened this switch pays for itself here: one
+            // typed command is the human's consent, and this second line is
+            // the record that the consent was given with eyes open — the
+            // mode gates nothing but the deny rules and the `rm -rf /`
+            // floor, and only this session's next turns are covered by it.
+            $switched .= "\n" . Lang::t('host.permissions.bypass_warning');
+        }
+
+        return CommandResult::reply($text, $switched)
+            ->withEffect(CommandEffect::setPermissionMode($mode));
     }
 
     /**
-     * The modes `/permissions mode` may switch to: every mode that still asks
-     * or refuses, plus a never-asking one only when the launch chose it.
+     * The modes `/permissions mode` may switch to: every mode that still
+     * asks or refuses, plus `bypass-permissions` (owner ruling 2026-10-06 —
+     * a slash command is typed by the human with their own hands, so
+     * switching INTO bypass is by construction the user's explicit choice;
+     * the mode still cannot escape the deny-rule + `rm -rf /` floor, and the
+     * switch prints a loud warning beside the confirmation line); but NOT
+     * `dont-ask`, which stays launch-only — it converts every would-be
+     * question into a silent Deny, so its failure mode is invisible
+     * breakage rather than unguarded writes, and the owner did not open it.
      *
      * @return list<PermissionMode>
      */
@@ -118,7 +140,7 @@ final class PermissionsCommand implements HostCommand
     {
         return array_values(array_filter(
             PermissionMode::cases(),
-            static fn (PermissionMode $m): bool => !in_array($m, [PermissionMode::BypassPermissions, PermissionMode::DontAsk], true)
+            static fn (PermissionMode $m): bool => $m !== PermissionMode::DontAsk
                 || $m === $gate->launchMode(),
         ));
     }

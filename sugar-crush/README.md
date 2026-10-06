@@ -468,8 +468,11 @@ screen that disagrees with the gate is worse than no screen. It is READ-ONLY in
 the strong sense — `PermissionGate::evaluate()` moves the Auto strike counters,
 so opening this must not, and does not, go anywhere near it. To CHANGE the
 mode for this session, type `/permissions mode <name>` between turns
-(`default`, `accept-edits`, `plan` or `auto`; `bypass-permissions` and
-`dont-ask` only when the session was launched in that mode) or press `Alt+M`
+(`default`, `accept-edits`, `plan`, `auto` or `bypass-permissions`; `dont-ask`
+only when the session was launched in that mode). Switching into
+`bypass-permissions` is a human-typed choice (owner ruling 2026-10-06), prints
+a loud warning beside the confirmation, and keeps only the deny-rule +
+`rm -rf /` floor. Or press `Alt+M`
 to toggle `plan` — the report says so, and so does every permission prompt
 (`mode: default · Alt+M plan · /permissions mode <name>`). To change it for
 every launch, use `--permission-mode`, `$SUGARCRUSH_PERMISSION_MODE`, or
