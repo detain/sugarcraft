@@ -91,7 +91,18 @@ final class ProcessTreeKillAsyncTest extends TestCase
             $resolved = true;
         });
         self::assertFalse($resolved, 'the kill went out inside the call, so the walk still ran on the caller\'s thread');
-        self::assertSame('T', ProcessTree::stat($child)['state'] ?? null, 'the root must be stopped before the call returns');
+        // SIGSTOP went out inside the call, but the kernel applies it when the
+        // target next runs: a root busy on another CPU still reads 'R' for a
+        // moment (measured on CI). Poll WITHOUT turning the loop, so nothing
+        // the promise schedules can be what stopped it.
+        $state = null;
+        for ($i = 0; $i < 200 && $state !== 'T'; $i++) {
+            $state = ProcessTree::stat($child)['state'] ?? null;
+            if ($state !== 'T') {
+                \usleep(5_000);
+            }
+        }
+        self::assertSame('T', $state, 'the root must be stopped before the call returns');
 
         $ticksWhilePending = 0;
         $heartbeat = $loop->addPeriodicTimer(0.001, static function () use (&$ticksWhilePending, &$resolved): void {
