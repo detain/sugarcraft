@@ -21,12 +21,14 @@ use SugarCraft\Mosaic\PixelGrid;
  * cell aspect ratio.
  *
  * **Transparent pixels:** When a pixel's alpha is fully transparent
- * (GD alpha 127 → `null` in the PixelGrid cell tuple), no SGR codes are
- * emitted for that half of the cell, letting the terminal default show
- * through. Both-transparent cells emit ▀ with no SGR at all. For a cell
- * where only one half is transparent the renderer emits the opposite
- * half-block glyph (▄ for bottom-transparent, ▀ for top-transparent)
- * with only the visible half's SGR codes.
+ * (GD alpha 127 → `null` in the PixelGrid cell tuple), that half of the
+ * cell shows the terminal default. Both-transparent cells emit a plain
+ * space. When only one half is opaque, the renderer paints just that
+ * half using the half-block whose FOREGROUND fills the needed side:
+ * a top-transparent cell emits ▄ (U+2584, fg paints its LOWER half)
+ * with the bottom colour as foreground; a bottom-transparent cell emits
+ * ▀ (U+2580, fg paints its UPPER half) with the top colour as
+ * foreground. In both cases the other colour layer is omitted entirely.
  */
 final class HalfBlockRenderer implements Renderer
 {
@@ -60,13 +62,15 @@ final class HalfBlockRenderer implements Renderer
                 $topTransparent = ($topA === null);
                 $botTransparent = ($botA === null);
                 if ($topTransparent && $botTransparent) {
-                    // Both transparent: emit upper-half block with no SGR,
-                    // leaving the cell blank (terminal default background).
-                    $line .= "\u{2580}";
+                    // Both transparent: a plain space keeps the cell blank
+                    // (a bare ▀ would still print the terminal default fg in
+                    // the upper half, showing a stripe over the backdrop).
+                    $line .= ' ';
                 } elseif ($topTransparent) {
-                    // Top pixel transparent, bottom opaque: show bottom half
-                    // only via lower-half block (▄) with bg color.
-                    $line .= Ansi::bgRgb($botR, $botG, $botB)
+                    // Top pixel transparent, bottom opaque: ▄ (U+2584) whose
+                    // FOREGROUND fills the LOWER half, so the bottom colour
+                    // rides fg and the upper half stays terminal default.
+                    $line .= Ansi::fgRgb($botR, $botG, $botB)
                         . "\u{2584}"
                         . Ansi::reset();
                 } elseif ($botTransparent) {

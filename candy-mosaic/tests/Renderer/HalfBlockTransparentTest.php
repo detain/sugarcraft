@@ -9,6 +9,21 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
 
+/**
+ * M1 (round LL): the transparency mapping in HalfBlockRenderer shipped
+ * two defects that the old contains-glyph asserts let through:
+ *  - both-transparent cells emitted a bare ▀ (a visible upper-half
+ *    stripe of the default foreground) instead of a plain space;
+ *  - top-transparent cells put the bottom colour in the BACKGROUND of
+ *    a ▄ — but ▄'s LOWER half is the foreground-filled part, so the
+ *    colour must ride fgRgb.
+ * Every branch is now pinned as an exact byte sequence: SGR + glyph +
+ * reset, nothing more, nothing less.
+ *
+ * Fixture halfblock_4branch.png is a 1×8 pixel band whose row-pairs
+ * (top, bottom) are: (T,T), (T,green), (red,T), (blue,yellow) — one
+ * cell per branch when rendered at width=1, height=4.
+ */
 final class HalfBlockTransparentTest extends TestCase
 {
     private HalfBlockRenderer $renderer;
@@ -18,82 +33,68 @@ final class HalfBlockTransparentTest extends TestCase
         $this->renderer = new HalfBlockRenderer();
     }
 
-    /**
-     * Test transparent cell at 1×1 where source size = cell size (2×2 source → 2×2 cells).
-     * The 2×2_transparent_halfblock fixture at 2×2 cells:
-     *   (0,0) = top:transparent / bot:transparent → ▀ no SGR
-     *   (0,1) = top:green / bot:green             → ▀ fg=green bg=green
-     *   (1,0) = top:red / bot:red                 → ▀ fg=red bg=red
-     *   (1,1) = top:transparent / bot:transparent → ▀ no SGR
-     */
-    public function testFullyTransparentCellEmitsNoSgrCodes(): void
+    /** @return list<string> one line per cell row, in fixture order */
+    private function renderBranchCells(): array
     {
-        // Cell (1,1) at 2×2 is both top-transparent + bot-transparent.
-        // Render at 2×2 cells: first line has cells (0,0) and (1,0).
-        // Cell (0,0): top-transparent + bot-transparent → just ▀ (no SGR).
-        $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/2x2_transparent_halfblock.png');
-        $out = $this->renderer->render($image, 2, 2);
+        $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/halfblock_4branch.png');
+        $out = $this->renderer->render($image, 1, 4);
 
-        // Cell (0,0): both transparent → no fg/bg SGR codes.
-        // The first cell's output is: "▀" (just the half-block glyph).
-        // Find the first cell's glyph by splitting on the reset sequence.
-        $firstCell = '';
-        $seenGlyph = false;
-        $chars = str_split($out);
-        foreach ($chars as $ch) {
-            if ($ch === "\x1b") {
-                // Skip to end of ANSI sequence
-                continue;
-            }
-            if ($ch === "\r" || $ch === "\n") {
-                break;
-            }
-            $firstCell .= $ch;
-            if ($ch === "\xe2" || $seenGlyph) {
-                $seenGlyph = true;
-            } else {
-                break;
-            }
-        }
-
-        // The first cell should contain only ▀ (U+2580) with no preceding SGR codes.
-        // Since we can't easily parse the SGR, verify the output has the correct
-        // overall structure: transparent cells render without color codes.
-        $this->assertStringContainsString("\u{2580}", $out);
+        return explode("\n", $out);
     }
 
-    public function testTransparentTopWithOpaqueBottom(): void
+    public function testBothTransparentEmitsPlainSpace(): void
     {
-        // Cell (1,1) in 2x2_transparent_halfblock.png is both transparent.
-        // Cell (1,0) is both opaque red.
-        // Cell (0,1) is both opaque green.
-        // Cell (0,0): top=transparent(black), bot=transparent(black).
-        // Render 2x1: cells (0,0) both transparent + cells (1,0) both red.
-        $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/2x2_transparent_halfblock.png');
-        $out = $this->renderer->render($image, 2, 1);
-
-        // Verify red is in the output (from cell 1,0 which is opaque red).
-        $this->assertStringContainsString(Ansi::fgRgb(255, 0, 0), $out);
-        // The line should have fg=red for cell 1,0.
-        $lines = explode("\n", $out);
-        $this->assertCount(1, $lines);
-        // Output must never contain a carriage return (TUI uses \n only).
-        $this->assertStringNotContainsString("\r", $out);
+        $lines = $this->renderBranchCells();
+        $this->assertCount(4, $lines);
+        // No glyph, no SGR — a bare ▀ would stripe the default fg.
+        $this->assertSame(' ', $lines[0]);
     }
 
-    public function testBothOpaqueRendersWithColors(): void
+    public function testTopTransparentPaintsBottomColourInLowerHalf(): void
     {
-        // 8x4_red.png has opaque red pixels throughout.
-        // Render at 8x4 cells (1:1 mapping, no interpolation).
+        $lines = $this->renderBranchCells();
+        // ▄ (U+2584) is filled by its FOREGROUND in the lower half, so the
+        // bottom colour rides fgRgb and the upper half shows terminal default.
+        $this->assertSame(
+            Ansi::fgRgb(0, 255, 0) . "\u{2584}" . Ansi::reset(),
+            $lines[1],
+        );
+    }
+
+    public function testBottomTransparentPaintsTopColourInUpperHalf(): void
+    {
+        $lines = $this->renderBranchCells();
+        // ▀ (U+2580) fg-fills its upper half — this branch was already correct.
+        $this->assertSame(
+            Ansi::fgRgb(255, 0, 0) . "\u{2580}" . Ansi::reset(),
+            $lines[2],
+        );
+    }
+
+    public function testBothOpaqueRendersFgTopBgBottomUpperBlock(): void
+    {
+        $lines = $this->renderBranchCells();
+        $this->assertSame(
+            Ansi::fgRgb(0, 0, 255) . Ansi::bgRgb(255, 255, 0) . "\u{2580}" . Ansi::reset(),
+            $lines[3],
+        );
+    }
+
+    public function testOutputNeverContainsCarriageReturn(): void
+    {
+        // TUI uses \n only.
+        $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/halfblock_4branch.png');
+        $this->assertStringNotContainsString("\r", $this->renderer->render($image, 1, 4));
+    }
+
+    public function testFullyOpaqueRedImageHasNoTransparentBranchBytes(): void
+    {
+        // 8x4_red.png: every cell is both-opaque red/red — no ▄ and no space.
         $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/8x4_red.png');
         $out = $this->renderer->render($image, 8, 4);
+        $cell = Ansi::fgRgb(255, 0, 0) . Ansi::bgRgb(255, 0, 0) . "\u{2580}" . Ansi::reset();
 
-        // All cells should have fg=red SGR code.
-        $this->assertStringContainsString(Ansi::fgRgb(255, 0, 0), $out);
-        // And bg=red SGR code.
-        $this->assertStringContainsString(Ansi::bgRgb(255, 0, 0), $out);
-        // Output should contain half-block glyphs.
-        $this->assertStringContainsString("\u{2580}", $out);
+        $this->assertSame(implode("\n", array_fill(0, 4, str_repeat($cell, 8))), $out);
     }
 
     public function testSupportsAlphaReturnsFalse(): void
