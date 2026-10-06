@@ -96,6 +96,9 @@ final class SessionStore
      */
     private int $sessionWriteSeq = 0;
 
+    /** Open {@see immediateTransaction()} frames on this connection. */
+    private int $transactionDepth = 0;
+
     /** @see sessionListQueries() */
     private int $sessionListQueries = 0;
 
@@ -798,21 +801,34 @@ final class SessionStore
      */
     public function immediateTransaction(\Closure $work): mixed
     {
-        if ($this->pdo->inTransaction()) {
+        // Our own depth, not PDO::inTransaction() alone: a transaction opened
+        // by a raw `BEGIN IMMEDIATE` is visible to inTransaction() only on
+        // builds whose pdo_sqlite asks SQLite for its autocommit state. CI's
+        // PHP does not, so a nested fork (EnhancedSessionStore::forkSession()
+        // around SessionStore::forkSession()) issued a second BEGIN and died
+        // "cannot start a transaction within a transaction", and the failure
+        // path skipped its ROLLBACK. inTransaction() still covers a
+        // beginTransaction() some other caller of getPdo() opened.
+        if ($this->transactionDepth > 0 || $this->pdo->inTransaction()) {
             return $work();
         }
 
         $this->pdo->exec('BEGIN IMMEDIATE');
+        $this->transactionDepth++;
         try {
             $result = $work();
             $this->pdo->exec('COMMIT');
         } catch (\Throwable $e) {
             // A failed COMMIT can leave SQLite having already rolled back on
-            // its own; guard so the original error is the one that surfaces.
-            if ($this->pdo->inTransaction()) {
+            // its own; swallow that ROLLBACK's "no transaction is active" so
+            // the original error is the one that surfaces.
+            try {
                 $this->pdo->exec('ROLLBACK');
+            } catch (\PDOException) {
             }
             throw $e;
+        } finally {
+            $this->transactionDepth--;
         }
 
         return $result;
