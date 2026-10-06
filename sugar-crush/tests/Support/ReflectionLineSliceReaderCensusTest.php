@@ -621,13 +621,27 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
         // rather than the silent one. One hop, still; a name-keyed call
         // graph over the whole suite remains a second instrument nobody
         // could check.
-        $streams = [];
+        //
+        // Memory: the walk keeps ONE token stream alive at a time. Holding
+        // every stream for the cross-file hop cost ~600 MB on the whole
+        // tests/ tree — enough, on top of what a serial run has accumulated by
+        // then, to exhaust phpunit.xml's 1G limit. A hop only ever asks two
+        // questions of its target (does it call array_slice, does it name
+        // getFileName), so the first pass records those two flags per
+        // function and drops the tokens; the second pass re-tokenizes only the
+        // files that contain a getStartLine() site.
         $byName = [];
         foreach ($sources as $relative => $source) {
-            $streams[$relative] = $tokens = \token_get_all($source);
+            $tokens = \token_get_all($source);
             foreach (TokenFunctionRanges::scan($tokens) as $range) {
-                $byName[$range['name']][] = [$relative, $range];
+                $names = self::namesIn($tokens, $range['from'], $range['to']);
+                $byName[$range['name']][] = [
+                    $relative,
+                    isset($names['array_slice']),
+                    isset($names['getFileName']),
+                ];
             }
+            unset($tokens);
         }
 
         /**
@@ -635,7 +649,7 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
          * first, then a cross-file match only when the walked tree holds
          * exactly one.
          *
-         * @return array{0:string,1:array{name:string,from:int,to:int}}|null
+         * @return array{0:string,1:bool,2:bool}|null file, slices, names the file
          */
         $hopInto = static function (string $called, string $ownFile) use ($byName): ?array {
             if (!isset($byName[$called])) {
@@ -651,7 +665,11 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
             return \count($byName[$called]) === 1 ? $byName[$called][0] : null;
         };
 
-        foreach ($streams as $relative => $tokens) {
+        foreach ($sources as $relative => $source) {
+            if (!\str_contains($source, 'getStartLine')) {
+                continue;
+            }
+            $tokens = \token_get_all($source);
             $ranges = TokenFunctionRanges::scan($tokens);
 
             foreach ($tokens as $i => $token) {
@@ -676,7 +694,8 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
                 // since E325 step (b), in the shared helper file the name
                 // resolves to. Both are responsible for the pairing, so a
                 // check in either one counts.
-                $coverage = [$names];
+                $slicingHops = 0;
+                $namesTheFile = isset($names['getFileName']);
 
                 foreach (array_keys($names) as $called) {
                     if ($called === $enclosing['name']) {
@@ -684,34 +703,23 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
                     }
 
                     $target = $hopInto($called, $relative);
-                    if ($target === null) {
+                    if ($target === null || !$target[1]) {
                         continue;
                     }
 
-                    [$hopFile, $hopRange] = $target;
-                    $hop = self::namesIn($streams[$hopFile], $hopRange['from'], $hopRange['to']);
-                    if (isset($hop['array_slice'])) {
-                        $coverage[] = $hop;
-                    }
+                    $slicingHops++;
+                    $namesTheFile = $namesTheFile || $target[2];
                 }
 
-                if (!isset($names['array_slice']) && \count($coverage) === 1) {
+                if (!isset($names['array_slice']) && $slicingHops === 0) {
                     $unreachable[$key] = $relative . ':' . $token[2];
 
                     continue;
                 }
 
-                $namesTheFile = false;
-                foreach ($coverage as $set) {
-                    if (isset($set['getFileName'])) {
-                        $namesTheFile = true;
-
-                        break;
-                    }
-                }
-
                 $readers[$key] = $namesTheFile;
             }
+            unset($tokens, $ranges);
         }
 
         ksort($readers);
