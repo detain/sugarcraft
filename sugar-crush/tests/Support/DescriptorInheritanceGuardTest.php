@@ -1156,7 +1156,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 // Excluded here rather than in the roster because it is not a
                 // horizon question at all: those files belong to a third
                 // package and are reached, if at all, through ITS manifest.
-                if (\str_starts_with($relative, 'vendor/')) {
+                // `node_modules/` likewise: sugar-crush-web's npm tree ships
+                // the odd .php file (flatted's port), present only after an
+                // `npm ci` in that lib, and never part of the PHP package.
+                if (\str_starts_with($relative, 'vendor/') || \str_starts_with($relative, 'node_modules/')) {
                     continue;
                 }
 
