@@ -23,7 +23,7 @@ declare -a MAP=(
   "N|13-settings-pane-and-configurability.md|Design: settings pane and configurability"
   "O|14-server-mode-and-web-ui.md|Design: server mode and sugar-crush-web"
   "P|16-sessions-and-live-agent-view.md|Design: sessions, live agent lines, agent view"
-  "R|17-execution-plan.md|Execution plan: concurrency-aware waves"
+  "R|17-execution-plan.md|Execution plan: what is left"
 )
 {
   cat "$D/99-synthesis.md"

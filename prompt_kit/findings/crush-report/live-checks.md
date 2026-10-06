@@ -1,4 +1,4 @@
-# Live checks (Part VI) — results
+# Live checks (synthesis Part V) — results
 
 Run on 2026-10-05 from the W10-i worktree with `sugar-crush/scripts/provider-cache-live-probe.php`:
 
