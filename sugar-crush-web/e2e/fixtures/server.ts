@@ -47,6 +47,11 @@ export class SugarCrushServer {
     const home = join(scratch, 'home')
     const repo = join(scratch, 'repo')
     mkdirSync(home, { mode: 0o700 })
+    // The specs drive the permission flow with harmless `echo` calls. Since
+    // read-only shell lines run unasked by default, those would never ask, so
+    // this HOME turns that off (user-tier settings.json).
+    mkdirSync(join(home, '.sugar-crush'), { mode: 0o700 })
+    writeFileSync(join(home, '.sugar-crush', 'settings.json'), '{"permissions.autoAllowReadOnly": false}\n', { mode: 0o600 })
     mkdirSync(repo)
     writeFileSync(join(repo, 'README.md'), '# e2e\n')
     const git = (...args: string[]) => spawnSync('git', ['-c', 'user.email=e2e@example.com', '-c', 'user.name=e2e', ...args], { cwd: repo })
