@@ -97,6 +97,7 @@ final class ReadOnlyAutoAllowTest extends TestCase
             'jq' => ['jq .name composer.json'],
             'a newline list of reads' => ["ls\npwd"],
             'sed printing a range' => ['sed -n 1,5p f'],
+            'an inline awk program' => ["awk '{print}' f"],
             'a read-only loop' => ['for f in src/*.php; do wc -l "$f"; done'],
         ];
     }
@@ -142,7 +143,7 @@ final class ReadOnlyAutoAllowTest extends TestCase
             '; with a non-read-only part' => ['ls; rm x'],
             'a newline with a non-read-only part' => ["ls\nrm x"],
             'sed -i' => ['sed -i s/a/b/ f'],
-            'awk' => ["awk '{print}' f"],
+            'awk running a command' => ["awk '{system(\"rm \" \$1)}' f"],
             'xargs rm' => ['ls | xargs rm'],
             'xargs alone' => ['xargs rm'],
             'php running a script' => ['php artisan migrate'],

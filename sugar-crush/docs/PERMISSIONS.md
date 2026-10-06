@@ -192,6 +192,7 @@ arguments** (`env rm x` runs `rm`), `grep`/`egrep`/`fgrep`, `rg` (not
 `--compress-program`), `uniq` (at most one operand — a second is written),
 `cut`, `tr`, `column`, `nl`, `diff`, `cmp`, `comm`, `basename`, `dirname`,
 `realpath`, `readlink`, `jq`, `fold`; `sed` with a script that only reads
+([below](#sed-and-loops)); `awk`/`gawk`/`mawk` with a simple inline program
 ([below](#sed-and-loops)); `git` read subcommands only — `status`, `log`,
 `show`, `diff`, `blame`, `shortlog`, `rev-parse`, `rev-list`, `ls-files`,
 `ls-tree`, `describe`, `cat-file`, `grep` (not `-O`), `branch` and `tag` in
@@ -213,6 +214,19 @@ option off the short allow-list (`-n`, `-e`, `-E`/`-r`, `-s`, `-u`, `-z`, their
 long names, `--posix`, `--debug`, `--sandbox`), and any script the parser
 cannot read — an unknown command, extra text after one, or a regex whose
 `[…]` bracket would make GNU and BSD sed disagree on where it ends.
+
+**`awk`, `gawk` and `mawk` are read-only only for simple inline programs**
+(`Permissions\AwkCommand`), and the check is strict because awk is a
+language: `awk '{print $1}' f | sort | uniq -c` and
+`awk -F: '$3 > 1000 {print $1}' /etc/passwd` run unasked. Options are `-F`,
+`-v NAME=VALUE` and `--` only (`-f`, `-i`, `--exec`, mawk's `-W`, gawk's
+profile/dump options ask), and the program is refused when it holds
+`system`, `close`, `fflush` or `@` (`@load`, `@include`, indirect calls)
+anywhere, a `|` that is not half of `||` (pipes, `|&`), `getline` with any
+`<`, or a `>` that is not provably a comparison — a `>` counts only in a
+program with no quotes, `/`, `\` or `#` (so braces and parentheses can be
+counted exactly), and only outside every `{…}` or inside `(…)`. When unsure,
+it asks.
 
 **Loops.** A `for NAME in WORD…; do …; done` or
 `while [IFS=…] read [-r] NAME…; do …; done` (fed by `< file` or a pipe) runs
@@ -241,8 +255,7 @@ after one `cd`, a further one must be absolute. `cd /etc && ls`,
 `cd .. && ls` and bare `cd` ask.
 
 **What makes the whole line ask** (fail closed — anything not shown read-only
-is a question, exactly as before): a command off the list (`awk`,
-`xargs`, `tee`, `sh`, `python3 -c …`, `php artisan …`, `npm test`, …, so
+is a question, exactly as before): a command off the list (`xargs`, `tee`, `sh`, `python3 -c …`, `php artisan …`, `npm test`, …, so
 `ls | sh` and `ls | xargs rm` ask); a writing redirection (`> f`, `>> f`,
 `&> f` — `2>/dev/null`, `>/dev/null` and `2>&1` are fine); a command or
 process substitution (`$(…)`, backticks, `<(…)`) or a `${…}` expansion other
@@ -389,7 +402,8 @@ A `Bash` call is allowed under `plan` when, after quote-aware tokenising
     `-T`, `--compress-program`), `uniq` (at most one operand — a second is the
     output file), `rg` (no `--pre`, `--hostname-bin`), `tree` (no `-o`, `-R`),
     `file` (no `-C`), `date` (display forms only), `printf` (no `-v`), `sed`
-    (a parsed script with no `-i`, `-f`, `w`, `W`, `e`, `s///w`, `s///e`), and `git`
+    (a parsed script with no `-i`, `-f`, `w`, `W`, `e`, `s///w`, `s///e`),
+    `awk`/`gawk`/`mawk` (a simple inline program, as above), and `git`
     limited to `status`, `log`, `show`, `diff`, `blame`, `shortlog`,
     `rev-parse`, `rev-list`, `ls-files`, `ls-tree`, `describe`, `cat-file`,
     `grep` (no `--output`, no `grep -O`), listing-only `branch`/`tag`,
@@ -403,8 +417,8 @@ A `Bash` call is allowed under `plan` when, after quote-aware tokenising
 So `git log --oneline`, `grep -rn foo src`, `cat a | grep b | wc -l`,
 `find . -name '*.php'` and `ls 2>/dev/null` run, and `ls; rm x`,
 `cat a | tee b`, `git log $(rm x)`, `find . -delete` and `echo x>/tmp/f` are
-denied. Deliberately **not** on the list: interpreters (`awk`, `perl`,
-`python`, `php`, `node`), anything that runs another command
+denied. Deliberately **not** on the list: interpreters handed inline code
+(`perl`, `python`, `php -r`, `node`), anything that runs another command
 (`xargs`, `env`, `sudo`, `timeout`, `nohup`, `bash -c`, `eval`, `exec`,
 `source`), `test`/`[` (`[ -v 'a[$(cmd)]' ]` runs `cmd`), pagers, `tee`, `xxd`,
 `curl`/`wget`. A command missing from the list costs one denied step — the

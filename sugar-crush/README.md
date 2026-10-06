@@ -1259,9 +1259,10 @@ command inside bubblewrap, writable only in the project.
   never asks. The list is conservative (`ls`, `cat`, `head`, `tail`, `wc`,
   `grep`/`rg`, `find` without `-exec`/`-delete`, `sort` without `-o`, `git`'s
   read subcommands, `php -l`, `composer show`, `npm ls`, `sed` with a script
-  that only reads …), and `for`/`while read` loops whose every command is one
-  of them qualify too; a writing redirection, a substitution, `sed -i` or a
-  sed `w`/`e`, `xargs`/`awk`, a `cd` out of the project,
+  that only reads, `awk` with a simple inline program …), and `for`/`while
+  read` loops whose every command is one of them qualify too; a writing
+  redirection, a substitution, `sed -i` or a sed `w`/`e`, awk's `system()`,
+  pipes or `print >`, `xargs`, `python3 -c`, a `cd` out of the project,
   a protected file (`.env`, keys) or anything else off the list makes the
   whole line ask as before. Configured rules and hooks still win;
   `"permissions.autoAllowReadOnly": false` (yours; a project may only switch

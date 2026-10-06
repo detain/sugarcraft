@@ -576,6 +576,7 @@ sugar-crush/tests/Tools/BuiltIn/WriteTest.php	0.130	22
 sugar-crush/tests/RuntimeMalformedToolArgumentsTest.php	0.130	3
 sugar-crush/tests/Tui/Settings/SettingsEditorTest.php	0.130	11
 sugar-crush/tests/Tui/AgentActivityLineTest.php	0.130	31
+sugar-crush/tests/Permissions/ReadOnlyAwkTest.php	0.130	41
 sugar-crush/tests/Commands/PermissionsCommandTest.php	0.129	33
 sugar-crush/tests/Context/SessionPromptMemoTest.php	0.127	10
 sugar-crush/tests/Providers/BedrockPromptCacheTest.php	0.126	30

@@ -121,7 +121,10 @@ final class ReadOnlyCommands
      *
      * `sed` is here because its script is PARSED ({@see SedCommand}): no
      * `-i`, no `-f` script file, no `w`/`W`/`e` command or `s///w`/`s///e`
-     * flag, nothing the parser cannot read.
+     * flag, nothing the parser cannot read. `awk` / `gawk` / `mawk` are here
+     * ONLY FOR SIMPLE INLINE PROGRAMS ({@see AwkCommand}): `-F` and `-v`
+     * alone, and a program with no `system`, `close`, `fflush`, `@`, pipe,
+     * `getline <`, or any `>` that is not provably a comparison.
      *
      * Left out deliberately, with the reason, so nobody re-adds one in passing:
      * `perl`/`python*`/`node`/`ruby` (interpreters handed inline code that can
@@ -137,6 +140,7 @@ final class ReadOnlyCommands
      */
     private const COMMANDS = [
         'ag' => 'ag',
+        'awk' => 'awk',
         'basename' => null,
         'cat' => null,
         'cd' => 'cd',
@@ -159,12 +163,14 @@ final class ReadOnlyCommands
         'find' => 'find',
         'fold' => null,
         'free' => null,
+        'gawk' => 'awk',
         'git' => 'git',
         'grep' => null,
         'head' => null,
         'id' => null,
         'jq' => null,
         'ls' => null,
+        'mawk' => 'awk',
         'nl' => null,
         'npm' => 'npm',
         'nproc' => null,
@@ -849,6 +855,7 @@ final class ReadOnlyCommands
             // runs code.
             'php' => self::phpIsLintOnly($args),
             'sed' => SedCommand::isReadOnly($args),
+            'awk' => AwkCommand::isReadOnly($args),
             'composer' => self::subcommandIs($args, self::COMPOSER_SUBCOMMANDS),
             'npm' => self::subcommandIs($args, self::NPM_SUBCOMMANDS),
             default => false,
