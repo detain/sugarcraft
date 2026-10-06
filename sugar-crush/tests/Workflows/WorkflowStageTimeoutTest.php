@@ -83,20 +83,22 @@ final class WorkflowStageTimeoutTest extends TestCase
     public function testAPipelineSharesOneBudgetAcrossItsSteps(): void
     {
         // Step 1 completes inside the budget; step 2 gets only what is left.
-        // Were each step handed the full 2 s afresh, step 2 alone would run
-        // to ~3.2 s.
+        // Were each step handed the full 3 s afresh, the pipeline would run to
+        // ~5 s. The 4 s line sits a full second from both answers: at a 2 s
+        // budget the gap was 0.3 s, and a loaded CI runner's fork overhead
+        // (measured 2.97 s for a shared budget) crossed it.
         $workflow = (new WorkflowBuilder())
             ->name('wf1-pipeline')
-            ->timeout(2)
+            ->timeout(3)
             ->pipeline('chain', [
-                Tasks::agent('coder')->name('quick')->prompt('sleep:1'),
+                Tasks::agent('coder')->name('quick')->prompt('sleep:2'),
                 Tasks::agent('coder')->name('slow')->prompt('never finishes'),
             ])
             ->build();
 
         [$result, $elapsed] = $this->runTimed($this->forkingEngine(), $workflow);
 
-        self::assertLessThan(2.9, $elapsed, 'the pipeline\'s second step was given a fresh budget');
+        self::assertLessThan(4.0, $elapsed, 'the pipeline\'s second step was given a fresh budget');
         $agents = $result->stageResults[0]->agents;
         self::assertCount(2, $agents);
         self::assertSame(AgentStatus::Completed, $agents[0]->status);
@@ -117,11 +119,18 @@ final class WorkflowStageTimeoutTest extends TestCase
             ->withVerification('checked', Tasks::agent('coder')->prompt('p'), Tasks::agent('tester')->prompt('v'))
             ->build());
 
+        // The verification stage's second task is bounded by what is LEFT of
+        // that stage's 77 s (AgentWorkerPool rounds the remainder up), so on a
+        // runner stalled for over a second between the two it is 76 — still
+        // the workflow's budget, never an engine literal.
+        $timeouts = $executor->timeouts;
+        $last = array_pop($timeouts);
         self::assertSame(
-            [77, 5, 77, 77],
-            $executor->timeouts,
+            [77, 5, 77],
+            $timeouts,
             'a task without timeout() must carry the workflow\'s per-stage budget, not an engine literal',
         );
+        self::assertThat($last, self::logicalAnd(self::greaterThanOrEqual(70), self::lessThanOrEqual(77)), 'the verifier must carry what is left of the stage budget');
     }
 
     /** @return array{0: \SugarCraft\Crush\Workflows\WorkflowResult, 1: float} */

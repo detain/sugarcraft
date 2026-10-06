@@ -873,7 +873,9 @@ final class EngineBackendTest extends TestCase
     private function runOnScaledClock(ProviderInterface $provider, array &$tokens): array
     {
         $backend = EngineBackend::new($provider, 'scaled');
-        $loop = new ScaledClockLoop();
+        // Clock from the first frame: fork-to-first-frame is host cost, and
+        // on a loaded CI runner it alone crossed the 240 ms the ceiling scales to.
+        $loop = ScaledClockLoop::startingAtFirstFrame();
         $previous = Loop::get();
         Loop::set($loop);
 

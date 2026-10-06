@@ -9,6 +9,7 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Support\ToolOutputSpill;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\CarriesSessionState;
@@ -515,14 +516,29 @@ final class GrepInstructionWiringTest extends TestCase
         // the short second hit line — because a clip whose window holds no
         // newline legitimately keeps a partial ":1:" (clipToLine), while
         // ":2:" can only survive if the whole padded line did.
+        //
+        // The probe pins the PLAIN line clip, so the spill store is refused
+        // for it. Over a spill-sized cap (>= ToolOutputSpill::minCapBytes())
+        // the clip keeps a head AND a tail window and saves the rest (roadmap
+        // 2.8), and whether the target lands in that tail is readdir order
+        // again: green on one filesystem, red on CI's, in the very file that
+        // set out to be order-independent.
         $padRoot = $this->fixture(200, self::CLIP_PROBE_PAD);
-        $stream = $this->grepIn($padRoot, new Grep($padRoot, 0)); // uncapped: raw hit list, offsets align with the clipped body
-        $at = strpos($stream, $padRoot . '/sub/target.zzz.php:1:');
-        self::assertNotFalse($at, 'the padded fixture must produce a target hit line');
+        $refusedStore = $this->dir . '/spill-store-is-a-file';
+        file_put_contents($refusedStore, '');
+        ToolOutputSpill::useDirectoryForTesting($refusedStore);
+        try {
+            $stream = $this->grepIn($padRoot, new Grep($padRoot, 0)); // uncapped: raw hit list, offsets align with the clipped body
+            $at = strpos($stream, $padRoot . '/sub/target.zzz.php:1:');
+            self::assertNotFalse($at, 'the padded fixture must produce a target hit line');
 
-        $cap = max(8 * $floor, $at + $floor + 1 + intdiv(self::CLIP_PROBE_PAD, 2));
-        $probeNudge = $this->zzzNudge();
-        $clipped = $this->grepIn($padRoot, new Grep($padRoot, $cap, skillNudge: $probeNudge));
+            $cap = max(8 * $floor, $at + $floor + 1 + intdiv(self::CLIP_PROBE_PAD, 2));
+            $probeNudge = $this->zzzNudge();
+            $clipped = $this->grepIn($padRoot, new Grep($padRoot, $cap, skillNudge: $probeNudge));
+        } finally {
+            ToolOutputSpill::useDirectoryForTesting(null);
+        }
+        self::assertStringNotContainsString('[saved:', $clipped, 'the probe must clip without spilling');
 
         self::assertStringNotContainsString(
             '/sub/target.zzz.php:2:',

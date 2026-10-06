@@ -45,7 +45,7 @@ final class ForkChannelIdleTimerSuspendedTest extends TestCase
 
     public function testAQuestionLeftOpenPastTheCeilingDoesNotKillTheTurn(): void
     {
-        $result = $this->runScaled(InteractiveTurnHarness::provider());
+        $result = $this->runScaled(InteractiveTurnHarness::provider(), freezeOnAnswer: true);
 
         self::assertFalse($result['realCeiling'], 'the turn hung instead of settling');
         self::assertTrue($result['settled']);
@@ -79,11 +79,16 @@ final class ForkChannelIdleTimerSuspendedTest extends TestCase
     /**
      * @return array{settled: bool, value: mixed, error: ?\Throwable, virtualSeconds: float, realCeiling: bool, finished: list<string>}
      */
-    private function runScaled(ScriptedProvider $provider): array
+    private function runScaled(ScriptedProvider $provider, bool $freezeOnAnswer = false): array
     {
-        // Clock from the first frame: the child's startup is host cost, not
-        // silence, and under CI load it alone could cross 240 ms of wall time.
-        $loop = ScaledClockLoop::startingAtFirstFrame();
+        // The clock starts when the question arrives. Everything before it —
+        // fork, App/Runtime construction, the provider call, the tool call
+        // reaching the gate — is host cost, not silence, and on a loaded CI
+        // runner it alone crossed the 240 ms of wall time the 120 s ceiling
+        // scales to. $freezeOnAnswer stops the clock again at the answer, for
+        // the test whose claim ends there: what the turn does after it (run
+        // the tool, call the provider again) is host cost too.
+        $loop = ScaledClockLoop::heldUntilReleased();
         $previous = Loop::get();
         Loop::set($loop);
         $finished = [];
@@ -93,14 +98,18 @@ final class ForkChannelIdleTimerSuspendedTest extends TestCase
                 [Message::user('go')],
                 null,
                 null,
-                static function (object $event) use ($loop, &$finished): void {
+                static function (object $event) use ($loop, &$finished, $freezeOnAnswer): void {
                     if ($event instanceof ToolFinished) {
                         $finished[] = $event->result->content();
                     }
                     if ($event instanceof PermissionAsked) {
                         $ask = $event->ask;
-                        $loop->addTimer(self::ANSWER_AFTER, static function () use ($ask): void {
+                        $loop->release();
+                        $loop->addTimer(self::ANSWER_AFTER, static function () use ($ask, $loop, $freezeOnAnswer): void {
                             $ask->reply(PermissionReply::Once);
+                            if ($freezeOnAnswer) {
+                                $loop->freeze();
+                            }
                         });
                     }
                 },

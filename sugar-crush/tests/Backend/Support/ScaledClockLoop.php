@@ -83,8 +83,13 @@ final class ScaledClockLoop implements LoopInterface
 
     private float $highWater = 0.0;
 
-    /** True until the first read listener runs, for {@see startingAtFirstFrame()}. */
+    /** While true, {@see now()} reads {@see $frozenAt} and no virtual time passes. */
     private bool $held = false;
+
+    /** Whether the next dispatched read listener {@see release()}s a held clock. */
+    private bool $releaseOnRead = false;
+
+    private float $frozenAt = 0.0;
 
     public function __construct()
     {
@@ -101,15 +106,54 @@ final class ScaledClockLoop implements LoopInterface
     {
         $loop = new self();
         $loop->held = true;
+        $loop->releaseOnRead = true;
 
         return $loop;
+    }
+
+    /**
+     * A loop whose clock reads zero until the test calls {@see release()} —
+     * for a test that knows which event starts the interval it measures (a
+     * question arriving), so every host cost before it is excluded.
+     */
+    public static function heldUntilReleased(): self
+    {
+        $loop = new self();
+        $loop->held = true;
+
+        return $loop;
+    }
+
+    /** Let a held clock run on, scaled, from the value it was held at. */
+    public function release(): void
+    {
+        if (!$this->held) {
+            return;
+        }
+        $this->held = false;
+        $this->releaseOnRead = false;
+        $this->startNs = (float) hrtime(true) - $this->frozenAt / self::VIRTUAL_SECONDS_PER_REAL_SECOND * 1e9;
+    }
+
+    /**
+     * Stop virtual time where it is until {@see release()}: for a test whose
+     * claim ends at a known event, so host cost after it cannot fire a timer.
+     */
+    public function freeze(): void
+    {
+        if ($this->held) {
+            return;
+        }
+        $this->frozenAt = $this->now();
+        $this->held = true;
+        $this->releaseOnRead = false;
     }
 
     /** Virtual seconds since this loop was constructed (or, held, since the first frame). */
     public function now(): float
     {
         if ($this->held) {
-            return 0.0;
+            return $this->frozenAt;
         }
 
         $seconds = ((float) hrtime(true) - $this->startNs) / 1e9 * self::VIRTUAL_SECONDS_PER_REAL_SECOND;
@@ -255,9 +299,8 @@ final class ScaledClockLoop implements LoopInterface
         foreach ($read as $stream) {
             $key = (int) $stream;
             if (isset($this->readStreams[$key])) {
-                if ($this->held) {
-                    $this->held = false;
-                    $this->startNs = (float) hrtime(true);
+                if ($this->held && $this->releaseOnRead) {
+                    $this->release();
                 }
                 ($this->readStreams[$key][1])($stream, $this);
             }
