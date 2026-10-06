@@ -96,6 +96,8 @@ final class ReadOnlyAutoAllowTest extends TestCase
             'tail -f' => ['tail -f storage/app.log'],
             'jq' => ['jq .name composer.json'],
             'a newline list of reads' => ["ls\npwd"],
+            'sed printing a range' => ['sed -n 1,5p f'],
+            'a read-only loop' => ['for f in src/*.php; do wc -l "$f"; done'],
         ];
     }
 
@@ -140,7 +142,6 @@ final class ReadOnlyAutoAllowTest extends TestCase
             '; with a non-read-only part' => ['ls; rm x'],
             'a newline with a non-read-only part' => ["ls\nrm x"],
             'sed -i' => ['sed -i s/a/b/ f'],
-            'plain sed' => ['sed -n 1,5p f'],
             'awk' => ["awk '{print}' f"],
             'xargs rm' => ['ls | xargs rm'],
             'xargs alone' => ['xargs rm'],

@@ -55,8 +55,8 @@ use SugarCraft\Crush\ToolCall;
  *   and substring offsets ARITHMETICALLY and `${x@P}` prompt-expands, and
  *   each of those runs a `$(…)` that lives in a variable's VALUE — one
  *   `${x:=…}` earlier on the same line can put it there. Measured on bash
- *   5.2: `echo ${x:=\$\(id\)} ${x@P}` runs `id`. Plain `$NAME` stays
- *   allowed; it substitutes a value and evaluates nothing;
+ *   5.2: `echo ${x:=\$\(id\)} ${x@P}` runs `id`. Plain `$NAME` and
+ *   `${NAME}` stay allowed; they substitute a value and evaluate nothing;
  * - every redirection is inert ({@see ShellWords::isInertRedirection()}) — an
  *   fd duplication or a write to `/dev/null`, never a file (`tee` is not on
  *   the list at all);
@@ -64,6 +64,12 @@ use SugarCraft\Crush\ToolCall;
  *   {@see COMMANDS}, LITERALLY (not a glob, not a brace, not a path —
  *   `/bin/cat` is not `cat` here, and a `NAME=value` prefix is not a
  *   command), and its arguments pass that command's check.
+ *
+ * COMPOUND STATEMENTS (user decision 2026-10-11): the line is read through
+ * {@see ShellCompound}, so a `for NAME in WORD…` or `while read NAME` loop,
+ * and an `if`, qualifies when every command of its body does, judged with
+ * the loop variables bound — see {@see simpleIsReadOnly()} for what a body
+ * may do with them. Anything that grammar does not read is `false`.
  *
  * Control operators are fine — `cat a | grep b | wc -l`, `ls; pwd`,
  * `git status && git log` — because every command they join is judged on its
@@ -113,10 +119,13 @@ final class ReadOnlyCommands
      * named `-delete` matched by `find *` both hand find a flag no literal
      * word showed.
      *
+     * `sed` is here because its script is PARSED ({@see SedCommand}): no
+     * `-i`, no `-f` script file, no `w`/`W`/`e` command or `s///w`/`s///e`
+     * flag, nothing the parser cannot read.
+     *
      * Left out deliberately, with the reason, so nobody re-adds one in passing:
-     * `sed`/`awk`/`perl`/`python*`/`node`/`ruby` (interpreters — `awk`
-     * writes with `print > f` and runs `system()`, `sed` writes with `w` and
-     * GNU sed's `e` runs a command); `xargs`, `sudo`, `nohup`, `timeout`,
+     * `perl`/`python*`/`node`/`ruby` (interpreters handed inline code that can
+     * do anything); `xargs`, `sudo`, `nohup`, `timeout`,
      * `nice`, `command`, `exec`, `eval`, `source`/`.`, `bash`/`sh -c`, `time`
      * (each runs ANOTHER command, which would escape this list); `test`/`[`
      * (`[ -v 'a[$(cmd)]' ]` evaluates the subscript and runs `cmd` — measured
@@ -148,6 +157,7 @@ final class ReadOnlyCommands
         'fgrep' => null,
         'file' => 'file',
         'find' => 'find',
+        'fold' => null,
         'free' => null,
         'git' => 'git',
         'grep' => null,
@@ -165,6 +175,7 @@ final class ReadOnlyCommands
         'readlink' => null,
         'realpath' => null,
         'rg' => 'rg',
+        'sed' => 'sed',
         'sort' => 'sort',
         'stat' => null,
         'tail' => null,
@@ -205,6 +216,18 @@ final class ReadOnlyCommands
 
     /** `npm` subcommands that only read: the dependency tree, a package's registry entry. */
     private const NPM_SUBCOMMANDS = ['ls', 'list', 'la', 'll', 'view', 'info', 'show', 'v'];
+
+    /**
+     * What an argument becomes when its text depends on a loop variable whose
+     * values are not known (a glob, `while read` input): a NUL byte, which no
+     * real argument can hold, so a check that only asks "is this an option?"
+     * sees an operand, and one that must READ the text (a sed script, a
+     * subcommand, a date) refuses it.
+     */
+    public const UNKNOWN = "\0";
+
+    /** At most this many combinations of known loop values are judged one by one. */
+    private const MAX_BINDINGS = 64;
 
     private function __construct()
     {
@@ -304,7 +327,7 @@ final class ReadOnlyCommands
         }
 
         $parsed = ShellWords::parse($command);
-        if (!$parsed->complete || $parsed->hasSubstitution() || $parsed->parameterExpansions !== []) {
+        if (!$parsed->complete || $parsed->hasSubstitution() || !self::expansionsArePlain($parsed)) {
             return false;
         }
 
@@ -320,20 +343,462 @@ final class ReadOnlyCommands
             return false;
         }
 
-        $judged = false;
+        $items = ShellCompound::parse($parsed);
+        if ($items === null) {
+            return false;
+        }
+        $judged = 0;
         $changedDirectory = false;
-        foreach ($parsed->commands as $index => $words) {
-            if ($words === []) {
-                // Redirections only (`2>/dev/null` on its own) — judged above.
-                continue;
-            }
-            if (!self::commandIsReadOnly($words, $parsed->expandable[$index] ?? [], $projectRoot, $cdAnywhere, $changedDirectory)) {
+
+        return self::itemsQualify($items, [], $projectRoot, $cdAnywhere, $changedDirectory, $judged, true, null)
+            && $judged > 0;
+    }
+
+    /**
+     * PER-PART COVERAGE of one compound item — a `for` / `while read` loop
+     * or an `if` — for {@see SessionPermissionMemo::coversBySegments()}
+     * (user decision 2026-10-11): the loop is ONE part, covered when its
+     * header qualifies (the same rules as the read-only judgement: no
+     * substitution, the list's variables in scope, no re-bound name) and
+     * EVERY command of its body is covered on its own — read-only in the
+     * loop's scope (when $readOnlyCovers), or by $covers, a remembered
+     * grant matched against that command's own source text. A `cd` inside
+     * one is never covered by a grant: it moves every later iteration.
+     *
+     * Redirections on the statement itself (`done > out`, `fi 2> f`) must be
+     * inert — no command of the body carries them, so no grant can cover them.
+     *
+     * @param array<string, mixed>               $item   a non-`simple` node of {@see ShellCompound::parse()}
+     * @param \Closure(array<string, mixed>): bool $covers a grant covers this `simple` node
+     */
+    public static function compoundIsCovered(ShellWords $parsed, array $item, ?string $projectRoot, bool $readOnlyCovers, \Closure $covers): bool
+    {
+        $structural = ShellCompound::structuralIndices([$item]);
+        foreach ($parsed->redirections as $redirection) {
+            if (in_array($redirection['command'], $structural, true) && !ShellWords::isInertRedirection($redirection)) {
                 return false;
             }
-            $judged = true;
+        }
+        $changedDirectory = false;
+        $judged = 0;
+
+        return self::itemsQualify([$item], [], $projectRoot === '' ? null : $projectRoot, false, $changedDirectory, $judged, $readOnlyCovers, $covers);
+    }
+
+    /**
+     * Every `${…}` is a plain `${name}` — which substitutes a value exactly
+     * as `$name` does and evaluates nothing — and there is no `$[…]`. The
+     * forms this refuses are the ones that RUN code: an array subscript or a
+     * substring offset is arithmetic, `${x@P}` prompt-expands, `${x:=…}`
+     * assigns (see the class docblock).
+     */
+    private static function expansionsArePlain(ShellWords $parsed): bool
+    {
+        if (\count($parsed->parameterExpansionBodies) !== \count($parsed->parameterExpansions)) {
+            return false;
+        }
+        foreach ($parsed->parameterExpansionBodies as $body) {
+            if (preg_match('/^\{[A-Za-z_][A-Za-z0-9_]*\}$/', $body) !== 1) {
+                return false;
+            }
         }
 
-        return $judged;
+        return true;
+    }
+
+    /**
+     * Do all of $items qualify — every command read-only (or, in per-part
+     * mode, covered by $covers) with the loop variables in $scope bound?
+     *
+     * @param list<array<string, mixed>>                                 $items
+     * @param array<string, array{values: ?list<string>, optionSafe: bool}> $scope
+     *        each loop variable in force: its values when every one is known
+     *        literally, else null; and whether no value can begin with `-`
+     * @param ?\Closure(array<string, mixed>): bool $covers
+     */
+    private static function itemsQualify(
+        array $items,
+        array $scope,
+        ?string $projectRoot,
+        bool $cdAnywhere,
+        bool &$changedDirectory,
+        int &$judged,
+        bool $readOnly,
+        ?\Closure $covers,
+    ): bool {
+        foreach ($items as $item) {
+            $ok = match ($item['kind']) {
+                'simple' => self::simpleQualifies($item, $scope, $projectRoot, $cdAnywhere, $changedDirectory, $judged, $readOnly, $covers),
+                'for' => self::forQualifies($item, $scope, $projectRoot, $cdAnywhere, $changedDirectory, $judged, $readOnly, $covers),
+                'while' => self::whileQualifies($item, $scope, $projectRoot, $cdAnywhere, $changedDirectory, $judged, $readOnly, $covers),
+                'if' => self::ifQualifies($item, $scope, $projectRoot, $cdAnywhere, $changedDirectory, $judged, $readOnly, $covers),
+                default => false,
+            };
+            if (!$ok) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed>                                         $node
+     * @param array<string, array{values: ?list<string>, optionSafe: bool}> $scope
+     * @param ?\Closure(array<string, mixed>): bool                         $covers
+     */
+    private static function simpleQualifies(
+        array $node,
+        array $scope,
+        ?string $projectRoot,
+        bool $cdAnywhere,
+        bool &$changedDirectory,
+        int &$judged,
+        bool $readOnly,
+        ?\Closure $covers,
+    ): bool {
+        if ($node['words'] === []) {
+            // Redirections only (`2>/dev/null` on its own) — judged by the caller.
+            return true;
+        }
+        ++$judged;
+        if ($readOnly && self::simpleIsReadOnly($node, $scope, $projectRoot, $cdAnywhere, $changedDirectory)
+            && ($covers === null || self::autoAllowRefusesNothing($node['source']))) {
+            return true;
+        }
+
+        return $covers !== null && $node['words'][0] !== 'cd' && $covers($node);
+    }
+
+    /**
+     * The two refusals {@see autoAllows()} makes on a whole line, made on
+     * one command of a compound judged part by part.
+     */
+    private static function autoAllowRefusesNothing(string $source): bool
+    {
+        return !ProtectFilesHook::namesProtectedFile($source)
+            && (new SafetyClassifier())->classify(new ToolCall('Bash', ['command' => $source])) === null;
+    }
+
+    /**
+     * One simple command, read-only with the loop variables in $scope bound.
+     *
+     * Outside any loop this is {@see commandIsReadOnly()} on the words as
+     * written. Inside one, every `$name` / `${name}` must be a loop variable
+     * in scope (anything else — `$HOME`, `$1`, `$@` — is refused there), and:
+     *
+     * - a variable whose values are all KNOWN (`for d in candy-core
+     *   candy-forms`) is substituted, and the command is judged once per
+     *   combination of values, exactly as each iteration will run it — up to
+     *   {@see MAX_BINDINGS} combinations;
+     * - a variable whose values are NOT known (a glob, `while read` input) is
+     *   fine anywhere in a command that inspects no argument; in a command
+     *   that checks its arguments it must be DOUBLE-QUOTED (or bash splits
+     *   the value into words, any of which may be an option), sit in no glob,
+     *   and provably not begin with `-` — a literal prefix (`./$f`), values
+     *   that cannot start with one (`for f in src/*`), or a `--` before it
+     *   (not for `find`, which reads a leading `-` as an expression whatever
+     *   precedes it) — and is then judged as the {@see UNKNOWN} placeholder:
+     *   an operand to every check, and a refusal from any check that must
+     *   read the text (a sed script, a command name).
+     *
+     * A `cd` in a loop body is refused outside plan: each iteration would
+     * start where the last one left off.
+     *
+     * @param array<string, mixed>                                         $node
+     * @param array<string, array{values: ?list<string>, optionSafe: bool}> $scope
+     */
+    private static function simpleIsReadOnly(array $node, array $scope, ?string $projectRoot, bool $cdAnywhere, bool &$changedDirectory): bool
+    {
+        $words = $node['words'];
+        $flags = $node['flags'];
+        if ($scope === []) {
+            return self::commandIsReadOnly($words, $flags, $projectRoot, $cdAnywhere, $changedDirectory);
+        }
+        if ($words[0] === 'cd' && !$cdAnywhere) {
+            return false;
+        }
+
+        $references = [];
+        $known = [];
+        foreach ($words as $w => $word) {
+            $refs = self::references($word, $node['dollars'][$w] ?? []);
+            if ($refs === null) {
+                return false;
+            }
+            foreach ($refs as $ref) {
+                if (!isset($scope[$ref['name']])) {
+                    return false;
+                }
+                if ($scope[$ref['name']]['values'] !== null) {
+                    $known[$ref['name']] = $scope[$ref['name']]['values'];
+                }
+            }
+            $references[$w] = $refs;
+        }
+
+        $bindings = [[]];
+        foreach ($known as $name => $values) {
+            $next = [];
+            foreach ($bindings as $binding) {
+                foreach ($values as $value) {
+                    $next[] = $binding + [$name => $value];
+                }
+            }
+            if ($next === [] || \count($next) > self::MAX_BINDINGS) {
+                return false;
+            }
+            $bindings = $next;
+        }
+
+        foreach ($bindings as $binding) {
+            $bound = $words;
+            $boundFlags = $flags;
+            foreach ($references as $w => $refs) {
+                if ($refs === []) {
+                    continue;
+                }
+                $unknown = false;
+                foreach ($refs as $ref) {
+                    $unknown = $unknown || !array_key_exists($ref['name'], $binding);
+                }
+                if (!$unknown) {
+                    $bound[$w] = self::substitute($words[$w], $refs, $binding);
+                    // Every `$` in it is now text; what bash may still rewrite
+                    // is a glob or brace character — read conservatively as
+                    // unquoted.
+                    $boundFlags[$w] = preg_match('/[*?\[{]/', $bound[$w]) === 1;
+                    continue;
+                }
+                if ($w === 0 || (self::COMMANDS[$bound[0]] ?? null) === null) {
+                    // A command name nobody can read (refused below), or an
+                    // argument of a command whose arguments are never inspected.
+                    continue;
+                }
+                if (!self::unknownIsAnOperand($words, $flags, $w, $refs, $scope, $bound[0])) {
+                    return false;
+                }
+                $bound[$w] = self::UNKNOWN;
+                $boundFlags[$w] = false;
+            }
+            if (!self::commandIsReadOnly($bound, $boundFlags, $projectRoot, $cdAnywhere, $changedDirectory)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Can word $w — which reads a loop variable whose values are unknown —
+     * only ever reach $command as an OPERAND? See {@see simpleIsReadOnly()}.
+     *
+     * @param list<string>                                                 $words
+     * @param list<bool>                                                   $flags
+     * @param list<array{offset: int, length: int, name: string, quoted: bool}> $refs
+     * @param array<string, array{values: ?list<string>, optionSafe: bool}> $scope
+     */
+    private static function unknownIsAnOperand(array $words, array $flags, int $w, array $refs, array $scope, string $command): bool
+    {
+        $word = $words[$w];
+        if (preg_match('/[*?\[{]/', $word) === 1) {
+            return false;
+        }
+        $optionSafe = true;
+        foreach ($refs as $ref) {
+            if (!$ref['quoted']) {
+                return false;
+            }
+            $optionSafe = $optionSafe && $scope[$ref['name']]['optionSafe'];
+        }
+        $prefix = substr($word, 0, $refs[0]['offset']);
+        if (($prefix !== '' && $prefix[0] !== '-') || $optionSafe) {
+            return true;
+        }
+        if ($command === 'find') {
+            return false;
+        }
+        for ($j = 1; $j < $w; ++$j) {
+            if ($words[$j] === '--' && !($flags[$j] ?? true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The variables a word reads, from its live `$` positions
+     * ({@see ShellWords::$dollars}): `$name` (longest identifier) or
+     * `${name}`, in source order — or null when any `$` is something else
+     * (`$1`, `$@`, `$?`, `$$`, a lone `$`).
+     *
+     * @param list<array{0: int, 1: bool}> $dollars
+     *
+     * @return list<array{offset: int, length: int, name: string, quoted: bool}>|null
+     */
+    private static function references(string $word, array $dollars): ?array
+    {
+        $refs = [];
+        foreach ($dollars as [$offset, $quoted]) {
+            $rest = substr($word, $offset + 1);
+            if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*/', $rest, $match) === 1) {
+                $refs[] = ['offset' => $offset, 'length' => 1 + \strlen($match[0]), 'name' => $match[0], 'quoted' => $quoted];
+                continue;
+            }
+            if (preg_match('/^\{([A-Za-z_][A-Za-z0-9_]*)\}/', $rest, $match) === 1) {
+                $refs[] = ['offset' => $offset, 'length' => 1 + \strlen($match[0]), 'name' => $match[1], 'quoted' => $quoted];
+                continue;
+            }
+
+            return null;
+        }
+        usort($refs, static fn (array $a, array $b): int => $a['offset'] <=> $b['offset']);
+
+        return $refs;
+    }
+
+    /**
+     * $word with each reference replaced by its bound value.
+     *
+     * @param list<array{offset: int, length: int, name: string, quoted: bool}> $refs
+     * @param array<string, string>                                         $binding
+     */
+    private static function substitute(string $word, array $refs, array $binding): string
+    {
+        foreach (array_reverse($refs) as $ref) {
+            $word = substr_replace($word, $binding[$ref['name']], $ref['offset'], $ref['length']);
+        }
+
+        return $word;
+    }
+
+    /**
+     * `for NAME in WORD…; do …; done`: no substitution in the list (refused
+     * for the whole line already), every variable it reads already in scope,
+     * NAME not one already bound (after an inner loop re-binds it, the outer
+     * name holds the inner's last value), and the body qualifying with NAME
+     * bound. The values are KNOWN when every word is literal text a bare
+     * substitution cannot split or glob (`candy-core`, `Core:candy-core`);
+     * they are option-safe when none can begin with `-` — a glob or variable
+     * word must start with a literal letter, digit, `_`, `.` or `/` and read
+     * its variables quoted.
+     *
+     * @param array<string, mixed>                                         $node
+     * @param array<string, array{values: ?list<string>, optionSafe: bool}> $scope
+     * @param ?\Closure(array<string, mixed>): bool                         $covers
+     */
+    private static function forQualifies(
+        array $node,
+        array $scope,
+        ?string $projectRoot,
+        bool $cdAnywhere,
+        bool &$changedDirectory,
+        int &$judged,
+        bool $readOnly,
+        ?\Closure $covers,
+    ): bool {
+        if (isset($scope[$node['var']]) || $node['words'] === []) {
+            return false;
+        }
+        $values = [];
+        $known = true;
+        $optionSafe = true;
+        foreach ($node['words'] as $w => $word) {
+            $refs = self::references($word, $node['dollars'][$w] ?? []);
+            if ($refs === null) {
+                return false;
+            }
+            $unquoted = false;
+            foreach ($refs as $ref) {
+                if (!isset($scope[$ref['name']])) {
+                    return false;
+                }
+                $unquoted = $unquoted || !$ref['quoted'];
+            }
+            if ($refs !== [] || ($node['flags'][$w] ?? true)) {
+                $known = false;
+                if ($unquoted || preg_match('/^[A-Za-z0-9_.\/]/', $word) !== 1) {
+                    $optionSafe = false;
+                }
+                continue;
+            }
+            if (preg_match('/^[A-Za-z0-9_.,:\/@%+=-]+$/', $word) !== 1) {
+                $known = false;
+            }
+            if ($word === '' || $word[0] === '-') {
+                $optionSafe = false;
+            }
+            $values[] = $word;
+        }
+        $scope[$node['var']] = ['values' => $known ? $values : null, 'optionSafe' => $optionSafe];
+
+        return self::itemsQualify($node['body'], $scope, $projectRoot, $cdAnywhere, $changedDirectory, $judged, $readOnly, $covers);
+    }
+
+    /**
+     * `while [IFS=…] read [-r] NAME…; do …; done` (the condition's shape is
+     * {@see ShellCompound}'s to check): each NAME bound to values nobody
+     * knows — lines of input — and not one already bound. The producer
+     * (`grep -l x * | while …`, `done < file`) is judged on its own.
+     *
+     * @param array<string, mixed>                                         $node
+     * @param array<string, array{values: ?list<string>, optionSafe: bool}> $scope
+     * @param ?\Closure(array<string, mixed>): bool                         $covers
+     */
+    private static function whileQualifies(
+        array $node,
+        array $scope,
+        ?string $projectRoot,
+        bool $cdAnywhere,
+        bool &$changedDirectory,
+        int &$judged,
+        bool $readOnly,
+        ?\Closure $covers,
+    ): bool {
+        foreach ($node['vars'] as $var) {
+            if (isset($scope[$var])) {
+                return false;
+            }
+            $scope[$var] = ['values' => null, 'optionSafe' => false];
+        }
+
+        return self::itemsQualify($node['body'], $scope, $projectRoot, $cdAnywhere, $changedDirectory, $judged, $readOnly, $covers);
+    }
+
+    /**
+     * `if …; then …; [elif …; then …;] [else …;] fi`: every condition and
+     * every branch qualifies.
+     *
+     * @param array<string, mixed>                                         $node
+     * @param array<string, array{values: ?list<string>, optionSafe: bool}> $scope
+     * @param ?\Closure(array<string, mixed>): bool                         $covers
+     */
+    private static function ifQualifies(
+        array $node,
+        array $scope,
+        ?string $projectRoot,
+        bool $cdAnywhere,
+        bool &$changedDirectory,
+        int &$judged,
+        bool $readOnly,
+        ?\Closure $covers,
+    ): bool {
+        $lists = [];
+        foreach ($node['branches'] as [$condition, $body]) {
+            $lists[] = $condition;
+            $lists[] = $body;
+        }
+        if ($node['else'] !== null) {
+            $lists[] = $node['else'];
+        }
+        foreach ($lists as $list) {
+            if (!self::itemsQualify($list, $scope, $projectRoot, $cdAnywhere, $changedDirectory, $judged, $readOnly, $covers)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -383,6 +848,7 @@ final class ReadOnlyCommands
             // option (`-r`, `-d auto_prepend_file=…`, `-S`) or a bare script
             // runs code.
             'php' => self::phpIsLintOnly($args),
+            'sed' => SedCommand::isReadOnly($args),
             'composer' => self::subcommandIs($args, self::COMPOSER_SUBCOMMANDS),
             'npm' => self::subcommandIs($args, self::NPM_SUBCOMMANDS),
             default => false,

@@ -199,11 +199,69 @@ final class PerPartGrantTest extends TestCase
         self::assertTrue($memo->allows('Bash', ['command' => 'npm test | grep FAIL'], $this->root));
     }
 
+    /**
+     * A loop is ONE part whose body commands must each be covered (user
+     * decision 2026-10-11): "always" on a loop remembers its commands, never
+     * its syntax, and a later loop of another shape over other values running
+     * those commands — or read-only ones — is covered.
+     */
+    public function testALoopIsRememberedAndCoveredCommandByCommand(): void
+    {
+        $asked = 'for t in tests/*Test.php; do vendor/bin/phpunit "$t" | tail -3; done';
+        $memo = $this->memo([$asked]);
+        self::assertSame(['Bash(vendor/bin/phpunit)', 'Bash(vendor/bin/phpunit *)', 'Bash(tail)', 'Bash(tail *)'], $memo->patterns());
+        self::assertSame('Bash(vendor/bin/phpunit *), Bash(tail *)', SessionPermissionMemo::scopeOf('Bash', ['command' => $asked]));
+
+        $gate = $this->gate($memo);
+        foreach ([
+            'for f in tests/Unit/*.php; do vendor/bin/phpunit "$f"; done',
+            'cd {root} && vendor/bin/phpunit tests/A.php | grep OK',
+            'ls tests | while read -r f; do vendor/bin/phpunit "tests/$f" 2>&1 | tail -1; done',
+            'for f in a b; do if vendor/bin/phpunit "$f"; then echo ok; else echo "$f"; fi; done',
+        ] as $later) {
+            self::assertSame(PermissionDecision::Allow, $this->decide($gate, $later), $later);
+            self::assertTrue($memo->allows('Bash', ['command' => str_replace('{root}', $this->root, $later)], $this->root), $later);
+        }
+        foreach ([
+            'for f in a; do vendor/bin/phpunit "$f"; rm -rf "$f"; done',
+            'for f in $(ls); do vendor/bin/phpunit "$f"; done',
+            'for f in a; do vendor/bin/phpunit "$f"; done > out.txt',
+            'for f in a; do vendor/bin/phpunit "$f" > "$f.log"; done',
+            'for f in a; do cd "$f"; vendor/bin/phpunit; done',
+            'for f in a; do vendor/bin/phpunit "$f"; done; npm test',
+            'until false; do vendor/bin/phpunit; done',
+        ] as $later) {
+            self::assertSame(PermissionDecision::Ask, $this->decide($gate, $later), $later);
+            self::assertFalse($memo->allows('Bash', ['command' => $later], $this->root), $later);
+        }
+    }
+
+    public function testALoopWithAnExactPartIsRememberedExactly(): void
+    {
+        $asked = 'for f in a.txt b.txt; do rm "$f"; done';
+        $memo = $this->memo([$asked]);
+        self::assertSame([], $memo->patterns(), 'a grant on `rm "$f"` would cover any later loop, over any list');
+        self::assertTrue($memo->allows('Bash', ['command' => $asked], $this->root));
+        self::assertFalse($memo->allows('Bash', ['command' => 'for f in *; do rm "$f"; done'], $this->root));
+    }
+
+    public function testALoopsReadOnlyBodyIsCoveredOnlyWhileTheSettingIsOnAndNeverForAProtectedFile(): void
+    {
+        $memo = $this->memo(['npm test']);
+        $line = 'for f in a b; do npm test "$f" | sed -n 1p; done';
+        self::assertSame(PermissionDecision::Allow, $this->decide($this->gate($memo), $line));
+        self::assertSame(PermissionDecision::Ask, $this->decide($this->gate($memo, false), $line));
+        self::assertSame(PermissionDecision::Ask, $this->decide($this->gate($memo), 'for f in .env a; do npm test; cat "$f"; done'));
+    }
+
     public function testARefusalStillWins(): void
     {
         $memo = $this->memo(['npm test | tail', 'npm publish && git log']);
         $gate = $this->gate($memo, true, [new PermissionRule('Bash(npm publish *)', PermissionAction::Deny)]);
         self::assertSame(PermissionDecision::Deny, $this->decide($gate, 'npm publish --tag x && git log'));
+
+        $loop = $this->gate($this->memo(['for f in a; do npm publish "$f"; done']), true, [new PermissionRule('Bash(npm publish *)', PermissionAction::Deny)]);
+        self::assertSame(PermissionDecision::Deny, $this->decide($loop, 'for f in b; do npm publish "$f"; done'), 'a deny sees the command a loop runs');
 
         $plan = (new PermissionGate(PermissionMode::Plan))->withSessionRules($memo->rules());
         self::assertSame(PermissionDecision::Deny, $this->decide($plan, 'npm test | tail'), 'plan refuses what a grant covers');

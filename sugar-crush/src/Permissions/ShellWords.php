@@ -99,6 +99,24 @@ final readonly class ShellWords
      *        names a redirection the word list no longer carries). Splitting
      *        happens HERE, on unquoted operators only, so `echo "a;b"` stays one
      *        source where a regex split on `;` produced two halves of nothing.
+     * @param list<?string> $terminators Parallel to {@see $commands}: the
+     *        control operator that ENDED each command (`;`, `|`, `&&`, a
+     *        newline …), or null for the last one. {@see $operators} cannot
+     *        give this: a blank line or a `;` with nothing before it ends no
+     *        command, so the two lists fall out of step on any multi-line
+     *        script — which is exactly the shape a `for` / `while` loop takes
+     *        ({@see ShellCompound} reads the structure off this list).
+     * @param list<list<list<array{0: int, 1: bool}>>> $dollars Parallel to
+     *        {@see $commands} and their words: every LIVE `$` in a word — one
+     *        bash will expand, so not one inside single quotes, escaped, or
+     *        opening `$'…'` / `$"…"` — as `[byte offset in the quote-removed
+     *        word, whether it sat inside double quotes]`. Quote removal makes
+     *        `'$f'` and `"$f"` the same text; only this says which one bash
+     *        substitutes, and whether the result is then split on whitespace.
+     * @param list<string> $parameterExpansionBodies Parallel to
+     *        {@see $parameterExpansions}: the raw text of each `${…}` / `$[…]`
+     *        group from its opener, so a caller can tell a plain `${name}`
+     *        (which evaluates nothing) from `${x:=…}` / `${a[i]}` / `${x@P}`.
      */
     private function __construct(
         public array $commands,
@@ -109,6 +127,9 @@ final readonly class ShellWords
         public array $expandable = [],
         public array $parameterExpansions = [],
         public array $sources = [],
+        public array $terminators = [],
+        public array $dollars = [],
+        public array $parameterExpansionBodies = [],
     ) {
     }
 
@@ -128,7 +149,14 @@ final readonly class ShellWords
         $wordFlags = [];
         $expandable = [];
         $parameterExpansions = [];
+        $parameterExpansionBodies = [];
         $sources = [];
+        $terminators = [];
+        $dollars = [];
+        // The live `$` offsets of the word being read, and of the words of
+        // the command being read — see the $dollars constructor parameter.
+        $wordDollars = [];
+        $commandDollars = [];
         // Byte offset where the current simple command's source text starts.
         $segmentStart = 0;
         $hasRedirect = false;
@@ -145,8 +173,10 @@ final readonly class ShellWords
         /** @var list<array{delimiter: string, stripTabs: bool}> $pendingHeredocs */
         $pendingHeredocs = [];
 
-        $endWord = static function () use (&$words, &$wordFlags, &$current, &$inWord, &$quoted, &$expands, &$pendingRedirect, &$redirections, &$pendingHeredocs): void {
+        $endWord = static function () use (&$words, &$wordFlags, &$current, &$inWord, &$quoted, &$expands, &$pendingRedirect, &$redirections, &$pendingHeredocs, &$wordDollars, &$commandDollars): void {
             if (!$inWord) {
+                $wordDollars = [];
+
                 return;
             }
             if ($pendingRedirect !== null) {
@@ -159,13 +189,15 @@ final readonly class ShellWords
             } else {
                 $words[] = $current;
                 $wordFlags[] = $expands;
+                $commandDollars[] = $wordDollars;
             }
+            $wordDollars = [];
             $current = '';
             $inWord = false;
             $quoted = false;
             $expands = false;
         };
-        $endCommand = static function (string $source) use (&$words, &$wordFlags, &$expandable, &$sources, &$hasRedirect, &$commands, &$pendingRedirect, &$complete, $endWord): void {
+        $endCommand = static function (string $source, ?string $terminator) use (&$words, &$wordFlags, &$expandable, &$sources, &$terminators, &$dollars, &$commandDollars, &$hasRedirect, &$commands, &$pendingRedirect, &$complete, $endWord): void {
             $endWord();
             if ($pendingRedirect !== null) {
                 // `echo >; ls` — bash: syntax error near unexpected token.
@@ -176,9 +208,12 @@ final readonly class ShellWords
                 $commands[] = $words;
                 $expandable[] = $wordFlags;
                 $sources[] = trim($source);
+                $terminators[] = $terminator;
+                $dollars[] = $commandDollars;
             }
             $words = [];
             $wordFlags = [];
+            $commandDollars = [];
             $hasRedirect = false;
         };
 
@@ -216,7 +251,7 @@ final readonly class ShellWords
             }
 
             if ($char === '"') {
-                $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete, $expands, $parameterExpansions);
+                $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete, $expands, $parameterExpansions, $parameterExpansionBodies, $wordDollars, strlen($current));
                 $inWord = true;
                 $quoted = true;
                 continue;
@@ -237,14 +272,15 @@ final readonly class ShellWords
                 }
                 if ($after === '"') {
                     $i = $at; // `$"…"` is a translatable "…"
-                    $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete, $expands, $parameterExpansions);
+                    $current .= self::readDoubleQuoted($line, $i, $substitutions, $complete, $expands, $parameterExpansions, $parameterExpansionBodies, $wordDollars, strlen($current));
                     $inWord = true;
                     $quoted = true;
                     continue;
                 }
                 $expands = true;
+                $wordDollars[] = [strlen($current), false];
                 if ($after === '(' || $after === '{' || $after === '[') {
-                    $current .= '$' . self::readDollarGroup($line, $i, $at, $substitutions, $parameterExpansions, $complete);
+                    $current .= '$' . self::readDollarGroup($line, $i, $at, $substitutions, $parameterExpansions, $parameterExpansionBodies, $complete);
                     $inWord = true;
                     continue;
                 }
@@ -308,7 +344,7 @@ final readonly class ShellWords
                     $op .= $next;
                     ++$i;
                 }
-                $endCommand(substr($line, $segmentStart, $opStart - $segmentStart));
+                $endCommand(substr($line, $segmentStart, $opStart - $segmentStart), $op);
                 $operators[] = $op;
                 if ($char === "\n" && $pendingHeredocs !== []) {
                     if (!self::skipHeredocBodies($line, $i, $pendingHeredocs)) {
@@ -340,13 +376,13 @@ final readonly class ShellWords
             $inWord = true;
         }
 
-        $endCommand(substr($line, $segmentStart));
+        $endCommand(substr($line, $segmentStart), null);
         if ($pendingHeredocs !== []) {
             // `cat <<EOF` with no body line at all.
             $complete = false;
         }
 
-        return new self($commands, $redirections, $substitutions, $operators, $complete, $expandable, $parameterExpansions, $sources);
+        return new self($commands, $redirections, $substitutions, $operators, $complete, $expandable, $parameterExpansions, $sources, $terminators, $dollars, $parameterExpansionBodies);
     }
 
     /**
@@ -377,6 +413,7 @@ final readonly class ShellWords
      *
      * @param list<string> $substitutions
      * @param list<string> $parameterExpansions
+     * @param list<string> $parameterExpansionBodies
      */
     private static function readDollarGroup(
         string $line,
@@ -384,6 +421,7 @@ final readonly class ShellWords
         int $at,
         array &$substitutions,
         array &$parameterExpansions,
+        array &$parameterExpansionBodies,
         bool &$complete,
     ): string {
         $opener = $line[$at];
@@ -401,6 +439,7 @@ final readonly class ShellWords
         }
         $group = substr($line, $at, $i - $at + 1);
         if ($opener !== '(') {
+            $parameterExpansionBodies[] = $group;
             $body = str_replace("\\\n", '', $group);
             if (str_contains($body, '$(')) {
                 $substitutions[] = '$(';
@@ -440,8 +479,13 @@ final readonly class ShellWords
      * `$expands` is raised for any `$` expansion or backtick inside — quoted
      * text is still expanded, just not split or globbed.
      *
+     * `$wordDollars` gains `[offset, true]` for each live `$`, the offset
+     * counted from `$base` — the length of the word read before the quote.
+     *
      * @param list<string> $substitutions
      * @param list<string> $parameterExpansions
+     * @param list<string> $parameterExpansionBodies
+     * @param list<array{0: int, 1: bool}> $wordDollars
      */
     private static function readDoubleQuoted(
         string $line,
@@ -450,6 +494,9 @@ final readonly class ShellWords
         bool &$complete,
         bool &$expands,
         array &$parameterExpansions,
+        array &$parameterExpansionBodies = [],
+        array &$wordDollars = [],
+        int $base = 0,
     ): string {
         $length = strlen($line);
         $out = '';
@@ -474,10 +521,11 @@ final readonly class ShellWords
             }
             if ($char === '$') {
                 $expands = true;
+                $wordDollars[] = [$base + strlen($out), true];
                 $at = self::skipContinuations($line, $i + 1);
                 $after = $line[$at] ?? '';
                 if ($after === '(' || $after === '{' || $after === '[') {
-                    $out .= '$' . self::readDollarGroup($line, $i, $at, $substitutions, $parameterExpansions, $complete);
+                    $out .= '$' . self::readDollarGroup($line, $i, $at, $substitutions, $parameterExpansions, $parameterExpansionBodies, $complete);
                     continue;
                 }
                 $out .= $char;

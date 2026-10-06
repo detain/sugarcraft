@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Permissions;
 
+use SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\ToolCall;
 
@@ -661,10 +662,19 @@ final class SessionPermissionMemo
      *   a subshell — (a `;` or newline line runs unasked only when EVERY
      *   part is read-only, which the mode itself settles);
      * - a command that is only redirections, or that opens with a shell
-     *   reserved word (`for`, `do`, `if`, `{` …: the tokeniser does not
-     *   parse compound statements);
+     *   reserved word the grammar of {@see ShellCompound} does not read
+     *   (`{`, `!`, `case`, `until` …);
      * - a second `cd` that is not absolute (the first moved the directory
      *   the read-only set judges a relative one against).
+     *
+     * A `for` / `while read` LOOP or an `if` is ONE part (user decision
+     * 2026-10-11): covered when its header qualifies and every command of its
+     * body is covered on its own, by a grant or as read-only in the loop's
+     * scope ({@see ReadOnlyCommands::compoundIsCovered()}); a line naming a
+     * protected file, or that {@see SafetyClassifier} flags, gets no
+     * read-only cover for its loop bodies. Inside the loop `;` and newlines
+     * are the loop's own syntax; between parts the operators above still
+     * apply.
      *
      * Each command is judged by its own source text, redirections included,
      * through the same matcher a whole line is — so `echo x > f` needs a
@@ -680,10 +690,16 @@ final class SessionPermissionMemo
             return false;
         }
         $parsed = ShellWords::parse($command);
-        if (!$parsed->complete || \count($parsed->commands) < 2
+        if (!$parsed->complete || $parsed->substitutions !== [] || $parsed->parameterExpansions !== []) {
+            return false;
+        }
+        $items = ShellCompound::parse($parsed);
+        if ($items !== null && ShellCompound::hasCompound($items)) {
+            return self::coversCompoundLine($rules, $parsed, $items, $command, $projectRoot, $readOnlyCovers);
+        }
+        if (\count($parsed->commands) < 2
             || \count($parsed->commands) !== \count($parsed->operators) + 1
-            || \count($parsed->sources) !== \count($parsed->commands)
-            || $parsed->substitutions !== [] || $parsed->parameterExpansions !== []) {
+            || \count($parsed->sources) !== \count($parsed->commands)) {
             return false;
         }
         foreach ($parsed->operators as $operator) {
@@ -706,20 +722,82 @@ final class SessionPermissionMemo
                 $changedDirectory = true;
             }
             $source = trim($parsed->sources[$index]);
-            $segment = new ToolCall('Bash', ['command' => $source]);
             $covered = $readOnlyCovers && ReadOnlyCommands::autoAllows($source, $root);
-            foreach ($covered ? [] : $rules as $rule) {
-                if ($rule->matches($segment, true, $projectRoot)) {
-                    $covered = true;
-                    break;
-                }
-            }
-            if (!$covered) {
+            if (!$covered && !self::ruleCoversSource($rules, $source, $projectRoot)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * {@see coversBySegments()} for a line holding a loop or an `if`: its
+     * top-level items joined only by {@see SEGMENT_OPERATORS}, each a plain
+     * command covered as one, or a compound covered body command by body
+     * command.
+     *
+     * @param list<PermissionRule>       $rules
+     * @param list<array<string, mixed>> $items
+     */
+    private static function coversCompoundLine(array $rules, ShellWords $parsed, array $items, string $command, ?string $projectRoot, bool $readOnlyCovers): bool
+    {
+        $root = $projectRoot === '' ? null : $projectRoot;
+        // The loop's own words (`for f in .env`) are in no body command's
+        // source, so the auto-allow's two whole-line refusals are made here.
+        $bodiesReadOnly = $readOnlyCovers && !ProtectFilesHook::namesProtectedFile($command)
+            && (new SafetyClassifier())->classify(new ToolCall('Bash', ['command' => $command])) === null;
+        $covers = static fn (array $node): bool => !in_array($node['words'][0] ?? '', self::RESERVED_WORDS, true)
+            && self::ruleCoversSource($rules, trim($node['source']), $projectRoot);
+
+        $last = \count($items) - 1;
+        $changedDirectory = false;
+        foreach ($items as $position => $item) {
+            if ($position < $last && !in_array($item['terminator'], self::SEGMENT_OPERATORS, true)) {
+                return false;
+            }
+            if ($item['kind'] !== 'simple') {
+                if (!ReadOnlyCommands::compoundIsCovered($parsed, $item, $root, $bodiesReadOnly, $covers)) {
+                    return false;
+                }
+                continue;
+            }
+            $program = $item['words'][0] ?? null;
+            if ($program === null || in_array($program, self::RESERVED_WORDS, true)) {
+                return false;
+            }
+            if ($program === 'cd') {
+                if ($changedDirectory && !str_starts_with((string) ($item['words'][1] ?? ''), '/')) {
+                    return false;
+                }
+                $changedDirectory = true;
+            }
+            $source = trim($item['source']);
+            $covered = $readOnlyCovers && ReadOnlyCommands::autoAllows($source, $root);
+            if (!$covered && !self::ruleCoversSource($rules, $source, $projectRoot)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Does one of $rules cover ONE command, judged by its own source text
+     * (redirections included) through the matcher a whole line is?
+     *
+     * @param list<PermissionRule> $rules
+     */
+    private static function ruleCoversSource(array $rules, string $source, ?string $projectRoot): bool
+    {
+        $segment = new ToolCall('Bash', ['command' => $source]);
+        foreach ($rules as $rule) {
+            if ($rule->matches($segment, true, $projectRoot)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -922,6 +1000,10 @@ final class SessionPermissionMemo
     private static function segmentPatterns(string $command, ?string $projectRoot): ?array
     {
         $parsed = ShellWords::parse($command);
+        $items = $parsed->complete ? ShellCompound::parse($parsed) : null;
+        if ($items !== null && ShellCompound::hasCompound($items)) {
+            return self::compoundPatterns($parsed, $items, $command, $projectRoot);
+        }
         if (!$parsed->complete || count($parsed->commands) < 2
             || count($parsed->commands) !== count($parsed->operators) + 1
             || count($parsed->sources) !== count($parsed->commands)
@@ -968,6 +1050,83 @@ final class SessionPermissionMemo
             $patterns[] = 'Bash(' . self::escape($source) . ')';
         }
         $patterns = array_values(array_unique($patterns));
+
+        $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow), $patterns);
+
+        return self::coversBySegments($rules, new ToolCall('Bash', ['command' => $command]), $projectRoot, false)
+            ? $patterns
+            : null;
+    }
+
+    /**
+     * {@see segmentPatterns()} for a line holding a `for` / `while read` loop
+     * or an `if` (user decision 2026-10-11): one grant per COMMAND — the
+     * loops' bodies included, the loop syntax itself never — so
+     * `for t in tests/*Test.php; do vendor/bin/phpunit "$t" | tail -3; done`
+     * remembers `Bash(vendor/bin/phpunit *)` and `Bash(tail *)`, and a later
+     * loop of another shape over other files running the same commands is
+     * covered ({@see coversBySegments()}).
+     *
+     * Null — the exact call is remembered — for a substitution or `${…}`
+     * anywhere, a launcher, a reserved word the grammar does not read, an
+     * interpreter on inline code, and for any command INSIDE a loop or an
+     * `if` that would have to be remembered exactly (`rm "$f"`, a writing
+     * redirection): an exact part's text there holds the loop variable, and
+     * a grant on `rm "$f"` would cover the same text in any later loop, over
+     * any list.
+     *
+     * @param list<array<string, mixed>> $items
+     *
+     * @return list<string>|null
+     */
+    private static function compoundPatterns(ShellWords $parsed, array $items, string $command, ?string $projectRoot): ?array
+    {
+        if ($parsed->substitutions !== [] || $parsed->parameterExpansions !== []) {
+            return null;
+        }
+        $writes = [];
+        foreach ($parsed->redirections as $redirection) {
+            if (!ShellWords::isInertRedirection($redirection)) {
+                $writes[$redirection['command']] = true;
+            }
+        }
+        $topLevel = [];
+        foreach ($items as $item) {
+            if ($item['kind'] === 'simple') {
+                $topLevel[$item['index']] = true;
+            }
+        }
+
+        $patterns = [];
+        foreach (ShellCompound::simpleCommands($items) as $node) {
+            $words = array_values(array_filter($node['words'], static fn (mixed $w): bool => is_string($w) && $w !== ''));
+            $program = $words[0] ?? null;
+            if ($program === null || in_array($program, self::RESERVED_WORDS, true)
+                || in_array($program, self::LAUNCHERS, true)) {
+                return null;
+            }
+            $prefix = isset($writes[$node['index']]) ? null : self::segmentPrefix($node['words'], $node['flags']);
+            if ($prefix !== null && in_array($program, self::FETCHERS, true) && $node['terminator'] === '|') {
+                $prefix = null;
+            }
+            if ($prefix !== null) {
+                $patterns[] = 'Bash(' . $prefix . ')';
+                $patterns[] = 'Bash(' . $prefix . ' *)';
+                continue;
+            }
+            if (in_array($program, self::INTERPRETERS, true) || !isset($topLevel[$node['index']])) {
+                return null;
+            }
+            $source = trim((string) preg_replace('/\s+/', ' ', $node['source']));
+            if ($source === '' || !PermissionRule::isWellFormedPattern('Bash(' . self::escape($source) . ')')) {
+                return null;
+            }
+            $patterns[] = 'Bash(' . self::escape($source) . ')';
+        }
+        $patterns = array_values(array_unique($patterns));
+        if ($patterns === []) {
+            return null;
+        }
 
         $rules = array_map(static fn (string $p): PermissionRule => new PermissionRule($p, PermissionAction::Allow), $patterns);
 

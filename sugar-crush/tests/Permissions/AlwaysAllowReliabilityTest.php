@@ -123,19 +123,19 @@ final class AlwaysAllowReliabilityTest extends TestCase
             generation: self::GENERATION,
             liveToolEvents: $inbox,
         );
-        $inbox[] = [self::GENERATION, new PermissionAsked(self::pendingAsk('c1', ['command' => 'sed -n 1,5p f | sort | uniq']))];
+        $inbox[] = [self::GENERATION, new PermissionAsked(self::pendingAsk('c1', ['command' => 'make lint | sort | uniq']))];
         [$asking] = $chat->update(new ToolEventPumpMsg());
         [$granted] = $asking->update(new PermissionReplyMsg(PermissionReply::Always));
 
         self::assertSame(
-            ['rule:Bash(sed)', 'rule:Bash(sed *)', 'rule:Bash(sort)', 'rule:Bash(sort *)', 'rule:Bash(uniq)', 'rule:Bash(uniq *)'],
+            ['rule:Bash(make lint)', 'rule:Bash(make lint *)', 'rule:Bash(sort)', 'rule:Bash(sort *)', 'rule:Bash(uniq)', 'rule:Bash(uniq *)'],
             $store->permissionGrants('sess-a'),
             'saved with the session, one grant per part',
         );
 
         // A later launch on the same session (`--resume sess-a`) starts from it.
         $resumed = Chat::storedPermissionGrants($store, 'sess-a');
-        self::assertTrue(SessionPermissionMemo::fromGrants($resumed)->allows('Bash', ['command' => 'sed x | sort -u | uniq -c']));
+        self::assertTrue(SessionPermissionMemo::fromGrants($resumed)->allows('Bash', ['command' => 'make lint -k | sort -u | uniq -c']));
         self::assertSame([], Chat::storedPermissionGrants($store, 'sess-unknown'));
         self::assertSame($granted->permissionGrants(), $resumed);
     }

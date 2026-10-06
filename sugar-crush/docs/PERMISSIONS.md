@@ -191,7 +191,8 @@ arguments** (`env rm x` runs `rm`), `grep`/`egrep`/`fgrep`, `rg` (not
 `-okdir`, `-delete`, `-fprint*`, `-fls`), `sort` (not `-o`, `-T`,
 `--compress-program`), `uniq` (at most one operand — a second is written),
 `cut`, `tr`, `column`, `nl`, `diff`, `cmp`, `comm`, `basename`, `dirname`,
-`realpath`, `readlink`, `jq`; `git` read subcommands only — `status`, `log`,
+`realpath`, `readlink`, `jq`, `fold`; `sed` with a script that only reads
+([below](#sed-and-loops)); `git` read subcommands only — `status`, `log`,
 `show`, `diff`, `blame`, `shortlog`, `rev-parse`, `rev-list`, `ls-files`,
 `ls-tree`, `describe`, `cat-file`, `grep` (not `-O`), `branch` and `tag` in
 their **list** forms (no `-d`/`-D`/`-m`/`-c`, no name to create),
@@ -201,6 +202,38 @@ them with `--output`, or a global option other than `--no-pager` (`-C`,
 `npm ls`/`list`/`view`/`info`. A command must be spelled literally:
 `/bin/ls`, `l?`, `$CMD` or a `FOO=1` prefix is not on the list.
 
+<a id="sed-and-loops"></a>
+**`sed`** is on the list with its script **parsed**, not pattern-matched
+(`Permissions\SedCommand`): `sed -n '1,40p' f`, `… | sed 's/^use //'`,
+`sed -e 's/a/b/' -e '/x/d'` run unasked. Refused: `-i`/`--in-place` in any
+spelling (`-ni`, `--in`, after the script), `-f`/`--file` (a script this
+check never sees), the `w`/`W` commands and the `s///w` flag (they write a
+file), GNU's `e` command and `s///e` flag (they run a shell command), any
+option off the short allow-list (`-n`, `-e`, `-E`/`-r`, `-s`, `-u`, `-z`, their
+long names, `--posix`, `--debug`, `--sandbox`), and any script the parser
+cannot read — an unknown command, extra text after one, or a regex whose
+`[…]` bracket would make GNU and BSD sed disagree on where it ends.
+
+**Loops.** A `for NAME in WORD…; do …; done` or
+`while [IFS=…] read [-r] NAME…; do …; done` (fed by `< file` or a pipe) runs
+unasked when **every** command of its body is read-only, and so does an
+`if …; then …; [elif …;] [else …;] fi` inside or around one; loops nest.
+`for f in src/*.php; do wc -l "$f"; done` and
+`grep -l x src/* | while read -r f; do head -3 "$f"; done` qualify. The
+list may hold words and globs but no command substitution
+(`for f in $(ls)` asks), and the body may read **only the loop variables**
+(`$f`, `"$f"`, `${f}` — `$HOME`, `$1`, `$@` in a body ask). When every list
+word is literal (`for d in candy-core candy-forms`) the body is judged once
+per value, as each iteration will run. When the values are not known (a
+glob, `read` input), a command that checks its arguments (`sed`, `sort`,
+`git`, `find` …) accepts the variable only **double-quoted** and only where
+it cannot become an option — after a literal prefix (`"./$f"`), from a list
+whose words cannot start with `-` (`src/*`, not `*`), or after `--` (not for
+`find`) — and never as a sed script. Still asking: a body command off the
+list, a writing redirection anywhere (`done > out` included), a `cd` in a
+body, a loop variable re-bound by an inner loop, `until`, `case`, `select`,
+`while` on anything but `read`, `for ((…))`, and a loop in the background.
+
 **`cd`** is allowed only into an existing directory **inside the project**
 (resolved like the leading `cd` an "always" grant strips — symlinks followed,
 no `~`, no `-`, and with `CDPATH` set a bare relative name does not count);
@@ -208,17 +241,20 @@ after one `cd`, a further one must be absolute. `cd /etc && ls`,
 `cd .. && ls` and bare `cd` ask.
 
 **What makes the whole line ask** (fail closed — anything not shown read-only
-is a question, exactly as before): a command off the list (`sed`, `awk`,
-`xargs`, `tee`, `sh`, `php artisan …`, `npm test`, …, so `ls | sh` and
-`ls | xargs rm` ask); a writing redirection (`> f`, `>> f`, `&> f` —
-`2>/dev/null`, `>/dev/null` and `2>&1` are fine); a command or process
-substitution (`$(…)`, backticks, `<(…)`) or a `${…}` expansion; a
+is a question, exactly as before): a command off the list (`awk`,
+`xargs`, `tee`, `sh`, `python3 -c …`, `php artisan …`, `npm test`, …, so
+`ls | sh` and `ls | xargs rm` ask); a writing redirection (`> f`, `>> f`,
+`&> f` — `2>/dev/null`, `>/dev/null` and `2>&1` are fine); a command or
+process substitution (`$(…)`, backticks, `<(…)`) or a `${…}` expansion other
+than a plain `${name}` (`${x:=y}`, `${a[i]}`, `${x@P}` evaluate code); a
 background `&`; a line that does not parse (an open quote, a here-doc); a
 file `protect-files` guards (`grep x .env`, `cat deploy.pem`, the policy
 files); and anything the `auto` classifier flags (`env | grep SECRET`).
 
 **What still wins.** It is a mode decision, so a configured `deny` or `ask`
-rule (`{"pattern": "Bash(git log *)", "action": "deny"}`) comes first, and the
+rule (`{"pattern": "Bash(git log *)", "action": "deny"}`) comes first — it
+sees the commands a loop body runs (`do git log …` is read as `git log …`) —
+and the
 hooks run before the gate at all — `protect-files` still refuses
 `grep API_KEY .env`. Paths are not restricted: reading outside the project is
 still reading, as it is with `Read`. `plan` keeps its own judgement (there a
@@ -334,14 +370,15 @@ A `Bash` call is allowed under `plan` when, after quote-aware tokenising
 - it contains no command or process substitution — `$(…)`, backticks, `<(…)`,
   `>(…)` — and no `${…}` / `$[…]` expansion (bash evaluates subscripts and
   `${x@P}` in ways that run a `$(…)` hidden in a variable's value; plain
-  `$NAME` is fine);
+  `$NAME` and `${NAME}` are fine);
 - every redirection is harmless: an fd duplication (`2>&1`), an output
   redirection onto `/dev/null`, `/dev/stdout` or `/dev/stderr`, an input
   redirection (`< file`, except bash's `/dev/tcp/…`), or a here-string. Any
   output redirection onto a file is denied **in every spacing and form**
   (`>f`, `2> f`, `>|`, `&>`, `>>`); `<>` and here-docs are denied;
-- every command in every pipeline and list (`|`, `&&`, `;`, newline) is on the
-  read-only list, named literally — not by path (`/bin/cat`), not behind a
+- every command in every pipeline, list (`|`, `&&`, `;`, newline) and
+  `for` / `while read` loop body or `if` branch ([the loop
+  rules](#sed-and-loops)) is on the read-only list, named literally — not by path (`/bin/cat`), not behind a
   `NAME=value` prefix:
   - any arguments: `cat`, `head`, `tail`, `ls`, `grep`/`egrep`/`fgrep`, `wc`,
     `cut`, `tr`, `nl`, `diff`, `cmp`, `comm`, `stat`, `du`, `df`, `basename`,
@@ -351,7 +388,8 @@ A `Bash` call is allowed under `plan` when, after quote-aware tokenising
     `-exec`, `-execdir`, `-ok`, `-okdir`, `-fprint*`, `-fls`), `sort` (no `-o`,
     `-T`, `--compress-program`), `uniq` (at most one operand — a second is the
     output file), `rg` (no `--pre`, `--hostname-bin`), `tree` (no `-o`, `-R`),
-    `file` (no `-C`), `date` (display forms only), `printf` (no `-v`), and `git`
+    `file` (no `-C`), `date` (display forms only), `printf` (no `-v`), `sed`
+    (a parsed script with no `-i`, `-f`, `w`, `W`, `e`, `s///w`, `s///e`), and `git`
     limited to `status`, `log`, `show`, `diff`, `blame`, `shortlog`,
     `rev-parse`, `rev-list`, `ls-files`, `ls-tree`, `describe`, `cat-file`,
     `grep` (no `--output`, no `grep -O`), listing-only `branch`/`tag`,
@@ -365,8 +403,8 @@ A `Bash` call is allowed under `plan` when, after quote-aware tokenising
 So `git log --oneline`, `grep -rn foo src`, `cat a | grep b | wc -l`,
 `find . -name '*.php'` and `ls 2>/dev/null` run, and `ls; rm x`,
 `cat a | tee b`, `git log $(rm x)`, `find . -delete` and `echo x>/tmp/f` are
-denied. Deliberately **not** on the list: interpreters and editors (`sed`,
-`awk`, `perl`, `python`, `php`, `node`), anything that runs another command
+denied. Deliberately **not** on the list: interpreters (`awk`, `perl`,
+`python`, `php`, `node`), anything that runs another command
 (`xargs`, `env`, `sudo`, `timeout`, `nohup`, `bash -c`, `eval`, `exec`,
 `source`), `test`/`[` (`[ -v 'a[$(cmd)]' ]` runs `cmd`), pagers, `tee`, `xxd`,
 `curl`/`wget`. A command missing from the list costs one denied step — the
@@ -707,8 +745,8 @@ situations, not two:
     and covers `make test && rm -f a.txt` but not `rm -f b.txt && make`. A
     line with a **launcher or an interpreter that runs inline or piped-in
     code** (`sh`, `bash -c`, `xargs`, `env`, `find`, `awk`, `perl`,
-    `php -r`, `python3 -c`, …) or a shell reserved word (`for …; do …;
-    done`), and a `;` list, keep the **whole-shape** grant instead — its
+    `php -r`, `python3 -c`, …) or a reserved word outside the loop grammar
+    (`until`, `case`), and a `;` list, keep the **whole-shape** grant instead — its
     operators kept, each command matched against its own segment:
     `git status | sh` → `Bash(git status * | sh)`, which covers
     `git status -s | sh` and never `cat x | sh` (a remembered `sh` on its
@@ -718,6 +756,16 @@ situations, not two:
     line none of whose segments can be generalised (`find . | xargs rm`) are
     remembered exactly; so is one with a substitution, a newline, a
     background `&` or a subshell.
+    A **`for` / `while read` loop** (or an `if`) is **one part whose body
+    commands must each be covered**: `a` on
+    `for t in tests/*Test.php; do vendor/bin/phpunit "$t" | tail -3; done`
+    remembers `Bash(vendor/bin/phpunit *)` and `Bash(tail *)` — the
+    commands, never the loop syntax — and a later loop of another shape over
+    other values running those commands (or read-only ones) is covered, its
+    header held to the [loop rules](#sed-and-loops). A loop whose body holds a
+    command that would be remembered exactly (`rm "$f"`, a writing
+    redirection) is remembered as the exact call: a grant on `rm "$f"` would
+    cover the same text in any later loop, over any list.
     "Exactly" is the command as it runs:
     `Bash`'s `description` (the model's caption, rewritten on every call) and
     `timeout` are not part of it, so the identical command re-run under a new

@@ -1258,8 +1258,10 @@ command inside bubblewrap, writable only in the project.
   `cd <project> && ls -d */ | head -80 && echo --- && git log --oneline -3`
   never asks. The list is conservative (`ls`, `cat`, `head`, `tail`, `wc`,
   `grep`/`rg`, `find` without `-exec`/`-delete`, `sort` without `-o`, `git`'s
-  read subcommands, `php -l`, `composer show`, `npm ls` …), and a writing
-  redirection, a substitution, `xargs`/`sed`/`awk`, a `cd` out of the project,
+  read subcommands, `php -l`, `composer show`, `npm ls`, `sed` with a script
+  that only reads …), and `for`/`while read` loops whose every command is one
+  of them qualify too; a writing redirection, a substitution, `sed -i` or a
+  sed `w`/`e`, `xargs`/`awk`, a `cd` out of the project,
   a protected file (`.env`, keys) or anything else off the list makes the
   whole line ask as before. Configured rules and hooks still win;
   `"permissions.autoAllowReadOnly": false` (yours; a project may only switch

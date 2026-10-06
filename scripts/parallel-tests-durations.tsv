@@ -491,6 +491,7 @@ sugar-crush/tests/Providers/VertexProviderTest.php	0.222	153
 sugar-crush/tests/TerminalSizeFallbackIsolationTest.php	0.218	2
 sugar-crush/tests/Skills/SkillPathNudgeTest.php	0.216	21
 sugar-crush/tests/LangParityTest.php	0.215	7
+sugar-crush/tests/Permissions/ReadOnlySedAndLoopsTest.php	0.210	75
 sugar-crush/tests/Commands/MemoryImportCommandTest.php	0.206	11
 sugar-crush/tests/Providers/SglangProviderEnvelopeHoldBackTest.php	0.202	11
 sugar-crush/tests/Integration/ParallelExemptJobStatusLostTest.php	0.200	1
@@ -505,7 +506,7 @@ sugar-crush/tests/Backend/SubAgentWrapUpNudgeTest.php	0.200	3
 sugar-crush/tests/Backend/MemoryFlushBeforeCompactionTest.php	0.200	10
 sugar-crush/tests/Server/SettingsSharedTierTest.php	0.200	3
 sugar-crush/tests/LangLaunchLocaleTest.php	0.200	13
-sugar-crush/tests/Permissions/ReadOnlyAutoAllowTest.php	0.200	69
+sugar-crush/tests/Permissions/ReadOnlyAutoAllowTest.php	0.200	70
 sugar-crush/tests/Cli/BootstrapUserConfigTest.php	0.199	16
 sugar-crush/tests/Cli/BootstrapMcpLivenessTest.php	0.198	11
 sugar-crush/tests/Tui/Components/AgentDashboardPaneTest.php	0.196	38
@@ -551,7 +552,7 @@ sugar-crush/tests/Tools/BuiltIn/AskUserToolTest.php	0.150	18
 sugar-crush/tests/Agents/Board/BoardTest.php	0.150	20
 sugar-crush/tests/Commands/NewRuleCommandTest.php	0.150	9
 sugar-crush/tests/Chat/ChatHostLangCatalogueTest.php	0.150	3
-sugar-crush/tests/Permissions/PerPartGrantTest.php	0.150	30
+sugar-crush/tests/Permissions/PerPartGrantTest.php	0.150	33
 sugar-crush/tests/Integration/RulePathScopingWiringTest.php	0.149	16
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.148	21
 sugar-crush/tests/Tools/ToolDescriptionGuidanceTest.php	0.147	23
@@ -729,7 +730,7 @@ sugar-crush/tests/Tools/BuiltIn/RecallToolTest.php	0.051	10
 sugar-crush/tests/Providers/SglangColdCacheReportTest.php	0.050	5
 sugar-crush/tests/Context/PromptFenceAttributeTagTest.php	0.050	141
 sugar-crush/tests/Agents/AgentDefinitionTest.php	0.050	40
-sugar-crush/tests/Permissions/SessionPermissionMemoTest.php	0.050	28
+sugar-crush/tests/Permissions/SessionPermissionMemoTest.php	0.050	30
 sugar-crush/tests/Support/FrontmatterKeyAuditTest.php	0.050	22
 sugar-crush/tests/Runtime/SteerSkipsUnstartedSequentialCallsTest.php	0.050	3
 sugar-crush/tests/Tui/Components/AgentDashboardPerInstanceTest.php	0.050	3

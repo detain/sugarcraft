@@ -641,6 +641,14 @@ final class PermissionRule
             $readings[] = self::collapseWhitespace($parsed->sources[$index] ?? '');
         }
 
+        // A compound statement's body commands open with its keywords
+        // (`do wc -l x`, `then rm y`): each reading is also tried with a
+        // leading run of them removed, so `Deny Bash(rm *)` sees the `rm` a
+        // loop runs. Only ever MORE readings — the safe direction here.
+        foreach ($readings as $reading) {
+            $readings[] = (string) preg_replace('/^(?:(?:do|then|else|elif|if|while|until|time|!|\{)\s+)+/', '', $reading);
+        }
+
         foreach (array_unique($readings) as $reading) {
             if ($reading !== '' && fnmatch($argumentPattern, $reading)) {
                 return true;
