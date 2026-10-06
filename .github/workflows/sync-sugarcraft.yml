@@ -34,16 +34,36 @@ jobs:
 
       - name: Compute affected libs
         id: affected
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          # Use the same affected-libs logic as ci.yml
-          # --range HEAD~1..HEAD gives us files changed in this push
-          # The script computes changed libs + transitive dependents
-          result=$(php scripts/affected-libs.php --range HEAD~1..HEAD 2>&1)
-          affected=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print('\n'.join(d['affected']))" 2>/dev/null || true)
-          force_all=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print('yes' if d['force_all'] else 'no')" 2>/dev/null || echo "yes")
+          # Same affected-libs logic as ci.yml: changed libs + transitive
+          # dependents over the whole push (before..sha), not just its last
+          # commit — a multi-commit push touching lib A then lib B must sync
+          # both. A dispatch, a new branch (zero before-sha) or a before-sha
+          # missing from history (force-push) falls back to HEAD~1..HEAD,
+          # whose script output still flags monorepo-wide files as force_all.
+          ZERO=0000000000000000000000000000000000000000
+          range="HEAD~1..HEAD"
+          if [ -n "${BEFORE_SHA:-}" ] && [ "$BEFORE_SHA" != "$ZERO" ] \
+             && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            range="${BEFORE_SHA}..${HEAD_SHA}"
+          fi
+          echo "affected-libs range: $range"
+          # stdout ONLY: the script prints its one-line summary on stderr, and
+          # folding that into the JSON (2>&1) made every parse fail — which
+          # fell back to force_all and pushed all libs on every sync.
+          # stderr still reaches the job log.
+          result=$(php scripts/affected-libs.php --range "$range")
+          # A parse failure still fails SAFE (push everything), never silent.
+          affected=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print(' '.join(d['affected']))" || true)
+          force_all=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print('yes' if d['force_all'] else 'no')" || echo "yes")
           echo "force_all=$force_all"
           echo "affected_libs=$affected"
+          # One space-separated line: a multi-line value is not a valid
+          # name=value GITHUB_OUTPUT entry.
           echo "affected_libs=$affected" >> "$GITHUB_OUTPUT"
           echo "force_all=$force_all" >> "$GITHUB_OUTPUT"
 
@@ -132,7 +152,7 @@ jobs:
             # Changed-only: push only affected libs
             echo "Pushing affected libs:"
             echo "$libs_str"
-            mapfile -t libs < <(echo "$libs_str" | grep -v '^$')
+            read -r -a libs <<<"$libs_str"
           fi
 
           for lib in "${libs[@]}"; do
