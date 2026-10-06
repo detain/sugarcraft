@@ -149,7 +149,10 @@ final class EngineBackendFrameSocketInheritanceTest extends TestCase
 
         self::assertInstanceOf(\RuntimeException::class, $error);
         self::assertStringContainsString('exited without a result', $error->getMessage());
-        self::assertLessThan(2.0, $elapsed, \sprintf(
+        // The holder keeps the socket for 5 s, so the defect reads as ~5 s.
+        // 4 s, not 2: a loaded CI runner spent 2.02 s on the fork and the
+        // turn's startup alone, and the line only has to separate the two.
+        self::assertLessThan(4.0, $elapsed, \sprintf(
             'the dead turn was only noticed after %.2fs — when the forked holder let go of the socket',
             $elapsed,
         ));

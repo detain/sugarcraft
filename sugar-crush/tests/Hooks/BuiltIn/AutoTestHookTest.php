@@ -171,8 +171,10 @@ final class AutoTestHookTest extends TestCase
     public function testTheStopChainsHeartbeatLetsTheRunOutlastTheIdleCeiling(): void
     {
         // A beatless run is cut IDLE_MARGIN_SECONDS inside the ceiling: a
-        // ceiling of margin + 0.3 s leaves it 0.3 s, too short for the suite.
-        $runner = TestRunner::new()->withCommand('sleep 1; touch ran')->withinTurnIdleCeiling((int) TestRunner::IDLE_MARGIN_SECONDS + 1);
+        // ceiling of margin + 1 s leaves it 1 s, too short for the suite. The
+        // suite sleeps 2 s, not 1: a cut due at 1 s racing a 1 s sleep let
+        // `touch` win on a loaded CI runner.
+        $runner = TestRunner::new()->withCommand('sleep 2; touch ran')->withinTurnIdleCeiling((int) TestRunner::IDLE_MARGIN_SECONDS + 1);
         $edits = AutoTestEditHook::new();
         $hook = new AutoTestHook($runner, $edits);
 

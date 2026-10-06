@@ -83,13 +83,14 @@ final class WorkflowStageTimeoutTest extends TestCase
     public function testAPipelineSharesOneBudgetAcrossItsSteps(): void
     {
         // Step 1 completes inside the budget; step 2 gets only what is left.
-        // Were each step handed the full 3 s afresh, the pipeline would run to
-        // ~5 s. The 4 s line sits a full second from both answers: at a 2 s
-        // budget the gap was 0.3 s, and a loaded CI runner's fork overhead
-        // (measured 2.97 s for a shared budget) crossed it.
+        // Were each step handed the full 5 s afresh, the pipeline would run to
+        // ~7 s; shared, it ends near 5 s. The 6 s line sits a second from both,
+        // and step 1 has 3 s of slack: on a loaded CI runner a shared budget
+        // measured 2.97 s against the old 2.9 s line, and over a second went
+        // before the first dispatch.
         $workflow = (new WorkflowBuilder())
             ->name('wf1-pipeline')
-            ->timeout(3)
+            ->timeout(5)
             ->pipeline('chain', [
                 Tasks::agent('coder')->name('quick')->prompt('sleep:2'),
                 Tasks::agent('coder')->name('slow')->prompt('never finishes'),
@@ -98,7 +99,7 @@ final class WorkflowStageTimeoutTest extends TestCase
 
         [$result, $elapsed] = $this->runTimed($this->forkingEngine(), $workflow);
 
-        self::assertLessThan(4.0, $elapsed, 'the pipeline\'s second step was given a fresh budget');
+        self::assertLessThan(6.0, $elapsed, 'the pipeline\'s second step was given a fresh budget');
         $agents = $result->stageResults[0]->agents;
         self::assertCount(2, $agents);
         self::assertSame(AgentStatus::Completed, $agents[0]->status);
@@ -119,17 +120,18 @@ final class WorkflowStageTimeoutTest extends TestCase
             ->withVerification('checked', Tasks::agent('coder')->prompt('p'), Tasks::agent('tester')->prompt('v'))
             ->build());
 
-        // The verification stage's second task is bounded by what is LEFT of
-        // that stage's 77 s (AgentWorkerPool rounds the remainder up), so on a
-        // runner stalled for over a second between the two it is 76 — still
-        // the workflow's budget, never an engine literal.
+        // Every task is bounded by what is LEFT of its stage's budget, rounded
+        // up (AgentWorkerPool::executeInline()), so a runner that stalls over a
+        // second before a dispatch hands 76, not 77 — measured on CI. Still
+        // the workflow's budget, never an engine literal; the declared 5 is
+        // below every remainder and stays exact.
         $timeouts = $executor->timeouts;
-        $last = array_pop($timeouts);
-        self::assertSame(
-            [77, 5, 77],
-            $timeouts,
-            'a task without timeout() must carry the workflow\'s per-stage budget, not an engine literal',
-        );
+        self::assertCount(4, $timeouts);
+        self::assertSame(5, $timeouts[1], 'a declared timeout() is kept');
+        foreach ([0, 2] as $i) {
+            self::assertThat($timeouts[$i], self::logicalAnd(self::greaterThanOrEqual(70), self::lessThanOrEqual(77)), 'a task without timeout() must carry the workflow\'s per-stage budget, not an engine literal');
+        }
+        $last = $timeouts[3];
         self::assertThat($last, self::logicalAnd(self::greaterThanOrEqual(70), self::lessThanOrEqual(77)), 'the verifier must carry what is left of the stage budget');
     }
 
