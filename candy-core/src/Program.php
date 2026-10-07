@@ -190,13 +190,17 @@ final class Program
 
     /**
      * @deprecated Renamed to {@see setRecorder()} (candy-core audit C4).
-     *             No call site inside the monorepo uses this name any more
-     *             (candy-vcr's chains ride candy-pty's PumpOptions::withRecorder,
-     *             a different class; its only Program mention is a doc cite,
-     *             and candy-testing's ProgramSimulator never carried the name).
-     *             Like the {@see getModel()} alias below, the delegating shim
-     *             stays for external consumers that track dev-master; new code
-     *             must call setRecorder().
+     *             Live call sites remain inside the monorepo, all in
+     *             candy-vcr: tests/ProgramRecordingTest.php,
+     *             tests/PlayerTest.php, tests/Assert/ScreenRoundTripTest.php
+     *             and examples/record.php (plus doc cites in its
+     *             src/Recorder.php and src/Cli/RecordCommand.php). candy-vcr's
+     *             pump chains themselves ride candy-pty's
+     *             PumpOptions::withRecorder, a different class, and
+     *             candy-testing's ProgramSimulator never carried the name.
+     *             The delegating shim therefore stays for those in-tree
+     *             callers and for external consumers that track dev-master;
+     *             new code must call setRecorder().
      */
     public function withRecorder(?Recorder $recorder): self
     {
