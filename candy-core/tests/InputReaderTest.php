@@ -126,6 +126,62 @@ final class InputReaderTest extends TestCase
         $this->assertTrue($msgs[0]->alt);
     }
 
+    // candy-core audit C3: Alt + non-ASCII runes. Meta arrives as ESC + the
+    // rune's UTF-8 bytes; the pre-fix alt set was ASCII-only, so these
+    // degraded to a bare Escape plus a non-alt rune (alt flag lost).
+
+    public function testAltPrefixedTwoByteRuneKeepsAltFlag(): void
+    {
+        // Alt+é: ESC C3 A9 must be ONE alt-flagged Char, not Escape + plain.
+        $msgs = (new InputReader())->parse("\x1b\xc3\xa9");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Char, $msgs[0]->type);
+        $this->assertSame('é', $msgs[0]->rune);
+        $this->assertTrue($msgs[0]->alt);
+        $this->assertSame('alt+é', $msgs[0]->string());
+    }
+
+    public function testAltPrefixedThreeByteRuneKeepsAltFlag(): void
+    {
+        // Alt+€ (U+20AC): ESC + three-byte cluster assembles atomically.
+        $msgs = (new InputReader())->parse("\x1b\xe2\x82\xac");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Char, $msgs[0]->type);
+        $this->assertSame('€', $msgs[0]->rune);
+        $this->assertTrue($msgs[0]->alt);
+    }
+
+    public function testAltPrefixedRuneSplitAcrossReadsParksThenCompletes(): void
+    {
+        // A read boundary inside the cluster must park ESC + plausible lead
+        // (no premature Escape, no lost bytes) and complete on arrival.
+        $r = new InputReader();
+        $this->assertCount(0, $r->parse("\x1b\xc3"));
+        $this->assertFalse($r->hasPendingEscape(), 'ESC + lead is not a lone pending Escape');
+        $msgs = $r->parse("\xa9");
+        $this->assertCount(1, $msgs);
+        $this->assertSame('é', $msgs[0]->rune);
+        $this->assertTrue($msgs[0]->alt);
+    }
+
+    public function testAltPrefixedProvenBrokenClusterDegradesToEscapeThenGarbageDrop(): void
+    {
+        // ESC C3 'q': the ASCII 'q' disproves the sequence immediately, so
+        // the parser emits the bare Escape (old behavior preserved for
+        // genuine garbage) and the stray lead byte drops via the non-alt
+        // fail-open path — 'q' itself decodes normally on its own pass.
+        $msgs = (new InputReader())->parse("\x1b\xc3q");
+        $this->assertSame(KeyType::Escape, $msgs[0]->type);
+        $this->assertFalse($msgs[0]->alt);
+        $decoded = array_values(array_filter(
+            $msgs,
+            static fn ($m): bool => $m instanceof KeyMsg && $m->type === KeyType::Char,
+        ));
+        $this->assertCount(1, $decoded);
+        $this->assertSame('q', $decoded[0]->rune);
+        $this->assertFalse($decoded[0]->alt);
+    }
+
     public function testBareEscapeIsBufferedThenFlushed(): void
     {
         $r = new InputReader();

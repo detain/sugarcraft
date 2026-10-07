@@ -236,6 +236,60 @@ final class InputReader
                     $i += 2;
                     continue;
                 }
+                // Alt + non-ASCII rune (candy-core audit C3): terminals send
+                // Meta as ESC <bytes>, so Alt+é arrives as ESC C3 A9. The
+                // printable set above is ASCII-only, and falling through to
+                // the bare-Escape branch below silently dropped the alt flag
+                // for EVERY non-ASCII keypress (Escape, then a plain rune
+                // from the leftover bytes on the next pass). Mirror the
+                // bubbletea rune-assembly law of the non-alt block: assemble
+                // the full cluster after the ESC, park only a genuine
+                // plausible partial, and degrade provably-broken or
+                // overlong-encoded sequences exactly like the old branch did
+                // (Escape, then the stray byte re-parses as non-alt garbage).
+                // Single-codepoint framing keeps bubbletea parity: a combining
+                // sequence after Alt+base still yields one alt-flagged Char
+                // for the base plus plain Chars for the marks.
+                if ($code2 >= 0xc0 && $code2 <= 0xf7) {
+                    $seqLen = match (true) {
+                        $code2 >= 0xf0 => 4,
+                        $code2 >= 0xe0 => 3,
+                        default => 2,   // 0xC0-0xDF: 2-byte sequences
+                    };
+                    $available = min($seqLen, $len - $i - 1);
+
+                    $provenBroken = false;
+                    for ($j = 1; $j < $available; $j++) {
+                        $cb = ord($this->buf[$i + 1 + $j]);
+                        if ($cb < 0x80 || $cb > 0xbf) {
+                            $provenBroken = true;
+                            break;
+                        }
+                    }
+                    if ($provenBroken) {
+                        $msgs[] = new KeyMsg(KeyType::Escape);
+                        $i += 1;
+                        continue;
+                    }
+                    if ($available < $seqLen) {
+                        // Split read mid-rune: ESC + plausible lead parks in
+                        // the buffer. Safe — hasPendingEscape()/flushPending()
+                        // promote only a LONE ESC, never ESC + lead.
+                        break;
+                    }
+                    $rune = substr($this->buf, $i + 1, $seqLen);
+                    // Strict decode catches what the range scan cannot:
+                    // overlong forms (C0/C1 leads) and out-of-range lead +
+                    // continuation combinations.
+                    if (!mb_check_encoding($rune, 'UTF-8')) {
+                        $msgs[] = new KeyMsg(KeyType::Escape);
+                        $i += 1;
+                        continue;
+                    }
+                    $msgs[] = new KeyMsg(KeyType::Char, rune: $rune, alt: true);
+                    $i += 1 + $seqLen;
+                    continue;
+                }
                 $msgs[] = new KeyMsg(KeyType::Escape);
                 $i += 1;
                 continue;
