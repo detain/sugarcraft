@@ -790,3 +790,5 @@ it identically, so CI injects the same path-repo. Cosmetic; 7 such constraints e
 - **sugar-mcp:** `McpMessageTest.php` (177 lines) not opened.
 - **candy-pty:** `src/Output/{AnsiOutputParser,SgrHandler,SgrState}.php`,
   `src/Input/PtyInputDecoder.php`, most of `src/Exception/*` and `src/Contract/*`.
+
+2026-10-07 ADDENDUM — deferred backlog items now closed: crush BuildsUnifiedDiff twin folded onto sugar-diff @14725b088 (GNU-faithful headers adopted crush-wide); sugar-toast Width::nextCluster fork deduped onto candy-core public promotion @85466ebd2+793d9d959; candy-kit real terminal-width resolution @a403c6338; candy-focus reorder() disabled-head fallback @6eb057529; scripts/parallel-tests.sh default --timeout 900 @6f3c02321. Suite re-pinned 21,196T/406,402A @abbb45650.

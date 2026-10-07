@@ -306,7 +306,9 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, PromptGuidance,
 
         // Same contract as Edit: the diff rides its own ToolResult field so a
         // renderer hands it straight to DiffViewer. For a new file the old side
-        // is empty, which `diff -u` renders as an `@@ -0,0 +1,N @@` hunk.
+        // is empty, which `diff -u` renders as an `@@ -0,0 +1,N @@` hunk for
+        // an N-line file — with the GNU elision, N == 1 headers as the short
+        // `@@ -0,0 +1 @@` (the `,1` count is dropped when it equals 1).
         $preview = $previousTooLarge === null && $content !== $previous
             ? self::diffPreview($path, $previous, $content)
             : ['diff' => '', 'added' => 0, 'removed' => 0, 'omitted' => false];

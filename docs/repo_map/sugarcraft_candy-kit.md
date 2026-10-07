@@ -119,19 +119,19 @@ final class Section
         string $label,
         ?Theme $theme = null,
         int $leftPad = 2,
-        ?int $width = 80,
+        int|AutoWidth|null $width = AutoWidth::Auto,
         string $rune = '─',
     ): string;
 
     public static function rule(
         ?Theme $theme = null,
-        ?int $width = 80,
+        int|AutoWidth|null $width = AutoWidth::Auto,
         string $rune = '─',
     ): string;
 }
 ```
 
-Output format: `── LABEL ──────────────` (total width = 80 cells by default).
+Output format: `── LABEL ──────────────` (total width defaults to the terminal — the exported `COLUMNS` where the environment advertises one, else the historical 80 cells).
 
 The implementation uses `SugarCraft\Core\Util\Width::string()` to compute ANSI-aware cell width for accurate padding when the terminal uses TrueColor or ANSI256:
 
@@ -195,10 +195,10 @@ final class HelpText
         array $sections,
         string $description = '',
         ?Theme $theme = null,
-        ?int $width = 80,
+        int|AutoWidth|null $width = AutoWidth::Auto,
     ): string;
 
-    public static function renderRows(array $rows, ?Theme $theme = null, ?int $width = 80): string;
+    public static function renderRows(array $rows, ?Theme $theme = null, int|AutoWidth|null $width = AutoWidth::Auto): string;
 }
 ```
 
