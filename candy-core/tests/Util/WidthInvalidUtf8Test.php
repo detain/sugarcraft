@@ -77,4 +77,20 @@ final class WidthInvalidUtf8Test extends TestCase
         // Both measures treat the stray byte as a zero-width cluster.
         $this->assertSame(Width::truncate($in, 10), Width::wrap($in, 10));
     }
+
+    /**
+     * Public-API pin: `nextCluster()` is the canonical splitter sibling libs
+     * (sugar-toast since the fork deletion) call directly, so the shapes the
+     * walkers above only prove end-to-end must hold at the entry point itself.
+     */
+    public function testNextClusterIsPublicAndHoldsItsGuardsAtTheEntryPoint(): void
+    {
+        // ICU-position rejection: the stray lead byte yields itself, never
+        // the neighbour ICU would hand back.
+        $this->assertSame("\xff", Width::nextCluster("aaa\xffb", 3));
+        // Continuation-byte validation: the broken lead owns only itself.
+        $this->assertSame("\xe2", Width::nextCluster("\xe2AB", 0));
+        // ICU grapheme segmentation: base + skin-tone modifier is ONE cluster.
+        $this->assertSame("\u{1F44D}\u{1F3FB}", Width::nextCluster("\u{1F44D}\u{1F3FB}x", 0));
+    }
 }

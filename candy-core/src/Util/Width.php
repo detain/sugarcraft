@@ -817,6 +817,14 @@ final class Width
     /**
      * The cluster starting at byte offset `$i`, via ICU's UAX #29 segmenter.
      *
+     * **Public: this is the canonical cluster walk for the whole stack.**
+     * sugar-toast's painter ran a verbatim copy of this body (the sanctioned
+     * fork at `@c5cce07d7`) only because this method was `private`; the fork's
+     * body is now deleted and the toast renderer delegates here, so one
+     * splitter — including both invalid-UTF-8 guards — decides segmentation
+     * everywhere. Keep the signature and the byte-for-byte reproduction of
+     * malformed input stable: sibling libs now link against it.
+     *
      * **The `function_exists()` fallback below is a SEAM, not a supported
      * path, and it is measurably wrong.** WHAT THE ABSENCE OF A NOTE HERE
      * IMPLIED: that the two branches are interchangeable. WHAT IS TRUE NOW:
@@ -844,7 +852,7 @@ final class Width
      * must fix this branch first; it is not merely approximate, it is wrong
      * by a bounded amount recorded above.
      */
-    private static function nextCluster(string $s, int $i): string
+    public static function nextCluster(string $s, int $i): string
     {
         if (function_exists('grapheme_extract')) {
             $next = 0;
