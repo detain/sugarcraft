@@ -177,8 +177,9 @@ final class RendererImageTest extends TestCase
         $view = Renderer::renderView($this->chatWithImage(Mosaic::sixel(), $this->pngBytes(16, 1600)));
         $placement = array_values($view->images)[0];
 
-        // 40 / (16/1600) / 2 = 2000 natural rows, clamped to rows(40) - 2.
-        $this->assertSame(38, $placement->heightCells);
+        // 40 / (16/1600) / 2 = 2000 natural rows, clamped to the full
+        // rows(40): CL-3 took the shell's two border rows out of the budget.
+        $this->assertSame(40, $placement->heightCells);
     }
 
     /**

@@ -71,8 +71,9 @@ use SugarCraft\Sprinkles\Table\Table;
  * The pane the box must fit is not the terminal: {@see
  * \SugarCraft\Crush\Renderer::render()} wraps the transcript at
  * `max(1, $chat->cols() - Renderer::SHELL_CHROME_COLS)`, and
- * {@see CHROME_COLS} is that same 6. A row wider than that is HARD-wrapped
- * mid-row by the Markdown pass, which shreds the box into fragments — which
+ * {@see CHROME_COLS} is that same (zero-since-CL-3) chrome. A row wider
+ * than that is HARD-wrapped mid-row by the Markdown pass, which shreds the
+ * box into fragments — which
  * is the whole reason the fit is derived from the wrap width rather than from
  * the terminal width.
  */
@@ -81,16 +82,19 @@ final class TranscriptTable
     /**
      * Columns the transcript pane gives up to the shell's own chrome.
      *
-     * The same 6 as {@see \SugarCraft\Crush\Renderer}'s `SHELL_CHROME_COLS`
-     * — border 1 each side plus `padding(0, 1)` — because the number this
-     * class must fit inside is literally the `$width` `Renderer::render()`
-     * hands `renderHistory()`, which is `max(1, $chat->cols() - 6)`. Kept
-     * here rather than reached for across the class boundary for the reason
+     * The same 0 as {@see \SugarCraft\Crush\Renderer}'s `SHELL_CHROME_COLS`
+     * — 0 since CL-3 removed the transcript shell's border + padding(1, 2)
+     * (it had been the same 6: border 1 each side plus 2+2 of horizontal
+     * padding) because the hosted App frames the chat in its own ChatPane
+     * box. The number this class must fit inside is literally the `$width`
+     * `Renderer::render()` hands `renderHistory()`, which is
+     * `max(1, $chat->cols() - SHELL_CHROME_COLS)`. Kept here rather than
+     * reached for across the class boundary for the reason
      * `Chat::HELP_CHROME_COLS` gives: this side needs the number, not the
      * layout. {@see \SugarCraft\Crush\Tests\Commands\TranscriptTableTest}
      * pins it against `Renderer`'s so the two cannot drift apart silently.
      */
-    public const CHROME_COLS = 6;
+    public const CHROME_COLS = 0;
 
     /**
      * The pane width a table built for `$chat` must fit inside.

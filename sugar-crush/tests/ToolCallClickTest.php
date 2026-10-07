@@ -84,35 +84,47 @@ final class ToolCallClickTest extends TestCase
      * Regression for the layout failure the post-styling marking pass exists
      * to avoid: `Style::render()` measures every line to size the border and
      * pad the short ones, and it counts a sentinel pair as ~29 columns of
-     * content. Marking the label before the shell is drawn therefore leaves
-     * the tool row's right border far left of every other row's. Marking the
-     * finished row instead cannot move anything.
+     * content. Marking the label before the shell is drawn therefore left
+     * rows a different visible width than the identical unmarked frame.
+     *
+     * CL-3 re-pins the LAW for the borderless shell: since the transcript
+     * rows no longer share one boxed width, invariance is asserted as the
+     * pairing — every row of the marked frame keeps the display width the
+     * same frame has with clicks off (marking may add zones, it may not move
+     * a cell). The pre-CL-3 form compared the bordered rows against each
+     * other, which only meant something while they were all boxed equal.
      */
     public function testToolCallZoneMarkingLeavesEveryShellRowTheSameWidth(): void
     {
-        $frame = Renderer::render($this->chatWith([
+        $messages = [
             Message::user('find the bug'),
             $this->toolMessage('grep', "alpha\nbeta", 'call_1'),
-        ]));
+        ];
 
-        // Only the transcript shell — the input box below it is its own,
-        // narrower box and would otherwise be compared against it.
-        $widths = [];
-        $inShell = false;
-        foreach (explode("\n", $frame) as $line) {
-            $plain = $this->stripSgr($line);
-            $inShell = $inShell || str_starts_with($plain, '╭');
-            if (!$inShell) {
-                continue;
-            }
-            $widths[] = Width::string($plain);
-            if (str_starts_with($plain, '╰')) {
-                break;
-            }
+        $marked = Renderer::render($this->chatWith($messages));
+        self::assertNotNull(
+            Renderer::scanner()->get('toolcall:call_1'),
+            'the pairing below only means something for a frame that was actually marked',
+        );
+
+        putenv('SUGARCRUSH_DISABLE_MOUSE_CLICKS=1');
+        $unmarked = Renderer::render($this->chatWith($messages));
+        self::assertNull(
+            Renderer::scanner()->get('toolcall:call_1'),
+            'the second fixture must paint the same frame UNmarked',
+        );
+
+        $markRows = explode("\n", $marked);
+        $plainRows = explode("\n", $unmarked);
+        self::assertCount(count($plainRows), $markRows, 'marking changed the frame height');
+        self::assertGreaterThan(4, count($plainRows));
+        foreach ($markRows as $i => $row) {
+            self::assertSame(
+                Width::string($this->stripSgr($plainRows[$i])),
+                Width::string($this->stripSgr($row)),
+                "row {$i} gained or lost display width to the marking pass",
+            );
         }
-
-        self::assertGreaterThan(4, count($widths));
-        self::assertCount(1, array_unique($widths), 'every shell row must be the same display width');
     }
 
     public function testNoToolCallZoneIsMarkedWhenClicksAreDisabled(): void

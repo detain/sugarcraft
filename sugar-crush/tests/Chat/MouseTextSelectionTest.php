@@ -149,10 +149,12 @@ final class MouseTextSelectionTest extends TestCase
     {
         [$chat] = $this->transcript();
 
-        // Column 1 is the transcript shell's left border.
-        [$chat] = $chat->update($this->press(1, 3));
-        [$chat] = $chat->update($this->motion(30, 3));
-        [, $cmd] = $chat->update($this->release(30, 3));
+        // Column 40 sits right of the region's last column (the widest
+        // transcript row is 22 cells) — since CL-3 there is no shell border to
+        // press, so the dead space beyond the text is the off-region cell.
+        [$chat] = $chat->update($this->press(40, 3));
+        [$chat] = $chat->update($this->motion(40, 3));
+        [, $cmd] = $chat->update($this->release(40, 3));
 
         self::assertNull($cmd);
         self::assertNull(Chat::textSelection());
@@ -161,7 +163,9 @@ final class MouseTextSelectionTest extends TestCase
     public function testTheNextPressKeyWheelOrResizeDismissesTheCopiedHighlight(): void
     {
         $dismissals = [
-            'press' => $this->press(1, 1),
+            // Row 4 is the input box's top border — below the bare
+            // transcript's last row (CL-3; it used to be the shell's border).
+            'press' => $this->press(1, 4),
             'key' => new KeyMsg(KeyType::Char, 'x'),
             'wheel' => new MouseWheelMsg(5, 5, MouseButton::WheelUp, MouseAction::Press),
             'resize' => new WindowSizeMsg(80, 24),

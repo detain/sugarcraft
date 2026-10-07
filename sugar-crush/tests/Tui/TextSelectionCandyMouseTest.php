@@ -141,18 +141,21 @@ final class TextSelectionCandyMouseTest extends TestCase
         [$rowFrom, $rowTo, $colFrom, $colTo] = $region;
         $lines = array_map(static fn (string $line): string => Ansi::strip($line), Renderer::selectableLines());
 
-        // Frame line R is $lines[R - 1]: the rows just outside the region are
-        // the shell's top and bottom borders.
-        self::assertStringStartsWith('╭', $lines[$rowFrom - 2]);
-        self::assertStringStartsWith('╰', $lines[$rowTo]);
+        // Frame line R is $lines[R - 1]. Since CL-3 the shell paints no border
+        // of its own: the region's first row IS the frame's first row, and the
+        // row just past its last is the input box's top border — the highlight
+        // must stop before the input, which is what the old bottom-border check
+        // proved.
+        self::assertSame('user>', mb_substr($lines[$rowFrom - 1], 0, 5));
+        self::assertStringStartsWith('┌', $lines[$rowTo]);
 
         // Cell C of a row is its C-th column: the region's first column is the
-        // turn's first text cell, and its last column is the final cell inside
-        // the right padding.
+        // turn's first text cell, and its last column is the final cell of the
+        // widest transcript row — with the padding gone there is nothing beyond.
         $text = self::rowContaining($lines, 'user>');
         self::assertSame('user>', mb_substr($text, $colFrom - 1, 5));
-        self::assertSame('│', mb_substr($text, $colTo + 2, 1));
-        self::assertSame('  ', mb_substr($text, $colTo, 2));
+        self::assertSame('gamma', mb_substr($text, $colTo - 5, 5));
+        self::assertSame('', mb_substr($text, $colTo, 1), 'the region ends where the longest row ends');
     }
 
     // =========================================================================

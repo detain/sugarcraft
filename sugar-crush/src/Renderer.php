@@ -303,15 +303,24 @@ final class Renderer
     private const DIFF_MIN_BODY_COLS = 24;
 
     /**
-     * Columns the shell's border + padding(1, 2) consume, subtracted before
+     * Columns the transcript shell's own chrome consumes, subtracted before
      * anything inside it is truncated to width.
+     *
+     * ZERO since CL-3: the shell's rounded border + `padding(1, 2)` (6 cols,
+     * 4 rows) was removed because the hosted App paints its own ChatPane box
+     * around this frame — the double chat frame. The transcript now paints
+     * bare. The const is KEPT (at 0) rather than deleted because every
+     * consumer below reads its derivation through it — content width, the
+     * picker overlays, the slash menu, the permission modal, the selection
+     * inset — and `Commands\TranscriptTable::CHROME_COLS` is reflection-pinned
+     * equal to it; if a frame ever comes back, the number returns HERE.
      *
      * PUBLIC since E744 WS4: {@see \SugarCraft\Crush\Tui\SessionPicker::overlayGeometry()}
      * and {@see Chat}'s picker-zone whitelist must size the overlay with the
      * same number {@see renderSessionPicker()} paints it with, and a second
-     * literal 6 would be a drift waiting to happen.
+     * literal would be a drift waiting to happen.
      */
-    public const SHELL_CHROME_COLS = 6;
+    public const SHELL_CHROME_COLS = 0;
 
     /**
      * Columns the "/" popup's own frame costs on top of
@@ -323,13 +332,24 @@ final class Renderer
     private const SLASH_MENU_CHROME_COLS = 4;
 
     /**
+     * Terminal widths below which {@see renderSlashMenu()}'s narrowest painted
+     * row cannot fit: its own chrome ({@see SLASH_MENU_CHROME_COLS}), the two
+     * columns every row spends on its "▸ "/"  " marker, and one content cell.
+     * Owned by the frame's clip decision in {@see renderView()} — see the
+     * comment there for why this, not the removed shell's chrome, is what the
+     * clip triggers on.
+     */
+    private const SLASH_MENU_MIN_COLS = 7;
+
+    /**
      * Chrome {@see renderInput()}'s box spends on itself: `border()` is 1 cell
      * each side and `padding(0, 1)` is another 1 each side.
      *
-     * NOT {@see SHELL_CHROME_COLS}, whose 6 is the same arithmetic for the
-     * transcript shell's wider `padding(1, 2)`. Named because the draft's wrap
-     * budget subtracts it and a boundary spelled twice is a boundary that
-     * drifts.
+     * NOT {@see SHELL_CHROME_COLS} — which CL-3 zeroed when the transcript
+     * shell's border went (it had been the same arithmetic for the shell's
+     * wider `padding(1, 2)`). The input box kept its frame. Named because the
+     * draft's wrap budget subtracts it and a boundary spelled twice is a
+     * boundary that drifts.
      */
     private const INPUT_CHROME_COLS = 4;
 
@@ -509,6 +529,16 @@ final class Renderer
      * call's own arguments), not a list of short command labels.
      */
     private const PERMISSION_MODAL_COLS = 60;
+
+    /**
+     * Columns {@see renderPermissionPrompt()}'s own box spends on itself:
+     * `border()` 1 each side plus `padding(1, 2)` 2 each side = 6. Taken off
+     * the terminal width before the content width is chosen so the finished
+     * box never reaches the terminal over-wide (the overlay clip would cut its
+     * right border). Owned here, not by {@see SHELL_CHROME_COLS}, since CL-3
+     * removed the shell's frame — the two numbers merely used to coincide.
+     */
+    private const PERMISSION_MODAL_CHROME_COLS = 6;
 
     /**
      * Rows of the hook's question {@see renderPermissionPrompt()} paints
@@ -1204,9 +1234,10 @@ final class Renderer
      * {@see Style::width()} is given a content width, which the box then grows
      * past by exactly this much.
      *
-     * NOT {@see SHELL_CHROME_COLS}, whose 6 is the same arithmetic for a box
-     * with `padding(1, 2)` ({@see renderPermissionPrompt()}). Two boxes, two
-     * paddings, two numbers — sharing one would make the reference 2 columns
+     * NOT {@see SHELL_CHROME_COLS}, which CL-3 zeroed with the transcript
+     * shell's border; this box (like the permission prompt, which shares its
+     * `padding(1, 2)`) still paints its own. Two boxes, two paddings, two
+     * numbers — sharing one would make the reference 2 columns
      * narrower than it can afford, and would break the moment either box's
      * padding changed.
      */
@@ -1660,9 +1691,12 @@ final class Renderer
         // load-bearing because renderToolImage() reserved at least 8 cells for
         // a picture; it now reserves `max(1, min(IMAGE_COLS, $width))`, so the
         // marker block can never be wider than the pane it sits in and
-        // fitToPane() never rewrites the reserved cells. Below
-        // SHELL_CHROME_COLS + 1 columns the bordered shell cannot fit at all;
-        // clipFrameToCols() cuts that case further down.
+        // fitToPane() never rewrites the reserved cells. CL-3 removed the
+        // bordered shell, so SHELL_CHROME_COLS is 0 and the transcript gets
+        // the full width; the floor keeps its meaning for a cols=0 degenerate
+        // size, and clipFrameToCols() still cuts the frame down at the narrow
+        // sizes where the boxes that DID keep chrome (input, slash popup)
+        // cannot fit.
         $contentWidth = max(1, $chat->cols() - self::SHELL_CHROME_COLS);
         // Roadmap P-C2: with the shell's Agent View open, the transcript area
         // is that run's own transcript — its projected rows, drawn by the same
@@ -1679,7 +1713,9 @@ final class Renderer
             $chat->mosaic(),
             // Row budget for a single picture: anything taller is clipped off
             // the frame's tail anyway, so encoding it would be pure waste.
-            max(1, $chat->rows() - 2),
+            // CL-3: the shell's 2 border rows are gone with the border, so
+            // the terminal's full height is budget.
+            max(1, $chat->rows()),
             // Roadmap P-B2: the delegated runs' live state, for the line
             // under each Task row. Read here, never advanced: its clock moves
             // in update() (Chat's pump tick), so this frame stays a pure
@@ -1765,11 +1801,14 @@ final class Renderer
         $input = self::renderInput($chat, $theme);
         $slashMenu = self::renderSlashMenu($chat, $theme);
 
-        $shell = Style::new()
-            ->border(Border::rounded())
-            ->borderForeground($theme->border)
-            ->padding(1, 2)
-            ->render($body);
+        // CL-3: the transcript shell paints BARE. Its rounded border +
+        // padding(1, 2) (6 cols, 4 rows) is removed unconditionally — the
+        // hosted App already frames this frame in its own ChatPane box, and
+        // the two frames together were the double chat frame the user
+        // ruling kills. Upstream crush renders borderless too, so the
+        // standalone path stays consistent; SHELL_CHROME_COLS documents the
+        // now-zero chrome every width derivation below still reads through.
+        $shell = $body;
         $shell = self::markToolCalls($shell);
         $shell = self::markAgentLines($shell);
         // P-C2: a worker the view opened that keeps no transcript of its own
@@ -2027,13 +2066,19 @@ final class Renderer
             $frame = self::overlaySettingsToast($frame, $toast, $chat->cols());
         }
 
-        // Below SHELL_CHROME_COLS + 1 columns the shell's border and padding
-        // alone are wider than the terminal, and so are the input box and the
-        // "/" popup chrome, so no producer can hold its own bound. Every row is
-        // cut to the terminal here instead (audit 15b-09). Only at these sizes:
-        // above them each producer fits itself and this would just re-measure
-        // every row of every frame.
-        if ($chat->cols() <= self::SHELL_CHROME_COLS) {
+        // Below this terminal width at least one framed producer cannot hold
+        // its own bound and every row is cut to the terminal here instead
+        // (audit 15b-09). The binding case is the "/" popup: its narrowest
+        // painted row is {@see SLASH_MENU_MIN_COLS} wide (border + padding(0, 1)
+        // = 4, the two-column "▸ "/"  " marker, and one content cell), so at a
+        // terminal NARROWER than that it overflows no matter what the budget
+        // computes. Only at these sizes: above it each producer fits itself and
+        // this would just re-measure every row of every frame.
+        //
+        // CL-3: this bound used to be `SHELL_CHROME_COLS` (6), which happened
+        // to equal the popup's overflow edge one column below. The bordered
+        // shell is gone; the number stays, re-owned to its true reason here.
+        if ($chat->cols() < self::SLASH_MENU_MIN_COLS) {
             $frame = self::clipFrameToCols($frame, $chat->cols());
         }
 
@@ -2072,11 +2117,13 @@ final class Renderer
      * {@see \SugarCraft\Mouse\Selection} use — so frame line R is
      * `selectableLines()[R - 1]`.
      *
-     * It is the transcript shell's TEXT column — inside its rounded border
-     * and horizontal padding — over the shell's rows that survived the tail
-     * clip and scroll window. Not the whole frame: a whole-row selection
-     * clamped to the frame would copy the box's `│  ` gutter before every
-     * line (see {@see \SugarCraft\Crush\Tui\TextSelection}).
+     * It is the transcript body — every row and column of the shell {@see
+     * transcriptTextRegion()} measures — over the shell's rows that survived
+     * the tail clip and scroll window. Not the whole frame: the input box,
+     * strips and status bar below it are not transcript. CL-3 removed the
+     * shell's border and padding, so there is no `│  ` gutter left to exclude
+     * and the first/last transcript row are selectable (see {@see
+     * \SugarCraft\Crush\Tui\TextSelection}).
      *
      * @return array{0:int,1:int,2:int,3:int}|null
      */
@@ -2106,14 +2153,19 @@ final class Renderer
         $shellTop = $tabStrip === '' ? 0 : substr_count($tabStrip, "\n") + 1;
         $shellRows = substr_count($shell, "\n") + 1;
         $shellWidth = Width::string(self::stripZoneMarkers(explode("\n", $shell, 2)[0]));
+        // CL-3: the shell is bare, so its chrome columns are 0 and this inset
+        // excludes nothing. Kept as the derivation (intdiv of the shared const)
+        // rather than a literal 0 so a future frame pays for itself here too.
         $inset = intdiv(self::SHELL_CHROME_COLS, 2);
 
         // Measured as 0-based line/cell offsets into the frame, then shifted
-        // to the 1-based cells the region is published in. Border row
-        // excluded at both ends; the padding rows stay in, so a drag that
-        // begins just above the first line still starts there.
-        $rowFrom = max(0, $shellTop + 1 - $sliceStart);
-        $rowTo = min($available - 1, $shellTop + $shellRows - 2 - $sliceStart);
+        // to the 1-based cells the region is published in. The bordered shell
+        // used to skip its top border row (`+ 1`) and stop before its bottom
+        // one (`- 2`); with the border gone every shell row from shellTop to
+        // shellTop + shellRows - 1 is transcript, so the window is the whole
+        // shell the tail clip left on screen.
+        $rowFrom = max(0, $shellTop - $sliceStart);
+        $rowTo = min($available - 1, $shellTop + $shellRows - 1 - $sliceStart);
         $colFrom = $inset;
         $colTo = $shellWidth - 1 - $inset;
 
@@ -5656,9 +5708,10 @@ final class Renderer
      * {@see Chat::sessionPicker()}.
      *
      * Sized against the same budget every other renderer here uses
-     * ({@see SHELL_CHROME_COLS}), because under the live App/ChatPane shell
-     * the picker is drawn inside a border + padding(1, 2) that the raw
-     * terminal width knows nothing about. A further 4 columns come off for
+     * ({@see SHELL_CHROME_COLS} — 0 since CL-3 took the transcript shell's
+     * border out, so this is the raw terminal width), because the overlay is
+     * composited onto the frame the terminal paints whole. A further 4
+     * columns come off for
      * {@see \SugarCraft\Crush\Tui\SessionPicker::render()}'s own
      * `border()->padding(0, 1)`, which wraps AROUND the width it is handed -
      * without that subtraction the composited frame is wider than the
@@ -6225,9 +6278,12 @@ final class Renderer
         // like the transcript's own content width: it was 20 (R4, the residual
         // of audit 15b-09), so under 26 columns the box came out wider than
         // the terminal and the overlay clip cut off its right border. Now the
-        // whole box fits from 7 columns up, where the bordered shell itself
-        // starts to fit.
-        $inner = max(1, min(self::PERMISSION_MODAL_COLS, $chat->cols() - self::SHELL_CHROME_COLS));
+        // whole box fits from 7 columns up, where the modal's OWN chrome stops
+        // fitting. (CL-3: this cap used to read `cols - SHELL_CHROME_COLS`
+        // because the bordered transcript shell's 6 equalled the modal's 6;
+        // with the shell's chrome now 0, the number is stated under its true
+        // owner — the box's own border + padding(1, 2).)
+        $inner = max(1, min(self::PERMISSION_MODAL_COLS, $chat->cols() - self::PERMISSION_MODAL_CHROME_COLS));
 
         $lines = [
             Style::new()->foreground($theme->userLabel)->bold()

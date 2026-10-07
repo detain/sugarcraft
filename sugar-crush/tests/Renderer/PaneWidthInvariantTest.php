@@ -448,12 +448,15 @@ final class PaneWidthInvariantTest extends TestCase
             $plain = explode("\n", self::plain(Renderer::render($chat)));
 
             $bulletRow = self::rowContaining($plain, 'first bullet item');
-            $continuation = self::rowContaining($plain, 'eighty columns');
+            // Re-pinned at CL-3: the 80-cell pane (the shell's 6 chrome columns
+            // are gone) carries the bullet row through '...at eighty', so the
+            // continuation now opens with 'columns'.
+            $continuation = self::rowContaining($plain, 'columns and then');
             self::assertNotSame($bulletRow, $continuation, "the {$state} item did not wrap");
 
             self::assertSame(
                 mb_strpos($plain[$bulletRow], 'first'),
-                mb_strpos($plain[$continuation], 'eighty'),
+                mb_strpos($plain[$continuation], 'columns'),
                 "the {$state} turn's list continuation is not aligned under the item's text",
             );
         }
@@ -827,14 +830,20 @@ final class PaneWidthInvariantTest extends TestCase
             // Byte-identical to what ImageOverlay itself would emit for this
             // box: the marker cell plus every one of the reserved padding cells
             // the runtime paints the picture over.
-            $box = max(1, min(40, max(1, $cols - 6)));
+            $box = max(1, min(40, max(1, $cols - Renderer::SHELL_CHROME_COLS)));
             self::assertStringContainsString(
                 ImageOverlay::markerBlock(0, $box, 1),
                 $marker,
                 "the fitter rewrote the reserved image cells at cols={$cols}",
             );
+            // CL-3 re-derived: the row keeps EVERY cell the overlay emitted,
+            // which is the box width itself. It used to read $cols because the
+            // bordered shell padded each short row out to the full box — with
+            // the shell gone the marker row is its natural width (and the
+            // IMAGE_COLS cap shows at 46 > 40, where the padding used to hide
+            // it).
             self::assertSame(
-                $cols,
+                $box,
                 self::rowWidth($marker),
                 "the marker row lost cells at cols={$cols}",
             );
@@ -845,7 +854,7 @@ final class PaneWidthInvariantTest extends TestCase
             $placements = Renderer::renderView($chat)->images;
             self::assertCount(1, $placements, "no image was registered at cols={$cols}");
             self::assertLessThanOrEqual(
-                max(1, $cols - 6),
+                max(1, $cols - Renderer::SHELL_CHROME_COLS),
                 reset($placements)->widthCells,
                 "the reserved image box is wider than the pane at cols={$cols}",
             );
@@ -1173,8 +1182,15 @@ final class PaneWidthInvariantTest extends TestCase
                 $widest = self::widestRow(implode("\n", self::transcriptRows(Renderer::render($chat))));
 
                 self::assertLessThanOrEqual($cols, $widest);
+                // A correctly word-wrapped row is short by LESS than one word:
+                // once the slack reached the fixture's longest word
+                // ('constantly'/'explaining', ten cells) the next word would
+                // have fitted on the row. Re-derived at CL-3 — with the pane
+                // widened by the shell's six columns the words land elsewhere,
+                // and the ten-cell law, not the old chrome-sized slack, is what
+                // actually binds (measured slack: 2/1/8 at 60/80/100 columns).
                 self::assertGreaterThan(
-                    $cols - 8,
+                    $cols - 10,
                     $widest,
                     "the {$state} turn's prose wraps well short of the {$cols}-column pane",
                 );

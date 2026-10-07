@@ -294,14 +294,15 @@ final class Chat implements Model
     private ?string $currentSessionId = null;
 
     /**
-     * Columns the `/help` listing gives up to the chrome it will be painted
-     * inside: {@see Renderer}'s shell border + padding(1, 2) is 6, and the rest
-     * is slack so the listing does not sit flush against the border. Same
-     * arithmetic as {@see Renderer}'s own SHELL_CHROME_COLS, kept here rather
-     * than reached for across the class boundary because this side only needs
-     * the number, not the layout.
+     * Columns the `/help` listing gives up so it does not sit flush against
+     * the pane edge: 4 of pure slack. It used to be 10 = that slack plus the
+     * 6 the {@see Renderer} shell's border + padding(1, 2) consumed; CL-3
+     * removed that frame, so the chrome half went to 0 (matching
+     * {@see Renderer::SHELL_CHROME_COLS}) and the slack is what remains. Kept
+     * here rather than reached for across the class boundary because this side
+     * only needs the number, not the layout.
      */
-    private const HELP_CHROME_COLS = 10;
+    private const HELP_CHROME_COLS = 4;
 
     /**
      * Where the `/help` listing's description column starts. A constant rather

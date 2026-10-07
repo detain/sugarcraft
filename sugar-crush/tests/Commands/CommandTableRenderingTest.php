@@ -328,12 +328,13 @@ final class CommandTableRenderingTest extends TestCase
 
     /**
      * THE DEFECT THIS CLOSES. `McpAuthCommand`'s budgets sum to 88 cells, and
-     * an 80-column terminal's transcript pane is **74** — `Renderer::render()`
-     * wraps `renderHistory()` at `max(20, cols() - SHELL_CHROME_COLS)`, and
-     * SHELL_CHROME_COLS is 6. A row wider than that is HARD-wrapped mid-row by
-     * the Markdown pass, which shreds the bordered box into fragments, so the
-     * box had to FIT rather than merely be smaller than the unbounded rows it
-     * replaced.
+     * an 80-column terminal's transcript pane is **80** — CL-3 zeroed
+     * `SHELL_CHROME_COLS`, so `Renderer::render()` now wraps `renderHistory()`
+     * at the full `max(20, cols())`; it used to be `cols() - 6` = 74. Either
+     * way 88 does not fit, and a row wider than the pane is HARD-wrapped
+     * mid-row by the Markdown pass, which shreds the bordered box into
+     * fragments, so the box had to FIT rather than merely be smaller than the
+     * unbounded rows it replaced.
      *
      * The bound is asserted as `paneWidthFor(80)` rather than as a literal,
      * and that is the whole point of this test rather than a style choice:
@@ -348,7 +349,7 @@ final class CommandTableRenderingTest extends TestCase
     public function testMcpAuthListFitsAnEightyColumnPane(): void
     {
         $pane = $this->paneWidthFor(80);
-        $this->assertSame(74, $pane, 'an 80-column terminal gives the transcript pane 74 cells, not 76 or 80');
+        $this->assertSame(80, $pane, 'since CL-3 an 80-column terminal gives the transcript pane all 80 cells');
 
         $output = $this->runMcpAuthList(
             ['https://a-genuinely-long-mcp-server-url.example.com/v1/sse' => [time() + 9999, ['read', 'write']]],
@@ -365,8 +366,8 @@ final class CommandTableRenderingTest extends TestCase
     }
 
     /**
-     * The same guarantee for `/agents`. Its 76 does NOT fit an 80-column
-     * terminal either — the pane is 74 — so this asserts both widths.
+     * The same guarantee for `/agents`. Its 76 fit the post-CL-3 80-cell pane
+     * but never fitted the 60-column one — so this asserts both widths.
      */
     public function testAgentsListFitsItsPaneAtEightyAndAtSixtyColumns(): void
     {
@@ -398,7 +399,7 @@ final class CommandTableRenderingTest extends TestCase
     /**
      * The fit must not clip a FIXED-FORMAT column into a wrong value. A
      * purely proportional shrink across all four columns takes `Expires` below
-     * 16 — measured at 13 for both a 74- and a 60-cell pane — which renders
+     * 16 — measured at 13 for both an 80- and a 60-cell pane — which renders
      * `2026-08-22 03:00` as `2026-08-22 0…`, a wrong date rather than a short one, and exactly the
      * mangling `Table::width()`'s own cap was rejected for.
      * `TranscriptTable::fit()` floors that column instead, so the loss lands

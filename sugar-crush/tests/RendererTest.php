@@ -831,13 +831,16 @@ final class RendererTest extends TestCase
     {
         // The popup box, and the box only: the input box below it also contains
         // the '/websearch' draft, so the "▸" marker is what identifies the row.
+        // Rows re-measured at CL-3: the budget gained the shell's 6 columns, so
+        // every width below shows six more cells of hint/description than the
+        // pre-CL-3 table did; 120 is unchanged because the natural row fits.
         $expected = [
-            20 => '▸ /websearch …',
-            30 => '▸ /websearch — Sear…',
-            40 => '▸ /websearch — Search the web…',
-            60 => '▸ /websearch <query>… — Search the web via SearXNG',
-            80 => '▸ /websearch <query> [--safesearch 0|1|2… — Search the web via SearXNG',
-            100 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|… — Search the web via SearXNG',
+            20 => '▸ /websearch — …',
+            30 => '▸ /websearch — Search the…',
+            40 => '▸ /websearch — Search the web via S…',
+            60 => '▸ /websearch <query> [--sa… — Search the web via SearXNG',
+            80 => '▸ /websearch <query> [--safesearch 0|1|2] [--t… — Search the web via SearXNG',
+            100 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|month|… — Search the web via SearXNG',
             120 => '▸ /websearch <query> [--safesearch 0|1|2] [--time-range day|month|year] — Search the web via SearXNG',
         ];
 

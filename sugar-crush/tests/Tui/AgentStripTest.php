@@ -125,7 +125,10 @@ final class AgentStripTest extends TestCase
 
         $this->assertNotNull($strip, 'the strip is painted');
         $this->assertStringStartsWith('┌', $lines[$strip + 1], 'directly above the input box');
-        $this->assertStringStartsWith('╰', $lines[$strip - 1], 'and below the transcript');
+        // CL-3: the shell paints no bottom border any more, so the row above
+        // the strip is transcript text itself — the empty-conversation notice
+        // here — packed against the strip.
+        $this->assertStringStartsWith('_(empty conversation', $lines[$strip - 1], 'and directly below the transcript text');
 
         $focused = Renderer::renderView($chat, 'r1')->body;
         $this->assertMatchesRegularExpression('/\e\[(?:\d+;)*7m/', $focused, 'the shell\'s focus is painted');
