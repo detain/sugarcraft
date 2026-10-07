@@ -934,7 +934,8 @@ final class TextInput implements Model
 
     /**
      * Insert `$text` at the cursor position. Newlines are stripped (a
-     * single-line input can't represent them). Honors `charLimit`.
+     * single-line input can't represent them). Honors `charLimit` and —
+     * rune by rune, exactly like typing — `restrict` (E736 F2).
      */
     public function paste(string $text): self
     {
@@ -985,6 +986,27 @@ final class TextInput implements Model
 
     private function insert(string $rune): self
     {
+        // E736 F2: the restrict gate is per codepoint, not per payload. One
+        // unanchored preg_match over a whole paste only had to match
+        // SOMEWHERE, so '12ab34' sailed through a '\d' restrict. Each rune of
+        // any payload — typed or pasted — now faces the identical gate, and
+        // refused runes are dropped BEFORE the charLimit budget so they can
+        // never consume room (matching the typed path, where a refused rune
+        // mutates nothing). Empty-after-filtering keeps the old whole-reject
+        // outcome; an empty payload still costs nothing either way.
+        if ($this->restrict !== '') {
+            $allowed = '';
+            for ($i = 0, $count = mb_strlen($rune, 'UTF-8'); $i < $count; $i++) {
+                $cp = mb_substr($rune, $i, 1, 'UTF-8');
+                if (preg_match('/' . $this->restrict . '/', $cp) === 1) {
+                    $allowed .= $cp;
+                }
+            }
+            if ($allowed === '') {
+                return $this;
+            }
+            $rune = $allowed;
+        }
         // charLimit is a budget, not a gate: a multi-codepoint payload (a
         // paste) is clipped to the room left, so one clipboard action can
         // never carry the buffer past the cap. Checking only "already at the
@@ -997,10 +1019,6 @@ final class TextInput implements Model
             if (mb_strlen($rune, 'UTF-8') > $budget) {
                 $rune = mb_substr($rune, 0, $budget, 'UTF-8');
             }
-        }
-        // Reject characters that don't match the restrict pattern.
-        if ($this->restrict !== '' && preg_match('/' . $this->restrict . '/', $rune) !== 1) {
-            return $this;
         }
         $before = mb_substr($this->value, 0, $this->cursorPos, 'UTF-8');
         $after  = mb_substr($this->value, $this->cursorPos, null, 'UTF-8');
