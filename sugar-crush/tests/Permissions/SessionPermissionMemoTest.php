@@ -181,7 +181,13 @@ final class SessionPermissionMemoTest extends TestCase
 
     public function testASessionRuleAlsoAnswersAConfiguredAsk(): void
     {
-        $gate = (new PermissionGate(PermissionMode::BypassPermissions, [new PermissionRule('mcp__git__*', PermissionAction::Ask)]))
+        // Backdrop is DontAsk, not BypassPermissions: the owner ruling of
+        // 2026-10-06 suppresses Ask-class rules under bypass, which would let
+        // the mode answer BOTH calls and make the memo unobservable. DontAsk's
+        // evaluator denies an mcp tool outright, so `status` returning Allow
+        // can only be the session grant answering the CONFIGURED Ask, and
+        // `push` returning Ask (not Deny) can only be that same rule.
+        $gate = (new PermissionGate(PermissionMode::DontAsk, [new PermissionRule('mcp__git__*', PermissionAction::Ask)]))
             ->withSessionRules(SessionPermissionMemo::new()->withGrant('mcp__git__status', [])->rules());
 
         self::assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall('mcp__git__status', [])));

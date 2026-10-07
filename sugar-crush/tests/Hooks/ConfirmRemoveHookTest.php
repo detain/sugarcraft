@@ -90,6 +90,14 @@ final class ConfirmRemoveHookTest extends TestCase
         $result = $hook->execute($context);
 
         $this->assertTrue($result->isDenied());
+
+        // Owner ruling 2026-10-06: the same hook wired to a bypass session
+        // stands down, and a stricter mode does not. A hook with no reader at
+        // all — the line above — enforces exactly as it always did.
+        $bypassing = new ConfirmRemoveHook(static fn (): PermissionMode => PermissionMode::BypassPermissions);
+        $this->assertTrue($bypassing->execute($context)->isAllowed(), 'bypass is above this guard-rail');
+        $asking = new ConfirmRemoveHook(static fn (): PermissionMode => PermissionMode::Default);
+        $this->assertTrue($asking->execute($context)->isDenied(), 'only bypass stands the hook down');
     }
 
     public function testDenyCombinedFlags(): void
@@ -204,30 +212,50 @@ final class ConfirmRemoveHookTest extends TestCase
     }
 
     /**
-     * The audit's repro, end to end: the full built-in chain plus the gate in
-     * the shipped `bypass-permissions` default. Before the fix all three were
-     * `allow` — the quoted flag slipped past ConfirmRemoveHook AND the step-0
-     * breaker.
+     * The audit's repro, end to end, re-measured after the owner ruling of
+     * 2026-10-06 (bypass is allow-all): under `bypass-permissions` this hook
+     * stands down, so the ONLY thing still refusing destructive Bash is the
+     * gate's step-0 breaker — which is quoted-flag aware and catches every
+     * `rm`-shaped row here but not `find -delete`. Each row states its bypass
+     * verdict; under a non-bypass session every row still denies, pinned in
+     * the same run so the pair cannot drift apart.
      *
-     * @return iterable<string, array{string}>
+     * @return iterable<string, array{string, bool}>
      */
     public static function fullChainCases(): iterable
     {
-        yield 'rm quoted flag, home' => ["rm '-rf' ~"];
-        yield 'rm double-quoted flag, root' => ['rm "-rf" /'];
-        yield 'find quoted -delete' => ["find . '-delete'"];
-        yield 'rm second target root' => ['rm -rf ./x /'];
-        yield 'rm HOME variable' => ['rm -rf $HOME'];
+        yield 'rm quoted flag, home' => ["rm '-rf' ~", true];
+        yield 'rm double-quoted flag, root' => ['rm "-rf" /', true];
+        yield 'find quoted -delete' => ["find . '-delete'", false];
+        yield 'rm second target root' => ['rm -rf ./x /', true];
+        yield 'rm HOME variable' => ['rm -rf $HOME', true];
     }
 
     #[DataProvider('fullChainCases')]
-    public function testFullBuiltInChainDeniesInBypassMode(string $command): void
+    public function testFullBuiltInChainInBypassKeepsOnlyTheBreakerFloor(string $command, bool $breakerCaught): void
+    {
+        $verdict = $this->chain($command, PermissionMode::BypassPermissions);
+        $this->assertSame(
+            $breakerCaught,
+            $verdict->isDenied(),
+            json_encode($command) . ($breakerCaught ? ' is breaker territory and must still deny' : ' is hook territory and must run') . " under bypass: {$verdict->message}",
+        );
+
+        // Control: with the hook in force, every row denies — none of these
+        // shapes is a licence the mode switch silently widens outside bypass.
+        $this->assertTrue(
+            $this->chain($command, PermissionMode::Default)->isDenied(),
+            json_encode($command) . ' must deny outside bypass',
+        );
+    }
+
+    private function chain(string $command, PermissionMode $mode): HookResult
     {
         $manager = new HookManager(new HookRegistry());
         $manager->registerBuiltIns();
-        $manager->register(new PermissionGateHook(new PermissionGate(PermissionMode::BypassPermissions)));
+        $manager->register(new PermissionGateHook(new PermissionGate($mode)));
 
-        $this->assertTrue($manager->preToolUse($this->createContext($command))->isDenied());
+        return $manager->preToolUse($this->createContext($command));
     }
 
     public function testQuotedTextThatIsNotAnRmStaysAllowed(): void

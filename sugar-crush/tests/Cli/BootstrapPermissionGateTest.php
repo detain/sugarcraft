@@ -164,14 +164,14 @@ final class BootstrapPermissionGateTest extends TestCase
     /**
      * What the default gate does and does not buy, stated honestly.
      *
-     * It refuses the `rm -rf /` circuit-breaker command — but so does
-     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}, which has been
-     * in the built-in chain all along and denies far more broadly. With the
-     * shipped empty rule set the default gate is therefore EQUAL to having no
-     * gate, not stricter than it; see
-     * {@see testTheDefaultGateAddsNothingTheBuiltInChainDidNotAlreadyRefuse()}
-     * for the composed-chain proof. What it buys is reachability: a mode or a
-     * rule in the config now decides something.
+     * It refuses the `rm -rf /` circuit-breaker command unconditionally — the
+     * one thing that survives every ruling. Since the owner ruling of
+     * 2026-10-06 the shipped console default (`bypass-permissions`) is no
+     * longer EQUAL to having no gate: it installs a mode the guard built-ins
+     * stand down to, so the composed chain decides LESS than the bare chain,
+     * down to exactly the breaker floor plus the policy-file floors. See
+     * {@see testTheShippedDefaultGateStandsTheChainDownToTheBreakerFloor()}
+     * for the per-row composed-chain proof.
      */
     public function testTheDefaultGateStillRefusesTheCircuitBreakerCommand(): void
     {
@@ -188,23 +188,23 @@ final class BootstrapPermissionGateTest extends TestCase
     }
 
     /**
-     * The claim this file used to make — "BypassPermissions is still strictly
-     * MORE guarded than no gate" — pinned at the layer where it is actually
-     * decided, the COMPOSED chain a real launch runs, rather than at the gate
-     * in isolation where it is trivially true and misleading.
+     * The composed chain a real console launch runs, pinned row by row. The
+     * claim this test used to carry — "the default gate ADDS nothing the
+     * built-in chain did not already refuse" — was inverted deliberately by
+     * the owner ruling of 2026-10-06: `bypass-permissions` is allow-all, and
+     * because it is the shipped console default, installing the gate now
+     * REMOVES the guard rails' heuristics from the verdict — {@see
+     * \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook} reads the live mode
+     * and stands down, leaving only the gate's narrow root/home breaker and
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook}'s policy-floor
+     * denials. Each row states the pair (without-gate, with-gate); the
+     * stand-down row (`chained rm`) is the ruling's fingerprint and the
+     * shared-denial rows are the floor. If a future change moves any pair,
+     * this goes red and the prose gets rewritten deliberately.
      *
-     * Every command the gate's narrow root/home breaker refuses is already
-     * refused by `ConfirmRemoveHook`'s much broader recursive/force `rm`
-     * regex, and that hook runs FIRST. So on the shipped default the verdict
-     * with the gate installed is identical to the verdict without it, for
-     * both destructive and benign calls. This test exists so that claim can
-     * never quietly drift back into the docs: if a future change genuinely
-     * makes the default gate add something, this goes red and the prose gets
-     * rewritten deliberately.
-     *
-     * @dataProvider callsTheDefaultGateChangesNothingFor
+     * @dataProvider callsTheShippedDefaultStandsDownOrHoldsFor
      */
-    public function testTheDefaultGateAddsNothingTheBuiltInChainDidNotAlreadyRefuse(string $tool, array $args): void
+    public function testTheShippedDefaultGateStandsTheChainDownToTheBreakerFloor(string $tool, array $args, bool $withoutGatePermits, bool $withGatePermits): void
     {
         $context = $this->context($tool, $args);
 
@@ -215,37 +215,44 @@ final class BootstrapPermissionGateTest extends TestCase
         $withGate->registerBuiltIns();
         $withGate->register(new PermissionGateHook(Bootstrap::permissionGate()));
 
-        $before = $withoutGate->preToolUse($context);
-        $after = $withGate->preToolUse($context);
-
         $this->assertSame(
-            $before->permitsExecution(),
-            $after->permitsExecution(),
-            "the default gate changed the verdict for {$tool} — the README/docblock claim needs rewriting",
+            $withoutGatePermits,
+            $withoutGate->preToolUse($context)->permitsExecution(),
+            "the no-gate chain moved its own verdict for {$tool} — the guard rails are supposed to be mode-blind here",
+        );
+        $this->assertSame(
+            $withGatePermits,
+            $withGate->preToolUse($context)->permitsExecution(),
+            "the shipped default changed the verdict for {$tool} outside the documented stand-down/floor pairs — the README/docblock claim needs rewriting",
         );
     }
 
     /**
-     * @return array<string, array{0: string, 1: array<string, mixed>}>
+     * @return array<string, array{0: string, 1: array<string, mixed>, 2: bool, 3: bool}>
      */
-    public static function callsTheDefaultGateChangesNothingFor(): array
+    public static function callsTheShippedDefaultStandsDownOrHoldsFor(): array
     {
         return [
-            'rm -rf /' => ['Bash', ['command' => 'rm -rf /']],
-            'rm -fr /' => ['Bash', ['command' => 'rm -fr /']],
-            'rm -rf ~' => ['Bash', ['command' => 'rm -rf ~']],
-            'rm --no-preserve-root' => ['Bash', ['command' => 'rm -rf --no-preserve-root /']],
-            'sudo rm -rf /' => ['Bash', ['command' => 'sudo rm -rf /']],
-            'chained rm' => ['Bash', ['command' => 'cd / && rm -rf *']],
-            'benign ls' => ['Bash', ['command' => 'ls -la']],
+            // Breaker floor: denied by BOTH the bare hook chain and the
+            // through-bypass gate — the pair the ruling keeps.
+            'rm -rf /' => ['Bash', ['command' => 'rm -rf /'], false, false],
+            'rm -fr /' => ['Bash', ['command' => 'rm -fr /'], false, false],
+            'rm -rf ~' => ['Bash', ['command' => 'rm -rf ~'], false, false],
+            'rm --no-preserve-root' => ['Bash', ['command' => 'rm -rf --no-preserve-root /'], false, false],
+            'sudo rm -rf /' => ['Bash', ['command' => 'sudo rm -rf /'], false, false],
+            // The stand-down row: the hook's broad regex catches this spelling
+            // without a gate; the shipped bypass default stands it down, and
+            // the breaker alone does not cover a relative `*` operand.
+            'chained rm' => ['Bash', ['command' => 'cd / && rm -rf *'], false, true],
+            'benign ls' => ['Bash', ['command' => 'ls -la'], true, true],
             // `file_path`, which is what these tools' schemas actually name —
             // and what `PermissionRule::SUBJECT_ARGUMENTS` maps them to. As
             // `path` these two rows described a call no tool can make, so they
             // exercised the unknowable-subject branch instead of the one they
             // read as being about.
-            'benign read' => ['Read', ['file_path' => 'README.md']],
-            'benign edit' => ['Edit', ['file_path' => 'notes.txt', 'content' => 'hi']],
-            'benign glob' => ['Glob', ['pattern' => '*.php']],
+            'benign read' => ['Read', ['file_path' => 'README.md'], true, true],
+            'benign edit' => ['Edit', ['file_path' => 'notes.txt', 'content' => 'hi'], true, true],
+            'benign glob' => ['Glob', ['pattern' => '*.php'], true, true],
         ];
     }
 

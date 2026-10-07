@@ -166,12 +166,18 @@ final class PermissionRuleAllowFailClosedTest extends TestCase
     /**
      * `Ask` is restrictive, so a substitution that an `Allow` refuses still
      * raises an `Ask` rule rather than slipping past both.
+     *
+     * Backdrop is DontAsk, not BypassPermissions: the owner ruling of
+     * 2026-10-06 suppresses Ask-class rules under bypass, and Default would
+     * Ask on this Bash line with no rule at all. DontAsk's evaluator DENIES
+     * `git log \`id\``, so the Ask below can only have come from the rule
+     * matching a spelling the allow-side refuses — the asymmetry intact.
      */
     public function testAnAskRuleStillFiresOnASubstitutionSpelling(): void
     {
         self::assertSame(
             PermissionDecision::Ask,
-            self::decide(PermissionMode::BypassPermissions, new PermissionRule('Bash(git *)', PermissionAction::Ask), 'git log `id`'),
+            self::decide(PermissionMode::DontAsk, new PermissionRule('Bash(git *)', PermissionAction::Ask), 'git log `id`'),
         );
     }
 

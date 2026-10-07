@@ -22,6 +22,14 @@ final class PermissionModeTest extends TestCase
         $this->assertContains('Auto', $names);
         $this->assertContains('DontAsk', $names);
         $this->assertContains('BypassPermissions', $names);
+
+        // isBypass() is what three layers ask per call (hooks, the no-UI ask
+        // arm, the sub-agent mode merge); exactly one case may answer yes.
+        $bypassing = array_values(array_filter(
+            PermissionMode::cases(),
+            static fn (PermissionMode $mode): bool => $mode->isBypass(),
+        ));
+        $this->assertSame([PermissionMode::BypassPermissions], $bypassing);
     }
 
     /**

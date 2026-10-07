@@ -8,6 +8,7 @@ use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\ShellWords;
 
 /**
@@ -30,9 +31,32 @@ use SugarCraft\Crush\Permissions\ShellWords;
  * candidate is the raw text with every quote and backslash deleted instead —
  * cruder, but a deny list must not get NARROWER on input it cannot read. The
  * raw text is always checked too, so nothing denied before is allowed now.
+ *
+ * BYPASS IS ABOVE THIS GUARD-RAIL (owner ruling 2026-10-06). `bypass-permissions`
+ * means allow-all: the human already holds the wheel, and every refusal this
+ * hook adds is a heuristic prompt the operator explicitly waived. The
+ * unswitchable floor for destructive Bash stays where it always was — the
+ * step-0 `rm -rf /` breaker inside {@see \SugarCraft\Crush\Permissions\PermissionGate},
+ * which no mode and no hook can talk open. Constructed without
+ * $modeReader (bare embedders, tests) the hook denies exactly as before.
  */
 final readonly class ConfirmRemoveHook implements HookInterface
 {
+    /** Lazy read of the session's permission mode; see {@see __construct()}. */
+    private ?\Closure $modeReader;
+
+    /**
+     * @param (callable(): ?PermissionMode)|null $modeReader reads the mode
+     *        of the gate registered on the SAME HookManager at execute time —
+     *        lazy, not a captured gate, because a mode switch replaces the
+     *        gate object mid-session ({@see \SugarCraft\Crush\Chat}'s
+     *        permission-mode toggle re-registers {@see PermissionGateHook});
+     *        null (or a chain with no gate) keeps the pre-ruling behaviour.
+     */
+    public function __construct(?\Closure $modeReader = null)
+    {
+        $this->modeReader = $modeReader;
+    }
     /**
      * Destructive-command patterns, each matched against the raw Bash command
      * AND its quote-removed form (see the class docblock). Deliberately
@@ -72,6 +96,14 @@ final readonly class ConfirmRemoveHook implements HookInterface
 
     public function execute(HookContext $context): HookResult
     {
+        // Early exit for the one mode the operator declared above the
+        // guard-rails; see the class docblock's ruling. A null reader means no
+        // gate was wired into this manager, which is NOT a licence to allow.
+        $read = $this->modeReader;
+        if ($read !== null && $read() === PermissionMode::BypassPermissions) {
+            return HookResult::allow();
+        }
+
         $command = $context->toolArgs['command'] ?? '';
         if (!is_string($command)) {
             $command = '';

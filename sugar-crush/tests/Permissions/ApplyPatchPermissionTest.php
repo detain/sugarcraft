@@ -106,7 +106,11 @@ final class ApplyPatchPermissionTest extends TestCase
 
     public function testWriteRulesBindAPatchTooNameOnlyOrByPath(): void
     {
-        $ask = new PermissionGate(PermissionMode::BypassPermissions, [new PermissionRule('Write(dist/*)', PermissionAction::Ask)]);
+        // AcceptEdits backdrop (not Bypass): the owner ruling of 2026-10-06
+        // suppresses Ask-class rules under bypass, while AcceptEdits grants an
+        // inside-root patch on its own — so the Ask here is the rule's doing
+        // and the plain patch's Allow is the mode's.
+        $ask = new PermissionGate(PermissionMode::AcceptEdits, [new PermissionRule('Write(dist/*)', PermissionAction::Ask)]);
         self::assertSame(PermissionDecision::Ask, $ask->evaluate(self::call(['src/a.php', 'dist/app.js']), $this->root));
         self::assertSame(PermissionDecision::Allow, $ask->evaluate(self::call(['src/a.php']), $this->root));
 

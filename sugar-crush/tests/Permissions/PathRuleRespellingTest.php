@@ -26,9 +26,12 @@ use SugarCraft\Crush\ToolCall;
  * `notes -> secret.txt` walked past every path deny because nothing consulted
  * the filesystem.
  *
- * Deny/Ask are observed under {@see PermissionMode::BypassPermissions}, where
- * only a rule can refuse; Allow under {@see PermissionMode::DontAsk}, whose
- * evaluator denies `Write`, so a grant can only come from the rule.
+ * Deny is observed under {@see PermissionMode::BypassPermissions}, where
+ * only a rule can refuse; Ask under {@see PermissionMode::Default}, whose
+ * evaluator auto-allows reads so the Ask can only come from the rule (since
+ * the owner ruling of 2026-10-06 bypass suppresses Ask-class rules outright);
+ * Allow under {@see PermissionMode::DontAsk}, whose evaluator denies `Write`,
+ * so a grant can only come from the rule.
  *
  * Fixture, under a fresh temp dir:
  *
@@ -139,9 +142,14 @@ final class PathRuleRespellingTest extends TestCase
     #[DataProvider('respellingsOfTheSecret')]
     public function testAskRulesGetTheSameUnion(string $spelling): void
     {
+        // Backdrop is Default, not BypassPermissions: since the owner ruling of
+        // 2026-10-06, bypass answers Ask-class rules with Allow, so it can no
+        // longer isolate a rule-raised Ask. Default auto-allows a Read (its
+        // evaluator grants read-only tools), so the Ask below can only have
+        // come from the rule — the union the respellings must all reach.
         $this->assertSame(
             PermissionDecision::Ask,
-            $this->decide(PermissionMode::BypassPermissions, 'Read({real}/secret.txt)', PermissionAction::Ask, 'Read', $spelling, '{real}'),
+            $this->decide(PermissionMode::Default, 'Read({real}/secret.txt)', PermissionAction::Ask, 'Read', $spelling, '{real}'),
         );
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Hooks;
 
 use SugarCraft\Crush\Permissions\ApprovalVerdict;
+use SugarCraft\Crush\Permissions\PermissionMode;
 
 /**
  * Manages hook loading and execution.
@@ -165,11 +166,27 @@ final class HookManager
 
     /**
      * Register built-in hooks.
+     *
+     * The two guard built-ins are wired to a LAZY read of the permission mode
+     * (owner ruling 2026-10-06: `bypass-permissions` is allow-all above their
+     * heuristics). Lazy rather than a gate passed at construction: the gate
+     * lands on this registry AFTER registerBuiltIns() — Bootstrap::hooks() and
+     * EngineBackend::resolveHookManager() append {@see BuiltIn\PermissionGateHook}
+     * last — and a mode switch REPLACES that hook with one on a new gate
+     * object, so only a read through the registry at execute time can ever see
+     * the mode the session actually holds. A manager whose chain has no gate
+     * answers null, and null keeps every guard enforcing.
      */
     public function registerBuiltIns(): void
     {
-        $this->registry->register(new BuiltIn\ProtectFilesHook());
-        $this->registry->register(new BuiltIn\ConfirmRemoveHook());
+        $modeReader = function (): ?PermissionMode {
+            $gate = $this->registry->get(HookEvent::PreToolUse->value, BuiltIn\PermissionGateHook::NAME);
+
+            return $gate instanceof BuiltIn\PermissionGateHook ? $gate->gate()->mode() : null;
+        };
+
+        $this->registry->register(new BuiltIn\ProtectFilesHook(null, null, $modeReader));
+        $this->registry->register(new BuiltIn\ConfirmRemoveHook($modeReader));
         $this->registry->register(new BuiltIn\AuditHook());
     }
 

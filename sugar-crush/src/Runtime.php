@@ -30,6 +30,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Permissions\DenialKind;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\SiblingSpendLedger;
@@ -3025,33 +3026,48 @@ final class Runtime
         $kind = DenialKind::Hook;
 
         if ($hookResult->isAsk()) {
-            // `$onPermissionRequest === null` is settleAsk()'s OWN fail-closed
-            // condition, read a second time rather than inferred from the
-            // message it produces: matching on that message would couple this
-            // to its wording, and the wording is the half most likely to be
-            // reworded.
-            $kind = $onPermissionRequest === null ? DenialKind::Unanswered : DenialKind::Refused;
-            $memoKey = $this->taskGrantMemoKey($toolCall, $hookResult);
-            if ($memoKey !== null && isset($this->taskGrants[$memoKey])) {
-                // F5 batch-spawn memo. A grant for THIS agent under THIS mode
-                // was already given inside this turn, so the approver would be
-                // re-asked an identical question for every spawn the model
-                // (correctly, per the batch doctrine) emitted as one message.
-                // The answer is routed through the very call an approval makes
-                // — resolveAsk(…, true) — never through settleAsk(), so the
-                // settled verdict carries the chain's additionalContext and the
-                // question's rewrite exactly as a fresh approval would; the
-                // only difference is that the human is not prompted twice for
-                // one decision. Refusals are never memoised, and a Deny never
-                // reaches this branch (it is not an ASK), so explicit-Deny
-                // precedence is structurally untouched.
+            if ($onPermissionRequest === null && $this->bypassAnswersAsks()) {
+                // BYPASS ALLOW-ALL (owner ruling 2026-10-06): this is the
+                // Ask-fail-closed no-UI arm the ruling turns into an allow —
+                // in `bypass-permissions` nobody is being asked because the
+                // operator already answered. Routed through resolveAsk(…, true)
+                // exactly like the F5 batch memo below, so a settled ASK still
+                // carries its rewrite and the chain's additionalContext. A live
+                // approver is NOT bypassed: with a UI present the question is
+                // put, and the human's "no" still lands — bypass suppresses
+                // refusals, not the operator's own answers.
                 $hookResult = $this->hookManager->resolveAsk($hookResult, true);
             } else {
-                // $kind is refined by the settlement itself: an approver that
-                // answers "nobody answered" (1.C-2) is Unanswered, not Refused.
-                $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest, $kind);
-                if ($memoKey !== null && ($hookResult->isAllowed() || $hookResult->isModified())) {
-                    $this->taskGrants[$memoKey] = true;
+                // `$onPermissionRequest === null` is settleAsk()'s OWN
+                // fail-closed condition, read a second time rather than
+                // inferred from the message it produces: matching on that
+                // message would couple this to its wording, and the wording is
+                // the half most likely to be reworded.
+                $kind = $onPermissionRequest === null ? DenialKind::Unanswered : DenialKind::Refused;
+                $memoKey = $this->taskGrantMemoKey($toolCall, $hookResult);
+                if ($memoKey !== null && isset($this->taskGrants[$memoKey])) {
+                    // F5 batch-spawn memo. A grant for THIS agent under THIS
+                    // mode was already given inside this turn, so the approver
+                    // would be re-asked an identical question for every spawn
+                    // the model (correctly, per the batch doctrine) emitted as
+                    // one message. The answer is routed through the very call
+                    // an approval makes — resolveAsk(…, true) — never through
+                    // settleAsk(), so the settled verdict carries the chain's
+                    // additionalContext and the question's rewrite exactly as a
+                    // fresh approval would; the only difference is that the
+                    // human is not prompted twice for one decision. Refusals
+                    // are never memoised, and a Deny never reaches this branch
+                    // (it is not an ASK), so explicit-Deny precedence is
+                    // structurally untouched.
+                    $hookResult = $this->hookManager->resolveAsk($hookResult, true);
+                } else {
+                    // $kind is refined by the settlement itself: an approver
+                    // that answers "nobody answered" (1.C-2) is Unanswered,
+                    // not Refused.
+                    $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest, $kind);
+                    if ($memoKey !== null && ($hookResult->isAllowed() || $hookResult->isModified())) {
+                        $this->taskGrants[$memoKey] = true;
+                    }
                 }
             }
         }
@@ -3083,6 +3099,23 @@ final class Runtime
         }
 
         return [$args, null, $context, $hookResult->additionalContext, null];
+    }
+
+    /**
+     * Whether the session's live permission mode is `bypass-permissions`,
+     * read through the gate hook on this manager's chain rather than any
+     * captured gate object — the same lazy channel {@see HookManager}'s
+     * registerBuiltIns() wires into the guard built-ins, and for the same
+     * reason: a mode switch replaces the gate. This reader exists because
+     * Runtime's fail-closed no-UI Ask arm must answer allow in bypass (owner
+     * ruling 2026-10-06) while an EXPLICIT Deny still travels the hook-Deny
+     * path above and is never consulted here.
+     */
+    private function bypassAnswersAsks(): bool
+    {
+        $gate = $this->hookManager->hook(HookEvent::PreToolUse->value, PermissionGateHook::NAME);
+
+        return $gate instanceof PermissionGateHook && $gate->gate()->mode()->isBypass();
     }
 
     /**

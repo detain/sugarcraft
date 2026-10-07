@@ -57,6 +57,18 @@ enum PermissionMode: string
     }
 
     /**
+     * Whether this is `bypass-permissions`, the one mode whose callers get a
+     * named predicate because three layers ask it per tool call (the gate's
+     * rule evaluator, the built-in guard hooks, the spawn-mode merge) and a
+     * comparison spelled `=== PermissionMode::BypassPermissions` at each reads
+     * as ceremony rather than as policy.
+     */
+    public function isBypass(): bool
+    {
+        return $this === self::BypassPermissions;
+    }
+
+    /**
      * One sentence on what this mode actually does, for a surface that has to
      * SHOW the policy back to the person running under it — `/permissions`,
      * via {@see \SugarCraft\Crush\Chat}.

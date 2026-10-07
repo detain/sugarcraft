@@ -385,6 +385,17 @@ final class HeadlessPermissionPrompt
      */
     public function __invoke(ToolCall $call, HookResult $ask): bool
     {
+        if ($this->mode->isBypass()) {
+            // BYPASS ALLOW-ALL (owner ruling 2026-10-06): the Ask-class arms
+            // this class implements — the no-tty fail-closed refusal and the
+            // interactive question — answer allow in `bypass-permissions`
+            // before anyone is put to the console. Explicit Deny rules and the
+            // rm-rf breaker never reach an approver at all (they return Deny
+            // through the gate), so this early grant cannot widen them; the
+            // policy-self-grant floor likewise denies ahead of any ASK.
+            return true;
+        }
+
         if (!$this->isInteractive()) {
             NonInteractive::noteUnattendedAsk(); // E375: the row qualifier's only write site — see class doc-block
             $this->write($this->refusal($call, $ask));

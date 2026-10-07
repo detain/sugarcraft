@@ -311,6 +311,11 @@ final class PermissionGateDontAskBypassTest extends TestCase
 
     /**
      * BypassPermissions: explicit Allow rule → Allow.
+     *
+     * Folded in (owner ruling 2026-10-06): an explicit ASK rule is neutralised
+     * to the mode's own Allow — the Ask class is exactly what bypass waives —
+     * while the neighbouring Deny rule above stays the floor. Control row:
+     * outside bypass the same Ask rule still asks.
      */
     public function testBypassPermissionsExplicitAllowRuleOverrides(): void
     {
@@ -327,6 +332,32 @@ final class PermissionGateDontAskBypassTest extends TestCase
         ));
 
         $this->assertSame(PermissionDecision::Allow, $decision);
+
+        $asking = new PermissionGate(
+            PermissionMode::BypassPermissions,
+            rules: [
+                new PermissionRule(pattern: 'Bash*', action: PermissionAction::Ask),
+            ],
+        );
+
+        $this->assertSame(
+            PermissionDecision::Allow,
+            $asking->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => 'anything'])),
+            'an Ask rule is a question bypass has already answered',
+        );
+
+        $stillAsks = new PermissionGate(
+            PermissionMode::Default,
+            rules: [
+                new PermissionRule(pattern: 'Bash*', action: PermissionAction::Ask),
+            ],
+        );
+
+        $this->assertSame(
+            PermissionDecision::Ask,
+            $stillAsks->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => 'anything'])),
+            'only bypass answers asks',
+        );
     }
 
     /**

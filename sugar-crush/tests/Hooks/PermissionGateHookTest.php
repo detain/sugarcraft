@@ -92,16 +92,16 @@ final class PermissionGateHookTest extends TestCase
      * refuses `rm -rf /`.
      *
      * Note what this does NOT establish. In isolation the gate is stricter
-     * than nothing; in the chain a real launch composes,
-     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook} already denies
-     * every recursive/force `rm` — strictly more than this breaker catches —
-     * and runs first, so with the shipped empty rule set the default gate
-     * changes no verdict at all. That composed behaviour is pinned by
-     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapPermissionGateTest::testTheDefaultGateAddsNothingTheBuiltInChainDidNotAlreadyRefuse()};
+     * than nothing. What it does establish, since the owner ruling of
+     * 2026-10-06, is the FLOOR: `bypass-permissions` stands the guard built-ins
+     * ({@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}) down to their
+     * floors, so the composed console chain decides LESS than the bare chain,
+     * not more — only the gate's breaker and the policy-file floors survive.
+     * That composed pair is pinned row by row by
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapPermissionGateTest::testTheShippedDefaultGateStandsTheChainDownToTheBreakerFloor()};
      * bypass-permissions stays the default only on the console paths (-p,
      * the daemon; the TUI starts in `default` since DEF-MODE) because their
-     * approver refuses without a terminal — not because it guards anything
-     * extra.
+     * approver refuses without a terminal.
      */
     public function testTheCircuitBreakerStillRefusesUnderBypassPermissions(): void
     {
@@ -114,19 +114,36 @@ final class PermissionGateHookTest extends TestCase
     /**
      * Ordering contract from the class docblock: the built-ins are the
      * narrower, more specific hazard check, and their DENY short-circuits the
-     * scan before the gate's broad-policy message can replace it.
+     * scan before the gate's broad-policy message can replace it. Backdrop is
+     * Default — under the bypass-permissions ruling of 2026-10-06 the guard
+     * hooks stand down entirely (second limb below), so the ranking is only
+     * observable while they still enforce; what survives bypass is the gate's
+     * own breaker floor, which the third limb pins.
      */
     public function testABuiltInDenyOutranksTheGatesBroaderVerdict(): void
     {
         $manager = new HookManager($registry = new HookRegistry());
         $manager->registerBuiltIns();
-        $manager->register(new PermissionGateHook(new PermissionGate(PermissionMode::BypassPermissions)));
+        $manager->register(new PermissionGateHook(new PermissionGate(PermissionMode::Default)));
 
         $result = $manager->preToolUse($this->context('Bash', ['command' => 'rm -rf ./build']));
 
         $this->assertTrue($result->isDenied());
         $this->assertStringContainsString('destructive', $result->message);
         $this->assertNotNull($registry->get('PreToolUse', PermissionGateHook::NAME));
+
+        $bypass = new HookManager(new HookRegistry());
+        $bypass->registerBuiltIns();
+        $bypass->register(new PermissionGateHook(new PermissionGate(PermissionMode::BypassPermissions)));
+
+        $this->assertTrue(
+            $bypass->preToolUse($this->context('Bash', ['command' => 'rm -rf ./build']))->isAllowed(),
+            'bypass stands the guard rail down — same call, same chain, new floor',
+        );
+        $this->assertTrue(
+            $bypass->preToolUse($this->context('Bash', ['command' => 'rm -rf /']))->isDenied(),
+            'the breaker floor is not a guard rail: it denies through bypass',
+        );
     }
 
     /**

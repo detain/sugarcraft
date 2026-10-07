@@ -546,15 +546,28 @@ final class ProtectFilesHookTest extends TestCase
     }
 
     /**
-     * Write-only, like the rest of the policy list: reading a hook script
-     * grants nothing, so `Read` of one stays allowed — through the chain
-     * under bypass, where nothing but this hook could refuse it. `.github/`
-     * and a hook-SAMPLE directory are different names and stay writable.
+     * The bypass contract after the owner ruling of 2026-10-06. Three things
+     * hold at once through the real chain:
+     *
+     *  - the POLICY FLOOR still denies — writing `hooks.yaml`, `config.json`,
+     *    or an `agents/` preset is how a session turns any mode's word into
+     *    code, so bypass, which the human chose for themselves, does not let
+     *    the model choose it for them. The message is asserted so the row
+     *    cannot pass via some later layer.
+     *  - the FILE-CLASS protections flip to allow (`.env`, key material) —
+     *    bypass means the human already answered "yes" to exactly these.
+     *  - reads of the policy surface and write-lookalikes were never this
+     *    hook's, and stay allowed, as does everything under a plain gate.
+     *
+     * The `POLICY_ASK` class is deliberately NOT waived: `.mcp.json` and the
+     * skills/commands surfaces still ask, and headless they fail closed like
+     * every other ask this file pins.
      */
-    public function testGitHooksMayBeReadAndLookalikesWritten(): void
+    public function testBypassKeepsThePolicyFloorAndFlipsTheRest(): void
     {
         $mode = PermissionMode::BypassPermissions;
 
+        // Reads and lookalikes — as before the ruling.
         $this->assertTrue($this->chainVerdict('Read', ['file_path' => '.git/hooks/pre-commit'], $mode)->isAllowed());
         $this->assertTrue($this->chainVerdict('Read', ['file_path' => '.git/info/exclude'], $mode)->isAllowed());
         $this->assertTrue(
@@ -563,6 +576,35 @@ final class ProtectFilesHookTest extends TestCase
         $this->assertTrue(
             $this->chainVerdict('Write', ['file_path' => '.git/hooks-sample/README', 'content' => 'x'], $mode)->isAllowed(),
         );
+
+        // The floor: every WRITE_ONLY pattern denies in bypass, message named,
+        // so a pass could only come from this hook's list — not the mode.
+        $floor = [
+            'hooks.yaml' => ['Write', ['file_path' => '.sugar-crush/hooks.yaml', 'content' => 'x']],
+            'config.json' => ['Write', ['file_path' => '.sugar-crush/config.json', 'content' => '{}']],
+            'agents preset' => ['Write', ['file_path' => '.sugar-crush/agents/extra.md', 'content' => 'x']],
+            'git hook' => ['Write', ['file_path' => '.git/hooks/pre-commit', 'content' => "#!/bin/sh\n"]],
+            'bash spelling' => ['Bash', ['command' => 'cp payload.sh .sugar-crush/hooks.yaml']],
+        ];
+        foreach ($floor as $label => [$tool, $args]) {
+            $verdict = $this->chainVerdict($tool, $args, $mode);
+            $this->assertTrue($verdict->isDenied(), "the policy floor must hold in bypass: {$label}");
+            $this->assertStringContainsString('prevents modification of files matching', (string) $verdict->message);
+        }
+
+        // File class flips: a secret is a prompt the human waived, not a wall.
+        $this->assertTrue($this->chainVerdict('Edit', ['file_path' => '.env', 'old_string' => 'a', 'new_string' => 'b'], $mode)->isAllowed());
+        $this->assertTrue($this->chainVerdict('Read', ['file_path' => '.env'], $mode)->isAllowed());
+        $this->assertTrue($this->chainVerdict('Read', ['file_path' => '/home/u/.ssh/id_rsa'], $mode)->isAllowed());
+
+        // Control: outside bypass the file class is a wall again.
+        $this->assertTrue(
+            $this->chainVerdict('Edit', ['file_path' => '.env', 'old_string' => 'a', 'new_string' => 'b'], PermissionMode::Default)->isDenied(),
+        );
+
+        // POLICY_ASK is not waived: bypass still puts the question.
+        $asked = $this->chainVerdict('Write', ['file_path' => '.mcp.json', 'content' => '{}'], $mode);
+        $this->assertTrue($asked->isAsk(), 'the policy-ask class answers to the human, not to the mode');
     }
 
     // =========================================================================

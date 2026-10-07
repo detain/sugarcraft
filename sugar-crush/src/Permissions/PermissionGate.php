@@ -608,7 +608,20 @@ final class PermissionGate
 
         // 1. Check explicit rules first (highest priority), then 2. the
         // mode-specific logic; 3. a session "always" can only answer an Ask.
-        $decision = $this->evaluateRules($call, $argumentsKnown, $projectRoot)
+        $fromRules = $this->evaluateRules($call, $argumentsKnown, $projectRoot);
+
+        // BYPASS ALLOW-ALL (owner ruling 2026-10-06): a user ASK rule is a
+        // deferred question, not a refusal, and `bypass-permissions` is the
+        // mode whose operator has answered every question in advance — so
+        // under bypass an Ask from the rule layer falls through to
+        // evaluateMode(), which Allows. A DENY rule returns Deny, never Ask,
+        // from evaluateRules() and is structurally untouched: deny beats mode,
+        // exactly as the step-0 breaker above it does.
+        if ($fromRules === PermissionDecision::Ask && $this->mode->isBypass()) {
+            $fromRules = null;
+        }
+
+        $decision = $fromRules
             ?? $this->evaluateMode($call, $commitAutoStrikes, $argumentsKnown, $projectRoot, $sessionId);
 
         // A security finding's question is put every time (SECURITY_CATEGORIES):

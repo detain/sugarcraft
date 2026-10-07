@@ -8,6 +8,7 @@ use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
 use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\ShellWords;
 use SugarCraft\Crush\Tools\Catalog\ToolCatalog;
 use SugarCraft\Crush\Tools\Catalog\ToolPermissionClass;
@@ -255,6 +256,9 @@ final readonly class ProtectFilesHook implements HookInterface
     /** @var list<string> */
     private array $askPatterns;
 
+    /** Lazy read of the session's permission mode; see {@see __construct()}. */
+    private ?\Closure $modeReader;
+
     /**
      * @param list<string>|null $protectedPatterns Regex patterns to DENY;
      *        null keeps {@see self::DEFAULT_PROTECTED_PATTERNS}. An empty list
@@ -264,11 +268,21 @@ final readonly class ProtectFilesHook implements HookInterface
      *        ASKED about; null keeps {@see self::POLICY_ASK_PATTERNS}, [] asks
      *        about nothing. Judged only after every deny pattern missed, so a
      *        call both lists name is refused rather than put to the human.
+     * @param (callable(): ?PermissionMode)|null $modeReader reads the mode
+     *        of the gate registered on the SAME HookManager at execute time —
+     *        lazy for the same reason {@see ConfirmRemoveHook} gives, and null
+     *        (or a chain with no gate) enforces the full list as before.
+     *        Owner ruling 2026-10-06: under `bypass-permissions` only
+     *        {@see self::WRITE_ONLY_PATTERNS} — the policy-self-grant floor —
+     *        keeps denying; the secret/file-class protections flip to allow.
+     *        The POLICY_ASK questions are NOT waived by the ruling and still
+     *        ask in every mode; see {@see self::POLICY_ASK_PATTERNS}.
      */
-    public function __construct(?array $protectedPatterns = null, ?array $askPatterns = null)
+    public function __construct(?array $protectedPatterns = null, ?array $askPatterns = null, ?\Closure $modeReader = null)
     {
         $this->protectedPatterns = array_values($protectedPatterns ?? self::DEFAULT_PROTECTED_PATTERNS);
         $this->askPatterns = array_values($askPatterns ?? self::POLICY_ASK_PATTERNS);
+        $this->modeReader = $modeReader;
     }
 
     /**
@@ -278,7 +292,7 @@ final readonly class ProtectFilesHook implements HookInterface
      */
     public function withProtectedPatterns(array $protectedPatterns): self
     {
-        return new self($protectedPatterns, $this->askPatterns);
+        return new self($protectedPatterns, $this->askPatterns, $this->modeReader);
     }
 
     /**
@@ -288,7 +302,7 @@ final readonly class ProtectFilesHook implements HookInterface
      */
     public function withAskPatterns(array $askPatterns): self
     {
-        return new self($this->protectedPatterns, $askPatterns);
+        return new self($this->protectedPatterns, $askPatterns, $this->modeReader);
     }
 
     /** @return list<string> */
@@ -402,8 +416,22 @@ final readonly class ProtectFilesHook implements HookInterface
             true,
         );
 
+        // Owner ruling 2026-10-06 (bypass allow-all): in `bypass-permissions`
+        // every protection except the policy-self-grant floor flips to allow.
+        // The floor survives precisely because it is the switch's own
+        // integrity — writing hooks.yaml, config.json's trust list, or an
+        // agents/ preset is how a session upgrades ANY mode's word into code,
+        // so no mode, bypass included, may take it unprompted. A null reader
+        // (no gate in the chain) is NOT bypass: enforce everything, as before.
+        $read = $this->modeReader;
+        $bypassing = $read !== null && $read() === PermissionMode::BypassPermissions;
+
         foreach ($this->protectedPatterns as $pattern) {
             if ($readOnly && \in_array($pattern, self::WRITE_ONLY_PATTERNS, true)) {
+                continue;
+            }
+
+            if ($bypassing && !\in_array($pattern, self::WRITE_ONLY_PATTERNS, true)) {
                 continue;
             }
 

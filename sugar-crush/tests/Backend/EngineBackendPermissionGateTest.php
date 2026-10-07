@@ -93,10 +93,14 @@ final class EngineBackendPermissionGateTest extends TestCase
     }
 
     /**
-     * The gate is an ADDITIONAL layer, not a replacement: a mode as permissive
-     * as BypassPermissions must not talk the built-in hooks out of a refusal.
+     * The gate is an ADDITIONAL layer, not a replacement — but after the owner
+     * ruling of 2026-10-06 the built-in guard-rail hooks stand down under
+     * `bypass-permissions`: destructive-but-not-terminal Bash (`rm -rf
+     * ./build`) now runs. What still refuses in bypass is the gate's own
+     * step-0 breaker (`rm -rf /`), pinned as the pair below, and the
+     * ProtectFiles policy floor (pinned in {@see ProtectFilesHookTest}).
      */
-    public function testTheBuiltInHooksSurviveAPermissiveGate(): void
+    public function testBypassRunsGuardrailedWorkWhileTheBreakerHolds(): void
     {
         $tool = $this->recordingTool('Bash');
 
@@ -105,7 +109,16 @@ final class EngineBackendPermissionGateTest extends TestCase
             ->withPermissionGate(new PermissionGate(PermissionMode::BypassPermissions))
             ->complete([Message::user('go')]);
 
-        $this->assertSame(0, $tool->calls);
+        $this->assertSame(1, $tool->calls, 'the ConfirmRemove guard-rail is below bypass');
+
+        $breaker = $this->recordingTool('Bash');
+
+        (new EngineBackend($this->toolThenAnswerProvider('Bash', ['command' => 'rm -rf /']), 'test'))
+            ->withTools([$breaker])
+            ->withPermissionGate(new PermissionGate(PermissionMode::BypassPermissions))
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(0, $breaker->calls, 'the rm -rf / breaker is unswitchable');
     }
 
     /**
@@ -132,6 +145,11 @@ final class EngineBackendPermissionGateTest extends TestCase
     /**
      * With no approver attached, an ASK fails CLOSED — {@see \SugarCraft\Crush\Runtime::settleAsk()}'s
      * pre-existing contract, now reachable from the gate.
+     *
+     * The bypass pair (owner ruling 2026-10-06): the same unanswered Ask — a
+     * user Ask rule under a bypass session — answers itself ALLOW, because the
+     * human already consented by switching the mode; there is no second
+     * question left to ask them.
      */
     public function testAnAskingGateFailsClosedWithNoApprover(): void
     {
@@ -144,6 +162,31 @@ final class EngineBackendPermissionGateTest extends TestCase
             ->complete([Message::user('go')]);
 
         $this->assertSame(0, $tool->calls);
+
+        $bypassed = $this->recordingTool();
+
+        (new EngineBackend($this->toolThenAnswerProvider(), 'test'))
+            ->withTools([$bypassed])
+            ->withPermissionGate(new PermissionGate(
+                PermissionMode::BypassPermissions,
+                [new PermissionRule('Edit', PermissionAction::Ask)],
+            ))
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(1, $bypassed->calls, 'bypass answers an Ask rule without a UI');
+
+        // And the arm for a HOOK's ask (Runtime's no-UI fail-closed): the
+        // POLICY_ASK class is never waived by the ruling — but with nobody to
+        // put the question to, bypass is itself the standing yes. In the TUI
+        // an approver is attached and the question still reaches the human.
+        $policy = $this->recordingTool('Write');
+
+        (new EngineBackend($this->toolThenAnswerProvider('Write', ['file_path' => '.mcp.json', 'content' => '{}']), 'test'))
+            ->withTools([$policy])
+            ->withPermissionGate(new PermissionGate(PermissionMode::BypassPermissions))
+            ->complete([Message::user('go')]);
+
+        $this->assertSame(1, $policy->calls, 'an unanswered hook ask settles allow under bypass');
     }
 
     /**

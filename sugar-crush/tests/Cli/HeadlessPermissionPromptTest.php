@@ -276,6 +276,15 @@ final class HeadlessPermissionPromptTest extends TestCase
         $this->assertStringContainsString('mode: auto', $text);
         $this->assertStringContainsString('--permission-mode', $text);
         $this->assertStringContainsString('permissionRules entry for Bash', $text);
+
+        // Owner ruling 2026-10-06: bypass is the shape of this answer already
+        // given — the prompt returns allow without a terminal, without
+        // reading, and without a word on stderr. (Denies never reach an
+        // approver at all, and the breaker/floor live below this class.)
+        [$bypassing, $quietErr] = $this->nonInteractivePrompt('', PermissionMode::BypassPermissions);
+
+        $this->assertTrue($bypassing(new ToolCall('c1', 'Bash', ['command' => 'git push']), HookResult::ask('Allow Bash to run?')));
+        $this->assertSame('', $this->read($quietErr), 'bypass prompts nobody and refuses nothing');
     }
 
     // ------------------------------------------------------- end to end ----
