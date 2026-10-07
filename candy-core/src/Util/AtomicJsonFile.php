@@ -5,15 +5,20 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Util;
 
 /**
- * Atomic tmp+flock+rename JSON store; consolidates the durable-state save
+ * Atomic lock+tmp+rename JSON store; consolidates the durable-state save
  * pattern hand-rolled across candy-mines, candy-hermit, candy-metrics,
  * sugar-stash and 5+ other libs (each with subtly different locking /
  * cleanup / decode-guard behaviour).
  *
- * The persist contract: a reader must never observe a half-written file, so
- * we write to a sibling temp file in the SAME directory (rename is only
- * atomic within one filesystem) and rename it over the target — the rename
- * swaps the directory entry in a single syscall.
+ * The persist contract has two halves. Readers: we write to a sibling temp
+ * file in the SAME directory (rename is only atomic within one filesystem)
+ * and rename it over the target — the rename swaps the directory entry in a
+ * single syscall, so a reader sees either the old or the new file, never a
+ * torn one. Writers: an exclusive flock on a stable sidecar,
+ * `<dirname>/.<basename>.lock`, serialises the whole write+rename critical
+ * section, so two processes cannot interleave temp-publishes and lose one
+ * update to a stale rename. The sidecar is created on demand and never
+ * deleted — unlinking a lock races a writer blocked on the old inode.
  *
  * Optional base-dir confinement guards callers that build the path from
  * untrusted components: the resolved target must stay inside $baseDir, and a
@@ -143,12 +148,15 @@ final class AtomicJsonFile
     /**
      * Atomically persist $data.
      *
-     * Writes to a uniquely-named temp file in the target's own directory under
-     * an exclusive lock, flushes to the OS, then renames it over the target so
-     * a concurrent reader sees either the old or the new file, never a torn
-     * one. The parent dir is created 0700 (not 0755): durable state may hold
+     * Serialises writers with an exclusive flock on the stable `<target>.lock`
+     * sidecar ({@see lockPath()}), writes the payload to a uniquely-named temp
+     * file in the target's own directory, flushes (and fsyncs where the runtime
+     * offers it) BEFORE publishing, then renames the temp over the target so a
+     * concurrent reader sees either the old or the new file, never a torn one.
+     * The parent dir is created 0700 (not 0755): durable state may hold
      * tokens/history and should not be world-readable. On any failure the temp
-     * file is removed before the exception propagates.
+     * file is removed before the exception propagates; the lock sidecar stays
+     * in place by design — deleting a lock is the race this shape avoids.
      *
      * When {@see withPermissions()} set a mode, the temp inode is chmod'ed to it
      * immediately after creation — before a single payload byte is written — so
@@ -174,26 +182,56 @@ final class AtomicJsonFile
             JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
         );
 
+        // Mutual exclusion rides a STABLE inode. The temp file below carries a
+        // fresh random name per write, so an flock() on it is a lock nobody
+        // else ever takes; <target>.lock is the one path every writer of this
+        // store agrees on, so it is what actually serialises the critical
+        // section. 'cb' creates it once; the sidecar holds no payload, so it
+        // is 0600 regardless of the published file's requested mode (the
+        // chmod is best-effort: an existing sidecar's bits are not ours to
+        // police, and failing here would fail a write over a metadata nicety).
+        $lockPath = $this->lockPath();
+        $lockHandle = @fopen($lockPath, 'cb');
+        if ($lockHandle === false) {
+            throw new \RuntimeException("Failed to open lock file: {$lockPath}");
+        }
+        @chmod($lockPath, 0600);
+
         $tmp = $dir . \DIRECTORY_SEPARATOR . '.' . basename($this->path) . '.tmp.' . bin2hex(random_bytes(8));
 
-        $handle = @fopen($tmp, 'wb');
-        if ($handle === false) {
-            throw new \RuntimeException("Failed to open temp file: {$tmp}");
-        }
+        $handle = null;
 
         try {
-            $this->applyPermissions($tmp);
-
-            if (!flock($handle, \LOCK_EX)) {
-                throw new \RuntimeException("Failed to lock temp file: {$tmp}");
+            if (!flock($lockHandle, \LOCK_EX)) {
+                throw new \RuntimeException("Failed to acquire write lock: {$lockPath}");
             }
+
+            $handle = @fopen($tmp, 'wb');
+            if ($handle === false) {
+                throw new \RuntimeException("Failed to open temp file: {$tmp}");
+            }
+
+            $this->applyPermissions($tmp);
 
             if (fwrite($handle, $payload) === false) {
                 throw new \RuntimeException("Failed to write temp file: {$tmp}");
             }
 
-            fflush($handle);
-            flock($handle, \LOCK_UN);
+            if (!fflush($handle)) {
+                throw new \RuntimeException("Failed to flush temp file: {$tmp}");
+            }
+
+            // Durability before publish: fflush() alone leaves payload bytes
+            // in the page cache while the rename can already be committed —
+            // power loss then shows up as a truncated JSON under an "atomic"
+            // name. fsync() exists since PHP 8.1; where it is absent or
+            // refused (some networked filesystems) the write still succeeds:
+            // durability is best-effort, the published bytes' correctness is
+            // what the rename contract guarantees.
+            if (\function_exists('fsync')) {
+                @fsync($handle);
+            }
+
             fclose($handle);
             $handle = null;
 
@@ -214,8 +252,32 @@ final class AtomicJsonFile
             if (is_file($tmp)) {
                 @unlink($tmp);
             }
+            $this->releaseWriteLock($lockHandle);
 
             throw $e;
+        }
+
+        // Released only after the publish: a writer that grabbed the lock
+        // second must rename on top of the first one's settled file.
+        $this->releaseWriteLock($lockHandle);
+    }
+
+    /**
+     * The writer-mutual-exclusion inode for this store: a hidden dot-file
+     * beside the target, created on demand, never deleted (unlinking a lock
+     * races waiters blocked on the old inode into a new one).
+     */
+    private function lockPath(): string
+    {
+        return \dirname($this->path) . \DIRECTORY_SEPARATOR . '.' . basename($this->path) . '.lock';
+    }
+
+    /** @param resource|\ClosedResource|null $lockHandle */
+    private function releaseWriteLock($lockHandle): void
+    {
+        if (\is_resource($lockHandle)) {
+            flock($lockHandle, \LOCK_UN);
+            fclose($lockHandle);
         }
     }
 

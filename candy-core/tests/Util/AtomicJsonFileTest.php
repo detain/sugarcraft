@@ -84,9 +84,12 @@ final class AtomicJsonFileTest extends TestCase
 
         $entries = array_values(array_diff(scandir($this->tmpDir) ?: [], ['.', '..']));
 
-        // After a successful atomic write the directory must contain ONLY the
-        // target file — no orphaned `.state.json.tmp.*` sidecar.
-        $this->assertSame(['state.json'], $entries);
+        // After a successful atomic write the directory must contain the
+        // target plus the permanent lock sidecar — and nothing else. Temp
+        // inodes (`.state.json.tmp.*`) must never survive; the sidecar
+        // (`.state.json.lock`) deliberately does, because deleting a lock
+        // races waiters blocked on the inode being unlinked.
+        $this->assertSame(['.state.json.lock', 'state.json'], $entries);
     }
 
     public function testReadNonArrayTopLevelThrows(): void
