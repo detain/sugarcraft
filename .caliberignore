@@ -9,3 +9,6 @@ codacy-coverage-reporter
 # VHS Gifs
 sugar-reel/.vhs/play.gif
 */.vhs/*.gif
+
+ansi/ansi.json
+
