@@ -264,12 +264,40 @@ final class AgentDashboardPane
             return $frame;
         }
 
+        // Veil clips the overlay to the BACKDROP's canvas, and box() hugs
+        // its list: a short dashboard (one session = four rows) would
+        // amputate a taller peek tile below the backdrop's last row, its
+        // content and its own border alike — which is how a peek's newest
+        // output line could vanish from the frame. Fill the canvas out to
+        // the rows the caller budgeted first; the shell (Renderer's
+        // clipHead) never gives this pane more than $rows, so the filled
+        // rows are blank on screen either way.
         return Veil::new()->withBackdrop(50)->composite(
             $overlay,
-            $frame,
+            self::padCanvas($frame, $rows),
             Position::CENTER,
             Position::CENTER,
         );
+    }
+
+    /**
+     * Extend a content-hugging frame down to $canvasRows with full-width
+     * blanks, so an overlay composite has the whole pane as its canvas.
+     */
+    private static function padCanvas(string $frame, int $canvasRows): string
+    {
+        $lines = explode("\n", $frame);
+        $missing = $canvasRows - count($lines);
+        if ($missing <= 0) {
+            return $frame;
+        }
+
+        $blank = str_repeat(' ', max(array_map(
+            static fn (string $line): int => Width::of($line),
+            $lines,
+        )));
+
+        return $frame . str_repeat("\n" . $blank, $missing);
     }
 
     /**
