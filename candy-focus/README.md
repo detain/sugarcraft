@@ -96,8 +96,14 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;
   in to restore a session:
 
 ```php
-$s = json_decode($json, true); // a non-empty snapshot
-$ring = FocusRing::of(...$s['ids'])->focus($s['ids'][$s['index']]);
+$s = json_decode($json, true);
+// An empty ring stores index -1, so guard the lookup — on `[]` this would read
+// `$s['ids'][-1]` (undefined key) and pass null to focus(). Focus first, then
+// re-apply the disabled flags: focus() refuses disabled ids, and this order
+// restores even a snapshot whose focused region was itself disabled.
+$ring = $s['ids'] === []
+    ? FocusRing::new()
+    : FocusRing::of(...$s['ids'])->focus($s['ids'][$s['index']]);
 foreach ($s['disabled'] as $id) {
     $ring = $ring->disable($id);
 }

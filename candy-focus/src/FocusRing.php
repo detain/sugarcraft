@@ -233,13 +233,20 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     }
 
     /**
-     * Focus a specific registered region. A no-op if it is not registered or is
-     * already focused.
+     * Focus a specific registered, ENABLED region. A no-op if it is not
+     * registered, is disabled, or is already focused.
+     *
+     * Refusing disabled ids (audit 2026-10-07 ruling) keeps the two ways focus
+     * moves consistent: next()/previous() skip disabled regions, so focus()
+     * must not be a teleport past the same wall. Focus stays parkable ON a
+     * disabled region the other way round — disable() never moves an existing
+     * focus (see next()/previous() docs), and snapshot restore focuses ids
+     * before re-applying their disabled flags, which this order keeps working.
      */
     public function focus(string $id): self
     {
         $pos = array_search($id, $this->ids, true);
-        if ($pos === false || $pos === $this->index) {
+        if ($pos === false || $pos === $this->index || isset($this->disabled[$id])) {
             return $this;
         }
 

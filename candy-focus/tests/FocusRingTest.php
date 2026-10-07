@@ -129,6 +129,25 @@ final class FocusRingTest extends TestCase
         self::assertSame($ring, $ring->focus('a'));
     }
 
+    public function testFocusDisabledRegionIsANoOp(): void
+    {
+        // Audit 2026-10-07 ruling: focus() refuses disabled ids so it cannot
+        // teleport past the wall next()/previous() skip.
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b');
+
+        $same = $ring->focus('b');
+
+        self::assertSame($ring, $same);
+        self::assertSame('a', $same->current());
+
+        // Re-enabling makes the same focus() call land.
+        self::assertSame('b', $ring->enable('b')->focus('b')->current());
+
+        // Focus may still STAY on a region that becomes disabled afterwards.
+        $parked = FocusRing::of('a', 'b')->focus('b')->disable('b');
+        self::assertSame('b', $parked->current());
+    }
+
     public function testUnregisterUnknownRegionIsANoOp(): void
     {
         $ring = FocusRing::of('a', 'b');
