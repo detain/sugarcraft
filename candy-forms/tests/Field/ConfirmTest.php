@@ -56,6 +56,18 @@ final class ConfirmTest extends TestCase
         $this->assertFalse($f->value());
     }
 
+    public function testBareAccessorAliasesMatchGetForms(): void
+    {
+        // E736 F4: the get-forms are the Field interface contract and stay
+        // authoritative; description()/error() are bare house aliases.
+        // title() is deliberately NOT mirrored — that name is the setter.
+        $f = Confirm::new('q')->withTitle('T')->withDescription('D');
+        $this->assertSame($f->getDescription(), $f->description());
+        $this->assertSame('D', $f->description());
+        $this->assertSame($f->getError(), $f->error());
+        $this->assertNull($f->error());
+    }
+
     public function testIgnoresKeysWhenUnfocused(): void
     {
         $f = Confirm::new('q');

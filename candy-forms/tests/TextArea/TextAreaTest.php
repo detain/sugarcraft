@@ -398,6 +398,20 @@ final class TextAreaTest extends TestCase
         $this->assertSame(0, $t->getRowOffset());
     }
 
+    public function testRowOffsetBareAliasMatchesGetForm(): void
+    {
+        // E736 F4: rowOffset() is the bare house accessor; getRowOffset()
+        // stays as the deprecated back-compat form. Pinned both at rest (0)
+        // and after the caret pans the viewport (non-zero), so the alias can
+        // never drift into a stale field read.
+        $t = TextArea::new()->withHeight(2)->setValue("a\nb\nc\nd");
+        $this->assertSame($t->getRowOffset(), $t->rowOffset());
+
+        [$focussed, ] = $t->focus();
+        $this->assertGreaterThan(0, $focussed->rowOffset());
+        $this->assertSame($focussed->getRowOffset(), $focussed->rowOffset());
+    }
+
     public function testTotalLengthMemoIsFreshPerSnapshot(): void
     {
         // E736-F2/2.4: totalLength() was an O(lines) rescan on every

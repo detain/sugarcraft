@@ -929,8 +929,19 @@ final class TextArea implements Model
      * Vertical scroll offset (0-based row index of the topmost visible line).
      * Follows the caret automatically: every edit/navigation snapshot pans it
      * so the cursor row stays inside the {@see effectiveHeight()} window.
+     *
+     * @deprecated Use the bare {@see rowOffset()} accessor (E736 F4, house
+     *             no-get rule); kept for back-compat, delegates identically.
      */
     public function getRowOffset(): int { return $this->rowOffset; }
+
+    /**
+     * Bare scroll-offset accessor (E736 F4). The get-form on the property
+     * violated the house no-get rule; `width`/`height` have no twin here
+     * because those bare names are already the setters (E736 1.x aliases) —
+     * read them off the public readonly properties instead.
+     */
+    public function rowOffset(): int { return $this->rowOffset; }
 
     /**
      * Idiomatic split for callers that prefer dedicated setters over

@@ -179,6 +179,14 @@ final class Confirm implements \SugarCraft\Forms\Field
     public function skippable(): bool         { return false; }
     public function consumes(Msg $msg): bool  { return false; }
 
+    // Bare accessors (E736 F4, house no-get rule). The get-forms above are
+    // the Field interface contract — consumed by Form and every renderer —
+    // so they stay authoritative; these delegate for callers holding a
+    // concrete Confirm. `title()` is NOT mirrored: that bare name is the
+    // setter alias above, so read the title via getTitle().
+    public function description(): string { return $this->getDescription(); }
+    public function error(): ?string      { return $this->getError(); }
+
     private function mutate(
         ?bool $value = null,
         ?bool $focused = null,
