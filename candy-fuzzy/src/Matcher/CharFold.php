@@ -27,6 +27,16 @@ namespace SugarCraft\Fuzzy\Matcher;
  *  - Greek final sigma: whole-string folding maps a word-final Σ to ς,
  *    per-char folding always yields σ (simple fold, no context).
  *
+ * Malformed UTF-8 (audit 2026-10-07, documented not fixed): mb_strtolower
+ * folds a lone invalid byte to the literal '?' (0x3F) and mb_str_split emits
+ * exactly one element per invalid byte — so foldSplit stays 1:1 with the
+ * original even for corrupt input, and a bad byte can never desync indices:
+ * it only makes its own element compare as '?' (and lets a literal '?' query
+ * match it). Downstream, Highlighter's mb_substr renders that byte as its
+ * substitution char too, so styled output of corrupt input is '?'-rewritten
+ * and not byte-faithful — alignment is preserved, fidelity is not. Pinned
+ * by CodePointExpansionTest::testMalformedByteFoldsToQuestionMarkWithoutDesync.
+ *
  * Pure memoized folding — same input, same output; the process cache is an
  * optimization with a hard size cap and is never observable from outside.
  */

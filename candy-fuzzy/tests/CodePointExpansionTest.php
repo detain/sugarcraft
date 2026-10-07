@@ -48,9 +48,14 @@ final class CodePointExpansionTest extends TestCase
     #[Test]
     public function testFoldSplitStaysOneToOneWithCodePoints(): void
     {
-        $strings = [self::ISTANBUL, "İ1\u{1E9E}ßﬁǰıΣς中文", 'plain ASCII', '', "i\u{0307}stanbul"];
+        $strings = [self::ISTANBUL, "İ1\u{1E9E}ßﬁǰıΣς中文", 'plain ASCII', '', "i\u{0307}stanbul",
+            // 4-byte SMP code points (audit 2026-10-07 test gap): mb_str_split and
+            // the per-char fold must stay 1:1 across the astral plane too.
+            "\u{1F600}abc\u{1F4A9}", "\u{1F600}\u{1F600}\u{1F600}",
+            // Malformed UTF-8: one element per invalid byte, folded to '?'.
+            "\xFF" . 'ab', "\xFF\xFE",];
         foreach ($strings as $s) {
-            $this->assertCount(mb_strlen($s, 'UTF-8'), CharFold::foldSplit($s), "1:1 broken for '$s'");
+            $this->assertCount(mb_strlen($s, 'UTF-8'), CharFold::foldSplit($s), "1:1 broken for " . json_encode($s));
         }
 
         // The expansion itself: İ folds to TWO code points in ONE element.
@@ -145,6 +150,81 @@ final class CodePointExpansionTest extends TestCase
         $this->assertSame('İ[sta]nbul', $smOut);
     }
 
+    // ── 4-byte SMP coverage (audit 2026-10-07 test gap #1) ────────────────────
+    // The matrix sweep above proves index honesty across pairings; these pins
+    // characterize the exact production shapes: an emoji is ONE index slot even
+    // though it occupies FOUR bytes, and the highlighter round-trips it whole.
+
+    #[Test]
+    public function testSmpEmojiQueryMatchesItselfInBothMatchersAtCodePointIndex(): void
+    {
+        $emoji = "\u{1F600}"; // 4 bytes in UTF-8, 1 code point
+
+        $swResult = $this->sw->match($emoji, $emoji . 'abc');
+        $smResult = $this->sm->match($emoji, $emoji . 'abc');
+
+        $this->assertNotNull($swResult);
+        $this->assertSame([0], $swResult->indices(), 'SW must address the emoji as code point 0, not byte 0-3');
+        $this->assertNotNull($smResult);
+        $this->assertSame([0], $smResult->indices());
+    }
+
+    #[Test]
+    public function testSmpCharBeforeQueryKeepsAsciiIndicesInCodePointSpace(): void
+    {
+        $haystack = "\u{1F600}" . 'abc';
+
+        // A byte-indexed implementation would report 4/5/6 here; code point
+        // indexing must report 1/2/3 with the emoji counted as a single slot.
+        $this->assertSame([1], $this->sw->match('a', $haystack)?->indices());
+        $this->assertSame([3], $this->sm->match('c', $haystack)?->indices());
+        $this->assertSame([0, 3], $this->sw->match("\u{1F600}c", $haystack)?->indices());
+
+        // And trailing: Sahilm scanning past an astral char at the end.
+        $this->assertSame([2], $this->sm->match('z', 'abz' . "\u{1F600}")?->indices());
+    }
+
+    #[Test]
+    public function testSmpHighlighterRoundTripWrapsTheWholeEmoji(): void
+    {
+        $emoji = "\u{1F600}";
+        $highlighter = new Highlighter();
+
+        $selfOut = $highlighter->highlight($this->sw->match($emoji, $emoji . 'abc'), static fn(string $m): string => "[$m]");
+        $afterOut = $highlighter->highlight($this->sw->match('a', $emoji . 'abc'), static fn(string $m): string => "[$m]");
+        $mixedOut = $highlighter->highlight($this->sw->match($emoji . 'c', $emoji . 'abc'), static fn(string $m): string => "[$m]");
+
+        $this->assertSame('[' . $emoji . ']abc', $selfOut, 'emoji must survive the run splice whole');
+        $this->assertSame($emoji . '[a]bc', $afterOut);
+        $this->assertSame('[' . $emoji . ']ab[c]', $mixedOut);
+    }
+
+    // ── Malformed UTF-8 fold semantics (audit 2026-10-07 ruling #2) ──────────
+    // Documenting the ACCEPTED behaviour, not fixing it: an invalid byte folds
+    // to a literal '?' yet stays 1:1, so indices never desync (see CharFold
+    // class docblock). If a future change breaks the count or the alignment,
+    // this pin goes red.
+
+    #[Test]
+    public function testMalformedByteFoldsToQuestionMarkWithoutDesync(): void
+    {
+        $bad = "\xFF" . 'ab';
+
+        // One element per (invalid) byte, bad byte folded to '?' — the 1:1
+        // index contract holds even on corrupt input.
+        $this->assertSame(['?', 'a', 'b'], CharFold::foldSplit($bad));
+        $this->assertSame('?', CharFold::fold("\xFF"));
+
+        // Matching past the bad byte stays aligned on the ORIGINAL code points.
+        $result = $this->sw->match('ab', $bad);
+        $this->assertNotNull($result);
+        $this->assertSame([1, 2], $result->indices());
+        $this->assertSame($bad, $result->haystack, 'result keeps the raw bytes even though the fold shows ?');
+
+        // Accepted consequence of the fold: a literal '?' query matches the bad byte.
+        $this->assertNotNull($this->sw->match('?', $bad));
+    }
+
     /**
      * Deterministic sweep over case-expansion-relevant code points: every index
      * any matcher reports must (a) be in range of the original haystack and
@@ -154,7 +234,11 @@ final class CodePointExpansionTest extends TestCase
      */
     public static function expansionMatrix(): array
     {
-        $chars = ["\u{0130}", "\u{1E9E}", "\u{00DF}", "\u{FB01}", "\u{01F0}", "\u{0131}", "\u{03A3}", "\u{03C2}", 'I', 'i', '中'];
+        // U+1F600 (4-byte UTF-8) joins the sweep so every pairing exercises a
+        // Supplementary-Multilingual-Plane char through BOTH matcher styles
+        // (audit 2026-10-07 gap: coverage was BMP-only, so a byte-vs-code-point
+        // index error astral of U+FFFF had no test to hide from).
+        $chars = ["\u{0130}", "\u{1E9E}", "\u{00DF}", "\u{FB01}", "\u{01F0}", "\u{0131}", "\u{03A3}", "\u{03C2}", 'I', 'i', '中', "\u{1F600}"];
         $cases = [];
         foreach ($chars as $a) {
             foreach ($chars as $b) {

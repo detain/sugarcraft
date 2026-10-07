@@ -86,6 +86,48 @@ final class MatchResultSorterTest extends TestCase
     }
 
     #[Test]
+    public function testNumericStringHaystackTiebreakComparesNumerically(): void
+    {
+        // The haystack tiebreak uses <=>, which for two numeric strings orders
+        // them NUMERICALLY — "10" sorts after "9", not before it as plain byte
+        // order would give. Pinned as total-order semantics (docblock law).
+        $sorted = MatchResultSorter::sort([
+            $this->r('10', 5),
+            $this->r('9', 5),
+        ]);
+
+        $this->assertSame(['9', '10'], array_map(static fn(MatchResult $r) => $r->haystack, $sorted));
+
+        // Mixed numeric/non-numeric falls back to string comparison: "2a" is
+        // not numeric, so "10" vs "2a" orders by bytes — "1" < "2".
+        $mixed = MatchResultSorter::sort([
+            $this->r('2a', 5),
+            $this->r('10', 5),
+        ]);
+
+        $this->assertSame(['10', '2a'], array_map(static fn(MatchResult $r) => $r->haystack, $mixed));
+    }
+
+    #[Test]
+    public function testFullTiePreservesInputOrderViaStableSort(): void
+    {
+        // Score AND haystack equal → comparator returns 0; PHP >= 8.0's stable
+        // usort keeps the pair in arrival order. The library requires ^8.3, so
+        // this is a guarantee, not a coincidence; needles discriminate the two
+        // rows for the assertion (they are not compared by the sort itself).
+        $first = new MatchResult('arrived-first', 'same', 5, [0]);
+        $second = new MatchResult('arrived-second', 'same', 5, [1]);
+
+        $sorted = MatchResultSorter::sort([$first, $second]);
+        $this->assertSame(['arrived-first', 'arrived-second'], array_map(static fn(MatchResult $r) => $r->needle, $sorted));
+
+        // Reversed arrival reverses the output — order follows input, never
+        // any hidden tiebreaker.
+        $reversed = MatchResultSorter::sort([$second, $first]);
+        $this->assertSame(['arrived-second', 'arrived-first'], array_map(static fn(MatchResult $r) => $r->needle, $reversed));
+    }
+
+    #[Test]
     public function testCombinedScoreThenHaystackOrdering(): void
     {
         $sorted = MatchResultSorter::sort([
