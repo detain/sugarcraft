@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kit\Tests;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Kit\Banner;
 use SugarCraft\Kit\Theme;
 use SugarCraft\Sprinkles\Border;
@@ -89,5 +90,45 @@ final class BannerTest extends TestCase
             . "+-------+",
             $out,
         );
+    }
+
+    /**
+     * `$width` is the INNER content width (Style::width()'s semantics), so the
+     * title is cut before the box is laid and the whole block stays at
+     * width + 2*padding + 2*border cells instead of growing with the text.
+     */
+    public function testWidthParamCapsTheBox(): void
+    {
+        $out = Banner::title('LongTitleHere', 'sub', Theme::plain(), null, 6);
+        $rows = explode("\n", $out);
+
+        $this->assertCount(4, $rows, 'top, title, subtitle, bottom');
+        // 6 inner + 2x2 padding + 2 border = 12 cells on every row.
+        foreach ($rows as $i => $row) {
+            $this->assertSame(12, Width::string($row), "row {$i}");
+        }
+        $this->assertSame('│  LongTi  │', $rows[1], 'hard cut, no ellipsis');
+        $this->assertSame('│  sub     │', $rows[2], 'shorter lines keep their padding');
+    }
+
+    /** Omitting `$width` keeps the pre-existing auto-sizing output byte-for-byte. */
+    public function testNullWidthLeavesTheBoxAutoSized(): void
+    {
+        $auto   = Banner::title('LongTitleHere', 'sub', Theme::plain());
+        $explicit = Banner::title('LongTitleHere', 'sub', Theme::plain(), null, null);
+
+        $this->assertSame($auto, $explicit);
+        $this->assertSame('│  LongTitleHere  │', explode("\n", $auto)[1]);
+    }
+
+    /**
+     * Banner takes the same side of the width argument as Section and HelpText:
+     * a width below 1 is an authoring error, not an empty box.
+     */
+    public function testWidthBelowOneThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Banner width must be at least 1 cell');
+        Banner::title('App', '', Theme::plain(), null, 0);
     }
 }

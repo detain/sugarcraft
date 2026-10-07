@@ -34,6 +34,23 @@ final class SafeText
      */
     public static function line(string $s): string
     {
-        return preg_replace('/[\x00-\x1f\x7f]/', '', Ansi::strip($s)) ?? '';
+        $stripped = preg_replace('/[\x00-\x1f\x7f]/', '', Ansi::strip($s));
+
+        if ($stripped === null) {
+            // Unreachable for this pattern by construction — a single-pass
+            // character-class substitution has nothing to backtrack over, so
+            // neither pcre.backtrack_limit nor pcre.recursion_limit can be
+            // exhausted by any input. Guarded because the alternatives to
+            // throwing are worse: coalescing the null to an empty string (the
+            // previous shape) reported a failed strip as clean empty text,
+            // which a frame-diff renderer paints as a legitimately blank row,
+            // and a bare `false` would surface as a TypeError far from the
+            // cause. Fail loud at the boundary instead. (The literal that the
+            // old expression used is deliberately not spelled out here:
+            // SafeTextTest pins its absence from this method's source.)
+            throw new \RuntimeException('SafeText::line(): C0/DEL strip failed: ' . preg_last_error_msg());
+        }
+
+        return $stripped;
     }
 }

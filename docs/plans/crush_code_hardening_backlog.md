@@ -15128,6 +15128,32 @@ wiring than carrying a stale require.
 manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
 Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
 
+**Decision record added 2026-10-07 (lane LL-kit-sprinkles) — the E453 STEP's two options were both the
+wrong frame, and the standing rule in this very section already names the third: dormant code is "WIRED or
+documented as an intentional seam, never deleted".** `candy-kit` is the documented seam. It stays in
+`sugar-crush`'s require set UNWIRED, and `PRUNE_REQUIRE_AND_REPO` (option b) is explicitly refused — the
+dependency is not spent, it is deferred against one named restyle. What defers it is a genuine conflict of
+intent between the two libraries, not an oversight:
+
+- `candy-kit`'s `Internal\SafeText::line()` (`candy-kit/src/Internal/SafeText.php:35-38`, reached from
+  `HelpText.php` and `Section.php`) strips the whole C0 range, **including `\n`**, because its presenters
+  feed a frame-diff renderer that owns one row per line — a stray newline would knock a row out of a border
+  box. The flattening is the library's contract, not a bug.
+- `sugar-crush`'s `--help` page decides the **opposite** on purpose: `Cli\Help::screen()`
+  (`sugar-crush/src/Cli/Help.php:41-46`) returns `cli.help.screen` as ONE catalogue entry, "translated as a
+  page, column layout included", written straight to STDOUT where the terminal does the wrapping. Its line
+  breaks and continuation indents are load-bearing content (`serve`'s option block,
+  `session pin|unpin|…`).
+
+Adopting `HelpText` for the help screen is therefore a **content-model rewrite, not a restyle**: a
+presenter that guarantees one-line output cannot carry a multi-hundred-line page whose meaning lives in its
+breaks, and `HelpTest` asserts line-start anchors that any re-layout would break. `crush_libs.md` item 8
+asked for exactly this to be recorded so the item stops being costed as a restyle — done here; the matching
+analysis is at `crush_libs.md:348-349`. The by-hand confirmation lives in `sugar-crush/composer.json`'s
+`extra.sugarcraft.deferred-wiring` row (which `tools/check-path-repos.php --unused` reads, reporting
+DEFERRED_WIRING instead of a prune candidate), and that row — not this one — is what to delete when the
+wiring finally lands. Revisit only if the help page is ever restructured into per-row translatable keys.
+
 ### E454 [NO-FIX] — `--fix --strict-closure` cannot restore the closure by itself, and re-running it UNDOES a manual repair
 
 **Recorded 2026-08-25 by the round-54 supervisor.** Severity: procedural, and it silently voids figures.

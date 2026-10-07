@@ -6,6 +6,7 @@ namespace SugarCraft\Kit;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Kit\Internal\SafeText;
+use SugarCraft\Kit\Internal\WidthGuard;
 
 /**
  * Build a fang-style `--help` page from structured input. Each
@@ -29,6 +30,20 @@ final class HelpText
     /** Left margin of a description stacked under its key. */
     public const STACKED_INDENT = 6;
 
+    /*
+     * TODO(width-resolution): `?int $width = 80` in render()/renderRows() is a
+     * plain fallback, not a measurement — nothing here queries the terminal or
+     * the caller's layout, and `null` means "never wrap" rather than "resolve
+     * it yourself". sugar-crush's `cli.help.screen` longest line measures 81
+     * cells, so that page would need an explicit width (or a resolved one)
+     * either way; it is currently rendered by sugar-crush's own whole-string
+     * presenter, not by this class. Bumping the default to 81 would re-flow
+     * output for every caller relying on it while fixing nothing for the one
+     * consumer that is over-wide, so the honest fix is a width-resolution pass
+     * (default to the caller's terminal/frame width, falling back to 80 only
+     * when unknown) — a behavior change across the board, deferred rather than
+     * bundled into a bugfix.
+     */
     /**
      * Render the full help screen.
      *
@@ -44,7 +59,10 @@ final class HelpText
      * @param array<string, array<string, string>> $sections
      *        section title => entry => description. Section order
      *        is preserved.
-     * @param ?int $width  cell width to wrap to; null = never wrap
+     * @param ?int $width  cell width to wrap to; null = never wrap (see the
+     *                     TODO(width-resolution) note on the class for why the
+     *                     80 default is a fallback rather than a resolved
+     *                     terminal width)
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
@@ -90,7 +108,8 @@ final class HelpText
      * byte-for-byte as they would be unwrapped.
      *
      * @param array<string, string> $rows
-     * @param ?int $width  cell width to wrap to; null = never wrap
+     * @param ?int $width  cell width to wrap to; null = never wrap (see the
+     *                     TODO(width-resolution) note on the class)
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
@@ -166,12 +185,12 @@ final class HelpText
         return $width === null ? null : max(1, $width - $margin);
     }
 
+    /**
+     * Refuse a width below one cell, harmonized with Section via
+     * {@see WidthGuard}.
+     */
     private static function assertWidth(?int $width): void
     {
-        if ($width !== null && $width < 1) {
-            throw new \InvalidArgumentException(
-                'HelpText width must be at least 1 cell (or null to disable wrapping); got ' . $width . '.'
-            );
-        }
+        WidthGuard::assert('HelpText', $width, 'disable wrapping');
     }
 }

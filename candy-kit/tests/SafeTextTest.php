@@ -139,4 +139,60 @@ final class SafeTextTest extends TestCase
         $input = "\x1b[1m bold \x1b[0m and \x1b[38;5;196m red \x1b[0m text";
         $this->assertSame(' bold  and  red  text', SafeText::line($input));
     }
+
+    /**
+     * A PCRE failure must throw, never collapse to the empty string.
+     *
+     * The `preg_replace` here cannot actually fail: the pattern is a fixed
+     * character class with no quantifier to backtrack, so neither
+     * pcre.backtrack_limit nor pcre.recursion_limit is reachable by any input,
+     * and the pattern compiles unconditionally. That makes the null arm
+     * untriggerable from test space — lowering the limits in a child process
+     * still returns a string (measured: n up to 1e5 chars against
+     * backtrack_limit=1). So the contract is pinned on the source itself: if
+     * the guard is deleted, or the old `?? ''` swallow is reinstated, the next
+     * failure mode that DOES arrive (a rewritten pattern, PCRE terminated
+     * mid-run) is silent again, and a frame renderer paints a stripped-to-nothing
+     * label as a legitimately blank row.
+     */
+    public function testPcreFailureThrowsInsteadOfSwallowingEmpty(): void
+    {
+        $body = self::methodSource(SafeText::class, 'line');
+
+        $this->assertStringNotContainsString(
+            "?? ''",
+            $body,
+            'a null preg_replace result must not be coerced to an empty string',
+        );
+        $this->assertStringContainsString('=== null', $body, 'the failure arm must be checked explicitly');
+        $this->assertStringContainsString('throw new \\RuntimeException', $body);
+        $this->assertStringContainsString('preg_last_error_msg()', $body, 'the throw must name the PCRE cause');
+    }
+
+    /**
+     * Discriminates the pin above: the clean-text path still works, so the
+     * assertions are not merely matching a method that no longer strips.
+     */
+    public function testStripStillFunctionsAfterTheGuardWasAdded(): void
+    {
+        $this->assertSame('ab', SafeText::line("a\x1b[2J\x00b"));
+    }
+
+    /**
+     * @return string the declared body of $class::$method, for source-level pins
+     *                of branches that are unreachable by construction
+     */
+    private static function methodSource(string $class, string $method): string
+    {
+        $reflection = new \ReflectionMethod($class, $method);
+        $file       = $reflection->getFileName();
+        $start      = $reflection->getStartLine();
+        $end        = $reflection->getEndLine();
+
+        self::assertIsString($file);
+        $lines = file($file);
+        self::assertIsArray($lines);
+
+        return implode('', \array_slice($lines, $start, $end - $start - 1));
+    }
 }

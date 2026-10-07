@@ -190,8 +190,40 @@ final class SectionTest extends TestCase
     {
         $this->assertSame('───', Section::header('X', Theme::plain(), leftPad: 10, width: 3));
         $this->assertSame('  ', Section::subHeader('X', Theme::plain(), indent: 8, width: 2));
-        $this->assertSame('', Section::header('X', Theme::plain(), width: 0));
-        $this->assertSame('', Section::header('X', Theme::plain(), width: -5));
+    }
+
+    /**
+     * A width below 1 is an authoring error and throws rather than silently
+     * rendering an empty line. Formerly Section clamped these to 0 (an empty
+     * result, pinned here as `''` before width 0 and -5); harmonized on throw
+     * to agree with HelpText::assertWidth(), so the two presenters now fail
+     * identically on the same bad input.
+     */
+    public function testWidthBelowOneThrowsInsteadOfCollapsingToEmpty(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Section::header('X', Theme::plain(), width: 0);
+    }
+
+    public function testWidthBelowOneThrowsForSubHeaderAndRule(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Section::subHeader('X', Theme::plain(), width: 0);
+    }
+
+    /** Every entry point guards before doing any work, including rule(). */
+    public function testRuleWidthBelowOneThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Section::rule(Theme::plain(), -3);
+    }
+
+    /** The thrown message names the offending value, per the fail-loud law. */
+    public function testWidthErrorNamesTheBadValue(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('got -5.');
+        Section::header('X', Theme::plain(), width: -5);
     }
 
     /** Wide (CJK) labels are cut by display cells, never past the width. */
@@ -203,11 +235,11 @@ final class SectionTest extends TestCase
         }
     }
 
-    /** rule() length contract as documented: whole runes in max(1, $width) cells. */
+    /** rule() length contract as documented: whole runes in the width budget. */
     public function testRuleLengthContract(): void
     {
-        $this->assertSame('─', Section::rule(Theme::plain(), 0));
-        $this->assertSame('─', Section::rule(Theme::plain(), -3));
+        // Widths below 1 now throw (testRuleWidthBelowOneThrows) instead of
+        // clamping to a single rune, so this contract starts at width 1.
         $this->assertSame('', Section::rule(Theme::plain(), 1, '漢'));
         $this->assertSame('──', Section::rule(Theme::plain(), null));
         $this->assertSame('漢', Section::rule(Theme::plain(), null, '漢'));
