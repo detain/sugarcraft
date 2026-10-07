@@ -229,13 +229,16 @@ the pre-buffer lesson still governs the painter:
 Rule of thumb: any string that may contain multibyte glyphs or ANSI must be
 measured/sliced with `Width::*`, never `strlen`/`substr`/`str_pad`.
 
-FOLLOW-UP (owed to candy-core): `Toast::nextCluster()` is a sanctioned fork of
-the canonical `Width::nextCluster()` — but that one is `private static` in
-core, so the invalid-UTF-8 guards (ICU-position `substr_compare` rejection +
-continuation-byte validation) had to be copied in rather than called. When a
-candy-core lane is next open, promote `Width::nextCluster()` to a public
-entry point and delete this fork (mid-campaign public-API widening is what
-this campaign forbids).
+FOLLOW-UP DONE (candy-core @85466ebd2): `Width::nextCluster()` is now a public
+canonical entry point in core (bodies proven behaviorally identical by
+normalized diff before unifying). `Toast::nextCluster()` is reduced to a
+one-line delegate — the verbatim copy of the invalid-UTF-8 guards (ICU-position
+`substr_compare` rejection + continuation-byte validation) is deleted, and the
+malformed-walk pins (`ToastNextClusterInvalidUtf8Test`,
+`ToastRenderingTest::invokeNextCluster`) keep defending behaviour through the
+delegate seam unchanged. Standing law: never re-fork a canonical core helper —
+if a promotion is blocked, say so in a follow-up note like this one was and
+keep the copy provably verbatim until the core lane lands.
 
 ## [antipattern:hand-built-sgr] Route SGR through candy-core Ansi, not string literals
 

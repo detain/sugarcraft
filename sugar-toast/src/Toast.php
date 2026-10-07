@@ -839,52 +839,18 @@ final class Toast
     /**
      * Extract the next UTF-8 grapheme cluster from string $s at position $i.
      *
-     * Mirrors candy-core's canonical {@see Width::nextCluster()} (private in
-     * core — this is the sanctioned fork; see CALIBER_LEARNINGS.md) including
-     * BOTH invalid-UTF-8 guards: ICU's answer is accepted only when it really
-     * starts at $i, and a lead byte only owns bytes that are true UTF-8
-     * continuations, so the cluster walk reproduces malformed input
-     * byte-for-byte instead of duplicating a neighbour and dropping the bad
-     * byte.
+     * Delegates to candy-core's canonical {@see Width::nextCluster()}. This
+     * used to be the sanctioned verbatim fork (@c5cce07d7, kept because the
+     * core splitter was private); the duplicated body is deleted now that
+     * core promotes it to a public entry point, so both invalid-UTF-8 guards
+     * (ICU position rejection + continuation-byte validation) live in exactly
+     * one place. The malformed-walk pins reach the guards through this seam:
+     * the call-site contract is unchanged (same return shape, byte-for-byte
+     * reproduction of malformed input, always advances by >= 1 byte).
      */
     private function nextCluster(string $s, int $i): string
     {
-        if (\function_exists('grapheme_extract')) {
-            $next = 0;
-            $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
-            // On malformed UTF-8 ICU does not return the bytes AT `$i`: it
-            // skips a stray lead byte and hands back the NEXT cluster
-            // (`"aaa\xffb"` at 3 yields `"b"`), or substitutes U+FFFD for a
-            // truncated tail (`"ab\xc3"` at 2 yields 3 bytes of EF BF BD).
-            // Every caller advances by strlen() of what comes back and
-            // re-emits it as the input's own bytes, so trusting either answer
-            // duplicated one cluster and dropped the bad byte —
-            // truncate("aaa\xffb", 10) was "aaabb". Accept ICU's cluster only
-            // when it IS the input at `$i`.
-            if (\is_string($cluster) && $cluster !== ''
-                && \substr_compare($s, $cluster, $i, \strlen($cluster)) === 0
-            ) {
-                return $cluster;
-            }
-        }
-        $b = \ord($s[$i]);
-        $bytes = match (true) {
-            ($b & 0x80) === 0    => 1,
-            ($b & 0xe0) === 0xc0 => 2,
-            ($b & 0xf0) === 0xe0 => 3,
-            ($b & 0xf8) === 0xf0 => 4,
-            default              => 1,
-        };
-        // A lead byte only owns the bytes that really are continuations
-        // (10xxxxxx); otherwise it is a stray byte of its own, so a broken
-        // sequence like `\xe2AB` never swallows the ASCII after it.
-        $len = \strlen($s);
-        for ($k = 1; $k < $bytes; $k++) {
-            if ($i + $k >= $len || (\ord($s[$i + $k]) & 0xc0) !== 0x80) {
-                return $s[$i];
-            }
-        }
-        return \substr($s, $i, $bytes);
+        return Width::nextCluster($s, $i);
     }
 
     /**

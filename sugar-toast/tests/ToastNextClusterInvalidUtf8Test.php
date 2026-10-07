@@ -10,10 +10,13 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Mirrors candy-core's WidthInvalidUtf8Test::malformed() shapes onto Toast's
- * sanctioned nextCluster() fork: with the ported invalid-UTF-8 guards (ICU
+ * nextCluster() seam — a thin delegate to the canonical
+ * `Width::nextCluster()` since the fork body was deleted (@85466ebd2 promoted
+ * the core method to public): with the core's invalid-UTF-8 guards (ICU
  * position rejection + continuation-byte validation) the cluster walk must
  * reproduce malformed input byte-for-byte, and a stray lead byte must never
- * swallow the ASCII that follows it.
+ * swallow the ASCII that follows it. These pins defend behaviour, not
+ * implementation — they hold whatever the seam delegates through.
  */
 final class ToastNextClusterInvalidUtf8Test extends TestCase
 {
