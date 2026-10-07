@@ -39,17 +39,32 @@ final class Toast
     /** Internal queue of active alerts. */
     private array $queue = [];
 
-    /** Dismissed flag — if true, Toast won't render any alerts. */
+    /**
+     * Dismissed flag — if true, Toast won't render any alerts ("stop
+     * rendering until cleared"): {@see clear()} is the documented revival and
+     * also resets this flag, while {@see alert()} / {@see progressToast()} /
+     * {@see push()} refuse to queue into a dead instance.
+     */
     private bool $dismissed = false;
 
     /** Host-consumed flag: whether the host should dismiss on Escape key press. The renderer stores this preference; it does not handle input itself. */
     private bool $allowEscToClose = true;
 
-    /** Maximum number of concurrent alerts (null = unlimited). */
+    /**
+     * Maximum number of concurrent alerts (null = unlimited).
+     *
+     * Growth caveat, stated honestly: with the default null cap the queue only
+     * shrinks through `dismiss()`, `clear()`, or the opportunistic prune that
+     * now runs on every write, so persistent (non-expiring) alerts accumulate
+     * without bound until the host clears them.
+     */
     private ?int $maxConcurrent = null;
 
     /** Overflow strategy when queue exceeds maxConcurrent. */
     private Overflow $overflow = Overflow::DropOldest;
+
+    /** Maximum number of entries kept in the history log (null = unbounded). */
+    private ?int $historyLimit = 100;
 
     /** History log of dismissed alerts. */
     private HistoryLog $historyLog;
@@ -143,6 +158,23 @@ final class Toast
     }
 
     /**
+     * Cap the history log at $limit entries, evicting the oldest first
+     * (the Overflow::DropOldest policy applied to history). The default is
+     * 100; pass null to keep every dismissed alert unbounded.
+     *
+     * @throws \InvalidArgumentException when $limit is negative
+     */
+    public function withHistoryLimit(?int $limit): self
+    {
+        if ($limit !== null && $limit < 0) {
+            throw new \InvalidArgumentException(
+                "History limit must be >= 0 or null (unbounded), got {$limit}"
+            );
+        }
+        return $this->mutate(['historyLimit' => $limit]);
+    }
+
+    /**
      * Create a new instance with the given changes merged in.
      *
      * Mirrors the Mutable trait pattern from sugar-core but avoids requiring
@@ -169,8 +201,10 @@ final class Toast
      *
      * When maxConcurrent is set and the queue would exceed it, applies
      * the configured overflow strategy (DropOldest, DropNewest, or Enqueue).
+     * Expired alerts sitting in the queue are pruned first, on this write.
      *
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the message
+     * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null): self
     {
@@ -195,6 +229,7 @@ final class Toast
      *
      * @param float $progress  Value between 0.0 and 1.0 (clamped)
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the progress bar
+     * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null, ?array $actions = null): self
     {
@@ -220,8 +255,10 @@ final class Toast
      * directly — e.g. to attach background/foreground/border colours via
      * {@see Alert::withBackgroundColor()} / {@see Alert::withForegroundColor()}
      * / {@see Alert::withBorderColor()}. Honours the configured duration
-     * (when the alert carries no expiry of its own) and the
-     * maxConcurrent/overflow policy, exactly like {@see alert()}.
+     * (when the alert carries no expiry of its own), the expired-on-write
+     * prune, and the maxConcurrent/overflow policy, exactly like {@see alert()}.
+     *
+     * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function push(Alert $alert): self
     {
@@ -240,16 +277,34 @@ final class Toast
      * policy — the shared engine behind {@see alert()}, {@see progressToast()}
      * and {@see push()}.
      *
+     * Expired alerts are pruned from the queue first, on this write, so a
+     * long-lived instance cannot accumulate dead cruft between view() calls.
+     * A dismissed instance refuses new writes outright rather than queueing
+     * into a renderer that will not paint them — clear() revives first.
+     *
      * DropNewest discards the incoming alert; DropOldest evicts the oldest
      * queued alert — at a zero cap there is nothing to evict, so the incoming
      * alert is discarded too rather than letting the queue exceed the cap.
-     * Enqueue (the default) deliberately lets the queue grow past the cap.
+     * Enqueue lets the queue grow past the cap (DropOldest is the default).
      *
      * @param list<Alert> $queue
      * @return list<Alert>
+     * @throws \LogicException when the toast has been dismissed
      */
     private function appendBounded(array $queue, Alert $alert): array
     {
+        if ($this->dismissed) {
+            throw new \LogicException(
+                'Toast has been dismissed; call clear() before queueing new alerts.'
+            );
+        }
+
+        // Bounded-queue law: expiry leaves on the next write, not only on
+        // view() — otherwise maxConcurrent=null instances grow forever.
+        $queue = \array_values(
+            \array_filter($queue, fn(Alert $a): bool => !$a->isExpired())
+        );
+
         if ($this->maxConcurrent !== null && \count($queue) >= $this->maxConcurrent) {
             if ($this->overflow === Overflow::DropNewest) {
                 return $queue;
@@ -299,18 +354,29 @@ final class Toast
     }
 
     /**
-     * Dismiss all alerts and record them in the history log.
+     * Stop rendering and move the live alerts into the history log.
+     *
+     * Dismiss is a MOVE, not a copy: queued alerts leave the queue (expired
+     * ones are dropped, never recorded), so a second dismiss() can neither
+     * double-count history nor find leftovers. Rendering stays stopped until
+     * the host calls {@see clear()} — alert() refuses meanwhile — and clear()
+     * resets the flag.
      */
     public function dismiss(): self
     {
+        if ($this->dismissed) {
+            return $this;  // idempotent: already stopped, nothing left to move
+        }
+
         $clone = clone $this;
 
-        // Record active (non-expired) alerts to history before dismissing
+        // Move active (non-expired) alerts to history, then empty the queue.
         foreach ($clone->queue as $alert) {
             if (!$alert->isExpired()) {
-                $clone->historyLog = $clone->historyLog->push($alert);
+                $clone->historyLog = $clone->historyLog->push($alert, $clone->historyLimit);
             }
         }
+        $clone->queue = [];
 
         $clone->dismissed = true;
         return $clone;
@@ -329,12 +395,14 @@ final class Toast
     }
 
     /**
-     * Clear the entire queue.
+     * Clear the entire queue and reset the dismissed flag, resuming
+     * rendering — the documented revival path after {@see dismiss()}.
      */
     public function clear(): self
     {
         $clone = clone $this;
         $clone->queue = [];
+        $clone->dismissed = false;
         return $clone;
     }
 
@@ -770,13 +838,32 @@ final class Toast
 
     /**
      * Extract the next UTF-8 grapheme cluster from string $s at position $i.
+     *
+     * Mirrors candy-core's canonical {@see Width::nextCluster()} (private in
+     * core — this is the sanctioned fork; see CALIBER_LEARNINGS.md) including
+     * BOTH invalid-UTF-8 guards: ICU's answer is accepted only when it really
+     * starts at $i, and a lead byte only owns bytes that are true UTF-8
+     * continuations, so the cluster walk reproduces malformed input
+     * byte-for-byte instead of duplicating a neighbour and dropping the bad
+     * byte.
      */
     private function nextCluster(string $s, int $i): string
     {
         if (\function_exists('grapheme_extract')) {
             $next = 0;
             $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
-            if (\is_string($cluster) && $cluster !== '') {
+            // On malformed UTF-8 ICU does not return the bytes AT `$i`: it
+            // skips a stray lead byte and hands back the NEXT cluster
+            // (`"aaa\xffb"` at 3 yields `"b"`), or substitutes U+FFFD for a
+            // truncated tail (`"ab\xc3"` at 2 yields 3 bytes of EF BF BD).
+            // Every caller advances by strlen() of what comes back and
+            // re-emits it as the input's own bytes, so trusting either answer
+            // duplicated one cluster and dropped the bad byte —
+            // truncate("aaa\xffb", 10) was "aaabb". Accept ICU's cluster only
+            // when it IS the input at `$i`.
+            if (\is_string($cluster) && $cluster !== ''
+                && \substr_compare($s, $cluster, $i, \strlen($cluster)) === 0
+            ) {
                 return $cluster;
             }
         }
@@ -788,6 +875,15 @@ final class Toast
             ($b & 0xf8) === 0xf0 => 4,
             default              => 1,
         };
+        // A lead byte only owns the bytes that really are continuations
+        // (10xxxxxx); otherwise it is a stray byte of its own, so a broken
+        // sequence like `\xe2AB` never swallows the ASCII after it.
+        $len = \strlen($s);
+        for ($k = 1; $k < $bytes; $k++) {
+            if ($i + $k >= $len || (\ord($s[$i + $k]) & 0xc0) !== 0x80) {
+                return $s[$i];
+            }
+        }
         return \substr($s, $i, $bytes);
     }
 

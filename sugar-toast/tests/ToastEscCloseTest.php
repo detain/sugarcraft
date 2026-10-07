@@ -75,9 +75,9 @@ final class ToastEscCloseTest extends TestCase
     public function testHasActiveAlertAfterDismiss(): void
     {
         $t = Toast::new(50)->success('Hello')->dismiss();
-        // dismiss() hides rendering but queue still has the alert
-        // hasActiveAlert checks queue, not dismissed flag
-        $this->assertTrue($t->hasActiveAlert());
+        // dismiss() MOVES live alerts into the history log, so the queue is
+        // empty — the old split brain (rendering dead but queue alive) is gone.
+        $this->assertFalse($t->hasActiveAlert());
     }
 
     public function testFluentWithAllowEscToClose(): void

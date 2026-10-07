@@ -25,7 +25,7 @@ PHP port of [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) — floati
 - **Multiple alerts**: queue of toasts rendered in order
 - **Progress toasts**: inline progress bar (0–100%) beneath the message body
 - **Action buttons**: `[Label]` buttons attached to an alert with closure callbacks
-- **History log**: immutable record of every dismissed alert
+- **History log**: immutable, bounded record of dismissed alerts (default cap 100)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
 
 ## Install
@@ -108,8 +108,9 @@ Overflow::Enqueue     // allow queue to exceed maxConcurrent
 Control the maximum number of concurrent alerts with `withMaxConcurrent(int|null)`:
 
 - Pass an integer to cap the queue size
-- Pass `null` for unlimited (default)
-
+- Pass `null` for unlimited (default) — expired alerts still leave the queue on
+  the next write, but persistent (non-expiring) alerts accumulate until the
+  host calls `clear()` or `dismiss()`
 
 
 
@@ -128,15 +129,20 @@ that never expires automatically:
 $toast = $toast->alert(ToastType::Info, 'Connected', null);  // never expires
 ```
 
-Persistent alerts are dismissed only via `dismiss()`, `clear()`, or `pruneExpired()`.
+Persistent alerts never expire, so `pruneExpired()` cannot remove them — take
+them down with `dismiss()` (moves live alerts into the history log and stops
+rendering until you `clear()`) or `clear()` (drops the queue without
+recording). While dismissed, `alert()` throws; call `clear()` first.
 
 ## Loop integration
 
 
 
 
-Expired alerts are removed by `pruneExpired()`, but something has to *call* it.
-Rather than poll on a fixed interval, ask the toast when the next prune is due and
+Expired alerts leave the queue on every write (`alert()`/`progressToast()`/
+`push()`), and `pruneExpired()` removes them explicitly — but a quiet queue with
+no incoming writes still needs something to *call* it. Rather than poll on a
+fixed interval, ask the toast when the next prune is due and
 schedule a single timer for exactly that moment:
 
 ```php
@@ -243,15 +249,14 @@ Attach clickable buttons to an alert via `Alert::withActions()`:
 ```php
 use SugarCraft\Toast\{Action, Toast, ToastType};
 
-$action = Action::make('Retry', function (): void {
+$action = Action::new('Retry', function (): void {
     // reconnect logic here
 });
 
 $alert = (new Alert(ToastType::Error, 'Connection lost'))
     ->withActions([$action]);
 
-$toast = $toast->alert(ToastType::Error, 'Connection lost')
-    ->withActions([$action]);
+$toast = $toast->alert(ToastType::Error, 'Connection lost', actions: [$action]);
 ```
 
 `Action` is a value object with `readonly string $label` and
@@ -267,7 +272,8 @@ $toast = $toast->alert(ToastType::Error, 'Connection lost')
 `HistoryLog`:
 
 ```php
-// Dismiss all active alerts and record them
+// Dismiss live alerts: they move into the history log and rendering stops
+// until clear()
 $toast = $toast->dismiss();
 
 // Retrieve the log
@@ -279,7 +285,9 @@ foreach ($history as $alert) {
 ```
 
 `HistoryLog` is immutable — `dismiss()` returns a new `Toast` with an
-updated log; prior instances are unchanged.
+updated log; prior instances are unchanged. The log is capped at 100 entries
+by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
+(`null` = unbounded).
 
 ## API Summary
 
@@ -297,13 +305,14 @@ updated log; prior instances are unchanged.
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
+| `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded) |
 | `->alert(ToastType\|string, string, ?float $expiresAt)` | Add alert (string type = case-insensitive) |
 | `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt)` | Add alert with progress bar (0.0–1.0) |
 | `->error/warning/info/success(string)` | Convenience alert helpers |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
 | `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
-| `->dismiss() / clear() / pruneExpired()` | Manage alert lifecycle; `dismiss()` records to history |
+| `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` moves live alerts to history (rendering stops until `clear()`, which also resets the flag) |
 | `->history(): list<Alert>` | Return all dismissed alerts |
 | `->view(string $background, int $w, int $h): string` | Render toast layer over background (the legacy `View()` spelling is a deprecated alias) |
 
@@ -313,10 +322,10 @@ updated log; prior instances are unchanged.
 | `Alert` | `withActions(list<Action>)` | Attach action buttons |
 | `Alert` | `isExpired(): bool` | Check expiry |
 | `Alert` | `withExpiry(float $duration)` | Set expiry from now |
-| `Action` | `make(string $label, \Closure(): void $callback)` | Factory |
+| `Action` | `new(string $label, \Closure(): void $callback)` | Factory |
 | `Action` | `->label: non-empty-string` | Button label (readonly) |
 | `Action` | `->callback: \Closure(): void` | Callback (readonly) |
-| `HistoryLog` | `push(Alert): self` | Append alert, return new log |
+| `HistoryLog` | `push(Alert, ?int $limit = null): self` | Append alert, evicting oldest past `$limit`; new log |
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |
 | `HistoryLog` | `count(): int` | Entry count |
 

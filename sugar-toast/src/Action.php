@@ -22,12 +22,13 @@ final class Action
     ) {}
 
     /**
-     * Factory for fluent construction.
+     * Factory for fluent construction — the project's `::new()` convention
+     * (no `::make()`/`::create()`/`::default()`).
      *
      * @param non-empty-string $label
      * @param \Closure(): void $callback
      */
-    public static function make(string $label, \Closure $callback): self
+    public static function new(string $label, \Closure $callback): self
     {
         return new self($label, $callback);
     }

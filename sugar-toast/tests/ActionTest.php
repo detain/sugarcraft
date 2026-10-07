@@ -19,9 +19,9 @@ final class ActionTest extends TestCase
         $this->assertSame($callback, $action->callback);
     }
 
-    public function testMakeFactory(): void
+    public function testNewFactory(): void
     {
-        $action = Action::make('Cancel', static function () {});
+        $action = Action::new('Cancel', static function () {});
         $this->assertSame('Cancel', $action->label);
     }
 

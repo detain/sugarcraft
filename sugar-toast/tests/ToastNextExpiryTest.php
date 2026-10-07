@@ -33,23 +33,27 @@ final class ToastNextExpiryTest extends TestCase
 
     public function testNextExpiryReturnsSoonestAcrossAlerts(): void
     {
-        // Explicit absolute expiry times keep the assertion deterministic
-        // (nextExpiry() does no microtime() math).
+        // Explicit future expiries keep the assertion deterministic
+        // (nextExpiry() does no microtime() math of its own) AND keep the
+        // alerts alive under the expired-on-write prune in appendBounded().
+        $base = \microtime(true);
         $t = Toast::new()
-            ->alert(ToastType::Info, 'late', 2000.0)
-            ->alert(ToastType::Error, 'soon', 500.0)
-            ->alert(ToastType::Success, 'mid', 1000.0);
+            ->alert(ToastType::Info, 'late', $base + 2.0)
+            ->alert(ToastType::Error, 'soon', $base + 0.5)
+            ->alert(ToastType::Success, 'mid', $base + 1.0);
 
-        $this->assertSame(500.0, $t->nextExpiry());
+        $this->assertSame($base + 0.5, $t->nextExpiry());
     }
 
     public function testNextExpiryIgnoresNonExpiringSiblings(): void
     {
+        // Future expiry: alive through the expired-on-write prune.
+        $base = \microtime(true);
         $t = Toast::new()
             ->info('persistent')              // no expiry
-            ->alert(ToastType::Warning, 'timed', 750.0);
+            ->alert(ToastType::Warning, 'timed', $base + 0.75);
 
-        $this->assertSame(750.0, $t->nextExpiry());
+        $this->assertSame($base + 0.75, $t->nextExpiry());
     }
 
     public function testNextExpiryReturnsPastInstantWhenAlreadyDue(): void

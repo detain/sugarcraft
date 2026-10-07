@@ -11,7 +11,7 @@ final class ToastAnimationTest extends TestCase
 {
     public function testActionButtonsRenderedInToast(): void
     {
-        $action = Action::make('OK', static function () {});
+        $action = Action::new('OK', static function () {});
         $alert = (new Alert(ToastType::Info, 'msg'))->withActions([$action]);
 
         $t = Toast::new(50)
@@ -31,8 +31,8 @@ final class ToastAnimationTest extends TestCase
 
     public function testMultipleActionButtons(): void
     {
-        $a1 = Action::make('Yes', static function () {});
-        $a2 = Action::make('No', static function () {});
+        $a1 = Action::new('Yes', static function () {});
+        $a2 = Action::new('No', static function () {});
         $alert = (new Alert(ToastType::Success, 'Proceed?'))->withActions([$a1, $a2]);
 
         $t = Toast::new(50)->withPosition(Position::TopLeft)->alert(ToastType::Success, 'Proceed?');

@@ -159,13 +159,14 @@ no-op.
 
 `Action` is a minimal value object holding a user-visible label and a zero-arg
 callback. The class is `final` with two `readonly` constructor parameters and
-no internal state. Construction is via the named factory `Action::make()` for
-fluent call-chains, but direct construction is also valid since the ctor is
+no internal state. Construction is via the named factory `Action::new()` (the
+project's `::new()`-only rule retired the earlier `::make()`) for fluent
+call-chains, but direct construction is also valid since the ctor is
 public. Callbacks are stored as `\Closure(): void` — no parameters, no return
 value, keeps the interface small and impossible to misuse.
 
 ```php
-$action = Action::make('Retry', function (): void {
+$action = Action::new('Retry', function (): void {
     // reconnect logic
 });
 // Trigger:
@@ -227,6 +228,14 @@ the pre-buffer lesson still governs the painter:
 
 Rule of thumb: any string that may contain multibyte glyphs or ANSI must be
 measured/sliced with `Width::*`, never `strlen`/`substr`/`str_pad`.
+
+FOLLOW-UP (owed to candy-core): `Toast::nextCluster()` is a sanctioned fork of
+the canonical `Width::nextCluster()` — but that one is `private static` in
+core, so the invalid-UTF-8 guards (ICU-position `substr_compare` rejection +
+continuation-byte validation) had to be copied in rather than called. When a
+candy-core lane is next open, promote `Width::nextCluster()` to a public
+entry point and delete this fork (mid-campaign public-API widening is what
+this campaign forbids).
 
 ## [antipattern:hand-built-sgr] Route SGR through candy-core Ansi, not string literals
 
