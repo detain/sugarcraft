@@ -48,7 +48,7 @@ final class KittyStreamTest extends TestCase
         self::assertTrue($image->compressed());
         self::assertSame(7, $image->id());
         self::assertSame('T', $image->action());
-        self::assertStringStartsWith("\x89PNG", $image->png(), 'the f=1 payload must inflate back to a PNG');
+        self::assertStringStartsWith("\x89PNG", $image->png(), 'the o=z payload must inflate back to a PNG');
     }
 
     public function testPlacementCarriesNoPayload(): void
@@ -168,8 +168,8 @@ final class KittyStreamTest extends TestCase
     {
         $this->expectException(MalformedGraphicsException::class);
         $this->expectExceptionMessage('failed to inflate');
-        // f=1 but the (valid-base64) body is not a zlib stream.
-        KittyStream::decode("\x1bPqa=T,f=1,c=8,r=4\x1b\\m=0,aGVsbG8=m=0\x1b\\");
+        // o=z but the (valid-base64) body is not a zlib stream.
+        KittyStream::decode("\x1bPqa=T,f=100,o=z,c=8,r=4\x1b\\m=0,aGVsbG8=m=0\x1b\\");
     }
 
     public function testUnterminatedApcThrows(): void
@@ -421,8 +421,8 @@ final class KittyStreamTest extends TestCase
         // `KittyOptions::transmit()->withZIndex(1)` emits `f=100,z=1` over a plain
         // PNG (mosaic only ever spells PNG `100`), so inflating on `z` would make
         // this decoder reject its own primary producer's wire output. The loop
-        // below pins both accepted spellings. (Upstream's compression key is `o=z`, which this decoder
-        // does not act on — see `testCompressionFlagOnPngPassthroughIsNotInflated`.)
+        // below pins both accepted spellings. (The compression key is `o=z`,
+        // which this decoder acts on — see `testZlibCompressionKeyOnPngFormatInflates`.)
         foreach (['12', '100'] as $format) {
             $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => $format, 'z' => '1', 'i' => '9']))->image();
 
@@ -433,36 +433,46 @@ final class KittyStreamTest extends TestCase
         }
     }
 
-    public function testCompressionFlagOnPngPassthroughIsNotInflated(): void
+    public function testZlibCompressionKeyOnPngFormatInflates(): void
     {
-        // Upstream signals transmission compression with `o=z` for any format.
-        // This decoder keys inflate on `f=1` alone, so an `o=z` capture arrives
-        // exactly as sent — the documented gap, pinned so a future change to it
-        // is a decision rather than a surprise.
-        // `S` is the uncompressed byte count upstream sends with `o=z`, so the
-        // frame here is spec-shaped even though the flag itself is inert.
+        // M2/round-LL: inflate is keyed on the spec's `o=z` transmission-
+        // compression key. `f=100` keeps declaring the DATA FORMAT as PNG —
+        // the two axes are orthogonal. `S` is the uncompressed byte count
+        // upstream sends alongside `o=z`, so the frame here is spec-shaped.
         $stream = $this->apcFrame(['a' => 'T', 'f' => '100', 'o' => 'z', 'S' => (string) strlen($this->redPng())], base64_encode(gzcompress($this->redPng())));
         $image = KittyStream::decode($stream)->image();
 
-        self::assertFalse($image->compressed());
-        self::assertTrue($image->pngPassthrough());
-        self::assertSame(gzcompress($this->redPng()), $image->rawPayload(), 'the zlib bytes must not be inflated');
-
-        $this->expectException(MalformedGraphicsException::class);
-        $this->expectExceptionMessage('does not decode to a readable image');
-        $image->pixelDimensions();
+        self::assertTrue($image->compressed());
+        self::assertTrue($image->pngPassthrough(), 'f=100 still declares PNG format');
+        self::assertSame($this->redPng(), $image->png(), 'the zlib bytes must inflate back to the PNG');
+        self::assertSame([8, 4], $image->pixelDimensions());
     }
 
-    public function testZlibFormatInflatesWhateverTheZIndexSays(): void
+    public function testZlibCompressionInflatesWhateverTheZIndexSays(): void
     {
-        // The converse pin: `f=1` still inflates when a z-index rides along.
-        $stream = $this->apcFrame(['a' => 'T', 'f' => '1', 'z' => '3', 'i' => '8'], base64_encode(gzcompress($this->redPng())));
+        // The converse pin: `o=z` still inflates when a z-index rides along —
+        // `z` is stacking, never the compression axis.
+        $stream = $this->apcFrame(['a' => 'T', 'f' => '100', 'o' => 'z', 'z' => '3', 'i' => '8'], base64_encode(gzcompress($this->redPng())));
         $image = KittyStream::decode($stream)->image();
 
         self::assertTrue($image->compressed());
         self::assertSame(3, $image->zIndex());
-        self::assertFalse($image->pngPassthrough());
+        self::assertTrue($image->pngPassthrough());
         self::assertSame($this->redPng(), $image->png());
+    }
+
+    public function testLegacyF1FormatSpellingNoLongerInflates(): void
+    {
+        // The pre-M2 SugarCraft spelling (`f=1` = zlib) is retired: `f` is a
+        // data format only and the decoder accepts nothing but `o=z` as a
+        // compression signal, so an f=1 payload travels untouched instead of
+        // being guessed at.
+        $stream = $this->apcFrame(['a' => 'T', 'f' => '1', 'i' => '8'], base64_encode(gzcompress($this->redPng())));
+        $image = KittyStream::decode($stream)->image();
+
+        self::assertFalse($image->compressed());
+        self::assertFalse($image->pngPassthrough());
+        self::assertSame(gzcompress($this->redPng()), $image->rawPayload(), 'legacy f=1 must not be inflated');
     }
 
     public function testF100IsAcceptedAsPngPassthrough(): void
@@ -503,7 +513,7 @@ final class KittyStreamTest extends TestCase
 
     public function testUnknownFormatTravelsUntransformed(): void
     {
-        // Anything outside the zlib row of the format table travels untouched —
+        // Anything without the `o=z` compression key travels untouched —
         // here `f=24`, upstream's raw three-bytes-per-pixel RGB code, sent as a
         // 4-pixel red scanline. No inflate is attempted, nothing is rejected.
         // NOTE: if raw f=24/f=32 pixel decoding ever lands (graphics plan item

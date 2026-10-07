@@ -61,7 +61,7 @@ $transmitted = $renderer->renderWithOptions($image, 40, null, $opts);
 $opts = KittyOptions::place(1, x: 5, y: 10)->withZIndex(5);
 $placed = $renderer->renderWithOptions($image, 40, null, $opts);
 
-// Kitty: zlib compression (f=1) for large images
+// Kitty: zlib compression (o=z) for large images
 $opts = KittyOptions::transmit()->withCompression(1);
 $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 ```
@@ -163,9 +163,11 @@ The Kitty renderer supports two advanced options via `KittyOptions`:
   stores the image data in the terminal; subsequent renders reference it
   by ID and offset, reducing bandwidth.
 
-- **Zlib compression** (`f=1`): Pass `withCompression(1)` to compress
-  the PNG payload with zlib before base64-encoding. Useful for large
-  images on slow links; adds modest CPU overhead.
+- **Zlib compression** (`o=z`): Pass `withCompression(1)` to compress
+  the PNG payload with zlib before base64-encoding; the transmit is
+  emitted as `f=100,o=z` (compression rides the spec's `o` key, `f`
+  stays the data format). Useful for large images on slow links; adds
+  modest CPU overhead.
 
 ```php
 use SugarCraft\Mosaic\KittyOptions;

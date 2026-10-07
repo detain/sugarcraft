@@ -11,23 +11,25 @@ use SugarCraft\Testing\Lang;
  * One decoded Kitty graphics transmission (a single image or placement).
  *
  * Holds the parsed control parameters plus the fully reassembled payload bytes
- * (already base64-decoded and, for `f=1`, zlib-inflated into a PNG). A `a=p`
- * placement carries no payload — only an id and a target offset.
+ * (already base64-decoded and, for an `o=z` transmit, zlib-inflated into a
+ * PNG). A `a=p` placement carries no payload — only an id and a target offset.
  *
  * Every other transmission format travels untransformed: a PNG transmit already
  * carries a whole image, so this decoder hands those bytes over byte-for-byte —
  * no inflate, no re-encode.
  *
- * The `f` (transmission format) codes, and who says what. The kitty graphics
- * protocol's control-data reference lists `f` as one of `24` (RGB — three bytes
- * per pixel), `32` (RGBA) or `100` (PNG), defaulting to `32`, with transmission
- * compression carried SEPARATELY by the `o=z` key and `z` itself meaning the
- * image z-index. SugarCraft's own producers widen that: candy-mosaic's
- * `KittyOptions::withCompression(1)` declares a zlib-wrapped payload as `f=1`,
- * and `f=12` is accepted as a second PNG spelling so a capture written by
- * tooling that uses it still round-trips (nothing in this monorepo emits `12`).
- * Rather than privilege one spelling, {@see PNG_PASSTHROUGH_FORMATS} accepts
- * `100` and `12` alike and inflates only on `f=1`; any other (or absent) `f`
+ * The wire keys, per the kitty graphics protocol's control-data reference:
+ * `f` is the transmission DATA FORMAT — one of `24` (RGB — three bytes per
+ * pixel), `32` (RGBA) or `100` (PNG), defaulting to `32` — and transmission
+ * compression travels on the separate `o` key (`o=z` = zlib), while `z` itself
+ * means the image z-index. SugarCraft's producers once misspelled compression
+ * as `f=1`; the M2 fix (round LL) landed the spec spelling on BOTH sides at
+ * once — candy-mosaic's `KittyOptions::withCompression(1)` now emits
+ * `f=100,o=z`, and this decoder inflates only on `o=z`, accepting nothing
+ * else. `f=12` is additionally accepted as a second PNG spelling so a capture
+ * written by tooling that uses it still round-trips (nothing in this monorepo
+ * emits `12`). Rather than privilege one spelling, {@see PNG_PASSTHROUGH_FORMATS}
+ * accepts `100` and `12` alike; any other (or absent) `f` with no `o=z`
  * travels untouched, so an unknown code can never silently corrupt a capture —
  * the decoder mirrors what a terminal would see instead of guessing at a payload
  * it was not told how to read.
@@ -36,8 +38,8 @@ use SugarCraft\Testing\Lang;
  */
 final class KittyImage
 {
-    /** Zlib-wrapped payload — candy-mosaic's `f=1` convention; the only code {@see KittyStream} inflates. */
-    public const FORMAT_ZLIB = '1';
+    /** `o` key value meaning a zlib-wrapped payload — the kitty spec's transmission-compression spelling; the only signal {@see KittyStream} inflates on. */
+    public const COMPRESSION_ZLIB = 'z';
 
     /** PNG — the upstream protocol's own code for a complete PNG payload. */
     public const FORMAT_PNG = '100';
@@ -170,9 +172,9 @@ final class KittyImage
      *
      * The kitty spec types `z` as a signed integer index (negative values are
      * legal), and candy-mosaic's `KittyOptions::withZIndex()` emits it as such.
-     * Upstream carries transmission compression on the separate `o=z` key and
-     * SugarCraft signals it with `f=1`, so nothing here reads `z` as a hint to
-     * inflate.
+     * Transmission compression lives on the separate `o` key (`o=z` = zlib —
+     * what SugarCraft's producer has emitted since the M2/round-LL fix), so
+     * nothing here reads `z` as a hint to inflate.
      */
     public function zIndex(): ?int
     {
@@ -185,16 +187,18 @@ final class KittyImage
         return $this->params['f'] ?? null;
     }
 
-    /** Whether the payload was transmitted zlib-compressed (`f=1`) and already inflated here. */
+    /** Whether the payload was transmitted zlib-compressed (`o=z`) and already inflated here. */
     public function compressed(): bool
     {
-        return ($this->params['f'] ?? null) === self::FORMAT_ZLIB;
+        return ($this->params['o'] ?? null) === self::COMPRESSION_ZLIB;
     }
 
     /**
-     * Whether the payload is a PNG delivered untransformed — `f=100` (the
-     * upstream code) or `f=12` (the synonym accepted alongside it), both listed in
-     * {@see PNG_PASSTHROUGH_FORMATS}.
+     * Whether the `f` code declares the payload a complete PNG — `f=100` (the
+     * upstream code) or `f=12` (the synonym accepted alongside it), both listed
+     * in {@see PNG_PASSTHROUGH_FORMATS}. Orthogonal to {@see compressed()}:
+     * an `f=100,o=z` transmit is a PNG that arrived zlib-wrapped and was
+     * inflated here.
      */
     public function pngPassthrough(): bool
     {
@@ -203,7 +207,7 @@ final class KittyImage
 
     /**
      * The reassembled, decoded payload bytes for this transmit — already
-     * zlib-inflated for an `f=1` image and empty for a data-less placement.
+     * zlib-inflated for an `o=z` image and empty for a data-less placement.
      * Unlike {@see png()} this never throws on an empty payload.
      */
     public function rawPayload(): string
@@ -221,8 +225,8 @@ final class KittyImage
 
     /**
      * The image payload bytes for this transmit: a PNG for a PNG-format
-     * (`f=100`/`f=12`) transmit or an inflated `f=1` one, raw pixel data for an
-     * `f=24`/`f=32` transmit.
+     * (`f=100`/`f=12`) transmit — arrived plain or `o=z`-inflated — raw pixel
+     * data for an `f=24`/`f=32` transmit.
      *
      * @throws MalformedGraphicsException when the transmit is a data-less placement
      */

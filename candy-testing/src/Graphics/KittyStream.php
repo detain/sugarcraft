@@ -19,9 +19,10 @@ use SugarCraft\Testing\Lang;
  *    fix moved the producer onto APC frames.
  *
  * Payload base64 is reassembled across `m=1` continuation chunks and — for a
- * `f=1` transmit — zlib-inflated back into a PNG. Every other format travels
- * untransformed, so a PNG transmit (`f=100` in the upstream table, or the
- * `f=12` synonym) yields the sender's bytes byte-for-byte. Multi-image streams
+ * `o=z` transmit (the spec's transmission-compression key) — zlib-inflated
+ * back into a PNG. Every other payload travels untransformed, so a PNG
+ * transmit (`f=100` in the upstream table, or the `f=12` synonym, without
+ * `o=z`) yields the sender's bytes byte-for-byte. Multi-image streams
  * yield one {@see KittyImage} per transmit.
  *
  * Mirrors charmbracelet/candy-mosaic KittyRenderer (inverse).
@@ -328,23 +329,26 @@ final class KittyStream
     }
 
     /**
-     * Inflate a zlib-wrapped payload when — and only when — `f=1` declares one.
+     * Inflate a zlib-wrapped payload when — and only when — `o=z` declares one.
      *
-     * A PNG transmit (`f=100` upstream, or the `f=12` synonym) already holds the
-     * whole image, so inflating it would turn a valid payload into a
-     * `decompress_failed` error. And `z` is the image z-index, never a
+     * Per the kitty graphics protocol `o` is the transmission-compression key
+     * (`z` = zlib) and `f` is only ever a data format, so this gate reads `o`
+     * and accepts nothing else: an absent or other `o` value travels untouched.
+     * (Before M2/round-LL both SugarCraft sides misspelled compression as
+     * `f=1`; legacy captures in that spelling now surface as an undecodable
+     * raw payload rather than a guessed inflate.)
+     *
+     * A PNG transmit (`f=100` upstream, or the `f=12` synonym) without `o=z`
+     * already holds the whole image, so inflating it would turn a valid payload
+     * into a `decompress_failed` error. And `z` is the image z-index, never a
      * compression hint: `KittyOptions::withZIndex(1)` emits an uncompressed PNG
-     * under exactly `f=100,z=1`. Upstream's real compression key is `o=z`, which
-     * this decoder deliberately does not act on — honouring it has to land
-     * together with the emitters that would use it, so today such a capture
-     * surfaces as an undecodable payload instead of a guessed inflate. Any
-     * other, or absent, `f` travels untouched.
+     * under exactly `f=100,z=1`.
      *
      * @param array<string, string> $params
      */
     private static function maybeInflate(string $bytes, array $params): string
     {
-        if (($params['f'] ?? null) !== KittyImage::FORMAT_ZLIB || $bytes === '') {
+        if (($params['o'] ?? null) !== KittyImage::COMPRESSION_ZLIB || $bytes === '') {
             return $bytes;
         }
 

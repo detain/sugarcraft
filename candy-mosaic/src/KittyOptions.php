@@ -94,9 +94,19 @@ final class KittyOptions
     }
 
     /**
-     * Set compression level for the PNG payload.
+     * Request zlib compression for the PNG payload.
      *
-     * @param int $compress  100 = none (default), 1 = zlib compressed (f=1).
+     * Per the kitty graphics protocol, `f` is the DATA FORMAT (100 = PNG)
+     * and transmission compression travels on the separate `o` key — so a
+     * compressed transmit is emitted as `f=100,o=z`. (Until M2/round-LL
+     * this pair wrongly spelled compression as `f=1`; the candy-testing
+     * KittyStream decoder flipped in the same change.)
+     *
+     * @param int $compress  100 = none (default), 1 = zlib compressed (o=z).
+     *                        Any other value is inert: the wire carries no
+     *                        compression LEVEL, only the zlib (o=z) signal,
+     *                        and emitting `f=N` for N outside the spec's
+     *                        format table would mislabel the payload.
      *                        zlib is worthwhile for large images on slow links.
      */
     public function withCompression(int $compress): self
@@ -172,12 +182,20 @@ final class KittyOptions
             'a' => $this->action,
             'i' => $this->imageId !== 0 ? $this->imageId : null,
             'z' => $this->zIndex !== 0 ? $this->zIndex : null,
-            'f' => $this->compress !== 100 ? $this->compress : null,
+            // 'o' is the spec's transmission-compression key; 'f' stays the
+            // data format and is emitted by the renderer as a constant 100.
+            'o' => $this->isCompressed() ? 'z' : null,
             's' => $this->cellWidth ?: null,
             'v' => $this->cellHeight ?: null,
             'x' => $this->offsetX ?: null,
             'y' => $this->offsetY ?: null,
         ];
+    }
+
+    /** @internal */
+    public function isCompressed(): bool
+    {
+        return $this->compress === 1;
     }
 
     /** @internal */

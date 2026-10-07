@@ -78,8 +78,9 @@ final class KittyOptionsTest extends TestCase
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        // f=1 means zlib compression
-        $this->assertStringContainsString('f=1', $out);
+        // o=z is the spec's zlib transmission-compression key; f stays 100.
+        $this->assertStringContainsString('o=z', $out);
+        $this->assertStringContainsString('f=100', $out);
     }
 
     public function testKittyOptionsToArrayOmitsZeroDefaults(): void
@@ -91,8 +92,10 @@ final class KittyOptionsTest extends TestCase
         $this->assertNull($arr['i']);
         // z=0 should be omitted
         $this->assertNull($arr['z']);
-        // f=100 (no compression) should be omitted
-        $this->assertNull($arr['f']);
+        // no compression requested → o omitted, and f never carries
+        // compression (the data format belongs to the renderer)
+        $this->assertNull($arr['o']);
+        $this->assertArrayNotHasKey('f', $arr);
     }
 
     public function testZIndexCanBeNegative(): void

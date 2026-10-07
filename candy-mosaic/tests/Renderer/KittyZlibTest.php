@@ -18,14 +18,16 @@ final class KittyZlibTest extends TestCase
         $this->renderer = new KittyRenderer();
     }
 
-    public function testCompressFlagEmitsF1InBegin(): void
+    public function testCompressionEmitsOzWithPngFormatInBegin(): void
     {
         $image = ImageSource::fromFile(__DIR__ . '/../fixtures/4x2.png');
         $opts  = KittyOptions::transmit(1)->withCompression(1);
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        $this->assertStringContainsString('f=1', $out);
+        // Per the kitty spec `o=z` is the transmission-compression key and
+        // `f` stays the data format: exact begin-frame byte pin (M2/round-LL).
+        $this->assertStringStartsWith("\x1b_Ga=T,i=1,f=100,o=z,q=2,c=8,r=4,m=1;\x1b\\", $out);
     }
 
     public function testCompressedPayloadIsActuallyCompressed(): void
@@ -81,7 +83,7 @@ final class KittyZlibTest extends TestCase
 
         // Both compression and virtual placement should work together
         $this->assertStringContainsString('a=p', $out);
-        $this->assertStringContainsString('f=1', $out);
+        $this->assertStringContainsString('o=z', $out);
     }
 
     public function testNoCompressionFlagWhenCompressIs100(): void
@@ -91,21 +93,43 @@ final class KittyZlibTest extends TestCase
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        // f=100 (default=no compression) should be in the output as the Kitty protocol default
+        // f=100 (PNG data format) is always emitted; the o key is omitted
+        // entirely when no compression is requested.
         $this->assertStringContainsString('f=100', $out);
-        // f=1 (zlib compression) should NOT be present as a standalone value (not a substring of f=100)
-        $this->assertDoesNotMatchRegularExpression('/\bf=1\b/', $out);
+        $this->assertStringNotContainsString('o=', $out);
     }
 
-    public function testCompressionSuccessEmitsF1AndNonEmptyPayload(): void
+    public function testNonZlibCompressionValueIsInertOnTheWire(): void
+    {
+        // The wire carries no compression LEVEL — only the o=z zlib signal —
+        // so any value other than 1 (or the 100 default) must produce a plain
+        // f=100 transmit rather than mislabelling the payload as a format.
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/4x2.png');
+        $opts  = KittyOptions::transmit(1)->withCompression(5);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        $this->assertStringStartsWith("\x1b_Ga=T,i=1,f=100,q=2,c=8,r=4,m=1;\x1b\\", $out);
+        $this->assertStringNotContainsString('o=', $out);
+
+        if (!preg_match_all('/\x1b_Gm=[01];([A-Za-z0-9+\/=]+)\x1b\\\\/', $out, $matches)) {
+            $this->fail('No Kitty graphics chunks found in output');
+        }
+        $raw = base64_decode(implode('', $matches[1]));
+        $this->assertNotFalse($raw, 'Base64 decode failed');
+        $this->assertStringStartsWith("\x89PNG", $raw, 'inert level must leave the payload uncompressed');
+    }
+
+    public function testCompressionSuccessEmitsOzAndNonEmptyPayload(): void
     {
         $image = ImageSource::fromFile(__DIR__ . '/../fixtures/4x2.png');
         $opts  = KittyOptions::transmit(1)->withCompression(1);
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        // f=1 flag must be present.
-        $this->assertStringContainsString('f=1', $out);
+        // o=z must be present and f must stay the PNG format code.
+        $this->assertStringContainsString('o=z', $out);
+        $this->assertStringContainsString('f=100', $out);
 
         // Extract and verify the payload decodes and decompresses to source PNG bytes.
         if (!preg_match_all('/\x1b_Gm=[01];([A-Za-z0-9+\/=]+)\x1b\\\\/', $out, $matches)) {

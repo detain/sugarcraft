@@ -74,8 +74,9 @@ final class KittyRenderer implements Renderer
      *                            transmission (a=T), {@see KittyOptions::place()}
      *                            for virtual-image placement (a=p), or chain
      *                            withUseVirtual(true) on transmit to store+place
-     *                            in one step. Use withCompression(1) to gzip
-     *                            the PNG payload before base64-encoding (f=1).
+     *                            in one step. Use withCompression(1) to zlib-compress
+     *                            the PNG payload before base64-encoding, signalled
+     *                            as the spec's `o=z` key (`f` stays the data format).
      */
     public function renderWithOptions(
         ImageSource $image,
@@ -98,7 +99,7 @@ final class KittyRenderer implements Renderer
         }
 
         $pngBytes  = $this->ensurePng($image);
-        $compress  = ($optsArr['f'] ?? 100) === 1;
+        $compress  = $opts->isCompressed();
         if ($compress) {
             $z = gzcompress($pngBytes);
             if ($z === false) {
@@ -118,7 +119,9 @@ final class KittyRenderer implements Renderer
             'a' => $action,
             'i' => $optsArr['i'],
             'z' => $optsArr['z'],
-            'f' => $optsArr['f'] ?? 100,
+            // Compression rides 'o=z' (spec); 'f' keeps its constant data-
+            // format meaning and buildBegin emits f=100 for every transmit.
+            'o' => $optsArr['o'],
             'q' => 2,
             'c' => $width,
             'r' => $effectiveHeight > 0 ? $effectiveHeight : 1,
@@ -146,6 +149,7 @@ final class KittyRenderer implements Renderer
             'i' => $opts['i'] ?? null,
             'z' => $opts['z'] ?? null,
             'f' => $opts['f'] ?? 100,
+            'o' => $opts['o'] ?? null,
             'q' => $opts['q'] ?? 2,
             'c' => $opts['c'] ?? null,
             'r' => $opts['r'] ?? null,

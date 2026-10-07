@@ -18,19 +18,21 @@ final class KittyImageTest extends TestCase
         self::assertNull(KittyImage::fromTransmit(['a' => 'T'], 'payload')->format(), 'an omitted f is not a format');
     }
 
-    public function testOnlyZlibFormatReportsCompressed(): void
+    public function testOnlyZlibCompressionKeyReportsCompressed(): void
     {
-        // `f=1` is the single code this decoder inflates on: the upstream
-        // raw-pixel codes (`24` RGB, `32` RGBA), both PNG spellings and any
-        // other value must not claim it.
-        foreach (['0', '2', '12', '24', '32', '100'] as $format) {
+        // `o=z` is the single signal this decoder inflates on: every `f`
+        // format value — the upstream raw-pixel codes (`24` RGB, `32` RGBA),
+        // both PNG spellings, the retired `1` spelling, anything else — and an
+        // absent `o` must not claim it.
+        foreach (['0', '1', '2', '12', '24', '32', '100'] as $format) {
             self::assertFalse(
                 KittyImage::fromTransmit(['a' => 'T', 'f' => $format], 'payload')->compressed(),
-                "f={$format} is not a zlib transmission",
+                "f={$format} without o=z is not a zlib transmission",
             );
         }
+        self::assertFalse(KittyImage::fromTransmit(['a' => 'T', 'o' => 't'], 'payload')->compressed(), 'o=t (zstd) is not zlib');
 
-        self::assertTrue(KittyImage::fromTransmit(['a' => 'T', 'f' => '1'], 'payload')->compressed());
+        self::assertTrue(KittyImage::fromTransmit(['a' => 'T', 'f' => '100', 'o' => 'z'], 'payload')->compressed());
     }
 
     public function testPngPassthroughCoversBothPngSpellings(): void
@@ -70,9 +72,10 @@ final class KittyImageTest extends TestCase
     public function testFormatConstantsMatchTheBehaviourTheyGate(): void
     {
         // Deliberately not a constants-vs-constants echo: every code is checked
-        // against the predicates it is documented to select, so swapping `1`,
-        // `12` and `100` in the constant table would fail here.
-        self::assertSame('1', KittyImage::FORMAT_ZLIB);
+        // against the predicates it is documented to select, so swapping `12`
+        // and `100` in the format table or respelling the compression value
+        // would fail here.
+        self::assertSame('z', KittyImage::COMPRESSION_ZLIB);
         self::assertSame('12', KittyImage::FORMAT_PNG_ALT);
         self::assertSame('100', KittyImage::FORMAT_PNG);
         self::assertSame(
@@ -80,14 +83,14 @@ final class KittyImageTest extends TestCase
             KittyImage::PNG_PASSTHROUGH_FORMATS,
         );
 
-        $zlib = KittyImage::fromTransmit(['a' => 'T', 'f' => KittyImage::FORMAT_ZLIB], 'payload');
-        self::assertTrue($zlib->compressed(), 'f=1 is the zlib row');
-        self::assertFalse($zlib->pngPassthrough());
+        $zlib = KittyImage::fromTransmit(['a' => 'T', 'f' => '100', 'o' => KittyImage::COMPRESSION_ZLIB], 'payload');
+        self::assertTrue($zlib->compressed(), 'o=z is the zlib row');
+        self::assertTrue($zlib->pngPassthrough(), 'f=100 still declares the PNG format');
 
         foreach ([KittyImage::FORMAT_PNG_ALT, KittyImage::FORMAT_PNG] as $format) {
             $png = KittyImage::fromTransmit(['a' => 'T', 'f' => $format], 'payload');
             self::assertTrue($png->pngPassthrough(), "f={$format} must decode as PNG passthrough");
-            self::assertFalse($png->compressed(), "f={$format} must never be inflated");
+            self::assertFalse($png->compressed(), "f={$format} without o=z must never be inflated");
         }
     }
 }
