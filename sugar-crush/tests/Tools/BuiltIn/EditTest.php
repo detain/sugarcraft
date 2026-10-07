@@ -90,7 +90,7 @@ final class EditTest extends TestCase
         // consumes, so a stray "File updated:" header would break it.
         $expected = "--- a/$path\n"
             . "+++ b/$path\n"
-            . "@@ -1,1 +1,1 @@\n"
+            . "@@ -1 +1 @@\n"
             . "-Hello World\n"
             . "+Hello PHP\n";
 
@@ -242,7 +242,8 @@ final class EditTest extends TestCase
 
     public function testExecuteDiffMergesHunksSeparatedByExactlyContextWindowPlusOne(): void
     {
-        // Boundary regression for the buildHunks() merge threshold: two
+        // Boundary regression for the engine's merge threshold (sugar-diff's
+        // hunk grouping, reached through the BuildsUnifiedDiff window): two
         // single-line changes with exactly 6 unchanged lines between them
         // (op-index distance 2*CONTEXT_LINES+1 = 7) is the point at which
         // real `diff -u`/`git diff` still joins them into ONE hunk with
@@ -299,14 +300,11 @@ final class EditTest extends TestCase
 
     public function testExecuteDiffUsesZeroForNewSideWhenDeletionEmptiesTheFile(): void
     {
-        // `diff -u` reports a start line of 0 (not the last old line number)
-        // when the new side of a hunk is empty, since there's no line to
-        // anchor to. Deleting a single-line file's only content is the
-        // reachable-through-execute() case; the symmetric zero-old-side
-        // case (pure insertion with no surrounding context) is exercised
-        // directly against buildHunks() below since it isn't reachable
-        // through the public Edit API (old_string can never match inside
-        // an empty file).
+        // GNU reports a zero-count new side as `+0,0` (the count survives, the
+        // start anchors at 0 — there is no line to anchor an empty side to).
+        // Deleting a single-line file's only content is the reachable-through-
+        // execute() case; the symmetric zero-old-side case is covered by
+        // {@see testUnifiedDiffUsesZeroForOldSideOnCreationWithNoContext()}.
         $tool = new Edit();
         $path = $this->createTempFile("onlyline\n");
 
@@ -318,23 +316,22 @@ final class EditTest extends TestCase
         ]);
 
         $this->assertFalse($result->isError());
-        $this->assertStringContainsString("@@ -1,1 +0,0 @@\n", (string)$result->diff());
+        $this->assertStringContainsString("@@ -1 +0,0 @@\n", (string)$result->diff());
         $this->assertStringNotContainsString('+1,0', (string)$result->diff());
     }
 
-    public function testBuildHunksUsesZeroForOldSideOnPureInsertionWithNoContext(): void
+    public function testUnifiedDiffUsesZeroForOldSideOnCreationWithNoContext(): void
     {
-        $method = new \ReflectionMethod(Edit::class, 'buildHunks');
+        // A diff whose new file has content and whose old side is empty has
+        // zero old-side lines in its only hunk, so the header's old start is
+        // 0 with the `,0` count kept, while the new side prints GNU's elided
+        // single-line range (`+1`, not `+1,1`).
+        $method = new \ReflectionMethod(Edit::class, 'unifiedDiff');
         $method->setAccessible(true);
 
-        // A hunk whose only op is a single insertion has zero old-side
-        // lines (no eq/del ops at all), so the header's old start must be
-        // 0 per `diff -u` convention, not a fabricated line number.
-        $ops = [['ins', 'new line']];
+        $diff = (string) $method->invoke(null, 'f', '', "new line\n");
 
-        $hunks = $method->invoke(null, $ops);
-
-        $this->assertStringContainsString("@@ -0,0 +1,1 @@\n", $hunks);
+        $this->assertStringContainsString("@@ -0,0 +1 @@\n", $diff);
     }
 
     private function createTempFile(string $content): string

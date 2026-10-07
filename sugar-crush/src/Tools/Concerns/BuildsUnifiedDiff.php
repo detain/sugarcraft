@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools\Concerns;
 
+use SugarCraft\Diff\Diff;
+
 /**
  * The `diff -u`/`git diff --no-color`-compatible unified-diff builder shared by
  * every file-mutating built-in tool.
@@ -14,20 +16,31 @@ namespace SugarCraft\Crush\Tools\Concerns;
  * side is empty, so it deserves the same before/after preview and the same
  * permission-gating treatment rather than a second, drifting implementation.
  *
- * Memory is bounded by the size of the CHANGE, not of the file (audit F-T2).
- * The first version split both whole files into line arrays and built one
- * `['eq', line]` op per unchanged line of the common prefix and suffix, which
- * cost about 18x the file size: a one-line edit of a 36 MB file peaked at
- * 650 MB. The unchanged prefix and suffix are now trimmed at the byte level on
- * the original strings (compared in fixed-size chunks, line numbers counted
- * with `substr_count()`), and only the differing middle plus CONTEXT_LINES of
- * context on each side is ever split into lines. The output is byte-identical
- * to the line-array version; only what it allocates changed. A changed region
- * too large to be worth previewing is not diffed at all — see
- * {@see diffPreview()}.
+ * The diff ENGINE is {@see Diff} from sugar-diff — this trait no longer carries
+ * its own LCS/hunk-joining copy. The twin had drifted (the library emits
+ * GNU-faithful hunk headers: a count of 1 is elided and a zero-count side
+ * anchors at the line the hunk sits after, while the private copy printed the
+ * old `-N,1`/`-0,0` shape for both), which is what folded it away rather than
+ * syncing it.
  *
- * Every method is private and static — this is a self-contained algorithm, not
- * a behavioural mixin, and nothing here reads the using class's state.
+ * What stays here is the part the library deliberately does not own: memory
+ * bounded by the size of the CHANGE, not of the file (audit F-T2). The first
+ * version split both whole files into line arrays and built one op per
+ * unchanged line, which cost about 18x the file size: a one-line edit of a
+ * 36 MB file peaked at 650 MB. The unchanged prefix and suffix are still
+ * trimmed at the byte level on the original strings (compared in fixed-size
+ * chunks, line numbers counted with `substr_count()`), and only the differing
+ * middle plus CONTEXT_LINES of context on each side is ever split into lines
+ * and handed to the library. The library numbers its hunks relative to that
+ * window, so {@see relocateHunkHeaders()} shifts them back to file-absolute
+ * positions; the rendered diff is byte-identical to diffing the whole files
+ * with the library (the window always carries full context around every hunk,
+ * and the library's own line-level trim re-finds the same alignment inside
+ * it). A changed region too large to be worth previewing is not diffed at all
+ * — see {@see diffPreview()}.
+ *
+ * Every method is private and static — this is a self-contained policy, not a
+ * behavioural mixin, and nothing here reads the using class's state.
  */
 trait BuildsUnifiedDiff
 {
@@ -35,21 +48,13 @@ trait BuildsUnifiedDiff
     private const CONTEXT_LINES = 3;
 
     /**
-     * Guard against the O(n*m) LCS table on a huge scattered `replace_all`
-     * edit (common-prefix/suffix trimming only shrinks the middle region
-     * for a *localized* change) - past this many cells we fall back to a
-     * non-minimal but still-valid delete-all/insert-all hunk instead of
-     * hanging the request.
-     */
-    private const MAX_LCS_CELLS = 250_000;
-
-    /**
      * Past this many changed lines (old side + new side of the trimmed middle)
-     * no preview is built. The delete-all/insert-all fallback above keeps the
-     * TIME bounded but still allocates an op per line and a diff body bigger
-     * than both inputs — a `replace_all` across a large file, or a Write of a
-     * large new file, would rebuild most of F-T2's cost through the middle. A
-     * 20,000-line diff is also past what anyone reviews in a transcript.
+     * no preview is built. The library's own cell guard keeps the TIME bounded
+     * even for a scattered `replace_all` (delete-all/insert-all fallback) but
+     * still allocates a diff body bigger than both inputs — a `replace_all`
+     * across a large file, or a Write of a large new file, would rebuild most
+     * of F-T2's cost through the middle. A 20,000-line diff is also past what
+     * anyone reviews in a transcript.
      */
     private const MAX_DIFF_LINES = 20_000;
 
@@ -96,9 +101,9 @@ trait BuildsUnifiedDiff
         // Byte-level trimming, snapped to line boundaries. A cut is only ever
         // placed just after a "\n" that lies INSIDE the common region, so the
         // lines on the far side of it are byte-identical in both files; any
-        // equal line the snapping leaves in the middle is picked up by the
-        // line-level trimming below, which is what keeps the result identical
-        // to trimming whole line arrays.
+        // equal line the snapping leaves inside the middle is re-trimmed by
+        // the library's own line-level pass, which is what keeps the result
+        // identical to diffing the whole files.
         $oldStart = self::lineStartBefore($old, self::commonPrefixLength($old, $new));
         $newStart = $oldStart;
         $suffixBytes = self::commonSuffixLength($old, $new, min($oldLen - $oldStart, $newLen - $oldStart));
@@ -107,36 +112,8 @@ trait BuildsUnifiedDiff
         $oldEnd = $oldLen - $tailBytes;
         $newEnd = $newLen - $tailBytes;
 
-        // Line-level trimming of what is left, exactly as the line-array
-        // version trimmed the whole files: equal leading lines first, then
-        // equal trailing lines from what the prefix left over.
-        $prefixLines = self::countNewlines($old, 0, $oldStart);
-        while ($oldStart < $oldEnd && $newStart < $newEnd) {
-            [$oLine, $oNext] = self::lineAt($old, $oldStart, $oldEnd);
-            [$nLine, $nNext] = self::lineAt($new, $newStart, $newEnd);
-            if ($oLine !== $nLine) {
-                break;
-            }
-            $oldStart = $oNext;
-            $newStart = $nNext;
-            $prefixLines++;
-        }
-        while ($oldStart < $oldEnd && $newStart < $newEnd) {
-            [$oLine, $oFrom] = self::lastLineIn($old, $oldStart, $oldEnd);
-            [$nLine, $nFrom] = self::lastLineIn($new, $newStart, $newEnd);
-            if ($oLine !== $nLine) {
-                break;
-            }
-            $oldEnd = $oFrom;
-            $newEnd = $nFrom;
-        }
-
         $oldMidLines = self::lineCount($old, $oldStart, $oldEnd);
         $newMidLines = self::lineCount($new, $newStart, $newEnd);
-
-        if ($oldMidLines === 0 && $newMidLines === 0) {
-            return ['diff' => '', 'added' => 0, 'removed' => 0, 'omitted' => false];
-        }
 
         if (
             $oldMidLines + $newMidLines > self::MAX_DIFF_LINES
@@ -158,46 +135,22 @@ trait BuildsUnifiedDiff
         $contextTo = self::lineEndsForward($old, $oldEnd, self::CONTEXT_LINES);
         $after = self::splitLines(substr($old, $oldEnd, $contextTo - $oldEnd));
 
-        $ops = [];
-        foreach ($before as $line) {
-            $ops[] = ['eq', $line];
-        }
-        if (count($oldMid) * count($newMid) > self::MAX_LCS_CELLS) {
-            // Pathological case (e.g. replace_all scattering changes across
-            // a huge file): skip the O(n*m) table and emit a correct, if
-            // non-minimal, delete-all/insert-all block for the middle.
-            foreach ($oldMid as $line) {
-                $ops[] = ['del', $line];
-            }
-            foreach ($newMid as $line) {
-                $ops[] = ['ins', $line];
-            }
-        } else {
-            array_push($ops, ...self::lcsOps($oldMid, $newMid));
-        }
-        foreach ($after as $line) {
-            $ops[] = ['eq', $line];
-        }
-
-        $hunks = self::buildHunks($ops, $prefixLines - count($before) + 1);
+        // The window is a list, so the library trusts it as pre-split lines
+        // (a final unterminated line in the real file can never sit inside a
+        // window that ends at a line boundary, so no EOF marker is owed).
+        $diff = Diff::compute(
+            array_merge($before, $oldMid, $after),
+            array_merge($before, $newMid, $after),
+        );
+        $hunks = self::relocateHunkHeaders($diff->hunkText(), self::countNewlines($old, 0, $contextFrom));
         if ($hunks === '') {
             return ['diff' => '', 'added' => 0, 'removed' => 0, 'omitted' => false];
         }
 
-        $added = 0;
-        $removed = 0;
-        foreach ($ops as [$type]) {
-            if ($type === 'ins') {
-                $added++;
-            } elseif ($type === 'del') {
-                $removed++;
-            }
-        }
-
         return [
             'diff' => "--- a/{$path}\n+++ b/{$path}\n" . $hunks,
-            'added' => $added,
-            'removed' => $removed,
+            'added' => $diff->addedLines(),
+            'removed' => $diff->removedLines(),
             'omitted' => false,
         ];
     }
@@ -217,6 +170,31 @@ trait BuildsUnifiedDiff
             $preview['removed'],
             number_format(self::MAX_DIFF_LINES),
             number_format(self::MAX_DIFF_BYTES),
+        );
+    }
+
+    /**
+     * Shift both start numbers of every `@@` header by the number of lines
+     * that precede the window, turning the library's window-relative line
+     * numbers into file-absolute ones. Only headers begin a line with "@@":
+     * context, added, removed and no-newline rows all carry a one-character
+     * prefix, so the anchored pattern can never rewrite a body row. A
+     * zero-count side's GNU anchor shifts identically — its clamp to 0 is
+     * only reachable when the hunk is the window's first line with no
+     * context, which forces the delta to 0 as well.
+     */
+    private static function relocateHunkHeaders(string $hunks, int $delta): string
+    {
+        if ($delta === 0 || $hunks === '') {
+            return $hunks;
+        }
+
+        return (string) preg_replace_callback(
+            '/^@@ -(\d+)((?:,\d+)?)( \+)(\d+)((?:,\d+)?)/m',
+            static fn (array $m): string => '@@ -'
+                . ((int) $m[1] + $delta) . $m[2] . $m[3]
+                . ((int) $m[4] + $delta) . $m[5],
+            $hunks,
         );
     }
 
@@ -307,36 +285,6 @@ trait BuildsUnifiedDiff
     }
 
     /**
-     * The line starting at $from inside [$from, $to) and the offset of the
-     * line after it.
-     *
-     * @return array{0: string, 1: int}
-     */
-    private static function lineAt(string $text, int $from, int $to): array
-    {
-        $nl = strpos($text, "\n", $from);
-        if ($nl === false || $nl >= $to) {
-            return [substr($text, $from, $to - $from), $to];
-        }
-
-        return [substr($text, $from, $nl - $from), $nl + 1];
-    }
-
-    /**
-     * The last line inside [$from, $to) (a slice that ends at a line boundary
-     * or at the end of the text) and the offset it starts at.
-     *
-     * @return array{0: string, 1: int}
-     */
-    private static function lastLineIn(string $text, int $from, int $to): array
-    {
-        $end = $text[$to - 1] === "\n" ? $to - 1 : $to;
-        $start = max($from, self::lineStartBefore($text, $end));
-
-        return [substr($text, $start, $end - $start), $start];
-    }
-
-    /**
      * Offset of the start of the line $lines lines before the line starting at
      * $offset (or 0, when the text has fewer lines than that before $offset).
      */
@@ -361,149 +309,5 @@ trait BuildsUnifiedDiff
         }
 
         return $offset;
-    }
-
-    /**
-     * Classic O(n*m) longest-common-subsequence backtrack, turned into a
-     * sequence of equal/delete/insert ops.
-     *
-     * @param list<string> $a
-     * @param list<string> $b
-     * @return list<array{0:'eq'|'del'|'ins',1:string}>
-     */
-    private static function lcsOps(array $a, array $b): array
-    {
-        $n = count($a);
-        $m = count($b);
-
-        if ($n === 0 && $m === 0) {
-            return [];
-        }
-
-        $dp = array_fill(0, $n + 1, array_fill(0, $m + 1, 0));
-        for ($i = $n - 1; $i >= 0; $i--) {
-            for ($j = $m - 1; $j >= 0; $j--) {
-                $dp[$i][$j] = $a[$i] === $b[$j]
-                    ? $dp[$i + 1][$j + 1] + 1
-                    : max($dp[$i + 1][$j], $dp[$i][$j + 1]);
-            }
-        }
-
-        $ops = [];
-        $i = 0;
-        $j = 0;
-        while ($i < $n && $j < $m) {
-            if ($a[$i] === $b[$j]) {
-                $ops[] = ['eq', $a[$i]];
-                $i++;
-                $j++;
-            } elseif ($dp[$i + 1][$j] >= $dp[$i][$j + 1]) {
-                $ops[] = ['del', $a[$i]];
-                $i++;
-            } else {
-                $ops[] = ['ins', $b[$j]];
-                $j++;
-            }
-        }
-        while ($i < $n) {
-            $ops[] = ['del', $a[$i]];
-            $i++;
-        }
-        while ($j < $m) {
-            $ops[] = ['ins', $b[$j]];
-            $j++;
-        }
-
-        return $ops;
-    }
-
-    /**
-     * Group diff ops into `@@ -oldStart,oldLen +newStart,newLen @@` hunks,
-     * merging two changed regions into one hunk whenever their context
-     * windows would touch or overlap -- i.e. whenever they are separated by
-     * no more than 2*CONTEXT_LINES + 1 index positions -- matching `diff
-     * -u`'s hunk-joining behaviour.
-     *
-     * $firstLine is the line number of $ops[0] on both sides: the ops start
-     * inside the common prefix, which has the same length in both files, so
-     * one offset serves the old and the new numbering.
-     *
-     * @param list<array{0:'eq'|'del'|'ins',1:string}> $ops
-     */
-    private static function buildHunks(array $ops, int $firstLine = 1): string
-    {
-        $n = count($ops);
-        $oldLine = $firstLine;
-        $newLine = $firstLine;
-        $annotated = [];
-        $changedIdx = [];
-        foreach ($ops as $idx => $op) {
-            [$type] = $op;
-            $annotated[$idx] = [$op[0], $op[1], $oldLine, $newLine];
-            if ($type === 'eq') {
-                $oldLine++;
-                $newLine++;
-            } elseif ($type === 'del') {
-                $oldLine++;
-                $changedIdx[] = $idx;
-            } else {
-                $newLine++;
-                $changedIdx[] = $idx;
-            }
-        }
-
-        if ($changedIdx === []) {
-            return '';
-        }
-
-        $groups = [];
-        $groupStart = $changedIdx[0];
-        $groupEnd = $changedIdx[0];
-        for ($k = 1, $count = count($changedIdx); $k < $count; $k++) {
-            if ($changedIdx[$k] - $groupEnd <= self::CONTEXT_LINES * 2 + 1) {
-                $groupEnd = $changedIdx[$k];
-            } else {
-                $groups[] = [$groupStart, $groupEnd];
-                $groupStart = $changedIdx[$k];
-                $groupEnd = $changedIdx[$k];
-            }
-        }
-        $groups[] = [$groupStart, $groupEnd];
-
-        $out = '';
-        foreach ($groups as [$groupStart, $groupEnd]) {
-            $start = max(0, $groupStart - self::CONTEXT_LINES);
-            $end = min($n - 1, $groupEnd + self::CONTEXT_LINES);
-
-            $oldStart = $annotated[$start][2];
-            $newStart = $annotated[$start][3];
-            $oldLen = 0;
-            $newLen = 0;
-            $body = '';
-            for ($idx = $start; $idx <= $end; $idx++) {
-                [$type, $line] = $annotated[$idx];
-                if ($type === 'eq') {
-                    $body .= " {$line}\n";
-                    $oldLen++;
-                    $newLen++;
-                } elseif ($type === 'del') {
-                    $body .= "-{$line}\n";
-                    $oldLen++;
-                } else {
-                    $body .= "+{$line}\n";
-                    $newLen++;
-                }
-            }
-
-            // `diff -u` reports a start line of 0 when a hunk's old- or
-            // new-side is empty (pure insertion/deletion at a boundary),
-            // since there's no real line number to anchor an empty range to.
-            $headerOldStart = $oldLen === 0 ? 0 : $oldStart;
-            $headerNewStart = $newLen === 0 ? 0 : $newStart;
-
-            $out .= "@@ -{$headerOldStart},{$oldLen} +{$headerNewStart},{$newLen} @@\n{$body}";
-        }
-
-        return $out;
     }
 }
