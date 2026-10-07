@@ -630,7 +630,28 @@ final class McpToolWiringTest extends TestCase
         // HERE and would not be on a launch path. A bound on this test, not a
         // census of the suite. The map is process-global and other files feed
         // it, so this measures the DELTA and never the absolute size.
+        //
+        // ONE ORDER COUPLING THAT DELTA SILENTLY RELIED ON, closed after the
+        // review finding this guard answers: the count reads ONE because an
+        // EARLIER test in this file has already started the `fake` fixture and
+        // thereby seeded the creds-env notice key into the map. That notice is
+        // keyed on server NAME plus the ambient secret-shaped env names — no
+        // per-test tmp path — so it dedupes across tests, while the partial-
+        // start notice this call under test emits is path-keyed and always
+        // fresh. Run with `--filter <method>` alone, nothing pre-seeds the
+        // creds key and the seam correctly counts TWO. The guard below seeds the
+        // same key through the PRODUCTION path — not by copying the message
+        // text, which is exactly the pre-seed-by-KEY fragility this test's
+        // doc-block refuses — and only when the map does not already carry it,
+        // so in-order runs (every full-suite and CI-shard shape, which carries
+        // whole files) skip the launch outright: no extra child, no new stderr
+        // line, no new assertion, byte-identical figures. When it does fire in
+        // isolation, the seed lands BEFORE the snapshot, so the counted delta
+        // and both figures stay exactly what they were.
         $seen = new \ReflectionProperty(Bootstrap::class, 'reportedPermissionConfigWarnings');
+        if (!self::credsNoticeSeedPresent((array) $seen->getValue())) {
+            $this->seedCredsNoticeThroughProduction();
+        }
         $before = \count((array) $seen->getValue());
 
         $log = $this->tempDir . '/error_log.txt';
@@ -687,6 +708,82 @@ final class McpToolWiringTest extends TestCase
             $this->isAlive($pid),
             "the server started before the config threw (pid {$pid}) outlived stopMcpServers()",
         );
+    }
+
+    /**
+     * Does the dedup map already carry the `fake` fixture's creds-env notice —
+     * i.e. has some earlier launch in this process emitted the very key the
+     * measured call will hit? Probed by STABLE PREFIX (server name plus the
+     * opening paren) rather than whole message: what follows is derived from
+     * the ambient environment and none of this needs to know it. If the
+     * emitter's wording changes, the probe stops matching and the seed simply
+     * runs — one benign extra launch that still lands its key before the
+     * snapshot — so the guard fails toward correct, never away from it.
+     *
+     * @param array<array-key, mixed> $reported
+     */
+    private static function credsNoticeSeedPresent(array $reported): bool
+    {
+        foreach (array_keys($reported) as $key) {
+            if (\is_string($key) && str_starts_with($key, 'MCP stdio servers start without inherited credentials: fake (')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Start one fixture server under a SECOND trusted root so the production
+     * notice path writes its own creds-env dedup key into the process-global
+     * map — the isolation guard called from
+     * {@see testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()}.
+     * A different root because {@see Bootstrap::mcpClient()} memoizes per
+     * config path: reusing the measured repo would hand the measured call the
+     * seed's client instead of driving its start-then-throw. Different logs
+     * because the measured call asserts `handshakeCount() === 1` on the shared
+     * handshake log. Deliberately asserts nothing: the figures this test's
+     * cost paragraph protects must not move in either run shape, and a failed
+     * seed still reddens the counted-delta assertion loudly right after.
+     *
+     * THE ONE SIDE EFFECT THAT HAD TO BE UNDONE: {@see Bootstrap} freezes the
+     * trust list per config path for the process
+     * (`$trustedMcpRoots`, by design — mid-session trust flips must not widen
+     * a grant), and this seed is the first read of THIS test's sandboxed
+     * config, so it would freeze `[seedRepo]` and blind the measured call to
+     * its own re-grant. The thaw below snapshots that map around the seed and
+     * hands the pre-seed state back — each test sandboxes its own HOME, so the
+     * entry is this test's alone. What driveTheStartThenThrowPath() then
+     * freezes is `[repo]`, read fresh from the file it re-trusted — byte for
+     * byte what an unseeded isolated run would have frozen.
+     */
+    private function seedCredsNoticeThroughProduction(): void
+    {
+        $seedRepo = $this->tempDir . '/seed_repo';
+        mkdir($seedRepo, 0o755, true);
+        file_put_contents($seedRepo . '/.mcp.json', (string) json_encode(['mcpServers' => [
+            'fake' => [
+                'type' => 'stdio',
+                'command' => PHP_BINARY,
+                'args' => [$this->tempDir . '/server.php', $seedRepo . '/calls.log', $seedRepo . '/handshakes.log'],
+                'startTimeout' => 5,
+            ],
+        ]]));
+        // Safe to overwrite the grant: driveTheStartThenThrowPath() re-trusts
+        // the measured repo itself before its launch, one call later.
+        $this->trustTheRepo($seedRepo);
+
+        $frozen = new \ReflectionProperty(Bootstrap::class, 'trustedMcpRoots');
+        $snapshot = (array) $frozen->getValue();
+
+        Bootstrap::mcpClient($seedRepo);
+        Bootstrap::stopMcpServers();
+
+        // Hand back the trust-map state an unseeded run would have had; the
+        // drive's own trustTheRepo() write is what then gets frozen, exactly
+        // as before this guard existed. The dedup map is NOT restored — its
+        // one new key is the entire point of the seed.
+        $frozen->setValue(null, $snapshot);
     }
 
     /**
