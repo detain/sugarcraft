@@ -6013,7 +6013,10 @@ final class Chat implements Model
         foreach ($gated as [$toolCall, $denied, $hookContext, $ask, $preContext]) {
             if ($ask !== null) {
                 // Reaching the fork boundary with an unanswered ASK means the
-                // batch was released without the user deciding on this call.
+                // batch was released without this call being decided. The
+                // bypass mode does not arrive here undecided: since 747deb756
+                // the gate answers ASKs with allow at the decision point, so
+                // what survives to this arm is only a broken release path.
                 // Enforce the invariant here as well as in answerPermission()
                 // so a future caller cannot widen permission by accident: the
                 // call is reported as unapproved instead of being run.
@@ -7583,11 +7586,14 @@ final class Chat implements Model
      *
      * Every comparison against a recorded {@see Zone} has to go through here,
      * not just the hit-test: candy-mouse's {@see ZoneClickTracker} pairs a
-     * press with its release by re-testing the PRESS's stored box against the
-     * release event ({@see Zone::inBounds()}), so handing it an absolute event
-     * while the box is pane-local rejects every click inside a hosted pane as
-     * "released on a different zone" — the click resolves and then goes
-     * nowhere. Standalone the origin is `[0, 0]` and this is the identity.
+     * press with its release through the RELEASE-AGREEMENT gate (cdcd550be) —
+     * the release must re-resolve through the CURRENT registry to the very
+     * zone the press stored (id and full box, re-tested with
+     * {@see Zone::inBounds()}), and a vanished or mismatched fresh hit drops
+     * the pending press instead of firing a stale control. Handing the
+     * tracker an absolute event while the box is pane-local would therefore
+     * drop every click inside a hosted pane. Standalone the origin is
+     * `[0, 0]` and this is the identity.
      *
      * @return array{0: int, 1: int}
      */
@@ -7856,8 +7862,10 @@ final class Chat implements Model
         }
 
         // Built in the registry's coordinate space, not the terminal's: the
-        // tracker re-tests the recorded box against this event to pair the
-        // release with its press (see {@see zoneSpace()}). Drift below stays
+        // tracker's release-agreement gate (cdcd550be) pairs a release with
+        // its press only when the release re-resolves to the SAME zone the
+        // press stored — a moved or vanished zone drops the click rather than
+        // firing a stale control (see {@see zoneSpace()}). Drift below stays
         // absolute — it is only ever compared with itself, and a translation
         // cannot change a distance.
         [$zoneCol, $zoneRow] = self::zoneSpace($msg->x, $msg->y);

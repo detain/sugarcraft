@@ -95,8 +95,11 @@ final class Session
             'activePane' => $this->activePane,
         ];
 
-        // AtomicJsonFile persists via a same-dir temp + flock + rename, so a
-        // reader never sees a torn file, and it creates the parent dir 0700.
+        // AtomicJsonFile serialises writers with an exclusive flock on the
+        // stable `.<basename>.lock` sidecar beside the target — never on the
+        // uniquely-named temp, whose fresh name would make the lock one nobody
+        // else takes — then writes temp + rename, so a reader never sees a
+        // torn file, and it creates the parent dir 0700.
         // This session file records the user's working directory, selections
         // and filter history — private data that must stay owner-only (a
         // security requirement from #1232) — which withPermissions(0600) now

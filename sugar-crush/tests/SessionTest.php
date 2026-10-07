@@ -250,8 +250,13 @@ final class SessionTest extends TestCase
         // AtomicJsonFile writes through a sibling `.session.json.tmp.<hex>`
         // file and renames it into place; no temp file may survive the save.
         $this->assertSame([], glob($configDir . '/.session.json.tmp.*') ?: []);
+        // Writers serialise on a STABLE `.session.json.lock` sidecar that
+        // deliberately persists (candy-core AtomicJsonFile: the sidecar stays
+        // for the next writer) and "holds no payload" — the directory is the
+        // payload plus that empty lock, nothing else.
         $entries = array_values(array_diff(scandir($configDir) ?: [], ['.', '..']));
-        $this->assertSame(['session.json'], $entries);
+        $this->assertSame(['.session.json.lock', 'session.json'], $entries);
+        $this->assertSame('', file_get_contents($configDir . '/.session.json.lock'));
 
         // AtomicJsonFile encodes with JSON_UNESCAPED_SLASHES and no trailing
         // newline — distinct from the old non-atomic file_put_contents path,
