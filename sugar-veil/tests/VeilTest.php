@@ -1327,4 +1327,35 @@ final class VeilTest extends TestCase
         ];
     }
 
+    // ─── Overlay taller than backdrop paints from the top (LL fix #2) ────────
+
+    /**
+     * The background is the canvas: a CENTER/BOTTOM anchor on an overlay
+     * taller than the backdrop used to resolve a negative baseY and silently
+     * drop the overlay's TOP rows (probe: 4-row fg over 2-row bg CENTER →
+     * rows showed T2/T3, T1 vanished). The anchor now clamps to >= 0, so the
+     * overlay paints from its own top and the overflow clips at the bottom;
+     * an explicit negative yOffset is NOT clamped — slide animations that
+     * park the overlay off-screen above the canvas stay legal.
+     */
+    public function testOverlayTallerThanBackdropPaintsFromTopAndClipsBottom(): void
+    {
+        $fg = "T1\nT2\nT3\nT4";
+        $bg = "ne1\nne2";
+
+        $center = explode("\n", Veil::new()->composite($fg, $bg, Position::CENTER, Position::CENTER));
+        $this->assertSame(['T11', 'T22'], $center, 'CENTER anchor on an over-tall overlay keeps the top rows');
+
+        $bottom = explode("\n", Veil::new()->composite($fg, $bg, Position::BOTTOM, Position::CENTER));
+        $this->assertSame(['T11', 'T22'], $bottom, 'BOTTOM anchor likewise paints from the overlay top');
+
+        foreach ([$center, $bottom] as $frame) {
+            foreach ($frame as $row) {
+                $this->assertSame(3, Width::string($row), 'Canvas width stays exact');
+            }
+        }
+
+        $slid = explode("\n", Veil::new()->composite($fg, $bg, Position::CENTER, Position::CENTER, yOffset: -1));
+        $this->assertSame(['T21', 'T32'], $slid, 'Explicit negative yOffset still scrolls rows off the top');
+    }
 }

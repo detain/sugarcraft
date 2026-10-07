@@ -497,9 +497,16 @@ final class Veil
             return $this->emitFrame(\implode("\n", $fgLines), $fgWidth, $fgHeight);
         }
 
-        // Resolve base position
+        // Resolve base position. The background is the canvas, so an anchor
+        // never pushes the overlay's TOP off it: a centre/bottom anchor on an
+        // overlay taller than the backdrop would yield a negative baseY and
+        // silently drop the overlay's first rows (they sit above row 0).
+        // Clamping the anchor to >= 0 paints from the overlay's top instead
+        // and the overflow is clipped at the bottom — the least-surprising
+        // reading of "clip to canvas". Explicit $yOffset below is NOT
+        // clamped: negative offsets stay legal for slide-in animations.
         $baseX = $horizontal->xOffset($fgWidth, $bgWidth);
-        $baseY = $vertical->yOffset($fgHeight, $bgHeight);
+        $baseY = \max(0, $vertical->yOffset($fgHeight, $bgHeight));
 
         // Apply additional offsets
         $x = $baseX + $xOffset;
