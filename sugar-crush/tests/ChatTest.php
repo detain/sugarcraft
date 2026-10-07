@@ -2932,7 +2932,16 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString('running: bash(command: "ls")', \SugarCraft\Crush\Renderer::render($running));
 
         $this->assertInstanceOf(\Closure::class, $cmd);
-        $this->assertInstanceOf(BackendToolEventsMsg::class, $cmd());
+        // The fake backend settles inline — the blocking fallback's exact
+        // signature — so the settle stamps its queue as a REPLAY and the next
+        // hop is paced on a loop timer (one paint per row) instead of chaining
+        // at Cmd speed. A real host arms the timer; this unwinder takes the
+        // hop's payload directly.
+        $hop = $cmd();
+        if ($hop instanceof \SugarCraft\Core\TickRequest) {
+            $hop = ($hop->produce)();
+        }
+        $this->assertInstanceOf(BackendToolEventsMsg::class, $hop);
     }
 
     public function testToolFinishedReplacesThePlaceholderAndThenHandsOffTheReply(): void

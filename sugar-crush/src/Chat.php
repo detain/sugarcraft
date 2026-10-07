@@ -23,6 +23,7 @@ use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\RawMsg;
+use SugarCraft\Core\TickRequest;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
@@ -2558,6 +2559,30 @@ final class Chat implements Model
         }
         if ($msg instanceof PermissionReplyMsg) {
             return $this->answerPermission($msg->reply);
+        }
+        if ($msg instanceof TickRequest) {
+            // A paced replay hop ({@see foldHop()}) that reaches a driver
+            // with no loop to arm its timer — a synchronous chain unwinder,
+            // any model-only embedder — is answered HERE instead of stalling
+            // the queue: produce the hop now, skipping only the delay, never
+            // the event. The real host intercepts TickRequest in
+            // Program::dispatch() before update() ever sees one, so this arm
+            // exists for the headless shape alone.
+            $produced = ($msg->produce)();
+
+            return $produced === null ? [$this, null] : [$this, Cmd::send($produced)];
+        }
+        if ($msg instanceof TickRequest) {
+            // A paced replay hop ({@see foldHop()}) that reaches a driver
+            // with no loop to arm its timer - a synchronous chain unwinder,
+            // any model-only embedder - is answered HERE instead of
+            // stalling the queue: produce the hop now, skipping only the
+            // delay, never the event. The real host intercepts TickRequest
+            // in Program::dispatch() before update() ever sees one, so this
+            // arm exists for the headless shape alone.
+            $produced = ($msg->produce)();
+
+            return $produced === null ? [$this, null] : [$this, Cmd::send($produced)];
         }
         if ($msg instanceof BackendToolEventsMsg) {
             return $this->applyBackendToolEvent($msg);
@@ -5164,10 +5189,10 @@ final class Chat implements Model
         if ($event === null) {
             $runner->completeParked($msg->turn);
 
-            return [$this, Cmd::send(new AssistantMsg($msg->message, $msg->generation))];
+            return [$this, $this->foldHop(new AssistantMsg($msg->message, $msg->generation), $msg->replay)];
         }
 
-        $rest = new BackendToolEventsMsg($remaining, $msg->message, $msg->generation, $msg->turn);
+        $rest = new BackendToolEventsMsg($remaining, $msg->message, $msg->generation, $msg->turn, $msg->replay);
 
         if ($event instanceof SpendCapBreached) {
             // E20's mid-turn abort lands in the SAME ordered story as the
@@ -5176,7 +5201,7 @@ final class Chat implements Model
             $next = $this->appendSpendCapNotice($event);
             $runner->recordEvent($msg->turn, $event);
 
-            return [$next, Cmd::send($rest)];
+            return [$next, $this->foldHop($rest, $msg->replay)];
         }
 
         if ($event instanceof SubAgentActivity) {
@@ -5200,14 +5225,39 @@ final class Chat implements Model
             $this->agentLive()->apply($event);
             $runner->recordEvent($msg->turn, $event);
 
-            return [$this, Cmd::send($rest)];
+            return [$this, $this->foldHop($rest, $msg->replay)];
         }
 
         $next = $event instanceof ToolStarted
             ? $this->appendToolRunningPlaceholder($event, '', $msg->turn)
             : $this->replaceToolRunningPlaceholder($event, $msg->turn);
 
-        return [$next, Cmd::send($rest)];
+        return [$next, $this->foldHop($rest, $msg->replay)];
+    }
+
+    /**
+     * Re-dispatch the next hop of a settle-fold chain.
+     *
+     * Ordinary hops ride {@see Cmd::send()}: on the forked path events
+     * already arrived time-separated over the child's socket, and a headless
+     * driver unwinding the chain synchronously must keep unwinding it in one
+     * go. A REPLAY hop is different — the blocking fallback accumulated the
+     * WHOLE turn's events while the loop thread sat inside complete(), so
+     * every row's moment is now, and draining at Cmd speed lands the
+     * entire tool story in a single painted frame (the "all rows appear at
+     * once" symptom). One {@see TOOL_EVENT_POLL_SECONDS} tick per hop lets
+     * the framerate timer paint between rows; a driver with no timer to wait
+     * on answers the resulting {@see TickRequest} straight away
+     * (update()'s passthrough arm), so headless drains stay synchronous and
+     * the suite pays no wall-clock.
+     */
+    private function foldHop(Msg $hop, bool $replay): \Closure
+    {
+        if (!$replay) {
+            return Cmd::send($hop);
+        }
+
+        return Cmd::tick(self::TOOL_EVENT_POLL_SECONDS, static fn (): Msg => $hop);
     }
 
     /**

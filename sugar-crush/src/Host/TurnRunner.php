@@ -496,6 +496,29 @@ final class TurnRunner
                 default => $backend->completeAsync($visible, $onToken, $cancellation, $onEvent),
             };
 
+            // Was the promise ALREADY settled when the dispatch above
+            // returned? A probe attached to a settled react/promise fires
+            // synchronously at attach time; a pending one fires only later,
+            // after this factory has returned and the loop has resumed. That
+            // difference is exactly the blocking fallback's signature
+            // (EngineBackend without ext-pcntl runs the whole turn on the
+            // loop thread): every tool event it queued arrived while the pump
+            // and the framerate timer could not run, so the settle below is
+            // an after-the-fact REPLAY, not a live tail. Stamping it lets
+            // Chat pace the fold rows one frame apart instead of landing all
+            // of them — the turn's whole tool story — in a single painted
+            // frame (the user-visible "all rows at once" symptom).
+            $settledInline = false;
+            $promise->then(
+                static function () use (&$settledInline): void {
+                    $settledInline = true;
+                },
+                static function () use (&$settledInline): void {
+                    $settledInline = true;
+                },
+            );
+            $replay = $settledInline;
+
             // The permission events never ride a BackendToolEventsMsg: they
             // stay on the inbox for the live pump, which takes down a modal
             // whose question the turn's end settled (`cancelled`) — the settle
@@ -525,7 +548,7 @@ final class TurnRunner
                 return $events;
             };
 
-            $settle = static function (Message $message, bool $failed) use ($runner, $drain, $generation, $cancellation, $transcripts, $sessionId, $carriesLedger, $reminder, $activeRow): Msg {
+            $settle = static function (Message $message, bool $failed) use ($runner, $drain, $generation, $cancellation, $transcripts, $sessionId, $carriesLedger, $reminder, $activeRow, $replay): Msg {
                 // Roadmap 2.2-2: the ledger the turn ended with becomes the
                 // session's, and leaves the reply — it is transport, and the
                 // reply goes on to be a stored row.
@@ -559,7 +582,7 @@ final class TurnRunner
                 // `turn.completed` never lands above the tool rows it ended.
                 $runner->park($cancellation, $message, $failed);
 
-                return new BackendToolEventsMsg($events, $message, $generation, $cancellation);
+                return new BackendToolEventsMsg($events, $message, $generation, $cancellation, $replay);
             };
 
             return $promise->then(

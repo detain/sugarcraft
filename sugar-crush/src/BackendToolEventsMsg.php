@@ -50,11 +50,25 @@ final class BackendToolEventsMsg implements Msg
      *                                folded, never above the tool rows it
      *                                ended. Null (a test, an embedder) records
      *                                nothing.
+     * @param bool $replay True when this queue is the accumulated replay of a
+     *                                turn that BLOCKED the loop — the
+     *                                {@see Backend\EngineBackend} no-fork
+     *                                fallback, whose promise had already
+     *                                settled when the dispatch returned, so
+     *                                the live pump never painted a single
+     *                                event mid-turn. Paced folds (see
+     *                                {@see Chat}'s replay hop) let the screen
+     *                                catch up between rows instead of landing
+     *                                the whole turn in one painted frame.
+     *                                False (a test, an embedder, the forked
+     *                                path's residue) drains at Cmd speed as
+     *                                it always did.
      */
     public function __construct(
         public readonly array $events,
         public readonly Message $message,
         public readonly ?int $generation = null,
         public readonly ?CancellationToken $turn = null,
+        public readonly bool $replay = false,
     ) {}
 }
