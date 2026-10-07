@@ -280,21 +280,40 @@ final class McpMessage
         return $this->error !== null;
     }
 
+    /**
+     * The JSON-RPC error code, or NULL when absent or malformed.
+     *
+     * A third-party server sending `{"code":"abc"}` would cast to `0` under a
+     * plain `(int)` — a fabricated success-ish code that downstream callers
+     * cannot distinguish from a real one. Non-integer shapes therefore read as
+     * "no code reported", matching the sugar-crush twin accessor.
+     */
     public function errorCode(): ?int
     {
         if ($this->error === null) {
             return null;
         }
 
-        return isset($this->error['code']) ? (int) $this->error['code'] : null;
+        $code = $this->error['code'] ?? null;
+
+        return is_int($code) ? $code : null;
     }
 
+    /**
+     * The JSON-RPC error message, or NULL when absent or malformed.
+     *
+     * An array or object message would stringify to `'Array'` (with a PHP
+     * Warning under strict contexts); reading any non-string as "no message
+     * reported" keeps the accessor honest. Matches the sugar-crush twin.
+     */
     public function errorMessage(): ?string
     {
         if ($this->error === null) {
             return null;
         }
 
-        return isset($this->error['message']) ? (string) $this->error['message'] : null;
+        $message = $this->error['message'] ?? null;
+
+        return is_string($message) ? $message : null;
     }
 }

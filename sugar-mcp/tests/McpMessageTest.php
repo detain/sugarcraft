@@ -98,6 +98,40 @@ final class McpMessageTest extends TestCase
         self::assertSame('Method not found', $message->errorMessage());
     }
 
+    /**
+     * FIX #2: a malformed third-party error object must read as "nothing
+     * reported", never as a cast fabrication — `(int)'abc'` is 0 and
+     * `(string)['x']` is 'Array' with a Warning. Mirrors the sugar-crush twin
+     * pins: only a real int code / real string message survives.
+     */
+    public function testMalformedErrorMembersReadAsAbsentInsteadOfCast(): void
+    {
+        $malformed = [
+            'non-numeric string code' => ['code' => 'abc', 'message' => 'ok'],
+            'boolean code' => ['code' => true, 'message' => 'ok'],
+            'float code' => ['code' => 1.5, 'message' => 'ok'],
+            'numeric string code' => ['code' => '42', 'message' => 'ok'],
+            'missing code' => ['message' => 'ok'],
+        ];
+        foreach ($malformed as $label => $error) {
+            $message = McpMessage::parse(json_encode(['jsonrpc' => '2.0', 'id' => '1', 'error' => $error], JSON_THROW_ON_ERROR));
+            self::assertNotNull($message, $label);
+            self::assertTrue($message->isError(), $label);
+            self::assertNull($message->errorCode(), $label);
+        }
+
+        $malformedMessage = [
+            'array message' => ['code' => -1, 'message' => ['x']],
+            'numeric message' => ['code' => -1, 'message' => 42],
+            'missing message' => ['code' => -1],
+        ];
+        foreach ($malformedMessage as $label => $error) {
+            $message = McpMessage::parse(json_encode(['jsonrpc' => '2.0', 'id' => '1', 'error' => $error], JSON_THROW_ON_ERROR));
+            self::assertNotNull($message, $label);
+            self::assertNull($message->errorMessage(), $label);
+        }
+    }
+
     public function testFactoriesRoundTripThroughTheWire(): void
     {
         $request = McpMessage::request('42', 'tools/call', ['name' => 'ping']);
