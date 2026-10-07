@@ -29,7 +29,7 @@ final class UnifiedFormatTest extends TestCase
         $diff = Diff::compute("a\n", "b\n");
 
         $this->assertSame(
-            "--- a/old.txt\n+++ b/new.txt\n@@ -1,1 +1,1 @@\n-a\n+b\n",
+            "--- a/old.txt\n+++ b/new.txt\n@@ -1 +1 @@\n-a\n+b\n",
             $diff->unified('old.txt', 'new.txt'),
             'two-path mode mirrors `git diff` a/ b/ labels',
         );
@@ -107,7 +107,7 @@ final class UnifiedFormatTest extends TestCase
     {
         $diff = Diff::compute("a\n", "b\n");
 
-        $this->assertSame("@@ -1,1 +1,1 @@\n-a\n+b\n", $diff->hunkText());
+        $this->assertSame("@@ -1 +1 @@\n-a\n+b\n", $diff->hunkText());
         $this->assertStringNotContainsString('---', $diff->hunkText());
     }
 

@@ -8,15 +8,16 @@ namespace SugarCraft\Diff;
  * One `@@ -oldStart,oldLen +newStart,newLen @@` hunk: the display anchor pair
  * plus the context/change rows it covers.
  *
- * The starts follow the ported `diff -u` convention of
- * sugar-crush/src/Tools/Concerns/BuildsUnifiedDiff.php: a side whose hunk
- * length is 0 anchors at line 0, because an empty range has no real line to
- * point at. (GNU itself anchors a zero-length *mid-file* range at the previous
- * line instead; the ported engine only reaches oldLen/newLen 0 at a file
- * boundary or with a zero context window, where the two shapes agree often
- * enough that the faithful simpler rule is kept.)
+ * Header printing follows GNU `diff` exactly (audit 2026-10-07, oracle-verified
+ * against /usr/bin/diff -U0 and pinned by tests/GnuHunkHeaderParityTest.php):
+ *  - a single-line range drops its count: `-2`, not `-2,1` (`range()` below);
+ *  - a zero-length side is anchored at the line the hunk sits AFTER (0 before
+ *    the first line) by the producer in {@see Diff::assemble()} and keeps
+ *    its `,0` — GNU never drops a zero count.
  *
- * Mirrors the group-window walk of `BuildsUnifiedDiff::buildHunks()`.
+ * This replaced the ported sugar-crush shape (zero sides anchored at 0, counts
+ * always printed) from `BuildsUnifiedDiff::buildHunks()`; the group-window walk
+ * itself still mirrors it.
  */
 final class Hunk
 {
@@ -32,7 +33,17 @@ final class Hunk
     /** The `@@ -a,b +c,d @@` header line, without its trailing newline. */
     public function header(): string
     {
-        return "@@ -{$this->oldStart},{$this->oldLines} +{$this->newStart},{$this->newLines} @@";
+        return '@@ -' . self::range($this->oldStart, $this->oldLines)
+            . ' +' . self::range($this->newStart, $this->newLines) . ' @@';
+    }
+
+    /**
+     * GNU range syntax: a count of exactly 1 is elided (`-N` covers one line),
+     * every other count — including 0 — prints as `-N,C`.
+     */
+    private static function range(int $start, int $count): string
+    {
+        return $count === 1 ? (string) $start : "$start,$count";
     }
 
     /** @return list<Line> */

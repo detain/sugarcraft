@@ -23,11 +23,14 @@ final class DiffTest extends TestCase
     {
         $diff = Diff::compute('Hello World', 'Hello PHP');
 
-        // Byte-exact and prefix-free: sugar-stash's DiffViewer::fromRawDiff()
-        // consumes this verbatim, so a stray header line would break it.
+        // Byte-exact and prefix-free (a stray header line would break any
+        // verbatim consumer, e.g. a patch reader). NOTE (audit 2026-10-07): the
+        // earlier claim here that sugar-stash's DiffViewer::fromRawDiff() feeds on
+        // this output is FALSE — sugar-stash parses `git diff` output and does not
+        // depend on sugar-diff at all.
         $expected = "--- a/file.txt\n"
             . "+++ b/file.txt\n"
-            . "@@ -1,1 +1,1 @@\n"
+            . "@@ -1 +1 @@\n"
             . "-Hello World\n"
             . "+Hello PHP\n";
 
@@ -95,11 +98,12 @@ final class DiffTest extends TestCase
 
     public function testDeletionEmptyingTheFileAnchorsTheNewSideAtZero(): void
     {
-        // `diff -u` reports a start line of 0 (not a fabricated number) when
-        // a side of the hunk is empty, since there is no line to anchor to.
+        // A zero-length side anchors at the line it sits AFTER; emptying the
+        // whole file has no preceding line, so the new side anchors at 0. The
+        // old side's length-1 range drops its count per the GNU rule.
         $content = Diff::compute("onlyline\n", '')->unified('f');
 
-        $this->assertStringContainsString("@@ -1,1 +0,0 @@\n", $content);
+        $this->assertStringContainsString("@@ -1 +0,0 @@\n", $content);
         $this->assertStringNotContainsString('+1,0', $content);
     }
 
@@ -309,7 +313,7 @@ final class DiffTest extends TestCase
 
         $diff = Diff::compute($before, $after, DiffOptions::new()->withContextLines(0));
 
-        $this->assertSame("@@ -4,1 +4,1 @@\n-d\n+X\n", $diff->hunkText());
+        $this->assertSame("@@ -4 +4 @@\n-d\n+X\n", $diff->hunkText());
     }
 
     /** @return array{0:string,1:string} */

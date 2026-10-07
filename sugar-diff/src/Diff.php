@@ -403,12 +403,16 @@ final class Diff
                 }
             }
 
-            // `diff -u` anchors an empty side at line 0 — there is no real
-            // line number to point an empty range at.
+            // A zero-length side anchors at the line the hunk sits AFTER
+            // (line 0 before the first line), the GNU `diff -U0` rule —
+            // verified against the /usr/bin/diff oracle 2026-10-07 and pinned
+            // by tests/GnuHunkHeaderParityTest.php. The anchors above hold the
+            // counter STATE at the first row, i.e. one past the preceding line
+            // when the hunk opens on an insertion, hence the -1.
             $hunks[] = new Hunk(
-                oldStart: $oldLen === 0 ? 0 : $oldAnchor,
+                oldStart: $oldLen === 0 ? max(0, $oldAnchor - 1) : $oldAnchor,
                 oldLines: $oldLen,
-                newStart: $newLen === 0 ? 0 : $newAnchor,
+                newStart: $newLen === 0 ? max(0, $newAnchor - 1) : $newAnchor,
                 newLines: $newLen,
                 lines: $body,
             );
