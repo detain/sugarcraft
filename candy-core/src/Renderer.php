@@ -83,7 +83,7 @@ final class Renderer
 
     /**
      * Tee every byte chunk this renderer emits to the given recorder
-     * (or pass null to detach). Wired by {@see Program::withRecorder()};
+     * (or pass null to detach). Wired by {@see Program::setRecorder()};
      * direct callers shouldn't need this.
      */
     public function setRecorder(?Recorder $recorder): void

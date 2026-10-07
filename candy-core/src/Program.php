@@ -166,8 +166,15 @@ final class Program
      * Tee the program's input bytes, output bytes, and lifecycle events
      * to the given {@see Recorder}. Pass null to detach.
      *
-     * Returns `$this` so callers can chain at construction:
-     * `(new Program($model))->withRecorder($recorder)->run();`
+     * This is a SETTER, not a `with*()` builder, on purpose: the
+     * with*-returns-new rule exists so fluent callers never mutate a
+     * shared instance — but a recorder is a mutable, live sink wired BY
+     * IDENTITY into the Renderer too ({@see Renderer::setRecorder()}).
+     * Cloning the program would fork those two attachments: the clone's
+     * loop and the original's renderer would tee into different object
+     * graphs and the recording would silently desync. Mutation at
+     * construction time is the honest shape here, hence void return —
+     * call it as a statement: `$program->setRecorder($recorder);`
      *
      * Only one recorder per program — calling again replaces the previous
      * one (and does NOT close it; that's the caller's responsibility).
@@ -175,10 +182,22 @@ final class Program
      * the program loop ends, after a final {@see Recorder::recordQuit()}
      * if the program exited via QuitMsg.
      */
-    public function withRecorder(?Recorder $recorder): self
+    public function setRecorder(?Recorder $recorder): void
     {
         $this->recorder = $recorder;
         $this->renderer->setRecorder($recorder);
+    }
+
+    /**
+     * @deprecated Renamed to {@see setRecorder()} (candy-core audit C4).
+     *             Kept only because external candy-vcr call sites still
+     *             chain on this name and that lib is outside this rename;
+     *             removal is owed to a candy-vcr migration PR.
+     */
+    public function withRecorder(?Recorder $recorder): self
+    {
+        $this->setRecorder($recorder);
+
         return $this;
     }
 

@@ -6,7 +6,7 @@ namespace SugarCraft\Core;
 
 /**
  * Tee target for {@see Program} input bytes, output bytes, and lifecycle
- * events. Wired via {@see Program::withRecorder()}.
+ * events. Wired via {@see Program::setRecorder()}.
  *
  * candy-core defines the interface so the runtime can record without
  * depending on a concrete recorder. The canonical implementation is
