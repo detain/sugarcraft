@@ -1,5 +1,7 @@
 # SugarCraft libraries used by sugar-crush — audit report
 
+**2026-10-07: remediation campaign CLOSED — findings marked inline below; consumer flips + suite-figure re-pin landed with closeout; unpushed-on-master as of this stamp.**
+
 **State as of 2026-10-06, master `ce0c1931e`.** This report covers the 15 SugarCraft libraries that
 sugar-crush declares under `require`. It lists findings that are open on current master.
 
@@ -69,6 +71,7 @@ hits.
 | candy-sprinkles | MINOR | 2 | 0 |
 
 ## Cross-library patterns
+- **STATUS 2026-10-07:** forked cluster-walker guards ✅ ported verbatim (c5cce07d7); stale `findings/*.md` ✅ re-verify banners (3862a4657); parallel-copy folds (crush McpMessage/McpRouter/McpServer, LspExchangeLock twin, BuildsUnifiedDiff) ⏭ kept as backlog fold items — out of campaign scope.
 
 **Parallel copies drifting from their twin** — still live, and now in two places. sugar-crush keeps
 its own `McpMessage`, `MCP\McpRouter` and `MCP\McpServer` beside sugar-mcp's, and hardening has
@@ -91,24 +94,28 @@ their budget discovering that `findings/<slug>.md` describes code that no longer
 # candy-core
 
 ### 1. [MAJOR] `AsyncCmd` dispatches into a torn-down runtime; every other deferred path is generation-guarded and this one is not
+- **STATUS ✅ 2026-10-07:** landed 08555360c — generation guard on the `AsyncCmd` settle callbacks mirrors `deferTick`; the missing `ProgramRuntimeTeardownTest` `AsyncCmd` pins shipped with it.
 - **WHERE:** `candy-core/src/Program.php:694-717` — the promise `then()`/`otherwise()` callbacks call `$this->dispatch()` directly. Compare the guard on the tick path at `Program.php:1198-1207` (`deferTick`, runtime-generation checked), and `releaseRuntime()` at `:1170-1181`, which cancels ticks, timers, sequences and pending sends but never cancels or detaches an outstanding promise.
 - **WHAT:** An `AsyncCmd` whose promise settles after the program has released its runtime still calls `dispatch()`. `ProgramRuntimeTeardownTest` pins ticks, timers, sequences and send — it has no `AsyncCmd` case, which is why the gap has stayed invisible. sugar-crush drives `Cmd::promise()` from 20+ sites in `src/Chat.php`, so any provider response landing after a quit/restart takes this path.
 - **FIX:** Route the `then()`/`otherwise()` bodies through the same generation check `deferTick` uses, or have `releaseRuntime()` detach/cancel pending async handles. Add the missing `AsyncCmd` case to `ProgramRuntimeTeardownTest` — the test is the reason this is still open.
 - **USED-BY-CRUSH:** yes, on the live path. Needs a runtime probe (settle a promise after `releaseRuntime()` and observe `dispatch()`) to confirm the consequence is corruption rather than a benign late no-op.
 
 ### 2. [MINOR] `AtomicJsonFile`'s `flock` is dead code, and the docblock claims the protection it cannot provide
+- **STATUS ✅ 2026-10-07:** landed e4c36bff8 + 96e8fce92 — `LOCK_EX` on a never-unlinked `.<name>.lock` sidecar; `fflush`+`fsync` publish with fail-soft dir-sync on both sides.
 - **WHERE:** `candy-core/src/Util/AtomicJsonFile.php:167-220`. The claim is repeated downstream at `sugar-crush/src/Session.php:98`.
 - **WHAT:** The exclusive lock is taken on a per-write uniquely-named temp file. Two writers never share that inode, so the lock cannot block anyone — concurrent writes to the same target are unordered. There is also no `fsync` before the rename, so a crash can leave the file present but not durable.
 - **FIX:** Lock a stable sidecar path (e.g. `<target>.lock`), or drop the lock and correct the docblock and the `Session.php:98` comment. Do not leave a comment promising mutual exclusion that the code does not implement.
 - **USED-BY-CRUSH:** partially — sugar-crush writes session and config state through it. Single-process today, so the missing exclusion is latent; the false documentation is the live cost.
 
 ### 3. [MINOR] `Alt` + a non-ASCII character decodes as Escape + plain character
+- **STATUS ✅ 2026-10-07:** landed b02128c58 — Alt+non-ASCII now decodes as a single `Char` with `alt=true`; broken sequences degrade honestly to Esc+char.
 - **WHERE:** `candy-core/src/InputReader.php:233-241` — the alt-prefixed branch excludes bytes `>= 0x80`.
 - **WHAT:** In UTF-8 mode `Alt+é` arrives as `ESC 0xC3 0xA9`; the decoder yields Escape then the character rather than an alt-chord. Existing tests cover only ASCII alt cases.
 - **FIX:** Include the multi-byte lead in the alt-prefixed set and decode the following cluster as the chord. Add a non-ASCII alt case to `InputReaderTest`.
 - **USED-BY-CRUSH:** yes for any user whose keybindings use Alt with a non-ASCII key; sugar-crush's own defaults are ASCII.
 
 ### 4. [MINOR] `Program::withRecorder()` mutates `$this` and returns `$this`, unlike its siblings
+- **STATUS ✅ 2026-10-07:** landed 3b64097f7 + 24b401bd8 — `setRecorder():void` shipped; the `@deprecated` `withRecorder()` shim is retained for candy-vcr consumers (shim rationale truth-flipped 9bd59d808).
 - **WHERE:** `candy-core/src/Program.php:178-183`. `withLogger()` and `withExceptionHandler()` at `:205-223` clone.
 - **WHAT:** Breaks the repo rule that every `with*()` returns a new instance, and is inconsistent with the two adjacent setters in the same class, so a caller has to know which one lies.
 - **FIX:** Make it clone like its siblings, or rename to `setRecorder()` to stop advertising fluent semantics.
@@ -117,6 +124,7 @@ their budget discovering that `findings/<slug>.md` describes code that no longer
 # candy-mosaic
 
 ### 1. [MAJOR] Half-block transparency is inverted, and fully-transparent cells paint default-foreground stripes — **LEAD-VERIFIED**
+- **STATUS ✅ 2026-10-07:** landed e5f60c4f6 — both-transparent emits a space, top-transparent emits `fgRgb(bot)` + `▄`; 8 byte pins (crush-side pins re-verified against it in 79f62ed95).
 - **WHERE:** `candy-mosaic/src/Renderer/HalfBlockRenderer.php:62-71`. Class docblock `:23-29` states the mapping backwards from the code.
 - **WHAT:** Verified by reading `:60-84`. `▀` (U+2580) paints its **upper** half with the foreground and `▄` (U+2584) its **lower** half with the foreground.
   - `:62-65` both-transparent emits a bare `▀` with no SGR, so the upper half renders in the terminal's *default foreground* — a visible stripe over whatever the transcript already drew. It should emit a space.
@@ -127,6 +135,7 @@ their budget discovering that `findings/<slug>.md` describes code that no longer
 - **USED-BY-CRUSH:** yes. This is the fallback renderer on every non-graphics terminal and `sugar-crush/src/Renderer.php:4855` inlines its output into the frame.
 
 ### 2. [MINOR] Kitty graphics: compression is declared with the format key, and both in-repo sides agree on the wrong one
+- **STATUS ✅ 2026-10-07:** landed 7bae64b94 — compression sent as `o=z`, `f` kept as format; the candy-mosaic encoder and candy-testing decoder/fixture/pin were corrected in ONE coordinated commit.
 - **WHERE:** `candy-mosaic/src/Renderer/KittyRenderer.php:101-110` with `KittyOptions.php:99-115`; the counterpart is `candy-testing/.../KittyStream.php:331-341`.
 - **WHAT:** A zlib-deflated payload is sent as `f=1`. Per the Kitty spec `f` is the data *format* (1 = raw RGBA) and compression is `o=z`. candy-testing's own decoder inflates when it sees `f=1`, so the encoder and the in-repo decoder are mutually consistent and the test suite passes, while a real Kitty terminal would read compressed bytes as raw RGBA and render garbage.
 - **FIX:** Send `o=z` for compression and keep `f` as the format. The candy-testing decoder must be corrected in the same change or the pair will keep passing against each other.
@@ -139,6 +148,7 @@ before the agent's budget ran out. `ImageLayer` is on sugar-crush's hot path and
 # candy-mouse
 
 ### 1. [MAJOR] `ZoneClickTracker` resolves a release against the press's stored zone box, so a re-render between press and release can fire a different control
+- **STATUS ✅ 2026-10-07:** landed cdcd550be — `ZoneClickTracker` fresh-hit agreement gate (a release must re-agree on id AND box); zero API change; crush click suites proven immune.
 - **WHERE:** `candy-mouse/src/ZoneClickTracker.php:83` (pairs the release against the press's recorded zone/box). Consumer: `sugar-crush/src/Chat.php:7869-7957`.
 - **WHAT:** sugar-crush dispatches on `$click->zone->id`, and its ids are positional per frame (`session-row:<n>`, `picker-item:<n>`). If the transcript or picker re-renders between button-down and button-up — which it does, since ticks and streamed tokens repaint — the id now names a different row, and the action fires for a control that is no longer at that position. In an app whose clickable set includes permission grants this is the dangerous class of bug.
 - **STATUS: not traced to a confirmed mis-fire.** Settling it needs the probe the agent could not run: press on zone A, re-scan with A moved, release on A's old box, inspect the returned `Zone`.
@@ -146,12 +156,14 @@ before the agent's budget ran out. `ImageLayer` is on sugar-crush's hot path and
 - **USED-BY-CRUSH:** yes, if reproducible — this is the highest-value thing to probe in this report.
 
 ### 2. [MAJOR] The zone sentinel is a fixed, guessable literal; neutralising it is left entirely to the consumer
+- **STATUS ⏭ 2026-10-07:** REJECTED — mitigations already shipped (`scanRoot` strips, lone-sentinel consumption, zone-id whitelist); a per-process nonce ripples 3 libs; the sentinel trust boundary is documented in `Sentinel.php` in the same commit cdcd550be.
 - **WHERE:** `candy-mouse/src/Sentinel.php:31-34`; consumer-side stripping at `sugar-crush/src/Renderer.php:1543,4175,4215` via `Sanitize::stripZoneSentinels` (`candy-core/src/Util/Sanitize.php:80,83`).
 - **WHAT:** Because the sentinel is a constant string with no per-process nonce, text that happens to contain it — including model-authored or file-sourced text rendered into a frame — is parsed as a zone marker. sugar-crush defends against this by stripping at three call sites; candy-mouse ships no first-party neutralisation and no test asserting that a forged sentinel inside content is inert. A fourth render path that forgets the strip silently reintroduces it.
 - **FIX:** Give the sentinel a per-process random component so untrusted content cannot reproduce it by accident, and add a candy-mouse test that scans content containing the sentinel shape.
 - **USED-BY-CRUSH:** yes — sugar-crush renders untrusted model output, and its safety currently rests on three hand-maintained strip calls rather than on the library.
 
 ### 3. [MINOR] `SelectionRange::extract()` is not clamped to the current frame height
+- **STATUS ⏭ 2026-10-07:** disproved — unclamped trailing rows are absorbed by the renderers' blank-trims; test-only absorption pin added in cdcd550be.
 - **WHERE:** `candy-mouse/src/SelectionRange.php` (`$lines[$row - 1] ?? ''`), with `Selection`'s region frozen at construction.
 - **WHAT:** A selection that survives a resize copies blanks instead of being clamped to the new frame.
 - **FIX:** Clamp on extract, or have `Selection` re-derive its region per frame.
@@ -160,12 +172,14 @@ before the agent's budget ran out. `ImageLayer` is on sugar-crush's hot path and
 # candy-shine
 
 ### 1. [MAJOR] Streaming markdown repaints the open tail in full every frame, and sections only ever close at a column-0 heading
+- **STATUS ✅ 2026-10-07:** landed crush-side f3aaa7100 — incremental tail memo in sugar-crush `Renderer::streamingMarkdown` (pre-fix quadratic cost measured 0.235s→11.73s over 1k→8k tokens); shine-side section-splitting ⏭ DECLINED — would change section-split semantics for every consumer; the measured surviving cost was idle repaints of open fences, now memoized; shine's stream()==render() law untouched.
 - **WHERE:** `candy-shine/src/Render/SectionScanner.php:148-169` (boundaries emitted only for ATX headings at column 0), `candy-shine/src/Render/SectionStream.php:120-146`, consumer `sugar-crush/src/Renderer.php:4279-4330` with the re-render at `:4329`.
 - **WHAT:** `Renderer::streamingMarkdown()` keeps one `SectionStream` alive in a static memo, pushes each delta one line at a time, and re-renders the still-open tail on every frame via `(clone $stream)->finish()`. Because the scanner only closes a section at a column-0 heading, a long reply that is one fenced code block, or plain prose with no headings, never closes — so cost grows quadratically in tokens on the hottest path in the app. `sugar-crush/src/Renderer.php:4275-4277` documents this as accepted.
 - **FIX:** Either close sections on other block boundaries (fence end, blank-line paragraph break) so the tail stays small, or make the tail render incremental. `defersStreaming()` (`candy-shine/src/Renderer.php:355`) is the existing escape hatch and is worth checking before inventing a new one.
 - **USED-BY-CRUSH:** yes — every streamed assistant message. Needs a timing probe (render a 5k-token heading-free reply and plot per-frame cost) to size it.
 
 ### 2. [MINOR] `DiffGutter` justifies a setting with a `Width` fact that is no longer true
+- **STATUS ✅ 2026-10-07:** landed 79f62ed95 — comment-only sugar-crush-side truth-fix of the tab cite as prescribed (measured `Width::string("\t")` is 4; the `lineNumbers:false` conclusion unchanged).
 - **WHERE:** `sugar-crush/src/Tui/DiffGutter.php:35` claims `Width::string("\t")` is 0. `candy-core/src/Util/Width.php:52-76` records that as pre-E69 behaviour; a tab now costs `TAB_WIDTH = 4`.
 - **WHAT:** The conclusion (`lineNumbers: false`) is still right, because `candy-shine/src/SyntaxHighlighter.php:65` joins with a literal `"\t"` whose real width is column-dependent — but the stated reason is stale, and a future reader will re-derive from it and get the wrong answer.
 - **FIX:** Restate the comment against current `Width` behaviour. sugar-crush-side edit, not a candy-shine one.
@@ -174,6 +188,7 @@ before the agent's budget ran out. `ImageLayer` is on sugar-crush's hot path and
 # candy-forms
 
 ### 1. [MAJOR] `TextArea` never wraps, and measures codepoints rather than display cells
+- **STATUS ✅ 2026-10-07:** landed 88eb152b5 — cell-accurate soft-wrap in `view()` plus `visualColumn()` caret metric; `width<=0` stays byte-identical legacy.
 - **WHERE:** `candy-forms/src/TextArea/TextArea.php` — `$width` is stored and `view()` never uses it to wrap.
 - **WHAT:** Two separate defects on the same widget: long content does not wrap at the configured width, and caret column arithmetic counts codepoints, so the caret sits at the wrong x for any text containing wide or emoji characters. sugar-crush's session-title and rename editors are the reachable surfaces.
 - **FIX:** Wrap in `view()` against `$width` via `Width::wrapAnsi`, and derive caret column from `Width::string()` of the text before the caret.
@@ -181,17 +196,20 @@ before the agent's budget ran out. `ImageLayer` is on sugar-crush's hot path and
 - **NOTE:** because `sugar-bits` and `sugar-prompt` alias these classes, both fixes propagate to every façade consumer.
 
 ### 2. [MINOR] `TextInput::paste()` bypasses the restrict pattern
+- **STATUS ✅ 2026-10-07:** landed e5ea63553 — restrict is evaluated per codepoint on paste.
 - **WHERE:** `candy-forms/src/TextInput/TextInput.php:939-943` (inserts the whole payload) with the check at `:1002` (`preg_match` over the entire insert).
 - **WHAT:** Restrict is evaluated as an any-substring match against the pasted blob, so `4<script>` satisfies a `[0-9]` restrict.
 - **FIX:** Match per-character, or anchor with `^...$` over the full candidate.
 - **USED-BY-CRUSH:** no — grep of `sugar-crush/src` for `withRestrict|withValidator|withEnum` returns zero hits; crush uses only `withPrompt`/`withCharLimit`/`setValue`.
 
 ### 3. [MINOR] `Confirm`'s docblock advertises `Tab` toggling that `update()` does not implement
+- **STATUS ✅ 2026-10-07:** landed c4e3029fb — the advertised `Tab` toggle arm shipped.
 - **WHERE:** `candy-forms/src/Field/Confirm.php:19-21` versus the `match` at `:127-139`, which has no `Tab` arm. **LEAD-VERIFIED.**
 - **FIX:** Add the `Tab` arm or delete the claim.
 - **USED-BY-CRUSH:** documentation.
 
 ### 4. [MINOR] `get*()` accessors on the field classes
+- **STATUS ✅ 2026-10-07:** landed b401111d6 — bare accessor aliases shipped with class-local `@deprecated` on `get*`; `Field`-interface method names NOT renamed (breaking, ruled out).
 - **WHERE:** `Field/Confirm.php:171-173`, `TextArea/TextArea.php:793,796,803`, `TextInput/TextInput.php:591,622`.
 - **WHAT:** The repo rule is bare accessors. Renaming is a breaking change for every façade consumer, so it needs a deprecation pass rather than a sweep.
 - **USED-BY-CRUSH:** no (crush calls `value()`/`key()`).
@@ -209,48 +227,56 @@ Rows 1 and 2 are carried over from the 2026-10-03 edition; both were re-checked 
 round. Rows 3-8 are new and unprobed.
 
 ### 1. [HIGH] `sugarcraft/sugar-mcp` is not on Packagist, so the published sugar-crush cannot be installed
+- **STATUS ⏭ 2026-10-07:** already-fixed upstream pre-campaign — `sugarcraft/sugar-mcp` resolves on Packagist; no manifest change was needed.
 - **WHERE:** `sugar-crush/composer.json:49`. Also `php tools/check-path-repos.php`, which exits 1 with `sugar-crush: missing path-repo for sugar-mcp (required transitively via sugar-crush -> sugar-mcp)`.
 - **WHAT:** `https://repo.packagist.org/p2/sugarcraft/sugar-mcp~dev.json` returns 404 while `sugarcraft/sugar-crush` dev-master resolves and requires it. `composer require sugarcraft/sugar-crush` therefore cannot install. The split repo exists (`github.com/sugarcraft/sugar-mcp`, pushed by `sync-sugarcraft.yml`); only the Packagist registration is missing. Inside the monorepo the root path-repo hides this. *Carried from 2026-10-03; not re-probed this round — re-verify the Packagist 404 before acting.*
 - **FIX:** Register `sugarcraft/sugar-mcp` on Packagist; the gate then passes with no manifest change. Optionally add a `sugar-mcp` row to `DESCRIPTIONS` in `scripts/bootstrap-org-repos.sh`. Neither is doable from a working tree — both need org/Packagist access.
 - **USED-BY-CRUSH:** yes; it decides whether a Packagist install resolves at all.
 
 ### 2. [LOW] `McpMessage::errorCode()`/`errorMessage()` invent values from malformed wire errors — **re-confirmed still open at `ce0c1931e`**
+- **STATUS ✅ 2026-10-07:** landed c2252e06d — `errorCode()`/`errorMessage()` refuse to fabricate (null on malformed shapes) with a regression pin per shape; crush's `src/McpMessage.php` verified to be the ORIGINAL of the port — nothing to back-port.
 - **WHERE:** `sugar-mcp/src/McpMessage.php:289` (`(int) $this->error['code']`) and `:298` (`(string) $this->error['message']`), read by `describeError()` at `sugar-mcp/src/StdioMcpServer.php:1159-1172`. The hardened twin is `sugar-crush/src/McpMessage.php:308,326`.
 - **WHAT:** Third-party wire data. `{"code":"abc"}` yields `0` and `{"code":true}` yields `1`, so a refusal reports a code the server never sent; `{"message":{"x":1}}` raises `Warning: Array to string conversion` and the text becomes `"Array"`. Under an error handler that promotes warnings, `start()` throws `ErrorException`.
 - **FIX:** Port `is_int($code) ? $code : null` / `is_string($message) ? $message : null` into the library with a regression test per malformed shape. Longer term, fold crush's parallel copies onto the library's.
 - **USED-BY-CRUSH:** yes — crush's stdio path (`sugar-crush/src/MCP/StdioMcpServer.php:71,118`) wraps the library's server and formats refusals through the library's `McpMessage`.
 
 ### 3. [MAJOR] One deadline-less hung `callTool` wedges every process sharing the connection
+- **STATUS ✅ 2026-10-07:** landed crush-side 1b06c1c27 — `StdioMcpServer` `DEFAULT_TOOL_TIMEOUT_SECONDS = 120.0` bounds every call by default, no opt-out; README holder-wedge + `toolTimeout` documentation 555cbca51.
 - **WHERE:** `sugar-mcp/src/ExchangeLock.php:248-276` (`acquire()`), `sugar-mcp/src/StdioMcpServer.php:664-667` (deadline null unless `toolTimeoutSeconds` is opted in) and `:832-847` (`exchange()` blocks in `acquire()` before doing anything).
 - **WHAT:** The whole exchange runs under one `flock`. Waiters honour *their own* deadline and the server's liveness, but the **holder** is deliberately unbounded (E646: a tool call is somebody's real work). So a live-but-silent server — a stuck tool, not a crash — leaves the holder holding forever: bounded siblings time out, unbounded siblings hang. To the user the server looks dead while its process is up. `flock` waiters are also not FIFO, so even without a hang a waiter can starve. The liveness probe only rescues the *dead* server case.
 - **FIX:** (a) sugar-crush-side: give forked MCP workers a default `toolTimeoutSeconds` unless a tool declares itself long-running — the library already supports it per call. (b) Document the holder-wedges-the-queue consequence in the README's "Fork safety" section; it currently documents serialisation but not this. (c) Optionally have `exchange()` surface *why* `acquire()` returned null (deadline vs dead server vs starvation) so the payload can name the hung request id.
 - **USED-BY-CRUSH:** yes — the MCP worker pool and `ClaudeCodeMcpClient`. The LSP twin has the same shape (see #7).
 
 ### 4. [MINOR] `callTool()` can throw where the `McpServer` contract promises an `{"error": …}` payload
+- **STATUS ✅ 2026-10-07:** landed 07638ba1c — oversized frames are refused as an error payload and the poisoned buffer is dropped (framing reset), connection kept up; the `onWait`-throw half was contracted/not-a-bug.
 - **WHERE:** contract at `sugar-mcp/src/McpServer.php:57-61`; the `try` at `sugar-mcp/src/StdioMcpServer.php:670-686` catches only `\InvalidArgumentException`; escapes come from the 64 MiB frame cap at `:1335` and from a caller-supplied `onWait` closure invoked at `:1241,1253`.
 - **WHAT:** An oversized or pathological server reply, or a throwing `onWait` beat, propagates a `RuntimeException` through `callTool()` into the model-facing transcript path — exactly the consumer the interface says is protected from throws.
 - **FIX:** Guard the framing-cap throw separately (after a cap trip the buffer is poisoned: reset it or mark the connection dead), wrap the `onWait` invocation so a throwing beat degrades to a failed call, or amend the interface doc to name both throwing paths.
 - **USED-BY-CRUSH:** yes, tool-result rendering.
 
 ### 5. [MINOR] `claim()` has no two-owner guard, so the fork-safety promise holds only while exactly one process ever claims
+- **STATUS ✅ 2026-10-07:** landed 2eee1a136 — `claim():bool` refuses to displace a live owner; crush sites fresh-construct and are unaffected.
 - **WHERE:** `sugar-mcp/src/RequestIdSequence.php:68-71` (`claim()` sets `ownerPid` unconditionally) and `:98-110` (the plain-int branch keys solely off `$pid === $this->ownerPid`). Callers: `StdioMcpServer.php:340`, `sugar-crush/src/LSP/LspConnection.php:290`, `sugar-crush/src/MCP/HttpMcpServer.php:111`.
 - **WHAT:** A process that forks a *started* connection and re-runs its connect/`claim()` in the child produces two owners each holding a copy of the parent's counter, both emitting plain decimal ids. Sharing one connection (one HTTP session id, one LSP pipe) then collides ids and a reply can be matched to the wrong call. The library's own stdio flow self-protects — a child's inherited copy reports "already running" (`StdioMcpServer.php:328`) — but the downstream twins carry no such protection.
 - **FIX:** Make the handover explicit: `claim()` returns `false` or throws when the previous `ownerPid` is alive and not the current pid, leaving `claimAfterOwnerDeath()` for the legitimate restart case. Or document that consumers sharing one connection across forks must never re-claim.
 - **USED-BY-CRUSH:** reachable in principle through `HttpMcpServer`/`LspConnection`; the agent could not run the `pcntl_fork` probe that would settle it.
 
 ### 6. [MINOR] Null-id and batch replies are skipped silently, so a deadline-less call waits forever on a non-conforming server
+- **STATUS ✅ 2026-10-07:** landed e563f0fc5 — skip-strike tripwire (threshold 8) fails the exchange on junk frames; foreign-id late answers exempt.
 - **WHERE:** `sugar-mcp/src/McpMessage.php:54-92` (`{"id":null}` parses to `id = null`; a top-level JSON array fails the `jsonrpc` check at `:61` and returns `null`), `:268` (`isResponse()` requires `id !== null`), and the skip-by-design reader policy at `sugar-mcp/src/StdioMcpServer.php:1054-1096`.
 - **WHAT:** The malformed-reply gate `isMalformedReplyTo()` (`:1096`) can only fire for a frame carrying *our* id, so a null-id or array frame never reaches it. For a bounded call the deadline saves the caller; for the default unbounded `callTool()` it waits on a reply that will never be attributed — indistinguishable from finding #3.
 - **FIX:** A conformance tripwire: while an exchange is outstanding, count frames that parse to `null` or carry `id === null` with a result/error shape and fail the exchange with an `{"error": …}` after a small threshold.
 - **USED-BY-CRUSH:** only against misbehaving servers; conforming SDK servers never send these shapes.
 
 ### 7. [MINOR] `LspExchangeLock` duplicates `ExchangeLock`, so library hardening must be re-landed by hand
+- **STATUS ⏭ 2026-10-07:** re-characterized — no defect (the LSP store uses atomic temp+rename); the twin is acknowledged in the README via 555cbca51 and stays a backlog fold item.
 - **WHERE:** `sugar-crush/src/LSP/LspExchangeLock.php` (wired `LspConnection.php:72,313`) versus `sugar-mcp/src/ExchangeLock.php`.
 - **WHAT:** The library's fail-closed gates (`store()`/`markPhase()` returning `false` aborts the exchange — `ExchangeLock.php:314,340`; `sweepStale()` on every `new()` — `:89-95`) have no parity test, so each must be noticed and re-applied in the twin.
 - **FIX:** Parameterise `ExchangeLock` with the note/append API the LSP side needs so it can use the canonical class, or add a parity test asserting the twin behaves identically.
 - **USED-BY-CRUSH:** yes — LSP crash recovery.
 
 ### 8. [MINOR] Test gaps
+- **STATUS ⏭ 2026-10-07:** audit row stale — expiry-while-held is already covered by `ExchangeLockTest:107-124`.
 - **WHERE:** `sugar-mcp/tests/`.
 - **WHAT:** no test exercises `acquire()` expiring **while the holder is alive** — the exact #3 scenario, so the mitigation surface is unpinned; `RequestIdSequence` is pinned only through a pid seam (real-fork coverage lives one level up in `StdioMcpServerForkSafetyTest`); `McpMessageTest` (177 lines) was not opened, so null-id/error-shape tolerance is unverified.
 - **FIX:** Add the deadline-expiry-while-alive test first, then a fork test for `claim()`.
@@ -282,6 +308,7 @@ semantics; `CompactionLiveSettingsTest.php:284` also exercises it. So there is n
 the reached surface.
 
 ### 1. [MAJOR] `dismiss()` is a one-way trap; `clear()` does not undo it
+- **STATUS ✅ 2026-10-07:** landed c5cce07d7 — `clear()` resets `dismissed`; writing to a dismissed toast raises `LogicException`; dismiss→clear→alert→view revival pin shipped.
 - **WHERE:** `sugar-toast/src/Toast.php:315` (flag set), `:471` (`view()` short-circuits on it), `:334-339` (`clear()` empties the queue but not the flag); `README.md:131`.
 - **WHAT:** After one `dismiss()` call that instance can never render again — subsequent `alert()`s queue invisibly forever. There is no `withDismissed(false)`. The README explicitly tells hosts to retire persistent alerts via `dismiss()`, `clear()` or `pruneExpired()`, and `dismiss()` is the only one that records history *and* the only one that bricks the object.
 - **PROOF GAP:** `ToastEscCloseTest.php:75-81` documents the split brain in a comment, but no test renders, re-alerts or clears *after* a dismiss.
@@ -289,29 +316,34 @@ the reached surface.
 - **USED-BY-CRUSH:** no — `applySettings()` replaces the whole toast (`Chat.php:9226`) and never calls `dismiss()`. Latent.
 
 ### 2. [MAJOR] Unbounded accumulation by default; `view()` never frees expired alerts
+- **STATUS ✅ 2026-10-07:** landed c5cce07d7 — prune-on-write, `dismiss` MOVES alerts to history instead of double-counting, `withHistoryLimit` default 100.
 - **WHERE:** `sugar-toast/src/Toast.php:49` (`maxConcurrent = null`), `:251-267` (`appendBounded` caps nothing when null), `:475-477` (expiry filter), `:304-317` (`dismiss`), `HistoryLog.php:25-28`.
 - **WHAT:** Three defaults compose badly: no concurrency cap; `view()` filters expired alerts into a **local** `$active` and, being immutable, never writes the filtered set back, so expired alerts stay in `$queue` forever and nothing inside the library calls `pruneExpired()`; and `HistoryLog::push` is uncapped while `dismiss()` copies live alerts into it *and* leaves them in the queue, double-counting until pruned.
 - **FIX:** Return a drained instance alongside `view()` (or make the rendered set authoritative), default `maxConcurrent` to a finite number, add `withHistoryLimit(int|null)`.
 - **USED-BY-CRUSH:** no — crush toasts only on settings save, one persistent alert replaced wholesale, so the tight-loop-of-failures premise has no crush path. Latent for any long-lived host.
 
 ### 3. [MINOR] Forked `nextCluster()` lacks the invalid-UTF-8 guards `candy-core`'s canonical version has
+- **STATUS ✅ 2026-10-07:** landed c5cce07d7 — candy-core's invalid-UTF-8 guards ported verbatim into the fork; `Width::nextCluster` promotion noted as follow-up.
 - **WHERE:** `sugar-toast/src/Toast.php:774-792` versus `candy-core/src/Util/Width.php:847-884`.
 - **WHAT:** Toast's private cluster walker accepts `grapheme_extract()`'s return unconditionally. ICU, on malformed input, returns the *next* cluster (skipping the stray byte) or a substituted U+FFFD; `Width::nextCluster` learned this and now rejects clusters not positioned at the cursor plus validates the lead byte's continuation bytes. `candy-core/tests/Util/WidthInvalidUtf8Test.php:18-23` records the bug that fix closed ("every cluster walk duplicated one cluster and dropped the bad byte"). Toast forked the walker before that fix and never re-synced — which also breaks its own `CALIBER_LEARNINGS.md` instruction to delegate to `Width`.
 - **FIX:** Delete the fork and call `Width::nextCluster()`, or port both guards verbatim; mirror `WidthInvalidUtf8Test::malformed()` into the toast suite.
 - **USED-BY-CRUSH:** low — crush's alert texts are fixed strings plus settings paths.
 
 ### 4. [MINOR] README shows a call chain that fatals
+- **STATUS ✅ 2026-10-07:** landed c5cce07d7 — README example corrected to the `actions:`-parameter chain.
 - **WHERE:** `sugar-toast/README.md:253-255`.
 - **WHAT:** `$toast->alert(...)->withActions([$action])` throws "Call to undefined method Toast::withActions()" — `withActions()` exists only on `Alert` (`Alert.php:90`). The prior plan's Phase 4.4 asked for exactly this fix; the code grew an `actions:` parameter on `alert()`/`progressToast()` (`Toast.php:175,199`) and the example was never corrected.
 - **FIX:** `$toast->alert(ToastType::Error, 'Connection lost', actions: [$action])`.
 - **USED-BY-CRUSH:** documentation.
 
 ### 5. [MINOR] `Action::make()` violates the `::new()`-only factory rule
+- **STATUS ✅ 2026-10-07:** landed c5cce07d7 — `Action::new()` (8 sites).
 - **WHERE:** `sugar-toast/src/Action.php:30`, with no `new()` twin.
 - **FIX:** Rename to `Action::new()`, or alias `new()` and deprecate `make()`.
 - **USED-BY-CRUSH:** no — crush never touches `Action`.
 
 ### 6. [INFO] `withOverflow()` docblock contradicts the property default
+- **STATUS ✅ 2026-10-07:** landed c5cce07d7 — docblock truth-flipped: `DropOldest` is the default.
 - **WHERE:** `sugar-toast/src/Toast.php:246` says "Enqueue (the default)"; `:52` is `Overflow::DropOldest` (matching README and `CALIBER_LEARNINGS.md`). One-word doc fix.
 
 **Clean bill (sugar-toast):** the brief's top-risk hypothesis — armed timers left on the shared
@@ -345,27 +377,32 @@ defect at `docs/plans/crush_code_hardening_backlog.md:15101` (resolved in the ke
 `:16012`), while the restyle remains open — the row uses "E453" for both.
 
 ### 1. [MAJOR] candy-kit's presenters cannot express the current help page, so E453 is a content-model rewrite
+- **STATUS ✅ 2026-10-07:** landed 45b919a8e — E453 backlog doc-record: the content-model blocker (`SafeText::line()` strips newlines; adopting it reverses the help-page i18n contract) is recorded so the item is no longer costed as a restyle.
 - **WHERE:** `candy-kit/src/Internal/SafeText.php:37`, used by `HelpText.php:65,68,73,107,108`, `Section.php:41,108`, `Banner.php:29-30`.
 - **WHAT:** `SafeText::line()` strips `\x00-\x1f`, i.e. every newline, so a multi-line usage synopsis or any description containing a line break is silently flattened to one line. The single-line contract is deliberate — it protects the frame-diff renderer — but `sugar-crush/lang/en.php:152-533` is a 380-line page whose meaning lives in its line breaks and continuation indents (`serve`'s option block, `session pin|unpin|…`). `HelpText::render()` cannot reproduce it.
 - **FIX:** For whoever picks up E453: split the catalogue into per-row keys (`sections[title][key] => description`), or add a multi-line-preserving variant. Note the collision first: `sugar-crush/src/Cli/Help.php:37-41` records the *opposite* decision (audit 15b-14 — translated as a page, column layout included, deliberately not split per-row). Adopting `HelpText` reverses an i18n contract, and that, not the test pins, is the blocker.
 - **USED-BY-CRUSH:** no today; this is what makes the deferred work larger than a restyle.
 
 ### 2. [MINOR] `Banner::title()` takes no width
+- **STATUS ✅ 2026-10-07:** landed 45b919a8e — `Banner` gains a width parameter.
 - **WHERE:** `candy-kit/src/Banner.php:24-43` sizes to content (`Style::new()->border()->padding(0,2)->render()`); `Section` and `HelpText` both accept `?int $width`.
 - **WHAT:** A title wider than the terminal wraps and breaks the border box, and no caller can cap it.
 - **USED-BY-CRUSH:** no.
 
 ### 3. [MINOR] No presenter self-resolves width, and the current help page already exceeds the default
+- **STATUS ✅ 2026-10-07:** landed 45b919a8e — honest smallest fix shipped with a TODO pointer at the wiring call-site (disclosed).
 - **WHERE:** every presenter takes an explicit `?int $width` defaulting to 80 and never queries the terminal (`Section.php:96-97` says so outright); `Cli/Help.php:43` is `screen(): string` with no width to pass.
 - **WHAT:** Measured: the longest current help line is 81 cells, so rendering at the 80 default already changes output. Wiring must widen the signature or resolve width at the `ArgvParser` call site.
 - **USED-BY-CRUSH:** no today.
 
 ### 4. [MINOR] Sibling presenters disagree on a bad width
+- **STATUS ✅ 2026-10-07:** landed 45b919a8e — `HelpText` and `Section` share a `WidthGuard` for the bad-width contract.
 - **WHERE:** `HelpText::assertWidth()` throws `InvalidArgumentException` for `<1` (`HelpText.php:169-176`, correct per "no silent failures"); `Section::header()` clamps negatives to empty output (`Section.php:139`, pinned by `SectionTest.php:193-194`).
 - **WHAT:** One screen using both explodes in one place and blanks in the other.
 - **USED-BY-CRUSH:** no.
 
 ### 5. [MINOR] `SafeText.php:37` swallows a PCRE failure into an empty string
+- **STATUS ✅ 2026-10-07:** landed 45b919a8e — the PCRE failure now throws, with a structural pin against reintroducing `?? ''`.
 - **WHERE:** `preg_replace(...) ?? ''`.
 - **WHAT:** Caller text can vanish silently where the repo requires a throw. Reachability is low (fixed character-class pattern), hence MINOR. **FIX:** `?? throw new \RuntimeException(...)`.
 - **USED-BY-CRUSH:** no.
@@ -373,6 +410,7 @@ defect at `docs/plans/crush_code_hardening_backlog.md:15101` (resolved in the ke
 **SUSPECTED, unrun:** `Stage::subStepWithProgress()` picks its spinner frame from
 `(int)(microtime(true)*10) % 10` (`Stage.php:117-118`) while `tests/fixtures/stage-substep-progress.golden`
 is a 101-byte golden — confirm by running `--filter 'Progress|Banner'`.
+- **STATUS ⏭ 2026-10-07:** no-op — kit spinner/golden interaction verified green on re-run (19/40, goldens unshifted; 45b919a8e lane).
 
 **Clean bill (candy-kit):** all 10 classes `final`, `declare(strict_types=1)` first, no
 `::create()/::make()/::default()`, no `get*()` accessors, `Frame::new()` is the root; every value-object
@@ -394,20 +432,24 @@ directly; it uses only `Dock\Side` and `DockLayout` (`slots`, `resolve`, `region
 `toArray`/`fromArray`, `withSlotAdded/Removed/MovedTo`, `columnShare`, `centerPaneId`, `sideMinCols`,
 `centerMinCols`, `dividerCols`) plus `Region`. No contract divergence found and the Dock classes are
 `final readonly` / immutable-fluent as required.
+- **Two-solver/cycling premise ⏭ 2026-10-07:** re-audited premise-dead — delegation at `CassowarySolver.php:68-76`, zero MAJOR-or-worse; header note shipped in `findings/candy-layout.md` via LL-docs 3862a4657.
 
 ### 1. [MINOR] No test asserts the dock's columns sum to the frame width
+- **STATUS ⏭ 2026-10-07:** skipped — out of campaign scope; the LL-docs re-audit banner (3862a4657) records the section's worst as these 3 MINORs, zero MAJOR-or-worse.
 - **WHERE:** `candy-layout/tests/Dock/DockLayoutTest.php:650` sweeps **heights** 1..400; no equivalent width sweep exists.
 - **WHAT:** Rounding that loses a cell per region is exactly the failure that leaves a growing gutter or clips the last pane, and it is the one invariant sugar-crush's dock depends on that nothing pins.
 - **FIX:** Add the width sweep: 3-region dock, widths 1..200, assert region widths sum exactly to the frame. This is the single most valuable probe for this library and it was never run.
 - **USED-BY-CRUSH:** yes — every pane split.
 
 ### 2. [MINOR] Per-frame re-resolve cost on the drag path
+- **STATUS ⏭ 2026-10-07:** skipped — out of campaign scope; re-audit banner 3862a4657 (measure-first item never scheduled).
 - **WHERE:** sugar-crush calls `resolve()` from `sideWidth`, `stackHeights` and both drag previews; `isUntouchedDefaultDock()` rebuilds `toArray()` twice per call at `sugar-crush/src/App/App.php:1403`.
 - **WHAT:** Layout is recomputed continuously during a drag and on every `WindowSizeMsg` during a terminal resize.
 - **FIX:** Measure first (unbounded agent budget; no timing was taken). Memoize `toArray()` in `isUntouchedDefaultDock()` if the sweep shows it mattering.
 - **USED-BY-CRUSH:** yes, during drag/resize.
 
 ### 3. [MINOR] The only machine-sensitive arithmetic is the opt-in rounding path
+- **STATUS ⏭ 2026-10-07:** skipped — out of campaign scope; re-audit banner 3862a4657 (crush never opts into `roundSplit`).
 - **WHERE:** `candy-layout/src/GreedySolver.php:253-261` (`round()`/float `floor` percentage split, opt-in `roundSplit` only).
 - **WHAT:** Deterministic given identical input, but it is the one place a float-to-int policy could differ across builds. `DockGeometry` also exposes `dividerColumns` as both a property and a method.
 - **USED-BY-CRUSH:** not on crush's path (crush does not opt into `roundSplit`).
@@ -426,23 +468,27 @@ overlays through this chain; the agent did not open that file, so the claim was 
 Check it before treating veil coverage as a gap.
 
 ### 1. [MAJOR] A wide glyph straddling the overlay's clip boundary leaves half-glyph residue
+- **STATUS ✅ 2026-10-07:** landed da2fbbfcc — cell-aware suffix clip blanks the straddling backdrop cell; 7-case provider pins composited-row width.
 - **WHERE:** `sugar-veil/src/Veil.php` clip path, via `candy-core/src/Util/Width::dropAnsi()` (`candy-core/src/Util/Width.php:714-721`), which consumes the whole straddling cluster.
 - **WHAT:** The background cell under the split half is dropped rather than blanked, so half a glyph persists on screen. `DiffCellModelTest.php:27` covers wide glyphs in the diff model, not at the clip edge.
 - **FIX:** Blank the straddling cell explicitly when the cluster is consumed by a clip. Confirm by composing a CJK-bearing backdrop under a known overlay and dumping `bin2hex()`.
 - **USED-BY-CRUSH:** yes whenever an overlay edge lands on a wide character — CJK session titles and emoji in the transcript both qualify.
 
 ### 2. [MINOR] An overlay taller than the backdrop silently drops its own top rows
+- **STATUS ✅ 2026-10-07:** landed 2d3de05e6 — anchor `baseY` clamped to >= 0 so the overlay paints from its top; explicit negative `yOffset` stays unclamped for slide animations.
 - **WHERE:** `sugar-veil/src/Position.php:39` (`yOffset()` goes negative) with the row loop starting at `fy = row - $y` in `Veil.php:520`.
 - **WHAT:** The overlay's top rows — its border and title — are never painted. Latent for sugar-crush, which guards this itself (`Renderer.php:1345`, "never taller than `rows - 2`").
 - **FIX:** Clamp and clip the overlay rather than skipping rows.
 - **USED-BY-CRUSH:** no, guarded consumer-side.
 
 ### 3. [MINOR] `RenderSession` is shared by reference across every `with*()` clone
+- **STATUS ⏭ 2026-10-07:** by design — docblocked as such; `withFreshSession()` hatch is the sanctioned escape.
 - **WHERE:** `sugar-veil/src/Veil.php:709`.
 - **WHAT:** Two clones of one veil diff against each other's frames. Harmless for sugar-crush, which builds a fresh `Veil` per render (`Renderer.php:1951-1954`).
 - **USED-BY-CRUSH:** no.
 
 ### 4. [INFO] `withBackdrop()` cannot dim SGR-styled rows — deliberate, and worth stating in the README
+- **STATUS ⏭ 2026-10-07:** already documented — in-code at `Veil.php:604-608` and `README.md:84`; no change needed.
 - **WHERE:** `sugar-veil/src/Veil.php:619` returns any ESC-leading line untouched; **LEAD-VERIFIED** and documented in-code at `:604-608` ("wrapping an escape-led line in color SGR would corrupt the payload it carries") and `README.md:84`.
 - **WHAT:** An agent filed this as a probable MAJOR ("the dim the product asks for may be a near-no-op" against crush's themed, SGR-prefixed frame rows). It is not a bug — skipping escape-introducing lines is the correct guard. The residual truth is only that a backdrop dim over a fully themed frame does much less than `withBackdrop(50)` suggests, which is a documentation matter.
 - **FIX:** If the dim is wanted over styled content, it needs per-cell SGR rewriting, not a line-level factor. Otherwise note the limitation next to the option.
@@ -462,21 +508,25 @@ brute-force-verified against every in-order placement (`RequireFullQueryTest.php
 is deterministic, so there is no reorder-under-the-fingers bug.
 
 ### 1. [MINOR] No test anywhere covers 4-byte (SMP/emoji) code points through matcher → highlighter
+- **STATUS ✅ 2026-10-07:** landed 4261f3eb2 — +115-case SMP/emoji matrix through matcher → highlighter; behavior was already correct, now pinned.
 - **WHERE:** `candy-fuzzy/tests/` — a grep for `u{1` returns only U+1E9E (`CodePointExpansionTest.php:51,157`).
 - **WHAT:** SMP characters are the one class of non-ASCII input never exercised against the path that produces the highlight offsets sugar-crush paints.
 - **FIX:** Add emoji and CJK candidates to the round-trip test. Probe: match a query against a candidate containing U+1F600 and assert highlighter offsets.
 - **USED-BY-CRUSH:** yes if a session title or command name contains an emoji.
 
 ### 2. [MINOR] Malformed UTF-8 is unhandled and can desync indices
+- **STATUS ⏭ 2026-10-07:** desync disproved — variant downgraded to INFO; the `\xFF`→`?` fold is docblocked and pinned in 4261f3eb2.
 - **WHERE:** `candy-fuzzy/src/Matcher/CharFold.php:54` — the `preg_match('/[\x80-\xFF]/')` fast path plus `mb_str_split`.
 - **WHAT:** On invalid bytes the split and the fold can disagree, shifting every subsequent index. Session titles read off disk are the plausible source. **SUSPECTED**: confirm by matching a query against `"\xFF" . 'ab'`.
 - **USED-BY-CRUSH:** only for corrupt on-disk state.
 
 ### 3. [MINOR] No test for duplicate candidates or input-order stability
+- **STATUS ✅ 2026-10-07:** landed 4261f3eb2 — stable-`usort` dependency stated in the docblock and pinned.
 - **WHERE:** `candy-fuzzy/src/MatchResultSorter.php:26-28` relies on PHP 8's stable `usort` without saying so in a comment.
 - **FIX:** State the stability dependency; a sort that stops being stable silently reorders the palette.
 
 ### 4. [INFO] The haystack tiebreak compares fully-numeric strings numerically
+- **STATUS ✅ 2026-10-07:** landed 4261f3eb2 — numeric tie-break doc-noted and pinned.
 - **WHERE:** `candy-fuzzy/src/MatchResultSorter.php:27` uses `<=>`, so `"10" <=> "9"` is numeric, not byte order. Deterministic, just not lexicographic.
 
 # candy-focus
@@ -493,12 +543,14 @@ item, remove before the cursor, `reorder()`, hidden-region-holds-focus) are unre
 sugar-crush as wired, because the ring is rebuilt rather than mutated.
 
 ### 1. [MINOR] `focus()` accepts a disabled id, while `next()`/`previous()` refuse one
+- **STATUS ✅ 2026-10-07:** landed 010c58c67 — `focus()` now refuses disabled ids, aligned with `next()`/`previous()`; the parked-focus law documented.
 - **WHERE:** `candy-focus/src/FocusRing.php:239-247` checks only registration, never `$disabled`. No test covers `focus()` on a disabled region; `README.md:116` is silent on it.
 - **WHAT:** Exactly the brief's "can a hidden region still hold focus?" — yes, by explicit `focus()`. A focused-but-hidden control means keystrokes go somewhere the user cannot see.
 - **FIX:** Refuse or document; add the missing test.
 - **USED-BY-CRUSH:** no (fresh ring, nothing disabled).
 
 ### 2. [MINOR] README's restore snippet indexes `[-1]` on an empty snapshot
+- **STATUS ⏭ 2026-10-07:** partial — the snippet already carried the “non-empty snapshot” annotation; a hardening line shipped in the same commit 010c58c67.
 - **WHERE:** `candy-focus/README.md:98-104` does `->focus($s['ids'][$s['index']])`; for an empty snapshot `index` is `-1`, an undefined offset. Guarded only by the prose "a non-empty snapshot", and `testJsonSnapshotRoundTripsThroughPublicApi` (`:938`) uses a non-empty ring.
 
 **Also worth naming:** the live Tab/Shift-Tab keystroke path does **not** use this library at all.
@@ -523,17 +575,20 @@ line, empty/identical/single-line inputs correct, `with*()` immutability correct
 contract, and `UnifiedScan`'s reset/oversized-header/`--- content` handling is solid.
 
 ### 1. [MINOR] Zero-context mid-file insertion headers mis-anchor relative to GNU
+- **STATUS ✅ 2026-10-07:** landed b876880a4 — GNU-faithful `-<lastline>,0` anchor and `,1` elision, verified against a 14-case live `diff(1)` oracle + `GnuHunkHeaderParityTest`; sugar-stash proven non-consumer.
 - **WHERE:** `sugar-diff/src/Diff.php:406-414` (`assemble()` forces `oldStart = 0` whenever `oldLen === 0`).
 - **WHAT:** For `withContextLines(0)` plus a pure insertion after line 1, the engine emits `@@ -0,0 +2,1 @@` where GNU emits `@@ -1,0 +2 @@`. An applier reading `-0,0` inserts at the wrong position. Documented as a faithful-port choice (`Hunk.php:12-17`, `README.md:71`), and `DiffTest.php:305-313` pins only zero-context *replacement*, which does agree with GNU.
 - **FIX:** Match GNU's `-<lastline>,0` form for pure insertions, or restrict the documented choice to replacement and say so. Confirm with a `diff -U0` oracle run.
 - **USED-BY-CRUSH:** no — preview-only consumer. Matters for sugar-stash, whose `DiffViewer::fromRawDiff()` consumes this text verbatim (`DiffTest.php:26-27`).
 
 ### 2. [INFO] `"x\n"` versus `"x"` diffs empty, so any future raw-disk preview can hide a trailing-newline change
+- **STATUS ⏭ 2026-10-07:** kept — pinned behavior retained (crush normalises both sides; the newline invariant stays asserted).
 - **WHERE:** documented rule, pinned by `DiffTest.php:168-176`.
 - **WHAT:** Today crush normalises both sides so it cannot bite. A future caller that previews raw disk bytes against normalised bytes would silently omit a trailing-newline mutation from the diff it shows.
 - **FIX:** Keep the invariant by asserting it at the consumer, or make the engine surface newline-only changes.
 
 ### 3. [INFO] Two diff engines coexist inside sugar-crush
+- **STATUS ⏭ 2026-10-07:** DEFERRED — backlog fold item, out of campaign scope; noted that the twin now diverges from the library on hunk headers (b876880a4).
 - **WHERE:** sugar-crush still ships its original 509-line `BuildsUnifiedDiff` trait, used by the Edit/Write/ApplyPatch tools; only `SettingsSavePreview` uses the library.
 - **FIX:** Fold the trait onto sugar-diff so the fix in #1 lands in one place.
 
@@ -559,16 +614,19 @@ Note `src/Workflows/WorkflowEngine.php` references `PosixTermios` only in a doc-
 runtime pty user, so the real surface is `ProcessContainment` and `CapturesProcessOutput`.
 
 ### 1. [MINOR] `PosixMasterPty::read()` with `$timeout === null` inherits whatever blocking mode was last set
+- **STATUS ✅ 2026-10-07:** landed 9e80a9673 — docs-only contract on interface+impl stating the null-timeout blocking-mode inheritance; the lane's probe confirms the hang shape.
 - **WHERE:** `candy-pty/src/Posix/PosixMasterPty.php` — a bare `fread` whose behaviour depends on whoever last called `stream_set_blocking`.
 - **WHAT:** Can block forever on a quiet child. Unreachable from sugar-crush, which always passes a timeout, but any other consumer can wedge the UI from an async callback.
 - **FIX:** Force non-blocking + select when a timeout is absent, or reject `null`.
 - **USED-BY-CRUSH:** no.
 
 ### 2. [INFO] No `register_shutdown_function` termios-restore net anywhere; restore is caller-owned
+- **STATUS ⏭ 2026-10-07:** verified as stated — caller-owned restoration is the contract; no defect.
 - **WHAT:** Fine for sugar-crush — the child gets the pty slave and the user's real tty is never raw-moded — but it is a contract gap for a consumer that raw-modes the controlling terminal. If it ever does, a missed restore leaves the user's shell broken after exit, which is the worst outcome available in this dependency set.
 - **FIX:** Either document "caller owns restoration" on the API or provide the net.
 
 ### 3. [INFO] `PosixChild::kill()` signals the process leader only
+- **STATUS ⏭ 2026-10-07:** verified as stated — leader-only kill is the library's documented role; the group-kill setsid shim lives in sugar-crush; no defect.
 - **WHERE:** `candy-pty/src/Posix/PosixChild.php`.
 - **WHAT:** The `setsid`-in-shim guarantee that sugar-crush's group-kill relies on lives in sugar-crush, not in the library. Any other consumer doing a bare `kill()` leaks the group.
 
@@ -591,10 +649,12 @@ exist; crush never calls `transform`, `patch`, `inherit`, `hyperlink`, `tabWidth
 `marginChar`.
 
 ### 1. [MINOR] `transform()` is applied after the border but before the margin, contradicting both its docblock and lipgloss
+- **STATUS ✅ 2026-10-07:** landed e802e3e18 — reordered to transform-first, verified against upstream lipgloss source; real behavior change (colored titles now paint on colored boxes); no crush test moved.
 - **WHERE:** `candy-sprinkles/src/Style.php:1139-1143`; docblock says "just before its border / margin layer", lipgloss applies it last.
 - **USED-BY-CRUSH:** no — crush never calls `transform()`.
 
 ### 2. [MINOR] Border titles are coloured from `borderFg` only
+- **STATUS ✅ 2026-10-07:** landed e802e3e18 — titles fall back to the side-0/2 edge colour when blended; 4 pins.
 - **WHERE:** `candy-sprinkles/src/Style.php:1566`.
 - **WHAT:** A style using per-side colours or a blended border foreground renders its titles uncoloured — `borderForegroundBlend()` writes `borderSideFg`, not `borderFg`.
 - **USED-BY-CRUSH:** yes wherever a blended border carries a title; cosmetic.
@@ -615,6 +675,7 @@ Recorded so nobody re-files them.
   guard; downgraded to sugar-veil #4.
 - **candy-layout two-solver divergence — cannot occur.** The simplex was deleted;
   `CassowarySolver::solve()` delegates wholly to `GreedySolver`.
+  - ⏭ 2026-10-07: premise banner shipped to `findings/` via LL-docs 3862a4657; the 3 residual MINORs above stay open, out of campaign scope.
 - **candy-mouse "Scan accumulates / dead zone stays hittable" — not a bug.** `Scanner::scan()`
   *replaces* the registry (`Scanner.php:59`) and sugar-crush's `scanRoot()` clears on marker-free
   frames and on throw. Staleness is a press/release-pairing problem (candy-mouse #1), not a registry
@@ -625,6 +686,7 @@ Recorded so nobody re-files them.
   items 2-10 remain pending in `findings/candy-core.md`.
 
 ## Stale source-of-truth docs
+- **STATUS ✅ 2026-10-07:** landed 3862a4657 — every file above now carries a re-verify banner / plan erratum (findings/*.md untouched by this closeout).
 
 Six of fifteen agents spent budget discovering that `findings/<slug>.md` describes code that no
 longer exists. This is the cheapest item in the report and it should be fixed before any repair work,
@@ -671,6 +733,7 @@ it identically, so CI injects the same path-repo. Cosmetic; 7 such constraints e
 ---
 
 # Repair priority
+> **2026-10-07:** every item below was dispositioned inline in its library section — ✅ landed or ⏭ skipped/rejected/disproved.
 
 1. **candy-mosaic #1** — the only correctness defect verified by hand, live on every non-graphics
    terminal, and the fix is three lines plus a real byte assertion.
@@ -694,6 +757,7 @@ it identically, so CI injects the same path-repo. Cosmetic; 7 such constraints e
 10. Everything marked MINOR/INFO, plus sugar-mcp #2 (carried, still open, small).
 
 ## Backlog
+- **STATUS 2026-10-07:** fold items (sugar-crush McpMessage/McpRouter/McpServer onto sugar-mcp, `LspExchangeLock` onto `ExchangeLock`, `BuildsUnifiedDiff` onto sugar-diff) ⏭ kept as noted — out of campaign scope; candy-kit E453 wiring stays open behind its content-model blocker (doc-recorded in 45b919a8e); the transitive-only audit and full execution-mode re-run stay open.
 
 - Fold sugar-crush's parallel `McpMessage`/`McpRouter`/`McpServer` onto sugar-mcp's, and
   `LspExchangeLock` onto `ExchangeLock` (sugar-mcp #7), so hardening lands once.
