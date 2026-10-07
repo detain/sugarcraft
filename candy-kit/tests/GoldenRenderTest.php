@@ -13,6 +13,7 @@ use SugarCraft\Kit\Logo;
 use SugarCraft\Kit\StatusLine;
 use SugarCraft\Kit\Stage;
 use SugarCraft\Kit\Theme;
+use SugarCraft\Kit\Tests\Support\SandboxTerminalColumns;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Testing\Snapshot\Assertions;
 
@@ -26,11 +27,22 @@ use SugarCraft\Testing\Snapshot\Assertions;
  */
 final class GoldenRenderTest extends TestCase
 {
+    use SandboxTerminalColumns;
+
     private string $fixturesDir;
 
     protected function setUp(): void
     {
         $this->fixturesDir = __DIR__ . '/fixtures';
+        // The goldens were captured at the 80-cell fallback; a runner that
+        // advertises a different COLUMNS would re-flow the default-width
+        // renders below, so hide it before every byte comparison.
+        $this->sandboxTerminalColumns();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreTerminalColumns();
     }
 
     /**

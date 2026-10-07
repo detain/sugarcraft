@@ -7,6 +7,7 @@ namespace SugarCraft\Kit;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Kit\Internal\SafeText;
 use SugarCraft\Kit\Internal\WidthGuard;
+use SugarCraft\Kit\Internal\WidthProbe;
 
 /**
  * Build a fang-style `--help` page from structured input. Each
@@ -30,20 +31,6 @@ final class HelpText
     /** Left margin of a description stacked under its key. */
     public const STACKED_INDENT = 6;
 
-    /*
-     * TODO(width-resolution): `?int $width = 80` in render()/renderRows() is a
-     * plain fallback, not a measurement — nothing here queries the terminal or
-     * the caller's layout, and `null` means "never wrap" rather than "resolve
-     * it yourself". sugar-crush's `cli.help.screen` longest line measures 81
-     * cells, so that page would need an explicit width (or a resolved one)
-     * either way; it is currently rendered by sugar-crush's own whole-string
-     * presenter, not by this class. Bumping the default to 81 would re-flow
-     * output for every caller relying on it while fixing nothing for the one
-     * consumer that is over-wide, so the honest fix is a width-resolution pass
-     * (default to the caller's terminal/frame width, falling back to 80 only
-     * when unknown) — a behavior change across the board, deferred rather than
-     * bundled into a bugfix.
-     */
     /**
      * Render the full help screen.
      *
@@ -59,10 +46,11 @@ final class HelpText
      * @param array<string, array<string, string>> $sections
      *        section title => entry => description. Section order
      *        is preserved.
-     * @param ?int $width  cell width to wrap to; null = never wrap (see the
-     *                     TODO(width-resolution) note on the class for why the
-     *                     80 default is a fallback rather than a resolved
-     *                     terminal width)
+     * @param int|AutoWidth|null $width  cell width to wrap to; null = never
+     *                     wrap. Omitted (or `AutoWidth::Auto`) resolves to the
+     *                     terminal width — the exported `COLUMNS` where the
+     *                     environment advertises one, else the historical
+     *                     80-cell fallback (see {@see WidthProbe}).
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
@@ -71,8 +59,9 @@ final class HelpText
         array $sections,
         string $description = '',
         ?Theme $theme = null,
-        ?int $width = 80,
+        int|AutoWidth|null $width = AutoWidth::Auto,
     ): string {
+        $width = WidthProbe::resolve($width);
         self::assertWidth($width);
         $theme ??= Theme::detect();
         $blocks = [];
@@ -108,13 +97,16 @@ final class HelpText
      * byte-for-byte as they would be unwrapped.
      *
      * @param array<string, string> $rows
-     * @param ?int $width  cell width to wrap to; null = never wrap (see the
-     *                     TODO(width-resolution) note on the class)
+     * @param int|AutoWidth|null $width  cell width to wrap to; null = never
+     *                     wrap. Omitted (or `AutoWidth::Auto`) resolves to the
+     *                     terminal width, falling back to 80 cells — see
+     *                     {@see render()} and {@see WidthProbe}.
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
-    public static function renderRows(array $rows, ?Theme $theme = null, ?int $width = 80): string
+    public static function renderRows(array $rows, ?Theme $theme = null, int|AutoWidth|null $width = AutoWidth::Auto): string
     {
+        $width = WidthProbe::resolve($width);
         self::assertWidth($width);
         if ($rows === []) {
             return '';

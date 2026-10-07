@@ -7,10 +7,25 @@ namespace SugarCraft\Kit\Tests;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Kit\Section;
 use SugarCraft\Kit\Theme;
+use SugarCraft\Kit\Tests\Support\SandboxTerminalColumns;
 use PHPUnit\Framework\TestCase;
 
 final class SectionTest extends TestCase
 {
+    use SandboxTerminalColumns;
+
+    protected function setUp(): void
+    {
+        // Several pins below omit $width and assert the fallback geometry;
+        // hide any terminal width the runner advertises so they stay honest.
+        $this->sandboxTerminalColumns();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreTerminalColumns();
+    }
+
     public function testHeaderFillsToWidth(): void
     {
         $out = Section::header('SETUP', Theme::plain(), leftPad: 2, width: 20);
@@ -142,6 +157,7 @@ final class SectionTest extends TestCase
         $this->assertGreaterThanOrEqual(2, Width::string($out));
     }
 
+    /** With no terminal width advertised, the rule falls back to 80 cells. */
     public function testRuleDefaultWidthIs80(): void
     {
         $out = Section::rule(Theme::plain());

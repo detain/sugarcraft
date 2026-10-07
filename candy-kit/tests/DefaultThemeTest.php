@@ -13,6 +13,7 @@ use SugarCraft\Kit\Section;
 use SugarCraft\Kit\Stage;
 use SugarCraft\Kit\StatusLine;
 use SugarCraft\Kit\Theme;
+use SugarCraft\Kit\Tests\Support\SandboxTerminalColumns;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -23,6 +24,8 @@ use SugarCraft\Sprinkles\Style;
  */
 final class DefaultThemeTest extends TestCase
 {
+    use SandboxTerminalColumns;
+
     private const ENV_KEYS = ['NO_COLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR'];
 
     /** @var array<string, string|false> */
@@ -34,6 +37,9 @@ final class DefaultThemeTest extends TestCase
             $this->savedEnv[$k] = getenv($k);
             putenv($k);
         }
+        // The entry points below render at the default width; hide any
+        // advertised terminal width so the byte shapes stay the fallback's.
+        $this->sandboxTerminalColumns();
     }
 
     protected function tearDown(): void
@@ -41,6 +47,7 @@ final class DefaultThemeTest extends TestCase
         foreach ($this->savedEnv as $k => $v) {
             putenv($v === false ? $k : "{$k}={$v}");
         }
+        $this->restoreTerminalColumns();
     }
 
     /**

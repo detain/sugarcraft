@@ -7,6 +7,7 @@ namespace SugarCraft\Kit;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Kit\Internal\SafeText;
 use SugarCraft\Kit\Internal\WidthGuard;
+use SugarCraft\Kit\Internal\WidthProbe;
 
 /**
  * Render a section header — a label sandwiched between two horizontal
@@ -14,36 +15,27 @@ use SugarCraft\Kit\Internal\WidthGuard;
  * want to break long stretches of stdout into named groups.
  *
  * The label uses the theme's accent style; the rule rune defaults to
- * `─` (Unicode box-drawing horizontal). Total width defaults to 80
- * cells; pass an explicit width or `null` to disable trailing fill
- * (output ends right after the label's closing pad).
- *
- * TODO(width-resolution): the 80 in `?int $width = 80` is a plain fallback,
- * not a measurement — nothing here queries the terminal or the caller's
- * layout. It is deliberately NOT bumped to the 81 cells that sugar-crush's
- * `cli.help.screen` longest line needs, because that page is rendered by
- * sugar-crush's own whole-string presenter rather than by Section, so a
- * default change would re-flow every Section golden to serve a consumer that
- * never reads the default. The honest fix is a width-resolution pass (default
- * to the caller's terminal/frame width, falling back to 80 only when unknown)
- * which would change the output of every caller relying on the default and is
- * therefore deferred rather than slipped in beside a bugfix. Callers that know
- * their width — which is every real caller — already pass it explicitly or
- * pass null.
+ * `─` (Unicode box-drawing horizontal). Total width defaults to the
+ * terminal width — the exported `COLUMNS` where the environment
+ * advertises one, else 80 cells (see {@see WidthProbe}); pass an
+ * explicit width or `null` to disable trailing fill (output ends right
+ * after the label's closing pad).
  */
 final class Section
 {
     /**
-     * @param ?int $width  total cell width of the line, and a hard cap: the
-     *                     output never exceeds it. A label too long for the
-     *                     room left after the lead runes and its two pad
-     *                     spaces is cut with a `…`; if not even the `…`
-     *                     fits, the label is dropped, and lead runes that
+     * @param int|AutoWidth|null $width  total cell width of the line, and a
+     *                     hard cap: the output never exceeds it. A label too
+     *                     long for the room left after the lead runes and its
+     *                     two pad spaces is cut with a `…`; if not even the
+     *                     `…` fits, the label is dropped, and lead runes that
      *                     alone exceed the width are cut too. A width below 1
      *                     is an authoring error and throws (see
      *                     {@see self::assertWidth()}); null = no cap and
      *                     no fill: stop after the leading pad + label + 1
-     *                     trailing rune.
+     *                     trailing rune. Omitted (or `AutoWidth::Auto`)
+     *                     resolves to the terminal width, falling back to 80
+     *                     cells — see {@see WidthProbe}.
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
@@ -51,9 +43,10 @@ final class Section
         string $label,
         ?Theme $theme = null,
         int $leftPad = 2,
-        ?int $width = 80,
+        int|AutoWidth|null $width = AutoWidth::Auto,
         string $rune = '─',
     ): string {
+        $width = WidthProbe::resolve($width);
         self::assertWidth($width);
         $theme   ??= Theme::detect();
         $label   = SafeText::line($label);  // neutralize escape/control injection
@@ -89,9 +82,10 @@ final class Section
      */
     public static function rule(
         ?Theme $theme = null,
-        ?int $width = 80,
+        int|AutoWidth|null $width = AutoWidth::Auto,
         string $rune = '─',
     ): string {
+        $width = WidthProbe::resolve($width);
         self::assertWidth($width);
         $theme  ??= Theme::detect();
         $runeW  = max(1, Width::string($rune));
@@ -111,12 +105,15 @@ final class Section
      * @param string $label     sub-section label; empty = divider line only
      * @param Theme|null $theme
      * @param int $indent       left margin in cells (default 4)
-     * @param int|null $width   total display width, and a hard cap — same
-     *                          truncation rules as {@see header()}, with the
-     *                          indent cut to the width when it alone exceeds
-     *                          it; null emits no fill run — just the indent,
-     *                          label and one trailing rune (no terminal width
-     *                          is ever queried)
+     * @param int|AutoWidth|null $width   total display width, and a hard cap
+     *                          — same truncation rules as {@see header()},
+     *                          with the indent cut to the width when it alone
+     *                          exceeds it; null emits no fill run — just the
+     *                          indent, label and one trailing rune (the
+     *                          terminal-width probe is skipped). Omitted (or
+     *                          `AutoWidth::Auto`) resolves to the terminal
+     *                          width, falling back to 80 cells — see
+     *                          {@see WidthProbe}.
      * @param string $rune      divider rune between label and end fill
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
@@ -125,9 +122,10 @@ final class Section
         string $label,
         ?Theme $theme = null,
         int $indent = 4,
-        ?int $width = 80,
+        int|AutoWidth|null $width = AutoWidth::Auto,
         string $rune = '·',
     ): string {
+        $width = WidthProbe::resolve($width);
         self::assertWidth($width);
         $theme  ??= Theme::detect();
         $label  = SafeText::line($label);  // neutralize escape/control injection

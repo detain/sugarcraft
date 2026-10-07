@@ -7,10 +7,25 @@ namespace SugarCraft\Kit\Tests;
 use SugarCraft\Kit\HelpText;
 use SugarCraft\Kit\Theme;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Kit\Tests\Support\SandboxTerminalColumns;
 use PHPUnit\Framework\TestCase;
 
 final class HelpTextTest extends TestCase
 {
+    use SandboxTerminalColumns;
+
+    protected function setUp(): void
+    {
+        // Default-width renders below pin the 80-cell fallback; hide any
+        // terminal width the runner advertises so they stay honest.
+        $this->sandboxTerminalColumns();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreTerminalColumns();
+    }
+
     public function testRendersUsageAndSections(): void
     {
         $out = HelpText::render(
@@ -213,7 +228,7 @@ final class HelpTextTest extends TestCase
         $this->assertSame('  -x  ' . $long, $out);
     }
 
-    /** Default width is 80 cells. */
+    /** With no terminal width advertised, the wrap falls back to 80 cells. */
     public function testDefaultWidthIsEighty(): void
     {
         $out = HelpText::renderRows(['-x' => trim(str_repeat('word ', 100))], Theme::plain());

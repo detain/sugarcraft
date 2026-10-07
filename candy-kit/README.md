@@ -61,12 +61,14 @@ echo StatusLine::error('connection refused'), "\n";
 - **`Section`** — one-line themed dividers: `header()` label + fill rule,
   bare `rule()`, and indented `subHeader()` for nesting under a parent.
   An explicit `width` is a hard cap: an over-long label is cut with `…`
-  rather than overflowing the line.
+  rather than overflowing the line. Omitted `width` defaults to the
+  terminal width (exported `COLUMNS`, else 80 cells); `null` opts out.
 - **`Stage`** — per-line step renderers for progressive CLI output:
   `step()` (numbered), `subStep()`, and `subStepWithProgress()` (bar or spinner).
 - **`HelpText`** — fang-style `--help` page: `USAGE`, an optional
   description, and titled two-column `KEY  description` sections.
-  Wraps to `width` (default 80, `null` = never wrap): long descriptions
+  Wraps to `width` (omitted = the terminal width via exported `COLUMNS`,
+  else 80 cells; `null` = never wrap): long descriptions
   continue at the description column, and switch to a stacked layout
   (description under the key) when the key column leaves fewer than 16
   cells.
