@@ -1,3 +1,6 @@
+> ⚠️ SUPERSEDED 2026-10-06 — findings largely landed (see PRs/commits era r85-r89 + crush_libs.md re-verify). Item-level status below may misrepresent master. Re-derive before acting.
+> **ACTIVE HAZARD:** §1.1's prescription to delete the `if ($indices === [])` guard in `Highlighter.php` is now WRONG — the guard is load-bearing behind the out-of-range filter (9c1f14e9c); do not follow it. §2.1/2.3's full-matrix memory limits were removed by the one-byte-traceback rework; §6.3/§7.1/§7.4/§8.1 are implemented. **Open at 2026-10-06 audit time; re-verify:** deprecated `ScoringProfile::default()` / `FuzzyMatcherFactory::create()` (open *deliberately* pending candy-lister's `FuzzyMatch` migration), the SMP/emoji test gap, and malformed-UTF-8 handling (crush_libs.md §candy-fuzzy).
+
 # Code Audit: candy-fuzzy
 
 **Library:** `sugarcraft/candy-fuzzy`  

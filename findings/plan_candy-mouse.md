@@ -1,8 +1,10 @@
 ---
-status: not-started
+status: complete
 phase: 1
-updated: 2026-06-30
+updated: 2026-10-06
 ---
+
+> SUPERSEDED 2026-10-06 — the planned work is done in tree (crush_libs.md re-verify: Critical #1 fixed + pinned, High #3 superseded by the grid index, High #4 gone, Low #10 moot; era commits incl. cdcd550be). Item status below is historical; see findings/candy-mouse.md banner for the 2026-10-06 re-audit's still-open items.
 
 # Implementation Plan: candy-mouse
 

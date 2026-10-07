@@ -1,8 +1,10 @@
 ---
-status: not-started
+status: complete
 phase: 1
-updated: 2026-06-30
+updated: 2026-10-06
 ---
+
+> SUPERSEDED 2026-10-06 — all phases shipped (era commits 1253ba0d6 Phase-3 accessors/iterable/serialisable, da8201d6f incremental cache, 6e4af183b reorder/disabled fixes; crush_libs.md re-verify: all 10 findings implemented). Phase PENDING markers below are historical.
 
 # Implementation Plan: candy-focus
 

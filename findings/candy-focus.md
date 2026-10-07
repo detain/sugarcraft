@@ -1,3 +1,6 @@
+> ⚠️ SUPERSEDED 2026-10-06 — findings largely landed (see PRs/commits era r85-r89 + crush_libs.md re-verify). Item-level status below may misrepresent master. Re-derive before acting.
+> All ten items listed below are **implemented** in the current 521-line `src/FocusRing.php` (`Countable`/`IteratorAggregate`/`JsonSerializable` at `:25`, `disabledIds()`, `enabledCount()`/`disabledCount()`, non-leaking `ids()`, shared `step()`, `unique()`). **Open at 2026-10-06 audit time; re-verify:** `focus()` accepts a disabled id while `next()`/`previous()` refuse one (`FocusRing.php:239-247`), and the README `[-1]` empty-snapshot snippet (crush_libs.md §candy-focus MINORs 1-2).
+
 # Code Review: candy-focus
 
 **Library:** sugarcraft/candy-focus  

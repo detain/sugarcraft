@@ -1,9 +1,11 @@
 ---
-status: not-started
+status: complete
 phase: 1
-updated: 2026-06-30
+updated: 2026-10-06
 goal: Fix all actionable sugar-toast audit findings: viewport clamping, cancellable timers, null message handling, actions API, and verify findings 9 and 10
 ---
+
+> SUPERSEDED 2026-10-06 — Phases 1-4 demonstrably shipped (crush_libs.md: `resolveWidth`/`capWidth` clamping, `cancelAlert`/`extendAlert`/`extendAll`, nullable `Alert` message, `actions:` parameter; era commits c5cce07d7, dc015d10b). Phase 4.4's README item was the one leftover MINOR (sugar-toast #4); check crush_libs.md before re-running any phase.
 
 # Implementation Plan: sugar-toast Audit Fixes
 

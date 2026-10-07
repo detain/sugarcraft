@@ -1,3 +1,5 @@
+> ⚠️ RE-AUDITED 2026-10-06 (crush_libs.md §candy-layout): **zero MAJOR-or-higher open** — worst is 3 MINORs (no dock width-sum sweep, per-frame re-resolve cost on the drag path, opt-in float rounding). Critical #1 "CassowarySolver Known Cycling Bug" and the whole two-solver-divergence premise below are **premise-dead**: the simplex is deprecated and delegates wholly to `GreedySolver` (`src/CassowarySolver.php:68-76`). Item-level status may misrepresent master. Re-derive before acting.
+
 # Code Review Findings: candy-layout
 
 **Library:** sugarcraft/candy-layout  

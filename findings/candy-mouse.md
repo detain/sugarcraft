@@ -1,3 +1,6 @@
+> ⚠️ SUPERSEDED 2026-10-06 — findings largely landed (see PRs/commits era r85-r89 + crush_libs.md re-verify). Item-level status below may misrepresent master. Re-derive before acting.
+> Below: Critical #1 (different-zone release leaks pending state) fixed and pinned (`ZoneClickTracker.php`; release-agreement gate cdcd550be); High #3 (O(n) `hit()`) superseded by the `Scanner` grid index; High #4 (`Scan` not reentrant) gone — `parse()` keeps state in locals; Low #10 moot — `composer.json` has no `repositories[]` block. **Open at 2026-10-06 audit time; re-verify:** positional zone-ids dispatched across a re-render and the fixed-literal `Sentinel` (crush_libs.md §candy-mouse #1/#2 MAJORs; the X2 nonce proposal was REJECTED), plus `SelectionRange::extract()` height clamp (#3 MINOR).
+
 # candy-mouse Code Review
 
 **Library:** `sugarcraft/candy-mouse`  

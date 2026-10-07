@@ -1,6 +1,10 @@
 # Implementation Plan: candy-layout
 
-**Status:** Phase-5/6 sweep closed (r86-v2) — 1.2 ruled STOP-class; P4 gaps remain | **Updated:** 2026-09-17
+**Status:** Phase-5/6 sweep closed (r86-v2) — 1.2 ruled STOP-class; P4 gaps remain | **Updated:** 2026-10-06
+
+> ERRATUM 2026-10-06: the Goal/Context narrative of a "CassowarySolver cycling bug (critical)"
+> is premise-dead — the simplex now delegates wholly to `GreedySolver` (`src/CassowarySolver.php:68-76`)
+> and the re-audit found zero MAJOR-or-higher (worst: 3 MINORs; crush_libs.md §candy-layout). Do not execute §Critical items.
 
 ## Goal
 

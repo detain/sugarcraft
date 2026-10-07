@@ -1,3 +1,6 @@
+> ⚠️ SUPERSEDED 2026-10-06 — findings largely landed (see PRs/commits era r85-r89 + crush_libs.md re-verify). Item-level status below may misrepresent master. Re-derive before acting.
+> Findings 1, 2, 3, 8 below are fixed (viewport clamping via `resolveWidth`/`capWidth`, `cancelAlert`/`extendAlert`/`extendAll`, nullable message, `actions:` parameter); 9 and 10 verified. **Open at 2026-10-06 audit time; re-verify:** the six findings in crush_libs.md §sugar-toast — notably the `dismiss()` one-way trap #1 MAJOR (fix-era c5cce07d7 "repair dismiss lifecycle" may already cover it) — and the Phase 4.4 README MINOR (sugar-toast #4).
+
 # Audit: sugar-toast
 
 **Library:** SugarCraft/sugar-toast  

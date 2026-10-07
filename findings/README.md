@@ -1,4 +1,5 @@
 # SugarCraft Code Audit — Findings Summary
+> ⚠️ 2026-10-06: per-lib rows in this index predate the r85-r89 fix eras and the crush_libs.md re-verify — several listed "open" items have shipped. Each findings/<slug>.md now carries a status banner; trust those + crush_libs.md, then re-derive from source.
 
 **Audit Date:** 2026-06-30  
 **Projects Audited:** 57 (33 candy-*, 2 honey-*, 22 sugar-*)  

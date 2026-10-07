@@ -1,3 +1,6 @@
+> ⚠️ SUPERSEDED 2026-10-06 — findings largely landed (see PRs/commits era r85-r89 + crush_libs.md re-verify). Item-level status below may misrepresent master. Re-derive before acting.
+> Fixed in tree since: single accurate `dimLine()` docblock, `isClickOutside()` now throws pre-scan, the `Manager` BC shim is gone, `RenderSession::release()` exists, `Fade::apply()` is a real gray-pen implementation, `compositeAll()` docblock rewritten. **Open at 2026-10-06 audit time; re-verify:** wide-glyph straddle at the overlay clip boundary (crush_libs.md §sugar-veil #1 MAJOR) and taller-than-backdrop top-row drop (#2 MINOR) — the r88 fix-era (e235bcc78/89d729e57) may already cover them.
+
 # Sugar-Veil Library Audit Findings
 
 **Library:** sugarcraft/sugar-veil (port of rmhubbert/bubbletea-overlay)  

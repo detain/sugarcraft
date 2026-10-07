@@ -1,3 +1,5 @@
+> ⛔ PREMISE-DEAD 2026-10-06 — this audit describes files that **do not exist** in this library (`src/AnsiParser.php`, `src/Background.php`, `src/Border/BoxDrawing.php`, `src/Lipstick.php`, `src/ProgressBar.php`, `src/Spinner.php`, `src/Text.php`, `src/Width.php` — all absent from `candy-sprinkles/src/`). Not a staleness case: nothing below is actionable. Current authority: crush_libs.md §candy-sprinkles — immutability and reset discipline verified clean; two MINORs open at 2026-10-06 audit time (`transform()` ordering vs its docblock/lipgloss; border titles coloured from `borderFg` only); re-verify.
+
 # Audit: candy-sprinkles
 
 **Library:** SugarCraft/candy-sprinkles  
