@@ -336,8 +336,26 @@ final class StdioMcpServer implements McpServer
         // The lock exists before the child does: a server nobody can exchange
         // with safely is not started at all.
         $this->lock = ExchangeLock::new($this->name);
+
+        // FIX #5: a forked child may not take over the id space while its
+        // parent — the current owner — is still live and exchanging on this
+        // very connection; two live owners would mint identical ids. The
+        // child's own calls mint nonce ids either way, and a claim after the
+        // owner's death still succeeds (the restart path).
+        if (!$this->ids->claim()) {
+            $liveOwner = $this->ids->ownerPid();
+            $this->lock->destroy();
+            $this->lock = null;
+
+            throw new \RuntimeException(sprintf(
+                'MCP server %s is already owned by live pid %d; refusing to start a second owner from pid %d on the same request-id space',
+                $this->name,
+                $liveOwner,
+                (int) getmypid(),
+            ));
+        }
+
         $this->ownerPid = (int) getmypid();
-        $this->ids->claim();
 
         $this->process = @proc_open(
             $spawnCommand,
