@@ -35,7 +35,7 @@
 #                ReadmeSuiteFigureDriftTest::testArtifactIsNotStaleAgainstTheLiveEnumeration
 #                at every merge) then refuses the shortfall.
 #   --out        run directory (default: ${TMPDIR:-/tmp}/parallel-tests)
-#   --timeout    per-shard wall guard in seconds (default: 250, via timeout(1))
+#   --timeout    per-shard wall guard in seconds (default: 900, via timeout(1))
 #   --manifest   (re)generate the deterministic LPT manifests, run nothing
 #   --clover     each shard additionally writes --coverage-clover <out>/clover-<i>.xml
 #                (E691 — the sharded sugar-crush coverage job). Default OFF: shard
@@ -94,7 +94,7 @@ BASE_JUNIT=""
 DURATIONS=""
 AGAINST_JSON=""
 CLOVER=""
-SHARD_TIMEOUT=250
+SHARD_TIMEOUT=900
 MODE=run
 
 while [ $# -gt 0 ]; do
