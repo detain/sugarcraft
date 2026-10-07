@@ -167,7 +167,13 @@ final class ColdResumeFinishedAgentTest extends TestCase
 
         $chat = (new Chat(history: [Message::user('audit')], backend: $engine, agentManager: $manager))
             ->withCurrentSessionId($session)
-            ->withSize(100, 24);
+            // 200 (not the family's 100) cols: since 8013e0f20 (CL-2 F1)
+            // WindowSizeMsg crosses the pane auto-enable choke, so at 100 the
+            // docked files/agents bands leave the chat column ~24 wide and
+            // fitToPane WRAPS (never truncates) the notice row — the label
+            // survives, just split across rows, so the single-row pins below
+            // need a band wide enough to hold it.
+            ->withSize(200, 24);
         foreach ($registry->all() as $state) {
             // The chat's own registry gets the same beats the fixture saw.
             $chat->agentLive()->apply(new SubAgentActivity(
@@ -187,7 +193,7 @@ final class ColdResumeFinishedAgentTest extends TestCase
         }
         [$app] = App::new($this->createMock(ProviderInterface::class), 'm')
             ->withChat($chat)
-            ->update(new WindowSizeMsg(100, 24));
+            ->update(new WindowSizeMsg(200, 24));
         $app = $app->openAgentView($runId);
 
         [$app, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
