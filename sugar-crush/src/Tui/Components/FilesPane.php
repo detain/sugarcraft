@@ -89,6 +89,15 @@ final class FilesPane
      *
      * @return list<string>
      */
+    /**
+     * Whether the pane would list anything (CL-2 FIX 1 auto-enable
+     * predicate): one touched file is enough. Attachments ride this pane.
+     */
+    public static function hasFiles(App $a): bool
+    {
+        return self::recentFiles($a, 1) !== [];
+    }
+
     private static function recentFiles(App $a, int $budget): array
     {
         $seen = [];

@@ -9,7 +9,6 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Chat;
-use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -36,7 +35,11 @@ final class AgentsPaneDockedFooterTest extends TestCase
     protected function setUp(): void
     {
         $this->footerProvider = $this->createMock(ProviderInterface::class);
-        ShellRenderer::resetSizeCache();
+        // Pinned process size (DockDefaultIdentityTest idiom): the frame is
+        // composed without any message traversing delegateToChat, so CL-2
+        // FIX 1's auto-enable never fires in these fixtures — dock state is
+        // exactly what each case sets.
+        ShellRenderer::setSize(200, 60);
     }
 
     protected function tearDown(): void
@@ -78,8 +81,7 @@ final class AgentsPaneDockedFooterTest extends TestCase
     private function sizedApp(bool $agentsDocked): App
     {
         $app = App::new($this->footerProvider, 'test-model')
-            ->withChat(new Chat(agentManager: $this->managerListingOneRun()))
-            ->update(new WindowSizeMsg(200, 60))[0];
+            ->withChat(new Chat(agentManager: $this->managerListingOneRun()));
 
         return $agentsDocked ? $app->togglePaneDocking(Pane::Agents) : $app;
     }

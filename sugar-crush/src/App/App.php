@@ -49,8 +49,12 @@ use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
 use SugarCraft\Crush\Tui\Commands\NewSessionCmd;
 use SugarCraft\Crush\Tui\Commands\ProviderSelectCmd;
 use SugarCraft\Crush\Tui\Commands\SourceSkillCmd;
+use SugarCraft\Crush\Tui\Components\AgentDashboardPane;
+use SugarCraft\Crush\Tui\Components\FilesPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
+use SugarCraft\Crush\Tui\Components\TodoPane;
+use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
@@ -426,6 +430,12 @@ final class App implements Model
          * @var list<string>
          */
         public readonly array $agentPaused = [],
+        /**
+         * Auto-enable memory for the sidepanes (CL-2 FIX 1): which have
+         * already taken their first content-driven dock, and which the user
+         * touched by hand. Process-lifetime, rides every mutate.
+         */
+        public readonly PaneAutoShow $paneAutoShow = new PaneAutoShow(),
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -1519,7 +1529,10 @@ final class App implements Model
             ? $dock->withSlotMovedTo($pane->value, $side, $drop)
             : $dock->withSlotAdded($side, $pane->value, $drop);
 
-        return $this->persistDock($this->mutate(dock: $next));
+        return $this->persistDock($this->mutate(
+            dock: $next,
+            paneAutoShow: $this->paneAutoShow->withUserToggled($pane),
+        ));
     }
 
     /**
@@ -1591,6 +1604,7 @@ final class App implements Model
             return $this->persistDock($this->mutate(
                 dock: $next,
                 pane: $this->pane === $pane ? Pane::Chat : $this->pane,
+                paneAutoShow: $this->paneAutoShow->withUserToggled($pane),
             ));
         }
 
@@ -1599,7 +1613,10 @@ final class App implements Model
 
         $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
 
-        return $this->persistDock($this->mutate(dock: $dock->withSlotAdded($side, $pane->value)));
+        return $this->persistDock($this->mutate(
+            dock: $dock->withSlotAdded($side, $pane->value),
+            paneAutoShow: $this->paneAutoShow->withUserToggled($pane),
+        ));
     }
 
     /**
@@ -1619,6 +1636,63 @@ final class App implements Model
     public function isDocked(Pane $pane): bool
     {
         return $this->dockIsOccupied($this->dock(), $pane);
+    }
+
+    /**
+     * The panes that dock themselves the first time they have content
+     * (CL-2 FIX 1). Attachments ride the Files pane; there is no dedicated
+     * attachments surface to add here.
+     */
+    private const AUTO_ENABLE_PANES = [Pane::Todo, Pane::Agents, Pane::Tools, Pane::Files];
+
+    /**
+     * Dock every roster pane whose predicate just turned true, once per pane
+     * per process, on its default side ({@see Pane::dockSide()}).
+     *
+     * Settled panes — already auto-shown, or touched by the user by hand —
+     * are never re-docked, so a manual close is honored for the remainder of
+     * the process. Runs at the single choke every Chat transition lands on
+     * ({@see delegateToChat()}); the dock write rides the same
+     * {@see persistDock()} channel a menu toggle uses, so layout
+     * persistence is ordinary, not special-cased.
+     */
+    public function autoEnablePanes(): self
+    {
+        $app = $this;
+        foreach (self::AUTO_ENABLE_PANES as $pane) {
+            $app = $app->autoEnablePane($pane);
+        }
+
+        return $app;
+    }
+
+    private function autoEnablePane(Pane $pane): self
+    {
+        if ($this->paneAutoShow->settled($pane) || $this->isDocked($pane)) {
+            return $this;
+        }
+
+        $hasActivity = match ($pane) {
+            Pane::Todo => !TodoPane::todos($this)->isEmpty(),
+            Pane::Agents => AgentDashboardPane::entries($this) !== [],
+            Pane::Tools => ToolsPane::hasCalls($this),
+            Pane::Files => FilesPane::hasFiles($this),
+            default => false,
+        };
+        if (!$hasActivity) {
+            return $this;
+        }
+
+        $side = $pane->dockSide();
+        assert($side !== null); // guarded: the roster is dockable-only
+
+        $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
+        $next = $this->mutate(
+            dock: $dock->withSlotAdded($side, $pane->value),
+            paneAutoShow: $this->paneAutoShow->withAutoShown($pane),
+        );
+
+        return $this->persistDock($next);
     }
 
     private function dockIsOccupied(DockLayout $dock, Pane $pane): bool
@@ -3575,7 +3649,7 @@ final class App implements Model
             return [$this, $cmd];
         }
 
-        return [$this->withChat($next), $cmd];
+        return [$this->withChat($next)->autoEnablePanes(), $cmd];
     }
 
     /**
@@ -3812,6 +3886,7 @@ final class App implements Model
             agentViewLeader: array_key_exists('agentViewLeader', $changes) ? $changes['agentViewLeader'] : $this->agentViewLeader,
             agentCancelArmed: array_key_exists('agentCancelArmed', $changes) ? $changes['agentCancelArmed'] : $this->agentCancelArmed,
             agentPaused: array_key_exists('agentPaused', $changes) ? $changes['agentPaused'] : $this->agentPaused,
+            paneAutoShow: array_key_exists('paneAutoShow', $changes) ? $changes['paneAutoShow'] : $this->paneAutoShow,
         );
     }
 }
