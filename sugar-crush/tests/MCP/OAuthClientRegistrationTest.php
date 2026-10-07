@@ -15,6 +15,7 @@ use SugarCraft\Crush\Commands\McpAuthCommand;
 use SugarCraft\Crush\MCP\AuthEntry;
 use SugarCraft\Crush\MCP\McpAuthStore;
 use SugarCraft\Crush\MCP\OAuthClientRegistration;
+use SugarCraft\Crush\Tests\Support\RemovesTempDirHoldingLockSidecarsTrait;
 
 // AuthEntry is defined in the same file as OAuthClientRegistration
 require_once __DIR__ . '/../../src/MCP/OAuthClientRegistration.php';
@@ -28,6 +29,8 @@ final class OAuthClientRegistrationTest extends TestCase
     private string $tempDir;
     private string $authFilePath;
 
+    use RemovesTempDirHoldingLockSidecarsTrait;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -39,13 +42,9 @@ final class OAuthClientRegistrationTest extends TestCase
     protected function tearDown(): void
     {
         parent::tearDown();
-        if (is_dir($this->tempDir)) {
-            $files = glob($this->tempDir . '/*');
-            foreach ($files as $file) {
-                unlink($file);
-            }
-            rmdir($this->tempDir);
-        }
+        // Dot-entries included: AtomicJsonFile keeps its `.<name>.lock`
+        // sidecar for the life of the directory (glob('…/*') missed it).
+        self::removeTempDirEvenWithLockSidecars($this->tempDir);
     }
 
     // =========================================================================

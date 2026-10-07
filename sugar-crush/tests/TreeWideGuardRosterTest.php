@@ -610,10 +610,7 @@ final class TreeWideGuardRosterTest extends TestCase
             'scandir($this->worktreesBase)',
         ],
         'LSP/LspConnectionStdinWedgeTest.php' => ['scandir($dir)'],
-        'MCP/McpAuthStoreLoginTest.php' => ['glob($this->tempDir.\'/*\')'],
         'MCP/McpClientTest.php' => ['glob($this->tempDir.\'/*\')'],
-        'MCP/OAuthAuthorizationCodeExchangeTest.php' => ['glob($this->tempDir.\'/*\')'],
-        'MCP/OAuthClientRegistrationTest.php' => ['glob($this->tempDir.\'/*\')'],
         // removeTree() tears down the serve state dir the test made under its sandbox.
         'Server/ServeStatusStopTest.php' => ['scandir($path)'],
         // Names the package root only to hand its posix-less `php -n` probe the

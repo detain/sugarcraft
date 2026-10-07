@@ -15,6 +15,7 @@ use SugarCraft\Crush\Config\Settings\SettingCategory;
 use SugarCraft\Crush\Config\Settings\SettingsDocGenerator;
 use SugarCraft\Crush\Config\Settings\SettingsSchema;
 use SugarCraft\Crush\Lang;
+use SugarCraft\Crush\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
 
 /**
  * Audit 15b-14, step 15b-14-3: the registries' user-facing text — built-in
@@ -38,6 +39,8 @@ final class RegistryTranslationTest extends TestCase
 
     private ?string $pseudoDir = null;
 
+    use FlushesLocaleMemoisedCataloguesTrait;
+
     protected function setUp(): void
     {
         $this->locale = T::locale();
@@ -48,6 +51,7 @@ final class RegistryTranslationTest extends TestCase
     {
         T::overrideNamespace('crush', self::LANG_DIR);
         T::setLocale($this->locale);
+        self::flushLocaleMemoisedCatalogues();
         if ($this->pseudoDir !== null) {
             array_map('unlink', glob($this->pseudoDir . '/*.php') ?: []);
             rmdir($this->pseudoDir);
@@ -218,6 +222,7 @@ final class RegistryTranslationTest extends TestCase
 
         T::overrideNamespace('crush', $dir);
         T::setLocale(self::PSEUDO);
+        self::flushLocaleMemoisedCatalogues();
     }
 
     private static function assertPseudo(string $text, string $what): void

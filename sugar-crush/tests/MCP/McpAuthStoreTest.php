@@ -9,6 +9,7 @@ use SugarCraft\Crush\MCP\AuthEntry;
 use SugarCraft\Crush\MCP\McpAuthStore;
 use SugarCraft\Crush\MCP\OAuthClientRegistration;
 use SugarCraft\Crush\MCP\ServerAuthStatus;
+use SugarCraft\Crush\Tests\Support\RemovesTempDirHoldingLockSidecarsTrait;
 
 /**
  * @see McpAuthStore
@@ -17,6 +18,8 @@ final class McpAuthStoreTest extends TestCase
 {
     private string $tempDir;
     private string $authFilePath;
+
+    use RemovesTempDirHoldingLockSidecarsTrait;
 
     protected function setUp(): void
     {
@@ -29,13 +32,10 @@ final class McpAuthStoreTest extends TestCase
     protected function tearDown(): void
     {
         parent::tearDown();
-        if (is_dir($this->tempDir)) {
-            $files = glob($this->tempDir . '/*');
-            foreach ($files as $file) {
-                unlink($file);
-            }
-            rmdir($this->tempDir);
-        }
+        // The auth writes leave AtomicJsonFile's never-unlinked `.<name>.lock`
+        // sidecar behind, so the sweep has to see dot-entries: glob('…/*')
+        // missed it and the rmdir warned under shards.
+        self::removeTempDirEvenWithLockSidecars($this->tempDir);
     }
 
     private function createOAuthClient(): OAuthClientRegistration

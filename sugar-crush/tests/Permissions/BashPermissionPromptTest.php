@@ -159,11 +159,15 @@ final class BashPermissionPromptTest extends TestCase
 
     /**
      * A chain is remembered ONE GRANT PER PART (user decision 2026-10-11);
-     * the `cd` (not stripped here — no project root) is remembered exactly.
+     * the `cd` is remembered exactly because it lands OUTSIDE this session's
+     * project ({@see LeadingCd}) — an unrelated sandbox root is passed so the
+     * verdict never depends on the ambient `getcwd()` (Chat::projectRoot()
+     * falls back to it, which at repo-root cwd would equal the chain's target
+     * and strip the segment).
      */
     public function testAlwaysOnAChainNamesOneGrantPerPart(): void
     {
-        [$asking] = $this->asking(self::bash(self::CHAIN, 'List workspace lib directories'));
+        [$asking] = $this->asking(self::bash(self::CHAIN, 'List workspace lib directories'), root: $this->project());
 
         $scope = 'Bash(cd /home/sites/sugarcraft), Bash(ls *), Bash(head *), Bash(echo *), Bash(git log *)';
         self::assertSame($scope, $asking->permissionAlwaysScope());

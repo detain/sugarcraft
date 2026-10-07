@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Crush\Lang;
+use SugarCraft\Crush\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
 
 /**
  * The launch locale (audit 15b-14): `bin/sugarcrush` selects it from
@@ -25,6 +26,8 @@ final class LangLaunchLocaleTest extends TestCase
     private string $localeBefore = 'en';
 
     private ?string $catalogue = null;
+
+    use FlushesLocaleMemoisedCataloguesTrait;
 
     protected function setUp(): void
     {
@@ -48,6 +51,7 @@ final class LangLaunchLocaleTest extends TestCase
         }
         if ($this->catalogue !== null) {
             T::overrideNamespace('crush', \dirname(__DIR__) . '/lang');
+            self::flushLocaleMemoisedCatalogues();
             @\unlink($this->catalogue . '/en.php');
             @\unlink($this->catalogue . '/de.php');
             \rmdir($this->catalogue);
@@ -106,6 +110,7 @@ final class LangLaunchLocaleTest extends TestCase
         \file_put_contents($dir . '/de.php', '<?php return ' . \var_export(['cli.serve.none' => '(keine)'], true) . ';');
         Lang::t('cli.serve.none');
         T::overrideNamespace('crush', $dir);
+        self::flushLocaleMemoisedCatalogues();
 
         $_SERVER['LANG'] = 'de_AT.UTF-8';
         self::assertSame('de-at', Lang::useLaunchLocale());

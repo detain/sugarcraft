@@ -13,6 +13,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\Settings\SettingsTier;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Renderer;
+use SugarCraft\Crush\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\McpPanel;
 use SugarCraft\Crush\Tui\SessionPicker;
@@ -49,6 +50,8 @@ final class TuiLangTest extends TestCase
 
     private ?string $pseudoDir = null;
 
+    use FlushesLocaleMemoisedCataloguesTrait;
+
     protected function setUp(): void
     {
         $this->locale = T::locale();
@@ -59,6 +62,7 @@ final class TuiLangTest extends TestCase
     {
         if ($this->pseudoDir !== null) {
             T::overrideNamespace('crush', self::LANG_DIR);
+            self::flushLocaleMemoisedCatalogues();
             foreach (glob($this->pseudoDir . '/*.php') ?: [] as $file) {
                 unlink($file);
             }
@@ -288,6 +292,7 @@ final class TuiLangTest extends TestCase
 
         T::overrideNamespace('crush', $this->pseudoDir);
         T::setLocale('xx');
+        self::flushLocaleMemoisedCatalogues();
     }
 
     private function useEnglish(): void
