@@ -27,6 +27,11 @@ use SugarCraft\Crush\Tools\ToolResult;
  * the session's: a `plan` preset is denied a write a `default` session would
  * only have asked about, and a `bypass-permissions` preset under a `default`
  * session still asks — with nobody to answer here, the write is refused.
+ *
+ * AMENDMENT (owner ruling 2026-10-06): a `bypass-permissions` SESSION is the
+ * one direction a child may widen — the human gave that session the run of
+ * the machine, and every agent it spawns carries the same consent. Preset
+ * tool grants still scope what a child can even call.
  */
 final class TaskToolPresetPermissionModeTest extends TestCase
 {
@@ -64,11 +69,19 @@ final class TaskToolPresetPermissionModeTest extends TestCase
         $this->assertStringNotContainsString('of agent "reviewer"', self::lastToolResult($provider), 'a wider preset adds no gate of its own');
     }
 
-    public function testAStricterPresetNarrowsEvenABypassSession(): void
+    public function testABypassSessionInheritsBypassThroughAnyPreset(): void
     {
+        // Owner ruling 2026-10-06 (FIX 2): the narrow-only doctrine keeps every
+        // OTHER session mode; a bypass session is the one amendment — its
+        // children run bypass whatever the preset asked for, and the write the
+        // old rule used to strand in an unanswered Ask simply runs.
         [$write] = $this->delegateWrite(PermissionMode::Default, PermissionMode::BypassPermissions, approve: false);
 
-        $this->assertSame([], $write->calls, 'the preset\'s default mode asks, though the session would have run it');
+        $this->assertCount(1, $write->calls, 'the bypass session\'s child inherits bypass and does not ask');
+
+        [$preset] = $this->delegateWrite(PermissionMode::Plan, PermissionMode::BypassPermissions, approve: false);
+
+        $this->assertCount(1, $preset->calls, 'even a plan preset bows to the inherited bypass');
     }
 
     public function testWhatBothGatesAllowStillRuns(): void

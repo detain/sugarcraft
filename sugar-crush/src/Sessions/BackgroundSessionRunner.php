@@ -547,6 +547,15 @@ final class BackgroundSessionRunner
      * stricter of the two governs. With no one at a terminal an ASK is
      * refused ({@see self::backend()}'s console approver), and the run reads
      * that refusal like any other.
+     *
+     * AMENDMENT (owner ruling 2026-10-06, mirroring
+     * {@see \SugarCraft\Crush\Agents\AgentManager::createSubAgent()}):
+     * `bypass-permissions` inherits. The delegation payload carries the
+     * delegating session's real mode, so a session that asked in bypass is
+     * stating the operator waived the prompts for this spawn's whole tree —
+     * the child runs bypass even when the daemon's own launch configured a
+     * stricter gate. The session's Deny rules ride the new gate unchanged;
+     * only the mode is replaced.
      */
     private function executeDelegation(Backend $backend, ?\SugarCraft\Crush\Agents\AgentManager $agents): int
     {
@@ -569,13 +578,25 @@ final class BackgroundSessionRunner
         $backend = $backend->withSessionId($this->sessionId);
         $gate = $backend->permissionGate();
         $asked = \SugarCraft\Crush\Permissions\PermissionMode::tryFrom($this->delegation['permissionMode'] ?? '');
-        if ($gate !== null && $asked !== null && $asked->isStricterThan($gate->mode())) {
-            $backend = $backend->withPermissionGate(new \SugarCraft\Crush\Permissions\PermissionGate(
-                $asked,
-                $gate->rules(),
-                null,
-                'the session that started this background agent',
-            ));
+        if ($gate !== null && $asked !== null) {
+            if ($asked->isBypass() && !$gate->mode()->isBypass()) {
+                // Bypass inheritance, see the doc-block amendment: the session
+                // that asked runs prompt-free, so this spawn does too, even on
+                // a daemon launched with a stricter configured mode.
+                $backend = $backend->withPermissionGate(new \SugarCraft\Crush\Permissions\PermissionGate(
+                    \SugarCraft\Crush\Permissions\PermissionMode::BypassPermissions,
+                    $gate->rules(),
+                    null,
+                    'bypass-permissions inherited from the session that started this background agent',
+                ));
+            } elseif ($asked->isStricterThan($gate->mode())) {
+                $backend = $backend->withPermissionGate(new \SugarCraft\Crush\Permissions\PermissionGate(
+                    $asked,
+                    $gate->rules(),
+                    null,
+                    'the session that started this background agent',
+                ));
+            }
         }
 
         // Its seat (roadmap 4.7-3) is counted against the session that

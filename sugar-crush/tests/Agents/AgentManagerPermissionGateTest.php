@@ -78,6 +78,10 @@ final class AgentManagerPermissionGateTest extends TestCase
      * session-wide seal that locked the first sub-agent's mode and threw on a
      * second preset's is gone — narrowed to the session's ceiling, never
      * widened past it.
+     *
+     * The one amendment (owner ruling 2026-10-06): a bypass SESSION is a
+     * ceiling the children inherit whole — the consent belongs to the human
+     * who switched the mode, not to the preset.
      */
     public function testEachSubAgentGetsItsOwnModeNarrowedToTheSessions(): void
     {
@@ -100,6 +104,12 @@ final class AgentManagerPermissionGateTest extends TestCase
 
         $capped = $agentManager->createSubAgent('lock-test-agent', 'Task 4', PermissionMode::BypassPermissions, PermissionMode::Default);
         $this->assertSame(PermissionMode::Default, $capped->permissionGate?->mode(), 'a wider preset mode is held to the session\'s');
+
+        $inherited = $agentManager->createSubAgent('lock-test-agent', 'Task 5', PermissionMode::Plan, PermissionMode::BypassPermissions);
+        $this->assertSame(PermissionMode::BypassPermissions, $inherited->permissionGate?->mode(), 'a bypass session is the one ceiling a child widens to');
+
+        $bare = $agentManager->createSubAgent('lock-test-agent', 'Task 6', null, PermissionMode::BypassPermissions);
+        $this->assertSame(PermissionMode::BypassPermissions, $bare->permissionGate?->mode(), 'and with no preset at all the inheritance is the same');
     }
 
     /**

@@ -387,6 +387,15 @@ final class AgentManager
      * wider than the session. Narrowing per sub-agent keeps what the seal was
      * for (no delegation escalates the session) without that.
      *
+     * AMENDMENT (owner ruling 2026-10-06): `bypass-permissions` inherits
+     * DOWNWARD. When $sessionMode is bypass the child gets bypass regardless
+     * of the preset's `permissionMode:` — the operator of a bypass session has
+     * waived the prompts for the whole tree, and silently re-prompting inside
+     * a sub-agent contradicts the mode's own contract. Every other session
+     * mode keeps the narrow-only merge above, and tool GRANTS are unaffected
+     * in both directions: a preset's `tools:` still bounds what its agent can
+     * call, which is scoping rather than permission-mode policy.
+     *
      * @param PermissionMode|null $permissionMode The mode the agent asks for —
      *        a preset's `permissionMode:`. Null uses PermissionMode::Default.
      * @param PermissionMode|null $sessionMode The mode of the session that
@@ -402,7 +411,14 @@ final class AgentManager
 
         $mode = $permissionMode ?? PermissionMode::Default;
         if ($sessionMode !== null) {
-            $mode = $mode->stricterOf($sessionMode);
+            // BYPASS INHERITS (owner ruling 2026-10-06): a bypass session's
+            // children run bypass too, whatever their preset asks — the
+            // narrow-only doctrine exists to stop a delegate ESCAPING a
+            // session's limits, and bypass sets none to escape. Grants still
+            // scope which tools the child holds.
+            $mode = $sessionMode->isBypass()
+                ? PermissionMode::BypassPermissions
+                : $mode->stricterOf($sessionMode);
         }
 
         $gate = $this->createPermissionGate($mode);

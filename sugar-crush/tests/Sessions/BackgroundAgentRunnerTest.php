@@ -129,6 +129,26 @@ final class BackgroundAgentRunnerTest extends TestCase
                 : 'a `plan` session\'s background agent cannot write, whatever the daemon\'s own mode');
             @unlink($this->dir . '/session.buffer');
         }
+
+        // The amendment (owner ruling 2026-10-06): the direction flips only
+        // for bypass — a bypass session widens a stricter daemon's gate, with
+        // the daemon's own rules riding the new gate.
+        $write = self::probe('Write', 'wrote it');
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('c1', 'Write', ['file_path' => 'x.txt', 'content' => 'x'])]),
+            new CompleteResponse(content: 'done'),
+        ]);
+        $backend = EngineBackend::new($provider, 'm')
+            ->withTools([$write])
+            ->withRoot($this->dir)
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default));
+
+        $exit = $this->runner(['agent' => 'writer', 'permissionMode' => 'bypass-permissions'])
+            ->executeTask($backend, null, $this->manager($write, ['Write'], PermissionMode::Default));
+
+        $this->assertSame(0, $exit, $this->buffer());
+        $this->assertCount(1, $write->calls, 'a bypass session\'s background agent inherits bypass');
+        @unlink($this->dir . '/session.buffer');
     }
 
     /**
