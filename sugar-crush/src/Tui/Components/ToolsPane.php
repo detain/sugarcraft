@@ -171,15 +171,6 @@ final class ToolsPane
      *
      * @return list<array{0: string, 1: \SugarCraft\Core\Util\Color, 2: ?string, 3: list<string>}> [label, colour, click key, expanded detail]
      */
-    /**
-     * Whether the pane would list anything (CL-2 FIX 1 auto-enable
-     * predicate): one row of recent call activity is enough.
-     */
-    public static function hasCalls(App $a): bool
-    {
-        return self::recentCalls($a, 1, Theme::default()) !== [];
-    }
-
     private static function recentCalls(App $a, int $budget, Theme $theme): array
     {
         $own = self::sessionCalls($a, $budget, $theme);
@@ -200,6 +191,15 @@ final class ToolsPane
             static fn (array $e): array => [$e[0], $e[1], $e[4], $e[5]],
             array_slice($merged, 0, $budget),
         );
+    }
+
+    /**
+     * Whether the pane would list anything (CL-2 FIX 1 auto-enable
+     * predicate): one row of recent call activity is enough.
+     */
+    public static function hasCalls(App $a): bool
+    {
+        return self::recentCalls($a, 1, Theme::default()) !== [];
     }
 
     /**
