@@ -406,4 +406,52 @@ final class StdioMcpServerFailureGatesTest extends TestCase
         self::assertStringContainsString('Tool call timed out', $second['error']);
         self::assertLessThan(self::BOUND_SECONDS, $secondElapsed);
     }
+
+    /**
+     * FIX #6: a non-conforming server that keeps the pipe busy with frames
+     * attributable to no request (null/float ids on result/error pushes,
+     * batches, garbage) used to leave a deadline-less callTool() skipping
+     * them forever. The skip-strike tripwire now refuses the exchange after
+     * the threshold — reported as a payload (FIX #4 rail), naming the server
+     * — instead of hanging or throwing.
+     */
+    public function testAFloodOfUnattributableFramesRefusesTheOutstandingExchange(): void
+    {
+        $server = $this->spawn('unattributable_server.php');
+        $server->start();
+
+        $startedAt = microtime(true);
+        $reply = $server->callTool('echo', ['raw' => 'first']);
+        $elapsed = microtime(true) - $startedAt;
+
+        self::assertArrayHasKey('error', $reply, 'the unattributable flood left callTool() hanging or throwing');
+        self::assertStringStartsWith('Tool call failed: ', $reply['error']);
+        self::assertStringContainsString('attributable to no request', $reply['error']);
+        self::assertStringContainsString('probe', $reply['error'], 'the refusal did not name the server');
+        self::assertLessThan(self::BOUND_SECONDS, $elapsed);
+        self::assertTrue($server->isUp(), 'the tripwire stopped a server that merely answers badly');
+
+        $secondAt = microtime(true);
+        $second = $server->callTool('echo', ['raw' => 'second'], timeoutSeconds: 1.0);
+        self::assertArrayHasKey('error', $second);
+        self::assertStringContainsString('Tool call timed out', $second['error']);
+        self::assertLessThan(self::BOUND_SECONDS, microtime(true) - $secondAt);
+    }
+
+    /**
+     * The under-threshold half of FIX #6: fewer strike frames than the
+     * threshold, then a genuine reply — the call must SUCCEED, proving the
+     * tripwire bounds only hopeless waits and per-read counting lets any
+     * answered exchange start from zero strikes.
+     */
+    public function testStrikeFramesUnderTheThresholdStillAnswer(): void
+    {
+        $server = $this->spawn('unattributable_server.php', ['--recovers']);
+        $server->start();
+
+        $reply = $server->callTool('echo', ['raw' => 'first']);
+
+        self::assertArrayNotHasKey('error', $reply, 'a server that answered under the threshold was refused');
+        self::assertSame([['type' => 'text', 'text' => 'recovered']], $reply['content'] ?? $reply);
+    }
 }

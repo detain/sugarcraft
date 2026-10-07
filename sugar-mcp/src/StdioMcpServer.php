@@ -1092,11 +1092,22 @@ final class StdioMcpServer implements McpServer
      *
      * One unparseable shape is NOT noise: a JSON-RPC 2.0 envelope carrying OUR
      * id but neither `result` nor `error`. That is the server's answer, and
-     * it is broken — the call fails now instead of waiting on a reply that
-     * already came (callTool() has no deadline, so skipping it would hang).
+     * it is broken — the call fails now instead of waiting on a deadline-less
+     * callTool() waiting on a reply that already came.
+     *
+     * FIX #6 bounds the OTHER silence-shaped hole: a server that keeps the
+     * pipe busy with frames no exchange can ever be attributed to — blank-
+     * id result/error pushes, batches, unparseable chatter answering nothing.
+     * Skipping those without end is a deadline-less hang on a non-conforming
+     * server, so each read counts them and refuses the exchange after
+     * {@see UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL}; the refusal throws and
+     * callTool() reports it as an error payload (FIX #4 rail), while the
+     * handshake legs fail the start loudly.
      */
     private function readResponse(string $id, ?float $deadline = null): ?McpMessage
     {
+        $unattributable = 0;
+
         while (true) {
             if ($deadline !== null && self::nowSeconds() >= $deadline) {
                 return null;
@@ -1113,6 +1124,13 @@ final class StdioMcpServer implements McpServer
                     return null;
                 }
 
+                // FIX #6 strike: a NON-BLANK frame that is not even JSON-RPC
+                // (banner, batch array, garbage). Blank lines are exempt —
+                // the documented keep-alive shape below.
+                if ($line !== '') {
+                    $this->refuseAfterUnattributableFrames($id, ++$unattributable);
+                }
+
                 continue;
             }
 
@@ -1123,11 +1141,58 @@ final class StdioMcpServer implements McpServer
             // null — must never be mistaken for OUR response (probe P7: the
             // old `id !== null &&` guard let exactly that shape through).
             if (!$message->isResponse() || $message->id !== $id) {
+                // FIX #6 strike: a payload-shaped frame (result and/or error,
+                // no method) carrying NO id at all — the answer-is-coming
+                // forever shape, including ids parse() could not coerce
+                // (float, nested, explicit null). A foreign response WITH an
+                // id stays exempt: it is a late answer to somebody else's
+                // (often this client's own abandoned) call, and skipping it
+                // without blame is the whole point of strict id matching.
+                // Method-bearing frames (notifications, server requests) are
+                // protocol traffic and exempt, however chatty.
+                if ($message->id === null && $message->method === null && ($message->resultSet || $message->error !== null)) {
+                    $this->refuseAfterUnattributableFrames($id, ++$unattributable);
+                }
+
                 continue;
             }
 
             return $message;
         }
+    }
+
+    /**
+     * FIX #6: how many skipped unattributable frames one exchange tolerates
+     * before the wait is judged hopeless. Eight bounds a deadline-less
+     * callTool() against a server whose every frame is junk-to-us while
+     * staying far above the sloppiness the pinned fixtures model — the rogue
+     * id-less broadcast and the noisy stdout banner each cost AT MOST two
+     * strikes per leg, and any genuine reply resets the count by ending the
+     * read.
+     */
+    private const UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL = 8;
+
+    /**
+     * Refuse the outstanding exchange once $count of its skipped frames could
+     * be attributed to no request. The throw rides the FIX #4 rail in
+     * callToolWaiting (error payload, not an escaped exception) for tool
+     * calls, and the start() reap rail for handshake legs; the stream itself
+     * keeps its framing — only this exchange is abandoned.
+     */
+    private function refuseAfterUnattributableFrames(string $id, int $count): void
+    {
+        if ($count < self::UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL) {
+            return;
+        }
+
+        throw new \RuntimeException(sprintf(
+            'MCP server %s sent %d consecutive frames attributable to no request (no id, or not JSON-RPC) '
+            . 'while the reply to id %s was awaited; the stream does not answer this client and the '
+            . 'exchange was refused rather than left to wait forever',
+            $this->name,
+            $count,
+            $id,
+        ));
     }
 
     /**
