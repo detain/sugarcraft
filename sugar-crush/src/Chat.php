@@ -2572,18 +2572,6 @@ final class Chat implements Model
 
             return $produced === null ? [$this, null] : [$this, Cmd::send($produced)];
         }
-        if ($msg instanceof TickRequest) {
-            // A paced replay hop ({@see foldHop()}) that reaches a driver
-            // with no loop to arm its timer - a synchronous chain unwinder,
-            // any model-only embedder - is answered HERE instead of
-            // stalling the queue: produce the hop now, skipping only the
-            // delay, never the event. The real host intercepts TickRequest
-            // in Program::dispatch() before update() ever sees one, so this
-            // arm exists for the headless shape alone.
-            $produced = ($msg->produce)();
-
-            return $produced === null ? [$this, null] : [$this, Cmd::send($produced)];
-        }
         if ($msg instanceof BackendToolEventsMsg) {
             return $this->applyBackendToolEvent($msg);
         }
