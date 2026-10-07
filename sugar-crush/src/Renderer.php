@@ -489,7 +489,20 @@ final class Renderer
      * and width are unchanged. Any other partial (a new turn, a retry, a
      * resize) starts a new state.
      *
-     * @var array{theme: \WeakReference<\SugarCraft\Shine\Theme>, width: int, consumed: string, stream: SectionStream, bodies: string}|null
+     * The open tail's preview is kept with the state (`preview`): between
+     * token batches the 30 fps repaint ticks reach this method with the
+     * SAME partial (the spinner animates, the reply does not), and re-running
+     * the whole-tail `finish()` on unchanged bytes is pure waste - measured
+     * 34 ms per idle frame at a 32 KB open code fence, on top of a
+     * quadratically growing preview. An unchanged partial replays from the
+     * cache; a grown one recomputes it. (The growth frames themselves stay
+     * whole-tail renders on purpose: CandyShine pads every fenced line to the
+     * block's widest line, so a later line REWRITES earlier rows' bytes and no
+     * incremental splice can be byte-identical - the append-stability probes
+     * behind cl-4 FIX-B. Making growth frames incremental is a CandyShine
+     * seam, not a Renderer one.)
+     *
+     * @var array{theme: \WeakReference<\SugarCraft\Shine\Theme>, width: int, consumed: string, stream: SectionStream, bodies: string, preview: array{src: string, out: string}|null}|null
      */
     private static ?array $streamMemo = null;
 
@@ -4353,8 +4366,9 @@ final class Renderer
      * decoration makes sections unsafe ({@see Markdown::defersStreaming()}).
      *
      * The tail is a long reply with no section boundary yet, such as one
-     * huge code block. It is still rendered whole on each frame. Only the
-     * sections before it are saved.
+     * huge code block. It is rendered whole on each frame whose partial
+     * grew; a frame whose partial is unchanged (an idle repaint tick) reads
+     * the cached tail. Only the sections before it are saved regardless.
      */
     private static function streamingMarkdown(Markdown $md, Theme $theme, int $width, string $raw): string
     {
@@ -4377,6 +4391,7 @@ final class Renderer
                 'consumed' => '',
                 'stream' => new SectionStream($md),
                 'bodies' => '',
+                'preview' => null,
             ];
         }
         // Cleared first: the stream is mutated in place below, so a render
@@ -4406,7 +4421,15 @@ final class Renderer
         // again next frame.
         self::$streamMemo = $memo;
 
-        return $memo['bodies'] . implode('', (clone $memo['stream'])->finish());
+        // Unchanged partial (an idle repaint tick between token batches): the
+        // preview cached for these exact bytes IS this frame's answer.
+        $preview = $memo['preview'];
+        if ($preview === null || $preview['src'] !== $memo['consumed']) {
+            $preview = ['src' => $memo['consumed'], 'out' => implode('', (clone $memo['stream'])->finish())];
+            self::$streamMemo['preview'] = $preview;
+        }
+
+        return $memo['bodies'] . $preview['out'];
     }
 
     /**

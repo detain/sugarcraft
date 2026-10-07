@@ -301,6 +301,92 @@ final class RenderMemoTest extends TestCase
         self::assertSame($first, Renderer::render($chat));
     }
 
+    /**
+     * cl-4 FIX-B: between token batches the 30 fps repaint reaches
+     * streamingMarkdown() with an UNCHANGED partial, and the open tail used
+     * to be parsed and rendered again on every one of those idle frames
+     * (34 ms each at a 32 KB code fence). The preview cache must answer the
+     * idle frame from the bytes it already rendered - and must NOT answer a
+     * grown one from the stale cache.
+     */
+    public function testAnIdleRepaintServesTheOpenTailFromThePreviewCache(): void
+    {
+        $theme = Theme::byName('dark');
+        $partial = substr(self::streamingCorpus(), 0, 400);
+
+        $first = self::streamingTurn($partial, $theme, 80);
+
+        $memoProp = new ReflectionProperty(Renderer::class, 'streamMemo');
+        $memo = $memoProp->getValue();
+        self::assertIsArray($memo);
+        self::assertNotNull($memo['preview'], 'a rendered frame caches its tail preview');
+        self::assertSame($partial, $memo['preview']['src']);
+
+        // Poisoned: an idle frame that re-rendered the tail instead of reading
+        // the cache could not print the marker. The frame's contract is
+        // label . "\n" . rtrim(bodies . tail), so that is what the poisoned
+        // state must produce - and only from the cache, never a fresh render.
+        $bodies = $memo['bodies'];
+        $memo['preview']['out'] = 'PREVIEW-HIT';
+        $memoProp->setValue(null, $memo);
+
+        $labelLine = substr($first, 0, strpos($first, "\n") + 1);
+        self::assertSame(
+            $labelLine . rtrim($bodies . 'PREVIEW-HIT'),
+            self::streamingTurn($partial, $theme, 80),
+        );
+
+        // A grown partial must NOT read the stale cache: byte-identical to a
+        // whole render, exactly as an uncached frame would be.
+        $grown = substr(self::streamingCorpus(), 0, 900);
+        self::assertSame(self::wholeStreamingRender($grown, $theme, 80), self::streamingTurn($grown, $theme, 80));
+        $memo = $memoProp->getValue();
+        self::assertSame($grown, $memo['preview']['src'], 'the preview was recomputed and re-cached');
+    }
+
+    /**
+     * The same scaling law the brief asked for (8x content, <=3x time),
+     * applied where the memo puts it in force: idle repaint frames of an
+     * open-tail reply. Growth frames of a single unclosed fence stay
+     * whole-tail renders until CandyShine stops padding every fenced line
+     * to the block's widest row - a splice there would not be byte-identical
+     * (cl-4 FIX-B probe: appending a longer line REWRITES the earlier rows'
+     * padding bytes). min-of-N ratios, the house shape of
+     * {@see self::testAWarmFrameIsMuchCheaperThanAColdOne()}.
+     */
+    public function testIdleRepaintCostStaysBoundedAsTheOpenFenceGrows(): void
+    {
+        $mutate = new ReflectionMethod(Chat::class, 'mutate');
+        $line = "echo \$value; // padded line of code here\n";
+
+        $cost = static function (int $bytes) use ($mutate, $line): float {
+            self::clearMemos();
+            $doc = substr("```php\n" . str_repeat($line, intdiv($bytes, strlen($line)) + 1), 0, $bytes);
+            $chat = $mutate->invoke(
+                (new Chat(history: [Message::user('go')]))->withSize(100, 40),
+                ['inFlight' => true, 'streamingText' => $doc],
+            );
+            Renderer::render($chat); // fills the preview cache at this exact partial
+            $min = PHP_FLOAT_MAX;
+            for ($i = 0; $i < 12; $i++) {
+                $start = hrtime(true);
+                Renderer::render($chat);
+                $min = min($min, (float) (hrtime(true) - $start));
+            }
+
+            return $min;
+        };
+
+        $small = $cost(2000);
+        $large = $cost(16000);
+
+        self::assertLessThan(
+            $small * 3.0,
+            $large,
+            sprintf('idle frame 16 KB %.2f ms vs 2 KB %.2f ms', $large / 1e6, $small / 1e6),
+        );
+    }
+
     // =====================================================================
     // balanceSgr()
     // =====================================================================
