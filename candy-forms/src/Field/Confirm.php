@@ -135,6 +135,11 @@ final class Confirm implements \SugarCraft\Forms\Field
                 => [$this->mutate(value: true), null],
             $msg->type === KeyType::Char && $msg->rune === 'n' && !$msg->ctrl
                 => [$this->mutate(value: false), null],
+            // E736 F3: the class docblock always advertised `Tab` as a
+            // toggler; the arm simply was never wired. Flip the current
+            // answer (the arrow keys commit a side, Tab cycles it).
+            $msg->type === KeyType::Tab
+                => [$this->mutate(value: !$this->value), null],
             default => [$this, null],
         };
     }

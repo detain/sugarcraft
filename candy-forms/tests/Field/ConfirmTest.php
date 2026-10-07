@@ -44,6 +44,18 @@ final class ConfirmTest extends TestCase
         $this->assertTrue($f->value());
     }
 
+    public function testTabToggles(): void
+    {
+        // E736 F3: the docblock advertised Tab; the arm now exists and flips
+        // the current answer (unlike the arrows, which commit a side).
+        [$f, ] = Confirm::new('q')->focus();
+        $this->assertFalse($f->value());
+        [$f, ] = $f->update(new KeyMsg(KeyType::Tab));
+        $this->assertTrue($f->value());
+        [$f, ] = $f->update(new KeyMsg(KeyType::Tab));
+        $this->assertFalse($f->value());
+    }
+
     public function testIgnoresKeysWhenUnfocused(): void
     {
         $f = Confirm::new('q');
