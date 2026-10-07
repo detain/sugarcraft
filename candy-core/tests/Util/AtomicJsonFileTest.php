@@ -425,6 +425,37 @@ final class AtomicJsonFileTest extends TestCase
     }
 
     /**
+     * crush_libs.md candy-core C2 (durability half): the rename is a mutation
+     * of the DIRECTORY entry, so durability needs two syncs in two orders —
+     * the payload fsynced BEFORE the publish (else the name can land ahead of
+     * its bytes) and the directory fsynced AFTER it (else the committed rename
+     * itself can roll back under power loss). Neither order is observable in
+     * any functional test short of pulling the plug, so the placement is
+     * pinned structurally, like the permissions order above — and both syncs
+     * must stay fail-SOFT (a platform that refuses dir fsync keeps its write).
+     */
+    public function testThePublishIsFlushedOnBothSidesInOrder(): void
+    {
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Util/AtomicJsonFile.php');
+
+        $write = self::methodBody($src, 'public function write');
+        $rename = strpos($write, 'rename($tmp, $this->path)');
+        $payloadSync = strpos($write, 'fsync($handle)');
+        $dirSync = strpos($write, '$this->syncDirectory($dir)');
+
+        $this->assertIsInt($rename);
+        $this->assertIsInt($payloadSync, 'write() no longer fsyncs the payload temp before publishing');
+        $this->assertIsInt($dirSync, 'write() no longer fsyncs the directory after the publish rename');
+
+        $this->assertLessThan($rename, $payloadSync, 'payload bytes must reach storage before the rename publishes them');
+        $this->assertLessThan($dirSync, $rename, 'the directory sync must follow the rename whose entry it flushes');
+
+        $syncer = self::methodBody($src, 'private function syncDirectory');
+        $this->assertStringContainsString('@fopen($dir', $syncer, 'opening a directory must stay fail-soft');
+        $this->assertStringContainsString('@fsync(', $syncer, 'the directory fsync itself must stay fail-soft');
+    }
+
+    /**
      * Slice one method's source out of a file by its signature line, up to the
      * first brace at method indentation (PSR-12 puts every nested block deeper).
      */

@@ -259,4 +259,20 @@ final class AtomicJsonFileConcurrentWriteTest extends TestCase
             }
         }
     }
+
+    public function testTheSidecarIsCreatedOwnerOnly(): void
+    {
+        $target = $this->tmpDir . '/state.json';
+        $store = AtomicJsonFile::new($target);
+        // A published mode WIDER than the sidecar's must not rub off on it:
+        // the lock file carries no payload, and its bits are pinned at 0600
+        // for every store, whatever the caller asked the state to be.
+        $store->withPermissions(0644)->write(['gen' => 1]);
+
+        $lockPath = $this->lockPathFor($store);
+        $this->assertFileExists($lockPath);
+        // chmod (not creation-by-umask) is what settles these bits, so the
+        // pin holds under any umask the runner happens to carry.
+        $this->assertSame(0600, fileperms($lockPath) & 0777);
+    }
 }

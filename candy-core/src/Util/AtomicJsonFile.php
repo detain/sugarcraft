@@ -148,11 +148,15 @@ final class AtomicJsonFile
     /**
      * Atomically persist $data.
      *
-     * Serialises writers with an exclusive flock on the stable `<target>.lock`
-     * sidecar ({@see lockPath()}), writes the payload to a uniquely-named temp
-     * file in the target's own directory, flushes (and fsyncs where the runtime
-     * offers it) BEFORE publishing, then renames the temp over the target so a
-     * concurrent reader sees either the old or the new file, never a torn one.
+     * Serialises writers with an exclusive flock on the stable
+     * `.<basename>.lock` sidecar beside the target ({@see lockPath()}), writes
+     * the payload to a uniquely-named temp file in the target's own directory,
+     * flushes (and fsyncs where the runtime offers it) BEFORE publishing, then
+     * renames the temp over the target so a concurrent reader sees either the
+     * old or the new file, never a torn one. The publish rename is followed by
+     * a fail-soft fsync of the DIRECTORY ({@see syncDirectory()}) — the rename
+     * itself is a directory entry, and without it power loss can resurrect the
+     * old file even after a "successful" write.
      * The parent dir is created 0700 (not 0755): durable state may hold
      * tokens/history and should not be world-readable. On any failure the temp
      * file is removed before the exception propagates; the lock sidecar stays
@@ -184,10 +188,11 @@ final class AtomicJsonFile
 
         // Mutual exclusion rides a STABLE inode. The temp file below carries a
         // fresh random name per write, so an flock() on it is a lock nobody
-        // else ever takes; <target>.lock is the one path every writer of this
-        // store agrees on, so it is what actually serialises the critical
-        // section. 'cb' creates it once; the sidecar holds no payload, so it
-        // is 0600 regardless of the published file's requested mode (the
+        // else ever takes; the .<basename>.lock sidecar below is the one path
+        // every writer of this store agrees on, so it is what serialises the
+        // critical section. 'cb' creates it once; the sidecar holds no
+        // payload, so it is 0600 regardless of the published file's requested
+        // mode (the
         // chmod is best-effort: an existing sidecar's bits are not ours to
         // police, and failing here would fail a write over a metadata nicety).
         $lockPath = $this->lockPath();
@@ -245,6 +250,15 @@ final class AtomicJsonFile
             if (!@rename($tmp, $this->path)) {
                 throw new \RuntimeException("Failed to rename temp file onto: {$this->path}");
             }
+
+            // The rename is a mutation of the DIRECTORY, not of either file:
+            // fsyncing only the payload temp (above) leaves the published
+            // entry itself unflushed, so a crash can resurrect the old file
+            // through a rename that reported success. Fail-soft by the same
+            // law as the payload fsync — platforms that refuse to open() a
+            // directory (Windows) or fsync one (some FUSE/network mounts)
+            // keep their writes; they just keep them less durable.
+            $this->syncDirectory($dir);
         } catch (\Throwable $e) {
             if (\is_resource($handle)) {
                 fclose($handle);
@@ -270,6 +284,25 @@ final class AtomicJsonFile
     private function lockPath(): string
     {
         return \dirname($this->path) . \DIRECTORY_SEPARATOR . '.' . basename($this->path) . '.lock';
+    }
+
+    /**
+     * fsync the directory holding the published file, so the rename's
+     * directory entry itself reaches stable storage. Best-effort on every
+     * axis: an unopenable dir (non-POSIX) and a refused fsync (networked /
+     * FUSE mounts) both pass silently — the write contract is atomicity,
+     * and this call only upgrades durability where the platform supports it.
+     */
+    private function syncDirectory(string $dir): void
+    {
+        $handle = @fopen($dir, 'rb');
+        if ($handle === false) {
+            return;
+        }
+        if (\function_exists('fsync')) {
+            @fsync($handle);
+        }
+        fclose($handle);
     }
 
     /** @param resource|\ClosedResource|null $lockHandle */
