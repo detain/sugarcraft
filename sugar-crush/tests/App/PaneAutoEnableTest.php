@@ -162,7 +162,7 @@ final class PaneAutoEnableTest extends TestCase
     /** @return list<string> the pane ids stacked on one side, in order */
     private function slotIds(App $app, Side $side): array
     {
-        return array_map(static fn ($slot): string => $slot->paneId, $app->dock()->slots($side));
+        return array_map(static fn(\SugarCraft\Layout\Dock\DockSlot $slot): string => $slot->paneId, $app->dock()->slots($side));
     }
 
     /**

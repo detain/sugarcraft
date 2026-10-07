@@ -3390,7 +3390,12 @@ final class App implements Model
             ? $this->chat->runCommand('/' . $spec->name)
             : $this->chat->runPaletteAction($spec->label());
 
-        return [$next === $this->chat ? $this : $this->withChat($next), $cmd];
+        // REV-A MINOR-b: a command's answer is a Chat transition like any
+        // keystroke's, so it crosses the SAME auto-dock choke delegateToChat
+        // uses — without it, content a command lands (a provider list under
+        // an agent run, say) keeps its pane side-logged until the next
+        // unrelated keystroke docks it.
+        return [$next === $this->chat ? $this : $this->withChat($next)->autoEnablePanes(), $cmd];
     }
 
     /** A Ctrl+<rune> chord as the live terminal decoder delivers it. */
