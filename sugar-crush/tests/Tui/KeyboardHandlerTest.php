@@ -1851,7 +1851,10 @@ final class KeyboardHandlerTest extends TestCase
 
     /**
      * Escape means "cancel the running turn" / "close the palette" to Chat,
-     * so the shell only claims it when it has a pane to return FROM.
+     * so the shell only claims it when it has a pane to return FROM — and
+     * (CL-2) not at all while the hosted palette is open: an open palette IS
+     * somewhere to return the keystroke TO, Chat's own Escape arm being the
+     * canonical close.
      *
      * @see KeyboardHandler::handleKeyMsg()
      */
@@ -1864,6 +1867,48 @@ final class KeyboardHandlerTest extends TestCase
         $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Escape), $this->createApp(Pane::Settings));
         $this->assertNotNull($handled);
         $this->assertSame(Pane::Chat, $handled[0]->pane);
+
+        // CL-2: the same focus with a palette open on the hosted chat is NOT
+        // claimed — the keystroke must fall through to close it.
+        [$chatting] = App::new($this->provider, 'gpt-4')
+            ->withChat(new Chat(history: [Message::user('hi')], backend: new EchoBackend()))
+            ->update(new WindowSizeMsg(100, 30));
+        [$paletteInChat] = $chatting->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $paletteApp = $paletteInChat->withPane(Pane::Settings);
+        $this->assertNotNull($paletteApp->chat?->palette(), 'fixture: the palette is open');
+        $this->assertNull(
+            $this->handler->handleKeyMsg(new KeyMsg(KeyType::Escape), $paletteApp),
+            'a docked focus yields Escape to the open palette',
+        );
+    }
+
+    /**
+     * The CL-2 two-beat at the model level: from a focused docked pane, the
+     * first Escape closes the palette and leaves focus where it was; the next
+     * returns focus to Chat. (The palette door from a docked pane is Enter on
+     * an empty draft, so this state is reachable without ever visiting Chat.)
+     *
+     * @see KeyboardHandler::claims()
+     */
+    public function testEscapeFromADockedPaneClosesAnOpenPaletteBeforeHandingBackFocus(): void
+    {
+        $chat = new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            backend: new EchoBackend(),
+        );
+        [$sized] = App::new($this->provider, 'gpt-4')
+            ->withChat($chat)
+            ->update(new WindowSizeMsg(100, 30));
+        [$inChat] = $sized->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $opened = $inChat->withPane(Pane::Files);
+        $this->assertNotNull($opened->chat?->palette(), 'fixture: palette open while focus sits on Files');
+
+        [$first] = $opened->update(new KeyMsg(KeyType::Escape));
+        $this->assertNull($first->chat?->palette(), 'the first Escape closes the palette');
+        $this->assertSame(Pane::Files, $first->pane, 'and leaves focus where it was');
+
+        [$second] = $first->update(new KeyMsg(KeyType::Escape));
+        $this->assertSame(Pane::Chat, $second->pane, 'the second returns focus to Chat');
     }
 
     /**

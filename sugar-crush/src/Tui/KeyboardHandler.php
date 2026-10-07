@@ -265,7 +265,14 @@ final class KeyboardHandler
             return self::enterOpensPaletteDoor($app);
         }
 
-        if ($msg->type === KeyType::Escape && $app->pane !== Pane::Chat) {
+        // CL-2: the yield mirrors the Tab rule above — Escape with the hosted
+        // palette OPEN falls through even from a docked pane, because Chat
+        // routes every key to `handlePaletteKey()` while a palette is up and
+        // its Escape arm IS the matching arm (the canonical close). The
+        // two-beat: first Esc closes the palette where it stands, the next
+        // (palette now null) is claimed here and returns focus to Chat.
+        if ($msg->type === KeyType::Escape && $app->pane !== Pane::Chat
+            && $app->chat?->palette() === null) {
             return true;
         }
 
