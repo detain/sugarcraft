@@ -250,7 +250,10 @@ final class AgentManagerTest extends TestCase
      * What the seal was for — no delegation escalating the session — now holds
      * per sub-agent: with the session's mode as the ceiling, the gate is built
      * for the stricter of the two, so a wider preset mode is held to the
-     * session's and a stricter one stands.
+     * session's and a stricter one stands. The one amendment is bypass
+     * (CL-1 FIX 2, b46b1c8d6): a bypass SESSION inherits DOWN, whatever the
+     * preset asks — the narrow-only doctrine exists to stop a delegate
+     * ESCAPING the session's limits, and bypass sets none to escape.
      *
      * @return iterable<string, array{PermissionMode, PermissionMode, PermissionMode}>
      */
@@ -260,7 +263,7 @@ final class AgentManagerTest extends TestCase
         yield 'auto under accept-edits' => [PermissionMode::Auto, PermissionMode::AcceptEdits, PermissionMode::AcceptEdits];
         yield 'plan under default' => [PermissionMode::Plan, PermissionMode::Default, PermissionMode::Plan];
         yield 'dont-ask under plan' => [PermissionMode::DontAsk, PermissionMode::Plan, PermissionMode::DontAsk];
-        yield 'default under bypass' => [PermissionMode::Default, PermissionMode::BypassPermissions, PermissionMode::Default];
+        yield 'default under bypass' => [PermissionMode::Default, PermissionMode::BypassPermissions, PermissionMode::BypassPermissions];
         yield 'accept-edits under dont-ask' => [PermissionMode::AcceptEdits, PermissionMode::DontAsk, PermissionMode::DontAsk];
     }
 
