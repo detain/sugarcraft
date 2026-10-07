@@ -3606,11 +3606,16 @@ final class App implements Model
         // P-C2: the open Agent View rides the same per-paint seam — the chat's
         // renderer swaps the transcript area for it, for this frame only.
         Renderer::setAgentView($this->agentViewFrame());
+        // CL-2 FIX 2: a docked Agents sidebar IS the frame's agent listing —
+        // the same per-paint seam tells the transcript renderer to hold its
+        // footer off so the frame never carries two listings.
+        Renderer::setAgentsPaneDocked($this->isDocked(Pane::Agents));
         try {
             return TuiRenderer::renderView($this, $this->cols, $this->rows);
         } finally {
             Renderer::setPaletteAbandoned(false);
             Renderer::setAgentView(null);
+            Renderer::setAgentsPaneDocked(false);
         }
     }
 

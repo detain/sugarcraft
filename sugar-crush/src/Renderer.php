@@ -1012,6 +1012,29 @@ final class Renderer
     }
 
     /**
+     * Whether the Agents sidepane is docked in the frame being composited
+     * (CL-2 FIX 2). The docked sidebar already lists every run, so the
+     * under-input transcript footer would paint a SECOND agent listing in
+     * the same frame — the shell suppresses the footer for that frame.
+     *
+     * Same lineage as {@see self::$paletteAbandoned}: set around one paint by
+     * {@see \SugarCraft\Crush\App\App::view()} and reset on the way out, so a
+     * standalone Chat render (tests, exports) keeps the footer as its sole
+     * listing — the default `false` self-heals every non-hosted path.
+     */
+    private static bool $agentsPaneDocked = false;
+
+    /**
+     * Declare whether the Agents sidepane is docked for the frame being
+     * composited. Called by the shell compositor around its render, never by
+     * a standalone Chat render — see {@see self::$agentsPaneDocked}.
+     */
+    public static function setAgentsPaneDocked(bool $docked): void
+    {
+        self::$agentsPaneDocked = $docked;
+    }
+
+    /**
      * The Agent View the shell has open for the frame being
      * composited (roadmap P-C2), as {@see \SugarCraft\Crush\App\App::agentViewFrame()}
      * built it, or null for the parent transcript.
@@ -1791,7 +1814,12 @@ final class Renderer
             $content = $tabStrip . "\n" . $content;
         }
 
-        $agentView = $agentStrip === '' ? self::renderAgentView($chat) : '';
+        // The footer shows only when it is the frame's sole agent listing:
+        // not while the live strip above the input paints one (pre-existing),
+        // and — CL-2 FIX 2 — not while a docked Agents sidebar paints one.
+        $agentView = ($agentStrip === '' && !self::$agentsPaneDocked)
+            ? self::renderAgentView($chat)
+            : '';
         if ($agentView !== '') {
             $content .= "\n" . $agentView;
         }
