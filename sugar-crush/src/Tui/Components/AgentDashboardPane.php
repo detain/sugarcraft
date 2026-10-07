@@ -12,6 +12,7 @@ use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Sessions\BackgroundSession;
 use SugarCraft\Crush\Sessions\BackgroundSessionStatus;
 use SugarCraft\Crush\Tui\AgentDisplayState;
+use SugarCraft\Crush\Tui\AgentLabelFolding;
 use SugarCraft\Crush\Tui\AgentOutputPane;
 use SugarCraft\Crush\Tui\AgentOutputState;
 use SugarCraft\Crush\Tui\AgentStatusBar;
@@ -187,7 +188,11 @@ final class AgentDashboardPane
             }
         }
 
-        return $entries;
+        // CL-2 FIX 4: colliding prompt prefixes fold to show their
+        // difference inside the clip window. Fresh states, whole set in
+        // hand — the only two places the fold may run (sibling seam:
+        // AgentSplitColumn::renderRuns).
+        return AgentLabelFolding::apply($entries);
     }
 
     /**

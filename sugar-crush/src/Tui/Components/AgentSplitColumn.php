@@ -9,6 +9,7 @@ use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\AgentDisplayState;
+use SugarCraft\Crush\Tui\AgentLabelFolding;
 use SugarCraft\Crush\Tui\AgentOutputPane;
 use SugarCraft\Crush\Tui\AgentOutputState;
 use SugarCraft\Crush\Tui\Mode;
@@ -114,12 +115,17 @@ final class AgentSplitColumn
     public static function renderRuns(array $runs, Theme $theme, int $width, int $rows, int $skip = 0): string
     {
         $skip = max(0, min($skip, count($runs) - 1));
+        // CL-2 FIX 4: fold over the FULL run set before the scroll slice, so
+        // a scrolled-off twin still explains why its visible sibling reads
+        // "… sugar-dash". Fresh states, whole set in hand — the sibling seam
+        // is AgentDashboardPane::managerEntries().
+        $states = AgentLabelFolding::apply(array_map(self::runState(...), $runs));
         if ($skip === 0) {
-            return self::stack(array_map(self::runState(...), $runs), $theme, $width, $rows);
+            return self::stack($states, $theme, $width, $rows);
         }
 
         $marker = Style::new()->foreground($theme->shellMuted)->render('  ' . Lang::t('tui.agents.earlier', ['count' => $skip]));
-        $rest = self::stack(array_map(self::runState(...), array_slice($runs, $skip)), $theme, $width, max(1, $rows - 1));
+        $rest = self::stack(\array_slice($states, $skip), $theme, $width, max(1, $rows - 1));
 
         return self::clip($marker . "\n" . $rest, $width, $rows);
     }
