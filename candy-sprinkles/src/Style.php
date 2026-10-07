@@ -18,6 +18,7 @@ use SugarCraft\Core\Util\Width;
  * Render pipeline (innermost to outermost):
  *   content → fixed width + horizontal alignment → padding (styled)
  *           → fixed height (vertical fill, anchored by alignV)
+ *           → transform (optional, on the undecorated body)
  *           → border (styled separately) → margin (unstyled)
  *
  * Each public setter records the prop it touched in {@see $propsSet}, which
@@ -491,9 +492,11 @@ final class Style
     }
 
     /**
-     * Apply `$fn` to the rendered string just before its border /
-     * margin layer. Useful for last-mile rewrites (e.g. capitalise,
-     * mask sensitive values). Mirrors lipgloss's `Transform`.
+     * Apply `$fn` to the body just before its border / margin layer, so the
+     * callback sees the caller's text rather than the box drawn around it.
+     * Useful for last-mile rewrites (e.g. capitalise, mask sensitive values).
+     * Mirrors lipgloss's `Transform`, which is likewise applied ahead of
+     * `applyBorder`/`applyMargins` at the top of its `Render()`.
      *
      * @param ?\Closure(string):string $fn pass null to clear.
      */
@@ -1132,15 +1135,21 @@ final class Style
             $body = array_slice($body, 0, $this->maxHeight);
         }
 
-        // 6. Border.
+        // 6. Transform: callback rewrite of the content, applied before the
+        //    frame is drawn around it. Mirrors lipgloss, which runs
+        //    `transform(str)` at the top of Render() — ahead of padding,
+        //    border and margin — so a callback sees the caller's text and not
+        //    the decoration. Running it after the border instead (the previous
+        //    shape) handed the callback the box-drawing runes too, meaning a
+        //    whole-string rewrite such as strtoupper() or a value mask could
+        //    clip against or mangle the frame.
+        if ($this->transform !== null) {
+            $body = explode("\n", ($this->transform)(implode("\n", $body)));
+        }
+
+        // 7. Border.
         $rows = $this->applyBorder($body, $contentWidth, $bSides);
         $borderedWidth = $contentWidth + ($bSides[1] ? 1 : 0) + ($bSides[3] ? 1 : 0);
-
-        // 7. Transform: callback rewrite of the bordered+padded body.
-        if ($this->transform !== null) {
-            $rendered = ($this->transform)(implode("\n", $rows));
-            $rows = explode("\n", $rendered);
-        }
 
         // 8. Margin (optionally backgrounded).
         $marginSgr = '';
@@ -1323,7 +1332,8 @@ final class Style
             $rightSgr,  $rightReset,
             $bottomSgr, $bottomReset,
             $leftSgr,   $leftReset,
-            $titleSgr,  $titleReset,
+            $topTitleSgr, $topTitleReset,
+            $bottomTitleSgr, $bottomTitleReset,
         ] = $this->borderSgr();
 
         $titles = $b->titles();
@@ -1333,7 +1343,7 @@ final class Style
         // for the runes after it — so each title re-opens its edge's SGR.
         $out = [];
         if ($top) {
-            $line = $this->buildTopBorderLine($b, $contentWidth, $left, $right, $titles, $titleSgr, $titleReset . $topSgr);
+            $line = $this->buildTopBorderLine($b, $contentWidth, $left, $right, $titles, $topTitleSgr, $topTitleReset . $topSgr);
             $out[] = $topSgr . $line . $topReset;
         }
         $leftRune  = $left  ? ($leftSgr  . $b->left  . $leftReset)  : '';
@@ -1342,7 +1352,7 @@ final class Style
             $out[] = $leftRune . $row . $rightRune;
         }
         if ($bottom) {
-            $line = $this->buildBottomBorderLine($b, $contentWidth, $left, $right, $titles, $titleSgr, $titleReset . $bottomSgr);
+            $line = $this->buildBottomBorderLine($b, $contentWidth, $left, $right, $titles, $bottomTitleSgr, $bottomTitleReset . $bottomSgr);
             $out[] = $bottomSgr . $line . $bottomReset;
         }
         return $out;
@@ -1537,12 +1547,20 @@ final class Style
     /**
      * Content-independent border SGR bundle, memoized per immutable
      * instance. Resolves each side's opening/closing escape (applying any
-     * per-side colour override on top of the default border fg/bg) plus the
-     * title escape. Depends only on the border colours + profile, so the
-     * per-frame render loop no longer re-derives these on every applyBorder()
-     * call. Byte-identical to the former inline computation.
+     * per-side colour override on top of the default border fg/bg), plus the
+     * opening/closing escape for titles on the top edge and on the bottom
+     * edge. Depends only on the border colours + profile, so the per-frame
+     * render loop no longer re-derives these on every applyBorder() call.
      *
-     * @return array{string,string,string,string,string,string,string,string,string,string}
+     * Titles are laid into the top and bottom border lines, so a title takes
+     * the colour of the edge it is written on, using the very same
+     * side-override-then-default fallback as that edge. Reading only the
+     * global `borderFg` here — the previous shape — left a title unstyled
+     * whenever the caller coloured just that edge.
+     *
+     * @return array{0:string,1:string,2:string,3:string,4:string,5:string,6:string,7:string,8:string,9:string,10:string,11:string}
+     *         top, right, bottom, left (open/close each), then top-title and
+     *         bottom-title (open/close each)
      */
     private function borderSgr(): array
     {
@@ -1563,15 +1581,24 @@ final class Style
         [$bottomSgr, $bottomReset] = $side(2);
         [$leftSgr,   $leftReset]   = $side(3);
 
-        $titleSgr = $this->borderFg !== null ? $this->borderFg->toFg($this->profile) : '';
-        $titleReset = $titleSgr !== '' ? Ansi::reset() : '';
+        // A title is painted onto an edge, so it inherits that edge's colour
+        // through the same fallback the edge itself uses. Anchors are only
+        // ever top or bottom, hence only sides 0 and 2 are consulted.
+        $titleFg = function (int $sideIdx): array {
+            $fg  = $this->borderSideFg[$sideIdx] ?? $this->borderFg;
+            $sgr = $fg !== null ? $fg->toFg($this->profile) : '';
+            return [$sgr, $sgr === '' ? '' : Ansi::reset()];
+        };
+        [$topTitleSgr,    $topTitleReset]    = $titleFg(0);
+        [$bottomTitleSgr, $bottomTitleReset] = $titleFg(2);
 
         return $this->borderSgrMemo = [
             $topSgr,    $topReset,
             $rightSgr,  $rightReset,
             $bottomSgr, $bottomReset,
             $leftSgr,   $leftReset,
-            $titleSgr,  $titleReset,
+            $topTitleSgr,    $topTitleReset,
+            $bottomTitleSgr, $bottomTitleReset,
         ];
     }
 

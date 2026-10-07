@@ -622,10 +622,37 @@ final class StyleTest extends TestCase
         $this->assertSame("a\nb", $out);
     }
 
-    public function testTransformAppliesAfterRender(): void
+    public function testTransformAppliesToPlainContent(): void
     {
         $out = Style::new()->transform(static fn(string $s) => strtoupper($s))->render('hi');
         $this->assertSame('HI', $out);
+    }
+
+    /**
+     * The transform runs on the undecorated body, before the border is drawn
+     * (crush_libs finding #1, harmonized with lipgloss, whose Render() applies
+     * `transform(str)` at its top, ahead of applyBorder/applyMargins).
+     *
+     * Ordered the other way round the callback would receive "│hi│" and
+     * strtoupper would be handed the box-drawing runes — the name of this test
+     * used to be `testTransformAppliesAfterRender` while the code really did
+     * run it after the border, with only the docblock promising otherwise.
+     */
+    public function testTransformRunsBeforeTheBorderIsApplied(): void
+    {
+        $seen = null;
+        $out = Style::new()
+            ->border(Border::normal())
+            ->transform(static function (string $s) use (&$seen): string {
+                $seen = $s;
+                return strtoupper($s);
+            })
+            ->render('hi');
+
+        $this->assertSame('hi', $seen, 'the callback must see the body, not the bordered rows');
+        $this->assertStringNotContainsString('│', $seen ?? '');
+        // The border is still added afterwards, around the transformed body.
+        $this->assertStringContainsString('│HI│', $out);
     }
 
     public function testTabWidthExpands(): void

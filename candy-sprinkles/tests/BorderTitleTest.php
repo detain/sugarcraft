@@ -259,4 +259,76 @@ final class BorderTitleTest extends TestCase
             $top,
         );
     }
+
+    /**
+     * A title takes the colour of the edge it is written on, including a
+     * per-side override with no global borderForeground set (crush_libs
+     * sprinkles finding #2). Before the fix the title SGR read only the global
+     * colour, so this style — which colours the top edge green — emitted a
+     * bare, uncoloured `T` between two coloured corners.
+     */
+    public function testTopTitleUsesPerSideEdgeColourWhenNoGlobalBorderColour(): void
+    {
+        $green = \SugarCraft\Core\Util\Color::hex('#00ff00');
+        $top = explode("\n", Style::new()
+            ->border(Border::normal()->withTitle('T'))
+            ->borderTopForeground($green)
+            ->width(4)
+            ->render('a'))[0];
+
+        $this->assertSame(
+            "\x1b[38;2;0;255;0m┌\x1b[38;2;0;255;0mT\x1b[0m\x1b[38;2;0;255;0m───┐\x1b[0m",
+            $top,
+            'the top title must resolve through the top edge colour',
+        );
+    }
+
+    /** Same for a bottom-anchored title on a bottom-only coloured style. */
+    public function testBottomTitleUsesPerSideEdgeColourWhenNoGlobalBorderColour(): void
+    {
+        $green = \SugarCraft\Core\Util\Color::hex('#00ff00');
+        $rows = explode("\n", Style::new()
+            ->border(Border::normal()->withTitle('B', TitleAnchor::BottomRight))
+            ->borderBottomForeground($green)
+            ->width(4)
+            ->render('a'));
+        $bottom = $rows[count($rows) - 1];
+
+        $this->assertStringContainsString("\x1b[38;2;0;255;0mB\x1b[0m", $bottom);
+    }
+
+    /**
+     * The two edges resolve independently: colouring only the bottom must not
+     * reach a top-anchored title, which stays unstyled (no global colour set).
+     * Guards against the fix collapsing to one shared title SGR.
+     */
+    public function testBottomEdgeColourDoesNotLeakIntoTopTitle(): void
+    {
+        $green = \SugarCraft\Core\Util\Color::hex('#00ff00');
+        $top = explode("\n", Style::new()
+            ->border(Border::normal()->withTitle('T'))
+            ->borderBottomForeground($green)
+            ->width(4)
+            ->render('a'))[0];
+
+        $this->assertStringContainsString('┌T', $top, 'top title stays uncoloured');
+        $this->assertStringNotContainsString("\x1b[38;2;0;255;0mT", $top);
+    }
+
+    /**
+     * A global borderForeground still wins for a title on an edge with no
+     * override — the fallback direction is unchanged, so pre-existing styles
+     * render byte-for-byte as before.
+     */
+    public function testGlobalBorderColourStillColoursTitles(): void
+    {
+        $red = \SugarCraft\Core\Util\Color::hex('#ff0000');
+        $style = Style::new()
+            ->border(Border::normal()->withTitle('T'))
+            ->borderForeground($red)
+            ->width(4);
+        $top = explode("\n", $style->render('a'))[0];
+
+        $this->assertStringContainsString("\x1b[38;2;255;0;0mT\x1b[0m", $top);
+    }
 }
