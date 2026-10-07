@@ -23,6 +23,7 @@ use SugarCraft\Crush\Todo\TodoList;
 use SugarCraft\Crush\Todo\TodoStatus;
 use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\Todo;
+use SugarCraft\Crush\Tui\Commands\ProviderSelectCmd;
 use SugarCraft\Layout\Dock\Side;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as ShellRenderer;
@@ -152,6 +153,24 @@ final class PaneAutoEnableTest extends TestCase
             $this->slotIds($second, Side::Right),
             'no duplicate slot, no re-seeding on later transitions',
         );
+    }
+
+    public function testARegistryCommandCrossesTheSameChokeAsAKeystroke(): void
+    {
+        $chat = $this->chatWithManager($this->managerOneRun());
+        $app = $this->sized($chat);
+        $this->assertFalse($app->isDocked(Pane::Agents), 'fixture: the run awaits its first transition');
+
+        // REV-A MINOR-b: the slash/palette result path built its own withChat
+        // beside delegateToChat's choke, so a command's answer side-logged the
+        // dock until some later keystroke. /model on an idle chat returns a
+        // new Chat (the providers palette opens), so this exercises exactly
+        // that arm of runRegistryCommand().
+        [$next] = $app->consumeShellCmd(new ProviderSelectCmd());
+
+        $this->assertNotNull($next->chat->palette(), 'fixture: the command really ran');
+        $this->assertTrue($next->isDocked(Pane::Agents), 'the command transition docks pending content itself');
+        $this->assertSame(['agents'], $this->slotIds($next, Side::Right));
     }
 
     private function sized(Chat $chat): App
