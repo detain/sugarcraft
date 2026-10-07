@@ -2300,6 +2300,8 @@ final class RendererTest extends TestCase
     /**
      * Ctrl+O (and the click zone that shares its key, §8 E5) now actually
      * reaches the picture: expanding paints it and drops the affordance.
+     * '▀' re-verified vs candy-mosaic e5f60c4f6 (CL-3) — opaque fixture,
+     * both-opaque branch, unchanged by the transparency fix.
      */
     public function testExpandingAnImageResultPaintsThePictureAndDropsTheAffordance(): void
     {

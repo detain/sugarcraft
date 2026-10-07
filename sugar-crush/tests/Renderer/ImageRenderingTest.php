@@ -126,7 +126,9 @@ final class ImageRenderingTest extends TestCase
      * The decorator wraps DCS/APC/OSC and nothing else, so an inline renderer
      * under tmux is untouched: half-block cells are ordinary SGR-styled text
      * that tmux already forwards, and they must keep going straight into the
-     * frame with no image layer and no envelope.
+     * frame with no image layer and no envelope. The '▀' holds post
+     * candy-mosaic e5f60c4f6 (CL-3): opaque fixture → both-opaque branch,
+     * unchanged by the transparency fix.
      */
     public function testInlineHalfBlockCellsAreLeftUnwrappedUnderTmux(): void
     {

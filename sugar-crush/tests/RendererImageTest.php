@@ -129,6 +129,12 @@ final class RendererImageTest extends TestCase
     /**
      * An inline renderer (half-block/quarter-block/ASCII) emits ordinary cells,
      * so it goes straight into the frame and needs no overlay at all.
+     *
+     * The '▀' shape was re-verified against candy-mosaic e5f60c4f6's fixed
+     * transparency mapping (CL-3): this fixture is a fully opaque PNG, so only
+     * the untouched both-opaque branch fires — the ▄/space shapes the fix
+     * introduced for transparent cells are unreachable through crush's decode
+     * path anyway (probe: an alpha PNG still yields all-'▀' cells end-to-end).
      */
     public function testInlineHalfBlockImageIsPaintedIntoTheFrameWithNoPlacements(): void
     {

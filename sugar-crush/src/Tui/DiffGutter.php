@@ -32,9 +32,10 @@ use SugarCraft\Core\Util\Width;
  * code fences, and it is not a loose end to tidy up later. {@see
  * \SugarCraft\Shine\Renderer} is constructed here without `lineNumbers: true`
  * deliberately: {@see \SugarCraft\Shine\SyntaxHighlighter::highlight()} joins
- * its number column to the code with a literal `"\t"`, and `Width::string("\t")`
- * is 0 while candy-sprinkles' `Style::render()` paints it as `tabWidth` spaces
- * — so flipping that flag would inject a mismeasured tab into every code-fence
+ * its number column to the code with a literal `"\t"`, and the two halves of the
+ * frame never agree about it: `Width::string("\t")` measures a fixed 4 while
+ * candy-sprinkles' `Style::render()` paints it as `tabWidth` spaces — so
+ * flipping that flag would inject a mismeasured tab into every code-fence
  * line of every assistant reply and put the frame back into the PR #1403
  * over-wide-row failure. renderDiff() expands tabs before measuring for exactly
  * this reason; the markdown path has no such pass. Do not "finish the item" by
