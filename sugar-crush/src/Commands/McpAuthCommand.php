@@ -56,19 +56,22 @@ final class McpAuthCommand
      * arrived without a clip.
      *
      * These sum — with {@see TranscriptTable::maxCells()}'s border overhead —
-     * to 88 cells, well past the **74** an 80-column terminal's transcript
-     * pane holds (`max(20, cols() - 6)`, {@see TranscriptTable::CHROME_COLS}).
-     * An earlier revision defended that overrun as "a measured trade" forced
-     * by the pane width being unknowable from here. IT IS KNOWABLE:
+     * to 88 cells, past the width an 80-column terminal's transcript pane
+     * budgets. {@see TranscriptTable::CHROME_COLS} is 0 since CL-3, so
+     * {@see TranscriptTable::maxCells()} is `max(1, cols() - 0)` and the pane
+     * keeps its full column count (80 here). It is not an overrun the table
+     * simply eats: the width IS knowable —
      * {@see \SugarCraft\Crush\Chat::cols()} carries it and `execute()` is
      * handed the `Chat`, so {@see listServers()} runs these budgets through
      * {@see TranscriptTable::fit()} and 88 renders only when the pane HAS 88
      * cells.
      *
-     * MEASURED at a 74-cell pane (an 80-column terminal): `Server` 20,
-     * `Status` 16, `Expires` 16, `Scopes` 9 — the two free-text columns absorb
-     * the whole 14-cell loss, so a long `.mcp.json` URL clips with `…` instead
-     * of hard-wrapping the box into fragments, and the timestamp stays a
+     * MEASURED at an 80-cell pane (an 80-column terminal): the natural 88
+     * spills 8 cells, and the two shrinkable free-text columns — `Server` and
+     * `Scopes` — absorb that loss through {@see TranscriptTable::fit()} while
+     * `Status` and `Expires` hold their floors (they are unshrinkable, see
+     * {@see COLUMN_FLOORS}), so a long `.mcp.json` URL clips with `…` instead of
+     * hard-wrapping the box into fragments, and the timestamp stays a
      * timestamp. The old hand-built rows had no bound at all; the revision
      * before this one had a bound that only held on a wide terminal.
      *

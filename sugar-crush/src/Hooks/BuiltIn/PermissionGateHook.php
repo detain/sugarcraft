@@ -41,9 +41,13 @@ use SugarCraft\Crush\ToolCall;
  * workspace root: /etc") and this gate is broad policy ("permission mode
  * 'plan' does not allow Edit"), so letting the specific hazard short-circuit
  * first reports the actual reason rather than the generic one. The gate is
- * deliberately NOT a replacement for them: a mode as permissive as
- * BypassPermissions still has `rm -rf /` and `.env` writes refused, because
- * those checks live in the layer above it.
+ * deliberately NOT a replacement for them either. What survives even a mode as
+ * permissive as BypassPermissions is the `rm -rf /` circuit breaker and the
+ * user's own `deny` rules — both evaluated ahead of, or independent of, the
+ * mode in the layer above this gate. The narrow file-class guard
+ * (`ProtectFilesHook`, the check that would refuse a `.env` write) and
+ * `ConfirmRemoveHook` stand down under bypass by design, so bypass genuinely
+ * does reach an Edit there; the breaker and the deny list are the real floor.
  *
  * That "both orders" claim used to be made about the ARGUMENTS as well, and it
  * was false for them: registered last, this gate only ever saw a call as the
