@@ -641,6 +641,12 @@ final class StdioMcpServer implements McpServer
      * called far more often than that; throttling is the caller's business.
      * An exception it throws propagates out of callTool().
      *
+     * A failed call answers as an error payload, never a throw: unencodable
+     * arguments, a blown deadline, and this client's refusals of a
+     * non-conforming reply stream (an oversized frame, FIX #4) all arrive as
+     * `['error' => ...]`. Refusing a frame drops the read buffer — the
+     * framing reset — and leaves the connection up for the next exchange.
+     *
      * @param array<string,mixed> $args
      * @param (\Closure(): void)|null $onWait
      * @return array<string,mixed>
@@ -683,6 +689,24 @@ final class StdioMcpServer implements McpServer
             // nothing was written, and the McpServer contract reports a failed
             // call as a payload the transcript can show, never as a throw.
             return ['error' => 'Tool call failed: ' . $unencodable->getMessage()];
+        } catch (\RuntimeException $frameRefusal) {
+            // FIX #4: the RuntimeExceptions reachable from requestAs are this
+            // client's refusals of a non-conforming stream — the frame-cap
+            // drop (refuseAnOversizedFrame) and any later conformance tripwire.
+            // The McpServer contract (see the interface docblock)
+            // promises a failed call as an error payload, never a throw
+            // escaping callTool into the caller's tool loop.
+            //
+            // The connection is NOT stopped here. Dropping the oversized
+            // buffer IS the framing reset: exchange()'s finally already
+            // recorded the dirty phase and cleared the partial line, and the
+            // bytes still in the pipe resync under readResponse's skip law
+            // (unparseable/foreign-id frames are ignored), so the next
+            // exchange either completes or fails on its own merits. Killing
+            // the child would punish every later call for one bad frame and
+            // contradict the payload-refusal posture this catch exists to
+            // honour.
+            return ['error' => 'Tool call failed: ' . $frameRefusal->getMessage()];
         }
 
         if ($response === null && $deadline !== null && self::nowSeconds() >= $deadline) {

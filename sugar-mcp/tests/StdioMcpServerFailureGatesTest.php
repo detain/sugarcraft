@@ -372,4 +372,38 @@ final class StdioMcpServerFailureGatesTest extends TestCase
         self::assertNull($response, 'an exchange ran with a W/R marker it could not record');
         self::assertFalse($server->notify('notifications/cancelled', ['requestId' => '0']));
     }
+
+    /**
+     * FIX #4: the 64MiB frame-cap refusal threw straight out of callTool() on
+     * a mid-session oversized reply, breaking the McpServer contract promise
+     * (a failed call answers as an error payload). Now the refusal is caught
+     * in callToolWaiting. Dead-connection ruling, pinned here: the child is
+     * NOT stopped — dropping the oversized buffer is itself the framing
+     * reset, and the bounded remainder resyncs under readResponse's skip law,
+     * so the SAME connection goes on to take a fresh exchange and fail it on
+     * its own deadline rather than hang or throw.
+     */
+    public function testAnOversizedMidSessionReplyRefusesAsPayloadAndTheConnectionSurvives(): void
+    {
+        $server = $this->spawn('oversized_reply_server.php');
+        $server->start();
+
+        $startedAt = microtime(true);
+        $reply = $server->callTool('echo', ['raw' => 'first']);
+        $elapsed = microtime(true) - $startedAt;
+
+        self::assertArrayHasKey('error', $reply, 'the frame-cap throw escaped callTool()');
+        self::assertStringStartsWith('Tool call failed: ', $reply['error']);
+        self::assertStringContainsString('frame cap', $reply['error']);
+        self::assertLessThan(self::BOUND_SECONDS, $elapsed, 'the cap trip was not fail-fast');
+        self::assertTrue($server->isUp(), 'the refusal stopped a server that only sent one bad frame');
+
+        $secondAt = microtime(true);
+        $second = $server->callTool('echo', ['raw' => 'second'], timeoutSeconds: 1.0);
+        $secondElapsed = microtime(true) - $secondAt;
+
+        self::assertArrayHasKey('error', $second);
+        self::assertStringContainsString('Tool call timed out', $second['error']);
+        self::assertLessThan(self::BOUND_SECONDS, $secondElapsed);
+    }
 }
