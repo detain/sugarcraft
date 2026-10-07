@@ -129,11 +129,22 @@ A started `StdioMcpServer` may be used from `pcntl_fork()`ed children of the
 process that started it — one server shared by the whole process tree:
 
 - ids are process-unique (`RequestIdSequence`), so a reply — even the late
-  reply of a SIGKILLed child's call — only ever matches the call that sent it;
+  reply of a SIGKILLed child's call — only ever matches the call that sent
+  it; a forked child that re-opens the connection cannot silently take over
+  the id space while its owner is still live — `claim()` refuses a foreign
+  claim against a live owner, and the child keeps minting pid-tagged ids;
 - every exchange runs under a cross-process `flock` (`ExchangeLock`; each
   process opens its own handle, since an inherited one shares the lock).
   **Concurrent calls on one server therefore serialise**; the lock wait
   honours a request's deadline and gives up if the server dies;
+- the flip side of serialisation: a holder that stays **alive but hung** —
+  waiting on a deadline-less call to a wedged server — wedges every sharer
+  for as long as it holds the lock, and `flock` carries no FIFO promise, so a
+  waiter can be starved even after the holder releases. Nothing in this
+  library can bound another process's work; each waiter bounds **itself**
+  with `callTool(..., timeoutSeconds:)` (in sugar-crush, the per-server
+  `"toolTimeout"` entry in `.mcp.json` feeds exactly that knob). Set it if
+  you share a server across forked turns or sub-agents;
 - stdout bytes read past a response are kept in the lock file, so the next
   exchange starts at a line boundary whichever process runs it;
 - a holder killed mid-exchange leaves a phase marker: the next exchange
@@ -151,6 +162,14 @@ process that started it — one server shared by the whole process tree:
   are left alone.
 
 stderr is not locked — it is diagnostics only.
+
+> **A note on `LspExchangeLock`.** sugar-crush's LSP transport keeps its own
+> close-looking twin of `ExchangeLock` (`src/LSP/LspExchangeLock.php`). That
+> duplication is deliberate, not a missed reuse: the LSP side needs phase
+> state carried as an atomic write-to-temp + `rename()` (`store()`), so a
+> holder SIGKILLed mid-store leaves the previous file whole. Neither
+> behaviour is a defect in this library's lock; each file locks what its
+> transport needs.
 
 ## Deliberate exclusions
 
