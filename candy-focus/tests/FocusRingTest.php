@@ -917,6 +917,47 @@ final class FocusRingTest extends TestCase
         self::assertCacheConsistent($ring);
     }
 
+    /**
+     * Fallback law (lane W3, carried REV-C finding): when the focused region is
+     * dropped, reorder() must not land on a disabled head — the same wall
+     * focus() refuses (audit 010c58c67). It advances to the first ENABLED survivor.
+     */
+    public function testReorderFallbackSkipsDisabledHeadToFirstEnabled(): void
+    {
+        $ring = FocusRing::of('x', 'a', 'b')->disable('a')->reorder('a', 'b');
+
+        self::assertSame('b', $ring->current(), 'the fallback skips the disabled head');
+        self::assertSame(1, $ring->index());
+        self::assertTrue($ring->isEnabled('b'));
+        self::assertCacheConsistent($ring);
+    }
+
+    /** Polarity pair: with an enabled head there is no wall to skip, index 0 wins. */
+    public function testReorderFallbackLandsOnEnabledHeadDirectly(): void
+    {
+        $ring = FocusRing::of('x', 'a', 'b')->disable('b')->reorder('a', 'b');
+
+        self::assertSame('a', $ring->current());
+        self::assertSame(0, $ring->index());
+        self::assertCacheConsistent($ring);
+    }
+
+    /**
+     * Exhaustive-disabled edge: every survivor is disabled, so no enabled landing
+     * exists. Focus parks at index 0 — a legitimate parked-on-disabled state,
+     * the same one disable() leaves behind (it never moves focus).
+     */
+    public function testReorderFallbackOnExhaustivelyDisabledSurvivorsParksAtZero(): void
+    {
+        $ring = FocusRing::of('x', 'a', 'b')->disable('a')->disable('b')->reorder('a', 'b');
+
+        self::assertSame('a', $ring->current());
+        self::assertSame(0, $ring->index());
+        self::assertSame(0, $ring->enabledCount());
+        self::assertSame($ring, $ring->next(), 'traversal is a no-op while nothing is enabled');
+        self::assertCacheConsistent($ring);
+    }
+
     public function testReorderChurnKeepsBookkeepingConsistent(): void
     {
         $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b')->disable('d');

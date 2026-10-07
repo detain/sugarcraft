@@ -261,8 +261,13 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * Semantics:
      * 1. Dedupe incoming ids (first-wins), mirroring of()'s contract.
      * 2. Empty result = empty ring.
-     * 3. If current() survives, focus stays on it at its new position;
-     *    otherwise focus the first element (index 0).
+     * 3. If current() survives, focus stays on it at its new position. When it
+     *    was dropped, focus lands on the first ENABLED survivor in ring order —
+     *    the fallback must not teleport onto a disabled head, the same wall
+     *    {@see focus()} refuses (audit 010c58c67). Only when EVERY survivor is
+     *    disabled does it park at index 0: a non-empty ring always focuses
+     *    exactly one region, and focus-on-a-disabled-region is a legitimate
+     *    parked state in this model ({@see disable()} never moves focus).
      * 4. Disabled flags carry over for surviving ids only. A dropped id loses
      *    its flag exactly as {@see unregister()} clears it, and an id added by
      *    the new list is enabled exactly as {@see register()} enables it — so a
@@ -281,16 +286,23 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
             return new self([], -1);
         }
 
+        // Flags carry over for survivors only, computed before the fallback so it
+        // can honour the enabled wall.
+        $disabled = array_intersect_key($this->disabled, array_fill_keys($unique, true));
+
         $newIndex = array_search($this->current(), $unique, true);
         if ($newIndex === false) {
-            $newIndex = 0;
+            // The focused region was dropped. Skip past any disabled head onto
+            // the first enabled survivor; an exhaustively disabled survivor set
+            // has nowhere enabled to go, so index 0 parks on a disabled region
+            // exactly as disable() would have left it.
+            $enabled = self::computeEnabledPositions($unique, $disabled);
+            $newIndex = $enabled === [] ? 0 : $enabled[0];
         }
 
         if ($unique === $this->ids && $newIndex === $this->index) {
             return $this;
         }
-
-        $disabled = array_intersect_key($this->disabled, array_fill_keys($unique, true));
 
         return new self($unique, $newIndex, $disabled);
     }
