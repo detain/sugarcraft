@@ -51,7 +51,24 @@ final class StdioMcpServer implements McpServer
      */
     public const DEFAULT_START_TIMEOUT_SECONDS = \SugarCraft\Mcp\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS;
 
+    /**
+     * Per-`tools/call` ceiling default (cl-4 FIX-C). The library exposes no
+     * such constant — the number is crush's product decision: a hung third-
+     * party stdio server used to wedge its turn FOREVER (an unbounded call
+     * ignores every wait beat, and the turn's idle watchdog only fires when
+     * the pump itself stalls). 120 s matches the turn's 120 s idle ceiling:
+     * a call that outlasts the turn's own patience must not outlast the
+     * session. Legitimately slow servers raise it per entry with
+     * `toolTimeout`; there is deliberately no way to switch the bound off,
+     * the same policy {@see DEFAULT_START_TIMEOUT_SECONDS} enforces for the
+     * handshake — a hand-edited config must not disable a ceiling by accident.
+     */
+    public const DEFAULT_TOOL_TIMEOUT_SECONDS = 120.0;
+
     private readonly \SugarCraft\Mcp\StdioMcpServer $transport;
+
+    /** Resolved per-call ceiling in seconds — always positive (cl-4 FIX-C). */
+    private readonly float $toolTimeoutSeconds;
 
     /**
      * Credential-shaped names the last spawn plan withheld from the server
@@ -69,8 +86,9 @@ final class StdioMcpServer implements McpServer
      * @param float|null $startTimeoutSeconds handshake budget in seconds; null
      *        takes {@see DEFAULT_START_TIMEOUT_SECONDS}
      * @param float|null $toolTimeoutSeconds the `.mcp.json` `toolTimeout`
-     *        (item 0.5, decision D2): an OPT-IN bound on each `tools/call`;
-     *        null — the default — keeps every call unbounded
+     *        (item 0.5, decision D2, bounded-by-default per cl-4 FIX-C): a
+     *        bound on each `tools/call`; null or a non-positive takes
+     *        {@see DEFAULT_TOOL_TIMEOUT_SECONDS} — a call is never unbounded
      */
     public function __construct(
         public readonly string $name,
@@ -78,8 +96,12 @@ final class StdioMcpServer implements McpServer
         array $args,
         array $env,
         ?float $startTimeoutSeconds = null,
-        private readonly ?float $toolTimeoutSeconds = null,
+        ?float $toolTimeoutSeconds = null,
     ) {
+        $this->toolTimeoutSeconds = $toolTimeoutSeconds !== null && $toolTimeoutSeconds > 0.0
+            ? $toolTimeoutSeconds
+            : self::DEFAULT_TOOL_TIMEOUT_SECONDS;
+
         $this->transport = new \SugarCraft\Mcp\StdioMcpServer(
             name: $name,
             command: $command,
@@ -195,11 +217,14 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * UNBOUNDED BY DEFAULT, unlike {@see start()}'s handshake — see the
-     * library's callTool(). A server whose entry sets `toolTimeout` opts in
-     * to a per-call bound (the library cancels the request at it); without
-     * one, $onWait — the library's wait beat (item 0.4-b) — keeps a long
-     * call visibly alive instead of giving it a deadline.
+     * BOUNDED BY DEFAULT, like {@see start()}'s handshake — see the library's
+     * callTool(). Every call carries the entry's `toolTimeout` or
+     * {@see DEFAULT_TOOL_TIMEOUT_SECONDS} (the constructor resolves both);
+     * at the deadline the library sends `notifications/cancelled`, raises the
+     * named timeout error, and the bridge turns it into an error payload for
+     * the model — a wedged server costs one call, never the session. $onWait
+     * — the library's wait beat (item 0.4-b) — still keeps a long call
+     * visibly alive until that deadline.
      *
      * @param (\Closure(): void)|null $onWait
      * @return array<mixed>
@@ -209,8 +234,8 @@ final class StdioMcpServer implements McpServer
         return $this->transport->callTool($toolName, $args, $onWait, $this->toolTimeoutSeconds);
     }
 
-    /** The configured per-call bound in seconds, or null when unbounded. */
-    public function toolTimeoutSeconds(): ?float
+    /** The resolved per-call bound in seconds — never null since cl-4 FIX-C. */
+    public function toolTimeoutSeconds(): float
     {
         return $this->toolTimeoutSeconds;
     }

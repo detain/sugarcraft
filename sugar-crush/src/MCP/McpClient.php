@@ -512,12 +512,14 @@ final class McpClient
             // hand-edited config must not be able to turn the bound OFF by
             // accident. It bounds the HANDSHAKE only.
             //
-            // `toolTimeout` (seconds, item 0.5, decision D2) is the OPT-IN
-            // bound on each `tools/call`. Unset is UNBOUNDED, not a default
-            // number: a tool call is somebody's real work (E646), and a sequential
-            // call keeps the turn alive with wait beats instead (0.4-b). Only
-            // a positive finite number opts in — a string, 0 or a negative
-            // leaves the call unbounded rather than inventing a zero bound.
+            // `toolTimeout` (seconds, item 0.5, decision D2, bounded-by-
+            // default per cl-4 FIX-C) is the per-`tools/call` bound. Unset
+            // takes {@see StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS} — a
+            // hung third-party server must cost one call, never the session;
+            // slow real work (a build, a crawl) raises the number per entry.
+            // Only a positive finite number overrides it — a string, 0 or a
+            // negative falls back to the default rather than inventing a
+            // zero bound, the same policy `startTimeout` enforces.
             'stdio' => new StdioMcpServer(
                 name: $name,
                 command: $config['command'] ?? '',
@@ -642,7 +644,8 @@ final class McpClient
         $this->pumpStderr();
 
         // The wait beat (item 0.4-b) reaches the stdio transport only: it is
-        // the one whose call is unbounded. `http` carries Guzzle's 30 s total
+        // the one whose call can legitimately outlast the other transports.
+        // `http` carries Guzzle's 30 s total
         // timeout, under the turn's 120 s idle ceiling, and `claude-mcp`
         // speaks through its own client.
         return $server instanceof StdioMcpServer && $onWait !== null
@@ -754,8 +757,11 @@ final class McpClient
     }
 
     /**
-     * A stdio entry's `toolTimeout` as seconds, or null for "unbounded":
-     * only a positive, finite JSON number opts in (see buildServer()).
+     * A stdio entry's `toolTimeout` as written, or null for "nothing usable":
+     * only a positive, finite JSON number is honoured, and null resolves to
+     * {@see StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS} in the server's
+     * constructor (see buildServer()). The parser reports what the config
+     * SAYS; the ceiling policy lives on the server, one place.
      */
     public static function toolTimeout(mixed $raw): ?float
     {

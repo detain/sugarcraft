@@ -206,26 +206,30 @@ execution the tiers gate — the PreToolUse chain sees calls, never the
 the trust list controls rather than inside it.
 
 `startTimeout` is **seconds, per server, and bounds the handshake only** — a
-`tools/call` is unbounded unless the entry opts in with `toolTimeout` (below).
+`tools/call` carries its own ceiling, `toolTimeout` (below).
 Only a positive number is honoured; a string, `0` or
 a negative falls back to `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS`, which
 is `60.0`. A hand-edited config must not be able to turn the bound off by
 accident.
 
-`toolTimeout` is **seconds, per server, per `tools/call`, and opt-in**. Unset
-means unbounded — there is no global default, because a tool call is somebody's
-real work (a build, a crawl) and minutes are legitimate. While a call runs
-alone in a turn it sends the turn a heartbeat, so the 120 s idle watchdog does
-not kill a long call; a slow server costs its own wait, not the turn. When a
-`toolTimeout` is set and passes, the client stops waiting, sends the server
-`notifications/cancelled` naming the request, and the model gets an error
-result (`Tool call timed out after 300s (toolTimeout) …`); the connection stays
-usable and the late reply, if any, is discarded. Only a positive JSON number
-opts in: a string, `0` or a negative leaves the call unbounded rather than
-setting a zero bound. Like `startTimeout` it is left out of the trust
+`toolTimeout` is **seconds, per server, per `tools/call`, and always on**.
+Unset (or a non-positive) takes `StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS`,
+which is `120.0` — the same span as the turn's idle ceiling, so a wedged
+third-party server costs one call, never the session. A legitimately slow
+server (a build, a crawl) raises the number per entry; there is deliberately
+no way to switch the bound off, the policy `startTimeout` already enforces.
+While a call runs alone in a turn it sends the turn a heartbeat, so the 120 s
+idle watchdog does not kill a long call; a slow server costs its own wait, not
+the turn. When a call reaches its ceiling, the client stops waiting, sends the
+server `notifications/cancelled` naming the request, and the model gets an
+error result (`Tool call timed out after 300s (toolTimeout) …`); the
+connection stays usable and the late reply, if any, is discarded. Only a
+positive JSON number overrides the default: a string, `0` or a negative takes
+it rather than setting a zero bound. Like `startTimeout` it is left out of the
+trust
 fingerprint, so tuning it re-prompts nothing. It is read for `stdio` entries
 only; an `http` call is bounded by the client's fixed 30 s request timeout.
-Every answer, bounded or not, is capped at 65,536 bytes before the model sees
+Every answer is capped at 65,536 bytes before the model sees
 it, with a marker naming how much was cut. `startTimeout` is read for `stdio` entries only: a `claude-mcp`
 server's `initialize` and start-time `tools/list` each wait the same fixed
 `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS` budget, and nothing in the
