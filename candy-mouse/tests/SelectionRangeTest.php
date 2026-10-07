@@ -147,4 +147,50 @@ final class SelectionRangeTest extends TestCase
         self::assertSame([4, 13], [$range->edgeFrom, $range->edgeTo], 'a swapped edge pair describes the same column');
         self::assertSame([4, 13], $range->spanOnRow(3));
     }
+
+    /**
+     * X3 pin (not a fix — absorbed-edge behaviour, by ruling): extract() does
+     * NOT clamp its row walk to count($lines).  A selection whose trailing
+     * rows were eaten by a frame-height SHRINK between drag-start and copy
+     * reads them as '' via the `?? ''` at SelectionRange::extract(); because
+     * missing rows are always TRAILING (the walk is contiguous from startRow)
+     * the end-blank trims absorb them, and the surviving rows come back
+     * exactly as if the frame had never been taller.  This test freezes that
+     * behaviour so a future refactor cannot silently turn the graceful
+     * absorb into a crash or a padded copy.
+     */
+    public function testExtractAfterFrameHeightShrinkAbsorbsTheMissingTrailingRows(): void
+    {
+        $tall = [
+            '╭──────────────╮',
+            '│  alpha       │',
+            '│  bravo       │',
+            '│  charlie     │',
+            '│  delta       │',
+            '╰──────────────╯',
+        ];
+        $range = SelectionRange::new(2, 4, 5, 13, 4, 13);
+
+        self::assertSame(
+            "alpha\nbravo\ncharlie\ndelta",
+            $range->extract($tall),
+            'precondition: the un-shrunk frame copies all four words',
+        );
+
+        // The terminal shrinks: rows 5 and 6 no longer exist when the copy
+        // reads the frame.  The selection is NOT re-clamped — extract() walks
+        // to endRow, reads the missing tail as blank, and the blank-trims
+        // drop it.
+        $short = array_slice($tall, 0, 4);
+
+        self::assertSame(
+            "alpha\nbravo\ncharlie",
+            $range->extract($short),
+            'eaten trailing rows are absorbed by the blank-trims: no padding, no notice, no clamped crash',
+        );
+
+        // Even a total eviction of the selection yields the empty string,
+        // not an error.
+        self::assertSame('', $range->extract(['']), 'a fully off-frame selection extracts to empty');
+    }
 }

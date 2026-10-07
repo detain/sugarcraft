@@ -19,6 +19,14 @@ use SugarCraft\Core\Util\Sanitize;
  * reservation, so a sanitizer sweep and the markup it defends against can
  * never drift apart by a re-typed byte literal.
  *
+ * Trust boundary: these codepoints are public constants, not secrets — the
+ * sentinel DELIMITS our markup but authenticates nothing, so neutralising
+ * foreign-sentinel bytes inside untrusted content is the CONSUMER's duty
+ * (sugar-crush sweeps pasted/foreign frames through
+ * {@see Sanitize::stripZoneSentinels()} / {@see Sanitize::untrustedForMarkedFrames()}
+ * before they can forge a zone boundary; any other host of marked frames
+ * owns the same responsibility).
+ *
  * UTF-8 byte encoding:
  *   U+E000 = EE 80 80  (open sentinel)
  *   U+E001 = EE 80 81  (close sentinel)

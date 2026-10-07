@@ -9,6 +9,7 @@ use SugarCraft\Mouse\ClickResult;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\Zone;
 use SugarCraft\Mouse\ZoneClickTracker;
 
 final class ZoneClickTrackerTest extends TestCase
@@ -41,7 +42,7 @@ final class ZoneClickTrackerTest extends TestCase
         $this->tracker->track(MouseEvent::press(1, 1, 0));
         $this->tracker->setPressZone($zone, 0);
 
-        $result = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        $result = $this->tracker->track(MouseEvent::release(1, 1, 0), $zone);
 
         self::assertInstanceOf(ClickResult::class, $result);
         self::assertSame($zone, $result->zone);
@@ -68,7 +69,7 @@ final class ZoneClickTrackerTest extends TestCase
 
         // First release — since pending was overwritten, state is cleared;
         // but the zone still covers (1,1) so a click is emitted.
-        $result = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        $result = $this->tracker->track(MouseEvent::release(1, 1, 0), $zone);
         self::assertInstanceOf(ClickResult::class, $result);
 
         // Second release — pending was cleared by first release, no click.
@@ -90,7 +91,7 @@ final class ZoneClickTrackerTest extends TestCase
         // New press/release on zone B should still work.
         $this->tracker->track(MouseEvent::press(3, 1, 0));
         $this->tracker->setPressZone($zoneB, 0);
-        $result = $this->tracker->track(MouseEvent::release(3, 1, 0));
+        $result = $this->tracker->track(MouseEvent::release(3, 1, 0), $zoneB);
 
         self::assertInstanceOf(ClickResult::class, $result);
     }
@@ -107,7 +108,7 @@ final class ZoneClickTrackerTest extends TestCase
         self::assertNull($result);
 
         // Release after drag — still emits click if same zone.
-        $result2 = $this->tracker->track(MouseEvent::release(2, 1, 0));
+        $result2 = $this->tracker->track(MouseEvent::release(2, 1, 0), $zone);
         self::assertInstanceOf(ClickResult::class, $result2);
     }
 
@@ -133,12 +134,12 @@ final class ZoneClickTrackerTest extends TestCase
         $this->tracker->setPressZone($zone, 1);
 
         // Release button 0 — emits click for button 0.
-        $result0 = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        $result0 = $this->tracker->track(MouseEvent::release(1, 1, 0), $zone);
         self::assertInstanceOf(ClickResult::class, $result0);
         self::assertSame(0, $result0->button);
 
         // Release button 1 — emits click for button 1.
-        $result1 = $this->tracker->track(MouseEvent::release(1, 1, 1));
+        $result1 = $this->tracker->track(MouseEvent::release(1, 1, 1), $zone);
         self::assertInstanceOf(ClickResult::class, $result1);
         self::assertSame(1, $result1->button);
     }
@@ -165,7 +166,7 @@ final class ZoneClickTrackerTest extends TestCase
         $this->tracker->setPressZone($zone, 0);
 
         // Release at same position — should emit.
-        $result = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        $result = $this->tracker->track(MouseEvent::release(1, 1, 0), $zone);
         self::assertInstanceOf(ClickResult::class, $result);
     }
 
@@ -182,11 +183,11 @@ final class ZoneClickTrackerTest extends TestCase
         $this->tracker->setPressZone($zone, 1);
 
         // Release button 0 — click emitted.
-        $result = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        $result = $this->tracker->track(MouseEvent::release(1, 1, 0), $zone);
         self::assertInstanceOf(ClickResult::class, $result);
 
         // Release button 1 — click emitted.
-        $result2 = $this->tracker->track(MouseEvent::release(1, 1, 1));
+        $result2 = $this->tracker->track(MouseEvent::release(1, 1, 1), $zone);
         self::assertInstanceOf(ClickResult::class, $result2);
     }
 
@@ -201,7 +202,7 @@ final class ZoneClickTrackerTest extends TestCase
         $zone = $this->buildZone('inline', 'INLINE');
 
         $this->tracker->track(MouseEvent::press(1, 1, 0), $zone);
-        $result = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        $result = $this->tracker->track(MouseEvent::release(1, 1, 0), $zone);
 
         self::assertInstanceOf(ClickResult::class, $result);
         self::assertSame($zone, $result->zone);
@@ -234,13 +235,13 @@ final class ZoneClickTrackerTest extends TestCase
         // Inline form.
         $trackerInline = new ZoneClickTracker();
         $trackerInline->track(MouseEvent::press(1, 1, 1), $zone);
-        $resultInline = $trackerInline->track(MouseEvent::release(1, 1, 1));
+        $resultInline = $trackerInline->track(MouseEvent::release(1, 1, 1), $zone);
 
         // setPressZone form.
         $trackerLegacy = new ZoneClickTracker();
         $trackerLegacy->track(MouseEvent::press(1, 1, 1));
         $trackerLegacy->setPressZone($zone, 1);
-        $resultLegacy = $trackerLegacy->track(MouseEvent::release(1, 1, 1));
+        $resultLegacy = $trackerLegacy->track(MouseEvent::release(1, 1, 1), $zone);
 
         self::assertSame($resultInline?->zone?->id, $resultLegacy?->zone?->id);
         self::assertSame($resultInline?->button, $resultLegacy?->button);
@@ -267,16 +268,17 @@ final class ZoneClickTrackerTest extends TestCase
         // Press again on zone B — overwrites pending.
         $this->tracker->track(MouseEvent::press(10, 1, 0), $zoneB);
 
-        // Release at zone A — pending was for B, so this is a different zone.
-        // State machine says: "Release on different zone → clear state, idle".
-        $resultA = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        // Release at zone A — pending was for B, so this is a different zone
+        // under the current scan too.  State machine says: "Release on
+        // different zone → clear state, idle".
+        $resultA = $this->tracker->track(MouseEvent::release(1, 1, 0), $zoneA);
         self::assertNull($resultA);
 
         // Must press again on zone B to restore pending state.
         $this->tracker->track(MouseEvent::press(10, 1, 0), $zoneB);
 
         // Release at zone B — now emits click.
-        $resultB = $this->tracker->track(MouseEvent::release(10, 1, 0));
+        $resultB = $this->tracker->track(MouseEvent::release(10, 1, 0), $zoneB);
         self::assertInstanceOf(ClickResult::class, $resultB);
         self::assertSame('b', $resultB->zone->id);
     }
@@ -295,5 +297,106 @@ final class ZoneClickTrackerTest extends TestCase
         // Release without a prior press — null, no crash.
         $result = $this->tracker->track(MouseEvent::release(1, 1, 0));
         self::assertNull($result);
+    }
+
+    // ─── X1 agreement gate: release re-resolved against the CURRENT scan ───
+
+    /**
+     * Press A, a re-render moves A off the cursor's row and slides zone B
+     * under it, release there: neither A (stale box) nor B (never pressed)
+     * may fire — the fresh hit disagrees with the press zone.
+     */
+    public function testReleaseAfterZoneMovedUnderCursorDoesNotFireTheNewZone(): void
+    {
+        $frame1 = str_repeat("plain row\n", 4) . $this->mark->wrap('A', 'ROW-A') . "\n";
+        $scan1 = new Scanner();
+        $scan1->scan($frame1);
+        $zoneA1 = $scan1->get('A');
+        self::assertNotNull($zoneA1);
+
+        $this->tracker->track(MouseEvent::press(1, 5, 0), $zoneA1);
+
+        // Re-render: A vanishes and B now occupies (1,5).
+        $frame2 = str_repeat("x\n", 4) . $this->mark->wrap('B', 'NOW-B-AT-ROW-5') . "\n";
+        $scan2 = new Scanner();
+        $scan2->scan($frame2);
+        $hitB = $scan2->hit(1, 5);
+        self::assertNotNull($hitB);
+        self::assertSame('B', $hitB->id);
+
+        $result = $this->tracker->track(MouseEvent::release(1, 5, 0), $hitB);
+        self::assertNull($result, 'a release re-resolved onto a different zone must not fire the press-time control');
+
+        // The drop also cleared the pending press (state machine: idle), so
+        // releasing again without a new press cannot fire anything either.
+        self::assertNull($this->tracker->track(MouseEvent::release(1, 5, 0), $hitB));
+    }
+
+    /**
+     * Press A, then the frame re-renders with nothing at the cursor's
+     * coordinate (zone vanished): the fresh hit is null and the click drops
+     * instead of firing off the stale press box.
+     */
+    public function testReleaseAfterZoneVanishedDoesNotFire(): void
+    {
+        $frame1 = str_repeat("plain row\n", 4) . $this->mark->wrap('A', 'ROW-A') . "\n";
+        $scan1 = new Scanner();
+        $scan1->scan($frame1);
+        $zoneA1 = $scan1->get('A');
+        self::assertNotNull($zoneA1);
+
+        $this->tracker->track(MouseEvent::press(1, 5, 0), $zoneA1);
+
+        // Re-render collapses the filler rows above: nothing occupies (1,5) now.
+        $frame2 = $this->mark->wrap('A', 'ROW-A') . "\n";
+        $scan2 = new Scanner();
+        $scan2->scan($frame2);
+        self::assertNull($scan2->hit(1, 5), 'precondition: the coordinate is zone-less in the current frame');
+
+        $result = $this->tracker->track(MouseEvent::release(1, 5, 0), $scan2->hit(1, 5));
+        self::assertNull($result, 'a vanished zone must drop the pending press, not fire the stale box');
+    }
+
+    /**
+     * Positive control / vacuity guard for the two drops above: an unchanged
+     * frame re-resolves the release to an equal-valued zone from a FRESH
+     * scan (distinct Zone instance, same id + box) and the click fires.
+     */
+    public function testSameFramePressAndReleaseFiresAcrossIndependentScans(): void
+    {
+        $frame = str_repeat("plain row\n", 4) . $this->mark->wrap('A', 'ROW-A') . "\n";
+        $scanAtPress = new Scanner();
+        $scanAtPress->scan($frame);
+        $zoneAtPress = $scanAtPress->get('A');
+        self::assertNotNull($zoneAtPress);
+
+        $this->tracker->track(MouseEvent::press(1, 5, 0), $zoneAtPress);
+
+        // Second scanner over the identical frame: value-equal, identity-distinct.
+        $scanAtRelease = new Scanner();
+        $scanAtRelease->scan($frame);
+        $freshHit = $scanAtRelease->hit(1, 5);
+        self::assertNotNull($freshHit);
+        self::assertNotSame($zoneAtPress, $freshHit, 'agreement must be value-based, not object identity');
+
+        $result = $this->tracker->track(MouseEvent::release(1, 5, 0), $freshHit);
+        self::assertInstanceOf(ClickResult::class, $result);
+        self::assertSame('A', $result->zone->id);
+    }
+
+    /**
+     * Same id at a different box is NOT agreement: after a reflow the zone
+     * keeps its identity but its rectangle moved, so the coordinate covers
+     * different content than where the press landed and the click drops.
+     */
+    public function testAgreementRefusesSameIdWithMovedBox(): void
+    {
+        $pressZone = new Zone('row', 1, 5, 5, 5);
+        $this->tracker->track(MouseEvent::press(1, 5, 0), $pressZone);
+
+        // Current frame: 'row' reflowed to row 1 — the release re-hit is the
+        // pre-reflow-shaped answer for a zone with the same id, new box.
+        $result = $this->tracker->track(MouseEvent::release(1, 5, 0), new Zone('row', 1, 1, 5, 1));
+        self::assertNull($result, 'id equality alone must not resurrect a click over moved content');
     }
 }
