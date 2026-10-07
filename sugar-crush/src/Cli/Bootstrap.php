@@ -6373,13 +6373,24 @@ final class Bootstrap
      *   unattended CI run's first `Edit` into a refusal on upgrade. They opt
      *   in to asking with `--permission-mode` or the config key, like before.
      *
-     * Be honest about what the console default costs: with the shipped empty
-     * rule set, BypassPermissions is EXACTLY EQUAL to having no gate. Every
-     * destructive `rm` the gate's circuit breaker refuses is already refused,
-     * earlier and more broadly, by
-     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}. What it buys
-     * is a gate that is REACHABLE and configurable: set
-     * `permissionMode`/`permissionRules` and it starts deciding things.
+     * Be honest about what the console default costs — the 2026-10-06 bypass
+     * ruling flipped the old claim inside out: BypassPermissions is NOT equal
+     * to having no gate; it is NARROWER than one. A floor still refuses under
+     * bypass: the step-0 `rm -rf /` circuit breaker and every explicit `Deny`
+     * rule are mode-independent inside the gate, the policy-self-grant rows of
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook} still refuse so
+     * the model cannot rewrite the files that set the mode, and the guards
+     * mounted outside the gate — the opt-in worktree containment of
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook} (when a jail
+     * root is configured) and the per-turn
+     * {@see \SugarCraft\Crush\Hooks\BuiltIn\RepeatCallGuardHook} loop guard —
+     * never read the mode at all. A bare chain with no gate enforces MORE than
+     * bypass: it adds {@see \SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook}
+     * refusing destructive `rm`s earlier and more broadly than the breaker, and
+     * the secret/file-class refusals of ProtectFiles, which bypass stands down.
+     * What the gate buys either way is that all of it is REACHABLE and
+     * configurable: set `permissionMode`/`permissionRules` and it starts
+     * deciding things.
      *
      * Either default is reported with the source `the built-in default`; a
      * configured mode (flag, env var, config key) wins on every path alike.

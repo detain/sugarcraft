@@ -2146,8 +2146,15 @@ final class DocFigureProseDriftTest extends TestCase
         $registrar = self::bodyExcerpt(self::sourceOf('Hooks/HookManager.php'), 'registerBuiltIns', 900);
         $registerNeedle = '$this->registry->register(new BuiltIn\\';
         self::assertSame($words[$three[1]] ?? -1, substr_count($registrar, $registerNeedle), 'the spelled register count no longer matches registerBuiltIns()');
-        preg_match_all('/register\(new BuiltIn\\\\(\w+)\(\)\)/', $registrar, $registered);
-        self::assertCount(3, $registered[1], 'the registrar body no longer builds its hooks with new BuiltIn\X() — re-derive this pin');
+        // Constructor ARITY is not this arm's claim — the registered ROSTER is.
+        // Since CL-1 the two guard hooks take a lazy $modeReader, so a
+        // `\(\)`-closed match pinned the call spelling instead of the set
+        // (lane cl-1b re-derivation): capture the class name behind every
+        // register(new BuiltIn\ prefix and let the doc-word leg above stay the
+        // single source of the count.
+        preg_match_all('/register\(new BuiltIn\\\\(\w+)\s*\(/', $registrar, $registered);
+        self::assertSame(substr_count($registrar, $registerNeedle), count($registered[1]), 'a `$this->registry->register(new BuiltIn\…` line in the registrar body yields no captured class name — every table/grid leg below is derived from these captures');
+        self::assertNotEmpty($registered[1], 'the registrar body no longer builds its hooks with new BuiltIn\X(...) — re-derive this pin');
 
         // Built-ins table: the three rows, their event cells, and whichever
         // matchers they spell out.
