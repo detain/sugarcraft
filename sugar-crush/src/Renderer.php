@@ -3282,7 +3282,7 @@ final class Renderer
             }
             $tabs[] = [
                 'id' => $id,
-                'name' => self::clipSessionTabName($name, self::SESSION_TAB_NAME_COLS),
+                'name' => self::clipWithEllipsis($name, self::SESSION_TAB_NAME_COLS),
                 'current' => $isCurrent,
             ];
         }
@@ -3296,7 +3296,7 @@ final class Renderer
             // first tab is the anchor, which is what plain left-to-right
             // filling would have kept anyway.
             $anchor = $currentIndex ?? 0;
-            $tabs[$anchor]['name'] = self::clipSessionTabName(
+            $tabs[$anchor]['name'] = self::clipWithEllipsis(
                 $tabs[$anchor]['name'],
                 $cols - $reserve - 2,
             );
@@ -3353,9 +3353,13 @@ final class Renderer
     /**
      * $name cut to $budget cells, ending in an ellipsis when it was cut.
      * Grapheme-aware ({@see Width::truncate()}), so a wide or combining
-     * cluster is never split. A budget under one cell yields the empty name.
+     * cluster is never split. A budget under one cell yields the empty string.
+     *
+     * The file's one shared ellipsising clip — session tabs and, since the
+     * CL-2 pane auto-dock made the agent-composer ghost overrun a docked
+     * pane's text column, {@see renderInput()}'s ghost too.
      */
-    private static function clipSessionTabName(string $name, int $budget): string
+    private static function clipWithEllipsis(string $name, int $budget): string
     {
         if (Width::string($name) <= $budget) {
             return $name;
@@ -7099,7 +7103,16 @@ final class Renderer
         // tempt a message to the wrong recipient.
         $composer = self::$agentView;
         if ($composer !== null && $chat->inputBuf === '') {
-            $ghost = Width::truncate(
+            // The clip is ellipsised, not a hard slice: since CL-2's pane
+            // auto-dock (8013e0f20) the chat pane is a third of the window at
+            // 110 cols, and the broadcast ghost "message all N agents…"
+            // overruns that text column. A bare Width::truncate() there shed
+            // the plural s and the payload's own ellipsis and printed
+            // "message all 3 agent" — which reads as a SINGULAR addressee,
+            // inverting the one fact the ghost exists to name. clipWithEllipsis
+            // is the file's existing shared clip (session tabs); it keeps the
+            // cut honest as "message all 3 agen…".
+            $ghost = self::clipWithEllipsis(
                 self::oneLine(Lang::t('tui.input.message_agent', ['name' => self::untrusted((string) ($composer['composer'] ?? $composer['name']))])),
                 max(0, $textWidth - Width::of($cursor)),
             );
