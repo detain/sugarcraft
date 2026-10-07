@@ -6,6 +6,8 @@ namespace SugarCraft\Core\Tests;
 
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
+use React\Promise\Deferred;
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
@@ -344,5 +346,104 @@ final class ProgramRuntimeTeardownTest extends TestCase
                 pcntl_async_signals($prevAsync);
             }
         }
+    }
+
+    /**
+     * crush_libs.md candy-core C1: an AsyncCmd's promise used to dispatch
+     * straight into the Program from then()/otherwise() with no generation
+     * check, so a promise settling after releaseRuntime() mutated the dead
+     * model and appended render bytes onto the restored terminal. The fix
+     * mirrors the deferTick capture law; these pins go red exactly when the
+     * guard is dropped.
+     */
+    public function testAsyncCmdResolvingAfterTeardownIsDropped(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $deferred = new Deferred();
+
+        $model = new LoggingModel(initCmd: Cmd::batch(
+            static fn (): Msg => new AsyncCmd($deferred->promise()),
+            Cmd::tick(0.01, static fn (): Msg => new \SugarCraft\Core\Msg\QuitMsg()),
+        ));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $late = new KeyMsg(KeyType::Char, 'z');
+        $before = count($program->model()->log);
+        $bytes = ftell($out);
+        $this->assertIsInt($bytes);
+
+        $deferred->resolve($late);
+        $this->spin($loop, 0.05);
+
+        $this->assertNotContains($late, $program->model()->log, 'AsyncCmd dispatched into the torn-down Program');
+        $this->assertCount($before, $program->model()->log);
+        $this->assertSame($bytes, ftell($out), 'post-teardown dispatch painted the restored terminal');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** Reject path: no ExceptionMsg, no log line, and the user handler must NOT run after teardown. */
+    public function testAsyncCmdRejectingAfterTeardownRunsNothing(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $deferred = new Deferred();
+
+        $handlerRan = false;
+        $model = new LoggingModel(initCmd: Cmd::batch(
+            static fn (): Msg => new AsyncCmd($deferred->promise()),
+            Cmd::tick(0.01, static fn (): Msg => new \SugarCraft\Core\Msg\QuitMsg()),
+        ));
+        $program = (new Program($model, $this->options($in, $out, $loop)))
+            ->withExceptionHandler(static function () use (&$handlerRan): void {
+                $handlerRan = true;
+            });
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $before = count($program->model()->log);
+        $deferred->reject(new \RuntimeException('late rejection'));
+        $this->spin($loop, 0.05);
+
+        $this->assertFalse($handlerRan, 'the user exception handler fired into a finished runtime');
+        $this->assertCount($before, $program->model()->log);
+        $exceptions = array_filter(
+            $program->model()->log,
+            static fn (Msg $m): bool => $m instanceof \SugarCraft\Core\Msg\ExceptionMsg,
+        );
+        $this->assertSame([], array_values($exceptions), 'ExceptionMsg was dispatched after teardown');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** Non-vacuity control: inside the same generation the resolved Msg still lands. */
+    public function testAsyncCmdResolvingWhileStillRunningStillDispatches(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $deferred = new Deferred();
+        $late = new KeyMsg(KeyType::Char, 'z');
+
+        $model = new LoggingModel(initCmd: Cmd::batch(
+            static fn (): Msg => new AsyncCmd($deferred->promise()),
+            Cmd::tick(0.05, static fn (): Msg => new \SugarCraft\Core\Msg\QuitMsg()),
+        ));
+        $program = new Program($model, $this->options($in, $out, $loop));
+        $loop->addTimer(0.02, static fn () => $deferred->resolve($late));
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertContains($late, $program->model()->log, 'the generation guard swallowed a live dispatch');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
     }
 }

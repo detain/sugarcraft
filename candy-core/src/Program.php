@@ -692,11 +692,27 @@ final class Program
             $this->recorder?->recordResize($msg->cols, $msg->rows);
         }
         if ($msg instanceof AsyncCmd) {
-            $msg->promise->then(function (?Msg $resolvedMsg): void {
+            // Generation guard (mirrors the deferTick law): a promise may settle
+            // AFTER releaseRuntime() has torn this runtime down — the loop is
+            // gone, the terminal is restored, and dispatching would write bytes
+            // onto a recovered screen and mutate a model nobody renders again.
+            // releaseRuntime() bumps runtimeGeneration FIRST, so capturing the
+            // generation at arm-time and refusing to act on a mismatch makes
+            // post-teardown settlement a silent no-op.
+            $generation = $this->runtimeGeneration;
+            $msg->promise->then(function (?Msg $resolvedMsg) use ($generation): void {
+                if ($generation !== $this->runtimeGeneration) {
+                    return;
+                }
                 if ($resolvedMsg !== null) {
                     $this->dispatch($resolvedMsg);
                 }
-            })->otherwise(function (\Throwable $e): void {
+            })->otherwise(function (\Throwable $e) use ($generation): void {
+                if ($generation !== $this->runtimeGeneration) {
+                    // Same law on the reject path: no log line, no ExceptionMsg,
+                    // and crucially no user exception handler after teardown.
+                    return;
+                }
                 // Surface the async failure as an ExceptionMsg (models can react /
                 // quit) and run the user-configured exception handler.
                 $this->log('error', 'async command failed: ' . $e->getMessage());
