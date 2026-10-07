@@ -55,6 +55,20 @@ final class PosixMasterPty implements MasterPty
     }
 
     /**
+     * Null-timeout path (audit 2026-10-07, doc-contract ruling — no behavior
+     * change): the select arm is skipped entirely and @fread runs on the
+     * stream AS-IS, so the wait is governed by the stream's blocking mode —
+     * set only externally via Pty::setBlocking() (src/Pty.php:116) on this
+     * same stream, default blocking. Probe-proven on this box: read(8192, null)
+     * on an idle fresh master hangs until killed, returns as soon as the slave
+     * writes, and returns immediately once the stream was flipped
+     * non-blocking. Callers passing null must ensure non-blocking mode
+     * themselves or accept the blocking read; finite timeouts are recommended.
+     * The mode is deliberately NOT forced here: the stream is shared with
+     * PosixPump/MultiPump selects and owned by the caller's mode choice —
+     * switching it inside read() would mutate shared state (follow-up if a
+     * mode-owning API is ever wanted).
+     *
      * @see creack/pty.Read()
      */
     public function read(int $len = 8192, ?float $timeout = null): ?string

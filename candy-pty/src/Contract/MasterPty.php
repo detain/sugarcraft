@@ -22,6 +22,14 @@ interface MasterPty
      *
      * Returns null on timeout, empty string on EOF, bytes otherwise.
      *
+     * Timeout contract (audit 2026-10-07): with a finite $timeout the wait is
+     * bounded by an internal select. With $timeout = null NO mode control
+     * happens — the read inherits the stream's current blocking mode, which
+     * only {@see \SugarCraft\Pty\Pty::setBlocking()} changes and which a
+     * freshly opened master defaults to BLOCKING. Passing null therefore
+     * requires the caller to have armed non-blocking mode itself, or to accept
+     * an unbounded wait; prefer a finite timeout.
+     *
      * @see creack/pty.Read()
      * @see portable-pty.MasterPty.Read()
      */
