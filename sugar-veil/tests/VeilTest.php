@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Veil\Tests;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\{MouseAction, MouseButton, Msg\MouseMsg};
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Veil\{Position, Veil};
@@ -1280,4 +1281,50 @@ final class VeilTest extends TestCase
         // Since fg is empty (height=0), all rows are "not covered" and get dimmed
         $this->assertStringContainsString("38;2;", $result);
     }
+
+    // ─── Wide-glyph straddle at the overlay clip boundary (LL fix #1) ────────
+
+    /**
+     * @dataProvider straddleClipBoundaryCases
+     *
+     * Width::dropAnsi() drops a wide backdrop grapheme straddling the suffix
+     * cut whole, consuming one cell BEYOND the overlay footprint — pre-fix the
+     * remainder of the row slid left and the composite was a cell narrower than
+     * the backdrop. The clip path now blanks the straddled cell; these pins
+     * walk the cut across a wide cell (CJK + SMP emoji) and off it, asserting
+     * both the exact row string and the exact cell width at several offsets.
+     */
+    public function testWideGlyphStraddlingTheClipBoundaryBlanksOneCell(
+        string $fg,
+        string $bg,
+        int $xOffset,
+        string $expected,
+    ): void {
+        $row = explode("\n", Veil::new()->composite($fg, $bg, Position::TOP, Position::LEFT, xOffset: $xOffset))[0];
+
+        $this->assertSame($expected, $row);
+        $this->assertSame(Width::string($bg), Width::string($row), 'Composited row keeps the backdrop width exactly');
+    }
+
+    /**
+     * @return array<string, array{string, string, int, string}>
+     */
+    public static function straddleClipBoundaryCases(): array
+    {
+        return [
+            // 語 occupies cols 5-6; 'ZZZ' at x=3 covers its left half, so the
+            // right half at col 6 becomes a blank instead of shifting fgh left.
+            'cut on right half'     => ['ZZZ', 'abcde語fgh', 3, 'abcZZZ fgh'],
+            'cut on right half #2'  => ['ZZ', 'abcde語fgh', 4, 'abcdZZ fgh'],
+            // SMP emoji (2 cells) straddles the same way.
+            'emoji right half'      => ['Z', 'x😀yz', 1, 'xZ yz'],
+            // Clean cuts: right of the wide cell / exactly at its head — no blank.
+            'cut past wide cell'    => ['QQQQQ', 'abcde語fgh', 4, 'abcdQQQQQh'],
+            'cut at wide head'      => ['ZZZZ', 'abcde語fgh', 1, 'aZZZZ語fgh'],
+            'wide overlay inside'   => ['語', 'ab語cd', 3, 'ab 語d'],
+            // ASCII-only rows must not gain a stray space.
+            'no wide glyph'         => ['ZZ', 'abcdefghij', 2, 'abZZefghij'],
+        ];
+    }
+
 }

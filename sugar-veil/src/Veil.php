@@ -552,7 +552,20 @@ final class Veil
             // the overlay always starts at column max(0, x).
             $prefixWidth = \max(0, $x);
             $prefix = Width::padRight(Width::truncateAnsi($bgLine, $prefixWidth), $prefixWidth);
-            $suffix = Width::dropAnsi($bgLine, $prefixWidth + $fgVis);
+            $cut = $prefixWidth + $fgVis;
+            $suffix = Width::dropAnsi($bgLine, $cut);
+            // Width::dropAnsi() drops a wide backdrop grapheme straddling the
+            // cut WHOLE — it consumes its right-half cell one column BEYOND
+            // the overlay footprint. Without a replacement the rest of the
+            // row slides left and the composite is a cell narrower than the
+            // backdrop (e.g. 'abcde語fgh' + 'ZZZ' at x=3 yielded 9 cells).
+            // Measure the shortfall cell-aware and blank the straddled cell
+            // so every composited row keeps the backdrop's exact width; the
+            // left edge needs no twin because padRight above already re-blanks.
+            $straddled = Width::string($bgLine) - $cut - Width::string($suffix);
+            if ($straddled > 0) {
+                $suffix = \str_repeat(' ', $straddled) . $suffix;
+            }
 
             $output[$row] = $this->dimLine($prefix) . $fgLine . $this->dimLine($suffix);
         }
