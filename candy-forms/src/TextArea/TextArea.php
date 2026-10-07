@@ -17,6 +17,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Editor;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Multi-line text input. Holds a list of lines and a (row, col) cursor.
@@ -263,7 +264,9 @@ final class TextArea implements Model
         // `min(maxHeight, max(1, line count))`.
         $effectiveHeight = $this->effectiveHeight();
 
-        // Slice rows by height (height = 0 means show all).
+        // Slice rows by height (height = 0 means show all). Windowing is by
+        // BUFFER row; a soft-wrapped line may therefore spill past the height
+        // window by design — callers that must fit a pane clip it themselves.
         $start = max(0, $this->rowOffset);
         $rows  = $effectiveHeight > 0
             ? array_slice($this->lines, $start, $effectiveHeight)
@@ -279,26 +282,138 @@ final class TextArea implements Model
             }
         }
 
-        if (!$this->focused) {
-            return implode("\n", $this->prefixWithGutter($rows, $start));
-        }
+        // Selection spans (E736 5.13) paint reverse-video per row; rows with
+        // neither the caret nor a span keep the exact pre-clipboard render
+        // path. `-1` marks the unfocused render so no piece is treated as the
+        // caret row and no span is queried.
+        $relRow = $this->focused ? $this->row - $start : -1;
+        return implode("\n", $this->renderRows($rows, $start, $relRow));
+    }
 
-        // Render with the embedded cursor at (row, col). Selection spans
-        // (E736 5.13) paint reverse-video per row; rows with neither the
-        // caret nor a span keep the exact pre-clipboard render path.
-        $relRow = $this->row - $start;
+    /**
+     * Expand each visible buffer row into its soft-wrapped visual pieces,
+     * paint the caret / selection span on the piece that owns it, then
+     * prefix the per-row gutter + prompt onto the leading piece and an
+     * equal-width indent onto each continuation piece so wrapped columns
+     * stay aligned under the text they belong to.
+     *
+     * With `$width <= 0` every buffer row collapses to a single piece and the
+     * emitted rows are byte-for-byte what the legacy unwrapped render produced.
+     *
+     * @param list<string> $rows   visible buffer rows (filler rows appended)
+     * @param int          $start  buffer index of `$rows[0]` (for gutter numbering)
+     * @param int          $relRow index within `$rows` holding the caret, or -1
+     * @return list<string>
+     */
+    private function renderRows(array $rows, int $start, int $relRow): array
+    {
         $out = [];
         foreach ($rows as $i => $line) {
-            $span = $this->selectionSpanOn($start + $i);
-            if ($i !== $relRow) {
-                $out[] = $span === null ? $line : $this->paintSpan($line, $span);
-                continue;
+            $bufferRow = $start + $i;
+            $span      = $relRow >= 0 ? $this->selectionSpanOn($bufferRow) : null;
+            $pieces    = $this->wrapSegments($line, $this->width);
+            $caretIdx  = $i === $relRow ? $this->caretPieceIndex($pieces) : -1;
+            $padWidth  = 0;
+            foreach ($pieces as $j => $piece) {
+                $base = $piece['startCol'];
+                $text = $piece['text'];
+                $body = match (true) {
+                    $j === $caretIdx && $span !== null => $this->renderCursorAndSpan($text, $span, $base),
+                    $j === $caretIdx                   => $this->renderCursorLine($text, $base),
+                    $span !== null                     => $this->paintSpan($text, $span, $base),
+                    default                            => $text,
+                };
+                if ($j === 0) {
+                    $prefix   = $this->rowPrefix($bufferRow, $body);
+                    $padWidth = Width::string($prefix);
+                    $out[]    = $prefix . $body;
+                    continue;
+                }
+                $out[] = ($padWidth > 0 ? str_repeat(' ', $padWidth) : '') . $body;
             }
-            $out[] = $span === null
-                ? $this->renderCursorLine($line)
-                : $this->renderCursorAndSpan($line, $span);
         }
-        return implode("\n", $this->prefixWithGutter($out, $start));
+        return $out;
+    }
+
+    /**
+     * Soft-wrap one buffer line into display pieces no wider than `$width`
+     * cells, preserving every codepoint (this is an editor, so the wrap never
+     * drops or reflows characters the way {@see Width::wrap()} would). Each
+     * piece records the codepoint range `[startCol, endCol)` it carries so the
+     * caret and selection spans — both buffer-absolute codepoint offsets —
+     * resolve to the right visual row and column.
+     *
+     * A `$width` of `0` (or less) means unbounded: the whole line is one piece.
+     * When a single grapheme is wider than the full width, it still gets its
+     * own piece so the walk always advances; an over-wide row beats a hang.
+     *
+     * @return list<array{text: string, startCol: int, endCol: int}>
+     */
+    private function wrapSegments(string $line, int $width): array
+    {
+        $lineLen = mb_strlen($line, 'UTF-8');
+        if ($width <= 0 || $lineLen === 0) {
+            return [['text' => $line, 'startCol' => 0, 'endCol' => $lineLen]];
+        }
+
+        $pieces   = [];
+        $consumed = 0;
+        while ($consumed < $lineLen) {
+            $rest    = mb_substr($line, $consumed, null, 'UTF-8');
+            $segment = Width::truncate($rest, $width);
+            if ($segment === '') {
+                $segment = mb_substr($rest, 0, 1, 'UTF-8');
+            }
+            $segLen   = mb_strlen($segment, 'UTF-8');
+            $pieces[] = [
+                'text'     => $segment,
+                'startCol' => $consumed,
+                'endCol'   => $consumed + $segLen,
+            ];
+            $consumed += $segLen;
+        }
+        return $pieces;
+    }
+
+    /**
+     * Which wrapped piece of the caret's line owns the caret. The caret sits
+     * before the piece whose codepoint range contains `$col`; a caret parked
+     * at end-of-line rides the last piece.
+     *
+     * @param non-empty-list<array{text: string, startCol: int, endCol: int}> $pieces
+     */
+    private function caretPieceIndex(array $pieces): int
+    {
+        foreach ($pieces as $j => $piece) {
+            if ($this->col < $piece['endCol']) {
+                return $j;
+            }
+        }
+        return count($pieces) - 1;
+    }
+
+    /**
+     * Gutter + prompt prefix for one visual row, computed from the already
+     * rendered body so a dynamic prompt sees the same string the legacy render
+     * handed it. Returns '' when the row carries neither a number nor a prompt.
+     */
+    private function rowPrefix(int $row, string $rendered): string
+    {
+        if (!$this->showLineNumbers && $this->prompt === '' && $this->promptFunc === null) {
+            return '';
+        }
+        $totalLines = count($this->lines);
+        $gutter     = '';
+        if ($this->showLineNumbers) {
+            $gutterWidth = max(2, strlen((string) $totalLines) + 1);
+            $isFiller    = $rendered === $this->endOfBufferCharacter && $row >= $totalLines;
+            $label       = $isFiller ? '' : (string) ($row + 1);
+            $gutter      = str_pad($label, $gutterWidth, ' ', STR_PAD_LEFT) . ' ';
+        }
+        $prompt = $this->promptFunc !== null
+            ? ($this->promptFunc)($row, $rendered)
+            : $this->prompt;
+        return $gutter . $prompt;
     }
 
     /**
@@ -789,6 +904,21 @@ final class TextArea implements Model
     /** Cursor column on {@see line()} (0-based, codepoint count). Mirrors `Column()`. */
     public function column(): int { return $this->col; }
 
+    /**
+     * Cursor column measured in DISPLAY CELLS rather than codepoints — the
+     * x-offset the caret paints at once wide characters (CJK, emoji) and
+     * zero-width marks are accounted for. `column()` stays the codepoint
+     * offset the flat draft-index math (and sugar-crush's seekInput) relies
+     * on; this is the presentation-side companion, wrapping aside (each
+     * visual row restarts at 0 — add {@see wrapSegments()} offsets to locate
+     * the caret inside a soft-wrapped line).
+     */
+    public function visualColumn(): int
+    {
+        $line = $this->lines[$this->row] ?? '';
+        return Width::string(mb_substr($line, 0, $this->col, 'UTF-8'));
+    }
+
     /** Configured visible width in cells (0 = unbounded). */
     public function getWidth(): int { return $this->width; }
 
@@ -993,20 +1123,21 @@ final class TextArea implements Model
      * the Cursor primitive (which already paints reverse video, same as
      * renderCursorLine) — a caret sitting on a selected cell lands inside
      * the same bar, so no extra wrap is emitted here. Adjacent runs render
-     * as one continuous selection.
+     * as one continuous selection. `$base` is the piece's codepoint offset
+     * within the buffer line, so spans stay buffer-absolute across a wrap.
      *
      * @param array{0:int, 1:int} $span
      */
-    private function renderCursorAndSpan(string $line, array $span): string
+    private function renderCursorAndSpan(string $line, array $span, int $base = 0): string
     {
         $lineLen = mb_strlen($line, 'UTF-8');
-        $col     = max(0, min($lineLen, $this->col));
+        $col     = max(0, min($lineLen, $this->col - $base));
         $before  = mb_substr($line, 0, $col, 'UTF-8');
         $charAt  = $col < $lineLen ? mb_substr($line, $col, 1, 'UTF-8') : ' ';
         $after   = $col < $lineLen ? mb_substr($line, $col + 1, null, 'UTF-8') : '';
-        return $this->paintSpan($before, $span, 0)
+        return $this->paintSpan($before, $span, $base)
             . $this->cursor->setChar($charAt)->view()
-            . $this->paintSpan($after, $span, $col + 1);
+            . $this->paintSpan($after, $span, $base + $col + 1);
     }
 
     /**
@@ -1177,12 +1308,13 @@ final class TextArea implements Model
      * to the cursor primitive (E736 plan 3.10). Past the line end the
      * cursor paints a space so an empty-line caret still shows.
      */
-    private function renderCursorLine(string $line): string
+    private function renderCursorLine(string $line, int $base = 0): string
     {
         $lineLen = mb_strlen($line, 'UTF-8');
-        $before  = mb_substr($line, 0, $this->col, 'UTF-8');
-        $charAt  = $this->col < $lineLen ? mb_substr($line, $this->col, 1, 'UTF-8') : ' ';
-        $after   = $this->col < $lineLen ? mb_substr($line, $this->col + 1, null, 'UTF-8') : '';
+        $col     = max(0, min($lineLen, $this->col - $base));
+        $before  = mb_substr($line, 0, $col, 'UTF-8');
+        $charAt  = $col < $lineLen ? mb_substr($line, $col, 1, 'UTF-8') : ' ';
+        $after   = $col < $lineLen ? mb_substr($line, $col + 1, null, 'UTF-8') : '';
         return $before . $this->cursor->setChar($charAt)->view() . $after;
     }
 
