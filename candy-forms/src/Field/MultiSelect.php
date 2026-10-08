@@ -267,9 +267,16 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         if (!empty($next[$idx])) {
             unset($next[$idx]);
         } else {
-            // Honour max cap before adding.
+            // Honour max cap before adding. Same Lang::t route as the
+            // submit-time constraint in computeConstraintError() — the hard-
+            // coded twin here was the one untranslated display site
+            // (lane p4, F-P4-4; key multiselect.pick_at_most already ships
+            // in lang/en.php).
             if ($this->max > 0 && self::countTrue($next) >= $this->max) {
-                return $this->mutate(error: "Pick at most {$this->max}.", touchError: true);
+                return $this->mutate(
+                    error: Lang::t('multiselect.pick_at_most', ['n' => (string) $this->max]),
+                    touchError: true,
+                );
             }
             $next[$idx] = true;
         }

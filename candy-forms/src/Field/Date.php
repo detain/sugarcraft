@@ -31,16 +31,21 @@ use SugarCraft\Forms\Validator\Validator;
  * Keys while focused (Tab always leaves the field — the field never
  * consumes it):
  *   <- / ->          previous / next day          h / l
- *   ^ / v            previous / next week         k / j   (the field
- *                                                         consumes these:
- *                                                         the default
- *                                                         KeyMap binds
- *                                                         them to form
- *                                                         navigation —
- *                                                         same claim
- *                                                         {@see Select}
- *                                                         makes in list
- *                                                         mode)
+ *   Up / Down        previous / next week         k / j   (the field
+ *                                                         consumes the
+ *                                                         arrows only:
+ *                                                         they collide
+ *                                                         with the default
+ *                                                         KeyMap's form
+ *                                                         navigation,
+ *                                                         while the k/j
+ *                                                         chars need no
+ *                                                         claim — the
+ *                                                         default KeyMap
+ *                                                         binds no chars,
+ *                                                         so they reach
+ *                                                         update()
+ *                                                         unclaimed)
  *   SHIFT+<- / SHIFT+->, PageUp / PageDown        previous / next month
  *                                                  (day clamped to the
  *                                                  target month's length:

@@ -11,6 +11,7 @@ use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\HasReadonly;
+use SugarCraft\Forms\Util\RenderSafe;
 
 /**
  * File-system picker field. Wraps {@see PickerWidget}; the field's value
@@ -95,7 +96,13 @@ final class FilePicker implements \SugarCraft\Forms\Field
         if ($desc  !== '') { $lines[] = $desc; }
         $lines[] = $this->picker->view();
         if ($this->picker->selected() !== null) {
-            $lines[] = '→ ' . $this->picker->selected();
+            // The selected path is attacker-influenceable display text (a
+            // crafted filename carries ESC sequences straight into the
+            // terminal stream otherwise): clean at the render site like the
+            // inner widget's cwd/entry lines and every sibling field does
+            // (lane p4, F-P4-1 — the wrapper line was the one uncleaned
+            // display site). Value semantics stay raw; cleaning is view-only.
+            $lines[] = '→ ' . RenderSafe::clean((string) $this->picker->selected());
         }
         return implode("\n", $lines);
     }
