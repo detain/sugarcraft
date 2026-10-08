@@ -109,7 +109,9 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetStyleOp(Style::bold())];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b[0;1m", $bytes);
+        // B1 (lane A3a): a frame that ENDS styled is closed with an SGR
+        // reset so the next raw write cannot inherit the ghost colour.
+        $this->assertSame("\x1b[0;1m\x1b[0m", $bytes);
     }
 
     public function testEncodeSetStyleOpNullResets(): void
@@ -170,7 +172,8 @@ final class DiffEncoderTest extends TestCase
         ];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b[0;1mAB", $bytes);
+        // Trailing reset per B1 — the stream must end at default rendition.
+        $this->assertSame("\x1b[0;1mAB\x1b[0m", $bytes);
     }
 
     public function testEncodeSgrDifferentiatesBoldItalic(): void
@@ -183,7 +186,8 @@ final class DiffEncoderTest extends TestCase
         ];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b[0;1mB\x1b[0;3mI", $bytes);
+        // Trailing reset per B1 — italic was live at end of stream.
+        $this->assertSame("\x1b[0;1mB\x1b[0;3mI\x1b[0m", $bytes);
     }
 
     public function testEncodeWideCharAdvancesCursorByWidth2(): void
@@ -202,7 +206,8 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetCellOp([$cell])];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b[0;38;2;18;52;86;48;2;171;205;239;1;4mS", $bytes);
+        // Trailing reset per B1 — composite style was live at end of stream.
+        $this->assertSame("\x1b[0;38;2;18;52;86;48;2;171;205;239;1;4mS\x1b[0m", $bytes);
     }
 
     public function testRepeatRunWideAdvancesCursorByWidth(): void
@@ -303,5 +308,61 @@ final class DiffEncoderTest extends TestCase
         $this->assertStringContainsString('https://a.com', $bytes);
         $this->assertStringContainsString('https://b.com', $bytes);
         $this->assertStringContainsString("\x1b]8;;\x1b\\", $bytes);
+    }
+
+    // ─── B1 (lane A3a) — trailing SGR reset on the delta wire ────────────
+
+    public function testStyledTailFrameEndsWithAnSgrReset(): void
+    {
+        // Probe shape from the p8a audit: blank previous frame, the current
+        // one paints a single red 'X' at column 2. Before the fix encode()
+        // returned bytes that left the REAL terminal styled — the comment
+        // above the hyperlink close promised the reset but never emitted it.
+        $bytes = $this->encoder->encode([
+            new MoveCursorOp(2, 0),
+            new SetCellOp([Cell::new('X', Style::new(0xFF0000))]),
+        ]);
+
+        $this->assertSame("\x1b[1;3H\x1b[0;38;2;255;0;0mX\x1b[0m", $bytes);
+    }
+
+    public function testUnstyledFrameCarriesNoTrailingReset(): void
+    {
+        // The reset is CONDITIONAL (Buffer::toAnsi() parity): a stream that
+        // never activated a style stays byte-identical to the rune alone.
+        $bytes = $this->encoder->encode([new SetCellOp([Cell::new('x')])]);
+
+        $this->assertSame('x', $bytes);
+    }
+
+    public function testExplicitStyleClearIsNotFollowedByASecondReset(): void
+    {
+        $bytes = $this->encoder->encode([
+            new SetCellOp([Cell::new('X', Style::bold())]),
+            new SetStyleOp(null),
+        ]);
+
+        $this->assertSame("\x1b[0;1mX\x1b[0m", $bytes);
+    }
+
+    public function testConsumerShapedConcatenationDoesNotBleedStyleIntoTheNextFrame(): void
+    {
+        // sugar-veil RenderSession and sugar-dash Chart return encode()
+        // verbatim; a following delta frame that clears the red cell opens
+        // with ECH at whatever rendition the terminal is in. With the tail
+        // reset the combined wire is red-X, RESET, ECH; without it the ECH
+        // erases while the terminal is still red and the "cleared" cell
+        // ghosts red.
+        $frame = $this->encoder->encode([
+            new MoveCursorOp(2, 0),
+            new SetCellOp([Cell::new('X', Style::new(0xFF0000))]),
+        ]);
+        $clear = $this->encoder->encode([new EraseRunOp(1)]);
+
+        $this->assertSame(
+            "\x1b[1;3H\x1b[0;38;2;255;0;0mX\x1b[0m\x1b[1X",
+            $frame . $clear,
+            'the erase frame must start at default rendition',
+        );
     }
 }

@@ -23,6 +23,8 @@ use SugarCraft\Buffer\Style;
  *   - SGR  \x1b[...m      (style transitions)
  *   - OSC 8;id;url\x1b\\  (hyperlink open)
  *   - OSC 8;;\x1b\\        (hyperlink close)
+ *   - trailing \x1b[0m    (conditional SGR reset closing the stream when the
+ *                          frame ended styled — same contract as toAnsi())
  *
  * Mirrors ratatui's Buffer::diff encode logic.
  */
@@ -68,6 +70,17 @@ final class DiffEncoder
         if ($this->currentLink !== null) {
             $out .= "\x1b]8;;\x1b\\";
             $this->currentLink = null;
+        }
+        // The reset half of that promise is load-bearing: sugar-veil and
+        // sugar-dash return encode() output verbatim to a live terminal, so
+        // a frame ending on a styled cell would leave the terminal styled
+        // and every following UNSTYLED write (a clear, a space, the next
+        // frame's blanks) inherits the ghost colour. Buffer::toAnsi() has
+        // always closed its stream conditionally the same way — the two
+        // emitters must agree on end-of-stream terminal state.
+        if ($this->currentStyle !== null) {
+            $out .= "\x1b[0m";
+            $this->currentStyle = null;
         }
 
         return $out;
