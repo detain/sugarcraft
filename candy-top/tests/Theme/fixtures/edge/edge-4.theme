@@ -1,0 +1,3 @@
+theme[cpu_start]=""
+theme[cpu_end]=""
+theme[download_start]="300 0 0"

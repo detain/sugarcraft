@@ -1,0 +1,4 @@
+theme[main_fg]=#abcdef
+theme[title] = "#123456"
+  theme[hi_fg]="#010203"  
+theme[cpu_box]="#ffffff" trailing

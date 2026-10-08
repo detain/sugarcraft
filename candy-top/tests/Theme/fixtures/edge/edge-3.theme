@@ -1,0 +1,6 @@
+theme[inactive_fg]="#gg"
+theme[main_fg]="1  2   3"
+theme[hi_fg]="1 2"
+theme[title]="12x 4 5"
+theme[meter_bg]=""
+theme[graph_text]="#ab"
