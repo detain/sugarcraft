@@ -27,8 +27,14 @@ References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-refer
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
 ## In flight
-- (none) — U4a GPU/NPU collectors committed `a8f442188`. Reviewer note for the box-slot unit: bound the #1008
-  unmeasured-hold (heldFrom) to N samples so a permanently-gone GPU stand-in doesn't freeze its last values.
+- **U4 box-slots unit**, split into two parallel implementers (uncommitted):
+  (a) GPU boxes: Platform::gpu() wiring in CpuPanel::standard, shown_gpus→withVendors, bounded #1008 hold,
+      #1730/#1881 gpuN slots + gpu_box_columns grid, NPU display (CpuPanel, Panels, new GPU panel, View/**, Presets).
+  (b) #1552 proc GPU columns: Gpu%/GMem, proc_gpu_only (g), proc_gpu_graphs, sorts gpu/gpu memory (ProcPanel,
+      Panel/Proc/**); it reports a Panels.php wiring line for the supervisor to apply.
+  Shared: Schema.php, lang/*.php, KeyTable.php, OptionsCatalog.php. Supervisor does README regen
+  (`CANDY_TOP_UPDATE_DOCS=1 vendor/bin/phpunit tests/Docs`) + docs/_data + gen-docs after both reviewed, then ONE
+  commit for the unit. If agents are gone after a reset: run the suite, review the diff, finish, review, commit.
 
 ## Next
 1. **U4 box slots unit** (after U4a commits): wire `$platform->gpu()` in CpuPanel::standard (update PlatformWiringTest
