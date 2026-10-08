@@ -187,6 +187,11 @@ final class Schema
             Option::bool('proc_reversed', false),
             Option::bool('proc_tree', false),
             Option::bool('proc_command_basename', false),
+            // btop #1791c puts this right after proc_tree too; #1859's key
+            // keeps that slot and this one follows it. The remembered choices
+            // live in an XDG state file (State\TreeStateFile), not in btop's
+            // internal proc_tree_state config key.
+            Option::bool('proc_tree_persist_state', false),
             Option::bool('proc_colors', true),
             Option::bool('proc_gradient', true),
             Option::bool('proc_per_core', false),

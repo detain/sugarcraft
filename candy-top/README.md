@@ -254,6 +254,8 @@ Only bare left presses act as clicks. Right and middle clicks and modified click
 - Writes are atomic: a temp file is written in the same directory, fsynced, then renamed into place. A symlinked config is followed and its target replaced, so the link survives. An existing file's permission bits are kept. A read-only file is never replaced; the failure is reported instead. A directory candy-top creates gets mode 0700.
 - If a save fails mid-session, a warning box opens. If it fails on exit, the error is printed on stderr and candy-top exits with status 1.
 
+**Tree state** (btop #1791c). With `proc_tree_persist_state` on, the branches you collapse or expand in the tree view (space, `+`/`-`/`=`, `C`, or a click on the `[+]`/`[-]` marker) are remembered across runs. They are stored in `$XDG_STATE_HOME/candy-top/tree-state.json`, or `~/.local/state/candy-top/tree-state.json` when `XDG_STATE_HOME` is unset or not absolute. They are not stored in config.conf, unlike in the btop PR, so the config stays btop-compatible and is not rewritten on every collapse. PIDs change between runs, so a choice is keyed by the chain of process names from the tree root (for example `systemd → sshd → bash`), and processes with the same chain share a choice. A remembered choice is applied when a process first appears, and it overrides `proc_tree_auto_collapse`. `E` (all branches) is not remembered. The file is written atomically about two seconds after a change, and on exit (including SIGTERM/SIGHUP and crash exits) when anything is still unsaved. Nothing is written while the option is off; turning it off drops a pending write. It keeps at most 512 chains, drops the least recently used first, and forgets a chain unused for 90 days. A missing, unreadable or corrupt file is ignored. A failed write is reported on stderr at exit and never changes the exit status.
+
 **Reload.** `ctrl+r` reloads the file over the running config. Runtime state such as the filter, the selection and the detailed view is kept, the theme list is rescanned and the theme is reloaded. The first load warning, if any, is shown in a warning box. A reload is not counted as a change that needs saving.
 
 ## Config keys
@@ -285,6 +287,7 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 | `proc_reversed` | bool | `false` | `true`, `false` | 4 proc › Order and tree | Reverse sorting order, True or False. |
 | `proc_tree` | bool | `false` | `true`, `false` | 4 proc › Order and tree | Show processes as a tree. |
 | `proc_command_basename` | bool | `false` | `true`, `false` | 4 proc › Rows and selection | Show only the executable basename in process commands, preserving arguments.<br>The detailed view still shows the full command. |
+| `proc_tree_persist_state` | bool | `false` | `true`, `false` | 4 proc › Order and tree | Persist manual tree expand/collapse choices by process-name ancestry across runs.<br>Stored in $XDG_STATE_HOME/candy-top/tree-state.json, not in this file. |
 | `proc_colors` | bool | `true` | `true`, `false` | 4 proc › Rows and selection | Use the cpu graph colors in the process list. |
 | `proc_gradient` | bool | `true` | `true`, `false` | 4 proc › Rows and selection | Use a darkening gradient in the process list. |
 | `proc_per_core` | bool | `false` | `true`, `false` | 4 proc › Rows and selection | If process cpu usage should be of the core it's running on or usage of the total available cpu power. |
@@ -471,7 +474,7 @@ candy-top includes these open btop pull requests (evaluated 2026-10-08). New key
 | #1747 | `mem_selected`: a single focused mem graph. |
 | #1700 | `disks_order`. |
 | #1546 | Process cwd in the detailed view. |
-| #1791 | Tree siblings sorted by branch totals (a), and grouped option headings (b). |
+| #1791 | Tree siblings sorted by branch totals (a), grouped option headings (b), and (c) `proc_tree_persist_state`, stored in an XDG state file instead of config.conf. |
 | #1476 | `proc_box_width_percent`, Shift/Alt/Ctrl+Shift arrow width keys, and the presets W field. |
 | #1411 | Options tabs in box-toggle order (0-5) with digit selection. |
 | #1849 | Theme or config reload invalidates every cached render, including the battery meter. |
@@ -509,6 +512,8 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 - Mounts whose statvfs failed are retried after a while, not ignored for the process lifetime.
 - `proc_filter_containers` also hides VMs, and the text filter also matches container and VM names.
 - Tree siblings are sorted by branch totals (#1791a).
+- Remembered tree collapse choices (#1791c) are stored in `$XDG_STATE_HOME/candy-top/tree-state.json`, not in btop's internal `proc_tree_state` config key.
+- A remembered tree choice is applied once (at startup, when `proc_tree_persist_state` is turned on, and on entering the tree view), then only to newly appearing processes. btop re-applies it on every collect. So `E` is not undone by the next sample, but a process sharing the name chain of one you just collapsed or expanded is not updated until it is recreated or candy-top restarts.
 - The IO columns take exactly the 14 cells they draw, so Cpu% stays in place.
 - `F` follow and `u` pause are panel state, not config.
 - The banner has no version line.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
@@ -32,10 +33,15 @@ use SugarCraft\Top\Panel\Proc\ProcSelection;
 use SugarCraft\Top\Panel\Proc\ProcTable;
 use SugarCraft\Top\Panel\Proc\ProcTree;
 use SugarCraft\Top\Panel\Proc\ProcView;
+use SugarCraft\Top\Panel\Proc\TreeAncestry;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Source\Fake\FakeProcList;
 use SugarCraft\Top\Source\Source;
+use SugarCraft\Top\State\TreeState;
+use SugarCraft\Top\State\TreeStateFile;
+use SugarCraft\Top\State\TreeStateFlushMsg;
+use SugarCraft\Top\State\TreeStateSavedMsg;
 use SugarCraft\Top\View\Region;
 
 /**
@@ -91,6 +97,9 @@ final class ProcPanel implements Panel, ClickCapture
     /** btop Proc::draw clears dead pids' graphs every 100 fresh frames. */
     private const SWEEP = 100;
 
+    /** #1791c: seconds a tree collapse change waits before the state file is written. */
+    public const TREE_SAVE_DELAY = 2.0;
+
     /**
      * @param list<ProcEntry> $entries every sampled process in the last sorted order
      * @param array<int, float> $carry pid => last good cpu (#1008)
@@ -119,7 +128,14 @@ final class ProcPanel implements Panel, ClickCapture
         private int $followRow = 0,
         private bool $returnToFollowed = false,
         private bool $bannerShown = false,
+        private ?TreeStateFile $treeFile = null,
+        private ?TreeState $treeState = null,
+        private int $stateRev = 0,
+        private int $stateSavedRev = 0,
+        private int $flushRev = 0,
+        private bool $treeRestored = false,
     ) {
+        $this->treeState ??= TreeState::empty();
         $this->sel ??= ProcSelection::new();
         $this->graphs ??= ProcGraphTracker::new();
         $this->control ??= FakeProcessControl::new();
@@ -135,6 +151,58 @@ final class ProcPanel implements Panel, ClickCapture
     public static function new(Source $source, ?ProcessControl $control = null): self
     {
         return new self($source, control: $control);
+    }
+
+    /**
+     * Persist tree collapse choices (#1791c, proc_tree_persist_state) to
+     * `$file`, starting from `$state` — loaded by bin before the Program
+     * starts, like config.conf. Without a file choices are still remembered
+     * for the session but never written.
+     */
+    public function withTreeStore(?TreeStateFile $file, TreeState $state): self
+    {
+        return $this->mutate(['treeFile' => $file, 'treeState' => $state, 'stateRev' => 0, 'stateSavedRev' => 0, 'flushRev' => 0, 'treeRestored' => false]);
+    }
+
+    /** The remembered tree choices (#1791c). */
+    public function treeState(): TreeState
+    {
+        return $this->treeState ?? TreeState::empty();
+    }
+
+    /** Whether remembered choices changed since the last successful write. */
+    public function treeStateDirty(): bool
+    {
+        return $this->stateRev !== $this->stateSavedRev;
+    }
+
+    /**
+     * The Cmd writing the tree state atomically, answering
+     * {@see TreeStateSavedMsg}; null without a file or with nothing to
+     * write, or with proc_tree_persist_state off in `$config` (turned off
+     * after a change: the pending choices are dropped, not written). The
+     * App runs it on every quit path ({@see \SugarCraft\Top\App::stateSave()})
+     * and bin after the Program returns (signals, crash) — the debounced
+     * in-session save covers the rest. It always writes the LATEST state.
+     */
+    public function treeStateSave(Config $config): ?\Closure
+    {
+        $file = $this->treeFile;
+        if ($file === null || !$this->treeStateDirty() || !$config->bool('proc_tree_persist_state')) {
+            return null;
+        }
+        $state = $this->treeState();
+        $rev = $this->stateRev;
+
+        return static function () use ($file, $state, $rev): Msg {
+            try {
+                $file->write($state, time());
+            } catch (\RuntimeException $e) {
+                return new TreeStateSavedMsg($rev, false, $e->getMessage());
+            }
+
+            return new TreeStateSavedMsg($rev, true);
+        };
     }
 
     /** The followed process (btop followed_pid), or null when not following. */
@@ -244,6 +312,16 @@ final class ProcPanel implements Panel, ClickCapture
             return $msg->box === 'proc' && $msg->snapshot instanceof ProcSnapshot
                 ? new PanelResult($this->sampled($msg->snapshot, $msg->next, $context))
                 : new PanelResult($this);
+        }
+        if ($msg instanceof TreeStateFlushMsg) {
+            // Only the tick of the latest user change writes (debounce). It is
+            // keyed on flushRev, not stateRev: a restore match that refreshes
+            // an entry's age bumps stateRev without arming a tick, and must not
+            // swallow the pending one. The write itself takes the latest state.
+            return new PanelResult($this, $msg->revision === $this->flushRev ? $this->treeStateSave($context->config) : null);
+        }
+        if ($msg instanceof TreeStateSavedMsg) {
+            return new PanelResult($msg->ok && $msg->revision > $this->stateSavedRev ? $this->mutate(['stateSavedRev' => $msg->revision]) : $this);
         }
         if (!$context->visible()) {
             return new PanelResult($this);
@@ -363,7 +441,7 @@ final class ProcPanel implements Panel, ClickCapture
             'carry' => $carry,
             'memTotal' => $snap->memTotal > 0 ? $snap->memTotal : $this->memTotal,
             'rowsKey' => '',
-        ])->rebuilt($config)->settled($config, $context);
+        ])->restoreTree($config, array_keys(array_diff_key($fresh, $kept)))->rebuilt($config)->settled($config, $context);
 
         // Mini-graphs: one observation per fresh frame for the drawn rows.
         $graphs = $next->graphs();
@@ -694,6 +772,9 @@ final class ProcPanel implements Panel, ClickCapture
             if ($collapsed !== $this->collapsed) {
                 $panel = $this->mutate(['collapsed' => $collapsed, 'treeVersion' => $this->treeVersion + 1]);
             }
+            // btop #1791: restore_tree_state runs after _auto_collapse_oversized,
+            // so a remembered expand beats the auto-collapse.
+            $panel = $panel->restoreTree($context->config, null, true);
         }
 
         return $panel->set($context, ['proc_tree' => $on]);
@@ -709,15 +790,94 @@ final class ProcPanel implements Panel, ClickCapture
         $collapsed = $this->collapsed;
         if ($key === 'C') {
             $collapsed = ProcTree::toggleChildren($this->entries, $collapsed, $pid);
+            $changed = [];
+            foreach ($this->entries as $e) {
+                if ($e->process->ppid === $pid && $e->pid() !== $pid) {
+                    $changed[] = $e->pid();
+                }
+            }
         } else {
             $collapsed[$pid] = match ($key) {
                 '-' => true,
                 'space' => !($collapsed[$pid] ?? false),
                 default => false,
             };
+            $changed = [$pid];
+        }
+        $result = $this->treeChange($context, $collapsed);
+        $panel = $result->panel;
+        if (!$panel instanceof self || !$context->config->bool('proc_tree_persist_state')) {
+            return $result;
         }
 
-        return $this->treeChange($context, $collapsed);
+        return $panel->remembered($changed, $collapsed);
+    }
+
+    /**
+     * #1791c remember_tree_state / remember_tree_children: store the
+     * choice for each of `$pids` under its name ancestry, then arm the
+     * debounced write. `E` (collapse/expand all) is not remembered, as in
+     * the PR — it is a bulk view action, not a choice about one branch.
+     *
+     * @param list<int> $pids
+     * @param array<int, bool> $collapsed
+     */
+    private function remembered(array $pids, array $collapsed): PanelResult
+    {
+        $state = $this->treeState();
+        foreach (TreeAncestry::keys($this->entries, $pids) as $pid => $key) {
+            $state = $state->remember($key, $collapsed[$pid] ?? false);
+        }
+        if ($state === $this->treeState()) {
+            return new PanelResult($this);
+        }
+        $rev = $this->flushRev + 1;
+        $panel = $this->mutate(['treeState' => $state, 'stateRev' => $this->stateRev + 1, 'flushRev' => $rev]);
+
+        return new PanelResult(
+            $panel,
+            $this->treeFile === null ? null : Cmd::tick(self::TREE_SAVE_DELAY, static fn (): Msg => new TreeStateFlushMsg($rev)),
+        );
+    }
+
+    /**
+     * #1791c restore_tree_state: give processes their remembered collapse
+     * choice. Applied to every entry once (startup, the option turned on,
+     * entering tree view) and afterwards only to NEW pids — btop re-applies
+     * it on every collect, which would undo `E` on the next sample. A
+     * matched path counts as used, so it does not age out of the file.
+     *
+     * @param ?list<int> $newPids pids that appeared in this sample; null = every entry
+     */
+    private function restoreTree(Config $config, ?array $newPids, bool $all = false): self
+    {
+        if (!$config->bool('proc_tree_persist_state')) {
+            return $this->treeRestored ? $this->mutate(['treeRestored' => false]) : $this;
+        }
+        $all = $all || !$this->treeRestored || $newPids === null;
+        $state = $this->treeState();
+        if ($state->count() === 0 || (!$all && $newPids === [])) {
+            return $this->treeRestored ? $this : $this->mutate(['treeRestored' => true]);
+        }
+        $collapsed = $this->collapsed;
+        $matched = [];
+        foreach (TreeAncestry::keys($this->entries, $all ? null : $newPids) as $pid => $key) {
+            $saved = $state->lookup($key);
+            if ($saved !== null) {
+                $collapsed[$pid] = $saved;
+                $matched[] = $key;
+            }
+        }
+        $props = ['treeRestored' => true];
+        if ($collapsed !== $this->collapsed) {
+            $props += ['collapsed' => $collapsed, 'treeVersion' => $this->treeVersion + 1, 'rowsKey' => ''];
+        }
+        $touched = $state->touched($matched);
+        if ($touched !== $state) {
+            $props += ['treeState' => $touched, 'stateRev' => $this->stateRev + 1];
+        }
+
+        return $this->mutate($props);
     }
 
     /**

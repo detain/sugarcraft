@@ -52,6 +52,7 @@ final class ConfigWriterTest extends TestCase
 
         foreach ([
             "\nproc_tree = false\n\n#* Show only the executable basename in process commands, preserving arguments.\n#* The detailed view still shows the full command.\nproc_command_basename = false\n",
+            "\nproc_command_basename = false\n\n#* Persist manual tree expand/collapse choices by process-name ancestry across runs.\n#* Stored in \$XDG_STATE_HOME/candy-top/tree-state.json, not in this file.\nproc_tree_persist_state = false\n\n#* Use the cpu graph colors",
             "\nproc_info_smaps = false\n\n#* Percentage value for proc box width when mem or net is shown.\n",
             "\nproc_box_width_percent = 55\n\n#* Show proc box on left side",
             "\nproc_filter_kernel = false\n\n#* (Linux) Hide processes running in containers",

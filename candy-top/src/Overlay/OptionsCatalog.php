@@ -79,7 +79,7 @@ final class OptionsCatalog
             '@interface', 'net_iface', 'base_10_bitrate', 'net_hide_ip',
         ],
         'proc' => [
-            '@order', 'proc_sorting', 'proc_reversed', 'proc_tree', 'proc_aggregate', 'proc_tree_auto_collapse',
+            '@order', 'proc_sorting', 'proc_reversed', 'proc_tree', 'proc_aggregate', 'proc_tree_auto_collapse', 'proc_tree_persist_state',
             '@rows', 'proc_colors', 'proc_gradient', 'proc_per_core', 'proc_mem_bytes', 'keep_dead_proc_usage', 'proc_cpu_graphs',
             'proc_filter_kernel', 'proc_filter_containers', 'proc_command_basename', 'proc_follow_detailed', 'proc_info_smaps',
         ],
