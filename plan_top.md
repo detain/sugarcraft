@@ -486,9 +486,9 @@ Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aris
 *values* (`graph_symbol=block2`, `proc_sorting=io *`) make stock btop warn+default; the presets 4th field
 (#1476) is written only when the user set it (stock btop discards a presets string containing it).
 
-- **U0 — fix now (no config):** #1869 try every `nvidia-smi` candidate (incl. `/usr/lib/wsl/lib/nvidia-smi`)
+- ✅ `02f178b91` **U0 — fix now (no config):** #1869 try every `nvidia-smi` candidate (incl. `/usr/lib/wsl/lib/nvidia-smi`)
   before memoizing absence; #1856 add rename/parenthesis stat regression fixtures (parser already correct).
-- **U1 — collector additions:** #1739 zswap (meminfo Zswap/Zswapped, `show_zswap=true`, Used = on-disk swap);
+- ✅ `02f178b91` **U1 — collector additions:** #1739 zswap (meminfo Zswap/Zswapped, `show_zswap=true`, Used = on-disk swap);
   #1785 per-core freq (`cpuN/cpufreq`, `show_core_freq=off|value|graph`) + extract `Freq::label()` (#1792);
   #1573 iface IPs via `net_get_interfaces()` (`net_hide_ip=false`); ProcList bundle — #1859 argv[0] basename
   span (`proc_command_basename=false`), #1823 `/proc/pid/io` rates (EACCES → "-", never 0), #1873 container
