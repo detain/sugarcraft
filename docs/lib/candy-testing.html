@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — CandyTesting</title>
-<meta name="description" content="CandyTesting: Test harness for TEA programs — ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.">
+<meta name="description" content="CandyTesting: Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, and snapshot helpers.">
 <meta property="og:title" content="SugarCraft — CandyTesting">
 <meta property="og:description" content="ProgramSimulator drives a Program with scripted input; captures model/view/cmds. Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals. TapeRecorder emits VHS .tape files.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-testing.png">
@@ -38,18 +38,18 @@
       <img class="detail-icon" src="../img/icons/candy-testing.png" alt="CandyTesting">
       <div>
         <h2>🍬 CandyTesting</h2>
-        <p class="detail-sub">Test harness for TEA programs</p>
+        <p class="detail-sub">Test harness for SugarCraft apps</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">pioneering (no upstream)</span>
+          <span class="tag-chip accent">original — no 1:1 Go counterpart</span>
           <span class="tag-chip">testing</span>
-          <span class="tag-chip">tea</span>
+          <span class="tag-chip">testing-harness</span>
           <span class="tag-chip">foundation-package</span>
         </div>
       </div>
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-testing"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-testing" alt="CandyTesting code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneers that bubble-tea issue #1654 never shipped: <code>ProgramSimulator</code> for driving TEA programs with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for VHS demo capture.</p>
+    <p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneered: <code>ProgramSimulator</code> for driving SugarCraft apps with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for VHS demo capture.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-testing:@dev</code></pre>
@@ -109,11 +109,11 @@ echo "Final count: " . $result-&gt;model-&gt;count;</code></pre>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Deterministic TEA testing</strong> — ProgramSimulator drives Programs without real I/O.</li>
+      <li><strong>Deterministic Model–Update–View testing</strong> — ProgramSimulator drives Programs without real I/O.</li>
       <li><strong>Snapshot regression testing</strong> — Golden files for ANSI output.</li>
       <li><strong>Cell-grid assertions</strong> — assertCellGrid for Buffer-based renderers.</li>
       <li><strong>Demo capture</strong> — TapeRecorder emits VHS-compatible .tape files.</li>
-      <li><strong>Foundation for candy-forms + sugar-prompt</strong> — unblocks step-15 and step-16.</li>
+      <li><strong>Foundation for candy-forms + sugar-prompt</strong> — both build their test support on it.</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -121,6 +121,7 @@ echo "Final count: " . $result-&gt;model-&gt;count;</code></pre>
       <li><a href="https://github.com/sugarcraft/candy-testing">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-testing/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-testing/tree/master/tests">Test suite</a></li>
+      <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

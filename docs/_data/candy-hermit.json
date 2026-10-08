@@ -1,11 +1,11 @@
 {
     "title": "CandyHermit — SugarCraft",
-    "description": "CandyHermit: Fuzzy finder overlay for terminal UIs. PHP port of Genekkion/theHermit.",
+    "description": "CandyHermit: Fuzzy finder overlay for terminal UIs.",
     "ogTitle": "CandyHermit — SugarCraft",
-    "ogDescription": "Fuzzy finder overlay for terminal UIs. Port of Genekkion/theHermit.",
+    "ogDescription": "Fuzzy finder overlay for terminal UIs.",
     "emoji": "",
     "displayName": "CandyHermit",
     "tagline": "Fuzzy finder overlay for terminal UIs",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/Genekkion/theHermit\" style=\"color: inherit;\">Genekkion/theHermit</a></span>\n          <span class=\"tag-chip\">fuzzy</span><span class=\"tag-chip\">finder</span><span class=\"tag-chip\">overlay</span><span class=\"tag-chip\">search</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/Genekkion/theHermit\" style=\"color: inherit;\">Genekkion/theHermit</a></span>\n          <span class=\"tag-chip\">fuzzy</span><span class=\"tag-chip\">finder</span><span class=\"tag-chip\">overlay</span><span class=\"tag-chip\">search</span>"
 }

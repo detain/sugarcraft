@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SugarCraft · SugarCraft</title>
-<meta name="description" content="SugarCraft: Elm-architecture TUI runtime for PHP. Model/Msg/Cmd/Program pattern, cell-diff renderer, ReactPHP fibers, SSH support. Port of Go bubbletea.">
+<title>SugarCraft Core — SugarCraft</title>
+<meta name="description" content="SugarCraft: Model–Update–View TUI runtime for PHP — Model/Msg/Cmd/Program pattern, cell-diff renderer, ReactPHP event loop, SSH support.">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-core.html">
-<meta property="og:title" content="SugarCraft · SugarCraft">
-<meta property="og:description" content="Elm-architecture TUI runtime for PHP. Model/Msg/Cmd/Program, cell-diff renderer, ReactPHP fibers. Port of Go bubbletea.">
+<meta property="og:title" content="SugarCraft Core — SugarCraft">
+<meta property="og:description" content="Model–Update–View TUI runtime for PHP. Model/Msg/Cmd/Program, cell-diff renderer, ReactPHP event loop.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sugarcraft.github.io/lib/candy-core.html">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-core.png">
@@ -41,20 +41,20 @@
       <img class="detail-icon" src="../img/icons/candy-core.png" alt="SugarCraft">
       <div>
         <h2>🍬 SugarCraft</h2>
-        <p class="detail-sub">Elm-architecture TUI runtime</p>
+        <p class="detail-sub">Model–Update–View TUI runtime</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/bubbletea" style="color: inherit;">charmbracelet/bubbletea</a></span>
+          <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/bubbletea" style="color: inherit;">charmbracelet/bubbletea</a></span>
           <span class="tag-chip">runtime</span>
-          <span class="tag-chip">elm-architecture</span>
+          <span class="tag-chip">model-update-view</span>
           <span class="tag-chip">react-php</span>
-          <span class="tag-chip">fibers</span>
+          <span class="tag-chip">event-loop</span>
           <span class="tag-chip">ssh</span>
         </div>
       </div>
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-core"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-core" alt="SugarCraft code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Model / Msg / Cmd / Program. The runtime everything else builds on. Includes the cursed cell-diff renderer ported from Bubble Tea v2 — meaningful SSH bandwidth savings for slow-changing UIs.</p>
+    <p class="lede" style="margin-top: 28px;">Model / Msg / Cmd / Program. The runtime everything else builds on. Includes the cursed cell-diff renderer — meaningful SSH bandwidth savings for slow-changing UIs.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-core</code></pre>
@@ -92,10 +92,10 @@ final class Counter implements Model {
       <div class="feature"><strong>Model interface</strong><span>Three pure methods: <code>init()</code>, <code>update(Msg)</code>, <code>view()</code>.</span></div>
       <div class="feature"><strong>Cmd helpers</strong><span><code>Cmd::quit()</code>, <code>Cmd::batch()</code>, <code>Cmd::send()</code> — async work scheduled, never inlined.</span></div>
       <div class="feature"><strong>InputReader</strong><span>Stateful escape-sequence parser. Bracketed paste, mouse, function keys, OSC, DEC private modes. Paste is bounded: an end marker split across reads still closes the envelope, a paste larger than <code>MAX_PASTE_BYTES</code> (1 MiB) surfaces in chunks, and an envelope whose end marker never arrives is closed after <code>PASTE_IDLE_TIMEOUT</code> (1 s) of silence so the keyboard comes back. Pasted content is sanitized by default.</span></div>
-      <div class="feature"><strong>Cursed renderer</strong><span>Cell-diff rendering ported from Bubble Tea v2. ≥15% bandwidth savings on a 50-tick test.</span></div>
-      <div class="feature"><strong>ReactPHP loop</strong><span>Mirrors goroutine semantics for input, signals, render tick, command execution.</span></div>
+      <div class="feature"><strong>Cursed renderer</strong><span>Cell-diff rendering with ≥15% bandwidth savings on a 50-tick test.</span></div>
+      <div class="feature"><strong>ReactPHP loop</strong><span>Event-loop concurrency for input, signals, render tick, command execution.</span></div>
       <div class="feature"><strong>Signal handling</strong><span>Ctrl+C, SIGTERM, SIGWINCH (resize) all surface as Msgs in your update(). On exit the runtime cancels its pending one-shot timers and restores the previous signal handlers and async-signal mode.</span></div>
-      <div class="feature"><strong>ColorProfile::detect()</strong><span>Mirrors charmbracelet/colorprofile's order: unless <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code> is set, a non-tty output is <code>NoTty</code> first (so <code>NO_COLOR</code> on a pipe emits no escapes at all), then <code>TERM=dumb</code> → <code>NoTty</code>; next <code>NO_COLOR</code> → <code>Ascii</code> (colour off, bold/faint kept), then force → <code>TrueColor</code> (so a forced pipe still gets colour), then <code>COLORTERM</code>, <code>TERM_PROGRAM</code> and <code>TERM</code>.</span></div>
+      <div class="feature"><strong>ColorProfile::detect()</strong><span>Detection order: unless <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code> is set, a non-tty output is <code>NoTty</code> first (so <code>NO_COLOR</code> on a pipe emits no escapes at all), then <code>TERM=dumb</code> → <code>NoTty</code>; next <code>NO_COLOR</code> → <code>Ascii</code> (colour off, bold/faint kept), then force → <code>TrueColor</code> (so a forced pipe still gets colour), then <code>COLORTERM</code>, <code>TERM_PROGRAM</code> and <code>TERM</code>.</span></div>
       <div class="feature"><strong>Screen / ScreenStack</strong><span>Immutable stack for modal / drill-down flows. <code>RootModelWithScreenStack</code> + <code>ScreenStackCapable</code> delegate <code>init/update/view</code> to the active screen automatically.</span></div>
       <div class="feature"><strong>Component / Composite</strong><span>Parent-child lifecycle model. <code>Component</code> interface adds <code>onMount()</code>/<code>onUnmount()</code>; <code>Composite</code> owns children and drains lifecycle Cmds during reconcile.</span></div>
       <div class="feature"><strong>WorkerPool</strong><span>Bounded-concurrency pool (default 4 workers) for CPU-bound tasks. <code>WorkerCmd::run($pool, $task)</code> dispatches a global function name or serializable callable and yields a <code>WorkerResultMsg</code> on completion. A <code>Closure</code> cannot cross the process boundary, so dispatching one returns an already-rejected promise.</span></div>
@@ -106,7 +106,7 @@ final class Counter implements Model {
       <li><a href="https://github.com/sugarcraft/candy-core">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-core/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-core/tree/master/examples">Runnable examples</a></li>
-      <li>Port of <a href="https://github.com/charmbracelet/bubbletea">bubbletea</a> (Go upstream)</li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/bubbletea">bubbletea</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

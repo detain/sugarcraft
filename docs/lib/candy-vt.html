@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — CandyVt</title>
-<meta name="description" content="CandyVt: in-memory virtual terminal emulator. PHP port of charmbracelet/x/vt.">
+<meta name="description" content="CandyVt: In-memory virtual terminal emulator.">
 <meta property="og:title" content="SugarCraft — CandyVt">
 <meta property="og:description" content="In-memory virtual terminal emulator. ANSI byte stream → cell grid + cursor + mode state.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-vt.png">
@@ -40,7 +40,7 @@
         <h2>🍬 CandyVt</h2>
         <p class="detail-sub">In-memory virtual terminal emulator</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/vt" style="color: inherit;">charmbracelet/x/vt</a></span>
+          <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/x/tree/main/vt" style="color: inherit;">charmbracelet/x/vt</a></span>
           <span class="tag-chip">vt500-parser</span>
           <span class="tag-chip">cell-grid</span>
           <span class="tag-chip">snapshot-tests</span>
@@ -50,7 +50,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-vt"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-vt" alt="CandyVt code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid + cursor + mode state out — without ever spawning a real terminal. Built on a Paul-Williams VT500 state machine that mirrors charmbracelet/x/ansi/parser.</p>
+    <p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid + cursor + mode state out — without ever spawning a real terminal. Built on a Paul-Williams VT500 state machine.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-vt</code></pre>
@@ -74,7 +74,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>VT500 parser</strong><span>15-state Paul-Williams state machine. Direct port of charmbracelet/x/ansi/parser. Handles partial input across <code>feed()</code> calls and CSI subparameters (<code>:</code> separator per VT500 spec).</span></div>
+      <div class="feature"><strong>VT500 parser</strong><span>15-state Paul-Williams state machine. Handles partial input across <code>feed()</code> calls and CSI subparameters (<code>:</code> separator per VT500 spec).</span></div>
       <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg; bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles; SGR underline styles 4:0–4:5 (single / double / curly / dotted / dashed); BCE (CSI ?12 h) — erase fills inherit current background color.</span></div>
       <div class="feature"><strong>Cursor + erase + scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
       <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 synchronized output (batch queue + flush on disable), 7 auto-wrap (DECAWM).</span></div>
@@ -95,7 +95,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
       <li><a href="https://github.com/sugarcraft/candy-vt">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-vt/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-vt/tree/master/examples">Runnable examples</a></li>
-      <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/vt">charmbracelet/x/vt</a> (Go upstream)</li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/vt">charmbracelet/x/vt</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

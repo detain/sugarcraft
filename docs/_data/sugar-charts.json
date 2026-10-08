@@ -1,11 +1,11 @@
 {
     "title": "SugarCharts — SugarCraft",
-    "description": "SugarCharts: Terminal charts for SugarCraft. PHP port of ntcharts.",
+    "description": "SugarCharts: Charts that render in the terminal — line, bar, sparkline, heatmap, scatter, and more.",
     "ogTitle": "SugarCharts — SugarCraft",
-    "ogDescription": "Terminal charts for SugarCraft. Port of ntcharts.",
+    "ogDescription": "Charts that render in the terminal — line, bar, sparkline, heatmap, scatter, and more.",
     "emoji": "📊",
     "displayName": "SugarCharts",
     "tagline": "Terminal charts for SugarCraft",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/NimbleMarkets/ntcharts\" style=\"color: inherit;\">ntcharts</a></span>\n          <span class=\"tag-chip\">charts</span>\n          <span class=\"tag-chip\">sparkline</span>\n          <span class=\"tag-chip\">heatmap</span>\n          <span class=\"tag-chip\">sixel</span>\n          <span class=\"tag-chip\">kitty</span>\n          <span class=\"tag-chip\">iterm2</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/NimbleMarkets/ntcharts\" style=\"color: inherit;\">NimbleMarkets/ntcharts</a></span>\n          <span class=\"tag-chip\">charts</span>\n          <span class=\"tag-chip\">sparkline</span>\n          <span class=\"tag-chip\">heatmap</span>\n          <span class=\"tag-chip\">sixel</span>\n          <span class=\"tag-chip\">kitty</span>\n          <span class=\"tag-chip\">iterm2</span>"
 }

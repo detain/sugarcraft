@@ -1,11 +1,11 @@
 {
     "title": "CandyKit — SugarCraft",
-    "description": "CandyKit: CLI presentation helpers. PHP port of fang.",
+    "description": "CandyKit: Ready-made CLI widgets — status line, banner, section, stage, and help text for terminal apps.",
     "ogTitle": "CandyKit — SugarCraft",
-    "ogDescription": "CLI presentation helpers. Port of fang.",
+    "ogDescription": "Ready-made CLI widgets — status line, banner, section, stage, and help text for terminal apps.",
     "emoji": "🎁",
     "displayName": "CandyKit",
     "tagline": "CLI presentation helpers",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/fang\" style=\"color: inherit;\">fang</a></span>\n          <span class=\"tag-chip\">cli</span>\n          <span class=\"tag-chip\">presentation</span>\n          <span class=\"tag-chip\">library-only</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/fang\" style=\"color: inherit;\">charmbracelet/fang</a></span>\n          <span class=\"tag-chip\">cli</span>\n          <span class=\"tag-chip\">presentation</span>\n          <span class=\"tag-chip\">library-only</span>"
 }

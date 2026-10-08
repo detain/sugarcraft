@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCrush — SugarCraft</title>
-<meta name="description" content="SugarCrush: terminal AI coding agent. 7 LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions. PHP port of crush.">
+<meta name="description" content="SugarCrush: Terminal AI coding agent — seven LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.">
 <meta property="og:title" content="SugarCrush — SugarCraft">
-<meta property="og:description" content="Terminal AI coding agent — 7 providers, tools, skills, hooks, agents, MCP. PHP port of crush.">
+<meta property="og:description" content="Terminal AI coding agent — seven LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-crush.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-crush.html">
 <meta property="og:type" content="website">
@@ -40,7 +40,7 @@
         <h2>🤖 SugarCrush</h2>
         <p class="detail-sub">Terminal AI coding agent</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/crush" style="color: inherit;">charmbracelet/crush</a></span>
+          <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/crush" style="color: inherit;">charmbracelet/crush</a></span>
           <span class="tag-chip">ai</span>
           <span class="tag-chip">chat</span>
           <span class="tag-chip">anthropic</span>
@@ -82,14 +82,14 @@ sugarcrush -p "audit this" --output-format json | jq -r .result</code></pre>
       <div class="feature"><strong>Progressive skills</strong><span>Frontmatter <code>SKILL.md</code> files inject prompt context. The system prompt carries only name + description; the model pulls a full body through the <code>Skill</code> tool. 8 built-ins, plus <code>~/.sugar-crush/skills</code>, <code>&lt;project&gt;/.sugar-crush/skills</code> and skills imported from Claude Code and opencode.</span></div>
       <div class="feature"><strong>Sub-agents, teams &amp; worktrees</strong><span>The <code>Task</code> tool delegates to presets with their own model, tools, skills and permission mode — in parallel, nested, in the background or in a git worktree of their own, every run resumable; a preset model the provider does not serve falls back to the session's model. Each run gets a live line, an agents strip and an Agent View with its own transcript, where you can message, pause, cancel or send it to the background (<code>Ctrl+X b</code>). The agent messages, waits on and interrupts its sub-agents with <code>SendMessage</code>, <code>Subagents</code> and <code>InterruptAgent</code>, sub-agents reply to their parent, a parallel batch shares a board, and teammates claim tasks from a shared SQLite board through the <code>Team</code> tool.</span></div>
       <div class="feature"><strong>Workflows</strong><span><code>WorkflowEngine</code> runs multi-stage agent pipelines — sequential, fan-out parallel, chained pipeline, and task-then-verifier — from a PHP DSL or YAML, with SIGINT-safe pause and stage-granularity resume.</span></div>
-      <div class="feature"><strong>MCP client &amp; server</strong><span>Multi-server client over stdio + HTTP reading <code>.mcp.json</code> with <code>${VAR}</code> interpolation, plus stdio/HTTP servers to host your own tools. Per-preset <code>mcpServers</code> allowlists are enforced, not decorative.</span></div>
+      <div class="feature"><strong>MCP (Model Context Protocol) client &amp; server</strong><span>Multi-server client over stdio + HTTP reading <code>.mcp.json</code> with <code>${VAR}</code> interpolation, plus stdio/HTTP servers to host your own tools. Per-preset <code>mcpServers</code> allowlists are enforced, not decorative.</span></div>
       <div class="feature"><strong>SQLite sessions</strong><span>WAL-mode persistence of sessions, messages and tool calls with FK-enforced cascade, fork/rename/resume, and opt-in retention pruning that never drops a session you named.</span></div>
       <div class="feature"><strong>Context engine</strong><span>Compaction tiers with absolute token caps and summaries requested ahead of need, in-turn pruning of stale tool output, the agent's own <code>Prune</code>/<code>Compress</code>/<code>Recall</code> tools, re-injection after a compaction, and recovery from overflows, cut-off replies and dropped streams.</span></div>
       <div class="feature"><strong>Permissions &amp; checkpoints</strong><span>Six permission modes (the TUI asks by default; <code>Alt+M</code> toggles plan mode and the model leaves it with <code>PlanExit</code>, asking you to approve its plan; <code>auto</code> puts security findings to you and can have the title model review the rest), argument-scoped rules; shell lines proven read-only — <code>sed</code> scripts that only read, simple <code>awk</code> programs, <code>for</code>/<code>while read</code> loops over read-only bodies — run unasked (<code>permissions.autoAllowReadOnly</code>); <code>a</code> remembers each part of a chain and answers at once, <code>e</code> edits the scope first, a grant ignores a leading in-project <code>cd</code>, and <code>/permissions mode</code> / <code>/permissions revoke</code> switch the mode and drop grants; an optional bubblewrap sandbox for <code>Bash</code>, and a per-turn workspace checkpoint behind <code>/undo</code>, <code>/redo</code>, <code>/rewind</code> and <code>/diff</code>, with opt-in auto-commit, post-edit lint, LSP diagnostics and auto-test.</span></div>
       <div class="feature"><strong>Memory</strong><span>Notes indexed into the prompt, a <code>Memory</code> tool with BM25 recall, auto-consolidation at the end of a turn, a periodic dream pass, and a git history you can restore from.</span></div>
       <div class="feature"><strong>Server mode &amp; web UI</strong><span><code>sugarcrush serve</code> runs sessions headless behind an authenticated WebSocket speaking <code>sugarcrush.v1</code>; the <a href="sugar-crush-web.html">SugarCrushWeb</a> browser UI and <code>sugarcrush attach</code> drive them. Remote access is gated by <code>--allowed-host</code> and a <code>--allowed-ips</code> client allow-list, and <code>--allow-dir-browse</code> (confined to <code>--browse-root</code>) lets a client pick a new session's project directory — as <code>/new</code>'s folder picker does in the TUI. <code>sugarcrush acp</code> serves editors — Zed, JetBrains, Neovim — over the Agent Client Protocol on stdio.</span></div>
       <div class="feature"><strong>Prompts from anywhere</strong><span><code>@file</code>, <code>@diff</code> and <code>@https://…</code> attachments, <code>$skill</code> mentions for one turn, <code>!command</code> shell lines, opt-in <code>AI!</code> comments saved in your editor, <code>/handoff</code> into a fresh session seeded with a state summary, and <code>/newrule</code> to draft a project rule from the conversation.</span></div>
-      <div class="feature"><strong>Real TEA render loop</strong><span>A candy-core <code>Model</code>/<code>Program</code> tree with buffer-diffed output: Markdown-rendered replies via CandyShine, live tool-call lifecycle, unified diffs for <code>Edit</code> results, inline images via candy-mosaic, mouse zones and text selection via candy-mouse, and a command palette whose fuzzy filter requires every typed character to match. A slash command is offered when any such alignment starts on its first character, so <code>/ab</code> still finds <code>a__ab</code>.</span></div>
+      <div class="feature"><strong>Real Model–Update–View render loop</strong><span>A candy-core <code>Model</code>/<code>Program</code> tree with buffer-diffed output: Markdown-rendered replies via CandyShine, live tool-call lifecycle, unified diffs for <code>Edit</code> results, inline images via candy-mosaic, mouse zones and text selection via candy-mouse, and a command palette whose fuzzy filter requires every typed character to match. A slash command is offered when any such alignment starts on its first character, so <code>/ab</code> still finds <code>a__ab</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -97,7 +97,7 @@ sugarcrush -p "audit this" --output-format json | jq -r .result</code></pre>
       <li><a href="https://github.com/sugarcraft/sugar-crush">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-crush/blob/master/README.md">Full README</a> — the user guide, with an index of every docs page</li>
       <li><a href="https://github.com/sugarcraft/sugar-crush/tree/master/examples">Runnable examples</a></li>
-      <li>Port of <a href="https://github.com/charmbracelet/crush">crush</a> (Go upstream)</li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/crush">crush</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

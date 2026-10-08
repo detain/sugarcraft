@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyMouse — SugarCraft</title>
-<meta name="description" content="CandyMouse: Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker.">
+<meta name="description" content="CandyMouse: Mouse support for terminal UIs — mark rendered output with invisible zones, then hit-test where clicks land.">
 <meta property="og:title" content="CandyMouse — SugarCraft">
-<meta property="og:description" content="Self-contained Mark/Scan/Get mouse hit-testing. No external Manager wiring needed.">
+<meta property="og:description" content="Mouse support for terminal UIs — mark rendered output with invisible zones, then hit-test where clicks land.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-mouse.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-mouse.html">
 <meta property="og:type" content="website">
@@ -40,7 +40,7 @@
         <h2>🎯 CandyMouse</h2>
         <p class="detail-sub">Self-contained Mark/Scan/Get mouse hit-testing</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">port of <a href="https://github.com/lrstanley/bubblezone" style="color: inherit;">lrstanley/bubblezone</a></span>
+          <span class="tag-chip accent">inspired by <a href="https://github.com/lrstanley/bubblezone" style="color: inherit;">lrstanley/bubblezone</a></span>
           <span class="tag-chip">mouse</span>
           <span class="tag-chip">hit-testing</span>
           <span class="tag-chip">zone-click-track</span>
@@ -82,7 +82,7 @@ if ($result !== null) {
     <div class="feature-grid">
       <div class="feature"><strong>Mark sentinel wrap</strong><span><code>Mark::zone($id, $content)</code> wraps content in invisible U+E000/U+E001 codepoints safe from ANSI SGR clobbering. <code>Mark::new()</code> / <code>Mark::disabled()</code> build an instance for <code>wrap()</code>; <code>Mark::isValidId()</code> is the id predicate encoder and decoder share.</span></div>
       <div class="feature"><strong>Strict scan grammar</strong><span><code>Scan::parse()</code> decodes exactly what <code>Mark</code> encodes and every tag byte is zero-width; a lone sentinel or malformed id skips only its 3 sentinel bytes, so a stray marker can never shift the zones after it. Orphan closes/unclosed opens are dropped, a zone that paints no cell yields no zone, and a duplicate id throws.</span></div>
-      <div class="feature"><strong>Row accounting</strong><span><code>\n</code> and <code>\r\n</code> start a new row; a lone <code>\r</code> returns to column 1 like a terminal. A zone that painted nothing before a leading newline or <code>\r</code> starts where it first paints, instead of upstream bubblezone's inverted or over-wide boxes.</span></div>
+      <div class="feature"><strong>Row accounting</strong><span><code>\n</code> and <code>\r\n</code> start a new row; a lone <code>\r</code> returns to column 1 like a terminal. A zone that painted nothing before a leading newline or <code>\r</code> starts where it first paints, instead of inverted or over-wide boxes.</span></div>
       <div class="feature"><strong>Selection / SelectionRange</strong><span>Press → drag → release text-selection state machine over a selectable region, plus a normalised inclusive stream range whose <code>extract()</code> copies the selected text out of a frame.</span></div>
       <div class="feature"><strong>Scanner hit-testing</strong><span><code>Scanner::new()->scan($rendered)</code> parses sentinels; <code>hit(col, row)</code> reverse-lookup by coordinates; <code>get(id)</code> lookup by zone id.</span></div>
       <div class="feature"><strong>Zone bounding box</strong><span><code>Zone</code> readonly value object with 1-based start/end col/row coordinates matching terminal cell space.</span></div>
@@ -90,7 +90,7 @@ if ($result !== null) {
       <div class="feature"><strong>No external Manager</strong><span>Scanner is owned by each consumer — no global Manager wiring, no shared state across components.</span></div>
       <div class="feature"><strong>ANSI-safe sentinels</strong><span>Private-use Unicode codepoints U+E000/U+E001 never collide with CSI or OSC ANSI sequences.</span></div>
       <div class="feature"><strong>CJK column accounting</strong><span>Scanning uses <code>Width::string()</code> from candy-core so wide East-Asian characters account for 2 cell columns each.</span></div>
-      <div class="feature"><strong>ZoneClickTracker improves on bubblezone issue #10</strong><span>Press+Release dedup per zone per button — bubblezone never shipped this fix.</span></div>
+      <div class="feature"><strong>ZoneClickTracker improves on bubblezone</strong><span>Press+Release dedup per zone per button — bubblezone never shipped this fix.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -98,7 +98,7 @@ if ($result !== null) {
       <li><a href="https://github.com/sugarcraft/candy-mouse">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-mouse/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-mouse/tree/master/examples">Runnable examples</a></li>
-      <li>Inspired by <a href="https://github.com/lrstanley/bubblezone">bubblezone</a> (Go upstream)</li>
+      <li>Originally inspired by <a href="https://github.com/lrstanley/bubblezone">bubblezone</a> (Go); SugarCraft is developed as a native PHP project.</li>
       <li><a href="https://github.com/lrstanley/bubblezone/issues/10">bubblezone issue #10</a> — ZoneClickTracker addresses this gap</li>
     </ul>
 

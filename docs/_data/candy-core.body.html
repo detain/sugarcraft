@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Model / Msg / Cmd / Program. The runtime everything else builds on. Includes the cursed cell-diff renderer ported from Bubble Tea v2 — meaningful SSH bandwidth savings for slow-changing UIs.</p>
+<p class="lede" style="margin-top: 28px;">Model / Msg / Cmd / Program. The runtime everything else builds on. Includes the cursed cell-diff renderer — meaningful SSH bandwidth savings for slow-changing UIs.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-core</code></pre>
@@ -36,10 +36,10 @@ final class Counter implements Model {
       <div class="feature"><strong>Model interface</strong><span>Three pure methods: <code>init()</code>, <code>update(Msg)</code>, <code>view()</code>.</span></div>
       <div class="feature"><strong>Cmd helpers</strong><span><code>Cmd::quit()</code>, <code>Cmd::batch()</code>, <code>Cmd::send()</code> — async work scheduled, never inlined.</span></div>
       <div class="feature"><strong>InputReader</strong><span>Stateful escape-sequence parser. Bracketed paste, mouse, function keys, OSC, DEC private modes. Paste is bounded: an end marker split across reads still closes the envelope, a paste larger than <code>MAX_PASTE_BYTES</code> (1 MiB) surfaces in chunks, and an envelope whose end marker never arrives is closed after <code>PASTE_IDLE_TIMEOUT</code> (1 s) of silence so the keyboard comes back. Pasted content is sanitized by default.</span></div>
-      <div class="feature"><strong>Cursed renderer</strong><span>Cell-diff rendering ported from Bubble Tea v2. ≥15% bandwidth savings on a 50-tick test.</span></div>
-      <div class="feature"><strong>ReactPHP loop</strong><span>Mirrors goroutine semantics for input, signals, render tick, command execution.</span></div>
+      <div class="feature"><strong>Cursed renderer</strong><span>Cell-diff rendering with ≥15% bandwidth savings on a 50-tick test.</span></div>
+      <div class="feature"><strong>ReactPHP loop</strong><span>Event-loop concurrency for input, signals, render tick, command execution.</span></div>
       <div class="feature"><strong>Signal handling</strong><span>Ctrl+C, SIGTERM, SIGWINCH (resize) all surface as Msgs in your update(). On exit the runtime cancels its pending one-shot timers and restores the previous signal handlers and async-signal mode.</span></div>
-      <div class="feature"><strong>ColorProfile::detect()</strong><span>Mirrors charmbracelet/colorprofile's order: unless <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code> is set, a non-tty output is <code>NoTty</code> first (so <code>NO_COLOR</code> on a pipe emits no escapes at all), then <code>TERM=dumb</code> → <code>NoTty</code>; next <code>NO_COLOR</code> → <code>Ascii</code> (colour off, bold/faint kept), then force → <code>TrueColor</code> (so a forced pipe still gets colour), then <code>COLORTERM</code>, <code>TERM_PROGRAM</code> and <code>TERM</code>.</span></div>
+      <div class="feature"><strong>ColorProfile::detect()</strong><span>Detection order: unless <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code> is set, a non-tty output is <code>NoTty</code> first (so <code>NO_COLOR</code> on a pipe emits no escapes at all), then <code>TERM=dumb</code> → <code>NoTty</code>; next <code>NO_COLOR</code> → <code>Ascii</code> (colour off, bold/faint kept), then force → <code>TrueColor</code> (so a forced pipe still gets colour), then <code>COLORTERM</code>, <code>TERM_PROGRAM</code> and <code>TERM</code>.</span></div>
       <div class="feature"><strong>Screen / ScreenStack</strong><span>Immutable stack for modal / drill-down flows. <code>RootModelWithScreenStack</code> + <code>ScreenStackCapable</code> delegate <code>init/update/view</code> to the active screen automatically.</span></div>
       <div class="feature"><strong>Component / Composite</strong><span>Parent-child lifecycle model. <code>Component</code> interface adds <code>onMount()</code>/<code>onUnmount()</code>; <code>Composite</code> owns children and drains lifecycle Cmds during reconcile.</span></div>
       <div class="feature"><strong>WorkerPool</strong><span>Bounded-concurrency pool (default 4 workers) for CPU-bound tasks. <code>WorkerCmd::run($pool, $task)</code> dispatches a global function name or serializable callable and yields a <code>WorkerResultMsg</code> on completion. A <code>Closure</code> cannot cross the process boundary, so dispatching one returns an already-rejected promise.</span></div>
@@ -50,7 +50,7 @@ final class Counter implements Model {
       <li><a href="https://github.com/sugarcraft/candy-core">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-core/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-core/tree/main/examples">Runnable examples</a></li>
-      <li>Port of <a href="https://github.com/charmbracelet/bubbletea">bubbletea</a> (Go upstream)</li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/bubbletea">bubbletea</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
