@@ -1,11 +1,11 @@
 {
     "title": "CandyWish — SugarCraft",
-    "description": "CandyWish: SSH server middleware framework. PHP port of wish.",
+    "description": "CandyWish: Run interactive terminal apps over SSH — composable middleware for serving your TUIs from OpenSSH.",
     "ogTitle": "CandyWish — SugarCraft",
-    "ogDescription": "SSH server middleware framework. Port of wish.",
+    "ogDescription": "Run interactive terminal apps over SSH — composable middleware for serving your TUIs from OpenSSH.",
     "emoji": "🔐",
     "displayName": "CandyWish",
     "tagline": "SSH server middleware framework",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/wish\" style=\"color: inherit;\">wish</a></span>\n          <span class=\"tag-chip\">ssh</span>\n          <span class=\"tag-chip\">middleware</span>\n          <span class=\"tag-chip\">force-command</span>\n          <span class=\"tag-chip\">multi-tenant</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/wish\" style=\"color: inherit;\">charmbracelet/wish</a></span>\n          <span class=\"tag-chip\">ssh</span>\n          <span class=\"tag-chip\">middleware</span>\n          <span class=\"tag-chip\">force-command</span>\n          <span class=\"tag-chip\">multi-tenant</span>"
 }

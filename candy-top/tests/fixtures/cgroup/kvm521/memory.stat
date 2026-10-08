@@ -1,0 +1,13 @@
+anon 2217099264
+file 229376
+kernel 46235648
+kernel_stack 114688
+pagetables 9617408
+sec_pagetables 6971392
+percpu 140200
+sock 0
+vmalloc 4534272
+shmem 0
+zswap 23660157
+zswapped 79515648
+inactive_file 0

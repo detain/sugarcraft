@@ -154,7 +154,7 @@ immediately — the historical contract. Slow TTY reads that split a sequence
 right after the escape byte then decode its remainder as literal keystrokes
 (observe `ESC`+`[1;20R` as `Escape`, `[`, `1`… — and on a real terminal a
 cursor-position report can absolutely arrive that way). Apps that bound reads
-with their own idle timer can opt into the bubbletea-style behaviour:
+with their own idle timer can opt into the deferred-escape behaviour:
 
 ```php
 $decoder = new EscapeDecoder(
@@ -179,10 +179,12 @@ resolving an Escape-only keystroke.
 
 `Shift`, `Ctrl`, `Alt`, `Super`, `Hyper`, `Meta`, `CapsLock`, `NumLock` — combine with bitwise OR.
 
-## Upstream parity
-
-The decoding semantics mirror [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea)'s input handling — the class docblocks cite it as the reference (as do the tests, e.g. the deferred-trailing-ESC strategy). It decodes the same sequences that the kernel and terminal emulators produce, ported to PHP.
-
 ## License
 
 MIT
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+The decoding semantics follow [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea)'s input handling; the class docblocks cite it as the reference (as do the tests, e.g. the deferred-trailing-ESC strategy). It decodes the same sequences that the kernel and terminal emulators produce.

@@ -13,13 +13,7 @@
 
 ![demo](.vhs/spinners.gif)
 
-PHP port of [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) —
-17 components total: 9 first-party TUI components (Table, Tabs, Tree,
-Progress, Paginator, Help, Key, Timer, Stopwatch) and 8 deprecated
-alias re-exports from `sugarcraft/candy-forms` (TextInput, TextArea,
-Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner). Includes
-the interactive `Tree` (mirrors upstream Bubbles #233) and per-cell
-`Table::styleFunc(...)` (mirrors #246).
+sugar-bits — 17 TUI components for PHP 8.3+: 9 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch) and 8 deprecated alias re-exports from `sugarcraft/candy-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
 
 ```sh
 composer require sugarcraft/sugar-bits
@@ -28,7 +22,7 @@ composer require sugarcraft/sugar-bits
 > `TextInput`, `TextArea`, and `Help` expose short-form aliases for the
 > most-used setters: `placeholder` / `charLimit` / `width` / `height` /
 > `prompt` / `validator` / `styles` / `separator` / `ellipsis`. The
-> upstream-mirroring `with*` long forms still work side-by-side.
+> `with*` long forms still work side-by-side.
 
 ## Components
 
@@ -54,7 +48,7 @@ Spinner.
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | — |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList`)_ | — |
-| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Mirrors upstream Bubbles #233. | — |
+| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
 | `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
@@ -333,12 +327,12 @@ Pagination works with sort and filter: changing the sort order, filter query, or
 
 ## btop helpers — TextEdit, OptionRow, position-coloured Progress
 
-Three pieces added for [candy-top](https://github.com/detain/sugarcraft/tree/master/candy-top) (the btop port) that are
+Three pieces added for [candy-top](https://github.com/detain/sugarcraft/tree/master/candy-top) (the btop-inspired system monitor) that are
 useful to any TUI drawing overlays, option screens or gradient meters.
 
 ### `Input\TextEdit` — underline-caret inline editor
 
-A pure immutable value object (not a TEA Model) mirroring btop
+A pure immutable value object (not a Model–Update–View component) mirroring btop
 `Draw::TextEdit` — the proc filter bar and options-menu value editor. The
 caret is drawn as an SGR underline (`TextEdit::UL` / `TextEdit::UUL`) on
 the cluster under it, so several editors can be on screen while the
@@ -517,5 +511,7 @@ cd sugar-bits && composer install && vendor/bin/phpunit
 ## Related
 
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
-- Upstream: [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles)
 
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

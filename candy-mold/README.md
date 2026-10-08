@@ -48,7 +48,7 @@ public function update(Msg $msg): array;       // [nextModel, ?Cmd]
 public function view(): string;                // current frame
 ```
 
-The shape is borrowed verbatim from Bubble Tea / The Elm Architecture. State lives on the value object, transitions are pure functions, side effects (timers, HTTP, file I/O) get *scheduled* as Cmds rather than executed inline.
+The shape follows the MVC-style Model–Update–View architecture. State lives on the value object, transitions are pure functions, side effects (timers, HTTP, file I/O) get *scheduled* as Cmds rather than executed inline.
 
 `update()` always returns a new `Model` rather than mutating `$this`. That's why the demo declares `public readonly int $n` — the only way to "change" the count is to construct a fresh Counter with the new value.
 
@@ -98,3 +98,7 @@ Then uncomment the panic handler block in `bin/start`:
 ## License
 
 MIT.
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

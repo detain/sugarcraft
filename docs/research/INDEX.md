@@ -41,6 +41,7 @@ To implement an item:
 | **sugar-stickers** | [research/libraries/sugar-stickers-research.md](libraries/sugar-stickers-research.md) | 1. Viewport, 2. Sticky via FlexBox, 3. Scrollbar |
 | **sugar-boxer** | [research/libraries/sugar-boxer-research.md](libraries/sugar-boxer-research.md) | 1. Box styles enum, 2. Text alignment, 3. Box titles |
 | **sugar-crumbs** | [research/libraries/sugar-crumbs-research.md](libraries/sugar-crumbs-research.md) | 1. Fix examples, 2. Closable interfaces, 3. Click regions |
+| **MySQL Workbench status & performance dashboard** (candy-query parity study) | [mysql_workbench_dash.md](mysql_workbench_dash.md) | 1. Performance page metrics, 2. Two-connection cache model, 3. Page lifecycle / event-task model |
 
 ### Input & Readline
 

@@ -64,7 +64,7 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;
   (first wins), focus stays on the current region if it survives (otherwise
   the first region is focused), new ids are added and missing ids dropped.
 - **Immutable** — every mutator returns a new `FocusRing` and leaves the
-  receiver untouched, so it slots into the immutable-model (TEA) pattern.
+  receiver untouched, so it slots into the immutable-model architecture.
   No-op calls (registering an existing id, focusing an unknown or already
   focused id, traversal with nowhere to go…) return the *same* instance, so
   `$new === $old` cheaply detects "nothing changed".
@@ -137,3 +137,7 @@ foreach ($s['disabled'] as $id) {
 ## License
 
 MIT © Joe Huss
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

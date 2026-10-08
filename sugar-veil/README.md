@@ -10,7 +10,7 @@
 
 # SugarVeil
 
-PHP port of [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) — modal/overlay compositing for terminal UIs. Composite one string (foreground) over another (background) at any position with optional cell (column/row) offsets.
+sugar-veil — modal/overlay compositing for terminal UIs, for PHP 8.3+. Composite one string (foreground) over another (background) at any position with optional cell (column/row) offsets.
 
 ## Features
 
@@ -264,7 +264,7 @@ behaviour is always correct.
 
 A background with no cells (the empty string, or rows of zero width) is no canvas
 to clip the overlay against, so `composite()` returns the overlay itself as the
-frame — mirroring upstream's `bg == ""` early return — and records that frame in the
+frame — the `bg == ""` early return — and records that frame in the
 session like any other. A frame with no cells at all resets the session, so the next
 non-empty composite is emitted in full rather than diffed against a frame the
 terminal no longer shows.
@@ -281,3 +281,7 @@ Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay); SugarCraft is developed as a native PHP project.

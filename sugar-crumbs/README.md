@@ -10,7 +10,7 @@
 
 # SugarCrumbs
 
-PHP port of [KevM/bubbleo](https://github.com/KevM/bubbleo) — NavStack (navigation stack) and Breadcrumb components for terminal UIs.
+sugar-crumbs — NavStack (navigation stack) and Breadcrumb components for terminal UIs, for PHP 8.3+.
 
 ## Features
 
@@ -18,7 +18,7 @@ PHP port of [KevM/bubbleo](https://github.com/KevM/bubbleo) — NavStack (naviga
 - **Breadcrumb renderer** — renders the current navigation path as a clickable-looking breadcrumb string
 - **Shell** — combines NavStack + Breadcrumb into a single component
 - **Pure renderer** — breadcrumb output is just strings; works with any TUI framework
-- **No external dependencies** — pure PHP 8.1+
+- **No external dependencies** — pure PHP 8.3+
 
 ## Install
 
@@ -95,3 +95,7 @@ Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [KevM/bubbleo](https://github.com/KevM/bubbleo); SugarCraft is developed as a native PHP project.

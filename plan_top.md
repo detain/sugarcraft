@@ -511,8 +511,10 @@ Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aris
   meter included). P-G: #1683 mellow theme (42nd; bump the two 41-pinned tests) + #1849 theme-switch test.
 - **U4 — post-v1 (phase P-I, GPU/NPU):** ✅ `a8f442188` multi-vendor GPU/NPU data model, #1854 AMD sysfs + amdgpu.ids
   names, #1888 multi Intel GPU (DRM fdinfo/sysfs), #985 Intel NPU (`intel_vpu`), #1839 AMD NPU
-  (`/sys/class/accel` detection; FFI ioctl stats deferred), #1552 collector side (nvidia pmon) — collectors, not yet wired; then #1730 any-GPU box slots on the #1881 grid (`gpu_box_columns="Auto"`),
-  #1552 per-process GPU util/mem; #1873 container box; #1791c tree-state persistence ✅ `41b18d59f` in an
+  (`/sys/class/accel` detection; FFI ioctl stats deferred), #1552 collector side (nvidia pmon); ✅ `7a6a33579` wiring +
+  #1730 any-GPU box slots on the #1881 grid (`gpu_box_columns="Auto"`), NPU boxes, bounded #1008 hold, #1552 proc
+  Gpu%/GMem columns + `proc_gpu_only`/`proc_gpu_graphs` + gpu sorts (live-verified on skynet2, 4× NVIDIA);
+  ✅ `82a422cf1` #1873 container box (cgroup v2 + docker socket names; live-verified skynet2 docker, kvm521 libvirt); #1791c tree-state persistence ✅ `41b18d59f` in an
   `$XDG_STATE_HOME` file (not config).
 - **U5 — post-v1 FreeBSD collectors** ✅ (collectors + Platform factory `18fd19467`; panel wiring `70c09bec9`; live ps/iostat capture pending — host ssh down): reference output captured in `prompt_kit/findings/freebsd-reference.md`
   (FreeBSD 14.4, sysctl/kvm-surface notes); folds in #1851/#1830/#1787/#1728.

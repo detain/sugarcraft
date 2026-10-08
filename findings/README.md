@@ -2,8 +2,8 @@
 > ⚠️ 2026-10-06: per-lib rows in this index predate the r85-r89 fix eras and the crush_libs.md re-verify — several listed "open" items have shipped. Each findings/<slug>.md now carries a status banner; trust those + crush_libs.md, then re-derive from source.
 
 **Audit Date:** 2026-06-30  
-**Projects Audited:** 57 (33 candy-*, 2 honey-*, 22 sugar-*)  
-**Total Findings Files:** 57 project audits + 1 repeated_logic.md = 58 files  
+**Projects Audited:** 58 (34 candy-*, 2 honey-*, 22 sugar-*)  
+**Total Findings Files:** 58 project audits + 1 repeated_logic.md + 3 relocated work records (2026-10-08) = 62 files  
 ** auditor: Multi-agent codebase analysis
 
 ---
@@ -175,8 +175,9 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 
 - `README.md` — this file (collation of all findings)
 - `repeated_logic.md` — cross-cutting patterns repeated across 10+ projects
-- `candy-ansi.md` through `candy-zone.md` — 31 candy-* project audits
+- `candy-ansi.md` through `candy-zone.md` — 34 candy-* project audits
 - `honey-bounce.md`, `honey-flap.md` — 2 honey-* project audits
-- `sugar-bits.md` through `sugar-wishlist.md` — 23 sugar-* project audits
+- `sugar-bits.md` through `sugar-wishlist.md` — 22 sugar-* project audits (incl. `sugar-skate.md`, first-ever audit, 2026-09-15, E719)
+- `monorepo-audit-2026-05-27.md`, `vcr_use_findings.md`, `improvements-2026-05.md` — 3 internal work records relocated out of `docs/` on 2026-10-08
 
-**Total: 59 findings files covering 58 projects** — the 2026-06-30 pass (57 projects) plus `sugar-skate.md` (first-ever audit, 2026-09-15, E719)
+**Total: 63 findings files covering 58 projects** — the 58 project audits (2026-06-30 pass plus `sugar-skate.md` and later per-lib arrivals), `repeated_logic.md`, this `README.md`, and the 3 relocated work records. The `plan.md` index, per-lib `plan_<slug>.md` remediation plans, and `findings_resume_plan.md` / `resume_prompt.md` are tracked separately.

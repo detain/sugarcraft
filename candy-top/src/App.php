@@ -22,6 +22,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View as CoreView;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\ConfigFile;
+use SugarCraft\Top\Config\GpuPanels;
 use SugarCraft\Top\Config\InvalidOptionValue;
 use SugarCraft\Top\Input\KeyName;
 use SugarCraft\Top\Msg\ClockTickMsg;
@@ -40,16 +41,19 @@ use SugarCraft\Top\Overlay\OverlayContext;
 use SugarCraft\Top\Overlay\OverlayStack;
 use SugarCraft\Top\Panel\ClickCapture;
 use SugarCraft\Top\Panel\ClockReserve;
+use SugarCraft\Top\Panel\GpuRosterSource;
 use SugarCraft\Top\Panel\OptionChoices;
 use SugarCraft\Top\Panel\Panel;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\PanelResult;
 use SugarCraft\Top\Panel\ProcPanel;
+use SugarCraft\Top\Panel\SampleTap;
 use SugarCraft\Top\Theme\Palette;
 use SugarCraft\Top\Theme\ThemeRegistry;
 use SugarCraft\Top\View\ClockFormat;
 use SugarCraft\Top\View\FrameBuilder;
+use SugarCraft\Top\View\GpuRoster;
 use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Layout;
 use SugarCraft\Top\View\SizeError;
@@ -115,6 +119,14 @@ use SugarCraft\Top\View\Surface;
  * shown boxes' minimum shows btop's size notice, where only `q` and the
  * box toggles 1-4 work (btop.cpp:180-198).
  *
+ * GPU boxes (btop PR #1730/#1881): every `gpuN` box in shown_boxes is
+ * drawn by the ONE panel registered as `gpu` ({@see panelFor()}); the
+ * number keys 5, 6, 7, 8, 9, 0 toggle gpu box slots 0-5
+ * ({@see GpuPanels::toggle()}) — globals, like `1`-`4`, and also behind
+ * the size notice. The detected accelerators ({@see roster()}, from the
+ * panels implementing {@see GpuRosterSource}) size the gpu grid and the
+ * cpu box's GPU rows; a sample that changes them re-runs the layout.
+ *
  * Mirrors aristocratos/btop main loop, Input::process global keys, and
  * Draw::calcSizes / update_clock.
  */
@@ -122,6 +134,13 @@ final class App implements Model
 {
     /** btop's numeric box toggles (all_boxes, GPU build index 1-4). */
     public const BOX_KEYS = ['1' => 'cpu', '2' => 'mem', '3' => 'net', '4' => 'proc'];
+
+    /**
+     * btop PR #1873's ctr box toggle — a framed global like `1`-`4`, but
+     * not read behind the size notice (the PR leaves btop's resize loop
+     * at `1`-`4`).
+     */
+    public const CTR_KEY = 'x';
 
     /** update_ms step per `+`/`-` press. */
     public const UPDATE_STEP_MS = 100;
@@ -316,9 +335,27 @@ final class App implements Model
             return [$this, Cmd::batch($this->dataTick(), $this->collectAll())];
         }
         if ($msg instanceof SampledMsg) {
-            $panel = $this->panels[$msg->box] ?? null;
+            $panel = $this->panelFor($msg->box);
+            if ($panel === null) {
+                return [$this, null];
+            }
+            $roster = $this->roster();
+            [$next, $cmd] = $this->deliver($panel, $msg);
+            // Panels tapping this box's samples ({@see SampleTap}, the ctr box
+            // reading the proc scan), visible ones only.
+            foreach ($next->visiblePanels() as $tap) {
+                if ($tap instanceof SampleTap && $tap->box() !== $panel->box() && $tap->taps() === $msg->box) {
+                    [$next, $tapCmd] = $next->deliver($tap, $msg);
+                    $cmd = self::batch($cmd, $tapCmd);
+                }
+            }
+            if ($panel instanceof GpuRosterSource && !$next->roster()->equals($roster)) {
+                // A new accelerator, or a column that started / stopped
+                // measuring, moves btop's gpu_b_height_offsets: re-layout.
+                $next = $next->relayout()->settledBackdrop(true);
+            }
 
-            return $panel === null ? [$this, null] : $this->deliver($panel, $msg);
+            return [$next, $cmd];
         }
         if ($msg instanceof UpdateStepMsg) {
             return $this->stepUpdateMs($msg);
@@ -434,7 +471,7 @@ final class App implements Model
         }
         $boxes = $this->config->shownBoxes();
         if ($this->layout === null || !$this->framed()) {
-            [$w, $h] = FrameBuilder::minSize($boxes);
+            [$w, $h] = FrameBuilder::minSize($boxes, $this->cols, $this->roster(), $this->config->gpuBoxColumns());
 
             return SizeError::surface($this->cols, $this->rows, $w, $h);
         }
@@ -462,13 +499,13 @@ final class App implements Model
     private function frame(): Surface
     {
         $surface = Surface::new($this->cols, $this->rows, $this->ink->base());
-        FrameBuilder::paintChrome($surface, $this->layout, $this->ink, $this->config, $this->host, $this->preset);
+        FrameBuilder::paintChrome($surface, $this->layout, $this->ink, $this->config, $this->host, $this->preset, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()));
         $border = FrameBuilder::border($this->config);
         foreach ($this->layout->ordered() as $box => $rect) {
-            $panel = $this->panels[$box] ?? null;
+            $panel = $this->panelFor($box);
             $panel?->paint(
                 $surface->region($rect),
-                new PanelFrame($this->layout, $rect, $this->ink, $border, $this->config, $this->host),
+                new PanelFrame($this->layout, $rect, $this->ink, $border, $this->config, $this->host, $box),
             );
         }
         FrameBuilder::paintClock($surface, $this->layout, $this->ink, $this->config, $this->clockText(), $this->clockReserved());
@@ -555,6 +592,8 @@ final class App implements Model
         return [
             'm' => [$cpu->x + 11, $y, Width::string(Lang::t('button.menu')), 1],
             'p' => [$cpu->x + 17, $y, Width::string(Lang::t('button.preset')) + 2, 1],
+            // btop PR #1873 `{button_y, x + 27, 1, 5}`, only where it is drawn (or over the engine label).
+            ...(($ctr = FrameBuilder::ctrZone($cpu, $y, $this->host->containerEngine, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()))) !== null ? ['x' => $ctr] : []),
             '-' => [$cpu->x + $cpu->width - $len - 7, $y, 2, 1],
             '+' => [$cpu->x + $cpu->width - 5, $y, 2, 1],
         ];
@@ -569,8 +608,7 @@ final class App implements Model
         if ($this->layout === null) {
             return false;
         }
-        foreach ($this->layout->ordered() as $box => $rect) {
-            $panel = $this->panels[$box] ?? null;
+        foreach ($this->visiblePanels() as $box => $panel) {
             if ($panel instanceof ClockReserve && $panel->reservesClock($this->context($box))) {
                 return true;
             }
@@ -603,6 +641,36 @@ final class App implements Model
     public function panels(): array
     {
         return $this->panels;
+    }
+
+    /**
+     * The panel drawing box `$box`: its own roster entry, or — for any
+     * `gpuN` box — the panel registered as `gpu` (one panel draws every
+     * gpu box, btop's Gpu::draw per shown panel).
+     */
+    public function panelFor(string $box): ?Panel
+    {
+        return $this->panels[$box] ?? (GpuPanels::index($box) !== null ? $this->panels['gpu'] ?? null : null);
+    }
+
+    /**
+     * The detected accelerators — btop Gpu::count / gpu_b_height_offsets /
+     * gpu_names — as the largest roster any {@see GpuRosterSource} panel
+     * reports (none before a GPU sample).
+     */
+    public function roster(): GpuRoster
+    {
+        $best = GpuRoster::none();
+        foreach ($this->panels as $panel) {
+            if ($panel instanceof GpuRosterSource) {
+                $roster = $panel->gpuRoster();
+                if ($roster->count() > $best->count()) {
+                    $best = $roster;
+                }
+            }
+        }
+
+        return $best;
     }
 
     /** Copy with a replaced theme (options-menu theme cycling, P-F/P-G). */
@@ -655,8 +723,16 @@ final class App implements Model
         if ($config->bool('disable_mouse') !== $this->config->bool('disable_mouse')) {
             $cmds[] = $config->bool('disable_mouse') ? Cmd::disableMouse() : Cmd::enableMouseCellMotion();
         }
+        $sampled = [];
         foreach (array_diff($config->shownBoxes(), $before) as $box) {
-            $cmds[] = ($next->panels[$box] ?? null)?->collect($next->context($box));
+            $panel = $next->panelFor($box);
+            if ($panel !== null && !isset($sampled[$panel->box()]) && !$next->sampledBefore($panel, $before)) {
+                $sampled[$panel->box()] = true;
+                $next = $next->opened($panel);
+                $panel = $next->panelFor($box) ?? $panel;
+                $cmds[] = $panel->collect($next->context($box));
+                $cmds[] = $next->tapSourceCollect($panel, $sampled);
+            }
         }
         $cmds = array_values(array_filter($cmds));
 
@@ -671,6 +747,34 @@ final class App implements Model
         $key = self::themeKey($config);
 
         return static fn (): Msg => new PaletteMsg($themes($config), $key);
+    }
+
+    /**
+     * A {@see SampleTap} panel that was just shown gets its first data from
+     * the box it taps: sample that box now (btop's Runner::run("all") after
+     * a toggle re-collects proc together with ctr) unless it is hidden or
+     * already being sampled in `$sampled` (panel box => true, updated).
+     *
+     * @param array<string, bool> $sampled
+     */
+    private function opened(Panel $panel): self
+    {
+        return $panel instanceof SampleTap ? $this->withPanel($panel->opened()) : $this;
+    }
+
+    private function tapSourceCollect(Panel $panel, array &$sampled): ?\Closure
+    {
+        if (!$panel instanceof SampleTap) {
+            return null;
+        }
+        $box = $panel->taps();
+        $source = $this->panelFor($box);
+        if ($source === null || isset($sampled[$source->box()]) || !\in_array($box, $this->config->shownBoxes(), true)) {
+            return null;
+        }
+        $sampled[$source->box()] = true;
+
+        return $source->collect($this->context($box));
     }
 
     /** The data-tick Cmd for the current period and generation. */
@@ -713,7 +817,11 @@ final class App implements Model
             } catch (InvalidOptionValue) {
                 continue;
             }
-            if ($key === 'shown_boxes' && $this->cols > 0 && !FrameBuilder::fits($this->cols, $this->rows, $next->shownBoxes())) {
+            if ($key === 'shown_boxes' && !$this->gpusExist($next->shownBoxes())) {
+                // btop set_boxes: a gpuN beyond Gpu::count is invalid.
+                continue;
+            }
+            if ($key === 'shown_boxes' && $this->cols > 0 && !$this->fitsBoxes($next->shownBoxes(), $next)) {
                 $refused = true;
                 continue;
             }
@@ -731,7 +839,76 @@ final class App implements Model
     /** True when the shown boxes are laid out and painted (no size notice). */
     private function framed(): bool
     {
-        return $this->layout !== null && FrameBuilder::fits($this->cols, $this->rows, $this->config->shownBoxes());
+        return $this->layout !== null && $this->fitsBoxes($this->config->shownBoxes());
+    }
+
+    /**
+     * Whether `$boxes` fit the terminal — btop Term::get_min_size with the
+     * detected accelerators and `$config`'s gpu_box_columns (default: the
+     * current config).
+     *
+     * @param list<string> $boxes
+     */
+    private function fitsBoxes(array $boxes, ?Config $config = null): bool
+    {
+        return FrameBuilder::fits($this->cols, $this->rows, $boxes, $this->roster(), ($config ?? $this->config)->gpuBoxColumns());
+    }
+
+    /**
+     * btop PR #1730 valid_box_name(check_gpu_count): every gpuN names a
+     * detected accelerator.
+     *
+     * @param list<string> $boxes
+     */
+    private function gpusExist(array $boxes): bool
+    {
+        $count = $this->roster()->count();
+        foreach (GpuPanels::targets($boxes) as $gpu) {
+            if ($gpu >= $count) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Shown panels in layout order, each once, keyed by the box its
+     * context is built for — the first gpu box stands for the gpu panel.
+     *
+     * @return array<string, Panel>
+     */
+    private function visiblePanels(): array
+    {
+        $out = [];
+        $seen = [];
+        foreach (array_keys($this->layout?->ordered() ?? []) as $box) {
+            $panel = $this->panelFor($box);
+            if ($panel !== null && !isset($seen[$panel->box()])) {
+                $seen[$panel->box()] = true;
+                $out[$box] = $panel;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Whether `$panel` was already sampled under the old box list — the
+     * gpu panel draws several boxes, so opening a second gpu box must not
+     * re-sample it.
+     *
+     * @param list<string> $before
+     */
+    private function sampledBefore(Panel $panel, array $before): bool
+    {
+        foreach ($before as $box) {
+            if ($this->panelFor($box) === $panel) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -779,8 +956,7 @@ final class App implements Model
     /** The first visible panel (layout order) whose mapped button `$msg` hits, or null. */
     private function clickOwner(MouseMsg $msg): ?Panel
     {
-        foreach (array_keys($this->layout?->ordered() ?? []) as $box) {
-            $panel = $this->panels[$box] ?? null;
+        foreach ($this->visiblePanels() as $box => $panel) {
             if ($panel instanceof ClickCapture && $panel->capturesClick($msg, $this->context($box))) {
                 return $panel;
             }
@@ -794,15 +970,14 @@ final class App implements Model
     {
         $key = KeyName::mapped($msg, $this->chromeButtons());
 
-        return in_array($key, ['m', 'p', '-', '+'], true) ? $key : null;
+        return in_array($key, ['m', 'p', 'x', '-', '+'], true) ? $key : null;
     }
 
     /** The first visible panel (layout order) that owns all input, or null. Caller checks framed(). */
     private function modalPanel(): ?Panel
     {
-        foreach (array_keys($this->layout?->ordered() ?? []) as $box) {
-            $panel = $this->panels[$box] ?? null;
-            if ($panel !== null && $panel->modal($this->context($box))) {
+        foreach ($this->visiblePanels() as $box => $panel) {
+            if ($panel->modal($this->context($box))) {
                 return $panel;
             }
         }
@@ -813,9 +988,8 @@ final class App implements Model
     /** The first visible panel (layout order) that claims `$key`, or null. Caller checks framed(). */
     private function captor(KeyMsg $key): ?Panel
     {
-        foreach (array_keys($this->layout?->ordered() ?? []) as $box) {
-            $panel = $this->panels[$box] ?? null;
-            if ($panel !== null && $panel->capturesKey($key, $this->context($box))) {
+        foreach ($this->visiblePanels() as $box => $panel) {
+            if ($panel->capturesKey($key, $this->context($box))) {
                 return $panel;
             }
         }
@@ -835,7 +1009,8 @@ final class App implements Model
         return in_array($key->string(), ['q', 'ctrl+r'], true)
             || in_array($name, $this->menuKeys(), true)
             || in_array($name, ['p', 'P', ...KeyName::MODIFIED_ARROWS], true)
-            || ($key->type === KeyType::Char && !$key->ctrl && !$key->alt && isset(self::BOX_KEYS[$key->rune]));
+            || ($key->type === KeyType::Char && !$key->ctrl && !$key->alt
+                && (isset(self::BOX_KEYS[$key->rune]) || $key->rune === self::CTR_KEY || GpuPanels::slotFromKey($key->rune) !== null));
     }
 
     /**
@@ -879,6 +1054,11 @@ final class App implements Model
         if ($key->type === KeyType::Char && !$key->ctrl && !$key->alt && isset(self::BOX_KEYS[$key->rune])) {
             return $this->toggleBox(self::BOX_KEYS[$key->rune], false);
         }
+        // btop PR #1730 term_resize: the gpu slot keys toggle here too.
+        $slot = $key->type === KeyType::Char && !$key->ctrl && !$key->alt ? GpuPanels::slotFromKey($key->rune) : null;
+        if ($slot !== null) {
+            return $this->toggleGpuBox($slot, false);
+        }
 
         return [$this, null];
     }
@@ -914,6 +1094,13 @@ final class App implements Model
         }
         if (isset(self::BOX_KEYS[$key->rune])) {
             return $this->toggleBox(self::BOX_KEYS[$key->rune], true);
+        }
+        if ($key->rune === self::CTR_KEY) {
+            return $this->toggleBox('ctr', true);
+        }
+        $slot = GpuPanels::slotFromKey($key->rune);
+        if ($slot !== null) {
+            return $this->toggleGpuBox($slot, true);
         }
         if (!in_array($key->rune, ['+', '=', '-'], true) || !in_array('cpu', $this->config->shownBoxes(), true)) {
             return null;
@@ -971,18 +1158,62 @@ final class App implements Model
         if ($boxes === []) {
             return [$this, null];
         }
-        if ($this->cols > 0 && !FrameBuilder::fits($this->cols, $this->rows, $boxes)) {
+        if ($this->cols > 0 && !$this->fitsBoxes($boxes)) {
             return [$notify ? $this->withOverlay(Menus::sizeError()) : $this, null];
         }
         try {
-            $config = $this->config->with('shown_boxes', implode(' ', $boxes));
+            // btop PR #1730 toggle_box keeps current_gpu_panel_slots: write
+            // the slots with the boxes, or the shown_boxes write resets them.
+            $config = GpuPanels::withBoxes($this->config, $boxes, GpuPanels::slots($this->config));
         } catch (InvalidOptionValue) {
             return [$this, null];
         }
         // btop toggle_box goes through Config::set: the change is saved on exit.
         $next = $this->mutate(config: $config, preset: null, presetSet: true, writeNew: true)->relayout();
 
-        return [$next, $pos === false ? ($next->panels[$box] ?? null)?->collect($next->context($box)) : null];
+        $panel = $next->panels[$box] ?? null;
+        if ($pos !== false || $panel === null) {
+            return [$next, null];
+        }
+        $seen = [$panel->box() => true];
+        $next = $next->opened($panel);
+        $panel = $next->panels[$box] ?? $panel;
+
+        return [$next, self::batch($panel->collect($next->context($box)), $next->tapSourceCollect($panel, $seen))];
+    }
+
+    /**
+     * btop PR #1730's 5-0 keys (btop_input.cpp): toggle gpu box slot
+     * `$slot` ({@see GpuPanels::toggle()}). A free slot with no GPU of
+     * that index does nothing; any other refusal — six boxes shown, every
+     * GPU already boxed, the last box, or a terminal too small — opens
+     * btop's size-error box when `$notify` (btop shows it for every
+     * failed toggle_gpu_box). Drops the active preset; opening a box
+     * samples the gpu panel at once unless it already draws another box.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function toggleGpuBox(int $slot, bool $notify): array
+    {
+        $count = $this->roster()->count();
+        $active = \in_array($slot, GpuPanels::slots($this->config), true);
+        if (!$active && $slot >= $count) {
+            return [$this, null];
+        }
+        try {
+            $config = GpuPanels::toggle($this->config, $slot, $count);
+        } catch (InvalidOptionValue) {
+            $config = null;
+        }
+        if ($config === null || ($this->cols > 0 && !$this->fitsBoxes($config->shownBoxes()))) {
+            return [$notify ? $this->withOverlay(Menus::sizeError()) : $this, null];
+        }
+        $hadGpu = GpuPanels::targets($this->config->shownBoxes()) !== [];
+        $next = $this->mutate(config: $config, preset: null, presetSet: true, writeNew: true)->relayout();
+        $gpu = $next->panels['gpu'] ?? null;
+        $opened = !$active && !$hadGpu && $gpu !== null;
+
+        return [$next, $opened ? $gpu->collect($next->context('gpu')) : null];
     }
 
     /**
@@ -1004,7 +1235,10 @@ final class App implements Model
             return [$this, null];
         }
         $preset = $presets->at($index);
-        if ($this->cols > 0 && !FrameBuilder::fits($this->cols, $this->rows, $preset->boxNames())) {
+        // btop: apply_preset fails on a gpuN beyond Gpu::count (set_boxes)
+        // or a terminal too small — the size-error box opens and the old
+        // preset stays current, so `p` does not move past it.
+        if (!$this->gpusExist($preset->boxNames()) || ($this->cols > 0 && !$this->fitsBoxes($preset->boxNames()))) {
             return [$this->withOverlay(Menus::sizeError()), null];
         }
         try {
@@ -1159,7 +1393,7 @@ final class App implements Model
         $config = $this->config;
         $writeNew = $this->writeNew;
         if ($msg->result !== null) {
-            $config = $config->withPersistedFrom($msg->result->config)->withShownBoxesSettled(0);
+            $config = $config->withPersistedFrom($msg->result->config)->withShownBoxesSettled($this->roster()->count());
             $config = $config->with('lowcolor', !$config->bool('truecolor'));
             $writeNew = $writeNew || $msg->result->needsRewrite;
         }
@@ -1207,8 +1441,13 @@ final class App implements Model
     private function collectAll(): ?\Closure
     {
         $cmds = [];
+        $seen = [];
         foreach ($this->config->shownBoxes() as $box) {
-            $cmds[] = isset($this->panels[$box]) ? $this->panels[$box]->collect($this->context($box)) : null;
+            $panel = $this->panelFor($box);
+            if ($panel !== null && !isset($seen[$panel->box()])) {
+                $seen[$panel->box()] = true;
+                $cmds[] = $panel->collect($this->context($box));
+            }
         }
         $cmds = array_values(array_filter($cmds));
 
@@ -1221,7 +1460,7 @@ final class App implements Model
             return $this->mutate(layout: null, layoutSet: true);
         }
         $showTemp = $this->config->bool('check_temp') && $this->host->hasSensors;
-        $layout = FrameBuilder::layout($this->cols, $this->rows, $this->config, $this->host->coreCount, $showTemp);
+        $layout = FrameBuilder::layout($this->cols, $this->rows, $this->config, $this->host->coreCount, $showTemp, $this->roster());
 
         return $this->mutate(layout: $layout, layoutSet: true);
     }

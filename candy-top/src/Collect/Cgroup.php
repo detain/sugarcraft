@@ -12,8 +12,11 @@ namespace SugarCraft\Top\Collect;
  * outermost one (docker inside an LXC guest → the LXC guest):
  *  - LXC / Incus: `lxc.payload.<name>`, or `<name>` right below `lxc`
  *    (Proxmox);
- *  - systemd-nspawn / machined: `machine-<name>.scope`, except
- *    `machine-qemu*` (VMs are not containers); `\x2d` unescaped to '-';
+ *  - systemd-nspawn / machined: `machine-<name>.scope`, except a
+ *    libvirt guest's scope ({@see Vm::scope()}: VMs are not containers);
+ *    systemd's `\xNN` escapes decoded by {@see Vm::unescape()} (btop
+ *    replaces `\x2d` only). btop skips every `machine-qemu*` scope, so
+ *    an nspawn machine named e.g. "qemubox" is invisible there;
  *  - OCI runtimes: `[<engine>-]<64 hex>[.scope]` — `libpod` → podman,
  *    any path containing `kubepods` → k8s, a bare id below `docker` →
  *    docker, else the prefix itself, else "container"; a `*conmon`
@@ -83,8 +86,14 @@ final class Cgroup
             if ($prev === 'lxc' && $part !== '') {
                 return self::ref('lxc', $part, $path);
             }
-            if ($scope && str_starts_with($stem, 'machine-') && strlen($stem) > 8 && !str_starts_with($stem, 'machine-qemu\\x2d') && !str_starts_with($stem, 'machine-qemu-')) {
-                return self::ref('nspawn', str_replace('\x2d', '-', substr($stem, 8)), $path);
+            // A machined scope is a VM exactly when Vm::scope() reads it as one
+            // (`qemu-<id>-<name>` once unescaped), so the two classifiers can
+            // never both claim, or both drop, the same segment: an nspawn
+            // machine merely NAMED like qemu (`machine-qemubox.scope`) stays
+            // a container, a libvirt guest (`machine-qemu\x2d1\x2dweb.scope`,
+            // any escape case) is a VM.
+            if ($scope && str_starts_with($stem, 'machine-') && strlen($stem) > 8 && Vm::scope($part) === null) {
+                return self::ref('nspawn', Vm::unescape(substr($stem, 8)), $path);
             }
             $n = strlen($stem);
             if ($n >= 64 && ctype_xdigit(substr($stem, -64)) && ($n === 64 || $stem[$n - 65] === '-')) {

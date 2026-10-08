@@ -297,11 +297,13 @@ final class ProcPanelTest extends TestCase
         $p = $this->press($p, 'right');
         $this->assertSame(['proc_sorting' => 'io read'], $this->last?->set);
         $p = $this->press($p, 'right', 'right', 'right');
-        $this->assertSame('pid', $this->config->procSorting(), 'wraps after io total');
+        $this->assertSame('gpu', $this->config->procSorting(), '#1552 gpu sorts follow the io ones');
+        $p = $this->press($p, 'right', 'right');
+        $this->assertSame('pid', $this->config->procSorting(), 'wraps after gpu memory');
         $p = $this->press($p, 'left');
-        $this->assertSame('io total', $this->config->procSorting());
+        $this->assertSame('gpu memory', $this->config->procSorting());
         $this->assertSame('pid', ProcPanel::cycleSort('bogus', 1), 'unknown: right goes to the first');
-        $this->assertSame('io total', ProcPanel::cycleSort('bogus', -1), 'unknown: left goes to the last');
+        $this->assertSame('gpu memory', ProcPanel::cycleSort('bogus', -1), 'unknown: left goes to the last');
     }
 
     public function testToggleKeysWriteTheirOptions(): void

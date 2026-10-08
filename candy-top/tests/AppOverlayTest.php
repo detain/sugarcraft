@@ -246,9 +246,9 @@ final class AppOverlayTest extends TestCase
         $this->assertNull($cmd);
 
         $panels = Panels::placeholders(self::host(), self::config(), true);
-        $panels['net'] = new ClaimingPanel('net', [], sets: ['x' => static fn (): array => ['shown_boxes' => 'cpu mem net proc', 'proc_tree' => true]]);
+        $panels['net'] = new ClaimingPanel('net', [], sets: ['X' => static fn (): array => ['shown_boxes' => 'cpu mem net proc', 'proc_tree' => true]]);
         $app = self::app(70, 24, self::config(['shown_boxes' => 'cpu proc']), $panels);
-        $app = self::key($app, 'x');
+        $app = self::key($app, 'X');
         $this->assertSame(['cpu', 'proc'], $app->config->shownBoxes(), 'the panel write is refused');
         $this->assertTrue($app->config->bool('proc_tree'), 'the rest of the set still applies');
         $this->assertInstanceOf(MsgBox::class, $app->overlay());
@@ -300,8 +300,8 @@ final class AppOverlayTest extends TestCase
     public function testPanelsRequestOverlaysThroughPanelResult(): void
     {
         $panels = Panels::placeholders(self::host(), self::config(), true);
-        $panels['net'] = new ClickingPanel('net', null, [], Menus::help(), 'x');
-        $app = self::key(self::app(panels: $panels), 'x');
+        $panels['net'] = new ClickingPanel('net', null, [], Menus::help(), 'X');
+        $app = self::key(self::app(panels: $panels), 'X');
         $this->assertInstanceOf(HelpMenu::class, $app->overlay());
     }
 
@@ -358,7 +358,10 @@ final class AppOverlayTest extends TestCase
     {
         $app = self::booted(self::app());
         $map = $app->chromeButtons();
-        $this->assertSame(['m', 'p', '-', '+'], array_keys($map));
+        $this->assertSame(['m', 'p', 'x', '-', '+'], array_keys($map));
+        $this->assertSame([27, 0, 5, 1], $map['x'], 'btop PR #1873 {button_y, x + 27, 1, 5}');
+        [$ctr] = $app->update(self::click(28, 0));
+        $this->assertContains('ctr', $ctr->config->shownBoxes(), 'the x ctr button toggles the containers box');
         // btop: m at x + 11 (4 wide), - at x + width - len("2000ms") - 7, + at x + width - 5.
         $this->assertSame([11, 0, 4, 1], $map['m']);
         $this->assertSame([17, 0, 8, 1], $map['p'], 'btop {button_y, x + 17, 1, 8}');

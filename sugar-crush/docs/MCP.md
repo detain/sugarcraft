@@ -162,7 +162,7 @@ worked around: it costs one line in the launch report and nothing else.
 
 ### Supported transports
 
-The MCP specification names more transports than this port builds. The honest
+The MCP specification names more transports than sugar-crush builds. The honest
 census, table first:
 
 | Transport | Works here | Config it takes | How it runs |
@@ -310,7 +310,7 @@ here, so this is the worked answer to "how would I do that?". Shortest honest
 form: **write the file, trust the root, relaunch** — there is no registration
 step for anything that does not demand OAuth login.
 
-A stdio server and three zero-auth remotes, in this port's native spelling:
+A stdio server and three zero-auth remotes, in sugar-crush's native config spelling:
 
 ```json
 {
@@ -426,13 +426,13 @@ its config drifts. While that block is rendering and the file's bytes no
 longer match the digest taken at launch, the panel adds one line:
 `Config: changed since launch — restart sugar-crush to apply (reload is not
 implemented)`. That is a DETECTION, not a fix, and the fix was weighed and
-declined (E703 option β): re-reading the file in-session would relaunch
+declined (option β — hot-reloading the config): re-reading the file in-session would relaunch
 servers under a root grant the process already holds, which re-arms exactly
 the prompt-injection → `proc_open()` path the once-per-process freeze closes —
 the trusted-roots list is read **once per process and frozen** above, and the
 digest keeps that law whole by telling you when it has gone stale rather than
 silently honouring new bytes under an old decision. And the panel stays
-display-only, the E689 prohibition on inventing a second persistence seam
+display-only, the prohibition on inventing a second persistence seam
 standing: writing the grant has exactly one home, and neither a digest row
 nor a button belongs to it. Restart is your decision, not the panel's.
 
@@ -492,7 +492,7 @@ allowlists are enforced one layer up instead, at grant-resolution, where the
 preset actually is known — `AgentManager::resolveGrantedTools()` consults
 `McpRouter::serverAllowed` (the router's own membership law) and drops bridges
 whose server the preset does not name, so the narrowed roster is what the
-sub-agent's provider request advertises (E696). An empty or absent list is
+sub-agent's provider request advertises. An empty or absent list is
 allow-all, which is why declaring nothing changes nothing. The two options
 at construction were "the main agent gets zero MCP tools" or "synthesize a fake preset for it".
 What the flag bypasses is `McpRouter`'s per-preset allowlist, which is sub-agent
@@ -522,8 +522,8 @@ server is started only once trusted; see
 [PERMISSIONS.md](PERMISSIONS.md#the-six-modes) for the full rule.
 
 **Denying servers.** The `disabledMcpServers` setting lists `.mcp.json` server
-names, or `fnmatch` globs such as `untrusted_*`, that this launch must not use
-(E696). `Bootstrap::mcpClient()` hands them to `McpClient::setDenyPatterns()`
+names, or `fnmatch` globs such as `untrusted_*`, that this launch must not use.
+`Bootstrap::mcpClient()` hands them to `McpClient::setDenyPatterns()`
 before any server starts, and the client applies them everywhere: a matching
 entry is never started (so it is not pinned as trusted either), its tools are
 never listed, and a call naming it is refused — on the unrestricted main-agent

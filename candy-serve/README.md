@@ -10,7 +10,7 @@
 
 # CandyServe
 
-PHP port of [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) — the mighty, self-hostable Git server for the command line.
+candy-serve — a self-hostable Git server for the command line, for PHP 8.3+.
 
 ## Overview
 
@@ -354,3 +354,7 @@ candy-serve uses [candy-async](https://github.com/detain/sugarcraft/tree/master/
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

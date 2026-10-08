@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top;
 
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Top\Collect\ContainerEngine;
 use SugarCraft\Top\Collect\Paths;
 use SugarCraft\Top\Collect\Temp;
 
@@ -12,7 +13,10 @@ use SugarCraft\Top\Collect\Temp;
  * Facts about the host that are fixed for the run and that the frame
  * layout needs before the first sample arrives: the cpu model shown on
  * the cores sub-box, the logical cpu count that sizes it, and the
- * user/host names for the clock's `/user` `/host` tokens.
+ * user/host names for the clock's `/user` `/host` tokens, and the
+ * container engine candy-top runs inside ({@see ContainerEngine}, btop
+ * `Cpu::container_engine`; '' on a host), shown on the cpu title in place
+ * of the `x ctr` button.
  *
  * {@see detect()} does the one-time reads; the launcher calls it so the
  * Model itself never touches the filesystem.
@@ -29,6 +33,7 @@ final class HostInfo
         public readonly string $host,
         public readonly bool $hasSensors,
         public readonly bool $hasCpuHz,
+        public readonly string $containerEngine = '',
     ) {
     }
 
@@ -40,6 +45,7 @@ final class HostInfo
         string $host = '',
         bool $hasSensors = false,
         bool $hasCpuHz = false,
+        string $containerEngine = '',
     ): self {
         return new self(
             self::clean($cpuName),
@@ -48,6 +54,7 @@ final class HostInfo
             self::clean($host),
             $hasSensors,
             $hasCpuHz,
+            $containerEngine === '' ? '' : ContainerEngine::name($containerEngine),
         );
     }
 
@@ -77,6 +84,8 @@ final class HostInfo
             is_string($host) ? $host : '',
             self::hasSensors($paths),
             is_file($paths->sys('devices/system/cpu/cpu0/cpufreq/scaling_cur_freq')),
+            // A fixture tree stands in for the whole host, so it gets an empty environment too.
+            ContainerEngine::detect($paths, $paths->root === '' ? null : []),
         );
     }
 

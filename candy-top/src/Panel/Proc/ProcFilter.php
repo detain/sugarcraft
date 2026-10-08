@@ -18,9 +18,15 @@ namespace SugarCraft\Top\Panel\Proc;
  * Extension (plan Wave U1b): the plain filter also matches a process's
  * container / VM name, so typing a guest name finds its qemu process.
  *
- * {@see containerHidden()} is btop #1873's ctr_hidden without the ctr box:
- * with proc_filter_containers on, every process in a container — or, for
+ * {@see containerHidden()} is btop #1873's ctr_hidden: a container picked
+ * in the ctr box shows only its processes; else, with
+ * proc_filter_containers on, every process in a container — or, for
  * candy-top, in a KVM/QEMU guest — is omitted.
+ *
+ * {@see gpuHidden()} is btop #1552's proc_gpu_only test (the head of its
+ * matches_filter): with the filter on, a process with no GPU time and no
+ * GPU memory is omitted. The panel only passes it on while per-process GPU
+ * data exists ({@see GpuUsage::measured()}).
  *
  * Mirrors aristocratos/btop Proc::matches_filter / ctr_hidden
  * (src/btop_shared.cpp).
@@ -55,9 +61,24 @@ final class ProcFilter
             || ($p->container !== null && stripos($p->container->name, $filter) !== false);
     }
 
-    public static function containerHidden(ProcEntry $entry, bool $filterContainers): bool
+    public static function gpuHidden(ProcEntry $entry, bool $gpuOnly): bool
     {
-        return $filterContainers && $entry->process->container !== null;
+        return $gpuOnly && $entry->gpuIdle();
+    }
+
+    /**
+     * btop #1873 ctr_hidden: with a container selected in the ctr box
+     * (`$selected`, its cgroup path) only that container's processes show;
+     * otherwise proc_filter_containers omits every containerised one.
+     */
+    public static function containerHidden(ProcEntry $entry, bool $filterContainers, string $selected = ''): bool
+    {
+        $container = $entry->process->container;
+        if ($selected !== '') {
+            return $container?->cgroupPath !== $selected;
+        }
+
+        return $filterContainers && $container !== null;
     }
 
     /** A PCRE for `$pattern`, or null when it does not compile (btop: no match). */

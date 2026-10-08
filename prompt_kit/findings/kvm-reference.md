@@ -181,3 +181,11 @@ vps3368444.xml
 /var/run/libvirt/qemu/vps3368339.pid
 /var/run/libvirt/qemu/vps3368444.pid
 ```
+
+## Per-VM data for a VM dashboard (kvm521, 2026-10-08, no subprocess needed)
+- Running domains: `/var/run/libvirt/qemu/<name>.xml` (root-readable live XML, 55 on kvm521): `<vcpu>N</vcpu>`,
+  `<memory unit='KiB'>`, `<currentMemory>`, disks `<source file=…>`/`<target dev='sda'>`, NICs `<target dev='vnet125'/>`.
+- cgroup v2 scope `machine.slice/machine-qemu\x2dN\x2d<name>.scope` (+ `libvirt/{emulator,vcpu0..}` children):
+  `cpu.stat` usage_usec (÷ vcpus for % of allocation), `cpu.max` (quota), `memory.current`/`memory.stat`/`memory.peak`,
+  `io.stat` per-device `rbytes/wbytes/rios/wios` (sum for disk rate), `cpu.pressure`/`memory.pressure`/`io.pressure` (PSI).
+- Network: `/sys/class/net/vnetN/statistics/{rx,tx}_bytes` — host-side tap, so host rx = guest upload (swap them).

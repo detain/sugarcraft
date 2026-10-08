@@ -125,6 +125,17 @@ final class Platform
         return CollectorSource::of($this->isFreeBsd() ? Gpu\Accelerators::nvidiaOnly() : Gpu\Accelerators::detect());
     }
 
+    /**
+     * The ctr box's per-container figures (btop PR #1873): cgroup v2 + the
+     * docker socket on Linux; on FreeBSD the box stays empty (btop's box
+     * compiles everywhere but only Linux fills it, and our FreeBSD
+     * ProcList reads no jail tags).
+     */
+    public function containers(): ContainerCollector
+    {
+        return $this->isFreeBsd() ? Containers::disabled() : Containers::new();
+    }
+
     private function probe(): FreeBsd\Probe
     {
         return $this->probe ?? FreeBsd\LiveProbe::new();

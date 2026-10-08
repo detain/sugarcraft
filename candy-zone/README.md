@@ -11,8 +11,8 @@
 <!-- BADGES:END -->
 
 
-PHP port of [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone) —
-mouse-zone tracker for TUI apps. Wrap rendered chunks with named markers,
+candy-zone — a mouse-zone tracker for TUI apps, for PHP 8.3+.
+Wrap rendered chunks with named markers,
 let CandyZone discover their bounding boxes, then ask zones whether a
 {@see \SugarCraft\Core\Msg\MouseMsg} fell inside them.
 ```sh
@@ -40,7 +40,7 @@ if ($z->get('btn:ok')?->inBounds($mouseMsg)) {
 }
 ```
 
-CandyZone is a thin TEA-facing façade over
+CandyZone is a thin app-facing façade over
 [candy-mouse](../candy-mouse), the shared low-level hit-test primitive —
 the marker scheme and its parser live there once and are reused by every
 SugarCraft zone consumer. `mark()` delegates to
@@ -88,8 +88,8 @@ Beyond `mark()` / `scan()` / `get()`:
 
 ## Package-level facade
 
-`SugarCraft\Zone\Zones` mirrors bubblezone's package-level surface
-(`bubblezone.DefaultManager` + `Mark` / `Scan` / `Clear` / `Get` /
+`SugarCraft\Zone\Zones` follows the package-level surface of the
+original design (`DefaultManager` + `Mark` / `Scan` / `Clear` / `Get` /
 `Close` / `SetEnabled` / `Enabled` / `NewPrefix` / `AnyInBounds*`)
 as static methods over a single shared `Manager`:
 
@@ -238,7 +238,7 @@ text-processing component that produces the raw CSI sequence.
   empty bounding box".
 - Organic shapes (ASCII art) report a rectangular bounding box —
   the marker pair only carries 4 corners' worth of information.
-- The PHP port has a synchronous `scan()` (no background worker), so
+- `scan()` is synchronous (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
 - `scan()` strips exactly the tags candy-mouse's `Scan::parse()` decodes:
@@ -286,3 +286,9 @@ text-processing component that produces the raw CSI sequence.
 ```sh
 cd candy-zone && composer install && vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+Design antecedent: [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone).

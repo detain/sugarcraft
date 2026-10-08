@@ -10,7 +10,7 @@
 
 # SugarSkate
 
-PHP port of [charmbracelet/skate](https://github.com/charmbracelet/skate) — a personal key/value store with multi-database support, binary data handling, and glob/list filtering.
+sugar-skate — a personal key/value store for PHP 8.3+ with multi-database support, binary data handling, and glob/list filtering.
 
 ## Features
 
@@ -92,7 +92,7 @@ skate import json - < backup.json
 ```
 
 > **Note:** piped values are stored verbatim — the full stdin is read with no
-> trimming, matching upstream `cat file | skate set key` byte-faithfulness.
+> trimming, byte-for-byte.
 > `echo` therefore stores its trailing newline; use `printf '%s' token |` (or
 > pass the value as an argument) when you need the exact bytes without it.
 
@@ -128,3 +128,7 @@ sugar-skate uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy)
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

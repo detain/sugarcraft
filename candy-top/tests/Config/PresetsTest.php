@@ -61,16 +61,28 @@ final class PresetsTest extends TestCase
         Presets::parse($nine . ' mem:0:default');
     }
 
+    public function testAnyGpuIndexAndUpToSixGpuBoxesParse(): void
+    {
+        // btop PR #1730: gpuN for any N (the GPU count is the app's check), 10 boxes max.
+        $preset = Presets::parse('cpu:0:default,mem:0:default,net:0:default,proc:0:default,gpu7:0:default,gpu12:0:block,gpu0:0:default,gpu1:0:default,gpu2:0:default,gpu3:0:default')->at(1);
+        $this->assertSame(['cpu', 'mem', 'net', 'proc', 'gpu7', 'gpu12', 'gpu0', 'gpu1', 'gpu2', 'gpu3'], $preset->boxNames());
+        $this->assertSame(10, Presets::MAX_BOXES);
+    }
+
     /** @return array<string, array{string, string}> */
     public static function invalid(): array
     {
         return [
-            'five boxes' => ['cpu:0:default,mem:0:default,net:0:default,proc:0:default,gpu0:0:default', 'Too many boxes entered for preset!'],
+            // btop PR #1730: 4 boxes + 6 gpu boxes per preset, at most 6 of them gpu boxes.
+            'eleven boxes' => ['cpu:0:default,mem:0:default,net:0:default,proc:0:default,gpu0:0:default,gpu1:0:default,gpu2:0:default,gpu3:0:default,gpu4:0:default,gpu5:0:default,gpu6:0:default', 'Too many boxes entered for preset!'],
+            'seven gpu boxes' => ['gpu0:0:default,gpu1:0:default,gpu2:0:default,gpu3:0:default,gpu4:0:default,gpu5:0:default,gpu6:0:default', 'Too many GPU boxes entered for preset!'],
             'two fields' => ['cpu:0', 'Malformatted preset in config value presets!'],
             'empty P collapses' => ['cpu::default', 'Malformatted preset in config value presets!'],
             'four fields' => ['cpu:0:tty:x', 'Malformatted preset in config value presets!'],
             'box' => ['disk:0:default', 'Invalid box name in config value presets!'],
-            'gpu6' => ['gpu6:0:default', 'Invalid box name in config value presets!'],
+            'gpu without index' => ['gpu:0:default', 'Invalid box name in config value presets!'],
+            'gpu index with junk' => ['gpu1x:0:default', 'Invalid box name in config value presets!'],
+            'negative gpu' => ['gpu-1:0:default', 'Invalid box name in config value presets!'],
             'position' => ['cpu:2:default', 'Invalid position value in config value presets!'],
             'graph' => ['cpu:0:dots', 'Invalid graph name in config value presets!'],
             'W on a mem box' => ['mem:0:block2:50', 'Malformatted preset in config value presets!'],

@@ -4,14 +4,12 @@
 [![Coverage](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-pty)](https://codecov.io/gh/detain/sugarcraft)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 
-PHP port of [`charmbracelet/x/xpty`](https://github.com/charmbracelet/x/tree/main/xpty) —
-the pseudo-terminal primitive Charm uses to drive child processes
-inside their TUIs. Open a master/slave PTY pair, spawn a child with
+candy-pty — pseudo-terminal primitives for PHP 8.3+, the building blocks for
+driving child processes inside terminal UIs. Open a master/slave PTY pair, spawn a child with
 its stdio wired to the slave, pump bytes between the host and the
 child, and forward host resizes into the child via `TIOCSWINSZ`.
 
-**Status**: Linux + macOS. Windows ConPTY is a separate concern
-tracked in `plans/x-windows.md`.
+**Status**: Linux + macOS. Windows ConPTY is not covered here.
 
 ## Install
 
@@ -216,8 +214,7 @@ quit on Ctrl-C.
 ## Async (ReactPHP)
 
 Every blocking primitive has an event-loop counterpart, so a ReactPHP
-application can drive PTY sessions without stalling its loop
-(plan items 8.1 / 8.3 / 8.4):
+application can drive PTY sessions without stalling its loop:
 
 - **`ReactPump`** — the async `PosixPump`. Registers the PTY master
   (and optional host stdin) with the loop via `addReadStream()`;
@@ -355,25 +352,11 @@ and a row here nothing reads.
 `SUGARCRAFT_LIBC` and `SUGARCRAFT_TERMIOS` are also read by the test suite,
 which sets and restores them around the cases that exercise each branch.
 
-## Mirrors
-
-| Charm symbol                      | candy-pty                                                |
-|-----------------------------------|----------------------------------------------------------|
-| `xpty.Open()`                     | `Pty::open()`                                            |
-| `xpty.Pty.Start(cmd)`             | `Pty::spawn(cmd, env, cols, rows)`                       |
-| `xpty.Pty.Read(buf)`              | `Pty::read($len, $timeout)`                              |
-| `xpty.Pty.Write(buf)`             | `Pty::write($bytes)`                                     |
-| `xpty.Pty.Resize(cols, rows)`     | `Pty::resize(cols, rows)`                                |
-| `xpty.Pty.Size()`                 | `Pty::size()`                                            |
-| `signalpty.NotifyResize(c, pty)`  | `SignalForwarder::attachSigwinch($pty, $sizeProvider)`   |
-| _fd-based variant_                | `SignalForwarder::attachSigwinchToFd($fd, $sizeProvider)` |
-| `xpty.claimControllingTerminal` | `ControllingTerminal::claim(int $fd)`                      |
-
 ## Compared to node-pty / creack/pty / portable-pty
 
 Cross-ecosystem parity table for the dominant PTY libraries in Go,
 Rust, and Node.js. The goal is "as good as `creack/pty` on Linux and
-macOS" — not a kitchen-sink port. This table is deliberately honest
+macOS" — not a kitchen-sink reimplementation. This table is deliberately honest
 about gaps: Windows ConPTY, foreground-job control, and worker-thread
 support are flagged as planned-or-missing rather than papered over.
 
@@ -396,12 +379,12 @@ support are flagged as planned-or-missing rather than papered over.
 | Non-blocking master I/O | ✅ `setBlocking(false)` + `stream_select` | ✅ `os.File` non-blocking | ✅ `set_nonblocking()` | ✅ event-driven |
 | Byte pump abstraction | ✅ `PosixPump::run()` w/ EOF grace + keepalive | ❌ caller copies bytes | ❌ caller copies bytes | ✅ libuv-driven |
 | Async / threaded operation | ⚠️ single-loop pump only (ReactPHP-friendly) | ✅ goroutines built-in | ✅ thread / async runtime | ✅ libuv worker thread |
-| Windows ConPTY | ❌ planned (v2 sidecar; see `plans/x-windows.md`) | ❌ Linux/macOS only | ✅ `ConPtySystem` | ✅ `winpty` / ConPTY |
+| Windows ConPTY | ❌ not yet implemented | ❌ Linux/macOS only | ✅ `ConPtySystem` | ✅ `winpty` / ConPTY |
 | Dependency-free DI seam | ✅ `Contract\PtySystem` interface | ❌ concrete `*Pty` only | ✅ `PtySystem` trait | ❌ concrete bindings |
 
 Legend: ✅ shipping today · ⚠️ partial / opt-in / caller-driven · ❌ not
-implemented. Method names cite real upstream symbols — see
-`docs/CONCEPTS.md` for the porting rationale behind each row.
+implemented. Method names cite real PTY primitives — see
+`docs/CONCEPTS.md` for the design rationale behind each row.
 
 ## Controlling terminal (Ctrl+C, job control)
 
@@ -439,8 +422,8 @@ environment variable to select which PTY backend to use:
 |---|---|
 | _(unset)_ / `auto` | Platform-appropriate default (same as `posix-ffi` on POSIX) |
 | `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS) |
-| `sidecar` | Not implemented in v1 — throws `UnsupportedPlatformException` (deferred to phase 12) |
-| `pecl` | Not implemented in v1 — throws `UnsupportedPlatformException` (deferred to phase 12) |
+| `sidecar` | Not implemented in v1 — throws `UnsupportedPlatformException` |
+| `pecl` | Not implemented in v1 — throws `UnsupportedPlatformException` |
 
 Unrecognised values throw `\InvalidArgumentException` naming the
 valid options.
@@ -470,7 +453,7 @@ The library is organised in two layers:
 
 ### Contract interfaces (`src/Contract/`) — pure signatures, no logic
 
-| Contract | Upstream mirror | Upcoming POSIX implementation |
+| Contract | Counterpart primitive | Upcoming POSIX implementation |
 |---|---|---|
 | `PtySystem` | `portable-pty.PtySystem` | `PosixPtySystem` |
 | `PtyPair` | `portable-pty.PtyPair` | `PosixPtyPair` |
@@ -495,14 +478,14 @@ reason (not just the first one per process), and
 
 ## Shared foundations
 
-candy-pty builds on two ports for input/output escape-sequence handling:
+candy-pty builds on two sibling libraries for input/output escape-sequence handling:
 
 - **[candy-input](https://github.com/detain/sugarcraft/tree/master/candy-input)** — `EscapeDecoder` consumes raw bytes from the PTY master and emits keyboard/mouse/osc events. The pty-read loop feeds `Pty::read()` chunks directly into `EscapeDecoder`; no private arrow-key or Ctrl-key buffering.
 - **[candy-ansi](https://github.com/detain/sugarcraft/tree/master/candy-ansi)** — `Parser` handles ANSI escape sequences in PTY output when inspection is needed (cursor-position reports, SGR state, OSC strings). PTY output that only needs pass-through to the terminal skips this layer entirely.
 
 ## Known limitations
 
-- **Linux + macOS only.** Windows ConPTY is a separate port.
+- **Linux + macOS only.** Windows ConPTY is not yet supported.
 - **ext-ffi is required but disabled by default.** `ext-ffi` is loaded eagerly
   because `FFI::cdef()` must resolve symbols at script startup. Many Linux
   distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening
@@ -536,3 +519,7 @@ candy-pty builds on two ports for input/output escape-sequence handling:
 ## License
 
 MIT — see [LICENSE](../LICENSE).
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

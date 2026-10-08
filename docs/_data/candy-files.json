@@ -1,11 +1,11 @@
 {
     "title": "CandyFiles — SugarCraft",
-    "description": "CandyFiles: Dual-pane terminal file manager. PHP port of superfile.",
+    "description": "CandyFiles: Dual-pane terminal file manager.",
     "ogTitle": "CandyFiles — SugarCraft",
-    "ogDescription": "Dual-pane terminal file manager. Port of superfile.",
+    "ogDescription": "Dual-pane terminal file manager.",
     "emoji": "📂",
     "displayName": "CandyFiles",
     "tagline": "Dual-pane terminal file manager",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/yorukot/superfile\" style=\"color: inherit;\">superfile</a></span>\n          <span class=\"tag-chip\">file-manager</span>\n          <span class=\"tag-chip\">midnight-commander</span>\n          <span class=\"tag-chip\">dual-pane</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/yorukot/superfile\" style=\"color: inherit;\">yorukot/superfile</a></span>\n          <span class=\"tag-chip\">file-manager</span>\n          <span class=\"tag-chip\">midnight-commander</span>\n          <span class=\"tag-chip\">dual-pane</span>"
 }

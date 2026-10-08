@@ -13,9 +13,7 @@
 
 ![demo](.vhs/render.gif)
 
-PHP port of [charmbracelet/glow](https://github.com/charmbracelet/glow) —
-a Markdown CLI viewer that composes **CandyShine** (rendering) and
-**SugarBits Viewport** (scrolling).
+sugar-glow — a Markdown CLI viewer for PHP 8.3+ that composes **CandyShine** (rendering) and **SugarBits Viewport** (scrolling).
 
 ```sh
 composer require sugarcraft/sugar-glow
@@ -158,3 +156,7 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 ```sh
 cd sugar-glow && composer install && vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

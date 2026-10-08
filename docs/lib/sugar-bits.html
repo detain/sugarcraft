@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarBits — SugarCraft</title>
-<meta name="description" content="SugarBits: Fifteen pre-built TUI components. PHP port of bubbles.">
+<meta name="description" content="SugarBits: A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.">
 <meta property="og:title" content="SugarBits — SugarCraft">
-<meta property="og:description" content="Fifteen pre-built TUI components. Port of bubbles.">
+<meta property="og:description" content="A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-bits.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-bits.html">
 <meta property="og:type" content="website">
@@ -38,9 +38,9 @@
       <img class="detail-icon" src="../img/icons/sugar-bits.png" alt="SugarBits">
       <div>
         <h2>🧁 SugarBits</h2>
-        <p class="detail-sub">Fifteen pre-built TUI components</p>
+        <p class="detail-sub">Ready-made TUI components — inputs, tables, spinners, and more</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/bubbles" style="color: inherit;">charmbracelet/bubbles</a></span>
+          <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/bubbles" style="color: inherit;">charmbracelet/bubbles</a></span>
           <span class="tag-chip">components</span>
           <span class="tag-chip">widgets</span>
           <span class="tag-chip">forms</span>
@@ -92,10 +92,10 @@ final class Search implements Model {
     <div class="feature-grid">
       <div class="feature"><strong>Spinner</strong><span>12 styles — line, dot, miniDot, points, pulse, globe, meter, jump, moon, monkey, hamburger, ellipsis.</span></div>
       <div class="feature"><strong>Progress</strong><span>Static <code>Progress</code> + spring-physics <code>AnimatedProgress</code> driven by HoneyBounce.</span></div>
-      <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, <code>ValidateOn</code> timing control, keystroke <code>restrict</code> pattern filter, line numbers, soft-wrap, dynamic-height growth (mirrors upstream bubbles #910).</span></div>
+      <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, <code>ValidateOn</code> timing control, keystroke <code>restrict</code> pattern filter, line numbers, soft-wrap, dynamic-height growth.</span></div>
       <div class="feature"><strong>ItemList</strong><span>Selectable, scrollable, filterable. Status messages, custom delegates.</span></div>
-      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code> (mirrors bubbles #246), multi-column sort with <code>withSort()</code> / <code>thenSortBy()</code> / <code>clearSort()</code>, filtering with <code>withFilterable()</code> / <code>withFilter()</code> / <code>withFilterPredicate()</code> (default: case-insensitive substring match on all visible columns), and pagination with <code>withPageSize()</code> / <code>paginator()</code> / <code>withPage()</code> / <code>nextPage()</code> / <code>prevPage()</code> / <code>pageFirst()</code> / <code>pageLast()</code> — integrates with sort and filter.</span></div>
-      <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump (mirrors bubbles #233).</span></div>
+      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code>, multi-column sort with <code>withSort()</code> / <code>thenSortBy()</code> / <code>clearSort()</code>, filtering with <code>withFilterable()</code> / <code>withFilter()</code> / <code>withFilterPredicate()</code> (default: case-insensitive substring match on all visible columns), and pagination with <code>withPageSize()</code> / <code>paginator()</code> / <code>withPage()</code> / <code>nextPage()</code> / <code>prevPage()</code> / <code>pageFirst()</code> / <code>pageLast()</code> — integrates with sort and filter.</span></div>
+      <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump.</span></div>
       <div class="feature"><strong>Viewport</strong><span>Scrollable text region. Mouse wheel, scrollbar, keyboard nav.</span></div>
       <div class="feature"><strong>FilePicker</strong><span>Directory browser with icons, size, sort modes.</span></div>
       <div class="feature"><strong>TextEdit + OptionRow</strong><span>btop-derived helpers: <code>Input\TextEdit</code> is an immutable inline editor with an underline caret (no hardware cursor), grapheme-cluster editing, cell-budget windowing and a digits-only mode; <code>Menu\OptionRow::render()</code> draws btop's two-line options-menu row. <code>Progress::withColorFunc</code> closures also receive the bar width for position-coloured ramps.</span></div>
@@ -117,7 +117,7 @@ echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
       <li><a href="https://github.com/sugarcraft/sugar-bits">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-bits/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-bits/tree/master/examples">Runnable examples</a></li>
-      <li>Port of <a href="https://github.com/charmbracelet/bubbles">bubbles</a> (Go upstream)</li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/bubbles">bubbles</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

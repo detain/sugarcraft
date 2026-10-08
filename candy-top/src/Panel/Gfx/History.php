@@ -82,6 +82,29 @@ final class History
         return new self(array_intersect_key($this->series, array_flip($keys)));
     }
 
+    /**
+     * Every series except those whose key starts with one of `$prefixes`
+     * — a GPU whose #1008 hold expired restarts its graphs empty.
+     */
+    public function withoutPrefixes(string ...$prefixes): self
+    {
+        $kept = array_filter(
+            $this->series,
+            static function (string $key) use ($prefixes): bool {
+                foreach ($prefixes as $prefix) {
+                    if (str_starts_with($key, $prefix)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            },
+            \ARRAY_FILTER_USE_KEY,
+        );
+
+        return new self($kept);
+    }
+
     /** @return list<string> */
     public function keys(): array
     {

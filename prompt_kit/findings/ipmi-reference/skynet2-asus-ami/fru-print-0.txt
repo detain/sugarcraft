@@ -1,0 +1,12 @@
+ Chassis Type          : Rack Mount Chassis
+ Chassis Part Number   : PN-000000
+ Chassis Serial        : SN0000000000
+ Board Mfg Date        : Thu 27 Feb 2025 05:02:00 AM EST EST
+ Board Mfg             : ASUSTeK COMPUTER INC.
+ Board Product         : K14PG-D24 Series
+ Board Serial          : SN0000000000
+ Board Part Number     : PN-000000
+ Product Manufacturer  : ASUSTeK COMPUTER INC.
+ Product Name          : ESC8000A-E12
+ Product Version       : SKU1A
+ Product Serial        : SN0000000000

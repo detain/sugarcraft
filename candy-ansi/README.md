@@ -4,11 +4,9 @@
 
 ECMA-48 VT500 ANSI parser state machine — the shared byte-stream interpreter extracted from `candy-vt`. Feeds raw bytes through the Paul-Williams state machine, dispatching abstract `Handler` events. Handles partial input naturally; multi-byte UTF-8 runes arrive at the handler as complete grapheme clusters.
 
-Upstream: [charmbracelet/x/ansi](https://github.com/charmbracelet/x/tree/main/ansi/parser)
-
 ## Status
 
-🟢 Working port. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`candy-vt`, `sugar-spark`, `candy-hermit`, `candy-freeze`, `candy-pty`). `CsiHandler` now covers the full emulator CSI-final set (cursor, erase, scroll, insert/delete line & char, repeat, SCO save/restore, CR/LF) so `candy-vt` can implement this interface directly instead of forking its own parser.
+🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`candy-vt`, `sugar-spark`, `candy-hermit`, `candy-freeze`, `candy-pty`). `CsiHandler` now covers the full emulator CSI-final set (cursor, erase, scroll, insert/delete line & char, repeat, SCO save/restore, CR/LF) so `candy-vt` can implement this interface directly instead of forking its own parser.
 
 ## Quickstart
 
@@ -56,7 +54,7 @@ both faithfully:
   `dcsDispatch`), a `list<bool>` aligned with `$params`: `true` at index *i*
   when the value at
   *i* was followed by a `:` (the slot continues). A leading `:` marks the
-  implicit default at index 0. This mirrors upstream's `Param.HasMore`
+  implicit default at index 0. This follows the original design's `Param.HasMore`
   side-channel, so SGR consumers can implement `58:2::148:199:255`-style
   colon forms without re-splitting the byte stream, and `Parser::groupSubparameters($params, $flags)`
   reconstitutes the nested `list<list<int>>` grouping in one call. SGR 58/59
@@ -92,3 +90,7 @@ when the list is already full is dropped and the following digits merge.
 |---|---|
 | [![CI](https://github.com/sugarcraft/candy-ansi/actions/workflows/ci.yml/badge.svg)](https://github.com/sugarcraft/candy-ansi/actions/workflows/ci.yml) | Unit tests |
 | [![codecov](https://codecov.io/gh/sugarcraft/candy-ansi/branch/master/graph/badge.svg?flag=candy-ansi)](https://app.codecov.io/gh/sugarcraft/candy-ansi) | Coverage |
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

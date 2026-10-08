@@ -1,11 +1,11 @@
 {
     "title": "CandyTop — SugarCraft",
-    "description": "CandyTop: btop-style terminal system monitor for PHP. Port of aristocratos/btop — cpu, mem, disks, net and process boxes, btop themes and config, Linux and FreeBSD collectors.",
+    "description": "CandyTop: Terminal system monitor for PHP — cpu, mem, disks, net, process, containers and GPU/NPU boxes, 42 themes and btop-compatible config, Linux and FreeBSD collectors.",
     "ogTitle": "CandyTop — SugarCraft",
-    "ogDescription": "Terminal system monitor — cpu, memory, disk, network and process boxes with braille graphs, gradient meters, btop's 42 themes and btop-compatible config. Port of btop.",
+    "ogDescription": "Terminal system monitor — cpu, memory, disk, network, process, container and GPU boxes with braille graphs, gradient meters, 42 themes and btop-compatible config.",
     "emoji": "📈",
     "displayName": "CandyTop",
-    "tagline": "btop-style terminal system monitor",
+    "tagline": "Terminal system monitor",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/aristocratos/btop\" style=\"color: inherit;\">btop</a></span>\n          <span class=\"tag-chip\">system-monitor</span>\n          <span class=\"tag-chip\">tui</span>\n          <span class=\"tag-chip\">charts</span>\n          <span class=\"tag-chip\">linux</span>\n          <span class=\"tag-chip\">freebsd</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/aristocratos/btop\" style=\"color: inherit;\">aristocratos/btop</a></span>\n          <span class=\"tag-chip\">system-monitor</span>\n          <span class=\"tag-chip\">tui</span>\n          <span class=\"tag-chip\">charts</span>\n          <span class=\"tag-chip\">linux</span>\n          <span class=\"tag-chip\">freebsd</span>"
 }

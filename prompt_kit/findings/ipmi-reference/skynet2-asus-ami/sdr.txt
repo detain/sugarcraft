@@ -1,0 +1,107 @@
+CPU1 Temperature | 45 degrees C      | ok
+CPU2 Temperature | disabled          | ns
+TR2 Temperature  | 73 degrees C      | ok
+TR3 Temperature  | 82 degrees C      | ok
+TR4 Temperature  | 80 degrees C      | ok
+TR5 Temperature  | 67 degrees C      | ok
+TR6 Temperature  | no reading        | ns
+TR7 Temperature  | no reading        | ns
+TR8 Temperature  | no reading        | ns
+TR9 Temperature  | no reading        | ns
+CPU1_DIMMA1_Temp | 27 degrees C      | ok
+CPU1_DIMMB1_Temp | 28 degrees C      | ok
+CPU1_DIMMC1_Temp | 28 degrees C      | ok
+CPU1_DIMMD1_Temp | no reading        | ns
+CPU1_DIMME1_Temp | 27 degrees C      | ok
+CPU1_DIMMF1_Temp | no reading        | ns
+CPU1_DIMMG1_Temp | 25 degrees C      | ok
+CPU1_DIMMH1_Temp | 27 degrees C      | ok
+CPU1_DIMMI1_Temp | 26 degrees C      | ok
+CPU1_DIMMJ1_Temp | no reading        | ns
+CPU1_DIMMK1_Temp | 25 degrees C      | ok
+CPU1_DIMML1_Temp | no reading        | ns
+CPU2_DIMMA1_Temp | disabled          | ns
+CPU2_DIMMB1_Temp | disabled          | ns
+CPU2_DIMMC1_Temp | disabled          | ns
+CPU2_DIMMD1_Temp | disabled          | ns
+CPU2_DIMME1_Temp | disabled          | ns
+CPU2_DIMMF1_Temp | disabled          | ns
+CPU2_DIMMG1_Temp | disabled          | ns
+CPU2_DIMMH1_Temp | disabled          | ns
+CPU2_DIMMI1_Temp | disabled          | ns
+CPU2_DIMMJ1_Temp | disabled          | ns
+CPU2_DIMMK1_Temp | disabled          | ns
+CPU2_DIMML1_Temp | disabled          | ns
+Inlet Temp       | 19 degrees C      | ok
++VCORE0_CPU1     | 1.13 Volts        | ok
++VCORE1_CPU1     | 1.13 Volts        | ok
++VCORE0_CPU2     | disabled          | ns
++VCORE1_CPU2     | disabled          | ns
++VSOC_CPU1       | 1.00 Volts        | ok
++VSOC_CPU2       | disabled          | ns
++VDDIO_CPU1      | 1.11 Volts        | ok
++VDDIO_CPU2      | disabled          | ns
++12V             | 12.35 Volts       | ok
++5V              | 5.09 Volts        | ok
++3.3V            | 3.36 Volts        | ok
++5VSB            | 5.09 Volts        | ok
++3.3VSB          | 3.36 Volts        | ok
+VBAT             | 3.12 Volts        | ok
+GPU_FAN1         | 16900 RPM         | ok
+GPU_FAN2         | 16770 RPM         | ok
+GPU_FAN3         | 16510 RPM         | ok
+GPU_FAN4         | 16380 RPM         | ok
+GPU_FAN5         | 16380 RPM         | ok
+SYS_FAN1         | 19890 RPM         | ok
+SYS_FAN2         | 20020 RPM         | ok
+SYS_FAN3         | 19890 RPM         | ok
+SYS_FAN4         | 20150 RPM         | ok
+SYS_FAN5         | 20280 RPM         | ok
+SYS_FAN6         | 19890 RPM         | ok
+PSU1 Power In    | 512 Watts         | ok
+PSU1 Power Out   | 480 Watts         | ok
+PSU2 Power In    | 512 Watts         | ok
+PSU2 Power Out   | 480 Watts         | ok
+PSU3 Power In    | 512 Watts         | ok
+PSU3 Power Out   | 480 Watts         | ok
+PSU4 Power In    | 528 Watts         | ok
+PSU4 Power Out   | 464 Watts         | ok
+CPU_Power        | 120 Watts         | ok
+Memory_Power     | 8 Watts           | ok
+Backplane1 HD01  | 0x00              | ok
+Backplane1 HD02  | 0x00              | ok
+Backplane1 HD03  | 0x00              | ok
+Backplane1 HD04  | 0x00              | ok
+Backplane1 HD05  | 0x00              | ok
+Backplane1 HD06  | 0x00              | ok
+Backplane1 HD07  | 0x00              | ok
+Backplane1 HD08  | 0x00              | ok
+PSU1 Over Temp   | 0x01              | ok
+PSU1 AC Lost     | 0x01              | ok
+PSU1 Slow FAN1   | 0x01              | ok
+PSU1 PWR Detect  | 0x01              | ok
+PSU1 Over Curr   | 0x01              | ok
+PSU2 Over Temp   | 0x01              | ok
+PSU2 AC Lost     | 0x01              | ok
+PSU2 Slow FAN1   | 0x01              | ok
+PSU2 PWR Detect  | 0x01              | ok
+PSU2 Over Curr   | 0x01              | ok
+PSU3 Over Temp   | 0x01              | ok
+PSU3 AC Lost     | 0x01              | ok
+PSU3 Slow FAN1   | 0x01              | ok
+PSU3 PWR Detect  | 0x01              | ok
+PSU3 Over Curr   | 0x01              | ok
+PSU4 Over Temp   | 0x01              | ok
+PSU4 AC Lost     | 0x01              | ok
+PSU4 Slow FAN1   | 0x01              | ok
+PSU4 PWR Detect  | 0x01              | ok
+PSU4 Over Curr   | 0x01              | ok
+CPU1_ECC1        | 0x40              | ok
+CPU2_ECC1        | Not Readable      | ns
+Memory_Train_ERR | 0x00              | ok
+BIOS Event       | 0x00              | ok
+PowerUnit        | 0x00              | ok
+CPU_Hardware     | 0x00              | ok
+Mem_Hardware     | 0x00              | ok
+PCIE_Hardware    | 0x00              | ok
+Watchdog2        | 0x00              | ok

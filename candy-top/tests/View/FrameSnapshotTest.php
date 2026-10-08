@@ -87,7 +87,10 @@ final class FrameSnapshotTest extends TestCase
             . $b . "\x1b[1;91mm" . $b . "\x1b[1;97menu"
             . $b . "\x1b[32m┌┐"
             . $b . "\x1b[1;91mp" . $b . "\x1b[1;97mreset *"
-            . $b . "\x1b[32m┌──────────┐"
+            // btop PR #1873's `x ctr` button (cpu box >= 76 wide).
+            . $b . "\x1b[32m┌┐"
+            . $b . "\x1b[1;91mx" . $b . "\x1b[1;97m ctr"
+            . $b . "\x1b[32m┌───┐"
             . $b . "\x1b[1;97m22:13:20"
             . $b . "\x1b[32m┌────────────────────┐"
             . $b . "\x1b[1;91m- " . $b . "\x1b[1;97m2000ms" . $b . "\x1b[1;91m +"

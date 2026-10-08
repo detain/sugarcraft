@@ -21,7 +21,8 @@ namespace SugarCraft\Top\Panel\Proc;
  * over the bar are rotated to the front. Not in tree view and not reversed.
  *
  * btop PR #1823 adds "io read" / "io write" / "io total" (bytes/s; an
- * unknown rate sorts as 0, btop's io_read_b default).
+ * unknown rate sorts as 0, btop's io_read_b default). btop PR #1552 adds
+ * "gpu" / "gpu memory" (gpu_p / gpu_m, descending by default).
  *
  * Mirrors aristocratos/btop Proc::proc_sorter (src/btop_shared.cpp).
  */
@@ -69,6 +70,8 @@ final class ProcSorter
             'io read' => [static fn (ProcEntry $e): float => max(0.0, $e->ioRead), false],
             'io write' => [static fn (ProcEntry $e): float => max(0.0, $e->ioWrite), false],
             'io total' => [static fn (ProcEntry $e): float => $e->ioTotal(), false],
+            'gpu' => [static fn (ProcEntry $e): float => $e->gpu, false],
+            'gpu memory' => [static fn (ProcEntry $e): int => $e->gpuMem, false],
             default => [null, true],
         };
         if ($key === null) {

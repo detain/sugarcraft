@@ -1,11 +1,11 @@
 {
     "title": "SugarVeil — SugarCraft",
-    "description": "SugarVeil: Terminal overlay compositor. PHP port of rmhubbert/bubbletea-overlay.",
+    "description": "SugarVeil: Overlay layer for terminal apps — dimmed modal overlays with slide/fade animation and click-outside dismissal.",
     "ogTitle": "SugarVeil — SugarCraft",
-    "ogDescription": "Terminal overlay compositor. Port of rmhubbert/bubbletea-overlay.",
+    "ogDescription": "Overlay layer for terminal apps — dimmed modal overlays with slide/fade animation and click-outside dismissal.",
     "emoji": "",
     "displayName": "SugarVeil",
     "tagline": "Terminal overlay compositor",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/rmhubbert/bubbletea-overlay\" style=\"color: inherit;\">rmhubbert/bubbletea-overlay</a></span>\n          <span class=\"tag-chip\">overlay</span><span class=\"tag-chip\">compositing</span><span class=\"tag-chip\">ui</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/rmhubbert/bubbletea-overlay\" style=\"color: inherit;\">rmhubbert/bubbletea-overlay</a></span>\n          <span class=\"tag-chip\">overlay</span><span class=\"tag-chip\">compositing</span><span class=\"tag-chip\">ui</span>"
 }

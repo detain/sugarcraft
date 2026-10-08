@@ -70,8 +70,8 @@ Every event line contains at least `t` (seconds since cassette start, ms precisi
 
 ### `windowSize` — alias for `resize`
 
-`windowSize` is a legacy alias for `resize` used by some upstream vcr
-implementations. candy-vcr emits `resize` but accepts both when replaying.
+`windowSize` is a legacy alias for `resize` used by some other recorder
+implementations. candy-vcr emits and replays `resize`.
 
 ### `quit` — session end
 

@@ -13,7 +13,7 @@
 
 
 
-PHP port of [Evertras/bubble-table](https://github.com/Evertras/bubble-table) — customizable interactive table component for terminal UIs.
+sugar-table — a customizable interactive table component for terminal UIs, for PHP 8.3+.
 
 ## Features
 
@@ -939,3 +939,7 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [Evertras/bubble-table](https://github.com/Evertras/bubble-table); SugarCraft is developed as a native PHP project.

@@ -1,12 +1,14 @@
 # candy-testing
 
-Test harness for TEA (The Elm Architecture) programs — pioneering what [bubble-tea issue #1654](https://github.com/charmbracelet/bubbletea/issues/1654) never shipped.
+Deterministic test harness for SugarCraft apps — MVC-style Model–Update–View
+programs — for PHP 8.3+: scripted input, golden snapshots and full program
+simulation.
 
-> **TEA background:** The Elm Architecture (Model / Update / View) is the foundation of [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea). Testing TEA programs deterministically has been a long-standing gap — `candy-testing` closes it for the PHP ecosystem.
+> **Architecture background:** SugarCraft apps follow the MVC-style Model–Update–View architecture. Testing such programs deterministically has been a long-standing gap — `candy-testing` closes it for the PHP ecosystem.
 
 ## Overview
 
-`candy-testing` provides the infrastructure SugarCraft pioneers for deterministic TEA program testing:
+`candy-testing` provides the infrastructure for deterministic SugarCraft app testing:
 
 - **`ProgramSimulator`** — drives a `Program` with scripted input, captures model/view/cmds
 - **`ScriptedInput`** — fluent builder for message sequences (`->key('q')->enter()`)
@@ -191,3 +193,7 @@ that wants to assert or diagnose rather than pin.
 ## License
 
 MIT
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
