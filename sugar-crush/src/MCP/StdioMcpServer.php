@@ -23,6 +23,15 @@ use SugarCraft\Crush\Support\ProcessContainment;
  *  - the product identity the handshake advertises — `sugar-crush` `1.0.0`,
  *    injected through the library's `$clientInfo` seam, because a third-party
  *    server's logs should name the tool the user configured, not a library.
+ *  - the per-call ceiling itself: {@see DEFAULT_TOOL_TIMEOUT_SECONDS} is a
+ *    crush product decision with no library counterpart — the library
+ *    transport bounds the handshake, the product bounds the turn's tool
+ *    calls, and `toolTimeout` per `.mcp.json` entry tunes the number but
+ *    never disables it.
+ *  - the secret scrub: credential-shaped environment names are withheld
+ *    from the spawn plan and only the names are surfaced in the launch
+ *    notice (item 0.14-b) — a library transport must not hold a policy
+ *    about what the product's users have in their environment.
  *  - the crush-side value shapes: this class keeps implementing
  *    {@see McpServer}, converts the library's McpTool rows into the product's
  *    {@see McpTool}, and keeps the FQCN every existing consumer
