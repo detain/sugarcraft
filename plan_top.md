@@ -478,6 +478,36 @@ from P-A.
 | P-G | Themes ported (all shipped `.theme` files), TTY mode fallback, VHS demo tape (`candy-top/.vhs/top.tape`: `Set Theme "TokyoNight"`, quoted values, `Type "php examples/top.php"`, deterministic seeded collectors per tea §5 — fake /proc fixtures), polish, README examples/ | CI re-renders demo GIF; `--tty` demo | +~10 |
 | P-H | **Documentation of every feature** (user-requested 2026-10-08). candy-top: full `README.md` (install, run, every panel, every key binding, mouse, config keys table generated/derived from `Config\Schema`, presets, themes list + adding user themes, TTY mode, collectors + data sources + permissions, adopted upstream-PR features from Wave U), `docs/_data/candy-top.{json,body.html}` refresh then `php tools/gen-docs.php`, `CALIBER_LEARNINGS.md`, examples/. Sibling libs — document each lane API in that lib's README + `docs/_data/<slug>.body.html` (+ gen-docs): sugar-charts (withSeriesColorFn, withBarColor), sugar-dash (BrailleCanvas gradient, Gradient101, DualSampleGraph, Meter position mode, NetAutoScale, GradientStore, DistanceFade, ProcRow*), candy-sprinkles (withEmbeddedTitle, embedJunctions, seam), sugar-bits (TextEdit, OptionRow, Progress width arg). Refresh stale "scaffold" wording in root README/docs/index.html; MATCHUPS 🟡→🟢 at v1. Add a docs drift test where cheap (e.g. README key-binding / config-key tables re-derived from source, like sugar-crush's drift guards). | README/doc pages cover every shipped feature; drift tests green | +~5 (drift guards) |
 
+
+### Wave U — adopted upstream btop PRs (evaluated 2026-10-08)
+
+Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aristocratos/btop PRs: 16 ADOPT,
+7 ADOPT-LATER, 9 N/A). Every new config key is additive (btop and our reader both skip unknown keys); new
+*values* (`graph_symbol=block2`, `proc_sorting=io *`) make stock btop warn+default; the presets 4th field
+(#1476) is written only when the user set it (stock btop discards a presets string containing it).
+
+- **U0 — fix now (no config):** #1869 try every `nvidia-smi` candidate (incl. `/usr/lib/wsl/lib/nvidia-smi`)
+  before memoizing absence; #1856 add rename/parenthesis stat regression fixtures (parser already correct).
+- **U1 — collector additions:** #1739 zswap (meminfo Zswap/Zswapped, `show_zswap=true`, Used = on-disk swap);
+  #1785 per-core freq (`cpuN/cpufreq`, `show_core_freq=off|value|graph`) + extract `Freq::label()` (#1792);
+  #1573 iface IPs via `net_get_interfaces()` (`net_hide_ip=false`); ProcList bundle — #1859 argv[0] basename
+  span (`proc_command_basename=false`), #1823 `/proc/pid/io` rates (EACCES → "-", never 0), #1873 container
+  tag from `/proc/pid/cgroup` (`proc_filter_containers`, `O` key).
+- **U2 — lib lane:** #1783 `block2` sextant graph symbols in sugar-dash `DualSampleGraph` + Schema value.
+- **U3 — folded into phases:** P-A/P-B: #1858 hidden panels never build/render + graph width/height clamp
+  ≥1 (DualSampleGraph throws <1), #1614 `max(1,…)` cpu-panel gpu sub-graph widths, #1008 keep last value on
+  UNMEASURED. P-B: #1785 view, #1747 `mem_selected` focused graph, #1739 view. P-C: #1573. P-D: #1700
+  `disks_order`. P-E: #1859, #1823 IO/R IO/W columns ≥90 cols + `io read|write|total` sort, #1546 cwd in
+  detail view (selected pid only), #1791a tree sort by branch totals, #1873 filter. P-F: #1476
+  `proc_box_width_percent=55` + Shift/Alt+Shift arrows + preset 4th field, #1411 options-tab digits = box
+  toggles, #1791b grouped option headings, #1849 theme/config reload invalidates every render memo (battery
+  meter included). P-G: #1683 mellow theme (42nd; bump the two 41-pinned tests) + #1849 theme-switch test.
+- **U4 — post-v1 (phase P-I, GPU/NPU):** multi-vendor GPU/NPU data model, then #1854 AMD sysfs + amdgpu.ids
+  names, #1888 multi Intel GPU (DRM fdinfo/sysfs), #985 Intel NPU (`intel_vpu`), #1839 AMD NPU
+  (`/sys/class/accel` + FFI ioctl), #1730 any-GPU box slots on the #1881 grid (`gpu_box_columns="Auto"`),
+  #1552 per-process GPU util/mem; #1873 container box; #1791c tree-state persistence in an
+  `$XDG_STATE_HOME` file (not config).
+
 ## 5. Monorepo integration checklist (still-open add-a-lib items)
 
 Scaffold (composer.json/phpunit.xml/src/Top.php/tests/README/CALIBER_LEARNINGS) already landed @ `31e4dd8ff`.
