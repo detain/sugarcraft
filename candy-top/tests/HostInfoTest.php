@@ -39,6 +39,39 @@ final class HostInfoTest extends TestCase
         $this->assertFalse($host->hasCpuHz);
     }
 
+    /** btop get_sensors: only a real temperature input counts, not an hwmon dir. */
+    #[\PHPUnit\Framework\Attributes\DataProvider('sensorTrees')]
+    public function testHasSensorsRequiresATemperatureInput(string $tree, bool $expected): void
+    {
+        $paths = Paths::under(__DIR__ . '/fixtures/host-sensors/' . $tree);
+        $this->assertSame($expected, HostInfo::hasSensors($paths));
+        $this->assertSame($expected, HostInfo::detect($paths)->hasSensors);
+    }
+
+    /** @return iterable<string, array{string, bool}> */
+    public static function sensorTrees(): iterable
+    {
+        yield 'no sys tree' => ['does-not-exist', false];
+        yield 'fan-only hwmon chip' => ['hwmon-without-temps', false];
+        yield 'hwmon temp input' => ['hwmon-direct', true];
+        yield 'hwmon device/temp input' => ['hwmon-device', true];
+        yield 'thermal zone' => ['thermal-zone', true];
+    }
+
+    public function testEmptyHwmonDirIsNotASensor(): void
+    {
+        $root = sys_get_temp_dir() . '/candy-top-hwmon-' . getmypid();
+        @mkdir($root . '/sys/class/hwmon', 0777, true);
+        try {
+            $this->assertFalse(HostInfo::hasSensors(Paths::under($root)));
+        } finally {
+            @rmdir($root . '/sys/class/hwmon');
+            @rmdir($root . '/sys/class');
+            @rmdir($root . '/sys');
+            @rmdir($root);
+        }
+    }
+
     public function testDetectSurvivesAnEmptyTree(): void
     {
         $host = HostInfo::detect(Paths::under(__DIR__ . '/fixtures/does-not-exist'));

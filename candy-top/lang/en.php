@@ -300,4 +300,13 @@ return [
     // ---- net panel (phase P-C) ----
     // No new keys: NetPanel reuses net.download/upload/zero/auto/sync/top/total
     // and help.net_* above. Button labels are held to btop's four cells.
+    // ---- cpu/mem panels (phase P-B) ----
+    'cpu.up' => 'up',
+    'cpu.load_avg_label' => 'Load avg:',
+    'cpu.gpu' => 'GPU',
+    'mem.title.used' => 'Used',
+    'mem.title.available' => 'Available',
+    'mem.title.cached' => 'Cached',
+    'mem.title.free' => 'Free',
+    'mem.title.zswap' => 'Zswap',
 ];

@@ -48,8 +48,8 @@ final class Panels
         $intervalSec = $config->updateMs() / 1000;
 
         return [
-            'cpu' => PlaceholderPanel::new('cpu', $fake ? FakeCpu::new($host->coreCount, $intervalSec) : CollectorSource::of(Cpu::new())),
-            'mem' => PlaceholderPanel::new('mem', $fake ? FakeMemory::new() : CollectorSource::of(Memory::new())),
+            'cpu' => CpuPanel::standard($host, $config, $fake),
+            'mem' => MemPanel::standard($config, $fake),
             'net' => \SugarCraft\Top\Panel\Net\NetPanel::new($fake ? FakeNet::new($intervalSec) : CollectorSource::of(Net::new())),
             'proc' => PlaceholderPanel::new('proc', $fake ? FakeProcList::new($host->coreCount) : CollectorSource::of(ProcList::new())),
         ];

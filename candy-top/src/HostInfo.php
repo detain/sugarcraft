@@ -6,6 +6,7 @@ namespace SugarCraft\Top;
 
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Top\Collect\Paths;
+use SugarCraft\Top\Collect\Temp;
 
 /**
  * Facts about the host that are fixed for the run and that the frame
@@ -74,9 +75,24 @@ final class HostInfo
             max(1, $cores),
             is_string($user) ? $user : '',
             is_string($host) ? $host : '',
-            is_dir($paths->sys('class/hwmon')) || is_dir($paths->sys('class/thermal/thermal_zone0')),
+            self::hasSensors($paths),
             is_file($paths->sys('devices/system/cpu/cpu0/cpufreq/scaling_cur_freq')),
         );
+    }
+
+    /**
+     * btop get_sensors' `got_sensors`: at least one temperature sensor was
+     * found — an hwmon chip with a `temp*_input` (directly or under
+     * `device/`), the coretemp platform hwmon, or a thermal zone with a
+     * `temp` file. An empty or fan-only /sys/class/hwmon is NOT a sensor.
+     * The discovery is {@see Temp}'s own port of get_sensors, so the layout's
+     * temp columns and the cpu box's readings can never disagree.
+     */
+    public static function hasSensors(Paths $paths): bool
+    {
+        [$snapshot] = Temp::new($paths)->sample();
+
+        return $snapshot->sensors !== [];
     }
 
     /**
