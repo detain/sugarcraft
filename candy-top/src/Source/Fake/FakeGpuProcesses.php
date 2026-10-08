@@ -37,20 +37,47 @@ final class FakeGpuProcesses implements Source
         return new self(0);
     }
 
-    public function sample(): array
+    /**
+     * The demo's per-process rows at `$step` on GPUs whose uuids are
+     * `$uuids` (index => uuid); rows on a GPU past the list are dropped.
+     * {@see FakeGpu::withProcesses()} reuses them, so `--fake`'s shared
+     * GPU feed and this standalone source show the same processes.
+     *
+     * @param array<int, string> $uuids
+     * @return list<GpuProcess>
+     */
+    public static function rows(int $step, array $uuids): array
     {
-        $s = $this->step;
+        $s = $step;
         $python = round(20.0 + Wave::percent($s, 0.3) * 0.75, 1);
         $qemu0 = round(Wave::percent($s, 2.2) / 4, 1);
         $qemu1 = round(Wave::percent($s, 4.1) / 3, 1);
         $node = round(1.0 + Wave::percent($s, 1.1) / 25, 1);
-        $processes = [
-            new GpuProcess(5133, 0, 'GPU-fake-0', (int) (6 * self::GIB + Wave::percent($s, 0.9) * 8 * self::MIB), $python),
-            new GpuProcess(6969, 0, 'GPU-fake-0', 2 * self::GIB, $qemu0),
-            new GpuProcess(6969, 1, 'GPU-fake-1', 2 * self::GIB, $qemu1),
-            new GpuProcess(4410, 1, 'GPU-fake-1', 180 * self::MIB, $node),
-            new GpuProcess(880, 0, 'GPU-fake-0', 512 * self::MIB, Sentinel::UNMEASURED),
+        $rows = [
+            [5133, 0, (int) (6 * self::GIB + Wave::percent($s, 0.9) * 8 * self::MIB), $python],
+            [6969, 0, 2 * self::GIB, $qemu0],
+            [6969, 1, 2 * self::GIB, $qemu1],
+            [4410, 1, 180 * self::MIB, $node],
+            [880, 0, 512 * self::MIB, Sentinel::UNMEASURED],
         ];
+        $out = [];
+        foreach ($rows as [$pid, $gpu, $mem, $util]) {
+            if (isset($uuids[$gpu])) {
+                $out[] = new GpuProcess($pid, $gpu, $uuids[$gpu], $mem, $util);
+            }
+        }
+
+        return $out;
+    }
+
+    public function sample(): array
+    {
+        $s = $this->step;
+        $processes = self::rows($s, ['GPU-fake-0', 'GPU-fake-1']);
+        $python = $processes[0]->utilization;
+        $qemu0 = $processes[1]->utilization;
+        $qemu1 = $processes[2]->utilization;
+        $node = $processes[3]->utilization;
         $devices = [
             new GpuDevice(0, 'Fake GPU 0', min(100.0, $python + $qemu0), (int) (8.5 * self::GIB), 24 * self::GIB, 61.0, 180.0, uuid: 'GPU-fake-0'),
             new GpuDevice(1, 'Fake GPU 1', min(100.0, $qemu1 + $node), (int) (2.2 * self::GIB), 24 * self::GIB, 48.0, 95.0, uuid: 'GPU-fake-1'),

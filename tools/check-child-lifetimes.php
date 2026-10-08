@@ -158,6 +158,21 @@ final class CheckChildLifetimes
                 . 'stop(), so no child outlives the object; the fd≥3 inheritance exposure '
                 . 'stands for sugar-mcp to own.',
         ],
+        'candy-top/src/Collect/Gpu/SmiProcess.php::spawn' => [
+            'count' => 1,
+            'reason' => 'the one nvidia-smi child of the shared GPU feed (moved here from '
+                . 'Collect/Gpu.php::nvidiaSmi, which drained and closed it in-function and so '
+                . 'was not a finding). It must outlive spawn(): launch() reads stdout on the '
+                . 'ReactPHP loop so pmon (0.25-1 s) never blocks the UI. The scanner reads it as '
+                . 'UNCLASSIFIED because the handle goes to is_resource() and new self(). Every '
+                . 'path ends in proc_close via release(): EOF + exit, or SIGKILL at TIMEOUT 2 s '
+                . 'then WNOHANG polls on a loop timer; a child that will not die stays in the '
+                . 'static registry that each later spawn polls and a shutdown hook SIGKILLs and '
+                . 'reaps. Cleanup is bounded, not absolute: a child in uninterruptible sleep '
+                . 'survives SIGKILL and is left to init after the 0.5 s shutdown wait. '
+                . 'Spec is 0 (/dev/null), 1 (pipe), 2 (/dev/null); the fd≥3 '
+                . 'inheritance lasts the child\'s bounded life and stands for candy-top to own.',
+        ],
     ];
 
     /**

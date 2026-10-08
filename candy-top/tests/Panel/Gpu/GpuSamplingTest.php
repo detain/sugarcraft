@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Tests\Panel\Gpu;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\Gpu\Accelerators;
+use SugarCraft\Top\Collect\GpuOutcome;
 use SugarCraft\Top\Collect\GpuVendor;
 use SugarCraft\Top\Config\Config;
+use SugarCraft\Top\Panel\Gpu\GpuDemand;
 use SugarCraft\Top\Panel\Gpu\GpuSampling;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeGpu;
@@ -48,5 +51,26 @@ final class GpuSamplingTest extends TestCase
         $this->assertNull(GpuSampling::tune(null, Config::new()));
         $other = CollectorSource::of(\SugarCraft\Top\Collect\Cpu::new());
         $this->assertSame($other, GpuSampling::tune($other, Config::new()));
+    }
+
+    public function testTuneForFlipsPerProcessCollectionOnlyOnAChange(): void
+    {
+        $fake = FakeGpu::new();
+        $on = GpuSampling::tuneFor($fake, GpuDemand::new(processes: true));
+        $this->assertInstanceOf(FakeGpu::class, $on);
+        $this->assertTrue($on->processesEnabled());
+        $this->assertSame($on, GpuSampling::tuneFor($on, GpuDemand::new(processes: true)), 'no change, same source');
+        $this->assertFalse(GpuSampling::tuneFor($on, GpuDemand::new())->processesEnabled());
+
+        $nvidia = CollectorSource::of(Gpu::new(static fn (array $a): array => [GpuOutcome::Absent, ''], candidates: ['nvidia-smi']));
+        $tuned = GpuSampling::withProcesses($nvidia, true);
+        $this->assertInstanceOf(CollectorSource::class, $tuned);
+        $this->assertTrue($tuned->collector()->processesEnabled(), 'a bare nvidia-smi collector too');
+        $this->assertSame($tuned, GpuSampling::withProcesses($tuned, true));
+
+        $acc = GpuSampling::tuneFor(CollectorSource::of(Accelerators::nvidiaOnly()), GpuDemand::new(['amd'], true));
+        $this->assertInstanceOf(CollectorSource::class, $acc);
+        $this->assertTrue($acc->collector()->processesEnabled());
+        $this->assertSame([GpuVendor::Amd], (new \ReflectionProperty($acc->collector(), 'vendors'))->getValue($acc->collector()));
     }
 }

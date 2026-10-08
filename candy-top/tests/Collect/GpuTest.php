@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Tests\Collect;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Top\Collect\Gpu;
+use SugarCraft\Top\Collect\Gpu\Settled;
 use SugarCraft\Top\Collect\GpuOutcome;
 use SugarCraft\Top\Collect\Sentinel;
 
@@ -644,8 +645,67 @@ final class GpuTest extends TestCase
     {
         [, $gpu] = $this->gpu()->sample();
         $this->now += 4.9;
+        $gpu->withProcesses(false)->sample();
+        $this->assertSame(1, $this->calls, 'withProcesses() without an opt-in kept the schedule');
+        [, $after] = $gpu->withProcesses()->sample();
+        $this->assertSame(2, $this->calls, 'a fresh opt-in queries at once');
+        $after->withProcesses()->sample();
+        $this->assertSame(2, $this->calls, 'an opt-in that is already on keeps the schedule');
+    }
+
+    public function testSampleAsyncRunsTheSameCycleOverTheLoopRunner(): void
+    {
+        $pending = [];
+        $async = function (array $argv) use (&$pending): \React\Promise\PromiseInterface {
+            $this->calls++;
+            $d = new \React\Promise\Deferred();
+            $pending[] = [$d, $argv];
+
+            return $d->promise();
+        };
+        $blocking = static fn (array $argv): array => throw new \LogicException('the blocking runner must not run');
+        $gpu = Gpu::new($blocking, fn (): float => $this->now, candidates: ['/a/nvidia-smi', '/b/nvidia-smi'], queries: [Gpu::QUERY], asyncRunner: $async);
+
+        $promise = $gpu->sampleAsync();
+        $this->assertFalse(Settled::peek($promise)[0]);
+        $pending[0][0]->resolve([GpuOutcome::Absent, '']);
+        $this->assertFalse(Settled::peek($promise)[0], 'the sweep moved on to the next candidate');
+        $this->assertSame('/b/nvidia-smi', $pending[1][1][0]);
+        $pending[1][0]->resolve([GpuOutcome::Ok, self::CSV]);
+        [$snap, $next] = Settled::value($promise);
+        $this->assertCount(2, $snap->devices);
+        $this->assertSame('/b/nvidia-smi', $next->binary(), 'pinned');
+
+        $this->now += 1.0;
+        [$cached] = Settled::value($next->sampleAsync());
+        $this->assertSame($snap, $cached, 'between queries: settled at once, no spawn');
+        $this->assertSame(2, $this->calls);
+    }
+
+    public function testSampleWithAPendingRunnerIsALogicError(): void
+    {
+        $gpu = Gpu::new(static fn (array $argv): \React\Promise\PromiseInterface => (new \React\Promise\Deferred())->promise(), candidates: ['nvidia-smi']);
+        $this->expectException(\LogicException::class);
+        $gpu->sample();
+    }
+
+    public function testAnInjectedBlockingRunnerAlsoServesSampleAsync(): void
+    {
+        [$snap] = Settled::value($this->gpu()->sampleAsync());
+        $this->assertCount(2, $snap->devices);
+        $this->assertSame(1, $this->calls);
+    }
+
+    public function testFreshProcessOptInDoesNotBypassADeviceBackoff(): void
+    {
+        $this->script = [[GpuOutcome::Ok, self::CSV], [GpuOutcome::Timeout, '']];
+        [, $gpu] = $this->gpu()->sample();
+        $this->now += 5.0;
+        [, $gpu] = $gpu->sample();
+        $this->assertSame(2, $this->calls);
+        $this->now += 1.0;
         $gpu->withProcesses()->sample();
-        $this->assertSame(1, $this->calls, 'withProcesses() kept the schedule');
+        $this->assertSame(2, $this->calls, 'the opt-in waits for the backoff');
     }
 
     public function testCandidatesListsEveryPathHitThenFallbacksDeduplicated(): void

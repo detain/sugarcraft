@@ -18,6 +18,7 @@ use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\GpuPanels;
 use SugarCraft\Top\Msg\SampledMsg;
+use SugarCraft\Top\Panel\Gpu\GpuFeed;
 use SugarCraft\Top\Panel\GpuPanel;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
@@ -137,7 +138,8 @@ final class GpuPanelTest extends TestCase
         $this->assertInstanceOf(SampledMsg::class, $msg);
         $this->assertSame('gpu', $msg->box);
         $this->assertInstanceOf(GpuSnapshot::class, $msg->snapshot);
-        $this->assertInstanceOf(FakeGpu::class, $msg->next);
+        $this->assertInstanceOf(GpuFeed::class, $msg->next, 'the panel asks the shared feed');
+        $this->assertInstanceOf(FakeGpu::class, $msg->next->source());
     }
 
     public function testNeverModalAndClaimsNoKeys(): void

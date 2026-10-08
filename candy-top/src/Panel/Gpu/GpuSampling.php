@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Gpu;
 
+use SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\Gpu\Accelerators;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\Schema;
 use SugarCraft\Top\Source\CollectorSource;
+use SugarCraft\Top\Source\Fake\FakeGpu;
 use SugarCraft\Top\Source\Source;
 
 /**
- * Collect-time retuning of a GPU source from the CURRENT config, shared by
- * the cpu box (show_gpu_info) and the gpu boxes:
+ * Collect-time retuning of a GPU source for what its consumers need — the
+ * shared feed ({@see GpuFeed}) tunes it for the union of every consumer's
+ * {@see GpuDemand}, the startup probe for the config alone:
  *  - `shown_gpus` → {@see Accelerators::withVendors()} (btop's vendor
  *    filter; NPUs are never filtered);
  *  - per-process collection (#1552) → {@see Accelerators::withProcesses()}
@@ -20,7 +23,9 @@ use SugarCraft\Top\Source\Source;
  *    columns decide. It flips the collector only on a CHANGE: re-calling
  *    withProcesses(true) would clear a nvidia-smi pmon "unsupported" mark
  *    every tick.
- * Any other source (a fake, a scripted test source) is returned unchanged.
+ * {@see \SugarCraft\Top\Source\Fake\FakeGpu} takes the per-process
+ * switch too; any other source (a scripted test source) is returned
+ * unchanged.
  */
 final class GpuSampling
 {
@@ -63,19 +68,37 @@ final class GpuSampling
     /** `$source` retuned for `$config` (vendors, per-process collection). */
     public static function tune(?Source $source, Config $config): ?Source
     {
+        return $source === null ? null : self::tuneFor($source, GpuDemand::of($config));
+    }
+
+    /** `$source` retuned for `$demand`: vendors, and per-process collection flipped only on a change. */
+    public static function tuneFor(Source $source, GpuDemand $demand): Source
+    {
+        if ($source instanceof CollectorSource && ($collector = $source->collector()) instanceof Accelerators) {
+            $source = CollectorSource::of($collector->withVendors($demand->vendors));
+        }
+
+        return self::withProcesses($source, $demand->processes);
+    }
+
+    /**
+     * `$source` with per-process collection (btop #1552) on or off — the
+     * live collectors and FakeGpu; flipped only on a CHANGE, since a
+     * re-opt-in clears pmon's "unsupported" mark and the spawns' backoffs.
+     */
+    public static function withProcesses(Source $source, bool $on): Source
+    {
+        if ($source instanceof FakeGpu) {
+            return $source->processesEnabled() === $on ? $source : $source->withProcesses($on);
+        }
         if (!$source instanceof CollectorSource) {
             return $source;
         }
         $collector = $source->collector();
-        if (!$collector instanceof Accelerators) {
+        if (!($collector instanceof Accelerators || $collector instanceof Gpu) || $collector->processesEnabled() === $on) {
             return $source;
         }
-        $collector = $collector->withVendors(self::vendors($config));
-        $want = self::processesWanted($config);
-        if ($collector->processesEnabled() !== $want) {
-            $collector = $collector->withProcesses($want);
-        }
 
-        return CollectorSource::of($collector);
+        return CollectorSource::of($collector->withProcesses($on));
     }
 }

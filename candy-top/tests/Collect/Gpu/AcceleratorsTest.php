@@ -97,6 +97,59 @@ final class AcceleratorsTest extends TestCase
         $this->assertNull($snap->processes, 'per-process is opt-in');
     }
 
+    public function testSampleAsyncWaitsOnlyForNvidiaSmiAndMergesLikeSample(): void
+    {
+        $dir = dirname(__DIR__, 2) . '/fixtures';
+        $pending = [];
+        $async = function (array $argv) use ($dir, &$pending): \React\Promise\PromiseInterface {
+            $d = new \React\Promise\Deferred();
+            $pending[] = $d;
+
+            return $d->promise()->then(static fn (): array => [GpuOutcome::Ok, (string) file_get_contents("$dir/linux/nvidia-smi/skynet2-query-extended.csv")]);
+        };
+        $blocking = static fn (array $argv): array => [GpuOutcome::Ok, (string) file_get_contents("$dir/linux/nvidia-smi/skynet2-query-extended.csv")];
+        $tree = GpuTree::of('amd');
+        $this->tree = $tree;
+        $clock = fn (): float => $this->now;
+        $acc = Accelerators::detect($tree->paths(), Gpu::new($blocking, $clock, candidates: ['nvidia-smi'], asyncRunner: $async), $clock);
+
+        $promise = $acc->sampleAsync();
+        [$done] = \SugarCraft\Top\Collect\Gpu\Settled::peek($promise);
+        $this->assertFalse($done, 'pending while nvidia-smi runs');
+        $this->assertCount(1, $pending);
+        $pending[0]->resolve(null);
+        [$snap, $next] = \SugarCraft\Top\Collect\Gpu\Settled::value($promise);
+
+        [$sync] = $acc->sample();
+        $this->assertEquals($sync, $snap, 'the same merge as the blocking sample');
+        $this->assertCount(7, $snap->devices, '4 NVIDIA then 3 AMD');
+
+        $this->now += 1.0;
+        [$done] = \SugarCraft\Top\Collect\Gpu\Settled::peek($next->sampleAsync());
+        $this->assertTrue($done, 'between nvidia-smi queries the sample settles at once (sysfs only)');
+        $this->assertCount(1, $pending, 'no spawn');
+    }
+
+    public function testFreeBsdNvidiaOnlySamplesAsyncThroughTheSameRunner(): void
+    {
+        $held = new \React\Promise\Deferred();
+        $dir = dirname(__DIR__, 2) . '/fixtures';
+        $nvidia = Gpu::new(
+            static fn (array $argv): array => [GpuOutcome::Absent, ''],
+            fn (): float => $this->now,
+            candidates: ['nvidia-smi'],
+            asyncRunner: static fn (array $argv): \React\Promise\PromiseInterface => $held->promise()->then(
+                static fn (): array => [GpuOutcome::Ok, (string) file_get_contents("$dir/linux/nvidia-smi/skynet2-query-extended.csv")],
+            ),
+        );
+        $promise = Accelerators::nvidiaOnly($nvidia)->sampleAsync();
+        $this->assertFalse(\SugarCraft\Top\Collect\Gpu\Settled::peek($promise)[0]);
+        $held->resolve(null);
+        [$snap, $next] = \SugarCraft\Top\Collect\Gpu\Settled::value($promise);
+        $this->assertCount(4, $snap->devices);
+        $this->assertSame([Gpu::class], array_map(static fn (object $b): string => $b::class, $next->backends()), 'no sysfs backends');
+    }
+
     public function testATransientBackendKeepsItsSlotsSoLaterIndexesNeverShift(): void
     {
         $acc = $this->accelerators(GpuTree::of('amd'));

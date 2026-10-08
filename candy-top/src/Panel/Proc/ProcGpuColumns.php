@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Proc;
 
-use SugarCraft\Top\Collect\Gpu;
-use SugarCraft\Top\Collect\Gpu\Accelerators;
 use SugarCraft\Top\Config\Config;
-use SugarCraft\Top\Source\CollectorSource;
+use SugarCraft\Top\Panel\Gpu\GpuDemand;
+use SugarCraft\Top\Panel\Gpu\GpuSampling;
 use SugarCraft\Top\Source\Source;
 
 /**
@@ -23,8 +22,10 @@ use SugarCraft\Top\Source\Source;
  * want it, which is true whenever the box may be wide.
  *
  * {@see tuned()} switches per-process collection on for the collector
- * (`withProcesses()`, off by default because it costs extra spawns); a
- * fake or other source passes through unchanged.
+ * (`withProcesses()`, off by default because it costs extra spawns); any
+ * other source passes through unchanged. The proc box no longer tunes a
+ * source of its own: it asks the App's shared GPU feed with a demand for
+ * per-process rows, and the feed tunes the one collector for the union.
  */
 final class ProcGpuColumns
 {
@@ -51,17 +52,14 @@ final class ProcGpuColumns
         return ProcView::sizes($width, $config->bool('proc_cpu_graphs'), true, $config->bool('proc_gpu_graphs'))['gpu'] > 0;
     }
 
-    /** `$source` with per-process collection switched on (collectors only). */
+    /**
+     * `$source` with per-process collection switched on (the live
+     * collectors and FakeGpu) — what the proc box's {@see GpuDemand} asks
+     * the shared feed for; the feed applies it through
+     * {@see GpuSampling::tuneFor()}.
+     */
     public static function tuned(Source $source): Source
     {
-        if (!$source instanceof CollectorSource) {
-            return $source;
-        }
-        $c = $source->collector();
-        if (($c instanceof Accelerators || $c instanceof Gpu) && !$c->processesEnabled()) {
-            return CollectorSource::of($c->withProcesses(true));
-        }
-
-        return $source;
+        return GpuSampling::withProcesses($source, true);
     }
 }

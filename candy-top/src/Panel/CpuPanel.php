@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Top\Collect\CpuSnapshot;
 use SugarCraft\Top\Collect\FreqMode;
 use SugarCraft\Top\Collect\FreqSnapshot;
+use SugarCraft\Top\Collect\Gpu\Settled;
 use SugarCraft\Top\Collect\GpuDevice;
 use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\Platform;
@@ -23,8 +25,9 @@ use SugarCraft\Top\Panel\Cpu\BorderBattery;
 use SugarCraft\Top\Panel\Cpu\CpuView;
 use SugarCraft\Top\Panel\Gfx\History;
 use SugarCraft\Top\Panel\Gfx\NamedSources;
+use SugarCraft\Top\Panel\Gpu\GpuDemand;
+use SugarCraft\Top\Panel\Gpu\GpuFeed;
 use SugarCraft\Top\Panel\Gpu\GpuHold;
-use SugarCraft\Top\Panel\Gpu\GpuSampling;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeCpu;
 use SugarCraft\Top\Source\Fake\FakeFreq;
@@ -41,11 +44,13 @@ use SugarCraft\Top\View\Region;
  * #1785 per-core frequency, load average, GPU brief rows) and the P-D
  * battery badge seam ({@see BatteryBadge}).
  *
- * Data: one Cmd per tick samples Cpu, Freq, Temp and (unless
- * show_gpu_info is Off, or Auto with every known GPU in a gpu box of its
- * own) the GPUs together through {@see NamedSources}; the GPU source is
- * retuned per collect for shown_gpus / per-process use
- * ({@see GpuSampling}). Every
+ * Data: one Cmd per tick samples Cpu, Freq and Temp through
+ * {@see NamedSources} and (unless show_gpu_info is Off, or Auto with every
+ * known GPU in a gpu box of its own) asks the App's shared GPU feed
+ * ({@see GpuFeed}, consumer `cpu`) for its snapshot. When an nvidia-smi
+ * query is in flight the cpu sample is delivered at once and the GPU part
+ * follows as a second `cpu` SampledMsg carrying only `gpu` — the cpu
+ * graphs never wait on nvidia-smi and the loop never blocks on it. Every
  * reading lands in a {@see History}, which holds the last good value on
  * UNMEASURED (btop #1008), so graphs never dip/spike on a failed read and
  * readouts never flip to `n/a`. Per-core frequency is only read while
@@ -103,12 +108,13 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
      * @param Source  $cpu  CpuSnapshot source (Collect\Cpu, Collect\FreeBsd\Cpu or FakeCpu)
      * @param ?Source $freq FreqSnapshot source; retuned per collect for show_core_freq
      * @param ?Source $temp TempSnapshot source; sampled only while check_temp is on
-     * @param ?Source $gpu  GpuSnapshot source; sampled only while show_gpu_info is not Off
+     * @param ?Source $gpu  the shared {@see GpuFeed}, or any GpuSnapshot source (given a feed of
+     *                      its own); asked only while show_gpu_info is not Off
      */
     public static function new(Source $cpu, ?Source $freq = null, ?Source $temp = null, ?Source $gpu = null): self
     {
         return new self(
-            NamedSources::of(['cpu' => $cpu, 'freq' => $freq, 'temp' => $temp, 'gpu' => $gpu]),
+            NamedSources::of(['cpu' => $cpu, 'freq' => $freq, 'temp' => $temp, 'gpu' => $gpu === null ? null : GpuFeed::of($gpu)]),
             null,
             History::new(),
             false,
@@ -129,11 +135,12 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
      * show_core_freq) seed the collectors; runtime changes of
      * show_core_freq / check_temp / show_gpu_info are honoured at collect
      * time. `$platform` picks the host's collector family (default: the
-     * running OS, {@see Platform::detect()}); its GPU source is the
-     * multi-vendor {@see \SugarCraft\Top\Collect\Gpu\Accelerators}
-     * (nvidia-smi only on FreeBSD).
+     * running OS, {@see Platform::detect()}); its GPU source is `$gpu`, the
+     * App's shared feed (default: a feed of its own over the platform's
+     * multi-vendor {@see \SugarCraft\Top\Collect\Gpu\Accelerators},
+     * nvidia-smi only on FreeBSD, or {@see FakeGpu}).
      */
-    public static function standard(HostInfo $host, Config $config, bool $fake = false, ?Platform $platform = null): self
+    public static function standard(HostInfo $host, Config $config, bool $fake = false, ?Platform $platform = null, ?GpuFeed $gpu = null): self
     {
         $perCore = $config->showCoreFreq() !== 'off';
         if ($fake) {
@@ -142,7 +149,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
                 FakeFreq::new($host->coreCount, $perCore),
                 FakeTemp::new(max(1, intdiv($host->coreCount, 2))),
                 // The same accelerators the fake gpu boxes show (U4).
-                FakeGpu::new(),
+                $gpu ?? FakeGpu::new(),
             )->withBattery(BorderBattery::standard($config, true));
         }
         $sensor = $config->string('cpu_sensor');
@@ -152,7 +159,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
             $platform->cpu(),
             $platform->freq(FreqMode::tryFrom($config->string('freq_mode')) ?? FreqMode::First, $perCore),
             $platform->temp($sensor === 'Auto' ? null : $sensor),
-            $platform->gpu(),
+            $gpu ?? $platform->gpu(),
         )->withBattery(BorderBattery::standard($config, $fake, $platform));
     }
 
@@ -184,18 +191,32 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         if ($config->bool('check_temp')) {
             $members[] = 'temp';
         }
-        if ($this->wantsGpus($config)) {
-            $members[] = 'gpu';
-        }
+        $feed = $this->sources->get('gpu');
+        $feed = $feed instanceof GpuFeed && $this->wantsGpus($config) ? $feed : null;
+        $demand = GpuDemand::of($config);
         $sampling = $this->sources->only($members);
         $sampling = $sampling->with('freq', self::tuneFreq($sampling->get('freq'), $perCore));
-        $sampling = $sampling->with('gpu', GpuSampling::tune($sampling->get('gpu'), $config));
         $sampling = $sampling->with('battery', $this->battery?->source($context));
 
-        return static function () use ($sampling): Msg {
+        return static function () use ($sampling, $feed, $demand): Msg {
             [$snapshot, $next] = $sampling->sample();
+            if ($feed === null || !$snapshot instanceof Samples) {
+                return new SampledMsg('cpu', $snapshot, $next);
+            }
+            $gpu = $feed->request('cpu', $demand);
+            [$settled, $value] = Settled::peek($gpu);
+            if ($settled) {
+                return new SampledMsg('cpu', new Samples([...$snapshot->snapshots, 'gpu' => $value]), $next);
+            }
+            // nvidia-smi is running: the cpu part now, the GPU part when it lands.
+            $now = new SampledMsg('cpu', $snapshot, $next);
 
-            return new SampledMsg('cpu', $snapshot, $next);
+            return Cmd::batch(
+                static fn (): Msg => $now,
+                Cmd::promise(static fn () => $gpu->then(
+                    static fn (GpuSnapshot $s): Msg => new SampledMsg('cpu', new Samples(['gpu' => $s]), NamedSources::of([])),
+                )),
+            )();
         };
     }
 

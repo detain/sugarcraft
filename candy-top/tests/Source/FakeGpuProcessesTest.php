@@ -40,4 +40,12 @@ final class FakeGpuProcessesTest extends TestCase
         $this->assertLessThan(0.0, $util[880], 'postgres: compute-apps without pmon');
         $this->assertGreaterThanOrEqual(20.0, $util[5133]);
     }
+
+    public function testRowsAreTheSampleProcessesOnAnyUuids(): void
+    {
+        [$snap] = FakeGpuProcesses::demo()->sample();
+        $this->assertEquals($snap->processes, FakeGpuProcesses::rows(0, ['GPU-fake-0', 'GPU-fake-1']));
+        $this->assertSame(['x', 'x', 'y', 'y', 'x'], array_map(static fn ($p): string => $p->gpuUuid, FakeGpuProcesses::rows(3, ['x', 'y'])));
+        $this->assertSame([], FakeGpuProcesses::rows(0, []));
+    }
 }

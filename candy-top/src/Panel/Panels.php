@@ -15,11 +15,12 @@ use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeCpu;
-use SugarCraft\Top\Source\Fake\FakeGpuProcesses;
+use SugarCraft\Top\Source\Fake\FakeGpu;
 use SugarCraft\Top\Source\Fake\FakeMemory;
 use SugarCraft\Top\Source\Fake\FakeNet;
 use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Source\Fake\FakeProcList;
+use SugarCraft\Top\Panel\Gpu\GpuFeed;
 
 /**
  * The panel roster — the ONE place a phase swaps its box in.
@@ -52,24 +53,30 @@ final class Panels
      * @param GpuSnapshot|null $gpuProbe the startup accelerator sample
      *                                ({@see GpuPanel::probe()}, btop Gpu::init)
      *                                seeding the gpu boxes' roster
+     * The cpu box, the gpu boxes and the proc box share ONE {@see GpuFeed}
+     * (over `Platform::gpu()`, or {@see FakeGpu} under --fake): a host is
+     * sampled once per round however many of them show accelerators.
+     *
      * @return array<string, Panel> keyed by box name; `gpu` draws every gpuN box
      */
     public static function standard(HostInfo $host, Config $config, bool $fake = false, ?Platform $platform = null, ?GpuSnapshot $gpuProbe = null): array
     {
         $intervalSec = $config->updateMs() / 1000;
         $platform ??= Platform::detect();
+        // ONE accelerator sampler for the cpu box, the gpu boxes and the proc box's GPU columns.
+        $gpuFeed = GpuFeed::of($fake ? FakeGpu::new() : $platform->gpu());
 
         return [
-            'cpu' => CpuPanel::standard($host, $config, $fake, $platform),
-            'gpu' => GpuPanel::standard($fake, $platform, $gpuProbe),
+            'cpu' => CpuPanel::standard($host, $config, $fake, $platform, $gpuFeed),
+            'gpu' => GpuPanel::standard($fake, $platform, $gpuProbe, $gpuFeed),
             'mem' => MemPanel::standard($config, $fake, $platform),
             'net' => \SugarCraft\Top\Panel\Net\NetPanel::new($fake ? FakeNet::new($intervalSec) : $platform->net()),
             'proc' => $fake
                 // --fake pids are invented: the signal / renice menus must never reach a live process.
-                // #1552 Gpu%/GMem: the proc box samples its own accelerator source (per-pid rows on demand).
+                // #1552 Gpu%/GMem: per-pid rows from the shared feed, collected while this box wants them.
                 // #1873: the fake fleet's container processes, so the ctr box and the proc list agree.
-                ? ProcPanel::new(FakeProcList::demo($host->coreCount)->withContainers(), FakeProcessControl::new())->withGpu(FakeGpuProcesses::demo())
-                : ProcPanel::new($platform->procList(), PosixProcessControl::new())->withGpu($platform->gpu()),
+                ? ProcPanel::new(FakeProcList::demo($host->coreCount)->withContainers(), FakeProcessControl::new())->withGpu($gpuFeed)
+                : ProcPanel::new($platform->procList(), PosixProcessControl::new())->withGpu($gpuFeed),
             // btop PR #1873's containers box: taps the proc box's scan, scans on its own only while proc is hidden.
             'ctr' => CtrPanel::standard($host->coreCount, $fake, $platform),
         ];

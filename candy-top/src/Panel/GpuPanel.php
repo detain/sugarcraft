@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Top\Collect\Gpu\Settled;
 use SugarCraft\Top\Collect\GpuDevice;
 use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\Platform;
@@ -16,6 +18,8 @@ use SugarCraft\Top\Config\InvalidOptionValue;
 use SugarCraft\Top\Input\KeyName;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Panel\Gfx\History;
+use SugarCraft\Top\Panel\Gpu\GpuDemand;
+use SugarCraft\Top\Panel\Gpu\GpuFeed;
 use SugarCraft\Top\Panel\Gpu\GpuFunctions;
 use SugarCraft\Top\Panel\Gpu\GpuHold;
 use SugarCraft\Top\Panel\Gpu\GpuSampling;
@@ -40,9 +44,11 @@ use SugarCraft\Top\View\Region;
  * GPU, while the cpu box's GPU rows, averages and totals never include it
  * ({@see GpuSnapshot::$devices} is GPUs only).
  *
- * Data: one sample per tick for all shown boxes, only while at least one
- * gpu box is shown (#1858); the source is retuned for shown_gpus and the
- * per-process hook at collect time ({@see GpuSampling}). Every device is
+ * Data: one snapshot per tick for all shown boxes, only while at least
+ * one gpu box is shown (#1858), asked from the App's shared GPU feed
+ * ({@see GpuFeed}, consumer `gpu`, demand from the CURRENT config). While
+ * an nvidia-smi query is in flight the Cmd resolves when it lands
+ * (loop-driven, never blocking); between queries at once. Every device is
  * held through N/A readings by {@see GpuHold} (#1008, bounded), so a box
  * whose GPU is gone for good reads n/a instead of frozen numbers.
  *
@@ -76,10 +82,13 @@ final class GpuPanel implements Panel, ClickCapture, OptionChoices, GpuRosterSou
     ) {
     }
 
-    /** @param ?Source $source GpuSnapshot source (Collect\Gpu\Accelerators via Platform::gpu(), or FakeGpu) */
+    /**
+     * @param ?Source $source the shared {@see GpuFeed}, or any GpuSnapshot source
+     *                        (Collect\Gpu\Accelerators via Platform::gpu(), FakeGpu) given a feed of its own
+     */
     public static function new(?Source $source): self
     {
-        return new self($source, GpuHold::new(), GpuHold::new(), History::new(), false, GpuRoster::none(), GpuRoster::none());
+        return new self($source === null ? null : GpuFeed::of($source), GpuHold::new(), GpuHold::new(), History::new(), false, GpuRoster::none(), GpuRoster::none());
     }
 
     /**
@@ -89,16 +98,18 @@ final class GpuPanel implements Panel, ClickCapture, OptionChoices, GpuRosterSou
      * caller already took (bin/candy-top probes once at startup, as btop's
      * Gpu::init does) — it seeds the roster until the panel samples.
      * Every option (shown_gpus, ...) is read at collect time, so no
-     * startup config is needed here.
+     * startup config is needed here. `$feed` is the App's shared GPU feed
+     * (default: one of its own over that source).
      */
-    public static function standard(bool $fake = false, ?Platform $platform = null, ?GpuSnapshot $probe = null): self
+    public static function standard(bool $fake = false, ?Platform $platform = null, ?GpuSnapshot $probe = null, ?GpuFeed $feed = null): self
     {
         if ($fake) {
-            $source = FakeGpu::new();
-            [$probe] = $source->sample();
+            // The fake roster is known up front; sampling a throwaway copy leaves the feed's sequence alone.
+            [$probe] = FakeGpu::new()->sample();
+            $source = $feed ?? FakeGpu::new();
         } else {
             $platform ??= Platform::detect();
-            $source = $platform->gpu();
+            $source = $feed ?? $platform->gpu();
         }
         $panel = self::new($source);
 
@@ -134,18 +145,20 @@ final class GpuPanel implements Panel, ClickCapture, OptionChoices, GpuRosterSou
     public function collect(PanelContext $context): ?\Closure
     {
         $config = $context->config;
-        if (GpuPanels::targets($config->shownBoxes()) === [] || $this->source === null) {
+        $feed = $this->source;
+        if (GpuPanels::targets($config->shownBoxes()) === [] || !$feed instanceof GpuFeed) {
             return null; // #1858: no gpu box, no sample
         }
-        $source = GpuSampling::tune($this->source, $config);
-        if ($source === null) {
-            return null;
-        }
+        $demand = GpuDemand::of($config);
 
-        return static function () use ($source): Msg {
-            [$snapshot, $next] = $source->sample();
+        return static function () use ($feed, $demand): Msg {
+            $snapshot = $feed->request('gpu', $demand);
+            [$settled, $value] = Settled::peek($snapshot);
+            if ($settled) {
+                return new SampledMsg('gpu', $value, $feed);
+            }
 
-            return new SampledMsg('gpu', $snapshot, $next);
+            return Cmd::promise(static fn () => $snapshot->then(static fn (GpuSnapshot $s): Msg => new SampledMsg('gpu', $s, $feed)))();
         };
     }
 

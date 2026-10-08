@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\Gpu;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Top\Collect\AcceleratorKind;
 use SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\GpuDevice;
@@ -11,6 +12,9 @@ use SugarCraft\Top\Collect\GpuProcess;
 use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\GpuVendor;
 use SugarCraft\Top\Collect\Paths;
+
+use function React\Promise\all;
+use function React\Promise\resolve;
 
 /**
  * The multi-vendor GPU/NPU collector: btop Gpu::collect
@@ -46,6 +50,11 @@ use SugarCraft\Top\Collect\Paths;
  * (#1552 guard). Per-process rows (withProcesses()) merge nvidia-smi's
  * compute-apps + pmon rows with the fdinfo rows of the DRM devices, all
  * on the merged indexes; `processes` is null when no source measured.
+ *
+ * {@see sample()} blocks on nvidia-smi; {@see sampleAsync()} runs the same
+ * cycle with the NVIDIA slice on the loop-driven runner (sysfs and the
+ * fdinfo scan are cheap reads and stay synchronous), so the shared GPU
+ * feed ({@see \SugarCraft\Top\Panel\Gpu\GpuFeed}) never stalls the UI.
  */
 final class Accelerators
 {
@@ -153,6 +162,24 @@ final class Accelerators
      */
     public function sample(): array
     {
+        return Settled::value($this->sampleWith(false));
+    }
+
+    /**
+     * The same sample with nvidia-smi on the loop ({@see Gpu::sampleAsync()}).
+     *
+     * @return PromiseInterface<array{0: GpuSnapshot, 1: self}>
+     */
+    public function sampleAsync(): PromiseInterface
+    {
+        return $this->sampleWith(true);
+    }
+
+    /**
+     * @return PromiseInterface<array{0: GpuSnapshot, 1: self}>
+     */
+    private function sampleWith(bool $async): PromiseInterface
+    {
         $backends = $this->backends ?? $this->discover();
 
         $active = [];
@@ -171,14 +198,33 @@ final class Accelerators
             [$scan, $scanner] = $scanner->sample();
         }
 
+        $polls = [];
+        foreach ($active as $i => $b) {
+            $polls[$i] = $async && $b instanceof Gpu ? $b->sampleAsync() : resolve($b->poll($scan));
+        }
+
+        return all($polls)->then(fn (array $results): array => $this->merged($backends, $results, $scan, $scanner));
+    }
+
+    /**
+     * Merge one cycle's backend results (keyed by backend position, in
+     * backend order) into the snapshot and the next collector.
+     *
+     * @param list<Backend> $backends
+     * @param array<int, array{0: GpuSnapshot, 1: Backend}> $results
+     * @return array{0: GpuSnapshot, 1: self}
+     */
+    private function merged(array $backends, array $results, DrmScan $scan, ?DrmFdinfo $scanner): array
+    {
+        ksort($results);
         $last = $this->last;
         $gpus = [];
         $npus = [];
         $standIns = 0;
         $processes = null;
         $pdevIndex = [];
-        foreach ($active as $i => $b) {
-            [$snap, $next] = $b->poll($scan);
+        foreach ($results as $i => [$snap, $next]) {
+            $b = $backends[$i];
             $backends[$i] = $next;
             [$devices, $standIn] = self::pad($snap->accelerators(), $last[$i] ?? []);
             if ($devices !== []) {

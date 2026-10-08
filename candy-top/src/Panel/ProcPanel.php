@@ -13,6 +13,8 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Dash\Plot\ProcRow\ProcGraphTracker;
+use SugarCraft\Top\Collect\Gpu\Settled;
+use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\ProcessControl;
 use SugarCraft\Top\Collect\ProcSnapshot;
 use SugarCraft\Top\Collect\TunableProcList;
@@ -25,6 +27,8 @@ use SugarCraft\Top\Overlay\Overlay;
 use SugarCraft\Top\Overlay\ReniceMenu;
 use SugarCraft\Top\Overlay\SignalMenu;
 use SugarCraft\Top\Overlay\Signals;
+use SugarCraft\Top\Panel\Gpu\GpuDemand;
+use SugarCraft\Top\Panel\Gpu\GpuFeed;
 use SugarCraft\Top\Panel\Proc\DetailState;
 use SugarCraft\Top\Panel\Proc\GpuUsage;
 use SugarCraft\Top\Panel\Proc\ProcGpuColumns;
@@ -91,10 +95,14 @@ use SugarCraft\Top\View\Region;
  * are claimed through {@see ClickCapture}, so the App hands a click on
  * one to this box alone.
  *
- * btop PR #1552 (Wave U4): with a GPU source ({@see withGpu()}) the Cmd
- * also samples it — per-process collection switched on, and only while
+ * btop PR #1552 (Wave U4): with a GPU source ({@see withGpu()}, the App's
+ * shared {@see GpuFeed}) the Cmd also asks it for a snapshot — consumer
+ * `proc`, demanding per-process rows, and only while
  * {@see ProcGpuColumns::wanted()} — and {@see GpuUsage} joins its rows to
  * the pids (summed over GPUs, held until the next measured GPU snapshot).
+ * The routine ask never waits: while nvidia-smi is in flight the list is
+ * joined with the previous snapshot, so the proc box never lags behind a
+ * 0.25-1 s pmon; only the immediate resample of `g` / a gpu sort waits.
  * Once per-process GPU data has been measured the box shows `GMem` /
  * `Gpu%` (+ a GPU mini-graph with proc_gpu_graphs) where the width allows
  * ({@see ProcView::sizes()}), the `gpu-only` title button, and applies
@@ -171,17 +179,18 @@ final class ProcPanel implements Panel, ClickCapture
     }
 
     /**
-     * Join per-process GPU use from `$gpu` (btop #1552) — a GPU collector
-     * source (`Platform::gpu()`; per-process collection is switched on at
-     * collect time, {@see ProcGpuColumns::tuned()}) or a fake feed. Null
-     * removes it: no GPU columns, filter or sampling.
+     * Join per-process GPU use from `$gpu` (btop #1552) — the App's shared
+     * {@see GpuFeed}, or any GpuSnapshot source (a collector, a fake), given
+     * a feed of its own. Per-process collection is part of this box's
+     * demand ({@see GpuDemand}). Null removes it: no GPU columns, filter or
+     * sampling.
      */
     public function withGpu(?Source $gpu): self
     {
-        return $this->mutate(['gpu' => $gpu, 'gpuUsage' => GpuUsage::none(), 'gpuGraphs' => null, 'rowsKey' => '']);
+        return $this->mutate(['gpu' => $gpu === null ? null : GpuFeed::of($gpu), 'gpuUsage' => GpuUsage::none(), 'gpuGraphs' => null, 'rowsKey' => '']);
     }
 
-    /** The GPU source, null without one. */
+    /** The GPU feed, null without one. */
     public function gpuSource(): ?Source
     {
         return $this->gpu;
@@ -339,21 +348,41 @@ final class ProcPanel implements Panel, ClickCapture
 
     public function collect(PanelContext $context): ?\Closure
     {
-        $source = $this->configured($context->config, $context->box?->width ?? 0);
-        $gpu = $this->gpu !== null && ProcGpuColumns::wanted($context->config, $context->box?->width)
-            ? ProcGpuColumns::tuned($this->gpu)
-            : null;
+        return $this->collectWith($context, false);
+    }
 
-        return static function () use ($source, $gpu): Msg {
+    /**
+     * @param bool $freshGpu wait for per-process GPU values from the GPU's current state (`g` / a gpu
+     *                       sort while they are not fresh); otherwise never wait on the GPU feed
+     */
+    private function collectWith(PanelContext $context, bool $freshGpu): \Closure
+    {
+        $source = $this->configured($context->config, $context->box?->width ?? 0);
+        $feed = $this->gpu instanceof GpuFeed && ProcGpuColumns::wanted($context->config, $context->box?->width)
+            ? $this->gpu
+            : null;
+        $demand = GpuDemand::of($context->config, true);
+
+        $joined = static function (GpuSnapshot|null $gpu) use ($source, $feed): Msg {
             [$snapshot, $next] = $source->sample();
-            if ($gpu !== null && $snapshot instanceof ProcSnapshot) {
-                [$gpuSnapshot, $gpuNext] = $gpu->sample();
-                if ($gpuSnapshot instanceof \SugarCraft\Top\Collect\GpuSnapshot) {
-                    $snapshot = new ProcGpuSample($snapshot, $gpuSnapshot, $gpuNext);
-                }
+
+            return new SampledMsg('proc', $gpu !== null && $feed !== null && $snapshot instanceof ProcSnapshot ? new ProcGpuSample($snapshot, $gpu, $feed) : $snapshot, $next);
+        };
+
+        return static function () use ($feed, $demand, $freshGpu, $joined): Msg {
+            if ($feed === null) {
+                return $joined(null);
+            }
+            $gpu = $feed->request('proc', $demand, false, $freshGpu);
+            [$settled, $value] = Settled::peek($gpu);
+            if ($settled) {
+                return $joined($value);
             }
 
-            return new SampledMsg('proc', $snapshot, $next);
+            // A fresh ask waits for nvidia-smi on the loop (the UI keeps running) and scans
+            // the processes when it lands, so this sample is never older than a routine one
+            // delivered meanwhile.
+            return Cmd::promise(static fn () => $gpu->then($joined))();
         };
     }
 
@@ -483,7 +512,8 @@ final class ProcPanel implements Panel, ClickCapture
      */
     private function withGpuSample(ProcGpuSample $sample): self
     {
-        return $this->mutate(['gpu' => $sample->gpuNext, 'gpuUsage' => $this->gpuUsage()->withSnapshot($sample->gpu)]);
+        // The feed is shared and constant; a sample from elsewhere (a test feeding samples) wires its source.
+        return $this->mutate(['gpu' => $this->gpu ?? GpuFeed::of($sample->gpuNext), 'gpuUsage' => $this->gpuUsage()->withSnapshot($sample->gpu)]);
     }
 
     /** A sample without the GPU (not wanted this tick): its values are dropped, availability kept. */
@@ -734,7 +764,7 @@ final class ProcPanel implements Panel, ClickCapture
             return $result;
         }
 
-        return new PanelResult($panel, $panel->collect(new PanelContext($after, $context->layout, $context->box)), $result->set, $result->overlay);
+        return new PanelResult($panel, $panel->collectWith(new PanelContext($after, $context->layout, $context->box), true), $result->set, $result->overlay);
     }
 
     /** A bare ctrl+g (no alt). */

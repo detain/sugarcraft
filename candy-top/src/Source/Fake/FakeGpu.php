@@ -17,6 +17,12 @@ use SugarCraft\Top\Source\Source;
  * total / controller utilization, temperature) and `$npus` Intel NPUs
  * answering what the intel_vpu sysfs backend reads (#985: busy %,
  * memory used, frequency — no total, power or temperature).
+ *
+ * Per-process rows (btop #1552) are off by default, like the live
+ * collector's; {@see withProcesses()} adds {@see FakeGpuProcesses::rows()}
+ * (the demo pids of {@see FakeProcList::demo()}) on these GPUs, so the
+ * `--fake` shared GPU feed serves the cpu box, the gpu boxes and the proc
+ * box's Gpu% / GMem columns from one coherent snapshot.
  */
 final class FakeGpu implements Source
 {
@@ -26,12 +32,24 @@ final class FakeGpu implements Source
         private readonly int $gpus,
         private readonly int $npus,
         private readonly int $step,
+        private readonly bool $processes = false,
     ) {
     }
 
     public static function new(int $gpus = 2, int $npus = 1): self
     {
         return new self(max(0, $gpus), max(0, $npus), 0);
+    }
+
+    /** Also report the demo's per-process rows (the live collector's withProcesses()). */
+    public function withProcesses(bool $on = true): self
+    {
+        return new self($this->gpus, $this->npus, $this->step, $on);
+    }
+
+    public function processesEnabled(): bool
+    {
+        return $this->processes;
     }
 
     /** The accelerators every sample reports (GPUs then NPUs) — the fixed device count. */
@@ -88,6 +106,15 @@ final class FakeGpu implements Source
             );
         }
 
-        return [new GpuSnapshot($devices, null, $npus), new self($this->gpus, $this->npus, $this->step + 1)];
+        $processes = null;
+        if ($this->processes) {
+            $uuids = [];
+            foreach ($devices as $d) {
+                $uuids[$d->index] = $d->uuid;
+            }
+            $processes = FakeGpuProcesses::rows($this->step, $uuids);
+        }
+
+        return [new GpuSnapshot($devices, $processes, $npus), new self($this->gpus, $this->npus, $this->step + 1, $this->processes)];
     }
 }

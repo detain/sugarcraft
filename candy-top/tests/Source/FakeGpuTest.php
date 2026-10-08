@@ -47,4 +47,21 @@ final class FakeGpuTest extends TestCase
         $this->assertCount(4, $snap->devices);
         $this->assertSame([], $snap->npus);
     }
+
+    public function testPerProcessRowsAreOptInAndSitOnTheseGpus(): void
+    {
+        $fake = FakeGpu::new();
+        $this->assertFalse($fake->processesEnabled());
+        [$off] = $fake->sample();
+        $this->assertNull($off->processes, 'off by default, like the live collector');
+
+        $on = $fake->withProcesses();
+        $this->assertTrue($on->processesEnabled());
+        [$snap, $next] = $on->sample();
+        $this->assertEquals($off->devices, $snap->devices, 'the devices do not change');
+        $uuids = array_map(static fn ($d): string => $d->uuid, $snap->devices);
+        $this->assertEquals(\SugarCraft\Top\Source\Fake\FakeGpuProcesses::rows(0, $uuids), $snap->processes, 'the demo pids');
+        $this->assertTrue($next->processesEnabled(), 'kept across samples');
+        $this->assertSame([5133, 6969, 880], array_map(static fn ($p): int => $p->pid, FakeGpu::new(1, 0)->withProcesses()->sample()[0]->processes), 'rows on a missing GPU are dropped');
+    }
 }

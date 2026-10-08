@@ -13,7 +13,9 @@ use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\Panels;
 use SugarCraft\Top\Panel\PlaceholderPanel;
+use SugarCraft\Top\Panel\Gpu\GpuFeed;
 use SugarCraft\Top\Panel\ProcPanel;
+use SugarCraft\Top\Source\Fake\FakeGpu;
 use SugarCraft\Top\Collect\PosixProcessControl;
 use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Source\Fake\FakeCpu;
@@ -50,15 +52,26 @@ final class PanelsTest extends TestCase
         $this->assertInstanceOf(FakeProcessControl::class, ProcPanel::new(FakeMemory::new())->processControl(), 'the default is inert');
     }
 
-    public function testTheProcBoxCarriesItsOwnGpuSource(): void
+    public function testTheGpuConsumersShareOneFeed(): void
     {
-        // #1552 Gpu%/GMem: --fake joins the demo pids, live samples the host's accelerators.
-        $fake = Panels::standard(Harness::host(), Config::new(), true)['proc'];
-        $this->assertInstanceOf(ProcPanel::class, $fake);
-        $this->assertInstanceOf(\SugarCraft\Top\Source\Fake\FakeGpuProcesses::class, $fake->gpuSource());
-        $live = Panels::standard(Harness::host(), Config::new(), false)['proc'];
-        $this->assertInstanceOf(ProcPanel::class, $live);
-        $this->assertNotNull($live->gpuSource());
+        // #1552 Gpu%/GMem, the gpu boxes and the cpu box's GPU rows: ONE sampler per roster.
+        foreach ([true, false] as $fake) {
+            $panels = Panels::standard(Harness::host(), Config::new(), $fake);
+            $proc = $panels['proc'];
+            $this->assertInstanceOf(ProcPanel::class, $proc);
+            $feed = $proc->gpuSource();
+            $this->assertInstanceOf(GpuFeed::class, $feed);
+            $this->assertSame($feed, (new \ReflectionProperty($panels['gpu'], 'source'))->getValue($panels['gpu']));
+            $this->assertSame($feed, (new \ReflectionProperty($panels['cpu'], 'sources'))->getValue($panels['cpu'])->get('gpu'));
+            if ($fake) {
+                $this->assertInstanceOf(FakeGpu::class, $feed->source(), '--fake: the demo GPUs, per-pid rows on demand');
+            }
+        }
+        $this->assertNotSame(
+            Panels::standard(Harness::host(), Config::new(), true)['proc']->gpuSource(),
+            Panels::standard(Harness::host(), Config::new(), true)['proc']->gpuSource(),
+            'one feed per roster (per App), never a process-wide one',
+        );
         $this->assertNull(ProcPanel::new(FakeMemory::new())->gpuSource(), 'no GPU source unless wired');
     }
 

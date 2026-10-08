@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Top\Collect\Gpu\Backend;
 use SugarCraft\Top\Collect\Gpu\DrmScan;
+use SugarCraft\Top\Collect\Gpu\Settled;
+use SugarCraft\Top\Collect\Gpu\SmiProcess;
+
+use function React\Promise\resolve;
 
 /**
  * Best-effort NVIDIA GPU stats via an `nvidia-smi` shell-out.
@@ -44,14 +49,15 @@ use SugarCraft\Top\Collect\Gpu\DrmScan;
  *    cadence, so real queries are spaced at least $interval seconds apart
  *    on the injected clock; samples in between return the last snapshot.
  *
- * The child is spawned with an argv array (no shell), only when a candidate
- * binary exists and is executable, bounded by a deadline, SIGKILLed on overrun and reaped with a
- * bounded wait — no descriptor outlives the call. A child that will not die
- * within that wait is abandoned rather than blocking the frame: PHP's
- * resource destructor only polls it with WNOHANG, so if it dies later it
- * stays a zombie until the PHP process exits (one per such timeout, and the
- * backoff above bounds how often that can happen). The runner is injectable
- * so tests never spawn.
+ * The child ({@see SmiProcess}) is spawned with an argv array (no shell),
+ * only when a candidate binary exists and is executable, bounded by a
+ * deadline, SIGKILLed on overrun and reaped without blocking. Two runners
+ * share it: {@see sample()} uses the blocking one (startup probe, tests),
+ * {@see sampleAsync()} the loop-driven one, so the shared GPU feed never
+ * stalls the UI while nvidia-smi runs. The whole query cycle (sweep, pin,
+ * compute-apps, pmon) is ONE promise chain over whichever runner is used;
+ * with a blocking runner every link settles synchronously. Both runners are
+ * injectable so tests never spawn.
  *
  * The per-process `--query-compute-apps` query is opt-in (withProcesses()):
  * it is a second spawn per interval, and a driver that answers the device
@@ -105,8 +111,6 @@ final class Gpu implements Backend
 
     public const float DEFAULT_INTERVAL = 5.0;
 
-    private const float TIMEOUT = 2.0;
-    private const float REAP_WAIT = 0.5;
     private const int MAX_BACKOFF_EXPONENT = 5;
 
     /** Consecutive compute-apps timeouts after which the query is switched off for APPS_RETRY_AFTER. */
@@ -125,7 +129,9 @@ final class Gpu implements Backend
     public const int PIN_MAX_FAILURES = 3;
 
     /**
-     * @param \Closure(list<string>): array{0: GpuOutcome, 1: string} $runner argv → [outcome, stdout]
+     * @param \Closure(list<string>): (array{0: GpuOutcome, 1: string}|PromiseInterface<array{0: GpuOutcome, 1: string}>) $runner argv → [outcome, stdout], blocking
+     * @param (\Closure(list<string>): (array{0: GpuOutcome, 1: string}|PromiseInterface<array{0: GpuOutcome, 1: string}>))|null $asyncRunner
+     *        the runner sampleAsync() uses; null = $runner
      * @param \Closure(): float $clock monotonic seconds
      * @param list<string> $candidates binaries tried in order until one answers
      * @param list<list<string>> $queries query-gpu field lists tried in order per candidate
@@ -152,11 +158,16 @@ final class Gpu implements Backend
         private readonly int $pmonTimeouts = 0,
         private readonly float $pmonNextAt = -INF,
         private readonly int $pmonFailures = 0,
+        private readonly ?\Closure $asyncRunner = null,
     ) {
     }
 
     /**
-     * @param (\Closure(list<string>): array{0: GpuOutcome, 1: string})|null $runner defaults to a bounded proc_open of nvidia-smi
+     * @param (\Closure(list<string>): array{0: GpuOutcome, 1: string})|null $runner defaults to a bounded, blocking
+     *        nvidia-smi child ({@see SmiProcess::run()}); when given, sampleAsync() uses it too unless
+     *        $asyncRunner is also given
+     * @param (\Closure(list<string>): PromiseInterface<array{0: GpuOutcome, 1: string}>)|null $asyncRunner
+     *        defaults (with $runner null) to the loop-driven child ({@see SmiProcess::launch()})
      * @param (\Closure(): float)|null $clock defaults to hrtime-based monotonic seconds
      * @param list<string>|null $candidates binaries to try; null discovers them (see candidates())
      * @param list<list<string>>|null $queries field lists to try per candidate; null = [QUERY_EXTENDED, QUERY]
@@ -171,13 +182,18 @@ final class Gpu implements Backend
         ?array $candidates = null,
         ?array $queries = null,
         bool $processes = false,
+        ?\Closure $asyncRunner = null,
     ): self {
         $discovered = $candidates === null;
+        if ($runner === null) {
+            $runner = self::nvidiaSmi(...);
+            $asyncRunner ??= self::nvidiaSmiAsync(...);
+        }
         $candidates = array_values($candidates ?? self::candidates());
         $queries = array_values(array_filter($queries ?? [self::QUERY_EXTENDED, self::QUERY], static fn (array $q): bool => $q !== []));
 
         return new self(
-            $runner ?? self::nvidiaSmi(...),
+            $runner,
             $clock ?? static fn (): float => hrtime(true) / 1e9,
             max(0.0, $interval),
             $candidates === [] || $queries === [],
@@ -194,21 +210,28 @@ final class Gpu implements Backend
             -INF,
             0,
             $discovered,
+            asyncRunner: $asyncRunner,
         );
     }
 
     /**
      * Opt in to (or out of) the per-process --query-compute-apps spawn; a
-     * fresh opt-in also clears its timeout backoff.
+     * fresh opt-in also clears its timeout backoff and makes the next
+     * sample query at once (unless the device query is backing off), so a
+     * consumer that just started wanting per-process rows — the proc box's
+     * `g` / gpu sort on the shared feed — gets them now, not one interval
+     * later.
      */
     public function withProcesses(bool $on = true): self
     {
+        $fresh = $on && !$this->processes;
+
         return new self(
             $this->runner,
             $this->clock,
             $this->interval,
             $this->absent,
-            $this->nextQueryAt,
+            $fresh && $this->timeouts === 0 ? null : $this->nextQueryAt,
             $this->timeouts,
             $this->last,
             $this->everSucceeded,
@@ -224,6 +247,7 @@ final class Gpu implements Backend
             $on && !$this->processes ? 0 : $this->pmonTimeouts,
             $on && !$this->processes ? -INF : $this->pmonNextAt,
             $on && !$this->processes ? 0 : $this->pmonFailures,
+            $this->asyncRunner,
         );
     }
 
@@ -269,57 +293,103 @@ final class Gpu implements Backend
     }
 
     /**
+     * One blocking sample (the injected or default blocking runner).
+     *
      * @return array{0: GpuSnapshot, 1: self}
      */
     public function sample(): array
     {
+        return Settled::value($this->sampleWith($this->runner));
+    }
+
+    /**
+     * The same sample over the loop-driven runner: resolves when the
+     * spawns are done, without blocking the loop thread meanwhile. Between
+     * queries (the interval, a backoff, a memoized absence) it is already
+     * settled with the last snapshot.
+     *
+     * @return PromiseInterface<array{0: GpuSnapshot, 1: self}>
+     */
+    public function sampleAsync(): PromiseInterface
+    {
+        return $this->sampleWith($this->asyncRunner ?? $this->runner);
+    }
+
+    /**
+     * @param \Closure(list<string>): mixed $runner
+     * @return PromiseInterface<array{0: GpuSnapshot, 1: self}>
+     */
+    private function sampleWith(\Closure $runner): PromiseInterface
+    {
         if ($this->absent) {
-            return [$this->last, $this];
+            return resolve([$this->last, $this]);
         }
         $now = ($this->clock)();
         if ($this->nextQueryAt !== null && $now < $this->nextQueryAt) {
-            return [$this->last, $this];
+            return resolve([$this->last, $this]);
         }
+        $run = static fn (array $argv): PromiseInterface => resolve($runner($argv));
 
         if ($this->pinnedBinary !== null && $this->pinnedQuery !== null) {
-            [$outcome, $output] = ($this->runner)(self::argv($this->pinnedBinary, $this->pinnedQuery));
-            $devices = $outcome === GpuOutcome::Ok ? self::parse($output, $this->pinnedQuery) : [];
-            if ($devices !== []) {
-                return $this->succeed($now, $this->pinnedBinary, $this->pinnedQuery, $devices);
-            }
-            [$empty, $next] = $this->backoff($now);
-            if ($outcome === GpuOutcome::Timeout) {
-                return [$empty, $next->with(pinFailures: 0)];
-            }
-            if ($this->pinFailures + 1 >= self::PIN_MAX_FAILURES) {
-                return [$empty, $next->with(unpin: true)];
-            }
+            $binary = $this->pinnedBinary;
+            $query = $this->pinnedQuery;
 
-            return [$empty, $next->with(pinFailures: $this->pinFailures + 1)];
-        }
-
-        foreach ($this->candidates as $binary) {
-            foreach ($this->queries as $query) {
-                [$outcome, $output] = ($this->runner)(self::argv($binary, $query));
-                if ($outcome === GpuOutcome::Timeout) {
-                    // A driver was reached and hung; every other candidate
-                    // and query would hang on it too. Stop here and back off.
-                    return $this->backoff($now);
-                }
+            return $run(self::argv($binary, $query))->then(function (array $result) use ($now, $binary, $query, $run): PromiseInterface|array {
+                [$outcome, $output] = $result;
                 $devices = $outcome === GpuOutcome::Ok ? self::parse($output, $query) : [];
                 if ($devices !== []) {
-                    return $this->succeed($now, $binary, $query, $devices);
+                    return $this->succeed($now, $binary, $query, $devices, $run);
                 }
+                [$empty, $next] = $this->backoff($now);
+                if ($outcome === GpuOutcome::Timeout) {
+                    return [$empty, $next->with(pinFailures: 0)];
+                }
+                if ($this->pinFailures + 1 >= self::PIN_MAX_FAILURES) {
+                    return [$empty, $next->with(unpin: true)];
+                }
+
+                return [$empty, $next->with(pinFailures: $this->pinFailures + 1)];
+            });
+        }
+
+        return $this->sweep($now, $run, 0);
+    }
+
+    /**
+     * Candidate × query pair `$at` onwards, in order, until one answers.
+     *
+     * @param \Closure(list<string>): PromiseInterface $run
+     * @return PromiseInterface<array{0: GpuSnapshot, 1: self}>
+     */
+    private function sweep(float $now, \Closure $run, int $at): PromiseInterface
+    {
+        $perBinary = \count($this->queries);
+        if ($at >= \count($this->candidates) * $perBinary) {
+            if (!$this->everSucceeded) {
+                $empty = new GpuSnapshot([]);
+
+                return resolve([$empty, $this->with(absent: true, timeouts: 0, last: $empty)]);
             }
+
+            return resolve($this->backoff($now));
         }
+        $binary = $this->candidates[intdiv($at, $perBinary)];
+        $query = $this->queries[$at % $perBinary];
 
-        if (!$this->everSucceeded) {
-            $empty = new GpuSnapshot([]);
+        return $run(self::argv($binary, $query))->then(function (array $result) use ($now, $run, $at, $binary, $query): PromiseInterface|array {
+            [$outcome, $output] = $result;
+            if ($outcome === GpuOutcome::Timeout) {
+                // A driver was reached and hung; every other candidate
+                // and query would hang on it too. Stop here and back off.
+                return $this->backoff($now);
+            }
+            $devices = $outcome === GpuOutcome::Ok ? self::parse($output, $query) : [];
+            if ($devices !== []) {
+                return $this->succeed($now, $binary, $query, $devices, $run);
+            }
 
-            return [$empty, $this->with(absent: true, timeouts: 0, last: $empty)];
-        }
-
-        return $this->backoff($now);
+            return $this->sweep($now, $run, $at + 1);
+        });
     }
 
     public function absent(): bool
@@ -363,16 +433,29 @@ final class Gpu implements Backend
     /**
      * @param list<string> $query
      * @param list<GpuDevice> $devices
+     * @param \Closure(list<string>): PromiseInterface $run
+     * @return PromiseInterface<array{0: GpuSnapshot, 1: self}>
+     */
+    private function succeed(float $now, string $binary, array $query, array $devices, \Closure $run): PromiseInterface
+    {
+        $none = resolve([null, [$this->appsTimeouts, $this->appsNextAt], [$this->pmonTimeouts, $this->pmonNextAt, $this->pmonFailures]]);
+        $processes = $this->processes && in_array('uuid', $query, true)
+            ? $this->queryProcesses($now, $binary, $devices, $run)
+            : $none;
+
+        return $processes->then(fn (array $p): array => $this->succeeded($now, $binary, $query, $devices, ...$p));
+    }
+
+    /**
+     * @param list<string> $query
+     * @param list<GpuDevice> $devices
+     * @param list<GpuProcess>|null $processes
+     * @param array{0: int, 1: float} $apps
+     * @param array{0: int, 1: float, 2: int} $pmon
      * @return array{0: GpuSnapshot, 1: self}
      */
-    private function succeed(float $now, string $binary, array $query, array $devices): array
+    private function succeeded(float $now, string $binary, array $query, array $devices, ?array $processes, array $apps, array $pmon): array
     {
-        $processes = null;
-        $apps = [$this->appsTimeouts, $this->appsNextAt];
-        $pmon = [$this->pmonTimeouts, $this->pmonNextAt, $this->pmonFailures];
-        if ($this->processes && in_array('uuid', $query, true)) {
-            [$processes, $apps, $pmon] = $this->queryProcesses($now, $binary, $devices);
-        }
         $snapshot = new GpuSnapshot($devices, $processes);
 
         return [$snapshot, $this->with(
@@ -422,10 +505,11 @@ final class Gpu implements Backend
      * withProcesses() opt-in. Worst case per interval: one bounded timeout.
      *
      * @param list<GpuDevice> $devices
-     * @return array{0: list<GpuProcess>|null, 1: array{0: int, 1: float}, 2: array{0: int, 1: float, 2: int}}
+     * @param \Closure(list<string>): PromiseInterface $run
+     * @return PromiseInterface<array{0: list<GpuProcess>|null, 1: array{0: int, 1: float}, 2: array{0: int, 1: float, 2: int}}>
      *         [processes, apps [timeouts, next at], pmon [timeouts, next at, failures]]
      */
-    private function queryProcesses(float $now, string $binary, array $devices): array
+    private function queryProcesses(float $now, string $binary, array $devices, \Closure $run): PromiseInterface
     {
         $byUuid = [];
         $uuidByIndex = [];
@@ -433,44 +517,49 @@ final class Gpu implements Backend
             $byUuid[$device->uuid] = $device->index;
             $uuidByIndex[$device->index] = $device->uuid;
         }
-        $processes = null;
-        $apps = [$this->appsTimeouts, $this->appsNextAt];
         $pmon = [$this->pmonTimeouts, $this->pmonNextAt, $this->pmonFailures];
 
-        if ($now >= $this->appsNextAt) {
-            [$outcome, $output] = ($this->runner)([
+        // [run pmon?, processes, apps state]
+        $apps = $now < $this->appsNextAt
+            ? resolve([true, null, [$this->appsTimeouts, $this->appsNextAt]])
+            : $run([
                 $binary,
                 '--query-compute-apps=' . implode(',', self::APPS_QUERY),
                 '--format=csv,noheader,nounits',
-            ]);
-            if ($outcome === GpuOutcome::Timeout) {
-                $n = min($this->appsTimeouts + 1, self::APPS_MAX_TIMEOUTS);
-                $wait = $n >= self::APPS_MAX_TIMEOUTS ? self::APPS_RETRY_AFTER : $this->interval * (2 ** $n);
+            ])->then(function (array $result) use ($now, $byUuid): array {
+                [$outcome, $output] = $result;
+                if ($outcome === GpuOutcome::Timeout) {
+                    $n = min($this->appsTimeouts + 1, self::APPS_MAX_TIMEOUTS);
+                    $wait = $n >= self::APPS_MAX_TIMEOUTS ? self::APPS_RETRY_AFTER : $this->interval * (2 ** $n);
 
-                return [null, [$n, $now + $wait], $pmon];
-            }
-            $apps = [0, -INF];
-            if ($outcome === GpuOutcome::Ok) {
-                $processes = self::parseProcesses($output, $byUuid);
-            }
-        }
+                    return [false, null, [$n, $now + $wait]];
+                }
 
-        if ($this->pmonFailures < self::PMON_MAX_FAILURES && $now >= $this->pmonNextAt) {
-            [$outcome, $output] = ($this->runner)([$binary, ...self::PMON_ARGS]);
-            $rows = $outcome === GpuOutcome::Ok ? self::parsePmon($output) : null;
-            if ($outcome === GpuOutcome::Timeout) {
-                $n = min($this->pmonTimeouts + 1, self::PMON_MAX_TIMEOUTS);
-                $wait = $n >= self::PMON_MAX_TIMEOUTS ? self::APPS_RETRY_AFTER : $this->interval * (2 ** $n);
-                $pmon = [$n, $now + $wait, $this->pmonFailures];
-            } elseif ($rows === null) {
-                $pmon = [0, -INF, $this->pmonFailures + 1];
-            } else {
-                $pmon = [0, -INF, 0];
-                $processes = self::mergePmon($processes ?? [], $rows, $uuidByIndex);
-            }
-        }
+                return [true, $outcome === GpuOutcome::Ok ? self::parseProcesses($output, $byUuid) : null, [0, -INF]];
+            });
 
-        return [$processes, $apps, $pmon];
+        return $apps->then(function (array $step) use ($now, $binary, $run, $pmon, $uuidByIndex): PromiseInterface|array {
+            [$continue, $processes, $apps] = $step;
+            if (!$continue || $this->pmonFailures >= self::PMON_MAX_FAILURES || $now < $this->pmonNextAt) {
+                return [$processes, $apps, $pmon];
+            }
+
+            return $run([$binary, ...self::PMON_ARGS])->then(function (array $result) use ($now, $processes, $apps, $uuidByIndex): array {
+                [$outcome, $output] = $result;
+                $rows = $outcome === GpuOutcome::Ok ? self::parsePmon($output) : null;
+                if ($outcome === GpuOutcome::Timeout) {
+                    $n = min($this->pmonTimeouts + 1, self::PMON_MAX_TIMEOUTS);
+                    $wait = $n >= self::PMON_MAX_TIMEOUTS ? self::APPS_RETRY_AFTER : $this->interval * (2 ** $n);
+
+                    return [$processes, $apps, [$n, $now + $wait, $this->pmonFailures]];
+                }
+                if ($rows === null) {
+                    return [$processes, $apps, [0, -INF, $this->pmonFailures + 1]];
+                }
+
+                return [self::mergePmon($processes ?? [], $rows, $uuidByIndex), $apps, [0, -INF, 0]];
+            });
+        });
     }
 
     /** False once pmon was memoized unsupported (PMON_MAX_FAILURES non-timeout failures in a row). */
@@ -719,66 +808,54 @@ final class Gpu implements Backend
             $pmon[0] ?? $this->pmonTimeouts,
             $pmon[1] ?? $this->pmonNextAt,
             $pmon[2] ?? $this->pmonFailures,
+            $this->asyncRunner,
         );
     }
 
     /**
+     * The default blocking runner.
+     *
      * @param list<string> $argv
      * @return array{0: GpuOutcome, 1: string}
      */
     private static function nvidiaSmi(array $argv): array
     {
-        // A discovered candidate is an absolute path; a bare name goes through PATH.
+        $argv = self::executable($argv);
+
+        return $argv === null ? [GpuOutcome::Absent, ''] : SmiProcess::run($argv);
+    }
+
+    /**
+     * The default loop-driven runner.
+     *
+     * @param list<string> $argv
+     * @return PromiseInterface<array{0: GpuOutcome, 1: string}>
+     */
+    private static function nvidiaSmiAsync(array $argv): PromiseInterface
+    {
+        $argv = self::executable($argv);
+
+        return $argv === null ? resolve([GpuOutcome::Absent, '']) : SmiProcess::launch($argv);
+    }
+
+    /**
+     * `$argv` with argv[0] resolved to an executable: a discovered
+     * candidate is an absolute path; a bare name goes through PATH.
+     *
+     * @param list<string> $argv
+     * @return list<string>|null null when there is no such executable
+     */
+    private static function executable(array $argv): ?array
+    {
         $binary = str_contains($argv[0], '/')
             ? (is_file($argv[0]) && is_executable($argv[0]) ? $argv[0] : null)
             : self::which($argv[0]);
         if ($binary === null) {
-            return [GpuOutcome::Absent, ''];
+            return null;
         }
         $argv[0] = $binary;
 
-        $pipes = [];
-        try {
-            $process = @proc_open($argv, [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
-        } catch (\Error) {
-            return [GpuOutcome::Absent, '']; // proc_open listed in disable_functions
-        }
-        if (!is_resource($process)) {
-            return [GpuOutcome::Absent, ''];
-        }
-
-        stream_set_blocking($pipes[1], false);
-        $output = '';
-        $deadline = microtime(true) + self::TIMEOUT;
-        while (!feof($pipes[1]) && ($left = $deadline - microtime(true)) > 0) {
-            $read = [$pipes[1]];
-            $write = $except = null;
-            if (@stream_select($read, $write, $except, 0, (int) min(200000, $left * 1e6)) > 0) {
-                $output .= (string) fread($pipes[1], 65536);
-            }
-        }
-        $timedOut = !feof($pipes[1]);
-        fclose($pipes[1]);
-
-        if ($timedOut) {
-            proc_terminate($process, 9);
-            // A child stuck in uninterruptible sleep ignores even SIGKILL;
-            // proc_close would then block the frame indefinitely. Poll
-            // briefly, and if it is still alive drop the handle: the
-            // resource destructor's WNOHANG poll never blocks, but a child
-            // that dies after it stays a zombie until PHP exits.
-            $reapBy = microtime(true) + self::REAP_WAIT;
-            while (proc_get_status($process)['running'] && microtime(true) < $reapBy) {
-                usleep(10000);
-            }
-            if (!proc_get_status($process)['running']) {
-                proc_close($process);
-            }
-
-            return [GpuOutcome::Timeout, ''];
-        }
-
-        return proc_close($process) === 0 ? [GpuOutcome::Ok, $output] : [GpuOutcome::Absent, ''];
+        return $argv;
     }
 
     private static function which(string $command): ?string

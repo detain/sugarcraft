@@ -20,6 +20,7 @@ use SugarCraft\Top\Panel\Mem\DisksSource;
 use SugarCraft\Top\Panel\MemPanel;
 use SugarCraft\Top\Panel\Net\NetPanel;
 use SugarCraft\Top\Panel\PanelContext;
+use SugarCraft\Top\Panel\Gpu\GpuFeed;
 use SugarCraft\Top\Panel\Panels;
 use SugarCraft\Top\Panel\ProcPanel;
 use SugarCraft\Top\Source\CollectorSource;
@@ -149,12 +150,15 @@ final class PlatformWiringTest extends TestCase
         $this->assertInstanceOf(FreeBsd\Memory::class, self::prop($panels['mem'], 'sources')->get('mem')->collector());
         $this->assertInstanceOf(FreeBsd\Net::class, self::prop($panels['net'], 'source')->collector());
         $this->assertInstanceOf(FreeBsd\ProcList::class, $panels['proc']->source()->collector());
+        $feed = self::prop($panels['gpu'], 'source');
+        $this->assertInstanceOf(GpuFeed::class, $feed);
         $this->assertSame(
             self::describe(CollectorSource::of(Collect\Gpu\Accelerators::nvidiaOnly())),
-            self::describe(self::prop($panels['gpu'], 'source')),
+            self::describe($feed->source()),
             'FreeBSD gpu boxes read nvidia-smi only',
         );
-        $this->assertSame(self::describe(self::prop($panels['gpu'], 'source')), self::describe($cpu->get('gpu')));
+        $this->assertSame($feed, $cpu->get('gpu'), 'the cpu box asks the same feed');
+        $this->assertSame($feed, $panels['proc']->gpuSource(), 'and so does the proc box');
     }
 
     public function testLinuxRosterBuildsTheSameCollectorsAsBefore(): void
@@ -185,8 +189,8 @@ final class PlatformWiringTest extends TestCase
             'cpu' => $cpu->get('cpu'),
             'freq' => $cpu->get('freq'),
             'temp' => $cpu->get('temp'),
-            'gpu' => $cpu->get('gpu'),
-            'gpuBoxes' => self::prop($panels['gpu'], 'source'),
+            'gpu' => $cpu->get('gpu')->source(),
+            'gpuBoxes' => self::prop($panels['gpu'], 'source')->source(),
             'battery' => self::prop($panels['cpu']->battery(), 'source'),
             'mem' => self::prop($panels['mem'], 'sources')->get('mem'),
             'mounts' => $disks->mounts(),
@@ -195,6 +199,7 @@ final class PlatformWiringTest extends TestCase
             'proc' => $panels['proc']->source(),
         ];
         $this->assertInstanceOf(NetPanel::class, $panels['net']);
+        $this->assertSame($cpu->get('gpu'), self::prop($panels['gpu'], 'source'), 'one shared GPU feed');
         foreach ($expected as $name => $source) {
             $this->assertSame(self::describe($source), self::describe($actual[$name]), $name);
         }
@@ -202,7 +207,8 @@ final class PlatformWiringTest extends TestCase
         if (PHP_OS === 'Linux') {
             $default = Panels::standard(PanelPaint::host(), $config, false);
             $this->assertSame(self::describe($actual['proc']), self::describe($default['proc']->source()));
-            $this->assertSame(self::describe($cpu), self::describe(self::prop($default['cpu'], 'sources')));
+            $this->assertSame(self::describe($cpu->with('gpu', null)), self::describe(self::prop($default['cpu'], 'sources')->with('gpu', null)));
+            $this->assertSame(self::describe($cpu->get('gpu')->source()), self::describe(self::prop($default['cpu'], 'sources')->get('gpu')->source()));
         }
     }
 

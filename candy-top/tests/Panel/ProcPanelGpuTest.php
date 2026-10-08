@@ -21,6 +21,7 @@ use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\PanelResult;
 use SugarCraft\Top\Panel\Proc\ProcGpuSample;
 use SugarCraft\Top\Panel\Proc\ProcView;
+use SugarCraft\Top\Panel\Gpu\GpuFeed;
 use SugarCraft\Top\Panel\ProcPanel;
 use SugarCraft\Top\Source\Fake\FakeGpuProcesses;
 use SugarCraft\Top\Source\Fake\FakeProcList;
@@ -143,7 +144,8 @@ final class ProcPanelGpuTest extends TestCase
         $this->assertInstanceOf(SampledMsg::class, $msg);
         $this->assertInstanceOf(ProcGpuSample::class, $msg->snapshot);
         $this->assertInstanceOf(FakeProcList::class, $msg->next, 'next stays the process source');
-        $this->assertInstanceOf(FakeGpuProcesses::class, $msg->snapshot->gpuNext);
+        $this->assertInstanceOf(GpuFeed::class, $msg->snapshot->gpuNext, 'a source of its own is wrapped in a feed');
+        $this->assertInstanceOf(FakeGpuProcesses::class, $msg->snapshot->gpuNext->source());
 
         $p = $this->apply($p->update($msg, $this->ctx()));
         $this->assertTrue($p->gpuAvailable());
