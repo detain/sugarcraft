@@ -1,7 +1,7 @@
 ---
 name: security-auditor
 description: Reviews a diff or directory for OWASP-class issues; use before merging anything touching auth, input parsing, or SQL.
-tools: [Read, Grep, Glob, Bash]
+tools: [Read, Grep, Glob, Bash, Skill]
 disallowedTools: [Write, Edit]
 model: sonnet
 permissionMode: plan

@@ -69,7 +69,7 @@ final class TaskToolArgumentScopedGrantTest extends TestCase
         ]);
         // The shipped preset's own declaration, not a copy of it: the hole was
         // in the built-in `reviewer`, so that is what must now hold.
-        $manager = self::manager([self::probe('Read'), self::probe('Grep'), $bash], RosterAgent::named('reviewer', AgentDefinition::reviewer()->defaultTools));
+        $manager = self::manager([self::probe('Read'), self::probe('Grep'), self::probe('Skill'), $bash], RosterAgent::named('reviewer', AgentDefinition::reviewer()->defaultTools));
 
         $result = $this->task($manager, EngineBackend::new($provider, 'm'))->execute(self::call('reviewer'));
 
@@ -81,7 +81,7 @@ final class TaskToolArgumentScopedGrantTest extends TestCase
         $this->assertStringContainsString('Bash ok', $denials[0]);
         foreach ([1, 2] as $i) {
             $this->assertStringContainsString('Hook denied', $denials[$i]);
-            $this->assertStringContainsString('outside the tool grant agent "reviewer" declares [Read, Grep, Bash(git *)]', $denials[$i]);
+            $this->assertStringContainsString('outside the tool grant agent "reviewer" declares [Read, Grep, Bash(git *), Skill]', $denials[$i]);
         }
     }
 

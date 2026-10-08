@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Reviews code changes for quality, security, and style; reads diffs, grep patterns, and runs analysis tools.
-tools: [Read, Grep, Bash]
+tools: [Read, Grep, Bash, Skill]
 disallowedTools: [Write, Edit]
 model: inherit
 permissionMode: plan

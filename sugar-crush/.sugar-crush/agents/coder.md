@@ -1,7 +1,7 @@
 ---
 name: coder
 description: Implements features and fixes bugs in PHP code; writes new files, edits existing code, and runs tests.
-tools: [Read, Write, Edit, Bash, Grep]
+tools: [Read, Write, Edit, Bash, Grep, Skill]
 disallowedTools: [git commit]
 model: inherit
 permissionMode: accept-edits

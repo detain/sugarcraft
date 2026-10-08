@@ -2801,9 +2801,9 @@ final class AgentManagerTest extends TestCase
         $grant = \SugarCraft\Crush\Agents\AgentDefinition::reviewer()->defaultTools;
         self::assertNotContains('Team', $grant);
 
-        $request = $this->captureSubAgentRequest($grant, $this->fakeRegistry('Bash', 'Read', 'Team', 'Grep', 'Edit'));
+        $request = $this->captureSubAgentRequest($grant, $this->fakeRegistry('Bash', 'Read', 'Team', 'Grep', 'Edit', 'Skill'));
 
-        $this->assertSame(['Bash', 'Read', 'Team', 'Grep'], self::toolNames($request->tools), 'registry order, Team included, Edit still narrowed out');
+        $this->assertSame(['Bash', 'Read', 'Team', 'Grep', 'Skill'], self::toolNames($request->tools), 'registry order, Team included, Edit still narrowed out');
     }
 
     public function testASessionWithoutTeamAddsNothingAndRefusesNothing(): void

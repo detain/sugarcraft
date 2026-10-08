@@ -33,7 +33,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('coder', $coder->name);
         $this->assertSame('General coding assistant', $coder->description);
         $this->assertStringStartsWith('You are a coding assistant', $coder->prompt);
-        $this->assertSame(['Read', 'Edit', 'Bash'], $coder->defaultTools);
+        $this->assertSame(['Read', 'Edit', 'Bash', 'Skill'], $coder->defaultTools);
         $this->assertSame([], $coder->defaultSkills);
     }
 
@@ -57,7 +57,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('reviewer', $reviewer->name);
         $this->assertSame('Code review specialist', $reviewer->description);
         $this->assertStringStartsWith('You are a code review specialist', $reviewer->prompt);
-        $this->assertSame(['Read', 'Grep', 'Bash(git *)'], $reviewer->defaultTools);
+        $this->assertSame(['Read', 'Grep', 'Bash(git *)', 'Skill'], $reviewer->defaultTools);
         $this->assertSame(['php-best-practices', 'security-audit'], $reviewer->defaultSkills);
     }
 
@@ -80,7 +80,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('debugger', $debugger->name);
         $this->assertSame('Bug investigation and fixing', $debugger->description);
         $this->assertStringStartsWith('You are a debugging specialist', $debugger->prompt);
-        $this->assertSame(['Read', 'Grep', 'Bash'], $debugger->defaultTools);
+        $this->assertSame(['Read', 'Grep', 'Bash', 'Skill'], $debugger->defaultTools);
         $this->assertSame([], $debugger->defaultSkills);
     }
 
@@ -94,7 +94,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('architect', $architect->name);
         $this->assertSame('System design and architecture', $architect->description);
         $this->assertStringStartsWith('You are a software architect', $architect->prompt);
-        $this->assertSame(['Read', 'Grep', 'Glob'], $architect->defaultTools);
+        $this->assertSame(['Read', 'Grep', 'Glob', 'Skill'], $architect->defaultTools);
         $this->assertSame([], $architect->defaultSkills);
     }
 
@@ -108,7 +108,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('tester', $tester->name);
         $this->assertSame('Test writing and coverage', $tester->description);
         $this->assertStringStartsWith('You are a testing specialist', $tester->prompt);
-        $this->assertSame(['Read', 'Bash'], $tester->defaultTools);
+        $this->assertSame(['Read', 'Bash', 'Skill'], $tester->defaultTools);
         $this->assertSame(['phpunit-master'], $tester->defaultSkills);
     }
 
@@ -122,7 +122,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('devops', $devops->name);
         $this->assertSame('CI/CD and deployment', $devops->description);
         $this->assertStringStartsWith('You are a DevOps specialist', $devops->prompt);
-        $this->assertSame(['Read', 'Bash', 'Glob'], $devops->defaultTools);
+        $this->assertSame(['Read', 'Bash', 'Glob', 'Skill'], $devops->defaultTools);
         $this->assertSame([], $devops->defaultSkills);
     }
 
@@ -458,6 +458,38 @@ final class AgentDefinitionTest extends TestCase
                 "preset \"%s\" declares a tool grant that cannot work:\n  %s",
                 $definition->type,
                 implode("\n  ", $defects),
+            ),
+        );
+    }
+
+    /**
+     * Every built-in grant opens the `Skill` door.
+     *
+     * Lane D's STOP-seam asked whether shipped presets should carry `Skill`
+     * once workers see the fenced listing; the ruling (Claude Code and
+     * opencode parity) is YES: a worker shown catalogues it must be able to
+     * open. `SkillTool`'s permission class is `Read` — loading a body is one
+     * escaped, fenced text file, no hidden capability behind it — and every
+     * built-in names `Read`, so the door grants nothing the roster did not
+     * already allow. A preset WITHOUT `Read` would instead get a seam-note,
+     * not the door; this pin holds that precondition too.
+     *
+     * @dataProvider everyPreset
+     */
+    public function testEveryBuiltinPresetGrantsTheSkillDoor(AgentDefinition $definition): void
+    {
+        $this->assertContains(
+            'Read',
+            $definition->defaultTools,
+            sprintf('preset "%s" lost Read; the Skill-door ruling only holds while Read is granted', $definition->type),
+        );
+        $this->assertContains(
+            'Skill',
+            $definition->defaultTools,
+            sprintf(
+                'preset "%s" sees the skills listing but cannot call Skill — close the seam in src, '
+                . 'do not delete this pin',
+                $definition->type,
             ),
         );
     }

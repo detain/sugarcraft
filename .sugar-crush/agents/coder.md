@@ -1,7 +1,7 @@
 ---
 name: coder
 description: Implements features and fixes according to specifications; triggered when the lead says 'implement', 'add', 'write', 'create', or 'build'.
-tools: [Read, Write, Edit, Grep, Glob, Bash]
+tools: [Read, Write, Edit, Grep, Glob, Bash, Skill]
 disallowedTools: []
 model: inherit
 permissionMode: acceptEdits

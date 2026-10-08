@@ -46,7 +46,7 @@ final readonly class AgentDefinition
                 . 'surrounding code rather than introducing your own. Finish with a short summary '
                 . 'naming every file you changed and calling out anything that alters a public API '
                 . 'or an observable behaviour.',
-            defaultTools: ['Read', 'Edit', 'Bash'],
+            defaultTools: ['Read', 'Edit', 'Bash', 'Skill'],
             defaultSkills: [],
         );
     }
@@ -91,7 +91,7 @@ final readonly class AgentDefinition
             // {@see AgentManager::resolveGrantedTools()} sends can only carry
             // the NAME half, because a tool schema has no field for "git
             // commands only".
-            defaultTools: ['Read', 'Grep', 'Bash(git *)'],
+            defaultTools: ['Read', 'Grep', 'Bash(git *)', 'Skill'],
             defaultSkills: ['php-best-practices', 'security-audit'],
         );
     }
@@ -108,7 +108,7 @@ final readonly class AgentDefinition
                 . 'cause, the probe that proves it, and the smallest fix — and say plainly when '
                 . 'the evidence does not settle the question instead of offering a plausible '
                 . 'story.',
-            defaultTools: ['Read', 'Grep', 'Bash'],
+            defaultTools: ['Read', 'Grep', 'Bash', 'Skill'],
             defaultSkills: [],
         );
     }
@@ -167,7 +167,7 @@ final readonly class AgentDefinition
                 . 'have to be true for the recommendation to be wrong. Produce a design, not an '
                 . 'implementation: describe the change precisely enough that someone else could '
                 . 'make it, and leave the editing to them.',
-            defaultTools: ['Read', 'Grep', 'Glob'],
+            defaultTools: ['Read', 'Grep', 'Glob', 'Skill'],
             defaultSkills: [],
         );
     }
@@ -184,7 +184,7 @@ final readonly class AgentDefinition
                 . 'assertion to make a suite pass. Assert the property rather than an incidental '
                 . 'literal, and finish by reporting the tests you added and the run that showed '
                 . 'them green.',
-            defaultTools: ['Read', 'Bash'],
+            defaultTools: ['Read', 'Bash', 'Skill'],
             defaultSkills: ['phpunit-master'],
         );
     }
@@ -200,7 +200,7 @@ final readonly class AgentDefinition
                 . 'it — a pipeline edit is not observable locally, so being sure beforehand is the '
                 . 'only check available. Prefer a change that fails loudly over one that degrades '
                 . 'silently, and report what you changed together with how it can be verified.',
-            defaultTools: ['Read', 'Bash', 'Glob'],
+            defaultTools: ['Read', 'Bash', 'Glob', 'Skill'],
             defaultSkills: [],
         );
     }
