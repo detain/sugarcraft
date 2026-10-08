@@ -40,10 +40,13 @@ use SugarCraft\Top\View\Symbols;
  * entries the proc box registers), computed from the same geometry the
  * painter uses so a click lands on what is drawn.
  *
- * Deviations: the pause / follow / terminate / kill / signals / nice
- * buttons are not drawn — their keys belong to later phases (P-F's
- * overlay seam owns the signal popups) and a button must never advertise
- * a key that does nothing; the paused/following banner is likewise absent.
+ * Phase P-F1 adds btop's action buttons — `pause` on the title row,
+ * `terminate` / `kill` / `signals` / `nice` / `follow` on the bottom row
+ * (live while a row is selected) and on the detailed view's top border
+ * (live while the detailed process itself is the target) — and the
+ * paused / following banner on the list's last row ({@see bannerText()}).
+ * Their positions follow the translated labels, so {@see buttons()} and
+ * the painter share {@see actionButtons()}.
  */
 final class ProcView
 {
@@ -145,10 +148,23 @@ final class ProcView
         if ($width > 35 + $sortLen) {
             $map['e'] = [$sortPos - 5, $dy, Width::string(Lang::t('proc.tree'))];
         }
+        if ($width > 60 + $sortLen) {
+            $map['u'] = [$sortPos - 31, $dy, Width::string(Lang::t('proc.pause'))];
+        }
         $map['left'] = [$sortPos + 1, $dy, 2];
         $map['right'] = [$sortPos + $sortLen + 3, $dy, 2];
         if ($selected > 0) {
             $map['info_enter'] = [14, $height - 1, Width::string(Lang::t('proc.info')) + 2];
+            foreach (self::actionButtons($width, $config, false) as [$key, $x, $text]) {
+                $map[$key] = [$x + 1, $height - 1, Width::string($text)];
+            }
+        }
+        if ($detail !== null && $selected === 0) {
+            foreach (self::actionButtons($width, $config, true) as [$key, $x, $text]) {
+                if ($key === 'F' || $detail->alive) {
+                    $map[$key] = [$x + 1, 0, Width::string($text)];
+                }
+            }
         }
         if ($detail !== null && !($selectedPid !== $detail->pid && $selected > 0)) {
             $map['enter'] = [$width - 9, 0, Width::string(Lang::t('proc.hide')) + 2];
@@ -170,6 +186,8 @@ final class ProcView
         ?DetailState $detail,
         int $memTotal,
         int $cores,
+        ?int $followed = null,
+        int $followRow = 0,
     ): void {
         $W = $region->width();
         $H = $region->height();
@@ -183,7 +201,8 @@ final class ProcView
         }
         $dy = self::detailRows($detail !== null);
         $listH = $H - $dy;
-        $selectMax = max(0, $listH - 3);
+        $banner = self::bannerText($config->bool('pause_proc_list'), $followed !== null);
+        $selectMax = max(0, $listH - 3 - ($banner !== null ? 1 : 0));
         $numpids = count($rows);
         $sel = $sel->clamp($numpids, $selectMax);
         $graphsOn = $config->bool('proc_cpu_graphs');
@@ -191,10 +210,10 @@ final class ProcView
         $tree = $config->bool('proc_tree');
 
         if ($detail !== null) {
-            self::paintDetail($region, $frame, $detail, $sel, $rows, $memTotal, $cores);
+            self::paintDetail($region, $frame, $detail, $sel, $rows, $memTotal, $cores, $followed);
         }
         self::paintTitleRow($region, $frame, $dy, $edit);
-        self::paintBottomRow($region, $frame, $sel, $numpids, $selectMax);
+        self::paintBottomRow($region, $frame, $sel, $numpids, $selectMax, $followed !== null, $followRow);
         self::paintHeader($region, $ink, $dy, $sz, $tree, $graphsOn, $config->bool('proc_mem_bytes'));
 
         $ctx = [
@@ -206,10 +225,23 @@ final class ProcView
             'graphs' => $graphsOn,
             'family' => self::family($config),
             'memTotal' => $memTotal,
+            'followed' => $followed,
         ];
         $visible = array_slice($rows, $sel->start, max(0, $selectMax));
         foreach ($visible as $lc => $entry) {
             self::paintRow($region, $ink, $dy + 2 + $lc, $W, $sz, $tree, $entry, $lc, $sel->selected, max(1, $selectMax), $graphs, $ctx);
+        }
+
+        if ($banner !== null) {
+            // btop: `{:^{width - 2}}` in proc_banner_fg on the state's bg, bold.
+            $bg = match (true) {
+                $config->bool('pause_proc_list') && $followed !== null => 'proc_banner_bg',
+                $config->bool('pause_proc_list') => 'proc_pause_bg',
+                default => 'proc_follow_bg',
+            };
+            $text = Width::truncate($banner, max(0, $W - 2));
+            $pad = max(0, $W - 2 - Width::string($text));
+            $region->put(1, $dy + $listH - 2, str_repeat(' ', intdiv($pad, 2)) . $text . str_repeat(' ', $pad - intdiv($pad, 2)), $ink->bg($bg) . $ink->fg('proc_banner_fg') . self::BOLD);
         }
 
         if ($numpids > $selectMax && $selectMax > 0) {
@@ -221,6 +253,74 @@ final class ProcView
                 $region->put($W - 2, $y, $y === $dy + 2 + $thumb ? '█' : ' ', $s);
             }
         }
+    }
+
+    /**
+     * btop's list banner (Proc::draw `proc_banner_shown`): null when the
+     * list is neither paused nor following a process.
+     */
+    public static function bannerText(bool $paused, bool $following): ?string
+    {
+        return match (true) {
+            $paused && $following => Lang::t('proc.banner.both'),
+            $paused => Lang::t('proc.banner.paused'),
+            $following => Lang::t('proc.banner.following'),
+            default => null,
+        };
+    }
+
+    /**
+     * btop's terminate / kill / signals / nice / follow buttons as drawn on
+     * the bottom border (`$detail` false, btop_draw.cpp:1958-1981) or on the
+     * detailed view's top border (`$detail` true, :1843-1869): key, the
+     * opening junction's local column, and the visible text. `t` needs a
+     * box wider than 60 (55 on the detail row), `k` wider than 55 on the
+     * bottom row, `F` wider than 72 (77); the kill key is `K` with vim_keys.
+     *
+     * @return list<array{0: string, 1: int, 2: string}>
+     */
+    public static function actionButtons(int $width, Config $config, bool $detail): array
+    {
+        $kill = $config->bool('vim_keys') ? 'K' : 'k';
+        if ($detail) {
+            $dgw = max(intdiv($width, 3), $width - 121);
+            $x = $dgw + 2;
+            $want = [['t', $width > 55], [$kill, true], ['s', true], ['N', true], ['F', $width > 77]];
+        } else {
+            $x = 1 + 2 + Width::string('↑ ' . Lang::t('proc.select') . ' ↓') + 2 + Width::string(Lang::t('proc.info') . ' ↵');
+            $want = [['t', $width > 60], [$kill, $width > 55], ['s', true], ['N', true], ['F', $width > 72]];
+        }
+        $labels = ['t' => 'proc.terminate', 'k' => 'proc.kill', 'K' => 'proc.kill', 's' => 'proc.signals', 'N' => 'proc.nice', 'F' => 'proc.follow'];
+        $out = [];
+        foreach ($want as [$key, $shown]) {
+            if (!$shown) {
+                continue;
+            }
+            $text = self::keyText(Lang::t($labels[$key]), $key);
+            $out[] = [$key, $x, $text];
+            $x += 2 + Width::string($text);
+        }
+
+        return $out;
+    }
+
+    /**
+     * btop's `hi_color + key + t_color + rest` labels: the key replaces the
+     * label's first letter when they match case-insensitively (`k`ill,
+     * `K`ill with vim_keys, `N`ice); a translated label that starts
+     * elsewhere gets the key in front of it.
+     */
+    private static function keyText(string $label, string $key): string
+    {
+        $first = mb_substr($label, 0, 1);
+
+        return mb_strtolower($first) === mb_strtolower($key) ? $key . mb_substr($label, 1) : $key . ' ' . $label;
+    }
+
+    /** The coloured inner text of an action button: key in `$hi`, the rest in `$t`. */
+    private static function keyInner(string $text, string $hi, string $t): string
+    {
+        return $hi . mb_substr($text, 0, 1) . $t . mb_substr($text, 1);
     }
 
     /** The graph family for proc mini-graphs (graph_symbol_proc, tty → tty). */
@@ -261,6 +361,9 @@ final class ProcView
         if ($showOmit) {
             self::embed($r, $sortPos - 42, $y, ($config->bool('proc_filter_containers') ? self::BOLD : '') . FrameBuilder::hotkey(Lang::t('proc.omit_ctr'), 'O', $ink), $line, $f->border, false);
         }
+        if ($W > 60 + $sortLen) {
+            self::embed($r, $sortPos - 32, $y, ($config->bool('pause_proc_list') ? self::BOLD : '') . FrameBuilder::hotkey(Lang::t('proc.pause'), 'u', $ink), $line, $f->border, false);
+        }
         if ($W > 55 + $sortLen) {
             self::embed($r, $sortPos - 25, $y, ($config->bool('proc_per_core') ? self::BOLD : '') . FrameBuilder::hotkey(Lang::t('proc.per_core'), 'c', $ink), $line, $f->border, false);
         }
@@ -282,7 +385,7 @@ final class ProcView
     }
 
     /** select / info buttons and the location counter (btop_draw.cpp:1959-1985, 2190-2194). */
-    private static function paintBottomRow(Region $r, PanelFrame $f, ProcSelection $sel, int $numpids, int $selectMax): void
+    private static function paintBottomRow(Region $r, PanelFrame $f, ProcSelection $sel, int $numpids, int $selectMax, bool $following, int $followRow = 0): void
     {
         $ink = $f->ink;
         $W = $r->width();
@@ -301,8 +404,14 @@ final class ProcView
         $x = 1;
         $x += self::embed($r, $x, $y, self::BOLD . $up . $title . ' ' . Lang::t('proc.select') . ' ' . $down, $line, $f->border, true);
         self::embed($r, $x, $y, self::BOLD . $tColor . Lang::t('proc.info') . ' ' . $hiColor . '↵', $line, $f->border, true);
+        foreach (self::actionButtons($W, $f->config, false) as [$key, $bx, $text]) {
+            $bold = $key !== 'F' || $following ? self::BOLD : '';
+            self::embed($r, $bx, $y, $bold . self::keyInner($text, $hiColor, $tColor), $line, $f->border, true);
+        }
 
-        $location = ($sel->start + $sel->selected) . '/' . $numpids;
+        // btop: `start + (follow_process ? followed : selected)` — the
+        // followed row counts even while the detailed view selects nothing.
+        $location = ($sel->start + ($following ? $followRow : $sel->selected)) . '/' . $numpids;
         $len = strlen($location);
         $at = $W - 3 - max(9, $len);
         $r->put($at, $y, str_repeat(Symbols::H_LINE, max(0, 9 - $len)), $line);
@@ -360,11 +469,15 @@ final class ProcView
         $memTotal = (int) $ctx['memTotal'];
         $memPct = $memTotal > 0 ? $e->mem * 100 / $memTotal : 0.0;
         $isSelected = $lc + 1 === $selected;
+        $isFollowed = $ctx['followed'] !== null && $ctx['followed'] === $p->pid;
         $main = $ink->fg('main_fg');
         $inactive = $ink->fg('inactive_fg');
 
-        if ($isSelected) {
-            $hl = $ink->bg('selected_bg') . $ink->fg('selected_fg') . self::BOLD;
+        if ($isSelected || $isFollowed) {
+            // btop: the followed row wins over the selection colours.
+            $hl = $isFollowed
+                ? $ink->bg('followed_bg') . $ink->fg('followed_fg') . self::BOLD
+                : $ink->bg('selected_bg') . $ink->fg('selected_fg') . self::BOLD;
             $r->fill(Rect::new(1, $y, $W - 2, 1), $hl);
             $g = $c = $m = $t = $end = $hl;
             $underlay = $glyph = $cpuS = $hl;
@@ -451,7 +564,7 @@ final class ProcView
     }
 
     /** The detailed-view box (btop_draw.cpp:1830-1880, 2002-2036; #1546 cwd). */
-    private static function paintDetail(Region $r, PanelFrame $f, DetailState $d, ProcSelection $sel, array $rows, int $memTotal, int $cores): void
+    private static function paintDetail(Region $r, PanelFrame $f, DetailState $d, ProcSelection $sel, array $rows, int $memTotal, int $cores, ?int $followed = null): void
     {
         $ink = $f->ink;
         $config = $f->config;
@@ -488,6 +601,15 @@ final class ProcView
         $r->put($dgw, 8, $border->seam(true, true, true, false), $line);
         for ($i = 1; $i < 8; $i++) {
             $r->put($dgw, $i, Symbols::V_LINE, $ink->fg('div_line'));
+        }
+
+        // terminate / kill / signals / nice / follow (btop_draw.cpp:1843-1869):
+        // live only while the detailed process itself is the target.
+        $tColor = !$alive || $sel->selected > 0 ? $inactive : $title;
+        $hiColor = !$alive || $sel->selected > 0 ? $tColor : $hiFg;
+        foreach (self::actionButtons($W, $config, true) as [$key, $bx, $text]) {
+            $bold = $key !== 'F' || $followed !== null ? self::BOLD : '';
+            self::embed($r, $bx, 0, $bold . self::keyInner($text, $hiColor, $tColor), $line, $border, false);
         }
 
         // hide ↵ (greyed while another row is selected).

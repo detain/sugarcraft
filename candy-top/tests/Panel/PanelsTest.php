@@ -13,6 +13,9 @@ use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\Panels;
 use SugarCraft\Top\Panel\PlaceholderPanel;
+use SugarCraft\Top\Panel\ProcPanel;
+use SugarCraft\Top\Collect\PosixProcessControl;
+use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Source\Fake\FakeCpu;
 use SugarCraft\Top\Source\Fake\FakeMemory;
 use SugarCraft\Top\Tests\Support\Harness;
@@ -33,6 +36,17 @@ final class PanelsTest extends TestCase
                 $this->assertSame($box, $panel->box());
             }
         }
+    }
+
+    public function testOnlyTheLiveRosterCanSignalRealProcesses(): void
+    {
+        $fake = Panels::standard(Harness::host(), Config::new(), true)['proc'];
+        $this->assertInstanceOf(ProcPanel::class, $fake);
+        $this->assertInstanceOf(FakeProcessControl::class, $fake->processControl(), '--fake pids are invented');
+        $live = Panels::standard(Harness::host(), Config::new(), false)['proc'];
+        $this->assertInstanceOf(ProcPanel::class, $live);
+        $this->assertInstanceOf(PosixProcessControl::class, $live->processControl());
+        $this->assertInstanceOf(FakeProcessControl::class, ProcPanel::new(FakeMemory::new())->processControl(), 'the default is inert');
     }
 
     public function testCollectSamplesOffTheUpdatePathAndUpdateStoresIt(): void

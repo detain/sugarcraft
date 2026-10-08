@@ -1,4 +1,4 @@
-╭─┐⁴proc┌┐filter┌────────────────────────┐Omit ctr┌───────┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─╮
+╭─┐⁴proc┌┐filter┌────────────────────────┐Omit ctr┌┐pause┌┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─╮
 │    Pid: Program:         Command:           Threads: User:        IO/R   IO/W  Mem%       Cpu%  │
 │       2 kthreadd                                   1 root            -      -    0% ⣀⣀⣀⣀⣀  0.0  │
 │     880 postgres         postgres -D /var/lib/p    3 postgres     117K    36K  1.3% ⣀⣀⣀⣀⣀  5.9  │
@@ -31,4 +31,4 @@
 │                                                                                                 │
 │                                                                                                 │
 │                                                                                                 │
-╰┘↑ select ↓└┘info ↵└───────────────────────────────────────────────────────────────────────┘1/13└╯
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└┘Follow└───────────────────────────────┘1/13└╯

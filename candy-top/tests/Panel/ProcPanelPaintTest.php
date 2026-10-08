@@ -135,6 +135,10 @@ final class ProcPanelPaintTest extends TestCase
         yield 'detailed view' => ['detail-120x40', 120, 40, [], ['down', 'down', 'enter']];
         yield 'filtering' => ['filter-120x40', 120, 40, [], ['f', 'o']];
         yield 'narrow basename' => ['narrow-80x24', 80, 24, ['proc_command_basename' => true, 'proc_cpu_graphs' => false], ['down']];
+        // Phase P-F1: the paused / following banner and the action buttons.
+        yield 'following' => ['following-120x40', 120, 40, [], ['down', 'down', 'down', 'F']];
+        yield 'paused' => ['paused-120x40', 120, 40, [], ['u']];
+        yield 'detail following' => ['detail-following-180x50', 180, 50, [], ['down', 'enter', 'u']];
     }
 
     /**
@@ -175,6 +179,38 @@ final class ProcPanelPaintTest extends TestCase
         $far = $s->style($box->x + 8, $box->y + 14);
         $this->assertNotSame($near, $far);
         $this->assertSame(Surface::canonical($ink->gradient('proc', 0)), $near, 'calc 0 on the row below the bar (btop off-by-one)');
+    }
+
+    public function testFollowedRowAndBannerColours(): void
+    {
+        $ink = Ink::new(ThemeConfig::new());
+        [$s, $box, $panel] = self::painted(120, 40, [], ['down', 'down', 'F']);
+        $this->assertNotNull($panel->followedPid());
+        $followed = Surface::canonical($ink->bg('followed_bg') . $ink->fg('followed_fg') . "\x1b[1m");
+        $this->assertSame($followed, $s->style($box->x + 5, $box->y + 3), 'btop: the followed row wins over the selection colours');
+        $bannerY = $box->y + $box->height - 2;
+        $this->assertSame(Surface::canonical($ink->bg('proc_follow_bg') . $ink->fg('proc_banner_fg') . "\x1b[1m"), $s->style($box->x + 1, $bannerY));
+        $this->assertStringContainsString('Following process', self::crop($s, $box)[$box->height - 2]);
+
+        [$s, $box] = self::painted(120, 40, [], ['u']);
+        $this->assertSame(Surface::canonical($ink->bg('proc_pause_bg') . $ink->fg('proc_banner_fg') . "\x1b[1m"), $s->style($box->x + 1, $box->y + $box->height - 2));
+        $this->assertStringContainsString('Process list paused', self::crop($s, $box)[$box->height - 2]);
+
+        [$s, $box] = self::painted(120, 40, [], ['down', 'F', 'u']);
+        $this->assertSame(Surface::canonical($ink->bg('proc_banner_bg') . $ink->fg('proc_banner_fg') . "\x1b[1m"), $s->style($box->x + 1, $box->y + $box->height - 2));
+        $this->assertStringContainsString('Paused list and Following process', self::crop($s, $box)[$box->height - 2]);
+    }
+
+    public function testActionButtonsGreyOutWithoutASelection(): void
+    {
+        $ink = Ink::new(ThemeConfig::new());
+        [$s, $box] = self::painted(120, 40);
+        $row = self::crop($s, $box)[$box->height - 1];
+        $x = $box->x + mb_strpos($row, 'terminate');
+        $this->assertSame(Surface::canonical($ink->fg('inactive_fg') . "\x1b[1m"), $s->style($x, $box->bottom() - 1), 'nothing selected: inactive');
+        [$s, $box] = self::painted(120, 40, [], ['down']);
+        $this->assertSame(Surface::canonical($ink->fg('hi_fg') . "\x1b[1m"), $s->style($x, $box->bottom() - 1), 'the key letter lights up');
+        $this->assertSame(Surface::canonical($ink->fg('title') . "\x1b[1m"), $s->style($x + 1, $box->bottom() - 1));
     }
 
     public function testProcColorsOffMakesMetricsBoldInTheRowColor(): void

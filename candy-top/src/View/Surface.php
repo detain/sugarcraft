@@ -168,6 +168,23 @@ final class Surface
         }
     }
 
+    /**
+     * Re-style every cell as `$sgr`, keeping the glyphs — btop's overlay
+     * backdrop (btop.cpp Runner: `Fx::ub + Theme::c("inactive_fg") +
+     * Fx::uncolor(output)`): every colour and attribute of the frame is
+     * stripped and the whole frame is redrawn in one dim colour under the
+     * menu.
+     */
+    public function dim(string $sgr): void
+    {
+        $sgr = self::canonical($sgr);
+        foreach ($this->cells as $y => $row) {
+            foreach ($row as $x => $cell) {
+                $this->cells[$y][$x][1] = $sgr;
+            }
+        }
+    }
+
     /** Glyph at ($x, $y): '' for the right half of a wide cluster. */
     public function glyph(int $x, int $y): string
     {

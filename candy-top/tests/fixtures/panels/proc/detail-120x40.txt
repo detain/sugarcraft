@@ -1,4 +1,4 @@
-╭─┐5120┌┐containerd-┌─┬─────────────────────────────────┐hide ↵┌─╮
+╭─┐5120┌┐containerd-┌─┬─┐terminate┌┐kill┌┐signals┌┐Nice┌┐hide ↵┌─╮
 │81.6%               ⡇│   Status:  Elapsed:    IO/R:     IO/W:   │
 │                    ⣷│  Sleeping  02:29:24  20.0 MiB  5.00 MiB  │
 │C                   ⣿│                                          │
@@ -23,5 +23,5 @@
 │       2 kthreadd                       root     0B ⣀⣀⣀⣀⣀  0.0  │
 │                                                                │
 │                                                                │
-│                                                                │
-╰┘↑ select ↓└┘info ↵└──────────────────────────────────────┘0/13└╯
+│                       Following process                        │
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└──────┘2/13└╯

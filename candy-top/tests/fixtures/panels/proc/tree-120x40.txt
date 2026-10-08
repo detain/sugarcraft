@@ -1,4 +1,4 @@
-╭─┐⁴proc┌┐filter┌─────────────┐per-core┌┐reverse┌┐tree┌┐← pid →┌─╮
+╭─┐⁴proc┌┐filter┌──────┐pause┌┐per-core┌┐reverse┌┐tree┌┐← pid →┌─╮
 │Tree:                                   User:  MemB       Cpu%  │
 │[-]─1 systemd (init)                    root   125M ⣀⣀⣀⣠⣤ 42.5  │
 │ │ [+]─412 sshd (sshd:)                 root   2.3G ⣀⣀⣀⣀⣠ 47.7  │
@@ -24,4 +24,4 @@
 │                                                                │
 │                                                                │
 │                                                                │
-╰┘↑ select ↓└┘info ↵└──────────────────────────────────────┘2/10└╯
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└──────┘2/10└╯

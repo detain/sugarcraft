@@ -15,20 +15,30 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View as CoreView;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\InvalidOptionValue;
+use SugarCraft\Top\Input\KeyName;
 use SugarCraft\Top\Msg\ClockTickMsg;
 use SugarCraft\Top\Msg\DataTickMsg;
+use SugarCraft\Top\Msg\OpenOverlayMsg;
+use SugarCraft\Top\Msg\PaletteMsg;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Msg\SetOptionMsg;
 use SugarCraft\Top\Msg\UpdateStepMsg;
+use SugarCraft\Top\Overlay\Menus;
+use SugarCraft\Top\Overlay\Overlay;
+use SugarCraft\Top\Overlay\OverlayContext;
+use SugarCraft\Top\Overlay\OverlayStack;
+use SugarCraft\Top\Panel\ClickCapture;
 use SugarCraft\Top\Panel\ClockReserve;
 use SugarCraft\Top\Panel\Panel;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\PanelResult;
 use SugarCraft\Top\Theme\Palette;
+use SugarCraft\Top\Theme\ThemeRegistry;
 use SugarCraft\Top\View\ClockFormat;
 use SugarCraft\Top\View\FrameBuilder;
 use SugarCraft\Top\View\Ink;
@@ -51,13 +61,25 @@ use SugarCraft\Top\View\Surface;
  * under 200 ms ago; the press time is read in a Cmd ({@see UpdateStepMsg}).
  *
  * Input precedence (full rule on {@see Panel}): `ctrl+c` always quits.
- * Behind the size notice only `q` and `1`-`4` act. Otherwise a visible
+ * Behind the size notice only `q` and `1`-`4` act. Otherwise an open menu
+ * ({@see Overlay} on top of the App's {@see OverlayStack}, btop's
+ * `Menu::active`) takes every key and mouse event. Otherwise a visible
  * panel reporting {@see Panel::modal()} (btop's open proc filter) gets
  * every key and only left clicks, ahead of the globals; else every key is
  * offered to the visible panels ({@see Panel::capturesKey()}, layout
  * order) and the first that claims it gets it alone — btop's proc box owns
  * `+`/`-`/`=` while proc_tree is on. Only unclaimed keys reach the global
- * `q`, `1`-`4`, `+`/`-` handling, then the broadcast.
+ * `q`, `1`-`4`, `+`/`-` handling, then the broadcast. A bare left click
+ * first hits the App's own cpu-title buttons (`menu`, `-`, `+`), then the
+ * panels' mapped buttons ({@see ClickCapture}: the owner gets it alone,
+ * btop's mouse_mappings), and only an unmapped click is broadcast.
+ *
+ * Menus (phase P-F1, btop_menu.cpp): `escape`/`m` open the main menu,
+ * `f1`/`?`/`h` (`H` with vim_keys) help, `f2`/`o` options; a panel asks for
+ * one through {@see PanelResult::$overlay}, a Cmd through
+ * {@see OpenOverlayMsg}. While a menu is open the frame is painted dimmed
+ * (btop's uncolor + inactive_fg backdrop) and the menu on top. A refused
+ * `1`-`4` toggle or shown_boxes write opens btop's size-error box.
  *
  * Config channel: panels get a fresh {@see PanelContext} (current Config,
  * Layout and their box) on every input call and write options through
@@ -91,6 +113,12 @@ final class App implements Model
     /** btop `last_press >= time_ms() - 200`. */
     public const HOLD_WINDOW_SEC = 0.2;
 
+    /** The open menus (btop Menu::menuMask); only the top one is shown and gets input. */
+    public readonly OverlayStack $overlays;
+
+    /** @var \Closure(Config): Palette loads the theme a config asks for (file I/O: Cmds only). */
+    private readonly \Closure $themes;
+
     /**
      * @param array<string, Panel> $panels keyed by box name
      */
@@ -110,13 +138,19 @@ final class App implements Model
         private readonly string $lastKey = '',
         private readonly int $keyRun = 0,
         private readonly ?float $lastStepAt = null,
+        ?OverlayStack $overlays = null,
+        ?\Closure $themes = null,
+        private readonly ?Surface $backdrop = null,
     ) {
+        $this->overlays = $overlays ?? OverlayStack::new();
+        $this->themes = $themes ?? self::systemThemes();
     }
 
     /**
      * @param array<string, Panel> $panels  from {@see Panel\Panels::standard()}
      * @param ?\Closure(): ClockTickMsg $clock reads wall time + uptime; null = the live system
      * @param ?ColorProfile $profile null = derived from config (truecolor / tty_mode)
+     * @param ?\Closure(Config): Palette $themes theme loader for runtime theme changes; null = {@see systemThemes()}
      */
     public static function start(
         Config $config,
@@ -125,10 +159,32 @@ final class App implements Model
         array $panels,
         ?\Closure $clock = null,
         ?ColorProfile $profile = null,
+        ?\Closure $themes = null,
     ): self {
         $profile ??= self::profileFor($config);
 
-        return new self($config, Ink::new($palette, $profile), $host, $panels, $clock ?? self::systemClock());
+        return new self($config, Ink::new($palette, $profile), $host, $panels, $clock ?? self::systemClock(), themes: $themes);
+    }
+
+    /**
+     * The live theme loader: the theme `$config` names, the TTY theme while
+     * tty_mode is on (btop Theme::setTheme), read through
+     * {@see ThemeRegistry}. Only ever called inside a Cmd.
+     *
+     * @return \Closure(Config): Palette
+     */
+    public static function systemThemes(): \Closure
+    {
+        return static fn (Config $c): Palette => ThemeRegistry::new()->load($c->colorTheme(), $c->bool('theme_background'), $c->ttyMode());
+    }
+
+    /**
+     * What decides the palette: tty_mode, color_theme, theme_background.
+     * A config change that moves it reloads the theme ({@see applyConfig()}).
+     */
+    public static function themeKey(Config $config): string
+    {
+        return ($config->ttyMode() ? 'tty' : 'color') . "\0" . $config->colorTheme() . "\0" . ($config->bool('theme_background') ? '1' : '0');
     }
 
     /**
@@ -165,8 +221,10 @@ final class App implements Model
     {
         if ($msg instanceof WindowSizeMsg) {
             $next = $this->mutate(cols: max(0, $msg->cols), rows: max(0, $msg->rows))->relayout();
+            [$next, $cmd] = $next->broadcast($msg);
 
-            return $next->broadcast($msg);
+            // btop repaints everything once on a resize, menu or not.
+            return [$next->settledBackdrop(true), $cmd];
         }
         if ($msg instanceof ClockTickMsg) {
             $delay = max(0.01, 1.0 - fmod($msg->time, 1.0));
@@ -191,6 +249,13 @@ final class App implements Model
         if ($msg instanceof SetOptionMsg) {
             return $this->applyOptions([$msg->key => $msg->value]);
         }
+        if ($msg instanceof OpenOverlayMsg) {
+            return [$this->withOverlay($msg->overlay), null];
+        }
+        if ($msg instanceof PaletteMsg) {
+            // A load that raced a newer theme change is dropped.
+            return [$msg->key === self::themeKey($this->config) ? $this->withPalette($msg->palette) : $this, null];
+        }
         if ($msg instanceof KeyMsg) {
             $name = $msg->string();
             $self = $this->mutate(lastKey: $name, keyRun: $name === $this->lastKey ? $this->keyRun + 1 : 1);
@@ -200,9 +265,13 @@ final class App implements Model
             if (!$self->framed()) {
                 return $self->sizeNoticeKey($msg);
             }
+            // btop: while Menu::active every key goes to Menu::process.
+            if ($self->overlays->top()?->capturesInput() === true) {
+                return $self->deliverOverlay($msg);
+            }
             // A modal panel (a filter prompt) takes `q` and digits as text; a
             // mere claim never may, or a panel could disable quit / toggles.
-            $owner = $self->modalPanel() ?? (self::isGlobalKey($msg) ? null : $self->captor($msg));
+            $owner = $self->modalPanel() ?? ($self->isGlobalKey($msg) ? null : $self->captor($msg));
             if ($owner !== null) {
                 return $self->deliver($owner, $msg);
             }
@@ -215,19 +284,35 @@ final class App implements Model
             if (!$this->framed()) {
                 return [$this, null];
             }
+            if ($this->overlays->top()?->capturesInput() === true) {
+                // btop swaps to Menu::mouse_mappings; the menu resolves its own buttons.
+                $name = 'mouse:' . $msg->action->name . ':' . $msg->button->name;
+
+                return $this->mutate(lastKey: $name, keyRun: $name === $this->lastKey ? $this->keyRun + 1 : 1)->deliverOverlay($msg);
+            }
             $modal = $this->modalPanel();
             // btop_input.cpp:158-161: while filtering every mouse event but a
             // click becomes "" — never reaching history or any handler.
             if ($modal !== null && !self::isClick($msg)) {
                 return [$this, null];
             }
+            if ($modal === null && self::isClick($msg) && ($key = $this->chromeButton($msg)) !== null) {
+                // btop maps the click to the button's key, pushes THAT into
+                // Input::history and processes it as the key (`m` opens the
+                // main menu, `+`/`-` step — or expand under a proc tree claim).
+                return $this->update(new KeyMsg(KeyType::Char, $key));
+            }
             // btop pushes every mouse event ("mouse_click", "mouse_scroll_up",
             // ...) into Input::history too (btop_input.cpp:193-195), so a
             // mouse event breaks a held `+`/`-` run.
             $name = 'mouse:' . $msg->action->name . ':' . $msg->button->name;
             $self = $this->mutate(lastKey: $name, keyRun: $name === $this->lastKey ? $this->keyRun + 1 : 1);
+            if ($modal !== null) {
+                return $self->deliver($modal, $msg);
+            }
+            $owner = self::isClick($msg) ? $self->clickOwner($msg) : null;
 
-            return $modal !== null ? $self->deliver($modal, $msg) : $self->broadcast($msg);
+            return $owner !== null ? $self->deliver($owner, $msg) : $self->broadcast($msg);
         }
 
         return $this->broadcast($msg);
@@ -254,6 +339,28 @@ final class App implements Model
             return SizeError::surface($this->cols, $this->rows, $w, $h);
         }
 
+        $top = $this->overlays->top();
+        if ($top !== null && $this->backdrop !== null) {
+            // background_update off (always in tty mode): the frame under the
+            // menu stays as it was when the menu opened (btop pause_output).
+            $surface = clone $this->backdrop;
+            $top->paint($surface, $this->overlayContext());
+
+            return $surface;
+        }
+        $surface = $this->frame();
+        if ($top !== null) {
+            // btop Runner: `Fx::ub + inactive_fg + Fx::uncolor(output)` under the menu.
+            $surface->dim($this->ink->fg('inactive_fg'));
+            $top->paint($surface, $this->overlayContext());
+        }
+
+        return $surface;
+    }
+
+    /** The boxes, panels and clock without any menu. Caller checks framed(). */
+    private function frame(): Surface
+    {
         $surface = Surface::new($this->cols, $this->rows, $this->ink->base());
         FrameBuilder::paintChrome($surface, $this->layout, $this->ink, $this->config, $this->host, $this->preset);
         $border = FrameBuilder::border($this->config);
@@ -267,6 +374,80 @@ final class App implements Model
         FrameBuilder::paintClock($surface, $this->layout, $this->ink, $this->config, $this->clockText(), $this->clockReserved());
 
         return $surface;
+    }
+
+    /**
+     * btop's background_update: off — and always in tty mode — the frame
+     * behind an open menu is frozen (btop.cpp:664 pause_output, :759).
+     */
+    public function freezesBackdrop(): bool
+    {
+        return !$this->config->bool('background_update') || $this->config->ttyMode();
+    }
+
+    /**
+     * Keep the frozen backdrop in step with the stack: captured (dimmed)
+     * when a menu opens while {@see freezesBackdrop()}, re-captured on
+     * `$recapture` (a resize repaints once), dropped when the last menu
+     * closes.
+     */
+    private function settledBackdrop(bool $recapture): self
+    {
+        if ($this->overlays->isEmpty() || !$this->freezesBackdrop() || $this->layout === null || !$this->framed()) {
+            return $this->backdrop === null ? $this : $this->mutate(backdrop: null, backdropSet: true);
+        }
+        if ($this->backdrop !== null && !$recapture) {
+            return $this;
+        }
+        $frame = $this->frame();
+        $frame->dim($this->ink->fg('inactive_fg'));
+
+        return $this->mutate(backdrop: $frame, backdropSet: true);
+    }
+
+    /** The menu on top of the stack, or null when none is open. */
+    public function overlay(): ?Overlay
+    {
+        return $this->overlays->top();
+    }
+
+    /**
+     * Copy with `$overlay` opened on top — btop Menu::show. A terminal
+     * smaller than the overlay's minimum gets the size-error box instead
+     * ({@see OverlayStack::push()}).
+     */
+    public function withOverlay(Overlay $overlay): self
+    {
+        return $this->mutate(overlays: $this->overlays->push($overlay, $this->cols, $this->rows))->settledBackdrop(false);
+    }
+
+    /** The context an overlay is updated and painted with, built now. */
+    public function overlayContext(): OverlayContext
+    {
+        return new OverlayContext($this->config, $this->cols, $this->rows, $this->ink);
+    }
+
+    /**
+     * The App-owned cpu title buttons as btop maps them (0-based
+     * [x, y, w, h]): `m` (menu), `-` and `+` (update_ms). `p` (preset)
+     * arrives with phase P-F2.
+     *
+     * @return array<string, array{0: int, 1: int, 2: int, 3: int}>
+     */
+    public function chromeButtons(): array
+    {
+        $cpu = $this->framed() ? $this->layout?->box('cpu') : null;
+        if ($cpu === null || $this->layout?->cpuCores === null) {
+            return [];
+        }
+        $y = $this->layout->cpuBottom ? $cpu->bottom() - 1 : $cpu->y;
+        $len = strlen($this->config->updateMs() . 'ms');
+
+        return [
+            'm' => [$cpu->x + 11, $y, Width::string(Lang::t('button.menu')), 1],
+            '-' => [$cpu->x + $cpu->width - $len - 7, $y, 2, 1],
+            '+' => [$cpu->x + $cpu->width - 5, $y, 2, 1],
+        ];
     }
 
     /**
@@ -324,9 +505,11 @@ final class App implements Model
      * Swap in `$config` (options menu, presets — P-F; {@see SetOptionMsg}
      * from a panel). Layout follows it, and so does the colour profile when
      * truecolor / tty_mode change what {@see profileFor()} derives (an
-     * explicit start() profile survives any change that does not). The
-     * palette is NOT reloaded: a tty_mode flip that should swap to the TTY
-     * theme needs ThemeRegistry I/O, so P-F pairs it with withPalette(). A
+     * explicit start() profile survives any change that does not). When
+     * tty_mode, color_theme or theme_background change ({@see themeKey()})
+     * the returned Cmd also loads the theme the new config asks for — the
+     * TTY theme on a tty_mode flip (btop Theme::setTheme) — off the update
+     * path and installs it through a {@see PaletteMsg}. A
      * changed update_ms bumps {@see $generation} AND returns the re-armed
      * data tick, and boxes the new config shows that the old one hid are
      * sampled at once — so the returned Cmd MUST be dispatched: dropping it
@@ -342,12 +525,25 @@ final class App implements Model
         $ink = $profile !== self::profileFor($this->config) ? Ink::new($this->ink->palette(), $profile) : null;
         $next = $this->mutate(config: $config, ink: $ink, generation: $this->generation + ($periodChanged ? 1 : 0))->relayout();
         $cmds = [$periodChanged ? $next->dataTick() : null];
+        if (self::themeKey($config) !== self::themeKey($this->config)) {
+            $cmds[] = $next->themeCmd();
+        }
         foreach (array_diff($config->shownBoxes(), $before) as $box) {
             $cmds[] = ($next->panels[$box] ?? null)?->collect($next->context($box));
         }
         $cmds = array_values(array_filter($cmds));
 
         return [$next, $cmds === [] ? null : Cmd::batch(...$cmds)];
+    }
+
+    /** The Cmd that loads the theme the current config asks for. */
+    public function themeCmd(): \Closure
+    {
+        $themes = $this->themes;
+        $config = $this->config;
+        $key = self::themeKey($config);
+
+        return static fn (): Msg => new PaletteMsg($themes($config), $key);
     }
 
     /** The data-tick Cmd for the current period and generation. */
@@ -372,7 +568,10 @@ final class App implements Model
     /**
      * Validate and apply option writes in order (btop Config::set: a value
      * its validator rejects is never stored; the rest still apply), then
-     * route the result through {@see applyConfig()}.
+     * route the result through {@see applyConfig()}. A shown_boxes value
+     * that would not fit the terminal is refused like a `1`-`4` toggle
+     * (btop's options menu runs the same Term::get_min_size check) and
+     * opens the size-error box.
      *
      * @param array<string, bool|int|string> $set
      * @return array{0: self, 1: ?\Closure}
@@ -380,15 +579,23 @@ final class App implements Model
     public function applyOptions(array $set): array
     {
         $config = $this->config;
+        $refused = false;
         foreach ($set as $key => $value) {
             try {
-                $config = $config->with((string) $key, $value);
+                $next = $config->with((string) $key, $value);
             } catch (InvalidOptionValue) {
                 continue;
             }
+            if ($key === 'shown_boxes' && $this->cols > 0 && !FrameBuilder::fits($this->cols, $this->rows, $next->shownBoxes())) {
+                $refused = true;
+                continue;
+            }
+            $config = $next;
         }
+        // Behind the size notice a refused write opens nothing, like a refused toggle.
+        $app = $refused && $this->framed() ? $this->withOverlay(Menus::sizeError()) : $this;
 
-        return $config === $this->config ? [$this, null] : $this->applyConfig($config);
+        return $config === $this->config ? [$app, null] : $app->applyConfig($config);
     }
 
     /** True when the shown boxes are laid out and painted (no size notice). */
@@ -407,8 +614,54 @@ final class App implements Model
     {
         $result = $panel->update($msg, $this->context($panel->box()));
         [$next, $applied] = $this->withPanel($result->panel)->applyOptions($result->set);
+        if ($result->overlay !== null) {
+            $next = $next->withOverlay($result->overlay);
+        }
 
         return [$next, self::batch($result->cmd, $applied)];
+    }
+
+    /**
+     * Hand `$msg` to the top overlay (btop Menu::process): store its next
+     * state (null closes it), open what it switched to, apply its writes.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function deliverOverlay(Msg $msg): array
+    {
+        $top = $this->overlays->top();
+        if ($top === null) {
+            return [$this, null];
+        }
+        $result = $top->update($msg, $this->overlayContext());
+        $next = $this->mutate(overlays: $this->overlays->replaceTop($result->overlay, $this->cols, $this->rows))->settledBackdrop(false);
+        if ($result->push !== null) {
+            $next = $next->withOverlay($result->push);
+        }
+        [$next, $applied] = $next->applyOptions($result->set);
+
+        return [$next, self::batch($result->cmd, $applied)];
+    }
+
+    /** The first visible panel (layout order) whose mapped button `$msg` hits, or null. */
+    private function clickOwner(MouseMsg $msg): ?Panel
+    {
+        foreach (array_keys($this->layout?->ordered() ?? []) as $box) {
+            $panel = $this->panels[$box] ?? null;
+            if ($panel instanceof ClickCapture && $panel->capturesClick($msg, $this->context($box))) {
+                return $panel;
+            }
+        }
+
+        return null;
+    }
+
+    /** The App-owned title button under `$msg` ({@see chromeButtons()}), or null. */
+    private function chromeButton(MouseMsg $msg): ?string
+    {
+        $key = KeyName::mapped($msg, $this->chromeButtons());
+
+        return in_array($key, ['m', '-', '+'], true) ? $key : null;
     }
 
     /** The first visible panel (layout order) that owns all input, or null. Caller checks framed(). */
@@ -437,11 +690,27 @@ final class App implements Model
         return null;
     }
 
-    /** `q` or a box toggle `1`-`4`: never offered to {@see Panel::capturesKey()}. */
-    private static function isGlobalKey(KeyMsg $key): bool
+    /**
+     * btop's global keys, checked before any box (btop_input.cpp:218-238):
+     * `q`, the menu keys and the box toggles `1`-`4` — never offered to
+     * {@see Panel::capturesKey()}.
+     */
+    private function isGlobalKey(KeyMsg $key): bool
     {
         return $key->string() === 'q'
+            || in_array(KeyName::key($key), $this->menuKeys(), true)
             || ($key->type === KeyType::Char && !$key->ctrl && !$key->alt && isset(self::BOX_KEYS[$key->rune]));
+    }
+
+    /**
+     * The keys that open a menu: escape/m main, f1/?/h help (`H` with
+     * vim_keys, where `h` is left), f2/o options.
+     *
+     * @return list<string>
+     */
+    private function menuKeys(): array
+    {
+        return ['escape', 'm', 'f1', '?', $this->config->bool('vim_keys') ? 'H' : 'h', 'f2', 'o'];
     }
 
     /** btop "mouse_click": a bare left-button press (`[<0;...M`). */
@@ -465,7 +734,7 @@ final class App implements Model
             return [$this, Cmd::quit()];
         }
         if ($key->type === KeyType::Char && !$key->ctrl && !$key->alt && isset(self::BOX_KEYS[$key->rune])) {
-            return $this->toggleBox(self::BOX_KEYS[$key->rune]);
+            return $this->toggleBox(self::BOX_KEYS[$key->rune], false);
         }
 
         return [$this, null];
@@ -477,11 +746,22 @@ final class App implements Model
         if ($key->string() === 'q') {
             return [$this, Cmd::quit()];
         }
+        $name = KeyName::key($key);
+        $help = $this->config->bool('vim_keys') ? 'H' : 'h';
+        $menu = match (true) {
+            in_array($name, ['escape', 'm'], true) => Menus::main(),
+            in_array($name, ['f1', '?', $help], true) => Menus::help(),
+            in_array($name, ['f2', 'o'], true) => Menus::options(),
+            default => null,
+        };
+        if ($menu !== null) {
+            return [$this->withOverlay($menu), null];
+        }
         if ($key->type !== KeyType::Char || $key->ctrl || $key->alt) {
             return null;
         }
         if (isset(self::BOX_KEYS[$key->rune])) {
-            return $this->toggleBox(self::BOX_KEYS[$key->rune]);
+            return $this->toggleBox(self::BOX_KEYS[$key->rune], true);
         }
         if (!in_array($key->rune, ['+', '=', '-'], true) || !in_array('cpu', $this->config->shownBoxes(), true)) {
             return null;
@@ -519,13 +799,15 @@ final class App implements Model
     /**
      * btop Config::toggle_box: append or remove `$box`; refused when the
      * result is empty (shown_boxes must name a box) or would not fit the
-     * terminal. Any toggle drops the active preset. A box toggled ON is
+     * terminal — the latter opens btop's size-error box when `$notify`
+     * (a framed toggle; behind the size notice btop's resize loop just
+     * ignores it). Any toggle drops the active preset. A box toggled ON is
      * sampled at once (btop Runner::run("all", false, true) after the
      * toggle) instead of sitting empty until the next data tick.
      *
      * @return array{0: self, 1: ?\Closure}
      */
-    private function toggleBox(string $box): array
+    private function toggleBox(string $box, bool $notify): array
     {
         $boxes = $this->config->shownBoxes();
         $pos = array_search($box, $boxes, true);
@@ -534,8 +816,11 @@ final class App implements Model
         } else {
             array_splice($boxes, $pos, 1);
         }
-        if ($boxes === [] || ($this->cols > 0 && !FrameBuilder::fits($this->cols, $this->rows, $boxes))) {
+        if ($boxes === []) {
             return [$this, null];
+        }
+        if ($this->cols > 0 && !FrameBuilder::fits($this->cols, $this->rows, $boxes)) {
+            return [$notify ? $this->withOverlay(Menus::sizeError()) : $this, null];
         }
         try {
             $config = $this->config->with('shown_boxes', implode(' ', $boxes));
@@ -622,6 +907,9 @@ final class App implements Model
         ?string $lastKey = null,
         ?int $keyRun = null,
         ?float $lastStepAt = null,
+        ?OverlayStack $overlays = null,
+        ?Surface $backdrop = null,
+        bool $backdropSet = false,
     ): self {
         return new self(
             $config ?? $this->config,
@@ -639,6 +927,9 @@ final class App implements Model
             $lastKey ?? $this->lastKey,
             $keyRun ?? $this->keyRun,
             $lastStepAt ?? $this->lastStepAt,
+            $overlays ?? $this->overlays,
+            $this->themes,
+            $backdropSet ? $backdrop : $this->backdrop,
         );
     }
 }

@@ -40,7 +40,7 @@ use SugarCraft\Top\View\Region;
  *
  * Mirrors aristocratos/btop Mem::draw (src/btop_draw.cpp:1237-1389).
  */
-final class MemPanel implements Panel
+final class MemPanel implements Panel, ClickCapture
 {
     /** Every series the view can graph (btop mem.percent keys + #1739). */
     public const SERIES = ['used', 'available', 'cached', 'free', 'swap_used', 'swap_free', 'swap_used_disk', 'zswap'];
@@ -113,6 +113,12 @@ final class MemPanel implements Panel
         }
 
         return new PanelResult($this);
+    }
+
+    /** A click on the `disks` / `io` label belongs to this box alone (App click map). */
+    public function capturesClick(MouseMsg $msg, PanelContext $context): bool
+    {
+        return self::button($msg, $context) !== null;
     }
 
     public function paint(Region $region, PanelFrame $frame): void

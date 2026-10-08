@@ -33,6 +33,9 @@ use SugarCraft\Top\View\Region;
  *   1. Behind the "terminal size too small" notice no panel is painted and
  *      only `q` and the box toggles `1`-`4` act (btop.cpp:180-198); every
  *      other key and every mouse event is dropped.
+ *   1b. MENU (phase P-F1): while an App overlay is open
+ *      ({@see \SugarCraft\Top\Overlay\Overlay}, btop `Menu::active`)
+ *      every key and mouse event goes to it and no panel sees any.
  *   2. MODAL: the first visible panel (layout order) whose {@see modal()}
  *      returns true receives every key ALONE — `q`, `1`-`4`, `+`/`-` and
  *      `escape` included — ahead of the App's global keys, and the only
@@ -40,14 +43,20 @@ use SugarCraft\Top\View\Region;
  *      every other mouse event — right/middle/modified presses included —
  *      is dropped (btop's proc filter: proc_filtering is checked before
  *      anything else and mouse input collapses to "mouse_click").
- *   3. CLAIM: otherwise every key except the globals `q` and `1`-`4` is
- *      offered to the visible panels in layout order through
- *      {@see capturesKey()} — those two are never asked, so no claim can
- *      disable quit or the box toggles; the first that returns true
+ *   3. CLAIM: otherwise every key except the globals `q`, the menu keys
+ *      and `1`-`4` is offered to the visible panels in layout order through
+ *      {@see capturesKey()} — the globals are never asked, so no claim can
+ *      disable quit, the menus or the box toggles; the first that returns true
  *      receives it ALONE via {@see update()} and the App does nothing else
  *      with it — btop's proc box claims `+`/`-`/`=` while proc_tree is on
  *      (btop_input.cpp:491).
- *   4. Unclaimed keys reach the App's globals (`q`, `1`-`4`, `+`/`-`/`=`);
+ *   3b. CLICK MAP: a bare left press first hits the App's cpu-title
+ *      buttons (`menu`, `-`, `+`), then the visible panels implementing
+ *      {@see ClickCapture} (layout order); the first whose painted button
+ *      it lands on receives it ALONE (btop resolves mouse_mappings before
+ *      Input::process). Unmapped clicks are broadcast as before.
+ *   4. Unclaimed keys reach the App's globals (`q`, `1`-`4`, the menu keys
+ *      `escape`/`m`/`f1`/`?`/`h`/`f2`/`o`, `+`/`-`/`=`);
  *      a key the App did not consume, every mouse event, WindowSizeMsg
  *      (after the App re-laid out) and any other Msg is broadcast to every
  *      panel — ignore what you do not handle and return
@@ -58,6 +67,10 @@ use SugarCraft\Top\View\Region;
  * CURRENT Layout and this panel's own box (null while hidden), built at the
  * moment of the call — so it already reflects toggles, option writes and
  * resizes. paint() sees the same on {@see PanelFrame}. Never cache either.
+ *
+ * Menus: a panel never draws a popup itself; it returns the menu in
+ * {@see PanelResult::$overlay} (P-E's signal / renice menus) and the App
+ * opens it.
  *
  * Config writes: return them in {@see PanelResult::$set}. The App applies
  * them synchronously inside the same update() — validated with
