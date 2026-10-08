@@ -12,7 +12,14 @@ namespace SugarCraft\Bounce\Easing;
  * This ensures the easing is monotonic in t even when control points would
  * otherwise cause non-monotonic behaviour.
  *
+ * The named family beyond the four CSS keywords ships the ORIGINAL (pre-2022)
+ * easings.net cubic-bezier approximation table; the site's 2022 redesign
+ * revised several rows. Do not mix generations — the easeInOutCirc repair in
+ * lane A3b restored the original-table Circ value precisely so the family
+ * stays internally consistent with its Quint/Expo neighbours.
+ *
  * @see https://www.w3.org/TR/css-easing-3/#cubic-bezier-algo
+ * @see https://github.com/ai/easings.net (2022 table in src/easings.yml; pre-2022 table mirrored at https://30secondsofcode.org/css/s/easing-variables/)
  */
 final class CubicBezier
 {
@@ -39,6 +46,17 @@ final class CubicBezier
      */
     public function __construct(float $x1, float $y1, float $x2, float $y2)
     {
+        // Fail fast on non-finite control points. The range check below uses
+        // bare < / > comparisons, which are ALWAYS false for NAN — without
+        // this guard a NaN point sails through, every solve degenerates to a
+        // NaN progress value, and the corruption surfaces frames later far
+        // from its cause.
+        if (!is_finite($x1) || !is_finite($y1) || !is_finite($x2) || !is_finite($y2)) {
+            throw new \InvalidArgumentException(
+                "cubic-bezier control points must be finite, got [$x1, $y1, $x2, $y2]"
+            );
+        }
+
         if ($x1 < 0.0 || $x1 > 1.0 || $x2 < 0.0 || $x2 > 1.0) {
             throw new \InvalidArgumentException(
                 "CubicBezier control points must have x-values in [0, 1]; got x1={$x1}, x2={$x2}"
@@ -77,6 +95,13 @@ final class CubicBezier
 
     public static function easeInQuint(): self      { return new self(0.86, 0.00, 0.07, 0.00); }
     public static function easeOutQuint(): self     { return new self(0.23, 1.00, 0.32, 1.00); }
+
+    /**
+     * Pre-2022 easings.net approximation: cubic-bezier(0.86, 0, 0.07, 1).
+     * (The site's 2022 redesign table lists (0.83, 0, 0.17, 1) instead; this
+     * preset family consistently ships the original table, see the class
+     * docblock.)
+     */
     public static function easeInOutQuint(): self    { return new self(0.86, 0.00, 0.07, 1.00); }
 
     public static function easeInExpo(): self        { return new self(0.95, 0.05, 0.80, 0.00); }
@@ -85,12 +110,32 @@ final class CubicBezier
 
     public static function easeInCirc(): self        { return new self(0.60, 0.04, 0.98, 0.34); }
     public static function easeOutCirc(): self      { return new self(0.16, 1.00, 0.30, 1.00); }
-    public static function easeInOutCirc(): self      { return new self(0.86, 0.00, 0.07, 1.00); }
+
+    /**
+     * Pre-2022 easings.net approximation: cubic-bezier(0.785, 0.135, 0.15, 0.86).
+     *
+     * A3b repair: this row shipped byte-identical to {@see easeInOutQuint()}
+     * (0.86, 0, 0.07, 1) — a copy-paste error; the Quint row is the genuine
+     * table value, the Circ row was the corrupted one. Restored from the
+     * original easings.net approximation table (mirrored at
+     * https://30secondsofcode.org/css/s/easing-variables/ and
+     * https://github.com/NG-ZORRO/ng-zorro-antd default.less), of which every
+     * neighbouring preset here is a member.
+     */
+    public static function easeInOutCirc(): self      { return new self(0.785, 0.135, 0.150, 0.860); }
 
     // ─── Evaluation ───────────────────────────────────────────────────────
 
     /**
      * Evaluate the cubic bezier at normalized time $t ∈ [0, 1].
+     *
+     * Range honesty (A3b): designed for $t in [0, 1]; an out-of-range $t is
+     * NOT rejected and NOT clamped — the Newton solve walks the polynomial
+     * outside [0, 1] (the binary fallback stays inside it), so the result is
+     * a curve-dependent extrapolation. The RETURN value is likewise unclamped: control points with y
+     * outside [0, 1] (back/elastic style curves, e.g. the easeInOutBack
+     * family) legitimately overshoot beyond 0..1 progress, and clamping
+     * would flatten exactly the motion those presets exist to express.
      */
     public function evaluate(float $t): float
     {
@@ -181,9 +226,16 @@ final class CubicBezier
 
     private function sampleCurveDerivativeX(float $t): float
     {
-        // dx/dt = 3(t-1)( (2-t)x1 + (t-2)x2 )
-        $t1 = $t - 1.0;
-        $t2 = $t - 2.0;
-        return 3.0 * $t1 * ((2.0 - $t) * $this->x1 + $t2 * $this->x2);
+        // A3b repair: the previous spelling 3(t-1)((2-t)x1+(t-2)x2) is NOT
+        // d/dt of sampleCurveX() — e.g. at t=0 it returns -6·x1 where the true
+        // derivative is 3·x1, and it collapses to 0 for every x1===x2 curve.
+        // Closed form of x(t) = at³ + bt² + ct with the WebKit UnitBezier
+        // coefficients (the Newton step's slope must match the polynomial or
+        // the solver relies on the subdivision fallback to mask the damage).
+        $ax = 1.0 - 3.0 * $this->x2 + 3.0 * $this->x1;
+        $bx = 3.0 * $this->x2 - 6.0 * $this->x1;
+        $cx = 3.0 * $this->x1;
+
+        return (3.0 * $ax * $t + 2.0 * $bx) * $t + $cx;
     }
 }

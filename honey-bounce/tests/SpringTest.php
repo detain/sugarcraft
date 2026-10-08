@@ -139,4 +139,46 @@ final class SpringTest extends TestCase
         // After 0.5s: 1 - (1+ω*t)*e^(-ω*t) with ω=6, t=0.5 → 1 - 4*e^-3 ≈ 0.800852.
         $this->assertEqualsWithDelta(80.0852, $pos, 0.05);
     }
+
+    // ─── Lane A3b (re-verify 2026-10-08) ──────────────────────────────────
+
+    /**
+     * INF dampingRatio used to flow into the over-damped branch where
+     * 0·INF → NAN coefficients, poisoning EVERY later update() with NAN
+     * frames after the constructor — far from its cause.
+     */
+    public function testInfiniteDampingRatioThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Spring(1.0 / 60.0, 6.0, INF);
+    }
+
+    public function testNanAngularFrequencyThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Spring(1.0 / 60.0, NAN, 1.0);
+    }
+
+    public function testInfiniteDeltaTimeThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Spring(INF, 6.0, 1.0);
+    }
+
+    /**
+     * Negative dt integrates the oscillator backwards; exp() diverges.
+     * (Negative frequency/damping stay legal — clamped by max(0.0, ·).)
+     */
+    public function testNegativeDeltaTimeThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Spring(-1.0 / 60.0, 6.0, 1.0);
+    }
+
+    public function testZeroDeltaTimeIsStillAccepted(): void
+    {
+        $s = new Spring(0.0, 6.0, 1.0);
+        // dt=0 ⇒ identity coefficients: the state passes through untouched.
+        $this->assertSame([5.0, 2.0], $s->update(5.0, 2.0, 5.0));
+    }
 }
