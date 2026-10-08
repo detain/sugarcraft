@@ -100,7 +100,16 @@ final class GifDecoder implements Decoder
             [$decodeW, $decodeH] = [$cellsW * ($mode?->colsPerCell() ?? 1), $cellsH * ($mode?->rowsPerCell() ?? 2)];
         }
 
-        $this->frames = FlipDecoder::decode($source, $decodeW, $decodeH);
+        // A3b guard: candy-flip documents RuntimeException, but an older vendored
+        // copy (or a new crafted-header shape) could still leak a raw ValueError
+        // from imagecreatetruecolor(). Reel's decoder contract is RuntimeException
+        // (see FfmpegDecoder), so translate narrowly instead of letting the
+        // engine-level error class escape.
+        try {
+            $this->frames = FlipDecoder::decode($source, $decodeW, $decodeH);
+        } catch (\ValueError $e) {
+            throw new \RuntimeException("GIF decode failed: {$e->getMessage()}", 0, $e);
+        }
 
         // Best-effort time seek: all GIF frames are already in memory, so advance
         // the cursor to the frame at $startSec (clamped). GIF timing is per-frame,

@@ -16,6 +16,7 @@ return [
     'decoder.grid_too_small'   => 'candy-flip: rozměry mřížky buněk musí být kladné',
     'decoder.truncated'        => 'candy-flip: zkrácený soubor GIF',
     'decoder.screen_too_large' => 'candy-flip: rozměry obrazovky GIF překračují maximum ({max} pixelů)',
+    'decoder.screen_too_small' => 'candy-flip: rozměry obrazovky GIF musí být kladné',
     'cli.usage'                => 'Použití: candy-flip <gif> [solid|density]',
     'cli.no_autoload'          => 'candy-flip: nelze najít composer autoload.php',
 ];

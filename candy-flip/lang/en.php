@@ -16,6 +16,7 @@ return [
     'decoder.grid_too_small'   => 'candy-flip: cell grid dimensions must be positive',
     'decoder.truncated'        => 'candy-flip: truncated GIF',
     'decoder.screen_too_large' => 'candy-flip: GIF screen dimensions exceed maximum ({max} pixels)',
+    'decoder.screen_too_small' => 'candy-flip: GIF screen dimensions must be positive',
     'cli.usage'                => 'usage: candy-flip <gif> [solid|density]',
     'cli.no_autoload'          => 'candy-flip: cannot find composer autoload.php',
 ];

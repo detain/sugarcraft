@@ -16,6 +16,7 @@ return [
     'decoder.grid_too_small'   => 'candy-flip: wymiary siatki komórek muszą być dodatnie',
     'decoder.truncated'        => 'candy-flip: skrócony plik GIF',
     'decoder.screen_too_large' => 'candy-flip: wymiary ekranu GIF przekraczają maksimum ({max} pikseli)',
+    'decoder.screen_too_small' => 'candy-flip: wymiary ekranu GIF muszą być dodatnie',
     'cli.usage'                => 'Użycie: candy-flip <gif> [solid|density]',
     'cli.no_autoload'          => 'candy-flip: nie można znaleźć composer autoload.php',
 ];

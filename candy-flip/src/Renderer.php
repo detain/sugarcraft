@@ -100,7 +100,12 @@ final class Renderer
     }
 
     /**
-     * @internal For testing only — creates a Renderer with explicit adaptive constraints.
+     * @internal Creates a Renderer with explicit adaptive constraints.
+     *
+     * Not "for testing only" (A3b truth-flip): Player's ResizeMsg handler is a
+     * production caller (src/Player.php). Still internal API — pre-1.0, the
+     * public surface is new()/fromFile(); do not build on this from outside.
+     *
      * @param int<0, max> $rows
      * @param int<0, max> $cols
      */

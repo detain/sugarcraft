@@ -90,6 +90,15 @@ final class Decoder
         $screenW = $header['width'];
         $screenH = $header['height'];
 
+        // A zero-dimension logical screen (ord-parsed header bytes make 0 the
+        // only impossible-but-craftable value) cannot host a canvas:
+        // imagecreatetruecolor() below — and the static fallback renderer —
+        // would raise a raw ValueError, breaking the RuntimeException
+        // contract this method documents. Reject at the door.
+        if ($screenW <= 0 || $screenH <= 0) {
+            throw new \RuntimeException(Lang::t('decoder.screen_too_small'));
+        }
+
         // Static fallback — when no Image Descriptors were found.
         if ($header['frameInfos'] === []) {
             $info = [

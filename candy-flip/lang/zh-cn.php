@@ -16,6 +16,7 @@ return [
     'decoder.grid_too_small'   => 'candy-flip：单元格网格尺寸必须为正数',
     'decoder.truncated'        => 'candy-flip：GIF 文件被截断',
     'decoder.screen_too_large' => 'candy-flip：GIF 屏幕尺寸超过上限（{max} 像素）',
+    'decoder.screen_too_small' => 'candy-flip: GIF 屏幕尺寸必须为正数',
     'cli.usage'                => '用法：candy-flip <gif> [solid|density]',
     'cli.no_autoload'          => 'candy-flip：无法找到 composer autoload.php',
 ];
