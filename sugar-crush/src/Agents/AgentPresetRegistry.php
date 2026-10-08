@@ -525,7 +525,7 @@ final class AgentPresetRegistry
      * split is restated here rather than shared.
      *
      * A YAML list must hold strings. A number or a nested map inside it is not
-     * a name any consumer can match — {@see \SugarCraft\Crush\MCP\McpRouter::serverAllowed()}
+     * a name any consumer can match — {@see \SugarCraft\Mcp\McpRouter::serverAllowed()}
      * already throws on one at call time — so it is refused here, where the
      * failure can name the file and cost only that file.
      *

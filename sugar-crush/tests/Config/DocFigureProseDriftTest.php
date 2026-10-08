@@ -31,7 +31,7 @@ use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Hooks\ScriptHook;
-use SugarCraft\Crush\MCP\McpRouter;
+use SugarCraft\Mcp\McpRouter;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\HookContextFiles;
 use SugarCraft\Crush\Support\ProcessContainment;

@@ -8,6 +8,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use SugarCraft\Crush\Agents\AgentPreset;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Mcp\McpRouter as LibraryMcpRouter;
 
 final class McpClient
 {
@@ -456,7 +457,7 @@ final class McpClient
             }
             // Before the admission check, so a denied entry is neither
             // started nor recorded as trusted: the operator said no to it.
-            if (McpRouter::serverDenied($name, $this->denyPatterns)) {
+            if (LibraryMcpRouter::serverDenied($name, $this->denyPatterns)) {
                 $this->deniedServers[] = $name;
 
                 return null;
@@ -607,7 +608,7 @@ final class McpClient
         $tools = [];
 
         foreach ($this->servers as $name => $server) {
-            if (McpRouter::serverDenied($name, $this->denyPatterns)) {
+            if (LibraryMcpRouter::serverDenied($name, $this->denyPatterns)) {
                 continue;
             }
 
@@ -664,7 +665,7 @@ final class McpClient
             return in_array($serverName, $this->router()->resolveAllowedServers($this->agentPreset), true);
         }
 
-        return $this->unrestricted && !McpRouter::serverDenied($serverName, $this->denyPatterns);
+        return $this->unrestricted && !LibraryMcpRouter::serverDenied($serverName, $this->denyPatterns);
     }
 
     /**

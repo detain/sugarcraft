@@ -4,10 +4,22 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\MCP;
 
 use SugarCraft\Crush\Agents\AgentPreset;
+use SugarCraft\Mcp\McpRouter as LibraryMcpRouter;
 
 /**
- * Routes MCP tool access per-agent, respecting per-preset allowlists and
- * global wildcard deny patterns.
+ * PRODUCT ADAPTER — maps an AgentPreset onto the library router's law.
+ *
+ * The routing law itself (deny-before-allow, `fnmatch` globs, the raw-key
+ * both-sides doctrine, the fail-loud allowlist entry check) is canonical in
+ * {@see LibraryMcpRouter} (sugarcraft/sugar-mcp) since the lane-A2 fold;
+ * this class keeps only the product-coupled half that cannot live in a
+ * library: reading the allow-list out of an {@see AgentPreset}'s
+ * `mcpServers` field, merging `listTools()` over the surviving servers of
+ * THIS package's {@see McpServer} interface, and returning server NAMES
+ * (the shape the preset-facing product surfaces consume) where the library
+ * returns the keyed server objects. It is a mapping, not a fork: every
+ * membership question is delegated to the library's two public statics so
+ * the router view and the grant-resolution roster can never diverge.
  *
  * An agent preset's `mcpServers` field names only the servers that preset
  * actually needs. Wildcard deny patterns like "untrusted_*" block whole
@@ -75,36 +87,8 @@ final class McpRouter
 
         return array_values(array_filter(
             $serverNames,
-            fn(string $name): bool => !$this->matchesAnyDenyPattern($name)
+            fn(string $name): bool => !LibraryMcpRouter::serverDenied($name, $this->denyPatterns)
         ));
-    }
-
-    /**
-     * Check if a server name matches any deny pattern.
-     */
-    private function matchesAnyDenyPattern(string $serverName): bool
-    {
-        return self::serverDenied($serverName, $this->denyPatterns);
-    }
-
-    /**
-     * Whether ONE server matches a deny-pattern map (pattern => "deny",
-     * `fnmatch` wildcards, compared against the RAW `.mcp.json` key as
-     * {@see serverAllowed()} is). Exposed for the same one-law reason:
-     * {@see McpClient} applies the same map to the servers it starts and to
-     * its unrestricted arm, which never builds a router.
-     *
-     * @param array<array-key, mixed> $denyPatterns
-     */
-    public static function serverDenied(string $server, array $denyPatterns): bool
-    {
-        foreach ($denyPatterns as $pattern => $action) {
-            if ($action === 'deny' && \is_string($pattern) && $pattern !== '' && fnmatch($pattern, $server)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -119,57 +103,7 @@ final class McpRouter
     {
         return array_values(array_filter(
             $serverNames,
-            static fn(string $name): bool => self::serverAllowed($name, $allowList),
+            static fn(string $name): bool => LibraryMcpRouter::serverAllowed($name, $allowList),
         ));
-    }
-
-    /**
-     * Whether ONE server passes a preset's `mcpServers` allowlist.
-     *
-     * THE LAW, EXPOSED. `applyAllowList()` filters a whole server map; the
-     * sub-agent roster in {@see \SugarCraft\Crush\Agents\AgentManager::resolveGrantedTools()}
-     * answers the same question one entry at a time (E696-α: MCP bridges are
-     * narrowed out of a preset's grant at resolution). Both must read the same
-     * law — empty list allows all, `*` entries `fnmatch`, everything else is
-     * exact equality on the RAW config server key — or a preset's roster and
-     * its router view diverge, which is the two-dialects defect PermissionRule
-     * refuses to host for tool names. One spelling of the membership rule, one
-     * implementation; the filter delegates here rather than mirroring it.
-     *
-     * RAW BOTH SIDES ON PURPOSE: entries are compared against the `.mcp.json`
-     * key as configured, never against the sanitised `mcp__<key>__` wire
-     * spelling (E42) — a caller holding only a wire name must not route it in
-     * here; {@see \SugarCraft\Crush\Tools\McpToolBridge::descriptor()} carries
-     * the raw half.
-     *
-     * @param array<array-key, mixed> $allowList The preset's `mcpServers` field,
-     *        untrusted shape — a foreign import casts with `(array)` only.
-     * @throws \RuntimeException when the list is non-empty and an entry is not
-     *         a non-empty string: a malformed allowlist fails loud rather than
-     *         reading as a rule that matches nothing, on the same argument
-     *         {@see \SugarCraft\Crush\Agents\AgentManager::namePatterns()} gives
-     *         for the grant lists.
-     */
-    public static function serverAllowed(string $server, array $allowList): bool
-    {
-        if ($allowList === []) {
-            return true;
-        }
-
-        foreach ($allowList as $entry) {
-            if (!is_string($entry) || $entry === '') {
-                throw new \RuntimeException(sprintf(
-                    'An mcpServers allowlist entry must be a non-empty string, %s given; '
-                    . 'a server allowlist is refused rather than read as a rule that matches nothing.',
-                    get_debug_type($entry),
-                ));
-            }
-
-            if (str_contains($entry, '*') ? fnmatch($entry, $server) : $entry === $server) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
