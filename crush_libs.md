@@ -121,6 +121,54 @@ their budget discovering that `findings/<slug>.md` describes code that no longer
 - **FIX:** Make it clone like its siblings, or rename to `setRecorder()` to stop advertising fluent semantics.
 - **USED-BY-CRUSH:** no — sugar-crush does not call it.
 
+## RE-VERIFY 2026-10-08 (campaign rerun) — lane A1
+
+- **N1 ✅ Descriptor-sink census red at master — CI blocker fixed (365b4ba4e, this lane).** The
+  sugar-crush merges 30f61cb3a/b0f62f399 moved twenty `->close()`/`->fcntl()` sites into
+  `DescriptorSinkArgumentCensusTest`'s scanned path with no roster rows; both census tests went red
+  (1241T/28626A/**2F**). Re-derived honestly: every site opened and read, one judged row each —
+  sixteen NOT-A-LIBC-CALLs (Ws status-code closes, session releases, LSP didClose, a
+  first-class-callable registration that is not a call), four genuine libc fds judged CORRECT
+  (Daemonize's dup2 spares, the two `/proc/self/fd` scanners whose `(int)` casts digit strings, not
+  resources). The four argument shapes the classifier cannot name pass only through a new
+  earned-absence door: the roster row must exist, claim UNCLASSIFIED, and open with 'NOT A LIBC
+  CALL'. Two of them (lone string literal, variable-rooted ternary) are pinned to UNCLASSIFIED by
+  the test's own liveness controls, so teaching the classifier would have meant unpinning the
+  controls — the exemption path is the honest one. Any new unnamed site still reds. Suite after:
+  1242T/28693A/0F/25S exit 0, assertions up (+64 from the kind-equality arm judging the new rows),
+  tests not down.
+- **N2 ⏭ Windows signal machinery — ruling RECORDED, NOT wired.** `WindowsBackend::drainSignals()`,
+  `onResize()` and `InterruptFlags` have zero production callers, so a native-Windows `Program` gets
+  no terminal resize and no Ctrl+C handling; behind them sit known dormant sub-defects —
+  any-key-counts-as-interrupt fallback (`WindowsBackend.php:366-386`), a leaked `CONIN$` handle
+  (`:189`), and the `InterruptFlags` singleton staying permanently dead after `destroy()` (`:498`,
+  `InterruptFlags.php:146`). Rationale for not wiring here: this is a Linux box, and the wiring's
+  linchpin cannot even exist on a shipping runtime — `Kernel32::setConsoleCtrlHandler()` gates on
+  `FFI::dynamicFunction()`, which no released PHP provides, so today the registration path returns
+  false on every OS. A fake-FFI seam test would go green here while proving nothing about the OS
+  callback that is the entire point; that is speculative plumbing, refused. When a real PHP FFI
+  closure-callback API lands (or a Windows CI leg can drive `GenerateConsoleCtrlEvent` end-to-end),
+  wire the trio, fix the three sub-defects above in the same stroke, and start from the now-safe
+  `Kernel32` registration in N4 (its trampoline retention is the prerequisite the future wiring
+  would otherwise have re-discovered as a use-after-free).
+- **N3 ✅ `restoreLast()` rescue apply→restore (4f6a2c487, this lane).** The second-call branch called
+  `apply()` on the `Termios::current()` snapshot — a silent no-op on the `stty` fallback host
+  (`SttyTermios::apply()` guards `!$this->raw` and a snapshot is never raw), leaving the terminal
+  stuck in raw mode after exit: the same defect class the sibling path at `PosixBackend.php:712`
+  documents as fixed. One-word fix plus the law cited at the call site. A real-pty stty pin is
+  impossible from a probe child (`runStty` pipes fd 0, so `-F /dev/fd/0` names the pipe — a
+  candy-pty property, disclosed); the deterministic pin shipped instead injects a recording
+  snapshot via reflection and demands `restore()` was called and `apply()` was not —
+  mutation-proven: reverting the fix reddens exactly that test.
+- **N4 ✅ `Kernel32` ctrl-handler retention + `toWideString` ownership truth (fc1ad93f0, this lane).**
+  (a) `setConsoleCtrlHandler()` handed Windows a raw function pointer and dropped the only PHP
+  reference to the owning trampoline CData — a registered handler became a use-after-free at first
+  Ctrl event; the trampoline and its closure are now retained in a never-pruned static. (b) An
+  honest NOT-YET-INTEGRATED comment marks the method's dormancy per N2. (c) `toWideString()`'s
+  docblock ordered callers to `FFI::free()` a GC-managed non-owned buffer — following that
+  instruction would itself be the bug; the prose now matches the real ownership (the sole caller
+  already had the right behaviour).
+
 # candy-mosaic
 
 ### 1. [MAJOR] Half-block transparency is inverted, and fully-transparent cells paint default-foreground stripes — **LEAD-VERIFIED**
