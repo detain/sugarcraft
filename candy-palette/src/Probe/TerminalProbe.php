@@ -93,11 +93,21 @@ class TerminalProbe
 
         $caps = $this->checkEnvVars();
 
+        // A3b gate order: NO_COLOR / CLICOLOR=0 / TERM=dumb from the env phase
+        // terminate the whole capability ladder, per the de-facto NO_COLOR
+        // spec ("…disable colored output…entirely"). Running terminfo or
+        // escape queries after a suppression verdict re-added TrueColor/Sixel
+        // and silently defeated the user's explicit "no color" — suppression
+        // is a decision, not one input among many.
+        $suppressed = isset($caps[capabilityKey(Capability::NoColor)]);
+
         // Phase 2: terminfo check if infocmp is available
-        $caps = $this->checkTerminfo($caps);
+        if (!$suppressed) {
+            $caps = $this->checkTerminfo($caps);
+        }
 
         // Phase 3: Escape queries (if interactive)
-        if ($this->interactive) {
+        if (!$suppressed && $this->interactive) {
             $caps = $this->checkEscapeQueries($caps);
         }
 

@@ -16,6 +16,7 @@ return [
     'decoder.grid_too_small'   => 'candy-flip: يجب أن تكون أبعاد شبكة الخلايا موجبة',
     'decoder.truncated'        => 'candy-flip: ملف GIF مبتور',
     'decoder.screen_too_large' => 'candy-flip: تتجاوز أبعاد شاشة GIF الحد الأقصى ({max} بكسل)',
+    'decoder.screen_too_small' => 'candy-flip: يجب أن تكون أبعاد شاشة GIF موجبة',
     'cli.usage'                => 'الاستخدام: candy-flip <gif> [solid|density]',
     'cli.no_autoload'          => 'candy-flip: تعذر العثور على composer autoload.php',
 ];

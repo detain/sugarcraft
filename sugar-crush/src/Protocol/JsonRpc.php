@@ -9,17 +9,19 @@ namespace SugarCraft\Crush\Protocol;
  *
  * WHY NOT `SugarCraft\Mcp\McpMessage`. Appendix O names that class as the
  * codec, on the condition that lifting a protocol-neutral one is clean. Its
- * plain {@see \SugarCraft\Crush\McpMessage::parse()} is not: it folds every
- * integer `id` into a string (a response must echo the id exactly as sent),
- * cannot build an error whose id is `null` (the answer to text that does not
- * parse), and decodes without a depth limit (§8.7). Decision D12's
- * id-preserving variant has since landed for the ACP adapter (roadmap 5.9-2):
- * {@see \SugarCraft\Crush\McpMessage::parsePreservingId()} and
- * {@see \SugarCraft\Crush\McpMessage::withWireId()}, which `Acp\AcpServer`
- * speaks through. This codec predates it and stays the `sugarcrush.v1` wire's:
- * it is not a third copy of the MCP envelope — it builds and reads exactly
- * the four shapes this protocol uses and nothing else — and moving
- * {@see decode()} onto the variant is a refactor with no behaviour to gain.
+ * plain {@see \SugarCraft\Mcp\McpMessage::parse()} is not: it folds every
+ * integer `id` into a string (a response must echo the id exactly as sent)
+ * and decodes without a depth limit (§8.7). Decision D12's id-preserving
+ * variant — {@see \SugarCraft\Mcp\McpMessage::parsePreservingId()} and
+ * {@see \SugarCraft\Mcp\McpMessage::withWireId()}, which `Acp\AcpServer`
+ * speaks through — landed in that class when sugar-crush's own envelope twin
+ * folded into `sugarcraft/sugar-mcp` (campaign re-verify lane A2, 2026-10-08).
+ * This codec predates both and stays the `sugarcrush.v1` wire's: it is not a
+ * second copy of the MCP envelope — it builds and reads exactly the four
+ * shapes this protocol uses and nothing else, encodes under its own
+ * {@see FLAGS}, and answers undecodable text with an {@see RpcError} instead
+ * of a null — and moving {@see decode()} onto the variant is a refactor with
+ * no behaviour to gain.
  *
  * Decoding never throws past {@see decode()}: text that is not a request comes
  * back as the {@see RpcError} the caller answers with.

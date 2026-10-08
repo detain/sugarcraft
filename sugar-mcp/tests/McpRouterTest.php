@@ -189,8 +189,47 @@ final class McpRouterTest extends TestCase
                 self::fail('allow-list entry ' . json_encode($bad[0]) . ' must throw');
             } catch (\RuntimeException $thrown) {
                 self::assertStringContainsString('non-empty string', $thrown->getMessage());
+                // The fail-loud WHY rides the message itself (lane-A2 fold of
+                // the sugar-crush wording): the refusal is a policy, not a
+                // parse error, and the operator reading the log gets the
+                // argument for it.
+                self::assertStringContainsString(
+                    'a server allowlist is refused rather than read as a rule that matches nothing.',
+                    $thrown->getMessage(),
+                );
             }
         }
+    }
+
+    /**
+     * The deny law, exposed as a public static — carried verbatim from the
+     * sugar-crush original with the lane-A2 fold. Only the exact action
+     * string "deny" acts; patterns are `fnmatch` against RAW config keys.
+     */
+    public function testServerDeniedStaticSemantics(): void
+    {
+        self::assertTrue(McpRouter::serverDenied('untrusted_x', ['untrusted_*' => 'deny']));
+        self::assertTrue(McpRouter::serverDenied('scratch', ['scratch' => 'deny']));
+        self::assertFalse(McpRouter::serverDenied('good', ['untrusted_*' => 'deny']));
+        self::assertFalse(McpRouter::serverDenied('untrusted_x', ['untrusted_*' => 'allow']));
+        self::assertFalse(McpRouter::serverDenied('untrusted_x', []));
+    }
+
+    public function testServerDeniedRefusesShapesThatAreNotPatternStrings(): void
+    {
+        // Lane-A2 doctrine: PHP casts digit-looking array keys back to int,
+        // and an empty key is not a rule anyone authored against a server
+        // name. Neither may match — matching a cast "pattern" would deny
+        // servers silently, the silent-boundary-move this class refuses on
+        // the allow side.
+        self::assertFalse(McpRouter::serverDenied('64', [64 => 'deny']), 'an int pattern key is not a pattern');
+        self::assertFalse(McpRouter::serverDenied('', ['' => 'deny']), 'an empty pattern is not a rule');
+
+        // The instance filter delegates to the same law rather than mirroring
+        // it: the constructor normalises the map, and the routed view must
+        // still refuse the non-string pattern.
+        $servers = ['64' => self::server('64', ['t'])];
+        self::assertSame(['t'], self::toolNames($servers, [], [64 => 'deny']));
     }
 
     public function testTheCrushConfigSpellingOfStringDenySpecsBlocks(): void

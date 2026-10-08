@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\Tests\Field;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Forms\Field\FilePicker;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\Note;
 use SugarCraft\Forms\Field\Select;
@@ -169,5 +172,41 @@ final class RenderSafeInjectionTest extends TestCase
         $this->assertStringContainsString('bad', $view);
         $this->assertStringContainsString('body', $view);
         $this->assertStringContainsString(self::ESC, (string) $field->getError());
+    }
+
+    /**
+     * F-P4-1 (lane p4, MAJOR): the FilePicker wrapper's "→ <path>" line was
+     * the one display site that echoed the selected path raw — a crafted
+     * filename (`ESC [ 2J` erase-display) reached the terminal stream
+     * untouched while every sibling render path already cleaned. The fix
+     * routes the line through RenderSafe::clean() exactly like the inner
+     * widget's cwd/entry rows; the field VALUE stays raw (value semantics).
+     */
+    public function testFilePickerSelectedPathDisplayCleanedButValueStaysRaw(): void
+    {
+        $root = sys_get_temp_dir() . '/candyforms-fp-inj-' . bin2hex(random_bytes(4));
+        mkdir($root);
+        $evilName = "evil\x1b[2Jname.txt";
+        file_put_contents($root . '/' . $evilName, 'x');
+
+        try {
+            [$f, ] = FilePicker::new('file', $root)->focus();
+            [$f, ] = $f->update(new KeyMsg(KeyType::Enter));
+
+            // VALUE: byte-for-byte raw path (cleaning is display-only).
+            $this->assertSame($root . '/' . $evilName, $f->value());
+
+            // DISPLAY: the injected erase-display sequence must not survive
+            // the "→ …" line. (The focused entry row legitimately carries
+            // SGR styling, so assert the injection is gone, as in the
+            // Select arm — not "zero ESC".)
+            $view = $f->view();
+            $this->assertStringNotContainsString(self::ESC . '[2J', $view);
+            $this->assertStringContainsString('evil', $view);
+            $this->assertStringContainsString('name.txt', $view);
+        } finally {
+            @unlink($root . '/' . $evilName);
+            @rmdir($root);
+        }
     }
 }

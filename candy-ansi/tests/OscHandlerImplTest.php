@@ -56,6 +56,20 @@ final class OscHandlerImplTest extends TestCase
         $this->assertSame('', $impl->hyperlinkId());
     }
 
+    public function testCloseSequenceCarryingIdStillResetsBothFields(): void
+    {
+        // C3 (lane A3a): 'ESC]8;id=x;ST' parses to hyperlink('', 'x'); the
+        // close path must clear the id too — the docblock always promised
+        // BOTH fields reset, and a stale id outlives the link it named.
+        $impl = new OscHandlerImpl();
+
+        $impl->hyperlink('https://example.com', 'anchor-1');
+        $impl->hyperlink('', 'stale-param');
+
+        $this->assertSame('', $impl->hyperlinkUri());
+        $this->assertSame('', $impl->hyperlinkId(), 'close resets the id even when the close carries one');
+    }
+
     public function testLastTitleInitiallyEmpty(): void
     {
         $impl = new OscHandlerImpl();

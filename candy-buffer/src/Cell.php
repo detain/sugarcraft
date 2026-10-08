@@ -12,8 +12,10 @@ namespace SugarCraft\Buffer;
  * display-cell width (1 for normal, 2 for wide chars like CJK/emoji).
  *
  * When width is 2 the next adjacent cell in the buffer MUST be an
- * empty "continuation" cell (rune '', width 0) — callers are
- * responsible for creating and placing it.
+ * empty "continuation" cell (rune '', width 0). Buffer's mutating API
+ * ({@see Buffer::withCellAt()}, fill(), withRegion()) creates and sweeps
+ * that partner automatically; grids supplied through Buffer::fromGrid()
+ * remain the caller's responsibility.
  *
  * CONTROL-BYTE CONTRACT (security-relevant): a Cell rune is stored and
  * emitted VERBATIM — {@see Buffer::toAnsi()} and the diff encoder write

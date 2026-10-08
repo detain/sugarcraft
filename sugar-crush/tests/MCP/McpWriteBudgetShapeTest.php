@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
-use SugarCraft\Crush\McpMessage;
+use SugarCraft\Mcp\McpMessage;
 use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**

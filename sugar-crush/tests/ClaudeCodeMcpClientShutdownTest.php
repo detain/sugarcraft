@@ -322,7 +322,7 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
      * sent one within the fixture's own lifetime.
      *
      * WHAT THIS SAID: that the fixture answers with an ARRAY result rather than
-     * a scalar because {@see \SugarCraft\Crush\McpMessage} typed `$result` as
+     * a scalar because {@see \SugarCraft\Mcp\McpMessage} typed `$result` as
      * `?array` and raised a `TypeError` on anything else — a real robustness gap
      * against a real server, recorded separately.
      *

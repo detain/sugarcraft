@@ -12,6 +12,27 @@ use SugarCraft\Mosaic\PrecomputedImage;
 
 final class AdaptiveImageTest extends TestCase
 {
+    public function testMaxCacheBelowOneBehavesAsOne(): void
+    {
+        $mosaic = Mosaic::sixel();
+        $image  = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+
+        // Degenerate capacities used to evict whatever render() had just
+        // stored — the memo silently did nothing on every redraw
+        // (lane p2, N3).
+        foreach ([0, -3] as $cap) {
+            $adaptive = new AdaptiveImage($image, $mosaic, $cap);
+
+            $first = $adaptive->render(4, 2);
+            $this->assertSame(1, $adaptive->cacheSize(), "maxCache {$cap} clamps to 1");
+            $this->assertSame($first, $adaptive->render(4, 2), 'the entry survives to serve a hit');
+
+            // A one-slot cache is still an LRU: a second size displaces it.
+            $adaptive->render(8, 4);
+            $this->assertSame(1, $adaptive->cacheSize());
+        }
+    }
+
     public function testRenderCachesResult(): void
     {
         $mosaic = Mosaic::sixel();

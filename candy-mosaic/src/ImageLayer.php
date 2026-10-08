@@ -136,10 +136,20 @@ final class ImageLayer
     public function placeTracked(string $bytes, int $width, int $height): PlacedImage
     {
         $digest = hash('xxh3', $bytes);
-        $id = $this->idByDigest[$digest] ??= count($this->idByDigest);
+        $id = $this->idByDigest[$digest] ?? null;
 
-        if ($id >= ImageOverlay::MAX_IMAGES) {
-            return new PlacedImage(self::blankBlock($width, $height), null);
+        if ($id === null) {
+            $candidate = count($this->idByDigest);
+            if ($candidate >= ImageOverlay::MAX_IMAGES) {
+                // Claim BEFORE writing (lane p2, N5): the old `??=` stored a
+                // dead row for every post-exhaustion digest, so the one
+                // unbounded structure in the class grew forever on a stream
+                // of unique blobs. Refusing the write caps the table at
+                // MAX_IMAGES rows; registered content keeps deduping.
+                return new PlacedImage(self::blankBlock($width, $height), null);
+            }
+            $this->idByDigest[$digest] = $candidate;
+            $id = $candidate;
         }
 
         $this->placementById[$id] = new ImagePlacement($bytes, $width, $height);

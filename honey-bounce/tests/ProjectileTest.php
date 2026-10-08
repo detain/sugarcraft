@@ -197,4 +197,36 @@ final class ProjectileTest extends TestCase
         );
         $this->assertSame($a, $p->acceleration());
     }
+
+    // ─── Lane A3b (re-verify 2026-10-08) ──────────────────────────────────
+
+    public function testNanDeltaTimeThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Projectile(NAN, Point::zero(), Vector::zero(), Projectile::gravity());
+    }
+
+    public function testNegativeDeltaTimeThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Projectile(-1.0, Point::zero(), Vector::zero(), Projectile::gravity());
+    }
+
+    public function testInfiniteAccelerationComponentThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Projectile(1.0 / 60.0, Point::zero(), Vector::zero(), new Vector(INF, 0.0));
+    }
+
+    public function testNanPositionComponentThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Projectile(1.0 / 60.0, new Point(NAN, 0.0), Vector::zero(), Vector::zero());
+    }
+
+    public function testInfiniteVelocityComponentThrowsAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Projectile(1.0 / 60.0, Point::zero(), new Vector(0.0, -INF), Vector::zero());
+    }
 }

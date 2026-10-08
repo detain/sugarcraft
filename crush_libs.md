@@ -121,6 +121,54 @@ their budget discovering that `findings/<slug>.md` describes code that no longer
 - **FIX:** Make it clone like its siblings, or rename to `setRecorder()` to stop advertising fluent semantics.
 - **USED-BY-CRUSH:** no — sugar-crush does not call it.
 
+## RE-VERIFY 2026-10-08 (campaign rerun) — lane A1
+
+- **N1 ✅ Descriptor-sink census red at master — CI blocker fixed (365b4ba4e, this lane).** The
+  sugar-crush merges 30f61cb3a/b0f62f399 moved twenty `->close()`/`->fcntl()` sites into
+  `DescriptorSinkArgumentCensusTest`'s scanned path with no roster rows; both census tests went red
+  (1241T/28626A/**2F**). Re-derived honestly: every site opened and read, one judged row each —
+  sixteen NOT-A-LIBC-CALLs (Ws status-code closes, session releases, LSP didClose, a
+  first-class-callable registration that is not a call), four genuine libc fds judged CORRECT
+  (Daemonize's dup2 spares, the two `/proc/self/fd` scanners whose `(int)` casts digit strings, not
+  resources). The four argument shapes the classifier cannot name pass only through a new
+  earned-absence door: the roster row must exist, claim UNCLASSIFIED, and open with 'NOT A LIBC
+  CALL'. Two of them (lone string literal, variable-rooted ternary) are pinned to UNCLASSIFIED by
+  the test's own liveness controls, so teaching the classifier would have meant unpinning the
+  controls — the exemption path is the honest one. Any new unnamed site still reds. Suite after:
+  1242T/28693A/0F/25S exit 0, assertions up (+64 from the kind-equality arm judging the new rows),
+  tests not down.
+- **N2 ⏭ Windows signal machinery — ruling RECORDED, NOT wired.** `WindowsBackend::drainSignals()`,
+  `onResize()` and `InterruptFlags` have zero production callers, so a native-Windows `Program` gets
+  no terminal resize and no Ctrl+C handling; behind them sit known dormant sub-defects —
+  any-key-counts-as-interrupt fallback (`WindowsBackend.php:366-386`), a leaked `CONIN$` handle
+  (`:189`), and the `InterruptFlags` singleton staying permanently dead after `destroy()` (`:498`,
+  `InterruptFlags.php:146`). Rationale for not wiring here: this is a Linux box, and the wiring's
+  linchpin cannot even exist on a shipping runtime — `Kernel32::setConsoleCtrlHandler()` gates on
+  `FFI::dynamicFunction()`, which no released PHP provides, so today the registration path returns
+  false on every OS. A fake-FFI seam test would go green here while proving nothing about the OS
+  callback that is the entire point; that is speculative plumbing, refused. When a real PHP FFI
+  closure-callback API lands (or a Windows CI leg can drive `GenerateConsoleCtrlEvent` end-to-end),
+  wire the trio, fix the three sub-defects above in the same stroke, and start from the now-safe
+  `Kernel32` registration in N4 (its trampoline retention is the prerequisite the future wiring
+  would otherwise have re-discovered as a use-after-free).
+- **N3 ✅ `restoreLast()` rescue apply→restore (4f6a2c487, this lane).** The second-call branch called
+  `apply()` on the `Termios::current()` snapshot — a silent no-op on the `stty` fallback host
+  (`SttyTermios::apply()` guards `!$this->raw` and a snapshot is never raw), leaving the terminal
+  stuck in raw mode after exit: the same defect class the sibling path at `PosixBackend.php:712`
+  documents as fixed. One-word fix plus the law cited at the call site. A real-pty stty pin is
+  impossible from a probe child (`runStty` pipes fd 0, so `-F /dev/fd/0` names the pipe — a
+  candy-pty property, disclosed); the deterministic pin shipped instead injects a recording
+  snapshot via reflection and demands `restore()` was called and `apply()` was not —
+  mutation-proven: reverting the fix reddens exactly that test.
+- **N4 ✅ `Kernel32` ctrl-handler retention + `toWideString` ownership truth (fc1ad93f0, this lane).**
+  (a) `setConsoleCtrlHandler()` handed Windows a raw function pointer and dropped the only PHP
+  reference to the owning trampoline CData — a registered handler became a use-after-free at first
+  Ctrl event; the trampoline and its closure are now retained in a never-pruned static. (b) An
+  honest NOT-YET-INTEGRATED comment marks the method's dormancy per N2. (c) `toWideString()`'s
+  docblock ordered callers to `FFI::free()` a GC-managed non-owned buffer — following that
+  instruction would itself be the bug; the prose now matches the real ownership (the sole caller
+  already had the right behaviour).
+
 # candy-mosaic
 
 ### 1. [MAJOR] Half-block transparency is inverted, and fully-transparent cells paint default-foreground stripes — **LEAD-VERIFIED**
@@ -291,6 +339,54 @@ injection path found from untrusted `inputSchema`), `McpRouter` deny-before-allo
 live-process child teardown (`BoundedShutdown` TERM→KILL→reap, group-aware) all checked out.
 `tools/check-child-lifetimes.php` was **not run** (Bash denied) — treat as blocked, not clean.
 
+## RE-VERIFY 2026-10-08 (campaign rerun) — lane A2
+
+- **P1 ✅ McpMessage twin folded into the library — (449298e62, this lane).** The probe verdict that
+  crush's copy was the *original with more machinery* held: the D12 wire-id superset
+  (`parsePreservingId`/`withWireId`/`MAX_DEPTH`) plus the mixed-typed `error()` data carrier migrated
+  into `sugar-mcp/src/McpMessage.php` with every library wire law preserved (`params:[]`→`stdClass`,
+  encode failures wrapped in `InvalidArgumentException` naming the method), crush's 424-line twin and
+  its canonical unit suite deleted per the façade rule — the moved pins (id-preserving round-trips,
+  the 13-type result matrix, wire-shape census, widened malformed-member loops re-fed as raw JSON
+  literals because `json_encode` on this host collapses `-32601.0` to int text) now live with the
+  canonical class; crush keeps only consumer-level e2e rows. Library suite 184T/668A → 226T/899A.
+- **P2 ✅ McpRouter law folded, product adapter kept — (bdc13dea0, this lane).** The library absorbs
+  crush's `serverDenied` static verbatim (instance path delegates, so the raw-key, string-pattern,
+  non-empty doctrine is the only spelling that exists) and crush's fail-loud allowlist wording;
+  `sugar-crush/src/MCP/McpRouter.php` survives as a 16/82 thin adapter mapping `AgentPreset` →
+  allowList (product policy: preset scoping, crush-`McpServer` tool merge, names-list shape). The
+  numeric-pattern-key behavior flip (int keys no longer match through the routed view) is crush's
+  canonical doctrine, pinned both ways in the library tests. Law-duplicate crush rows retired
+  (McpRouterTest 14T→4T adapter pins); the PathGlob census docblock moved in-step 291,596→289,440.
+- **P3 ✅ Stdio twins recorded already-folded — (a9228639c, this lane).** No code change: the probe
+  confirmed crush's `StdioMcpServer` is the intentional PHASE-2a product adapter over the library
+  transport, and its header now states the two product seams that justify the surviving file —
+  `spawnPlanner`/`clientInfo` wiring, the per-call `DEFAULT_TOOL_TIMEOUT_SECONDS = 120.0` ceiling
+  (no library counterpart; `toolTimeout` tunes, never disables), and the secret-scrub spawn policy.
+- **P4 ⏭ LspExchangeLock fold skipped with rationale — (4ea791720, this lane).** Diverged by
+  reason: crush's lock is a 3-file state/frame/notes-journal model for LSP exchange recovery, the
+  library's `ExchangeLock` a single-file phase-byte claim; merging would force a general file-set
+  abstraction onto the library for zero user benefit. The disposition is recorded in the class
+  docblock, shared laws restated there rather than factored into a base — dual maintenance of those
+  sentences is the accepted cost. `ReadPathCensus` rows untouched, as the skip implies no move.
+- **W-1 ✅ HttpMcpServerTest dot-sidecar leak closed — (47c91f1f3, this lane).** The probe-time
+  finding (4 warnings, exit 1 under `--filter Mcp`) was the test unlinks only `auth.json.lock` while
+  candy-core's `AtomicJsonFile` keeps its lock in the dot-sidecar `.auth.json.lock`, and its outer
+  gate skipped cleanup entirely when the payload file was absent. tearDown now tolerates each
+  leftover independently; post-fix a fresh run plants zero `/tmp/e695_http_*` residue (305
+  historical leaks before), and the crush Mcp filter closes at 1056T/5168A/**0 warnings**/exit 0.
+- **D-1 ✅ README timeout wording matches shipped reality — (4bdb94192, this lane).** README:2071
+  still advertised `tools/call` as unbounded-by-default long after 1b06c1c27 shipped the 120 s
+  default; the clause now cites `StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS` semantics (unset or
+  non-positive → 120.0, per-entry `toolTimeout` raises, never disables), pointing at docs/MCP.md
+  which already carried the truth. No documentation-drift guard pinned the stale sentence (grepped
+  before editing; the DocFigure timeout arm cites `Chat::PARALLEL_TOOL_TIMEOUT_SECONDS`, a
+  different constant, untouched).
+
+**Suite-figure seam (lane A2):** the crush Mcp-filter folds moved test *runs* across lib boundaries
+without touching `sugar-crush/tests/Config/Support/suite-figure.json` — the campaign's final re-pin
+commits carry that, alongside the known-red ReadmeSuiteFigureDrift staleness pair (pinned 21,196).
+
 # sugar-toast
 
 sugar-crush imports nothing from this library and names every symbol by inline FQN. The complete
@@ -357,6 +453,16 @@ clone (`ToastEscCloseTest.php:31-38`, `AlertTest.php:160`). `view('', $w, 0)` wi
 canvas height is `max(max(bg,0), stackHeight)` (`Toast.php:505`). `nextExpiry()` vs
 `secondsUntilNextExpiry()` are correctly distinguished. 23 test files cover essentially every public
 method; the only real gaps are the two dismiss cases in #1.
+
+RE-VERIFY 2026-10-08 (campaign rerun) — gate (sugar-toast; final undispositioned audit section, re-verified against source at this tip):
+- **Item 1 [dismiss one-way trap, MAJOR] — ✅ LANDED confirmed.** `clear()` resets `dismissed` (`Toast.php:405`), every write path (`appendBounded` :296) refuses a dismissed instance with a `LogicException` naming `clear()`, and the revival pin `testDismissThenClearThenAlertRendersAgain` plus three refuse-pins live in `ToastDismissLifecycleTest` — exactly the PROOF GAP the audit named.
+- **Item 2 [unbounded accumulation, MAJOR] — ✅ LANDED confirmed.** Prune-on-write inside `appendBounded` (:303-306, expired leave on every enqueue, not only at `view()`); `dismiss()` MOVES live alerts to history (:375-381, `testDismissMovesLiveAlertsOutOfTheQueue` + repeated-dismiss no-double-count pin); `withHistoryLimit` ships with default 100 (:67,:167) threaded through `HistoryLog::push`. `maxConcurrent` default stays null by design with the growth caveat stated honestly in the property docblock (:56).
+- **Item 3 [forked nextCluster, MINOR] — ✅ LANDED, SUPERSEDED STRONGER.** The STATUS row's "ported verbatim into the fork" is one commit behind history: @793d9d959 deleted the fork body entirely once `Width::nextCluster` was promoted public (`candy-core/src/Util/Width.php:855`) — `Toast.php:851` is now a one-line delegation, guards live in exactly one place. Malformed-walk pins mirrored from core: `ToastNextClusterInvalidUtf8Test` (byte-for-byte reproduction, broken-sequence non-swallow, stray-lead yields itself).
+- **Item 4 [README fatal chain, MINOR] — ✅ LANDED confirmed.** `README.md:259` shows the `actions:`-parameter chain; the chain also uses `Action::new` (item 5).
+- **Item 5 [`Action::make()`, MINOR] — ✅ LANDED confirmed.** `Action.php:31` declares `public static function new(...)`; no `make()` remains anywhere in src/ or README.
+- **Item 6 [overflow docblock lie, INFO] — ✅ LANDED confirmed.** `Toast.php:288` now reads "(DropOldest is the default)", matching the property default at :64.
+- **Coverage-rows reconciliation (the two test-addition rows):** the "Unaudited libraries: 7 transitive-only deps" row is discharged by lanes A3a/A3b — all seven (buffer/ansi/async/input/palette/flip/honey-bounce) audited with fixes and new pin files on disk (e.g. `candy-buffer/tests/WideCellPairingTest.php`, `candy-async/tests/CancellationSourceTest.php`). The "candy-mosaic unaudited surface" row is discharged by lane A4 — `DeadlineTest.php` (did not exist pre-lane) plus Scale/AdaptiveImage/AnimationDriver/ImageLayer fix-pins all present in `candy-mosaic/tests/`.
+- **Gates:** sugar-toast suite **278T/669A OK** (era figure, exact) linked plain-pipe, 0.63 s. Zero actionable defects found — no fix commit in this lane; nothing pushed. Evidence `/tmp/opencode/crush-libs-rerun/GATE/`.
 
 # candy-kit
 
@@ -634,6 +740,15 @@ runtime pty user, so the real surface is `ProcessContainment` and `CapturesProce
 `cd candy-pty && timeout 120 vendor/bin/phpunit --filter PosixMasterPtyTest` — single class only, per
 the repo's own warning that pump-loop tests "can only hang, never fail".
 
+RE-VERIFY 2026-10-08 (campaign rerun) — lane A7 (candy-pty Output/* test-support — SgrHandler / SgrState / AnsiOutputParser; probe evidence `p7`):
+- **Item 4 [bright-alias default collision, MEDIUM] — FIXED (intended behavior change, upstream-faithful).** `SgrState::COLOR_DEFAULT` was 9 — exactly the palette slot SGR 91 (bright red) occupies — so an ESC[31m→ESC[91m transition compared equal to default and was silently dropped from the event log (probe `p7`: 2 events for a 3-change stream). Default is now an out-of-palette sentinel (-4); brights keep their xterm-faithful palette 8-15, gain named consts `COLOR_BRIGHT_BLACK`..`COLOR_BRIGHT_WHITE`, and `describe()` renders 8-15 as `fg=bright-<name>` (bright values previously rendered as nothing). All consumers are candy-pty test-support only (zero imports outside the lib tree-wide). Stale "revert to 9 (default)" comments truth-fixed; the `SgrStateTest::testColorConstants` pin flipped 9→-4 in-step with a why-comment plus a default∉0-15 non-collision assert. Pinned by four new handler tests (full 3-event stream, both 90-97/100-107 ranges each distinct from default by value, name and `equals()`, 39/49-from-bright return to default), a parser-level 3-transition pin, and bright `describe()` pins.
+- **Item 5 [unbounded event growth, MEDIUM] — FIXED.** Consumers of `readChunk()` that never drained grew `SgrHandler::$events` without bound (probe: 2000 entries after 1000 undrained churns). The transition log is now capped at the documented `SgrHandler::MAX_EVENTS = 1024`, drop-OLDEST through a single private `record()`; the diagnostic/test-support surface loses the head of history, never the tail (stated in the const docblock). Pinned by `testUndrainedTransitionLogIsBoundedDropOldest`: churn past 2× the cap → size exactly at cap, the evicted head is the very first event (no surviving pair starts from default), newest reset event intact at the tail.
+- **Item 6 [readChunk @return lie, LOW] — FIXED (docblock-only).** Said "without ANSI escape sequences"; the impl returns raw bytes. Truth-flipped to say so and point at `drainTransitions()`/`readChunkWithTransitions()`. Pinned by `testReadChunkReturnsRawBytesIncludingEscapes`.
+- **Item 7 [reset() not clearing SGR state, LOW] — FIXED (docblock contract made true).** `AnsiOutputParser::reset()` now calls the new public `SgrHandler::reset()` (state → fresh default, event log emptied) in addition to `Parser::reset()`. Sole caller of `AnsiOutputParser::reset()` was its own test (grep-verified; test-support only), so the honest fix is the clearing one. The old pin `testResetClearsParserStateOnly` — which enshrined the broken survival — is flipped in-step (renamed `testResetClearsSgrState`), plus a multi-chunk clean-slate pin via a new `FakeMasterPtyQueue` fixture: paint red → reset → paint plain stays default with no phantom events.
+- **Item 8 [truecolor sub-params unclamped, LOW] — FIXED.** 38;2/48;2 channels packed verbatim (300 bit-wrapped to 44 in `describe()`); now clamped 0-255 at parse time mirroring the `\max(0, \min(255, …))` idiom the 38;5 path already used. Pinned handler-level (`[38,2,300,-5,128]` → `fg=rgb(255,0,128)`; 300 in R vs G position stays distinguishable) and on the byte path (`"\x1b[38;2;300;0;0m"` → 255<<16). Negative params asserted via `csiDispatch` only — ECMA-48 byte parsing never produces them.
+- **Pre-existing pty-section seam closed:** `php tools/check-child-lifetimes.php` (previously "never run (Bash denied)") ran on this lane: rc 0 — 61 libs / 28 proc_open sites / 7 findings, all 7 accounted (re-run at lane tip after the candy-top merges: 0 problems).
+- **Gates:** candy-pty 696T/1959A/14S → **708T/3107A/14S** OK linked plain-pipe (+12T/+1148A, ~1m). sugar-crush `--filter 'Pty|Terminal'` OK **1367T/116282A/1S** (staleness pair outside the window, untouched — no suite-figure re-pin by this lane). Mutations 3/3 discriminating with cp+md5 restores: M-F1 sentinel reverted to 9 → 20+ pins red across all three suites (the out-of-palette default is load-bearing everywhere); M-F2 cap removed → exactly 1 failure (the ring pin); M-F5 fg clamps removed → exactly 2 failures (handler + byte-path clamp pins). No composer manifest touched, nothing pushed. Evidence `/tmp/opencode/crush-libs-rerun/A7/`.
+
 # candy-sprinkles
 
 `Style.php` is 1831 lines and was read in full, plus `Border`, `Border/BorderTitle`, `Table\Table`,
@@ -792,3 +907,77 @@ it identically, so CI injects the same path-repo. Cosmetic; 7 such constraints e
   `src/Input/PtyInputDecoder.php`, most of `src/Exception/*` and `src/Contract/*`.
 
 2026-10-07 ADDENDUM — deferred backlog items now closed: crush BuildsUnifiedDiff twin folded onto sugar-diff @14725b088 (GNU-faithful headers adopted crush-wide); sugar-toast Width::nextCluster fork deduped onto candy-core public promotion @85466ebd2+793d9d959; candy-kit real terminal-width resolution @a403c6338; candy-focus reorder() disabled-head fallback @6eb057529; scripts/parallel-tests.sh default --timeout 900 @6f3c02321. Suite re-pinned 21,196T/406,402A @abbb45650.
+
+RE-VERIFY 2026-10-08 (campaign rerun) — lane A3a (transitive trio: candy-buffer / candy-ansi / candy-async; probe evidence `p8a`):
+- **candy-buffer B1 — FIXED @4ede1ce45.** `DiffEncoder::encode()` never emitted the trailing SGR reset its own comment promised; a styled-tail frame left the terminal carrying the rendition into the next raw write (both live consumers — veil `RenderSession.php:129`, dash `Chart.php:193` — return the bytes verbatim). Conditional `\x1b[0m` appended iff the stream ends styled, mirroring `toAnsi()`; 5 existing bleed pins flipped in-step, 4 new pins incl. the exact probe wire and a frame+erase concatenation.
+- **candy-buffer B2 — FIXED @4ede1ce45.** `withCellAt()`/`fill()`/`withRegion()` could split a width-2 pair (orphaned continuation = permanent diff/toAnsi ghost; stranded lead on write-into-continuation). All three now route through `placeWithPair()` following applyDiff's null-continuation discipline (straddle-at-last-col keeps only the lead, matching applyDiff's silent clamp; `fromGrid()` stays the documented escape hatch). 8 pins in `tests/WideCellPairingTest`.
+- **candy-buffer B3 — FIXED @4ede1ce45.** Bright black (`SGR 90` / `38;5;8`) returned `#000000` — invisible black-on-black on dark terminals; now canonical mid-grey `0x7F7F7F` per candy-palette `StandardColors`/xterm. `fromString` is fixture-only (zero production callers); exactly 1 fixture row encoded the wrong value and was flipped in-step, + 3 direct pins.
+- **candy-ansi C1 — FIXED @3e7edc12e.** A cross-type C1 introducer mid-string kept the pending `stringBuffer`, so an APC/SOS/PM fragment rode into the foreign sequence's dispatch (`\x1b_a` + 0x9D + `b0;t` + BEL → `oscDispatch('ab0;t')`) — title-injection from untrusted peers. `Parser::start()` now discards the payload on a cross-type introducer; same-type re-introduction preserves it (existing pin untouched). Downstream: candy-vt's `testCrossKindC1IntroducerPreservesPayload` pinned the bleed shape itself — flipped to the new truth in the same commit (test-only, disclosed).
+- **candy-ansi C2 — FIXED @3e7edc12e.** SOS/PM/APC Put stopped at 0x7F, so the anywhere UTF-8-lead edge won there: multi-byte runes inside those payloads printed mid-sequence and vanished from the dispatch (OSC/DCS already had the 0xFF extension). Put extended to 0x80–0xFF with the four string introducers + ST/ESC/CAN/SUB exits re-asserted; 4 raw-bytes-stay-in-payload pins.
+- **candy-ansi C3 — FIXED @3e7edc12e.** `OscHandlerImpl::hyperlink()` docblock claimed an empty URI resets BOTH fields but a param-carrying close (`OSC 8;id=x;` → `hyperlink('','x')`) left `hyperlinkId` stale; behavior fixed to match the doc (zero production consumers of this impl — candy-vt ships its own — so no stickiness relied upon). Unit + through-parser pins.
+- **candy-async A1 — FIXED @064b1c03a.** `fireCallbacks()` (public `@internal`) cleared the callback list without raising `$cancelled`; the direct-call path desynced `isCancelled()` observers and ghosted late `onCancel()` registrations. Flag now set on fire — consistent with the class invariant, byte-identical for the legitimate `acceptCancellationSource()` flow (it already sets the flag first); misuse-path pin + guard-rail pin.
+- **Gates:** buffer 301T/1622A→315T/1748A, ansi 344T/852A→360T/901A, async 115T/252A→117T/259A, all OK linked plain-pipe; downstream at each commit: candy-vt 976T/12873A OK, sugar-veil full 258T/561A OK, sugar-dash `--filter Chart` 816T/1695A OK, sugar-crush `--filter 'Diff|Ansi'` 432T/13862A OK. 8/8 mutation proofs one-or-more-red-exactly-as-intended, restores md5-verified. Evidence `/tmp/opencode/crush-libs-rerun/A3a/`. The remaining four transitive-only libs (input/palette/flip/honey-bounce) are lane A3b.
+
+RE-VERIFY 2026-10-08 (campaign rerun) — lane A3b (leaf four: candy-input / candy-palette / candy-flip / honey-bounce + sugar-reel guard; probe evidence `p8b`):
+- **candy-input MAJOR — FIXED @76df005be.** `EscapeDecoder` kept a stale incomplete-CSI remainder across a PasteStart marker: the pre-boundary fragment re-buffered during the prefix re-parse and stitched onto the FIRST post-paste keystroke (`"\x1b[" + "x"` → unknown CSI → dropped). Paste-start is now an explicit resynchronisation boundary that flushes the remainder — crush-reachable via candy-pty. 2 pins (the arrow-key variant self-heals under a raw-ESC restart, so the plain-character pin is the discriminator; noted honestly).
+- **candy-input — FIXED @76df005be.** `SignalResizeDriver` ctor mutated process-global signal disposition (pcntl_async_signals + SIGWINCH handler) and shell_exec'd tput twice, with zero repo consumers. Public API frozen pre-1.0, so construction is now side-effect-free and an explicit `arm()` opts into the globals — pinned both directions. `StreamInputDriver` restores the caller's blocking flag on destruct when the ctor cleared it. `ReactInputDriver::isReadable()` aligned to the React contract (pause defers emission; it does not make the stream unreadable) — one existing pin flipped in-step to the truthful polarity.
+- **candy-palette MAJOR — FIXED @aa8955d75.** `NO_COLOR`/`CLICOLOR=0` were defeated by gate order: the terminfo phase ran unconditionally after the env phase set only the NoColor flag, so `hasTrueColor()` returned true anyway (sixel leg live, truecolor leg latent-until-Tc-terminfo). Suppression now short-circuits the whole capability ladder (Phases 2+3 skipped; CLICOLOR_FORCE keeps its override; BasicAscii floor intact). 6 truth-table pins over env × terminfo.
+- **candy-palette MAJOR-dormant — FIXED @aa8955d75.** `AsyncProbe` (zero importers) bypassed every env gate, fabricated `TERM=xterm`, and spawned uncapped children. Now: DetectionChain consulted before spawning, no fabrication (unset/dumb TERM → sync path), `MAX_CONCURRENT_PROBES=4` with overflow degrading to the sync probe rather than queueing (disclosed shape), results documented advisory-only. 3 pins incl. reflection-driven cap exhaustion.
+- **candy-palette — FIXED @aa8955d75.** `stripAnsi` missed CSI intermediate bytes, `@`/`_`-class finals and most 2-char ESC sequences (probe: 8/13 leaked); CSI rewritten per ECMA-48 (`[0-?]*[ -\/]*[@-~]`), ESC set extended, charset finals widened to `[ -~]` — all 13 probe shapes pinned. Env lookups unified through one helper — disclosed edge deviation: `CLICOLOR_FORCE` now also honours `$_ENV` (previously DI map + getenv only). `Color::ansi16Sgr` gained its 0-15 guard.
+- **candy-palette INFO — NOT ACTIONED.** `StandardColors` mutable statics (frozen public surface pre-1.0; read-only in practice, no consumer writes them); `ProfileWriter` news a `Palette` per write (perf churn only, no correctness impact); `DetectionChain` attributes TMUX detection to a mislabelled `source()` string (cosmetic; behavior correct).
+- **candy-flip + sugar-reel — FIXED @8825a3be0.** A crafted GIF header with zero logical-screen dimensions passed the pixel-budget gate and escaped `imagecreatetruecolor()` as a raw `ValueError`, breaking the documented `RuntimeException` contract; guarded at parse time (new `decoder.screen_too_small` key, all 16 locales). `sugar-reel` `GifDecoder:103` wraps the Flip call in a narrow `ValueError`→`RuntimeException` translation for the vendored-copy window. `Renderer::withConstraints` `@internal` docblock was a lie (Player.php:94 is a production caller) — truth-flipped.
+- **honey-bounce — FIXED @0052eebea.** `Spring`/`Projectile` now reject non-finite numeric inputs and negative `deltaTime` at construction (INF damping poisoned every later tick to NaN via `0*INF`; NaN slipped the `max(0.0,·)` clamps; new lang keys ×16 locales). `CubicBezier` ctor rejects non-finite control points (the bare `<`/`>` range check is NaN-blind) and `sampleCurveDerivativeX` — which was not d/dt at all (returned −6·x1 at t=0, 0 for every x1===x2 curve) — replaced by the closed-form WebKit UnitBezier derivative, pinned against a central-difference oracle across all 26 presets.
+- **honey-bounce easing research verdict.** `easeInOutCirc` shipped byte-identical to `easeInOutQuint` (0.86,0,0.07,1). The preset family demonstrably derives from the PRE-2022 easings.net approximation table (neighbours easeInOutExpo `(1,0,0,1)`, easeOutQuint `(0.23,1,0.32,1)`, easeInCirc `(0.60,0.04,0.98,0.34)` are exact/rounded originals), in which Quint `(0.86,0,0.07,1)` is the genuine row and Circ is `(0.785,0.135,0.15,0.86)` — so ONLY Circ changed, provenance cited in docblock + pin. The `easeIn()`-holds-CSS-`ease` probe finding was REFUTED via `git log -p` (it always held `(0.42,0,1,1)`); no change. `evaluate()` documented honestly: y unclamped by design (elastic/back overshoot is the point), out-of-domain t extrapolates; pinned both.
+- **honey-bounce INFO — NOT ACTIONED.** Suspect digit-drift preset rows (`easeInQuint` y-tail `0.00`, `easeInQuart` `(0.70,0,0.84,0)`, `easeInOutQuad` `(0.46,0.03,0.52,0.64)`) are close-but-not-exact neighbours of the same original table and were outside the brief's identical-tuple finding — left untouched to avoid un-evidenced curve edits.
+- **Gates:** input 403T/41362A→409T/41381A, palette 504T/5484A→529T/5537A, flip 111T/316A→112T/318A, bounce 193T/5571A→210T/6088A, all OK linked plain-pipe; sugar-reel `--filter 'Gif|Decoder'` OK 101T/380A; downstream sugar-crush `--filter 'Input|Escape|Palette'` OK 894T/5488A, candy-mosaic `--filter Flip` OK 7T/63A. 5/5 mutation proofs red-exactly-as-intended (remainder flush, ladder gate, screen guard, derivative closed form, CSI regex), restores md5-verified. Evidence `/tmp/opencode/crush-libs-rerun/A3b/`.
+
+RE-VERIFY 2026-10-08 (campaign rerun) — lane A4 (candy-mosaic N1–N5 / candy-forms F-P4-1..5 / sugar-crush pane-cycle; probe evidence `p2`, `p4`, `p3`):
+- **candy-mosaic MAJOR — FIXED @5b063f208.** `Deadline::in($ms)` added `ms*1000` to a NANOSECOND `hrtime(true)` clock — every budget read expired 1000x early (a 5000 ms budget died at 10 ms). Crush-reachable via `Mosaic::auto()` → `Detect::probe()` (ToolResult image path), truncating multi-chunk terminal-capability probes. Fixed to honest ms↔ns math (+ public `isExpired()`); call-site audit: both `Detect.php` sites use `remaining()*1000` only as stream_select µs — no compensating fudges existed anywhere. `tests/DeadlineTest.php` did not exist; added with 6 pins incl. the exact regression shape (arm 5000 ms, ~20 ms wall sleep, still live) and a drain-rate bound.
+- **candy-mosaic — FIXED @5b063f208.** N2 `Scale::fill()`/`crop()` clamped the destination but not the SOURCE rect at extreme aspect ratios (0-sized rect handed to `imagecrop()`) — both dims floor at 1, both degenerate directions pinned. N3 `AdaptiveImage` `maxCache<1` silently evicted the just-cached entry — ctor clamps to ≥1; `withAsync()` docblock truth-flipped (no cache continuity). N4 `AnimationDriver` turned an APNG fcTL delay of 0 into `Cmd::tick(0.0)` — an unthrottled busy-loop; new `MIN_TICK_MS=10` floor at both tick arms (GIF/APNG netscape-loop-0 sentinel precedent: 0 means infinite/missing, never fast). N5 `ImageLayer::placeTracked` assigned the digest id BEFORE the `MAX_IMAGES` capacity early-return so the table kept growing past exhaustion — claim-after-guard, overflow blobs render blank (6398-cap pin).
+- **candy-forms MAJOR — FIXED @4cb8705fd.** `Field/FilePicker.php` echoed the selected path raw into `view()` — the one display site the wrapper never cleaned while the inner widget's cwd/entry rows and every sibling field route through `RenderSafe::clean()` — so a crafted filename carried ESC sequences straight into the terminal stream. The line now cleans at render; the field VALUE stays raw (cleaning is display-only). Pinned with a live temp-dir fixture selecting an ESC-bearing filename. Disclosed deviation: the pin follows the sibling convention (injected `\x1b[2J` gone, remainder printable) rather than a literal zero-ESC assertion, because `RenderSafe` preserves true SGR by design and the focused row legitimately styles.
+- **candy-forms — FIXED @4cb8705fd.** F-P4-2 Date/Color docblocks advertised `^ / v` page keys and a false "KeyMap binds j/k" rationale — `KeyMap::new()` binds neither; docblocks rewritten to the bound truth, NO bindings added (behavior ruling: docs were aspirational; keymaps ship through the sugar-bits/sugar-prompt façades). F-P4-3 Note's "Enter / Space activates" — Space is bound nowhere; Enter advances via the Form's generic arm — both docblocks truth-flipped. F-P4-4 `MultiSelect::toggle()`'s hard-coded "Pick at most N." routed through `Lang::t('multiselect.pick_at_most')` — the key already shipped in `lang/en.php` (no new key; en is the only locale, and ErrorHelpTest's byte-pin proves the rendered message unchanged).
+- **candy-forms ⏭ OPEN RULING.** F-P4-5 PageUp polarity differs between widgets: `Field/Color.php:166-167` PageUp → red channel +1 (advance) vs `Field/Date.php:191` PageUp → `shiftMonth(-1)` (retreat). Same key, opposite semantic direction. Behavior left unchanged pre-1.0 pending owner sign-off (and if unified, which direction wins incl. the PageDown pairing).
+- **sugar-crush — FIXED @196079294.** `App::paneCycleOrder()` listed dock slots without the `dockable()` filter `Renderer::sidePanes()` applies: a stale/hand-edited manifest naming input/help/menu put those panes in the Tab cycle while the frame never painted them — focus parked on a pane whose `renderPane()` defaults to `''` (p3 probe reproduced the asymmetry). The cycle now skips non-dockable ids exactly like the painted columns; 2 pins (all-polluted column → Tab stays Chat; mixed column → cycle `[Chat, Skills]`, round-trip skips the poisoned name).
+- **Gates:** mosaic 648T/8284A→661T/14820A (5S intact), forms 2271T/4222A→2272T/4226A, both OK linked plain-pipe; consumers green — sugar-bits 514T/1092A, sugar-prompt picker filter 2T; sugar-crush `--filter 'Pane|Dock|Cycle|Focus'` OK 847T/17459A (staleness pair outside the window; suite-figure re-pin owed at campaign closeout, not here). 8/8 mutation proofs red-exactly-as-intended (unit math, fill floor, crop floors, cache clamp, tick floor, claim ordering, raw-echo revert, dockable-filter re-drop), restores md5-verified. Evidence `/tmp/opencode/crush-libs-rerun/A4/`.
+
+RE-VERIFY 2026-10-08 (campaign rerun) — lane A5 (candy-layout width-sum sweep / drag memo / roundSplit doc; probe+bench evidence `A5`):
+- **Row 1 [width-sum sweep] — FIXED (tests-only).** New `candy-layout/tests/WidthSumInvariantSweepTest.php`, 11T/2153A, deterministic grid: full 3-region Dock (9 share-pairs × 4 minimum-pairs × stack shapes × widths 1..200) asserting exact contiguous column tiling of the frame + scalar-projection determinism; GreedySolver sweeps — fraction sets (thirds/halves/twelfths/tenths/mixed/zero-Fill + trailing Fill, n=1..6) × widths 1..200 both directions; exact-sum sets in floor AND roundSplit modes; over-constrained truncation tiles; under-constrained fixed sets keep their documented trailing gap (sizes stay [5×6]); Min/Max paths; minShare floor all-Fill sets; `withRemainderToLast()` Max-free sets; deprecated Cassowary path byte-identical to delegation target. **Zero allocator violations found — the invariant holds; no behavior fix was needed and the sweep is now the pin.** Suite 282T/1162A → 293T/3315A OK.
+- **Row 2 [drag memoization] — NO-ACTION (measure-first ruling).** Micro-bench (PHP 8.3.6, 3000 iters, 200 warm, `A5/bench-drag.php`): `DockLayout::resolve()` 12-pane 200×50 = **0.0679 ms/op**; resolve+3 `regionFor` drag step 0.0735; `isUntouchedDefaultDock()` double-`toArray()` 0.0183; composite `sideWidth()` per render-per-side 0.0802; 30-pane 240×60 0.1319 ms/op. Real crush docks run ≤~12 panes; per-mousemove cost ≈0.1–0.2 ms against a tens-of-ms frame paint — below the ~0.1 ms/op act threshold, and a keyed memo would fight the lib's `final readonly` immutable-value style. Memoization skipped with recorded numbers.
+- **Row 3 [roundSplit doc note] — FIXED (docblock-only, zero behavior change).** `GreedySolver::withRoundSplit()` now states the fractional-width determinism contract: both branches cast an IEEE-754 double through one PHP-core function (`(int) round(...)` half-away-from-zero when ON, `(int) floor(...)` when OFF) over integer operands, so same input ⇒ same cell widths on every build; the floor-vs-round POLICY is the only divergence and is flag-chosen (sugar-crush never enables it — its path is floor-only, exact-int `mulDivFloor` on the Dock side). Constructor `@param $roundSplit` cross-refs it. Pinned by `testRoundSplitRoundsHalfAwayFromZero` (discriminating shape `Percentage(50)+Fill(1)` @ w=5 → floor [2,3] vs round [3,2]; symmetric halves without a Fill absorber reconcile to the same tiling — also stated).
+- **Disclosure — concurrent zombie-writer dirt.** This clone hosted a duplicate A5 writer mid-lane: an untracked `candy-layout/tests/WidthSumInvariantTest.php` (~12:09) whose "repeat solve diverged" failures were proven spurious (its arm compared arrays of fresh `Region` instances with `!==` — instance identity, always unequal; scalar projections are identical: `fill-single` @ w=7 yields `[7]` from every repeat call), and an 11-line docblock insertion into `src/GreedySolver.php` (~12:32). Resolution: the docblock's content was independently re-verified honest and is KEPT (test citation corrected to the actually-shipped class); the zombie test file is deleted from the tree and archived at `A5/foreign-WidthSumInvariantTest.php`; its one genuinely-new claim (`remainderToLast` tiles Max-free shapes) was re-probed clean (7 sets × widths 1..200, 0 underfills) and folded in as `testRemainderToLastTilesEveryMaxFreeSet`.
+- **Gates:** candy-layout 293T/3315A OK (baseline 282T/1162A, +11T/+2153A), linked plain-pipe; sugar-crush `--filter 'Layout|Box|Flex'` OK 189T/8861A (staleness pair outside the window, untouched); candy-query `--filter 'Layout'` — no such tests exist. No composer manifest touched, no path-repos, nothing pushed. Evidence `/tmp/opencode/crush-libs-rerun/A5/` (baseline/final suite logs, probes, bench, consumer logs, foreign-file archive).
+
+RE-VERIFY 2026-10-08 (campaign rerun) — lane A6 (candy-kit E453 multi-line variant + sugar-crush Help wiring; evidence `A6`):
+- **Row 1 [E453 content-model blocker] — FIXED (the wiring itself landed).** Reproduced first: the page `Help::screen()` serves is byte-clean today (`A6/help-screen-before.txt`, 380 rows / 24059 B) but routing it through the only kit entry that existed collapses it to ONE row (`A6/help-via-existing-helptext.txt`, 0 newlines) — `SafeText::line()` strips all C0 incl. LF, and DocFigure's own pin proved `src/` reached candy-kit in zero files. Campaign ruling honored: the i18n page contract at `Help.php:37-41` (translate-as-a-page, never split per-row) is KEPT verbatim — instead the kit grew the multi-line-preserving counterpart the FIX row named as the alternative: `SafeText::page()` (strips escapes + every C0/DEL except LF; tab and CR go, so CRLF normalizes to bare-LF rows) and `HelpText::renderPage(string $page, int|AutoWidth|null $width = null)` (sanitize always; wrap over-long rows cell-aware only on explicit/Auto width; DEFAULT null = never re-flow an authored page — the deliberate divergence from the siblings' `AutoWidth::Auto`). `Cli/Help::screen()` now returns `HelpText::renderPage(Lang::t('cli.help.screen'))`: byte-identical for the clean English page (pinned), and a poisoned catalogue now gets sanitized WITHOUT losing its rows (behavioural pin via `T::overrideNamespace` throwaway catalogue). `render()`'s single-line flattening contract is untouched (polarity pin added).
+- **Deferral record retired exactly as it instructed.** The `extra.sugarcraft.deferred-wiring` row ("Delete this row when the wiring lands — never to quiet the check") and its DocFigure pin `testCandyKitDeferredWiringRowMatchesWhatItRecords` went in the kit-adjacent commit; `tools/check-path-repos.php --unused` now exits 0 with candy-kit genuinely reached (no PRUNE, no DEFERRED_WIRING), and `ManifestDependencyReachTest` gained a permanent anti-vacuity floor in the row-control's place: `src/` MUST keep reaching `SugarCraft\Kit\` (Rule 25's known-positive pair now runs only while some future row exists). Class docblock history paragraph truth-flipped.
+- **Rows 2–5 — no action, still landed** (45b919a8e: Banner width param, WidthProbe/AutoWidth resolution at a403c6338, shared WidthGuard, SafeText fail-loud — all re-verified in tree and green; renderPage rides the same WidthGuard/WidthProbe idiom). SUSPECTED Stage-golden row re-proved ⏭: `--filter 'Progress|Banner'` OK 22T/51A, goldens unshifted.
+- **Gates:** candy-kit 260T/1582A → **272T/1634A** OK linked plain-pipe (+12T/+52A: 8 renderPage + 3 SafeText::page pins + 1 polarity guard); sugar-crush `--filter 'DocFigure|ReadmeRoster|SymbolCitation|ManifestDependencyReach|Help'` OK **323T/118998A** (net crush delta +1T: −1 retired DocFigure arm, +2 HelpTest pins); guard family `--filter 'ReadmeSuiteFigureDrift|GlobDialect|DuplicatedTestHelper|SwallowingCatch|OneSidedHome|ChildWallClock'` 57T with ONLY the known staleness pair red by design (live 21,198 vs pinned 21,267 — re-pin owed at campaign closeout, NOT here). `check-path-repos --no-lib-path-repos` and `--unused` both rc 0. Mutation proofs 2/2: kit LF-preservation neuter → 6 of 11 page pins red; Help call-site revert → exactly the poison-catalogue pin red (byte-identity pin correctly stays green — raw Lang::t IS identity for clean text); restores md5-verified. Evidence `/tmp/opencode/crush-libs-rerun/A6/`.
+
+## CLOSEOUT 2026-10-08 (campaign rerun) — final gate
+
+- **Wave-1 re-verify executed:** eight probe lanes (p1 core/sprinkles, p2 mosaic, p3 mouse/focus/veil,
+  p4 shine/forms, p5 mcp, p6 toast/kit/layout, p7 pty/diff, p8a+p8b transitive-7) re-derived every
+  ✅-marked row of this audit against source at the campaign tip — all landed rows confirmed, verdict
+  sources under `/tmp/opencode/crush-libs-rerun/p1..p8b/`. No ✅ row was found false.
+- **Transitive-7 first-time audit closed:** candy-buffer / candy-ansi / candy-async (lane A3a) and
+  candy-input / candy-palette / candy-flip / honey-bounce (lane A3b) — every finding dispositioned
+  FIXED/⏭ in the two blocks above; the "Unaudited libraries" coverage row is discharged.
+- **Repairs shipped per lane (SHAs in each RE-VERIFY block):** A1 census roster 365b4ba4e;
+  A2 sugar-mcp folds 449298e62 / bdc13dea0 / a9228639c; A3a 4ede1ce45 / 3e7edc12e / 064b1c03a;
+  A3b 76df005be / aa8955d75 / 8825a3be0 / 0052eebea; A4 5b063f208 / 4cb8705fd / 196079294;
+  A5 layout sweep + roundSplit doc; A6 candy-kit renderPage + Help wiring e33d7c733;
+  A7 candy-pty Output/* items 4–8 (000888cf8 and siblings).
+- **Gate lane (this closeout):** sugar-toast section re-verified row-by-row — all six items ✅ LANDED
+  (item 3 superseded stronger by the fork deletion @793d9d959), suite 278T/669A OK; the two
+  coverage-section test-addition rows verified on disk. One cross-lane regression found and fixed:
+  lane A6's Cli/HelpTest poison-catalogue glob was never licensed in
+  `TreeWideGuardRosterTest::WALKS_A_DIRECTORY_THE_TEST_MADE` (reddened 2 serial arms) — roster row
+  added in-step.
+- **Final weld figures (serial, linked, cwd=sugar-crush, PHP 8.3.6, 2026-10-08):**
+  **21,198 tests / 406,450 assertions / 0F / 0E / 1S (McpClientTest canary) / exit 0**, 40m56s.
+  The staleness pair (pinned 21,267 from the mid-campaign operator weld vs live 21,198 after the
+  façade-law test deletions) is RESOLVED by this re-pin: README headline + suite-figure.json +
+  durations.tsv (1,184 rows, determinism-proven across two regenerations) all carry the green-serial
+  truth. K=8 sharded gate: CONSERVATION PASS (tests/skipped/errors/failures exact; assertions +17
+  provider wobble tolerated by design). Repo gates: check-path-repos rc 0, check-child-lifetimes rc 0
+  (7 findings / 7 accounted). Nothing pushed, per campaign law.

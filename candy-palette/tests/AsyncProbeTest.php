@@ -139,4 +139,68 @@ final class AsyncProbeTest extends TestCase
     {
         $this->assertFalse(Probe::isForceColor());
     }
+
+    // ─── A3b: env gate, no fabricated TERM, concurrency cap ────────────────
+
+    public function testNoColorResolvesSynchronouslyWithoutSpawning(): void
+    {
+        $_ENV['NO_COLOR'] = '1';
+        putenv('NO_COLOR=1');
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+
+        try {
+            $resolved = null;
+            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+                $resolved = $p;
+            });
+
+            // The suppression gate returns an ALREADY-resolved promise — a
+            // pending child would leave $resolved null until Loop::run().
+            $this->assertSame(ColorProfile::NoTTY, $resolved);
+        } finally {
+            unset($_ENV['NO_COLOR'], $_ENV['TERM']);
+            putenv('NO_COLOR');
+            putenv('TERM');
+        }
+    }
+
+    public function testUnsetTermResolvesSyncInsteadOfProbingFabricatedXterm(): void
+    {
+        // TERM absent: the old code ran `infocmp -1 xterm`, reporting the
+        // capabilities of a terminal nobody declared.
+        $resolved = null;
+        AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+            $resolved = $p;
+        });
+
+        $this->assertSame(ColorProfile::Ansi, $resolved, 'must be the sync default, not an async probe');
+    }
+
+    public function testConcurrencyCapDegradesToSyncDetection(): void
+    {
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+        $counter = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $counter->setAccessible(true);
+        $original = $counter->getValue();
+        $cap = (new \ReflectionClass(AsyncProbe::class))
+            ->getConstant('MAX_CONCURRENT_PROBES');
+
+        try {
+            $counter->setValue(null, $cap);
+
+            $resolved = null;
+            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+                $resolved = $p;
+            });
+
+            $this->assertSame(ColorProfile::Ansi256, $resolved, 'at-cap calls must sync-resolve');
+            $this->assertSame($cap, $counter->getValue(), 'the cap path must neither spawn nor book a slot');
+        } finally {
+            $counter->setValue(null, $original);
+            unset($_ENV['TERM']);
+            putenv('TERM');
+        }
+    }
 }

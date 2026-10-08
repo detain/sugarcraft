@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Agents;
 
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Events\SubAgentActivity;
-use SugarCraft\Crush\MCP\McpRouter;
+use SugarCraft\Mcp\McpRouter;
 use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
@@ -1574,7 +1574,7 @@ final class AgentManager
             // preset naming servers restricts its agent's roster to those
             // servers' bridges; naming NONE is absence, not denial, so the
             // empty list allows all — the exact law
-            // {@see \SugarCraft\Crush\MCP\McpRouter::serverAllowed()} states,
+            // {@see \SugarCraft\Mcp\McpRouter::serverAllowed()} states,
             // which is the single implementation consulted here (the router
             // filters a server map, this narrows one roster entry — same
             // membership, one spelling). Every built-in preset ships the

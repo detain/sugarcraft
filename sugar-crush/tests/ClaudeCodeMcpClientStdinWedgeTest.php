@@ -6,7 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
-use SugarCraft\Crush\McpMessage;
+use SugarCraft\Mcp\McpMessage;
 use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
 
 /**
@@ -1087,7 +1087,7 @@ PHP;
 declare(strict_types=1);
 require %s;
 use SugarCraft\Crush\ClaudeCodeMcpClient;
-use SugarCraft\Crush\McpMessage;
+use SugarCraft\Mcp\McpMessage;
 
 $client = new ClaudeCodeMcpClient(PHP_BINARY, [%s]);
 $client->connect();

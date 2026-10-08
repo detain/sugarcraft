@@ -2,15 +2,19 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Crush\Tests\MCP;
+namespace SugarCraft\Mcp\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Crush\McpMessage;
+use SugarCraft\Mcp\McpMessage;
 
 /**
  * Decision D12: the id-preserving {@see McpMessage} variant the ACP adapter
- * reads and writes with. An integer id stays an integer both ways; MCP's own
- * {@see McpMessage::parse()} and factories are byte-for-byte what they were.
+ * (sugar-crush) reads and writes with. An integer id stays an integer both
+ * ways; MCP's own {@see McpMessage::parse()} and factories are byte-for-byte
+ * what they were.
+ *
+ * Moved from sugar-crush/tests/MCP/ with the lane-A2 fold — the canonical
+ * tests live with the canonical class.
  */
 final class McpMessageIdPreservingTest extends TestCase
 {

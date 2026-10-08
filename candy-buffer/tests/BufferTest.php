@@ -1424,6 +1424,23 @@ final class BufferTest extends TestCase
         $this->assertSame('X', $buf->cellAt(0, 0)->rune());
         $this->assertNotNull($buf->cellAt(0, 0)->style());
     }
+    public function testFromStringSgr90ResolvesBrightBlackToMidGrey(): void
+    {
+        // B3 (lane A3a): SGR 90 is INTENSE black = bright grey, not #000000.
+        // Canonical value shared with candy-palette StandardColors and the
+        // xterm convention; the old "brightening" model lifted black to
+        // black. The 38;5;8 route is pinned in xterm256Provider.
+        $buf = Buffer::fromString("\x1b[90mX", 1, 1);
+
+        $this->assertSame(0x7f7f7f, $buf->cellAt(0, 0)->style()->fg());
+    }
+
+    public function testFromStringSgr100ResolvesBrightBlackBackgroundToMidGrey(): void
+    {
+        $buf = Buffer::fromString("\x1b[100mX", 1, 1);
+
+        $this->assertSame(0x7f7f7f, $buf->cellAt(0, 0)->style()->bg());
+    }
 
     public function testFromStringParsesUnderlineSgr(): void
     {
@@ -1643,7 +1660,11 @@ final class BufferTest extends TestCase
     {
         yield 'base red agrees with SGR 31' => [1, 0xFF0000];
         yield 'bright red agrees with SGR 91' => [9, 0xFF0000];
-        yield 'bright black lifts nothing' => [8, 0x000000];
+        // Bright black is the canonical mid grey (xterm colour 8 /
+        // candy-palette StandardColors::$brightBlack), NOT #000000 — the
+        // +40% lighten model has nothing to lift from black and used to
+        // render SGR 90 invisible on dark terminals (lane A3a B3).
+        yield 'bright black is canonical mid grey' => [8, 0x7F7F7F];
         yield 'cube origin' => [16, 0x000000];
         yield 'cube pure red' => [196, 0xFF0000];
         yield 'cube mixed' => [67, 0x5F87AF];

@@ -38,9 +38,14 @@ use SugarCraft\Forms\Lang;
  *
  * Keys while focused (bubbles' axis mapping):
  *   <- / ->          green column   h / l
- *   ^  / v           blue row       k / j   (consumed: the default KeyMap
- *                                            binds them to form nav, the
- *                                            {@see Select} list-mode
+ *   Up / Down        blue row       k / j   (the field consumes the
+ *                                            arrows only — they collide
+ *                                            with the default KeyMap's
+ *                                            form nav; the k/j chars need
+ *                                            no claim, the default KeyMap
+ *                                            binds no chars, so they
+ *                                            reach update() unclaimed —
+ *                                            the {@see Select} list-mode
  *                                            precedent)
  *   PageUp / PageDown   red plane
  *   Home / End       first / last green column

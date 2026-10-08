@@ -84,6 +84,50 @@ final class HelpText
     }
 
     /**
+     * Sanitize — and optionally re-wrap — an already-laid-out multi-line page.
+     *
+     * The multi-line-preserving counterpart of {@see render()} (E453): pages
+     * whose embedded newlines ARE the layout (a translated CLI help screen,
+     * for instance) cannot ride {@see render()}, which flattens every caller
+     * string through {@see SafeText::line()} and would collapse the whole
+     * page onto one row. Here each authored row survives: escape sequences
+     * and control bytes are stripped per {@see SafeText::page()}, and with
+     * an explicit `$width` any row too long for it is word-wrapped
+     * cell-aware (via {@see Width::wrap()}) in place while short rows come
+     * back byte-for-byte unchanged.
+     *
+     * Unlike the rest of the class, `$width` defaults to null — never
+     * wrap — on purpose. {@see render()} builds columns and must know its
+     * canvas; a page arrives already laid out by its author, and silently
+     * re-wrapping it to a terminal probed mid-pipe (the historical 80-cell
+     * fallback) would re-flow content nobody asked to re-flow. Callers who
+     * want terminal fitting pass {@see AutoWidth::Auto} or a width
+     * explicitly.
+     *
+     * @param string $page the full page, rows separated by "\n" (CRLF is
+     *                     normalized to "\n" — the CR is a stripped control)
+     * @param int|AutoWidth|null $width  cell width to wrap over-long rows to;
+     *                     null (the default) = never wrap, the page is
+     *                     returned exactly as sanitized
+     *
+     * @throws \InvalidArgumentException when `$width` is less than 1
+     */
+    public static function renderPage(string $page, int|AutoWidth|null $width = null): string
+    {
+        $width = WidthProbe::resolve($width);
+        WidthGuard::assert('HelpText::renderPage', $width, 'leave the page exactly as authored');
+
+        $clean = SafeText::page($page);
+        if ($width === null) {
+            return $clean;
+        }
+
+        $rows = explode("\n", $clean);
+
+        return implode("\n", array_map(static fn (string $row): string => implode("\n", self::wrap($row, $width)), $rows));
+    }
+
+    /**
      * Render a single two-column block.
      *
      * Each row is `  KEY  description`, keys padded to the widest key so

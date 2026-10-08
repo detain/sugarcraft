@@ -46,7 +46,24 @@ final class Projectile
         public readonly Point  $position,
         public readonly Vector $velocity,
         public readonly Vector $acceleration,
-    ) {}
+    ) {
+        // A3b fail-fast: explicit Euler with a non-finite or negative step
+        // diverges (INF dt ⇒ INF displacement; NaN dt poisons every frame
+        // after the first; negative dt integrates time backwards), and a
+        // non-finite state component never returns to the finite domain —
+        // reject the poison at construction rather than propagating it.
+        if (!is_finite($deltaTime)) {
+            throw new \InvalidArgumentException("deltaTime must be finite; got {$deltaTime}");
+        }
+        if ($deltaTime < 0.0) {
+            throw new \InvalidArgumentException("deltaTime must be >= 0; got {$deltaTime}");
+        }
+        foreach (['position' => $position, 'velocity' => $velocity, 'acceleration' => $acceleration] as $name => $vector) {
+            if (!is_finite($vector->x) || !is_finite($vector->y) || !is_finite($vector->z)) {
+                throw new \InvalidArgumentException("Projectile {$name} components must be finite");
+            }
+        }
+    }
 
     public static function new(
         float  $deltaTime,

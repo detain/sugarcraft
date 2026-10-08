@@ -133,15 +133,37 @@ final class McpRouter
 
     private function matchesAnyDenyPattern(string $name): bool
     {
-        foreach ($this->denyActions as $pattern => $action) {
-            // A pattern whose action is not "deny" is not a deny rule;
-            // ignore it rather than guess its intent. Shapes that carry no
-            // action at all were already refused in the constructor.
-            if ($action !== 'deny') {
-                continue;
-            }
+        // One law: the public static below is what every caller outside the
+        // router asks too, so the instance filter delegates rather than
+        // mirroring. The constructor already reduced specs to action strings.
+        return self::serverDenied($name, $this->denyActions);
+    }
 
-            if (fnmatch((string) $pattern, $name)) {
+    /**
+     * Whether ONE server name matches a deny-pattern map (pattern => "deny",
+     * `fnmatch` wildcards, compared against the RAW config key exactly as
+     * {@see serverAllowed()} is).
+     *
+     * Public static because the same question gets asked without a router in
+     * sight: sugar-crush's McpClient applies the operator's deny map to the
+     * servers it starts and to its unrestricted arm, which never builds a
+     * router over the servers it refuses (lane-A2 fold of the sugar-crush
+     * original — this class is now the single home of both predicates).
+     *
+     * A pattern that is not a non-empty string never matches. PHP casts
+     * numeric-looking array keys back to int, and an int "pattern" — or the
+     * literal "" a stray config colon leaves behind — is not a rule anyone
+     * authored against a server name; reading it as one would be guessing.
+     * An entry whose action is not the exact string "deny" is likewise not a
+     * deny rule; other actions are ignored, never interpreted.
+     *
+     * @param array<array-key, mixed> $denyPatterns pattern => action, the raw
+     *        config shape (or the constructor-normalised action map).
+     */
+    public static function serverDenied(string $server, array $denyPatterns): bool
+    {
+        foreach ($denyPatterns as $pattern => $action) {
+            if ($action === 'deny' && \is_string($pattern) && $pattern !== '' && fnmatch($pattern, $server)) {
                 return true;
             }
         }
@@ -150,10 +172,24 @@ final class McpRouter
     }
 
     /**
-     * Is this server name permitted by the allow-list?
+     * THE LAW, EXPOSED. Whether ONE server name passes an allow-list.
      *
-     * Public static because both the router and downstream gate checks ask the
-     * same question about the same list shape.
+     * `applyAllowList()` filters a whole server map; downstream gate checks
+     * answer the same question one entry at a time — sugar-crush's sub-agent
+     * roster narrows MCP bridges out of a preset's grant at resolution
+     * (E696-α, `AgentManager::resolveGrantedTools()`). Both must read the same
+     * law — empty list allows all, `*` entries `fnmatch`, everything else is
+     * exact equality on the RAW config server key — or a preset's roster and
+     * its router view diverge, which is the two-dialects defect a permission
+     * layer refuses to host for tool names. One spelling of the membership
+     * rule, one implementation; the filter delegates here rather than
+     * mirroring it. (Lane-A2 fold: this is the sugar-crush original's wording
+     * and doctrine, now the single home.)
+     *
+     * RAW BOTH SIDES ON PURPOSE: entries are compared against the config key
+     * as authored (`.mcp.json` for sugar-crush), never against the sanitised
+     * `mcp__<key>__` wire spelling (E42) — a caller holding only a wire name
+     * must not route it in here.
      *
      * An empty list means allow-all — "no restriction configured" is distinct
      * from "restrict to nothing", and every product caller relies on that
@@ -166,7 +202,9 @@ final class McpRouter
      * that silently narrows (or widens) access is worse than a loud boot
      * failure.
      *
-     * @param list<string> $allowList
+     * @param array<array-key, mixed> $allowList the caller's list, untrusted
+     *        shape — a foreign import casts with `(array)` only, so entries
+     *        are validated here at the boundary rather than trusted upstream.
      */
     public static function serverAllowed(string $name, array $allowList): bool
     {
@@ -177,8 +215,8 @@ final class McpRouter
         foreach ($allowList as $entry) {
             if (!is_string($entry) || $entry === '') {
                 throw new \RuntimeException(sprintf(
-                    'MCP allow-list entry for server "%s" must be a non-empty string, got %s.',
-                    $name,
+                    'An mcpServers allowlist entry must be a non-empty string, %s given; '
+                    . 'a server allowlist is refused rather than read as a rule that matches nothing.',
                     get_debug_type($entry),
                 ));
             }

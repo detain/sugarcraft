@@ -6,34 +6,26 @@ namespace SugarCraft\Crush\Tests\MCP;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\MCP\StdioMcpServer;
-use SugarCraft\Crush\McpMessage;
 
 /**
- * A JSON-RPC `result` IS ANY JSON VALUE, and this file is the fixture set that
- * says so for every type it can legally take.
+ * A JSON-RPC `result` IS ANY JSON VALUE. The TYPE MATRIX for the envelope
+ * itself lives with the canonical class in `sugarcraft/sugar-mcp`
+ * (tests/McpMessageTest.php, moved here by the lane-A2 fold); what stays in
+ * this file is the CONSUMER half only — the {@see StdioMcpServer::callTool()}
+ * and {@see StdioMcpServer::start()} behaviour the widening moved the crash
+ * onto, driven through real server children.
  *
- * {@see McpMessage}'s constructor typed `$result` as `?array`, while
- * {@see McpMessage::parse()} handed it `json_decode($raw, true)['result']`
- * unchecked. MEASURED on this host (PHP 8.3.6) by feeding
- * `{"jsonrpc":"2.0","id":"1","result":<v>}` to `parse()` once per value:
- *
- *     v = true  false  "s"  5  1.5  ->  TypeError: argument #4 ($result)
- *     v = []    {"a":1}             ->  parsed
- *     v = null                      ->  null (rejected — see below)
- *
- * That is not a swallowed warning. `@` does not suppress a `TypeError`, and the
- * throw escaped further than the one message: {@see \SugarCraft\Crush\MCP\McpClient}
- * wraps `start()` in `catch (\RuntimeException)` precisely so that "a single
- * unreachable/misbehaving server must not abort loading the rest", and a
- * `TypeError` is not a `RuntimeException`. One conforming server answering
- * `initialize` with `"result": true` therefore took down the whole MCP
- * subsystem for the session.
- *
- * WHY THESE ARE NOT IN `tests/McpMessageTest.php`: that file covers the
- * envelope's happy path with object `result`s. This one exists to hold the
- * TYPE MATRIX together with the {@see StdioMcpServer::callTool()} consumer that
- * the widening moved the crash onto — the fix is only whole when both halves
- * are pinned in the same place.
+ * Historical premise, kept because it is why these rows exist: the product's
+ * envelope once typed `$result` as `?array` while `parse()` handed it
+ * `json_decode($raw, true)['result']` unchecked, so every reply whose `result`
+ * decoded to a PHP scalar threw a `TypeError` out of `parse()` before the
+ * object existed. A `TypeError` is not a swallowed warning and not a
+ * `RuntimeException`, and `\SugarCraft\Crush\MCP\McpClient` wraps `start()` in
+ * `catch (\RuntimeException)` precisely so that "a single unreachable/
+ * misbehaving server must not abort loading the rest" — one conforming server
+ * answering `initialize` with a non-object `result` therefore took down the
+ * whole MCP subsystem for the session. The fix is `mixed` + the `resultSet`
+ * sentinel; these rows pin that the product-side consumers read both halves.
  */
 final class McpMessageResultTypeTest extends TestCase
 {
@@ -53,210 +45,6 @@ final class McpMessageResultTypeTest extends TestCase
         $this->removeTree($this->tempDir);
 
         parent::tearDown();
-    }
-
-    // =========================================================================
-    // The type matrix
-    // =========================================================================
-
-    /**
-     * ONE FIXTURE PER JSON TYPE `result` CAN HOLD. Each row is the literal that
-     * goes into the wire text and the value `->result` must come back as.
-     *
-     * `assertSame()` on the value, not merely "did not throw": a `parse()` that
-     * silently coerced every scalar to `null` — or to `[]` — would satisfy "no
-     * exception" while destroying the payload, and the payload is the whole
-     * point of the field.
-     *
-     * ZERO IS A ROW BECAUSE THIS ALPHABET WAS ONCE WRITTEN TO THE SHAPES
-     * ALREADY KNOWN. Its first cut held three non-zero numbers and no zero, and
-     * a falsy-coalescing bug in the {@see StdioMcpServer::callTool()} consumer
-     * that erased exactly `0` therefore passed every row. A number alphabet
-     * without a zero cannot see a falsiness defect; see
-     * {@see testAZeroResultReachesTheModelAsZeroAndNotAsEmptyText()}.
-     *
-     * `{}` AND `[]` ARE ONE ROW IN THE SECOND CONSUMER, NOT TWO, and the row
-     * names promise slightly more than that. `json_decode('{}', true)` and
-     * `json_decode('[]', true)` are both PHP `[]`, so the parse consumer really
-     * does distinguish the two WIRE forms — it is handed the literal — while the
-     * round-trip consumer is handed only the decoded value and emits `[]` for
-     * both. The `{}` wire form is therefore never round-tripped, and it cannot
-     * be without a `stdClass`, which `parse()` could not give back anyway
-     * (`json_decode(..., true)` never produces one). Recorded rather than
-     * papered over: the gap is in what the row NAME implies, not in the
-     * behaviour.
-     *
-     * FLOAT ZERO IS DELIBERATELY NOT A ROW HERE, and the reason is JSON's own
-     * number model rather than anything this package does: `json_encode(0.0)`
-     * is `"0"` on PHP 8.3.6 with the default `serialize_precision=-1`, so the
-     * round-trip consumer below would legitimately get `int(0)` back and an
-     * `assertSame()` against `0.0` would fail on a correct encoder. Float zero
-     * is covered where it can actually occur — off the wire, through
-     * `json_decode()` — in the dedicated test named above.
-     *
-     * @return iterable<string, array{0: string, 1: mixed}>
-     */
-    public static function legalResultTypes(): iterable
-    {
-        yield 'boolean true' => ['true', true];
-        yield 'boolean false' => ['false', false];
-        yield 'integer' => ['5', 5];
-        yield 'negative integer' => ['-17', -17];
-        yield 'zero' => ['0', 0];
-        yield 'float' => ['1.5', 1.5];
-        yield 'string' => ['"pong"', 'pong'];
-        yield 'empty string' => ['""', ''];
-        yield 'empty array' => ['[]', []];
-        yield 'list' => ['[1,2,3]', [1, 2, 3]];
-        yield 'object' => ['{"a":1}', ['a' => 1]];
-        yield 'empty object' => ['{}', []];
-
-        // NULL IS IN THE TABLE NOW, AND IT WAS THE LAST ONE OUT. It is a
-        // conforming JSON-RPC result and was rejected until `$resultSet` existed
-        // to tell "sent null" from "sent nothing" — see
-        // {@see testANullResultParsesAndIsDistinguishedFromAnAbsentOne()}.
-        yield 'null' => ['null', null];
-    }
-
-    /**
-     * @dataProvider legalResultTypes
-     */
-    public function testParseAcceptsEveryJsonTypeAResultMayLegallyHold(string $literal, mixed $expected): void
-    {
-        $message = McpMessage::parse('{"jsonrpc":"2.0","id":"1","result":' . $literal . '}');
-
-        $this->assertNotNull(
-            $message,
-            'parse() rejected a conforming JSON-RPC response whose result was ' . $literal,
-        );
-        $this->assertSame(
-            $expected,
-            $message->result,
-            'result ' . $literal . ' did not survive parse() intact',
-        );
-        $this->assertSame('1', $message->id);
-        $this->assertTrue($message->isResponse());
-        $this->assertFalse($message->isError());
-    }
-
-    /**
-     * `"result": null` PARSES, AND IS TOLD APART FROM AN ABSENT `result`.
-     *
-     * WHAT THIS TEST SAID BEFORE: that `"result": null` was REJECTED on purpose,
-     * and that the next reader must not "fix" it. The reasoning was sound at the
-     * time — with `method`, `error` and `result` all null there was no
-     * discriminator left in the decoded array, so the message was
-     * indistinguishable from `{"jsonrpc":"2.0"}` and from a reply carrying no
-     * `result` key — and it named the proper fix: a paired `bool $resultSet`, the
-     * convention this repo already uses for nullable state.
-     *
-     * WHAT IS TRUE NOW: that sentinel exists. `array_key_exists()` is the
-     * discriminator, so all three messages are distinct, and the rejection is
-     * gone. `{"jsonrpc":"2.0","id":"1","result":null}` is a conforming JSON-RPC
-     * success response and this class now represents it.
-     *
-     * WHY THE ROWS BELOW STILL EARN THEIR PLACE: the sentinel is only worth
-     * anything if it DISCRIMINATES, and a `resultSet` hard-wired to `true` would
-     * satisfy "null parses" while quietly making `{"jsonrpc":"2.0"}` parse too.
-     * All four polarities are here — present-and-null, present-and-false,
-     * absent-with-a-method, and absent-with-nothing-at-all — so neither a
-     * blanket-accept nor a blanket-reject passes.
-     */
-    public function testANullResultParsesAndIsDistinguishedFromAnAbsentOne(): void
-    {
-        $nullResult = McpMessage::parse('{"jsonrpc":"2.0","id":"1","result":null}');
-        $this->assertNotNull(
-            $nullResult,
-            'a conforming JSON-RPC response whose result is null was rejected — the resultSet '
-            . 'sentinel is not being consulted',
-        );
-        $this->assertTrue($nullResult->resultSet, 'the result key was present and is not recorded');
-        $this->assertNull($nullResult->result);
-        $this->assertTrue($nullResult->isResponse());
-        $this->assertFalse($nullResult->isError());
-
-        // The neighbouring falsy value, through the SAME call: a guard sloppy
-        // enough to sweep `null` up would very likely take `false` with it.
-        $falseResult = McpMessage::parse('{"jsonrpc":"2.0","id":"1","result":false}');
-        $this->assertNotNull($falseResult);
-        $this->assertTrue($falseResult->resultSet);
-        $this->assertFalse($falseResult->result);
-
-        // ABSENT, not null: a request carries no `result` key, and must not be
-        // reported as one that does.
-        $request = McpMessage::parse('{"jsonrpc":"2.0","id":"1","method":"tools/list"}');
-        $this->assertNotNull($request);
-        $this->assertFalse(
-            $request->resultSet,
-            'a message with no result key is reporting one, so the sentinel is hard-wired true '
-            . 'and discriminates nothing',
-        );
-
-        // AND THE ENVELOPE WITH NOTHING IN IT IS STILL REJECTED. This is what the
-        // guard in parse() is FOR, now that null is no longer its business: no
-        // method, no error, no result key — nothing to match a response against.
-        $this->assertNull(
-            McpMessage::parse('{"jsonrpc":"2.0"}'),
-            'an envelope carrying no method, no error and no result key was accepted — parse() '
-            . 'now returns objects that readResponse() has nothing to match on',
-        );
-    }
-
-    /**
-     * A NULL RESULT SURVIVES THE ROUND TRIP, which `toJson()` used to break in the
-     * mirror of the same bug: `if ($this->result !== null)` dropped the key, so a
-     * message that arrived as `{"…","result":null}` re-serialised as `{"…"}` — a
-     * DIFFERENT message, and one this class then refused to parse back.
-     */
-    public function testANullResultSurvivesToJsonAndBack(): void
-    {
-        $json = McpMessage::success('7', null)->toJson();
-
-        $this->assertStringContainsString(
-            '"result":null',
-            $json,
-            'toJson() dropped a null result, so the message it emits is not the one it holds',
-        );
-
-        $reparsed = McpMessage::parse($json);
-        $this->assertNotNull($reparsed, 'a null result did not survive toJson() + parse()');
-        $this->assertTrue($reparsed->resultSet);
-        $this->assertNull($reparsed->result);
-
-        // THE OTHER POLARITY: a message that genuinely has no result must not grow
-        // one. Without this, `toJson()` emitting `"result":null` unconditionally
-        // passes the row above and corrupts every request on the wire.
-        $this->assertStringNotContainsString(
-            '"result"',
-            McpMessage::request('7', 'tools/list', [])->toJson(),
-            'toJson() put a result key on a REQUEST',
-        );
-    }
-
-    /**
-     * The factory takes the same domain as the parser. `success()` was untyped
-     * (`$result` with no declaration) in front of a `?array` constructor, so it
-     * advertised "anything" and threw on most of it.
-     *
-     * @dataProvider legalResultTypes
-     */
-    public function testSuccessRoundTripsEveryLegalResultTypeThroughJson(string $literal, mixed $expected): void
-    {
-        $reparsed = McpMessage::parse(McpMessage::success('9', $expected)->toJson());
-
-        $this->assertNotNull($reparsed, 'success(' . $literal . ') did not survive toJson()+parse()');
-        $this->assertSame($expected, $reparsed->result);
-    }
-
-    /**
-     * `toArray()` carries the widened value out too — the shape
-     * {@see \SugarCraft\Mcp\StdioMcpServer::parseTools()} reads (phase-2a: the parser moved to `sugarcraft/sugar-mcp`).
-     */
-    public function testToArrayCarriesANonArrayResultThrough(): void
-    {
-        $array = McpMessage::success('3', true)->toArray();
-
-        $this->assertTrue($array['result']);
     }
 
     /**
@@ -308,10 +96,6 @@ final class McpMessageResultTypeTest extends TestCase
             $server->stop();
         }
     }
-
-    // =========================================================================
-    // The consumer the widening moved the crash onto
-    // =========================================================================
 
     /**
      * A SERVER THAT ANSWERS `initialize` WITH `"result": null` COMES UP EMPTY

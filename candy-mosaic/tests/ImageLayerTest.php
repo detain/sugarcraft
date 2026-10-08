@@ -196,6 +196,30 @@ final class ImageLayerTest extends TestCase
         self::assertCount(1, $layer->placements());
     }
 
+    public function testExhaustionNeverGrowsTheDigestTable(): void
+    {
+        $layer = new ImageLayer();
+        $cap   = ImageOverlay::MAX_IMAGES;
+
+        for ($i = 0; $i < $cap; $i++) {
+            self::assertSame($i, $layer->placeTracked("blob-{$i}", 1, 1)->imageId);
+        }
+
+        $table = new \ReflectionProperty(ImageLayer::class, 'idByDigest');
+        self::assertCount($cap, $table->getValue($layer));
+
+        // Past the cap: blank blocks and null ids, and NO new digest rows.
+        // The old `??=` wrote one dead row per unique overflow blob, forever
+        // (lane p2, N5 — the only unbounded structure in the class).
+        for ($i = 0; $i < 50; $i++) {
+            self::assertNull($layer->placeTracked("overflow-{$i}", 1, 1)->imageId);
+        }
+        self::assertCount($cap, $table->getValue($layer), 'idByDigest grew past MAX_IMAGES');
+
+        // Registered content still dedupes after exhaustion.
+        self::assertSame(7, $layer->placeTracked('blob-7', 1, 1)->imageId);
+    }
+
     public function testTheFirstIdsCellInFrameTextIsNotAMarker(): void
     {
         // Audit 15b-17: ids are dense from 0, so U+E002 used to mean "this

@@ -74,6 +74,7 @@ final class GreedySolver implements LayoutSolver
 {
     /**
      * @param bool $roundSplit        round() (not floor()) Percentage/Ratio sizes — sugar-boxer distribute().
+     *                                Float→int determinism contract in {@see self::withRoundSplit()}.
      * @param bool $remainderToLast   hand the rounding remainder to the LAST region/Fill/Max, not the first.
      * @param bool $truncateOverflow  proportionally shrink regions when demand exceeds the area (default);
      *                                sugar-boxer keeps each region at full base size (pass false).
@@ -138,6 +139,16 @@ final class GreedySolver implements LayoutSolver
 
     /**
      * Round Percentage/Ratio proportional sizes with round() instead of floor().
+     *
+     * Fractional-width determinism contract (lane A5 re-verify): both branches
+     * cast an IEEE-754 double to int with a single PHP-core function —
+     * `(int) round(...)` (half away from zero) when ON, `(int) floor(...)`
+     * (toward negative infinity) when OFF. The operands are integer arithmetic
+     * (`$totalWidth * $c->n / 100`, `... * $c->numerator / $c->denominator`), so
+     * the same inputs always yield the same cell widths on every build; the
+     * floor-vs-round POLICY is the only divergence, and it is chosen solely by
+     * this flag (opt-in — sugar-crush never enables it, its path is floor-only).
+     * Pinned by WidthSumInvariantSweepTest::testRoundSplitRoundsHalfAwayFromZero.
      */
     public function withRoundSplit(bool $on = true): self
     {

@@ -285,6 +285,42 @@ final class DecoderTest extends TestCase
     }
 
     /**
+     * A3b (campaign rerun): zero-dimension logical screen with one image
+     * descriptor used to reach imagecreatetruecolor(0, 8) and leak a raw
+     * ValueError, breaking decode()'s documented RuntimeException contract.
+     */
+    public function testDecodeThrowsRuntimeExceptionForZeroWidthScreen(): void
+    {
+        if (extension_loaded('gd') === false) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $buf = "GIF89a"
+             . pack('v', 0)    // width = 0 (crafted)
+             . pack('v', 8)    // height = 8
+             . "\x00"          // packed: no GCT
+             . "\x00"          // bg index
+             . "\x00"          // pixel aspect ratio
+             . "\x2C"          // image descriptor introducer
+             . "\x00\x00\x00\x00"  // left/top 0,0
+             . pack('v', 8) . pack('v', 8) // frame 8x8
+             . "\x00"          // descriptor packed: no LCT
+             . "\x02"          // LZW min code size
+             . "\x02\x44\x01"  // one sub-block
+             . "\x00"          // sub-block terminator
+             . "\x3B";         // trailer
+        $path = sys_get_temp_dir() . '/zero-width-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('candy-flip: GIF screen dimensions must be positive');
+            Decoder::decode($path, 4, 4);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
      * A file carrying the GIF signature but no complete Logical Screen
      * Descriptor is not a GIF at all — the old gate only asked for 6 bytes,
      * after which parseHeader read bytes 6..10 off the end of the string

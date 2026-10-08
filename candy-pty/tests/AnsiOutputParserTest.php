@@ -134,7 +134,13 @@ final class AnsiOutputParserTest extends TestCase
         $this->assertInstanceOf(SgrState::class, $parser->state());
     }
 
-    public function testResetClearsParserStateOnly(): void
+    /**
+     * F4 (lane A7 re-verify): this test used to pin the BROKEN shape — reset
+     * left the SGR state red — because its name admitted it ("StateOnly").
+     * The docblock contract always promised "clears SGR state"; reset() now
+     * honors it, so the pin is flipped in-step with the fix.
+     */
+    public function testResetClearsSgrState(): void
     {
         $master = new FakeMasterPty2("\x1b[31m");
         $parser = AnsiOutputParser::forMaster($master);
@@ -143,7 +149,67 @@ final class AnsiOutputParserTest extends TestCase
         $this->assertSame(SgrState::COLOR_RED, $parser->state()->foreground);
 
         $parser->reset();
+        $this->assertSame(SgrState::COLOR_DEFAULT, $parser->state()->foreground);
+    }
+
+    /**
+     * F4: after reset, a following plain chunk parses from a clean slate —
+     * no lingering red, and the event log starts empty.
+     */
+    public function testResetGivesSubsequentChunksACleanSlate(): void
+    {
+        $master = new FakeMasterPtyQueue(["\x1b[31mred text", "plain text"]);
+        $handler = new SgrHandler();
+        $parser = new AnsiOutputParser($master, new Parser($handler), $handler);
+
+        $parser->readChunk(0.001);
         $this->assertSame(SgrState::COLOR_RED, $parser->state()->foreground);
+
+        $parser->reset();
+        $this->assertSame('default', $parser->state()->describe());
+        $this->assertSame([], $handler->drainTransitions()); // log cleared too
+
+        $this->assertSame('plain text', $parser->readChunk(0.001));
+        $this->assertSame(SgrState::COLOR_DEFAULT, $parser->state()->foreground);
+        $this->assertSame([], $handler->drainTransitions()); // no phantom events
+    }
+
+    /**
+     * F1 (lane A7 re-verify): the probe stream "\x1b[31m…\x1b[91m…\x1b[39m"
+     * reported 2 events for 3 real changes. Through the full parser path it
+     * must now report all three transitions.
+     */
+    public function testBrightStreamReportsEveryTransitionThroughParser(): void
+    {
+        $master = new FakeMasterPty2("\x1b[31mred\x1b[91mbright\x1b[39mdefault");
+        $parser = AnsiOutputParser::forMaster($master);
+
+        $transitions = $parser->readChunkWithTransitions(0.001);
+        $this->assertCount(3, $transitions);
+        $this->assertSame(SgrState::COLOR_BRIGHT_RED, $transitions[1][1]->foreground);
+        $this->assertSame(SgrState::COLOR_DEFAULT, $transitions[2][1]->foreground);
+    }
+
+    /** F3 (lane A7 re-verify): readChunk returns raw bytes, escapes included. */
+    public function testReadChunkReturnsRawBytesIncludingEscapes(): void
+    {
+        $master = new FakeMasterPty2("\x1b[31mred");
+        $parser = AnsiOutputParser::forMaster($master);
+
+        $this->assertSame("\x1b[31mred", $parser->readChunk(0.001));
+    }
+
+    /**
+     * F5 (lane A7 re-verify): truecolor channels clamp on the byte path too —
+     * "\x1b[38;2;300;0;0m" must pack r=255, not wrap to 44.
+     */
+    public function testReadChunkClampsTruecolorChannels(): void
+    {
+        $master = new FakeMasterPty2("\x1b[38;2;300;0;0m");
+        $parser = AnsiOutputParser::forMaster($master);
+
+        $parser->readChunk(0.001);
+        $this->assertSame(255 << 16, $parser->state()->foregroundRgb);
     }
 
     public function testReadChunkWithMultipleSgrParameters(): void
@@ -196,6 +262,56 @@ final class FakeMasterPty2 implements MasterPty
             return '';
         }
         return null;
+    }
+
+    public function write(string $bytes): int
+    {
+        return \strlen($bytes);
+    }
+
+    public function resize(int $cols, int $rows): void {}
+
+    public function size(): array
+    {
+        return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0];
+    }
+
+    public function stream(): mixed
+    {
+        return null;
+    }
+
+    public function close(): void {}
+
+    public function isClosed(): bool
+    {
+        return false;
+    }
+
+    public function fd(): int
+    {
+        return -1;  // sentinel invalid fd for test fixture
+    }
+}
+
+/**
+ * Master PTY fixture that serves a queue of chunks, one per read() call,
+ * then EOF — for tests that need multi-chunk sessions (e.g. F4's
+ * paint→reset→paint-plain sequence).
+ */
+final class FakeMasterPtyQueue implements MasterPty
+{
+    /** @param list<string> $chunks */
+    public function __construct(
+        private array $chunks = [],
+    ) {}
+
+    public function read(int $len = 8192, ?float $timeout = null): ?string
+    {
+        if ($this->chunks === []) {
+            return '';
+        }
+        return \array_shift($this->chunks);
     }
 
     public function write(string $bytes): int

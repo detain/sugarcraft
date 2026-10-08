@@ -163,6 +163,14 @@ final class EscapeDecoder
                     $events = array_merge($events, $this->decodeClean($prefix));
                 }
 
+                // A paste-start marker is an external resynchronisation
+                // boundary: decodeClean($prefix) may have re-buffered an
+                // incomplete escape fragment (e.g. a stale "ESC [" from before
+                // the paste) into $this->remainder, and that fragment must
+                // never stitch onto the first post-paste keystroke — the same
+                // drop-the-orphan law the stray paste-END handling follows.
+                $this->remainder = '';
+
                 $this->pasteBuffer = '';
                 $this->inPaste = true;
                 $pass = $this->finishPastePass(substr($stream, $pasteStartPos + strlen(self::PASTE_START)));

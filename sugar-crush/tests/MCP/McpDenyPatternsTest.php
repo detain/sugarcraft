@@ -7,7 +7,6 @@ namespace SugarCraft\Crush\Tests\MCP;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\MCP\McpClient;
-use SugarCraft\Crush\MCP\McpRouter;
 use SugarCraft\Crush\MCP\McpTool;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Tests\Support\McpLaunchEnabledTrait;
@@ -91,15 +90,6 @@ final class McpDenyPatternsTest extends TestCase
         $this->restoreMcpLaunchEnabled();
 
         parent::tearDown();
-    }
-
-    public function testTheRouterLawMatchesGlobsAndOnlyTheDenyAction(): void
-    {
-        self::assertTrue(McpRouter::serverDenied('untrusted_x', ['untrusted_*' => 'deny']));
-        self::assertTrue(McpRouter::serverDenied('scratch', ['scratch' => 'deny']));
-        self::assertFalse(McpRouter::serverDenied('good', ['untrusted_*' => 'deny']));
-        self::assertFalse(McpRouter::serverDenied('untrusted_x', ['untrusted_*' => 'allow']));
-        self::assertFalse(McpRouter::serverDenied('untrusted_x', []));
     }
 
     public function testADeniedServerIsNeverStartedListedOrCalled(): void

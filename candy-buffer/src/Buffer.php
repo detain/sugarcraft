@@ -324,6 +324,15 @@ final class Buffer implements \JsonSerializable
         ];
         $base = $palette[$idx] ?? 0xffffff;
         if ($bright) {
+            if ($idx === 0) {
+                // Bright black has nothing to lighten from #000000 — the
+                // +40% model below would keep it pure black, painting
+                // invisible black-on-black text on dark terminals. The
+                // canonical bright-palette value (xterm colour 8, and
+                // candy-palette's StandardColors::$brightBlack) is mid
+                // grey 0x7F7F7F, so SGR 90 / `38;5;8` resolve there.
+                return 0x7f7f7f;
+            }
             // Bright: lighten the color
             $r = ($base >> 16) & 0xff;
             $g = ($base >> 8) & 0xff;
@@ -397,6 +406,13 @@ final class Buffer implements \JsonSerializable
     /**
      * Return a new Buffer with $cell placed at ($col, $row).
      *
+     * Wide-cell pairing is enforced here: placing a width-2 cell writes the
+     * width-0 continuation into the next column (clipped at the right edge,
+     * mirroring applyDiff's discipline); replacing a wide lead, or writing
+     * onto a continuation, sweeps the partner so no orphaned half-pair can
+     * survive the mutation. {@see fromGrid()} stays the unvalidated bulk
+     * escape hatch for callers that build grids themselves.
+     *
      * @throws \OutOfRangeException when coordinates are outside the grid
      */
     public function withCellAt(int $col, int $row, Cell $cell): self
@@ -404,7 +420,7 @@ final class Buffer implements \JsonSerializable
         $this->assertInBounds($col, $row);
 
         $grid = $this->grid;
-        $grid[$row * $this->width + $col] = $cell;
+        $this->placeWithPair($grid, $col, $row, $cell);
 
         return $this->mutate(['grid' => $grid]);
     }
@@ -418,6 +434,10 @@ final class Buffer implements \JsonSerializable
      * Note: negative origins are silently clipped — a region origin at
      * (-1, -1) starts one cell left/above the buffer's top-left corner
      * and no cells are written until the region enters buffer bounds.
+     *
+     * Wide-cell pairing is enforced per destination write exactly as in
+     * {@see withCellAt()} — a source pair blits intact, and a lead whose
+     * continuation falls outside the blit still gets its partner written.
      */
     public function withRegion(Region $region, Buffer $source): self
     {
@@ -446,7 +466,7 @@ final class Buffer implements \JsonSerializable
                     continue;
                 }
 
-                $grid[$dstRow * $this->width + $dstCol] = $source->grid[$srcRow * $srcW + $srcCol];
+                $this->placeWithPair($grid, $dstCol, $dstRow, $source->grid[$srcRow * $srcW + $srcCol]);
             }
         }
 
@@ -455,6 +475,9 @@ final class Buffer implements \JsonSerializable
 
     /**
      * Efficiently fill a rectangular $region with a single $cell.
+     *
+     * Wide-cell pairing is enforced per written cell exactly as in
+     * {@see withCellAt()}.
      *
      * @param Region $region The region to fill (clipped to buffer bounds)
      * @param Cell   $cell   The cell to write at each position in the region
@@ -476,7 +499,7 @@ final class Buffer implements \JsonSerializable
                     continue;
                 }
 
-                $grid[$dstRow * $this->width + $dstCol] = $cell;
+                $this->placeWithPair($grid, $dstCol, $dstRow, $cell);
             }
         }
 
@@ -863,6 +886,49 @@ final class Buffer implements \JsonSerializable
     }
 
     // ─── Internals ─────────────────────────────────────────────────────
+
+    /**
+     * Write one cell into a working grid, keeping the wide-cell pair
+     * invariant of the Cell docblock structurally true afterwards:
+     *
+     *  - a width-2 lead gets its width-0 continuation in the right neighbour
+     *    (a straddle at the last column keeps only the lead — the same
+     *    silent in-range clamp applyDiff() performs);
+     *  - replacing a lead with a real cell blanks a left-behind continuation
+     *    so the cleared column repaints instead of ghosting;
+     *  - writing a real cell onto a continuation blanks the stranded lead
+     *    to its left instead of leaving a half-open pair.
+     *
+     * Continuation-to-continuation writes pass through untouched, so a
+     * well-formed source pair blits byte-identically.
+     *
+     * @param non-empty-array<int, Cell> $grid working grid, mutated in place
+     */
+    private function placeWithPair(array &$grid, int $col, int $row, Cell $cell): void
+    {
+        $idx = $row * $this->width + $col;
+        $previous = $grid[$idx];
+        $grid[$idx] = $cell;
+
+        if ($cell->width() === 2) {
+            if ($col + 1 < $this->width) {
+                $grid[$idx + 1] = Cell::continuation();
+            }
+        } elseif ($cell->width() !== 0
+            && $previous->width() === 2
+            && $col + 1 < $this->width
+            && $grid[$idx + 1]->width() === 0
+        ) {
+            $grid[$idx + 1] = Cell::new();
+        }
+
+        if ($cell->width() !== 0 && $previous->width() === 0 && $col > 0) {
+            $left = $grid[$idx - 1];
+            if ($left->width() === 2) {
+                $grid[$idx - 1] = Cell::new();
+            }
+        }
+    }
 
     /**
      * @return static

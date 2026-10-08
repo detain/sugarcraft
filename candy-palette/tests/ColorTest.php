@@ -320,4 +320,22 @@ final class ColorTest extends TestCase
     {
         $this->assertSame('ASCII', \SugarCraft\Palette\ColorProfile::Ascii->label());
     }
+
+    public function testAnsi16SgrRejectsIndexBelowRange(): void
+    {
+        $this->expectException(\OutOfBoundsException::class);
+        Color::ansi16Sgr(-1, false);
+    }
+
+    public function testAnsi16SgrRejectsIndexAboveRange(): void
+    {
+        $this->expectException(\OutOfBoundsException::class);
+        Color::ansi16Sgr(16, true);
+    }
+
+    public function testAnsi16SgrAcceptsRangeEdges(): void
+    {
+        $this->assertSame(30, Color::ansi16Sgr(0, false));
+        $this->assertSame(107, Color::ansi16Sgr(15, true));
+    }
 }

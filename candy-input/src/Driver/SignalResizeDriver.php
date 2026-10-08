@@ -18,6 +18,7 @@ use SugarCraft\Input\Event;
  *
  * Usage:
  *   $driver = new SignalResizeDriver();
+ *   $driver->arm();
  *   while (true) {
  *       $event = $driver->read();
  *       if ($event instanceof ResizeEvent) {
@@ -28,6 +29,11 @@ use SugarCraft\Input\Event;
  * NOTE: Applications must still install a SIGWINCH handler if they need
  * to RESPOND to resizes, not just detect them. This driver only detects
  * that a resize occurred by checking a flag set in the signal handler.
+ *
+ * Construction is side-effect free. Arm() flips the process-global signal
+ * disposition (pcntl_async_signals + a SIGWINCH handler) and shells out to
+ * tput for the initial dimensions — opt-in only, so merely building the
+ * driver never mutates the process it lives in.
  *
  * @see ResizeEvent
  * @see InputDriver
@@ -84,7 +90,21 @@ final class SignalResizeDriver implements InputDriver
     {
         $this->commandRunner = $commandRunner
             ?? static fn (string $command): string|false|null => @\shell_exec($command);
+    }
 
+    /**
+     * Opt in to the driver's process-global side effects.
+     *
+     * Arm() is the ONLY place this class touches global state: it registers
+     * the instance with the shared SIGWINCH fan-out registry, installs the
+     * process-wide handler (flipping pcntl_async_signals on), and shells out
+     * to tput once for the initial dimensions. Construction alone never does
+     * any of that — callers who only build (or test-build) a driver leave the
+     * process disposition untouched. Calling arm() twice is harmless: the
+     * WeakMap set is idempotent and the handler re-install is the same closure.
+     */
+    public function arm(): void
+    {
         if (!function_exists('pcntl_signal')) {
             return;
         }
@@ -104,7 +124,7 @@ final class SignalResizeDriver implements InputDriver
 
     /**
      * Install the single process-wide SIGWINCH handler that marks every live
-     * registered driver. Safe to call from each constructor: re-installing the
+     * registered driver. Safe to call from each arm(): re-installing the
      * same fan-out handler is idempotent.
      */
     private static function installSigwinchHandler(): void

@@ -21,6 +21,15 @@ use SugarCraft\Palette\Probe\InfocmpBinary;
  * - The event loop is not available
  * - The infocmp binary is not present
  * - The child process errors before exiting
+ * - Environment suppression (NO_COLOR / CLICOLOR=0 / TERM=dumb) is in force —
+ *   A3b: the async leg must not outrun the env gate the sync path honours
+ * - TERM is unset — previously the probe fabricated `TERM=xterm` and probed
+ *   a terminal the caller never declared
+ * - {@see self::MAX_CONCURRENT_PROBES} children are already in flight
+ *
+ * Probe results are ADVISORY ONLY: the terminfo snapshot answers "what could
+ * this terminal type advertise", not "what will the renderer emit" — callers
+ * that must honour user suppression should read DetectionChain themselves.
  *
  * The returned promise carries no cancellation handler — cancelling it
  * does not fall back, it only detaches the caller from the result.
@@ -30,15 +39,38 @@ use SugarCraft\Palette\Probe\InfocmpBinary;
 final class AsyncProbe
 {
     /**
+     * Hard ceiling on simultaneously spawned infocmp children.
+     *
+     * The old code spawned one child per call with no bound — a request loop
+     * probing on every connection could fork unboundedly. At the cap, calls
+     * degrade to the sync detection instead of queueing (the async leg is an
+     * optimisation, never a correctness requirement).
+     */
+    private const MAX_CONCURRENT_PROBES = 4;
+
+    /** @var int Currently in-flight infocmp children started through this class */
+    private static int $inFlight = 0;
+
+    /**
      * Detect the terminal color profile asynchronously.
      *
      * @return PromiseInterface<ColorProfile> Resolves with the detected color profile
      */
     public static function colorProfile(): PromiseInterface
     {
+        // A3b env gate: suppression is terminal — hand it to the sync path,
+        // which already returns the honest no-color profile, and spawn nothing.
+        if (!DetectionChain::detect()->allowsColor()) {
+            return \React\Promise\resolve(Probe::colorProfile());
+        }
+
         $loop = self::getLoop();
         if ($loop === null) {
             // No event loop available — fall back to sync detection
+            return \React\Promise\resolve(Probe::colorProfile());
+        }
+
+        if (self::$inFlight >= self::MAX_CONCURRENT_PROBES) {
             return \React\Promise\resolve(Probe::colorProfile());
         }
 
@@ -52,9 +84,25 @@ final class AsyncProbe
         }
 
         $term = self::getTerm();
-        $command = $infocmpPath . ' -1 ' . escapeshellarg($term ?? 'xterm');
+        if ($term === null || $term === '' || $term === 'dumb') {
+            // A3b: do not fabricate a terminal type. Unknown TERM means the
+            // env-anchored sync detection is the only honest answer.
+            $deferred->resolve(Probe::colorProfile());
+
+            return $deferred->promise();
+        }
+        $command = $infocmpPath . ' -1 ' . escapeshellarg($term);
 
         $process = new Process($command);
+        self::$inFlight++;
+        $settled = false;
+        $release = static function () use (&$settled): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            self::$inFlight--;
+        };
         $process->start($loop);
 
         $stdout = '';
@@ -63,7 +111,8 @@ final class AsyncProbe
             $stdout .= $chunk;
         });
 
-        $process->on('exit', function (int $exitCode) use ($deferred, $stdout): void {
+        $process->on('exit', function (int $exitCode) use ($deferred, $stdout, $release): void {
+            $release();
             if ($exitCode === 0 && (preg_match('/\bTc\b/', $stdout) || preg_match('/\bRGB\b/', $stdout))) {
                 $deferred->resolve(ColorProfile::TrueColor);
             } else {
@@ -73,7 +122,8 @@ final class AsyncProbe
         });
 
         // Ensure we don't leave dangling processes
-        $process->on('error', function () use ($deferred): void {
+        $process->on('error', function () use ($deferred, $release): void {
+            $release();
             $deferred->resolve(Probe::colorProfile());
         });
 

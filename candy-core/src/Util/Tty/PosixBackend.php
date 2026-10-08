@@ -788,8 +788,15 @@ final class PosixBackend implements Backend
     {
         if (self::$rescueSnapshot !== null) {
             // Second+ call: restore saved termios.
+            //
+            // `restore()`, not `apply()`, for the reason documented in full at
+            // {@see self::restore()}: `current()` hands back an immutable
+            // SNAPSHOT whose `apply()` is a guarded no-op on the SttyTermios
+            // fallback -- the rescue path exists for exactly the hosts that
+            // land on that fallback, and `apply()` here left them stuck in
+            // raw mode after exit.
             try {
-                self::$rescueSnapshot->apply();
+                self::$rescueSnapshot->restore();
             } finally {
                 self::$rescueSnapshot = null;
             }

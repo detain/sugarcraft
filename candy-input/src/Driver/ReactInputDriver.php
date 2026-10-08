@@ -74,10 +74,15 @@ final class ReactInputDriver implements ReadableStreamInterface
 
     /**
      * Checks whether this stream is in a readable state.
+     *
+     * Per the React ReadableStreamInterface contract, readability means "not
+     * closed already" — pause() only defers event emission (the buffer flushes
+     * on resume), it does not make the stream unreadable. Including $paused
+     * here would have been a contract deviation.
      */
     public function isReadable(): bool
     {
-        return !$this->closed && !$this->paused;
+        return !$this->closed;
     }
 
     /**

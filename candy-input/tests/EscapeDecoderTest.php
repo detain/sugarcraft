@@ -767,6 +767,33 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('ArrowUp', $events[0]->key);
     }
 
+    public function testStaleRemainderDoesNotSurvivePasteBoundary(): void
+    {
+        // Probe shape (campaign rerun A3b): an incomplete CSI buffered BEFORE
+        // a paste must not stitch onto the first post-paste keystroke.
+        $this->decoder->decode("\x1b[");
+        $this->assertSame("\x1b[", $this->decoder->remainder());
+
+        $this->decoder->decode("\x1b[200~pasted\x1b[201~");
+        // The paste-start boundary flushed the orphan fragment.
+        $this->assertSame('', $this->decoder->remainder());
+
+        $events = $this->decoder->decode("x");
+        $this->assertCount(1, $events);
+        $this->assertSame('x', $events[0]->key);
+    }
+
+    public function testArrowKeyAfterStaleRemainderPasteSurfaces(): void
+    {
+        // Same boundary, real escape-sequence keystroke: "\x1b[" + "\x1b[A"
+        // must decode as a lone ArrowUp, never as a swallowed unknown CSI.
+        $this->decoder->decode("\x1b[");
+        $this->decoder->decode("\x1b[200~abc\x1b[201~");
+        $events = $this->decoder->decode("\x1b[A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+    }
+
     // ─── Reset ──────────────────────────────────────────────────────────────
 
     public function testResetClearsPasteBuffer(): void

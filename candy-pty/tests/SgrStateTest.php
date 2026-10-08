@@ -19,10 +19,24 @@ final class SgrStateTest extends TestCase
         $this->assertSame(5, SgrState::COLOR_MAGENTA);
         $this->assertSame(6, SgrState::COLOR_CYAN);
         $this->assertSame(7, SgrState::COLOR_WHITE);
-        $this->assertSame(9, SgrState::COLOR_DEFAULT);
+        // F1 (lane A7 re-verify): COLOR_DEFAULT was 9 — the exact palette
+        // slot bright red (SGR 91) occupies — swallowing bright-red
+        // transitions. It is now an out-of-palette sentinel.
+        $this->assertSame(-4, SgrState::COLOR_DEFAULT);
         $this->assertSame(-1, SgrState::COLOR_256);
         $this->assertSame(-2, SgrState::COLOR_RGB);
         $this->assertSame(-3, SgrState::COLOR_DEFAULT_256);
+        // Bright aliases (SGR 90-97 / 100-107) are xterm palette 8-15.
+        $this->assertSame(8, SgrState::COLOR_BRIGHT_BLACK);
+        $this->assertSame(9, SgrState::COLOR_BRIGHT_RED);
+        $this->assertSame(10, SgrState::COLOR_BRIGHT_GREEN);
+        $this->assertSame(11, SgrState::COLOR_BRIGHT_YELLOW);
+        $this->assertSame(12, SgrState::COLOR_BRIGHT_BLUE);
+        $this->assertSame(13, SgrState::COLOR_BRIGHT_MAGENTA);
+        $this->assertSame(14, SgrState::COLOR_BRIGHT_CYAN);
+        $this->assertSame(15, SgrState::COLOR_BRIGHT_WHITE);
+        // The whole point of the sentinel move: default is none of these.
+        $this->assertNotContains(SgrState::COLOR_DEFAULT, \range(0, 15));
     }
 
     public function testDefaultState(): void
@@ -180,6 +194,28 @@ final class SgrStateTest extends TestCase
     {
         $this->assertSame('bg=magenta', (new SgrState(background: SgrState::COLOR_MAGENTA))->describe());
         $this->assertSame('bg=cyan', (new SgrState(background: SgrState::COLOR_CYAN))->describe());
+    }
+
+    /**
+     * F1 (lane A7 re-verify): palette 8-15 must render as named bright
+     * colors, never collapse into the default representation.
+     */
+    public function testDescribeBrightColors(): void
+    {
+        $brights = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
+        foreach ($brights as $offset => $name) {
+            $this->assertSame(
+                "fg=bright-{$name}",
+                (new SgrState(foreground: 8 + $offset))->describe(),
+            );
+            $this->assertSame(
+                "bg=bright-{$name}",
+                (new SgrState(background: 8 + $offset))->describe(),
+            );
+        }
+        // Default stays its own word, distinct from every bright alias.
+        $this->assertSame('default', (new SgrState())->describe());
+        $this->assertNotSame((new SgrState())->describe(), (new SgrState(foreground: SgrState::COLOR_BRIGHT_RED))->describe());
     }
 
     public function testDescribeForeground256Color(): void

@@ -44,6 +44,25 @@ final class Spring
         ?bool $reducedMotionOverride = null,
     ) {
         $this->reducedMotionOverride = $reducedMotionOverride;
+
+        // A3b fail-fast: the max(0.0, ·) clamps below silently fold NAN into
+        // 0.0 (max returns the other operand), and an INF dampingRatio flows
+        // into the over-damped branch where 0·INF produces NAN coefficients —
+        // every later update() then returns NAN for the rest of the spring's
+        // life, far from its cause. A negative deltaTime integrates the
+        // oscillator backwards and exp() diverges. Validate the inputs here,
+        // at the boundary, and trust the coefficients throughout.
+        if (!is_finite($deltaTime) || !is_finite($angularFrequency) || !is_finite($dampingRatio)) {
+            throw new \InvalidArgumentException(Lang::t('spring.inputs_finite', [
+                'deltaTime' => $deltaTime,
+                'angularFrequency' => $angularFrequency,
+                'dampingRatio' => $dampingRatio,
+            ]));
+        }
+        if ($deltaTime < 0.0) {
+            throw new \InvalidArgumentException(Lang::t('spring.negative_dt', ['deltaTime' => $deltaTime]));
+        }
+
         $angularFrequency = max(0.0, $angularFrequency);
         $dampingRatio     = max(0.0, $dampingRatio);
 

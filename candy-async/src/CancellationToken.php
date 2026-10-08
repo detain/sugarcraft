@@ -89,6 +89,15 @@ final class CancellationToken
         if ($this->callbacksFired === true) {
             return;
         }
+        // A1 (lane A3a): callbacks fire ONLY as part of a cancellation, so
+        // firing IMPLIES cancelled — clearing the list while leaving
+        // isCancelled() false desynchronised every observer on the direct
+        // (@internal-misuse) call path, and late onCancel() registrations
+        // became ghosts that would never run. The legitimate flow enters
+        // through acceptCancellationSource(), which has already raised the
+        // flag, so external cancel-detection semantics for real cancels
+        // are unchanged.
+        $this->cancelled = true;
         $this->callbacksFired = true;
         $errors = [];
         foreach ($this->callbacks as $callback) {

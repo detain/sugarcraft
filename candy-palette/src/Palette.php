@@ -135,19 +135,26 @@ final class Palette
      */
     public static function stripAnsi(string $s): string
     {
-        // CSI sequences: \x1b[...{letter}
-        // Extended CSI: \x1b[?... (private mode), \x1b[>... (private mode), \x1b[=... (private mode)
+        // CSI sequences per ECMA-48: parameter bytes 0x30-0x3F (digits, `:`,
+        // `<`, `=`, `>`, `?` — the private-mode markers ride this class),
+        // optional intermediate bytes 0x20-0x2F (`$`, `!`, space …), final
+        // byte 0x40-0x7E. The old shape `[0-9;:<>=?]*[A-Za-z]` could not
+        // match DECSTR `ESC [ ! p`, DECRQM `ESC [ 2 $ p`, ICL `ESC [ 5 @`
+        // or `ESC [ 1 _ b` — those leaked as literal text under NoTTY.
         // OSC sequences: \x1b]...(\x07|\x1b\\)
         // DCS sequences: \x1bP...(\x07|\x1b\\)
         // SS3 sequences: \x1bO{letter}
-        // APC sequences: \x1b_...(\x07|\x1b\\)
+        // APC/PM/SOS strings: \x1b[_^X]...(\x07|\x1b\\)
+        // Fe escapes: the C0 escape-code pairs — DECSC `ESC 7`, DECRC `ESC 8`,
+        // RIS `ESC c`, NEL `ESC E`, keypad `ESC >` / `ESC =`, LS2 `ESC n`,
+        // plus the historic cursor/mode letters below.
         // Charset selectors: \x1b(B, \x1b(U, etc.
         return \preg_replace(
             '/(?:\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)|'
-            . '\x1b\[[0-9;:<>=?]*[A-Za-z]|'
+            . '\x1b\[[0-?]*[ -\/]*[@-~]|'
             . '\x1b[PX^_][^\x07\x1b]*(?:\x07|\x1b\\\\)|'
-            . '\x1b[OopeHMJKhCBDsu]|'
-            . '\x1b[()*+][@-~])/',
+            . '\x1b[OopeHMJKhCBDsunE78>=c]|'
+            . '\x1b[()*+][ -~])/',
             '',
             $s,
         ) ?? $s;
@@ -199,16 +206,30 @@ final class Palette
      * 13. isatty()              → NoTTY if not a TTY
      * 14. Default               → ANSI
      */
+    /**
+     * A3b: one env lookup for all three operator-knob reads in
+     * {@see self::detectProfile()} — previously CLICOLOR_FORCE skipped the
+     * $_ENV layer the other two consulted, an accident of edit history, not
+     * a designed difference. The injected DI map stays primary (that is what
+     * makes the chain testable); $_ENV then the real environment follow, and
+     * "unset" is normalised to null (getenv's `false` never leaks out).
+     */
+    private static function envValue(array $env, string $key): ?string
+    {
+        $value = $env[$key] ?? $_ENV[$key] ?? \getenv($key);
+
+        return $value === false ? null : $value;
+    }
+
     private static function detectProfile($stream, array $env): Profile
     {
         // 1. CLICOLOR_FORCE=1 → TrueColor (overrides everything below)
-        $cliclorForce = $env['CLICOLOR_FORCE'] ?? \getenv('CLICOLOR_FORCE');
-        if ($cliclorForce === '1') {
+        if (self::envValue($env, 'CLICOLOR_FORCE') === '1') {
             return Profile::TrueColor;
         }
 
         // 2. FORCE_COLOR: SugarCraft extension (level-based) — not in DetectionChain
-        $force = $env['FORCE_COLOR'] ?? $_ENV['FORCE_COLOR'] ?? \getenv('FORCE_COLOR');
+        $force = self::envValue($env, 'FORCE_COLOR');
         if (\is_string($force) && $force !== '') {
             $level = \intval($force);
             return match (true) {
@@ -234,7 +255,7 @@ final class Palette
         $profile = $chain->toProfile();
 
         // TERM_PROGRAM=iTerm.app check (only if color is allowed)
-        $termProgram = $env['TERM_PROGRAM'] ?? $_ENV['TERM_PROGRAM'] ?? \getenv('TERM_PROGRAM') ?: null;
+        $termProgram = self::envValue($env, 'TERM_PROGRAM');
         if ($termProgram === 'iTerm.app') {
             return Profile::TrueColor;
         }

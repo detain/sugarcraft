@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Cli;
 
 use Composer\InstalledVersions;
 use SugarCraft\Crush\Lang;
+use SugarCraft\Kit\HelpText;
 
 /**
  * Static factory for the one-shot (non-interactive) CLI's --help and
@@ -39,10 +40,21 @@ final class Help
      * included, so it is not split into per-row keys a translator would have
      * to re-align. English is the source of truth; another locale's
      * `lang/<code>.php` replaces the whole page.
+     *
+     * The page is passed through {@see HelpText::renderPage()} (E453,
+     * campaign rerun lane A6): catalogue text is caller-supplied display
+     * data, so escapes and stray control bytes are stripped before it
+     * reaches a terminal — while renderPage's page variant keeps the
+     * embedded newlines that ARE the layout above (the single-line
+     * flattening in render() would collapse the whole screen onto one row).
+     * Width is left null deliberately: the page ships already aligned by
+     * its translators, so no probed terminal width may re-flow it. For the
+     * clean English page — and any locale that keeps its layout — the call
+     * is byte-identity, verified by HelpTest.
      */
     public static function screen(): string
     {
-        return Lang::t('cli.help.screen');
+        return HelpText::renderPage(Lang::t('cli.help.screen'));
     }
 
     /**

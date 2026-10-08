@@ -366,4 +366,56 @@ final class CancellationTokenTest extends TestCase
         // All three should have been called despite the exception
         $this->assertSame(['first', 'second', 'third'], $order);
     }
+
+    /**
+     * A1 (lane A3a): firing callbacks WITHOUT the source (the @internal
+     * direct-call path) used to clear the list while isCancelled() stayed
+     * false — an observer desync. Firing now implies cancellation.
+     */
+    public function testDirectFireCallbacksLeavesTheTokenCancelled(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $fired = false;
+        $token->onCancel(function () use (&$fired): void {
+            $fired = true;
+        });
+
+        $token->fireCallbacks();
+
+        $this->assertTrue($fired);
+        $this->assertTrue($token->isCancelled(), 'a fired token must report cancelled');
+
+        // Late registrations fire immediately instead of queueing a ghost
+        // that can never run (cancelled is now visibly true to onCancel).
+        $late = false;
+        $token->onCancel(function () use (&$late): void {
+            $late = true;
+        });
+        $this->assertTrue($late, 'onCancel after a direct fire must not ghost');
+
+        // The real cancel() afterwards stays idempotent end-to-end.
+        $source->cancel();
+        $this->assertTrue($token->isCancelled());
+    }
+
+    public function testLegitimateCancelDetectionSemanticsAreUnchanged(): void
+    {
+        // The guard rail for A1: before the source cancels, nothing may
+        // report cancelled — the flag write inside fireCallbacks must not
+        // leak a premature true into untouched flows.
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $observed = [];
+        $token->onCancel(function () use ($token, &$observed): void {
+            $observed[] = $token->isCancelled();
+        });
+
+        $this->assertFalse($token->isCancelled());
+        $source->cancel();
+        $this->assertTrue($token->isCancelled());
+        $this->assertSame([true], $observed, 'callback observes cancelled during a real cancel');
+    }
 }

@@ -286,10 +286,18 @@ final class Color
      * Foreground: 0–7 → 30–37, 8–15 → 90–97
      * Background: 0–7 → 40–47, 8–15 → 100–107
      *
+     * Fail fast (A3b): an index outside 0–15 is not a color — it used to
+     * silently emit an off-by-N SGR code (e.g. -1 → "29", a cursor movement).
+     *
      * @see https://github.com/charmbracelet/colorprofile.Color.ANSI16SGR
+     *
+     * @throws \OutOfBoundsException when $idx is not an ANSI 16 slot
      */
     public static function ansi16Sgr(int $idx, bool $background): int
     {
+        if ($idx < 0 || $idx > 15) {
+            throw new \OutOfBoundsException("ANSI 16 index out of range: {$idx} (expected 0-15)");
+        }
         $base = $background ? 40 : 30;
         if ($idx < 8) {
             return $base + $idx;

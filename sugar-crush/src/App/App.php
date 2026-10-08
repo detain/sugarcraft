@@ -1716,8 +1716,11 @@ final class App implements Model
      * the cycle only visits panes the frame persistently shows. The menu-bar
      * labels are the door for everything else: clicking one docks the pane
      * and focuses it ({@see dispatchChromeClick()}), which admits it to this
-     * cycle. A malformed manifest id is skipped rather than fatal — focus
-     * cannot name a pane the enum does not have.
+     * cycle. A malformed manifest id — or one naming a pane that is not
+     * dockable (input/help/menu have no dock slot the frame paints) — is
+     * skipped rather than fatal, mirroring {@see \SugarCraft\Crush\Tui\Renderer::sidePanes()}:
+     * focus cannot name a pane the enum does not have, nor one it never
+     * renders.
      *
      * @return list<Pane>
      */
@@ -1729,7 +1732,11 @@ final class App implements Model
             foreach ($this->dock()->slots($side) as $slot) {
                 $pane = Pane::tryFrom((string) $slot->paneId);
 
-                if ($pane !== null && !in_array($pane, $order, true)) {
+                // Same dockable() filter Renderer::sidePanes() applies: a
+                // stale or hand-edited manifest naming a non-dockable pane
+                // (input/help/menu) must not park Tab focus on a pane the
+                // frame never paints (renderPane defaults to ''). (lane p3)
+                if ($pane !== null && $pane->dockable() && !in_array($pane, $order, true)) {
                     $order[] = $pane;
                 }
             }

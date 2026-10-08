@@ -16,6 +16,7 @@ return [
     'decoder.grid_too_small'   => 'candy-flip：セルグリッドの次元は正の値である必要があります',
     'decoder.truncated'        => 'candy-flip：GIF が切り詰められています',
     'decoder.screen_too_large' => 'candy-flip：GIF の画面サイズが上限（{max} ピクセル）を超過',
+    'decoder.screen_too_small' => 'candy-flip: GIF画面の寸法は正の値である必要があります',
     'cli.usage'                => '用法：candy-flip <gif> [solid|density]',
     'cli.no_autoload'          => 'candy-flip：composer autoload.php が見つかりません',
 ];

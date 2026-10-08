@@ -18,8 +18,9 @@ use SugarCraft\Forms\Util\RenderSafe;
  * Read-only paragraph. Renders title + description; tab navigation
  * skips over the field by default. When {@see withNext()} is enabled,
  * the Note becomes interactive: a labelled button is rendered after
- * the description and Enter / Space activates it (mirrors huh's
- * `Note.Next` / `NextLabel`).
+ * the description and Enter activates it — through the Form's generic
+ * advance arm, not a Note-level binding (Space is bound nowhere)
+ * (mirrors huh's `Note.Next` / `NextLabel`).
  */
 final class Note implements \SugarCraft\Forms\Field
 {
@@ -60,8 +61,9 @@ final class Note implements \SugarCraft\Forms\Field
     /**
      * Show a confirm-style button after the description. When on, the
      * Note participates in form navigation (no longer skippable) and
-     * Enter / Space advances to the next field. Mirrors huh's
-     * `Note.Next(bool)`.
+     * Enter advances to the next field — through the Form's generic
+     * advance arm; Space is bound nowhere (lane p4, F-P4-3 truth-flip).
+     * Mirrors huh's `Note.Next(bool)`.
      */
     public function withNext(bool $on = true): self
     {

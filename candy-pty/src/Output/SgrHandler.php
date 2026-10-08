@@ -23,13 +23,25 @@ use SugarCraft\Ansi\Parser\Handler;
 final class SgrHandler implements Handler
 {
     /**
+     * Upper bound on the undrained transition log.
+     *
+     * This is a diagnostic/test-support surface: a consumer that feeds
+     * chunks without ever calling {@see drainTransitions()} must not grow
+     * memory without bound, so once the log is full the OLDEST event is
+     * dropped to admit the newest. Slow consumers therefore lose the head
+     * of the history, never its tail — the most recent transitions always
+     * survive.
+     */
+    public const MAX_EVENTS = 1024;
+
+    /**
      * Current SGR state, updated on every csiDispatch where final='m'.
      *
      * @readonly
      */
     public SgrState $state;
 
-    /** Events logged for inspection in tests. */
+    /** @var list<array{SgrState, SgrState}> Events logged for inspection in tests, capped at {@see MAX_EVENTS}. */
     private array $events = [];
 
     public function __construct(?SgrState $initialState = null)
@@ -123,6 +135,30 @@ final class SgrHandler implements Handler
     }
 
     /**
+     * Clear the tracked SGR state to a fresh default and drop the pending
+     * transition log. Used by {@see AnsiOutputParser::reset()} so a reset
+     * really does mean "from a clean slate" for both the parser and the
+     * style model.
+     */
+    public function reset(): void
+    {
+        $this->state = new SgrState();
+        $this->events = [];
+    }
+
+    /**
+     * Append one transition, enforcing the {@see MAX_EVENTS} drop-oldest
+     * bound so undrained growth cannot exhaust memory.
+     */
+    private function record(SgrState $from, SgrState $to): void
+    {
+        $this->events[] = [$from, $to];
+        while (\count($this->events) > self::MAX_EVENTS) {
+            \array_shift($this->events);
+        }
+    }
+
+    /**
      * Apply an SGR parameter list to update the current state.
      *
      * @param list<int> $params  Numeric SGR parameters; -1 means default.
@@ -135,7 +171,7 @@ final class SgrHandler implements Handler
             $prev = $this->state;
             $this->state = new SgrState();
             if (!$this->state->equals($prev)) {
-                $this->events[] = [$prev, $this->state];
+                $this->record($prev, $this->state);
             }
             return;
         }
@@ -191,10 +227,12 @@ final class SgrHandler implements Handler
                     $state = $this->withForeground256($state, \max(0, \min(255, $params[$i + 2])));
                     $i += 2;
                 } elseif ($i + 4 < \count($params) && $params[$i + 1] === 2) {
-                    // RGB
-                    $r = $params[$i + 2];
-                    $g = $params[$i + 3];
-                    $b = $params[$i + 4];
+                    // RGB — clamp channels to 0-255 like the 38;5 path, so a
+                    // wild parameter cannot wrap bits into a neighbouring
+                    // channel (300 must read as 255, not 44).
+                    $r = \max(0, \min(255, $params[$i + 2]));
+                    $g = \max(0, \min(255, $params[$i + 3]));
+                    $b = \max(0, \min(255, $params[$i + 4]));
                     $state = $this->withForegroundRgb($state, ($r << 16) | ($g << 8) | $b);
                     $i += 4;
                 } else {
@@ -208,7 +246,8 @@ final class SgrHandler implements Handler
                     }
                 }
             } elseif ($p === 39) {
-                // Default foreground — revert to 9 (default)
+                // Default foreground — revert to the default sentinel
+                // (not a palette index; see SgrState::COLOR_DEFAULT).
                 $state = $this->withForeground($state, SgrState::COLOR_DEFAULT);
             } elseif ($p >= 40 && $p <= 47) {
                 // Standard background color (0-7)
@@ -220,10 +259,10 @@ final class SgrHandler implements Handler
                     $state = $this->withBackground256($state, \max(0, \min(255, $params[$i + 2])));
                     $i += 2;
                 } elseif ($i + 4 < \count($params) && $params[$i + 1] === 2) {
-                    // RGB
-                    $r = $params[$i + 2];
-                    $g = $params[$i + 3];
-                    $b = $params[$i + 4];
+                    // RGB — clamp channels to 0-255 like the 48;5 path.
+                    $r = \max(0, \min(255, $params[$i + 2]));
+                    $g = \max(0, \min(255, $params[$i + 3]));
+                    $b = \max(0, \min(255, $params[$i + 4]));
                     $state = $this->withBackgroundRgb($state, ($r << 16) | ($g << 8) | $b);
                     $i += 4;
                 } else {
@@ -237,13 +276,13 @@ final class SgrHandler implements Handler
                     }
                 }
             } elseif ($p === 49) {
-                // Default background — revert to 9 (default)
+                // Default background — revert to the default sentinel.
                 $state = $this->withBackground($state, SgrState::COLOR_DEFAULT);
             } elseif ($p >= 90 && $p <= 97) {
-                // Bright foreground (0-7 + 8 = 9, 10-17 for 8 bright colors)
+                // Bright foreground — xterm palette indices 8-15.
                 $state = $this->withForeground($state, $p - 90 + 8);
             } elseif ($p >= 100 && $p <= 107) {
-                // Bright background
+                // Bright background — xterm palette indices 8-15.
                 $state = $this->withBackground($state, $p - 100 + 8);
             }
             // All other SGR codes are ignored for state-tracking purposes.
@@ -252,7 +291,7 @@ final class SgrHandler implements Handler
 
         $this->state = $state;
         if (!$state->equals($prev)) {
-            $this->events[] = [$prev, $state];
+            $this->record($prev, $state);
         }
     }
 

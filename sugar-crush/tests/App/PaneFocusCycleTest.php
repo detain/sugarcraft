@@ -96,6 +96,47 @@ final class PaneFocusCycleTest extends TestCase
         $this->assertSame([Pane::Chat, Pane::Files], $app->paneCycleOrder());
     }
 
+    public function testNonDockableManifestNamesAreSkippedByTheCycle(): void
+    {
+        // Lane p3 (A4): Renderer::sidePanes() filters dockable(), but
+        // paneCycleOrder() did not — a stale or hand-edited manifest naming
+        // input/help/menu parked Tab focus on a pane the frame never paints
+        // (renderPane defaults to ''). The cycle now applies the same filter.
+        $app = $this->shell()->withDock(
+            DockLayout::new('chat')
+                ->withSlotAdded(Side::Right, 'input')
+                ->withSlotAdded(Side::Right, 'help')
+        );
+
+        $this->assertSame(
+            [Pane::Chat],
+            $app->paneCycleOrder(),
+            'non-dockable manifest names must not join the focus cycle',
+        );
+
+        [$next] = (new KeyboardHandler())->handle('tab', $app);
+        $this->assertSame(Pane::Chat, $next->pane, 'Tab parked on a never-painted pane');
+    }
+
+    public function testPollutedColumnCyclesOnlyTheDockedPanes(): void
+    {
+        // Mixed column: the valid dockable slot still joins in position,
+        // the polluted neighbour is invisible to both the order and the walk.
+        $app = $this->shell()->withDock(
+            DockLayout::new('chat')
+                ->withSlotAdded(Side::Right, 'input')
+                ->withSlotAdded(Side::Right, 'skills')
+        );
+
+        $this->assertSame([Pane::Chat, Pane::Skills], $app->paneCycleOrder());
+
+        [$landing] = (new KeyboardHandler())->handle('tab', $app);
+        $this->assertSame(Pane::Skills, $landing->pane);
+
+        [$wrapped] = (new KeyboardHandler())->handle('tab', $landing);
+        $this->assertSame(Pane::Chat, $wrapped->pane, 'round-trip must skip the polluted name');
+    }
+
     public function testFullWidthChatCycleDegeneratesToChatAlone(): void
     {
         // Coercion: every pane off → the center takes the full width and Tab
