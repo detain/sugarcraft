@@ -98,8 +98,19 @@ final class Search implements Model {
       <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump (mirrors bubbles #233).</span></div>
       <div class="feature"><strong>Viewport</strong><span>Scrollable text region. Mouse wheel, scrollbar, keyboard nav.</span></div>
       <div class="feature"><strong>FilePicker</strong><span>Directory browser with icons, size, sort modes.</span></div>
+      <div class="feature"><strong>TextEdit + OptionRow</strong><span>btop-derived helpers: <code>Input\TextEdit</code> is an immutable inline editor with an underline caret (no hardware cursor), grapheme-cluster editing, cell-budget windowing and a digits-only mode; <code>Menu\OptionRow::render()</code> draws btop's two-line options-menu row. <code>Progress::withColorFunc</code> closures also receive the bar width for position-coloured ramps.</span></div>
       <div class="feature"><strong>Paginator + Help + Key</strong><span>Dot / arabic page indicator, key-help footer, KeyMap binding DSL.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">TextEdit + OptionRow</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Bits\Input\TextEdit;
+use SugarCraft\Bits\Menu\OptionRow;
+
+$edit = TextEdit::new('firefox')-&gt;home()-&gt;right()-&gt;right();
+echo $edit-&gt;view();      // "fi\e[4mr\e[24mefox" — underline caret on "r"
+
+echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
+    selected: true, editing: true, hasArrows: true, editable: true);</code></pre>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -148,6 +159,13 @@ final class Search implements Model {
 <tr><td>Tree</td><td>new(root)</td><td>Create tree view</td></tr>
 <tr><td>Viewport</td><td>new(content)</td><td>Create scrollable viewport</td></tr>
 <tr><td>Progress</td><td>new(ratio)</td><td>Create progress bar</td></tr>
+<tr><td>Progress</td><td>withColorFunc(?Closure)</td><td>Per-filled-cell colour <code>fn(int $i, int $filledCells, float $percent, int $barWidth): Color</code> — the 4th arg (true bar width) enables btop position-coloured ramps; 3-arg closures still work</td></tr>
+<tr><td>TextEdit</td><td>new(text, ?caret, numeric)</td><td>Immutable inline editor (btop <code>Draw::TextEdit</code>); underline caret, grapheme-cluster caret</td></tr>
+<tr><td>TextEdit</td><td>left() / right() / home() / end() / withCaret(int)</td><td>Caret movement (clamped)</td></tr>
+<tr><td>TextEdit</td><td>insert(string) / backspace() / delete() / clear()</td><td>Edits; numeric mode rejects non-digit input</td></tr>
+<tr><td>TextEdit</td><td>withNumeric(bool)</td><td>Digits-only mode — strips existing non-digits</td></tr>
+<tr><td>TextEdit</td><td>view(int $limit = 0)</td><td>Render with SGR 4 underline caret, windowed to $limit display cells</td></tr>
+<tr><td>OptionRow</td><td>render(name, value, selected, editing, hasArrows, …)</td><td>btop options-menu two-line row: bold centred name, <code>← value →</code> / <code>↵</code>, live TextEdit while editing</td></tr>
 <tr><td>FilePicker</td><td>new(directory)</td><td>Create file picker</td></tr>
 <tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list</td></tr>
 </table>

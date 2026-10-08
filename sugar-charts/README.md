@@ -148,6 +148,55 @@ Available themes: `Theme::ansi()` / `Theme::dark()` / `Theme::light()` /
 `Theme::dracula()` / `Theme::tokyoNight()` / `Theme::oneDark()` /
 `Theme::githubDark()` / `Theme::solarizedDark()` / `Theme::solarizedLight()`.
 
+### Per-point and per-bar colors
+
+One color per series is too coarse for value-heat graphs — btop tints every
+graph point and meter by its value through the theme gradient
+(`Theme::g(...).at(value)` in `btop_draw.cpp`). Two optional resolvers bring
+that to SugarCharts:
+
+- `LineChart::withSeriesColorFn(?Closure)` — `fn(string $dataset, int $x, float $value): ?Color`.
+  A returned `Color` paints that sample's dot, its `withFill()` run and the
+  connector leaving it; `null` falls through to the normal per-series color
+  (legend color in braille mode, unstyled in cell mode). `$dataset` is the
+  series name — `LineChart::PRIMARY_SERIES` (`'_primary'`) for the unnamed
+  `$data` series — and `$x` is the sample's index in the *full* series, even
+  when the chart tail-slices to fit its width. Works in both cell and braille
+  (`withCanvas()`) modes.
+- `BarChart::withBarColor(?Closure)` — `fn(Bar $bar, int $i): ?Color`, `$i`
+  being the bar's index. Colors the `█` body and the eighth-block cap;
+  labels, gaps and the axis are never colored.
+
+Both have short-form aliases (`seriesColorFn()` / `barColor()`), passing
+`null` restores the default path byte-identically, and a resolver returning
+anything other than `Color|null` throws `\UnexpectedValueException` at
+render time. Equal colors share one memoized `Style`, so a resolver may
+return a fresh `Color` per call.
+
+```php
+use SugarCraft\Charts\BarChart\{Bar, BarChart};
+use SugarCraft\Charts\LineChart\LineChart;
+use SugarCraft\Core\Util\Color;
+
+$heat = static fn (float $v): Color => match (true) {
+    $v >= 7 => Color::hex('#ff5555'),
+    $v >= 4 => Color::hex('#f1fa8c'),
+    default => Color::hex('#50fa7b'),
+};
+
+echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)
+    ->withSeriesColorFn(
+        static fn (string $dataset, int $x, float $v): ?Color =>
+            $dataset === LineChart::PRIMARY_SERIES ? $heat($v) : null,
+    )
+    ->view() . PHP_EOL;
+
+echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
+    ->withFractionalHeights()
+    ->withBarColor(static fn (Bar $bar, int $i): ?Color => $heat($bar->value * 10))
+    ->view() . PHP_EOL;
+```
+
 ## Shared foundations
 
 All chart renderers build their output via [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer).

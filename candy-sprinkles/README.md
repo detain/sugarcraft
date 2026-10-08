@@ -164,7 +164,10 @@ echo Tree::new()
 - **`Border`** — `normal()`, `rounded()`, `thick()`, `double()`, `block()`,
   `ascii()`, `hidden()`, `markdownBorder()`. `Border::catalog()` enumerates the
   factory names as a `list<string>` for programmatic discovery. Per-side toggles
-  via `Style::border*`.
+  via `Style::border*`. Titles via `withTitle()` (laid on the edge) or
+  `withEmbeddedTitle()` (btop-style `─┐cpu┌─`); `embedJunctions()` and
+  `seam()` answer junction runes — see
+  [Embedded border titles + seam junctions](#embedded-border-titles--seam-junctions).
 - **`BorderGradientBlend`** — `fromColors(Color ...$colors)` accepts 1–5
   colors and returns a blend whose `sides(): list<Color>` (top / right / bottom /
   left) are interpolated around the perimeter. Apply via
@@ -402,6 +405,70 @@ The four border-section flags (`borderHeader` / `borderRow` /
 `borderColumn` / `borderTop/Right/Bottom/Left`) decide which
 separators draw. Defaults: rounded outer + header rule + column
 verticals; row separators off.
+
+## Embedded border titles + seam junctions
+
+`Border::withTitle()` lays text straight onto an edge.
+`Border::withEmbeddedTitle(string $text, ?TitleAnchor $anchor = null,
+?string $open = null, ?string $close = null)` instead brackets it in
+junction runes so it reads as cut into the line — btop's box titles and
+clock (`Draw::createBox` / `Draw::update_clock` in `btop_draw.cpp`):
+
+```php
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Border\TitleAnchor;
+use SugarCraft\Sprinkles\Style;
+
+$border = Border::rounded()
+    ->withEmbeddedTitle('cpu')
+    ->withEmbeddedTitle('12:00', TitleAnchor::TopCenter)
+    ->withEmbeddedTitle('mem', TitleAnchor::BottomLeft)
+    ->withEmbeddedTitle('disk', TitleAnchor::BottomLeft);
+
+echo Style::new()->border($border)->width(24)->render('load 0.42');
+// ╭─┐cpu┌────┐12:00┌───────╮
+// │load 0.42               │
+// ╰─┘mem└─┘disk└───────────╯
+```
+
+Placement follows btop exactly:
+
+- Left anchors sit one edge rune in from the corner (`╭─┐`); right anchors
+  mirror it (`┌─╮`).
+- Center anchors open at `floor(run/2) - floor(len/2)` into the full edge
+  (btop's clock formula — one cell right of true centre on even/even sizes,
+  kept on purpose), falling back to the leftover space only when that would
+  overlap a corner title.
+- Several embeds on one anchor are glued by one edge rune (`┘mem└─┘disk└`).
+- Overflow shrinks the text with a trailing `…`; an embed with no room for
+  one text cell plus both junctions is dropped and the edge stays plain.
+- An empty `$text` is a no-op; the text is painted verbatim inside the
+  edge's title colour, so pass pre-styled text for bold titles.
+- `$open` / `$close` override the junctions and must each be exactly one
+  cell wide (`\InvalidArgumentException` otherwise).
+
+`Border::embedJunctions(bool $bottom = false): array{string, string}`
+returns the default `[open, close]` pair, taken from the border's own
+corners with rounded arcs squared off as btop does: `┐┌` / `┘└` for
+normal + rounded, `┓┏` / `┛┗` thick, `╗╔` / `╝╚` double, `++` ascii.
+
+`Border::seam(bool $left, bool $right, bool $up, bool $down): string`
+answers the rune where lines leave a point in the given directions —
+the junction an internal divider makes where it meets the frame (btop's
+`div_left ├` / `div_right ┤` / `div_up ┬` / `div_down ┴` law). Every
+answer comes from the border's own runes, so the family is preserved:
+
+```php
+use SugarCraft\Sprinkles\Border;
+
+Border::normal()->seam(left: true, right: true, up: false, down: true); // ┬
+Border::thick()->seam(left: false, right: true, up: true, down: true);  // ┣
+Border::double()->seam(true, true, true, true);                         // ╬
+```
+
+Two-arm turns return the corners as-is (rounded keeps its arcs), a
+single arm degrades to the straight edge rune on that axis, and no arms
+is a blank cell.
 
 ## Graceful colour degradation
 

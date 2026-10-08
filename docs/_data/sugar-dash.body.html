@@ -22,7 +22,27 @@ echo $grid-&gt;render();   // two bordered cards side by side; below 90 columns 
       <div class="feature"><strong>Tabs</strong><span>Tabbed interface for switching between views.</span></div>
       <div class="feature"><strong>Card / Box / Paragraph</strong><span>Reusable UI components for building panels.</span></div>
       <div class="feature"><strong>Event system</strong><span>Keyboard, mouse, focus, and resize event handling.</span></div>
+      <div class="feature"><strong>DualSampleGraph</strong><span>btop's history graph: two samples per cell quantized through the 5×5 <code>graph_symbols</code> table, in braille / block / block2 / tty families, with invert, no-zero, max-value scaling, gradient colouring and the <code>graph_bg</code> underlay.</span></div>
+      <div class="feature"><strong>Position-coloured Meter</strong><span><code>Meter::withGradient($stops, positionWise: true)</code> renders btop's one-row <code>■</code> bar — each cell coloured at its own position on a 101-stop ramp, <code>meter_bg</code> tail, invert, memoized per shape.</span></div>
+      <div class="feature"><strong>Gradients</strong><span><code>Gradient101::expand()</code> (btop's integer ramp law), <code>GradientStore</code> named ramps (<code>at('cpu', 73)</code>), and value-driven <code>BrailleCanvas::withGradient()</code>.</span></div>
+      <div class="feature"><strong>NetAutoScale</strong><span>btop's network-graph ceiling hysteresis: grows or shrinks only after 5 sustained samples, 10 KiB floor, optional shared (sync) ceiling.</span></div>
+      <div class="feature"><strong>Process rows</strong><span><code>ProcRowComposer</code> renders a btop process-list row (pid … mem, 5×1 cpu mini-graph on graph_bg, cpu%) with <code>DistanceFade</code> shading; <code>ProcGraphTracker</code> manages per-pid graphs.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">btop-style graphs &amp; meters</h3>
+    <p>Ported from <a href="https://github.com/aristocratos/btop">aristocratos/btop</a> for candy-top; colour and quantization laws are byte-faithful to btop. Run <code>php examples/dual-sample-graph.php</code> for every family.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Color;
+use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+use SugarCraft\Dash\Plot\Chart\Meter;
+
+$stops = [Color::hex('#80d0a3'), Color::hex('#dcd179'), Color::hex('#d45454')];
+
+echo DualSampleGraph::new(12, 3)
+    -&gt;withGradient($stops)
+    -&gt;withData(5, 12, 30, 55, 80, 95, 70, 45, 20, 10, 35, 60)
+    -&gt;render(), "\n";
+
+echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: true)-&gt;render(), "\n";</code></pre>
 
     <h3 style="margin-top: 32px;">Showcase examples</h3>
     <div class="feature-grid">
@@ -72,6 +92,16 @@ echo $grid-&gt;render();   // two bordered cards side by side; below 90 columns 
 <tr><td>Layout\Grid\Options / ItemOptions</td><td>new Options(fitScreen: bool) / new ItemOptions(column: int, expandVertical: bool)</td><td>Grid and per-item options</td></tr>
 <tr><td>Components\Card\Card</td><td>static titled(Item, string $title)</td><td>Bordered card with a title</td></tr>
 <tr><td>Layout\Frame</td><td>static new(Item) / withTitle() / withBorder() / withPadding()</td><td>Framed panel</td></tr>
+<tr><td>Plot\Gradient101</td><td>static expand(list&lt;Color&gt; $stops)</td><td>btop's 101-entry ramp (index = percent), truncating integer law</td></tr>
+<tr><td>Plot\Braille\BrailleCanvas</td><td>withGradient(stops, ?scale) / withValue(v) / withoutGradient() / gradient() / value()</td><td>Null-colour dots take the ramp colour at the current value</td></tr>
+<tr><td>Plot\Braille\DualSampleGraph</td><td>static new(width, height, family, invert, noZero, maxValue, offset)</td><td>btop <code>Draw::Graph</code>; families <code>FAMILY_BRAILLE</code> / <code>FAMILY_BLOCK</code> / <code>FAMILY_TTY</code></td></tr>
+<tr><td>Plot\Braille\DualSampleGraph</td><td>push(...$v) / withData(...$v) / withGradient(stops) / withUnderlay(Color) / render(?profile)</td><td>Append or replace history, colour, underlay, render</td></tr>
+<tr><td>Plot\Braille\DualSampleGraph</td><td>static underlay(family, cells, Color)</td><td>Bare btop <code>graph_bg</code> strip (⣀ ▄ ░)</td></tr>
+<tr><td>Plot\Chart\Meter</td><td>withGradient(stops, positionWise) / withGlyph() / withInvert() / withMeterBg()</td><td>btop <code>Draw::Meter</code> position-coloured bar; <code>memoStats()</code> / <code>resetMemo()</code></td></tr>
+<tr><td>Foundation\NetAutoScale</td><td>static new(sync) / offer(down, up) / downloadMax() / uploadMax() / forceRescale()</td><td>btop net-graph ceiling hysteresis</td></tr>
+<tr><td>Foundation\GradientStore</td><td>static fromStops(array) / withGradient(name, start, ?mid, ?end) / at(name, percent)</td><td>Named 101-entry ramps (btop <code>Theme::g</code>)</td></tr>
+<tr><td>Plot\DistanceFade</td><td>ramp() / distance() / fadeColor() / metricColor() / flatMetricColor() / metricValues()</td><td>btop proc-list distance fade</td></tr>
+<tr><td>Plot\ProcRow\ProcRowComposer</td><td>static new(width) / row(ProcRow, row, selected, selectMax, ?graph, followed)</td><td>One btop process-list row; <code>ProcRow</code>, <code>ProcColumns</code>, <code>ProcRowPalette</code>, <code>ProcGraphTracker</code> supply data, layout, colours and mini-graphs</td></tr>
 </table>
   </div>
 </section>
