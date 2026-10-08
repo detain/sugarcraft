@@ -36,6 +36,9 @@ skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000
 - (C) NEXT, after (A) lands (reuse its async child runner): new `ipmi` box — BMC sensors via ipmitool (sensor list
   with thresholds, dcmi power, PSU in/out, fans RPM/%, temps, voltages, chassis status, SEL, mc/fru/lan once),
   radial/gauge visuals. Reference captures (sanitized) + timings: `prompt_kit/findings/ipmi-reference/`.
+- (D) Pastel default theme (bright pastels) + optional border gradients (theme keys; flat themes byte-identical).
+- (E) NEXT, after (B) lands: VM dashboard — toggleable `vms` view of per-VM cards (cpu/ram/net/disk gauges+graphs),
+  hides other boxes to make room. Data sources (no subprocess): `prompt_kit/findings/kvm-reference.md` "Per-VM data".
 Each: implementer → reviewer → fix → commit → note here.
 
 ## Remaining (blocked / optional)
