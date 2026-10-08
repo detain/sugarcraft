@@ -493,6 +493,13 @@ Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aris
   #1573 iface IPs via `net_get_interfaces()` (`net_hide_ip=false`); ProcList bundle — #1859 argv[0] basename
   span (`proc_command_basename=false`), #1823 `/proc/pid/io` rates (EACCES → "-", never 0), #1873 container
   tag from `/proc/pid/cgroup` (`proc_filter_containers`, `O` key).
+- **U1b — VM awareness (user-requested; not a btop PR):** tag KVM/QEMU guest processes with their VM —
+  from cgroup v2 `machine.slice/machine-qemu\x2d<id>\x2d<name>.scope` (unescape `\x2d`) + cmdline
+  `-name guest=<name>`, `-uuid`, `-smp`, `-m size=<KiB>k`; detect by cgroup/cmdline, NOT exe name (`/usr/bin/kvm`
+  on Ubuntu). Extends the #1873 Cgroup/ContainerRef parser (engine `kvm`); proc list shows the guest name,
+  `proc_filter_containers` covers VMs; per-vCPU threads via `debug-threads=on` `CPU N/KVM` comms. Reference
+  output: `prompt_kit/findings/kvm-reference.md`. Optional libvirt enrichment (one `virsh domstats --raw` per
+  cadence, root/libvirt group) and a VM box → U4.
 - ✅ `503ee9bb7` **U2 — lib lane:** #1783 `block2` sextant graph symbols in sugar-dash `DualSampleGraph` + Schema value.
 - **U3 — folded into phases:** P-A/P-B: #1858 hidden panels never build/render + graph width/height clamp
   ≥1 (DualSampleGraph throws <1), #1614 `max(1,…)` cpu-panel gpu sub-graph widths, #1008 keep last value on
