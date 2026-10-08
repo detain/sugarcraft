@@ -454,6 +454,16 @@ canvas height is `max(max(bg,0), stackHeight)` (`Toast.php:505`). `nextExpiry()`
 `secondsUntilNextExpiry()` are correctly distinguished. 23 test files cover essentially every public
 method; the only real gaps are the two dismiss cases in #1.
 
+RE-VERIFY 2026-10-08 (campaign rerun) — gate (sugar-toast; final undispositioned audit section, re-verified against source at this tip):
+- **Item 1 [dismiss one-way trap, MAJOR] — ✅ LANDED confirmed.** `clear()` resets `dismissed` (`Toast.php:405`), every write path (`appendBounded` :296) refuses a dismissed instance with a `LogicException` naming `clear()`, and the revival pin `testDismissThenClearThenAlertRendersAgain` plus three refuse-pins live in `ToastDismissLifecycleTest` — exactly the PROOF GAP the audit named.
+- **Item 2 [unbounded accumulation, MAJOR] — ✅ LANDED confirmed.** Prune-on-write inside `appendBounded` (:303-306, expired leave on every enqueue, not only at `view()`); `dismiss()` MOVES live alerts to history (:375-381, `testDismissMovesLiveAlertsOutOfTheQueue` + repeated-dismiss no-double-count pin); `withHistoryLimit` ships with default 100 (:67,:167) threaded through `HistoryLog::push`. `maxConcurrent` default stays null by design with the growth caveat stated honestly in the property docblock (:56).
+- **Item 3 [forked nextCluster, MINOR] — ✅ LANDED, SUPERSEDED STRONGER.** The STATUS row's "ported verbatim into the fork" is one commit behind history: @793d9d959 deleted the fork body entirely once `Width::nextCluster` was promoted public (`candy-core/src/Util/Width.php:855`) — `Toast.php:851` is now a one-line delegation, guards live in exactly one place. Malformed-walk pins mirrored from core: `ToastNextClusterInvalidUtf8Test` (byte-for-byte reproduction, broken-sequence non-swallow, stray-lead yields itself).
+- **Item 4 [README fatal chain, MINOR] — ✅ LANDED confirmed.** `README.md:259` shows the `actions:`-parameter chain; the chain also uses `Action::new` (item 5).
+- **Item 5 [`Action::make()`, MINOR] — ✅ LANDED confirmed.** `Action.php:31` declares `public static function new(...)`; no `make()` remains anywhere in src/ or README.
+- **Item 6 [overflow docblock lie, INFO] — ✅ LANDED confirmed.** `Toast.php:288` now reads "(DropOldest is the default)", matching the property default at :64.
+- **Coverage-rows reconciliation (the two test-addition rows):** the "Unaudited libraries: 7 transitive-only deps" row is discharged by lanes A3a/A3b — all seven (buffer/ansi/async/input/palette/flip/honey-bounce) audited with fixes and new pin files on disk (e.g. `candy-buffer/tests/WideCellPairingTest.php`, `candy-async/tests/CancellationSourceTest.php`). The "candy-mosaic unaudited surface" row is discharged by lane A4 — `DeadlineTest.php` (did not exist pre-lane) plus Scale/AdaptiveImage/AnimationDriver/ImageLayer fix-pins all present in `candy-mosaic/tests/`.
+- **Gates:** sugar-toast suite **278T/669A OK** (era figure, exact) linked plain-pipe, 0.63 s. Zero actionable defects found — no fix commit in this lane; nothing pushed. Evidence `/tmp/opencode/crush-libs-rerun/GATE/`.
+
 # candy-kit
 
 sugar-crush declares this library and reaches it from **zero** `src/` files. The deferral is
@@ -942,3 +952,32 @@ RE-VERIFY 2026-10-08 (campaign rerun) — lane A6 (candy-kit E453 multi-line var
 - **Deferral record retired exactly as it instructed.** The `extra.sugarcraft.deferred-wiring` row ("Delete this row when the wiring lands — never to quiet the check") and its DocFigure pin `testCandyKitDeferredWiringRowMatchesWhatItRecords` went in the kit-adjacent commit; `tools/check-path-repos.php --unused` now exits 0 with candy-kit genuinely reached (no PRUNE, no DEFERRED_WIRING), and `ManifestDependencyReachTest` gained a permanent anti-vacuity floor in the row-control's place: `src/` MUST keep reaching `SugarCraft\Kit\` (Rule 25's known-positive pair now runs only while some future row exists). Class docblock history paragraph truth-flipped.
 - **Rows 2–5 — no action, still landed** (45b919a8e: Banner width param, WidthProbe/AutoWidth resolution at a403c6338, shared WidthGuard, SafeText fail-loud — all re-verified in tree and green; renderPage rides the same WidthGuard/WidthProbe idiom). SUSPECTED Stage-golden row re-proved ⏭: `--filter 'Progress|Banner'` OK 22T/51A, goldens unshifted.
 - **Gates:** candy-kit 260T/1582A → **272T/1634A** OK linked plain-pipe (+12T/+52A: 8 renderPage + 3 SafeText::page pins + 1 polarity guard); sugar-crush `--filter 'DocFigure|ReadmeRoster|SymbolCitation|ManifestDependencyReach|Help'` OK **323T/118998A** (net crush delta +1T: −1 retired DocFigure arm, +2 HelpTest pins); guard family `--filter 'ReadmeSuiteFigureDrift|GlobDialect|DuplicatedTestHelper|SwallowingCatch|OneSidedHome|ChildWallClock'` 57T with ONLY the known staleness pair red by design (live 21,198 vs pinned 21,267 — re-pin owed at campaign closeout, NOT here). `check-path-repos --no-lib-path-repos` and `--unused` both rc 0. Mutation proofs 2/2: kit LF-preservation neuter → 6 of 11 page pins red; Help call-site revert → exactly the poison-catalogue pin red (byte-identity pin correctly stays green — raw Lang::t IS identity for clean text); restores md5-verified. Evidence `/tmp/opencode/crush-libs-rerun/A6/`.
+
+## CLOSEOUT 2026-10-08 (campaign rerun) — final gate
+
+- **Wave-1 re-verify executed:** eight probe lanes (p1 core/sprinkles, p2 mosaic, p3 mouse/focus/veil,
+  p4 shine/forms, p5 mcp, p6 toast/kit/layout, p7 pty/diff, p8a+p8b transitive-7) re-derived every
+  ✅-marked row of this audit against source at the campaign tip — all landed rows confirmed, verdict
+  sources under `/tmp/opencode/crush-libs-rerun/p1..p8b/`. No ✅ row was found false.
+- **Transitive-7 first-time audit closed:** candy-buffer / candy-ansi / candy-async (lane A3a) and
+  candy-input / candy-palette / candy-flip / honey-bounce (lane A3b) — every finding dispositioned
+  FIXED/⏭ in the two blocks above; the "Unaudited libraries" coverage row is discharged.
+- **Repairs shipped per lane (SHAs in each RE-VERIFY block):** A1 census roster 365b4ba4e;
+  A2 sugar-mcp folds 449298e62 / bdc13dea0 / a9228639c; A3a 4ede1ce45 / 3e7edc12e / 064b1c03a;
+  A3b 76df005be / aa8955d75 / 8825a3be0 / 0052eebea; A4 5b063f208 / 4cb8705fd / 196079294;
+  A5 layout sweep + roundSplit doc; A6 candy-kit renderPage + Help wiring e33d7c733;
+  A7 candy-pty Output/* items 4–8 (000888cf8 and siblings).
+- **Gate lane (this closeout):** sugar-toast section re-verified row-by-row — all six items ✅ LANDED
+  (item 3 superseded stronger by the fork deletion @793d9d959), suite 278T/669A OK; the two
+  coverage-section test-addition rows verified on disk. One cross-lane regression found and fixed:
+  lane A6's Cli/HelpTest poison-catalogue glob was never licensed in
+  `TreeWideGuardRosterTest::WALKS_A_DIRECTORY_THE_TEST_MADE` (reddened 2 serial arms) — roster row
+  added in-step.
+- **Final weld figures (serial, linked, cwd=sugar-crush, PHP 8.3.6, 2026-10-08):**
+  **21,198 tests / 406,450 assertions / 0F / 0E / 1S (McpClientTest canary) / exit 0**, 40m56s.
+  The staleness pair (pinned 21,267 from the mid-campaign operator weld vs live 21,198 after the
+  façade-law test deletions) is RESOLVED by this re-pin: README headline + suite-figure.json +
+  durations.tsv (1,184 rows, determinism-proven across two regenerations) all carry the green-serial
+  truth. K=8 sharded gate: CONSERVATION PASS (tests/skipped/errors/failures exact; assertions +17
+  provider wobble tolerated by design). Repo gates: check-path-repos rc 0, check-child-lifetimes rc 0
+  (7 findings / 7 accounted). Nothing pushed, per campaign law.
