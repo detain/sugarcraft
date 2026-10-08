@@ -131,6 +131,23 @@ trusted tier, so an unknown origin is never presented as the operator's or
 the harness's. The path nudge's lines (`SkillPathNudge`) carry no badge; its
 `<system-reminder>` header does not explain one.
 
+Who sees this fence: the main chat assembles it every turn, and every
+sub-agent worker's prompt carries the same layer too — `AgentManager` renders
+it through `SkillListingSection::render()` per batch member (which feeds both
+the engine-path `systemPromptFor()` and the pooled per-member requests) and on
+the in-process carrier. The granted-bodies exclusion applies per member: a
+skill the agent's `skills:` list already carries rides as its full body above
+the fence and is dropped from the one-line listing below it, so each skill is
+presented exactly once per prompt. Calling through the `Skill` tool remains
+governed by the tool grant, not by the listing: a worker that declares no
+`tools:` inherits the engine's full set, which includes it, while a preset
+whose `tools:` list omits `Skill` sees the catalogue without the door — the
+same advisory shape the paragraph above describes for the main prompt. On the
+detached fork-pool carrier the listing is reference context for now: that
+worker makes a single provider call and does not round-trip tool calls back to
+the parent, so nothing it lists is callable there until the wire grows a tool
+frame.
+
 ### The registry key is the path, not the directory name
 
 `SkillLoader::skillKeyFor()` keys a skill by its path *relative to the tier
