@@ -339,8 +339,10 @@ final class ReactInputDriverTest extends TestCase
         $events = [];
         [$driver, $upstream] = $this->makeDriver($events);
 
+        // React contract (A3b): pause() defers emission but the stream stays
+        // readable — only close() ends readability.
         $driver->pause();
-        $this->assertFalse($driver->isReadable());
+        $this->assertTrue($driver->isReadable());
 
         $driver->close();
         $this->assertFalse($driver->isReadable());

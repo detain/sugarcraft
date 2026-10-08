@@ -134,6 +134,42 @@ final class StreamInputDriverTest extends TestCase
     }
 
     /**
+     * A3b: the driver takes over a blocking caller stream for its lifetime and
+     * must hand the blocking flag back when destroyed — not leave the caller's
+     * resource silently non-blocking forever.
+     */
+    public function testDestructRestoresBlockingFlag(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        $this->assertIsArray($pair);
+        [$r, $w] = $pair;
+
+        $this->assertTrue(stream_get_meta_data($r)['blocked']);
+
+        $driver = new StreamInputDriver($r);
+        $this->assertFalse(stream_get_meta_data($r)['blocked'], 'ctor must clear blocking for its reads');
+
+        unset($driver);
+        $this->assertTrue(stream_get_meta_data($r)['blocked'], 'destruct must restore the caller flag we found');
+
+        fclose($r);
+        fclose($w);
+    }
+
+    public function testDestructLeavesAlreadyNonBlockingStreamAlone(): void
+    {
+        [$r, $w] = $this->createPipe(); // already non-blocking
+
+        $driver = new StreamInputDriver($r);
+        unset($driver);
+
+        $this->assertFalse(stream_get_meta_data($r)['blocked'], 'a stream we did not flip must not be flipped back');
+
+        fclose($r);
+        fclose($w);
+    }
+
+    /**
      * Create a non-blocking pipe pair for testing.
      *
      * @return array{0: resource, 1: resource}

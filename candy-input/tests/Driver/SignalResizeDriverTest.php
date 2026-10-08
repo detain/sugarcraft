@@ -51,6 +51,57 @@ final class SignalResizeDriverTest extends TestCase
     }
 
     /**
+     * A3b: the ctor used to flip pcntl_async_signals(true), install a SIGWINCH
+     * disposition, and shell out to tput twice. Construction must now be a
+     * pure store — verified by before/after identity so the pin holds
+     * regardless of what earlier tests left armed in this process.
+     */
+    public function testConstructionAloneTouchesNoGlobalState(): void
+    {
+        if (!function_exists('pcntl_signal_get_handler')) {
+            $this->markTestSkipped('global-state pin needs pcntl_signal_get_handler');
+        }
+
+        $calls = 0;
+        $runner = static function (string $command) use (&$calls): string {
+            $calls++;
+            return "80\n";
+        };
+
+        $asyncBefore = pcntl_async_signals();
+        $handlerBefore = pcntl_signal_get_handler(SIGWINCH);
+
+        new SignalResizeDriver($runner);
+
+        $this->assertSame(0, $calls, 'construction must not shell out to tput');
+        $this->assertSame($asyncBefore, pcntl_async_signals());
+        $this->assertSame($handlerBefore, pcntl_signal_get_handler(SIGWINCH));
+    }
+
+    public function testArmIsWhatInstallsTheHandler(): void
+    {
+        if (!function_exists('pcntl_signal')) {
+            $this->markTestSkipped('arm() installation test needs pcntl');
+        }
+
+        $calls = 0;
+        $driver = new SignalResizeDriver(static function (string $command) use (&$calls): string {
+            $calls++;
+            return "80\n";
+        });
+
+        $driver->arm();
+
+        $this->assertTrue(pcntl_async_signals(), 'arm() must enable async signals');
+        $handler = pcntl_signal_get_handler(SIGWINCH);
+        $this->assertNotSame(0, $handler, 'arm() must replace the default disposition');
+        $this->assertIsCallable($handler);
+        $this->assertSame(2, $calls, 'arm() probes cols + lines once');
+        // read() without a signal still returns null for this instance.
+        $this->assertNull($driver->read());
+    }
+
+    /**
      * When pcntl_signal is not available (Windows, some CI environments),
      * read() must return null without throwing.
      */
@@ -91,11 +142,14 @@ final class SignalResizeDriverTest extends TestCase
             return str_contains($command, 'lines') ? "50\n" : "200\n";
         });
 
-        // Each constructor probes cols + lines exactly once.
+        // Construction is side-effect free; arm() is what joins the fan-out
+        // registry and probes cols + lines exactly once per driver.
+        $driverA->arm();
+        $driverB->arm();
         $this->assertSame(2, $callsA);
         $this->assertSame(2, $callsB);
 
-        // Deliver a real SIGWINCH to this process (constructors armed
+        // Deliver a real SIGWINCH to this process (arm() installed
         // pcntl_async_signals; the dispatch call flushes any pending signal).
         $this->assertTrue(posix_kill(posix_getpid(), SIGWINCH));
         pcntl_signal_dispatch();

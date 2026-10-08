@@ -23,12 +23,35 @@ final class StreamInputDriver implements InputDriver
     /** Buffered events from the last decode that haven't been returned yet */
     private array $eventBuffer = [];
 
-    /** @param resource $stream A readable stream (STDIN, fopen('php://stdin', 'r'), etc.) */
+    /** Whether the caller's stream was blocking before we took it over */
+    private bool $restoresBlocking = false;
+
+    /**
+     * @param resource $stream A readable stream (STDIN, fopen('php://stdin', 'r'), etc.)
+     *
+     * The driver needs a non-blocking stream and therefore clears the blocking
+     * flag on the CALLER's resource; the previous state is remembered and put
+     * back when this driver is destroyed, so the hand-over is not permanent.
+     */
     public function __construct(
         private readonly mixed $stream,
     ) {
         $this->decoder = new EscapeDecoder();
+        $meta = @stream_get_meta_data($this->stream);
+        if (is_array($meta) && ($meta['blocked'] ?? false) === true) {
+            $this->restoresBlocking = true;
+        }
         stream_set_blocking($this->stream, false);
+    }
+
+    /**
+     * Hand the caller's stream back the way we found it.
+     */
+    public function __destruct()
+    {
+        if ($this->restoresBlocking && is_resource($this->stream)) {
+            @stream_set_blocking($this->stream, true);
+        }
     }
 
     /**
