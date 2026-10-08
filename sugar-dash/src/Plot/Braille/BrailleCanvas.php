@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Plot\Braille;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Dash\Foundation\SizedItem;
+use SugarCraft\Dash\Plot\Gradient101;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
@@ -76,12 +77,7 @@ final class BrailleCanvas implements SizedItem
      *
      * The stops are expanded here, once, into a 101-entry memo — the same
      * shape as btop's per-theme `std::array<string,101>` gradient cache —
-     * using btop's own integer law per channel,
-     * `start + (i - offset) * (end - start) / range` with C++ truncating
-     * division, so every entry is byte-identical to btop's (a rounding
-     * blend drifts by one on odd deltas, e.g. 127 vs 128 at the midpoint).
-     * With more than two stops the 0..100 range is split into equal
-     * segments; for three stops that is btop's start/mid/end split at 50.
+     * by {@see Gradient101::expand()}, btop's truncating integer law.
      *
      * `$scale` maps a raw sample onto 0..1 (result is clamped); it is where
      * a caller puts btop's `(v + offset) * 100 / max_value` percent law,
@@ -97,46 +93,7 @@ final class BrailleCanvas implements SizedItem
      */
     public function withGradient(array $stops, ?\Closure $scale = null): self
     {
-        $stops = array_values($stops);
-        if (count($stops) < 2) {
-            throw new \InvalidArgumentException(sprintf(
-                'BrailleCanvas gradient needs at least 2 color stops, got %d',
-                count($stops),
-            ));
-        }
-        foreach ($stops as $i => $stop) {
-            if (!$stop instanceof \SugarCraft\Core\Util\Color) {
-                throw new \InvalidArgumentException(sprintf(
-                    'BrailleCanvas gradient stop %d must be a %s, got %s',
-                    $i,
-                    \SugarCraft\Core\Util\Color::class,
-                    get_debug_type($stop),
-                ));
-            }
-        }
-
-        $segments = count($stops) - 1;
-        $memo = [$stops[0]];
-        $from = 0;
-        for ($k = 0; $k < $segments; $k++) {
-            $to = (int) round(($k + 1) * 100 / $segments);
-            $range = $to - $from;
-            $a = $stops[$k];
-            $b = $stops[$k + 1];
-            // Index $from already holds this segment's start (the previous
-            // segment's end), so adjacent segments share their boundary.
-            for ($i = $from + 1; $i <= $to; $i++) {
-                $step = $i - $from;
-                // intdiv truncates toward zero, matching C++ int division
-                // on the negative deltas of a descending channel.
-                $memo[] = \SugarCraft\Core\Util\Color::rgb(
-                    $a->r + intdiv($step * ($b->r - $a->r), $range),
-                    $a->g + intdiv($step * ($b->g - $a->g), $range),
-                    $a->b + intdiv($step * ($b->b - $a->b), $range),
-                );
-            }
-            $from = $to;
-        }
+        $memo = Gradient101::expand($stops);
 
         return $this->mutate(['gradientMemo' => $memo, 'gradientScale' => $scale])->resolveGradient();
     }
