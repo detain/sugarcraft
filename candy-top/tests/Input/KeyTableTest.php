@@ -54,7 +54,7 @@ final class KeyTableTest extends TestCase
     {
         $bindings = KeyTable::bindings();
         $this->assertSame(array_values(array_unique($bindings)), $bindings);
-        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '5', '0', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', 'x', '[', ']', ...KeyName::MODIFIED_ARROWS] as $key) {
+        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '5', '0', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', 'x', '[', ']', 'v', 'S', ...KeyName::MODIFIED_ARROWS] as $key) {
             $this->assertContains($key, $bindings);
         }
         foreach (['ctrl+z'] as $later) {
@@ -114,6 +114,8 @@ final class KeyTableTest extends TestCase
             'six gpus' => self::boot($sixGpus, Config::new()),
             // btop PR #1873: `[` / `]` act only while the ctr box is shown.
             'containers' => $boot(Config::new()->with('shown_boxes', 'cpu mem net ctr proc')),
+            // The VM dashboard: `s` / `S` and its grid keys act only while it is shown.
+            'vms' => $boot(Config::new()->with('shown_boxes', 'cpu mem net proc vms')),
         ];
     }
 

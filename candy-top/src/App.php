@@ -58,6 +58,7 @@ use SugarCraft\Top\View\GpuRoster;
 use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Layout;
 use SugarCraft\Top\View\SizeError;
+use SugarCraft\Top\View\VmsMode;
 use SugarCraft\Top\View\Surface;
 
 /**
@@ -142,6 +143,12 @@ final class App implements Model
      * at `1`-`4`).
      */
     public const CTR_KEY = 'x';
+
+    /**
+     * candy-top's VM dashboard toggle ({@see VmsMode}) — a framed global
+     * like `x`, with the cpu title's `vms` button.
+     */
+    public const VMS_KEY = 'v';
 
     /** update_ms step per `+`/`-` press. */
     public const UPDATE_STEP_MS = 100;
@@ -472,7 +479,7 @@ final class App implements Model
         }
         $boxes = $this->config->shownBoxes();
         if ($this->layout === null || !$this->framed()) {
-            [$w, $h] = FrameBuilder::minSize($boxes, $this->cols, $this->roster(), $this->config->gpuBoxColumns());
+            [$w, $h] = FrameBuilder::minSize($boxes, $this->cols, $this->roster(), $this->config->gpuBoxColumns(), $this->config->string('show_gpu_info'));
 
             return SizeError::surface($this->cols, $this->rows, $w, $h);
         }
@@ -596,6 +603,8 @@ final class App implements Model
             'p' => [$cpu->x + 17, $y, Width::string(Lang::t('button.preset')) + 2, 1],
             // btop PR #1873 `{button_y, x + 27, 1, 5}`, only where it is drawn (or over the engine label).
             ...(($ctr = FrameBuilder::ctrZone($cpu, $y, $this->host->containerEngine, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()))) !== null ? ['x' => $ctr] : []),
+            // The VM dashboard's `vms` button, right after `x ctr` (VM hosts, or while shown).
+            ...(($vms = FrameBuilder::vmsZone($cpu, $y, $this->host->containerEngine, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()), $this->host->vmHost || VmsMode::active($this->config->shownBoxes()))) !== null ? ['v' => $vms] : []),
             '-' => [$cpu->x + $cpu->width - $len - 7, $y, 2, 1],
             '+' => [$cpu->x + $cpu->width - 5, $y, 2, 1],
         ];
@@ -701,7 +710,8 @@ final class App implements Model
     public function applyConfig(Config $config, bool $dirty = true): array
     {
         $periodChanged = $config->updateMs() !== $this->config->updateMs();
-        $before = $this->config->shownBoxes();
+        // Laid-out boxes: entering / leaving the VM dashboard hides / shows boxes.
+        $before = VmsMode::effective($this->config->shownBoxes());
         $profile = self::profileFor($config);
         $ink = $profile !== self::profileFor($this->config) ? Ink::new($this->ink->palette(), $profile) : null;
         $next = $this->mutate(
@@ -725,18 +735,8 @@ final class App implements Model
         if ($config->bool('disable_mouse') !== $this->config->bool('disable_mouse')) {
             $cmds[] = $config->bool('disable_mouse') ? Cmd::disableMouse() : Cmd::enableMouseCellMotion();
         }
-        $sampled = [];
-        foreach (array_diff($config->shownBoxes(), $before) as $box) {
-            $panel = $next->panelFor($box);
-            if ($panel !== null && !isset($sampled[$panel->box()]) && !$next->sampledBefore($panel, $before)) {
-                $sampled[$panel->box()] = true;
-                $next = $next->opened($panel);
-                $panel = $next->panelFor($box) ?? $panel;
-                $cmds[] = $panel->collect($next->context($box));
-                $cmds[] = $next->tapSourceCollect($panel, $sampled);
-            }
-        }
-        $cmds = array_values(array_filter($cmds));
+        [$next, $opened] = $next->openShown($before);
+        $cmds = array_values(array_filter([...$cmds, ...$opened]));
 
         return [$next, $cmds === [] ? null : Cmd::batch(...$cmds)];
     }
@@ -853,7 +853,7 @@ final class App implements Model
      */
     private function fitsBoxes(array $boxes, ?Config $config = null): bool
     {
-        return FrameBuilder::fits($this->cols, $this->rows, $boxes, $this->roster(), ($config ?? $this->config)->gpuBoxColumns());
+        return FrameBuilder::fits($this->cols, $this->rows, $boxes, $this->roster(), ($config ?? $this->config)->gpuBoxColumns(), ($config ?? $this->config)->string('show_gpu_info'));
     }
 
     /**
@@ -972,7 +972,7 @@ final class App implements Model
     {
         $key = KeyName::mapped($msg, $this->chromeButtons());
 
-        return in_array($key, ['m', 'p', 'x', '-', '+'], true) ? $key : null;
+        return in_array($key, ['m', 'p', 'x', 'v', '-', '+'], true) ? $key : null;
     }
 
     /** The first visible panel (layout order) that owns all input, or null. Caller checks framed(). */
@@ -1012,7 +1012,7 @@ final class App implements Model
             || in_array($name, $this->menuKeys(), true)
             || in_array($name, ['p', 'P', ...KeyName::MODIFIED_ARROWS], true)
             || ($key->type === KeyType::Char && !$key->ctrl && !$key->alt
-                && (isset(self::BOX_KEYS[$key->rune]) || $key->rune === self::CTR_KEY || GpuPanels::slotFromKey($key->rune) !== null));
+                && (isset(self::BOX_KEYS[$key->rune]) || $key->rune === self::CTR_KEY || $key->rune === self::VMS_KEY || GpuPanels::slotFromKey($key->rune) !== null));
     }
 
     /**
@@ -1044,7 +1044,8 @@ final class App implements Model
 
     /**
      * btop.cpp:180-198: the size-notice loop reads only `q` and the box
-     * toggles `1`-`4`; every other key is dropped, never broadcast.
+     * toggles `1`-`4` (plus the gpu slot keys and candy-top's `v`, so the
+     * VM dashboard can be left); every other key is dropped, never broadcast.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -1055,6 +1056,10 @@ final class App implements Model
         }
         if ($key->type === KeyType::Char && !$key->ctrl && !$key->alt && isset(self::BOX_KEYS[$key->rune])) {
             return $this->toggleBox(self::BOX_KEYS[$key->rune], false);
+        }
+        // The VM dashboard can be left from here too (it may be what does not fit).
+        if ($key->type === KeyType::Char && !$key->ctrl && !$key->alt && $key->rune === self::VMS_KEY) {
+            return $this->toggleBox(VmsMode::BOX, false);
         }
         // btop PR #1730 term_resize: the gpu slot keys toggle here too.
         $slot = $key->type === KeyType::Char && !$key->ctrl && !$key->alt ? GpuPanels::slotFromKey($key->rune) : null;
@@ -1099,6 +1104,9 @@ final class App implements Model
         }
         if ($key->rune === self::CTR_KEY) {
             return $this->toggleBox('ctr', true);
+        }
+        if ($key->rune === self::VMS_KEY) {
+            return $this->toggleBox(VmsMode::BOX, true);
         }
         $slot = GpuPanels::slotFromKey($key->rune);
         if ($slot !== null) {
@@ -1151,8 +1159,13 @@ final class App implements Model
     private function toggleBox(string $box, bool $notify): array
     {
         $boxes = $this->config->shownBoxes();
+        $before = VmsMode::effective($boxes);
         $pos = array_search($box, $boxes, true);
-        if ($pos === false) {
+        if (VmsMode::active($boxes) && \in_array($box, VmsMode::ECLIPSED, true)) {
+            // The VM dashboard hides this box: its toggle leaves the
+            // dashboard and shows the box, never removes it unseen.
+            $boxes = VmsMode::leaving($boxes, [$box]);
+        } elseif ($pos === false) {
             $boxes[] = $box;
         } else {
             array_splice($boxes, $pos, 1);
@@ -1172,16 +1185,42 @@ final class App implements Model
         }
         // btop toggle_box goes through Config::set: the change is saved on exit.
         $next = $this->mutate(config: $config, preset: null, presetSet: true, writeNew: true)->relayout();
+        // Every box now laid out that was not (the toggled one, or the
+        // boxes the VM dashboard was hiding) is sampled at once.
+        [$next, $cmds] = $next->openShown($before);
 
-        $panel = $next->panels[$box] ?? null;
-        if ($pos !== false || $panel === null) {
-            return [$next, null];
+        return [$next, self::batch(...$cmds)];
+    }
+
+    /**
+     * Open and sample every panel whose box is laid out now but was not in
+     * `$before` (btop Runner::run("all") after a toggle): {@see SampleTap}
+     * panels get their {@see SampleTap::opened()} state and the box they
+     * tap is sampled with them; a panel drawing several boxes (gpu) is
+     * sampled once, and not at all when it already drew one of `$before`.
+     * Boxes are the laid-out ones ({@see VmsMode::effective()}), so leaving
+     * the VM dashboard samples the boxes it hid.
+     *
+     * @param list<string> $before effective boxes before the change
+     * @return array{0: self, 1: list<\Closure>}
+     */
+    private function openShown(array $before): array
+    {
+        $next = $this;
+        $cmds = [];
+        $sampled = [];
+        foreach (array_diff(VmsMode::effective($this->config->shownBoxes()), $before) as $box) {
+            $panel = $next->panelFor($box);
+            if ($panel !== null && !isset($sampled[$panel->box()]) && !$next->sampledBefore($panel, $before)) {
+                $sampled[$panel->box()] = true;
+                $next = $next->opened($panel);
+                $panel = $next->panelFor($box) ?? $panel;
+                $cmds[] = $panel->collect($next->context($box));
+                $cmds[] = $next->tapSourceCollect($panel, $sampled);
+            }
         }
-        $seen = [$panel->box() => true];
-        $next = $next->opened($panel);
-        $panel = $next->panels[$box] ?? $panel;
 
-        return [$next, self::batch($panel->collect($next->context($box)), $next->tapSourceCollect($panel, $seen))];
+        return [$next, array_values(array_filter($cmds))];
     }
 
     /**
@@ -1262,7 +1301,8 @@ final class App implements Model
      */
     private function resizeProc(string $key): array
     {
-        $shown = $this->config->shownBoxes();
+        // Laid-out boxes: behind the VM dashboard the proc box is hidden.
+        $shown = VmsMode::effective($this->config->shownBoxes());
         if ($this->cols <= 0 || !in_array('proc', $shown, true) || (!in_array('mem', $shown, true) && !in_array('net', $shown, true))) {
             return [$this, null];
         }
@@ -1444,7 +1484,8 @@ final class App implements Model
     {
         $cmds = [];
         $seen = [];
-        foreach ($this->config->shownBoxes() as $box) {
+        // Boxes hidden by the VM dashboard cost nothing ({@see VmsMode}).
+        foreach (VmsMode::effective($this->config->shownBoxes()) as $box) {
             $panel = $this->panelFor($box);
             if ($panel !== null && !isset($seen[$panel->box()])) {
                 $seen[$panel->box()] = true;

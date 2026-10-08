@@ -6,19 +6,19 @@
 │    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
 ╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
 │        Key:        Description:                                            │─╯
-│      ctrl + r      Reloads config file from disk.                          │─╮
-│     q, ctrl + c    Quits program.                                          │%│
-│       +, -, =      Add/Subtract 100ms to/from update timer.                │8│
-│      Up, Down      Select in process list.                                 │0│
-│        Enter       Show detailed information for selected process.         │6│
-│      Spacebar      Expand/collapse the selected process in tree view.      │5│
-│          C         Expand/collapse the selected process' children.         │9│
-│   Pg Up, Pg Down   Jump 1 page in process list.                            │2│
-│      Home, End     Jump to first or last page in process list.             │6│
-│     Left, Right    Select previous/next sorting column.                    │6│
+│        F2, o       Shows options.                                          │─╮
+│      F1, ?, h      Shows this window.                                      │%│
+│      ctrl + r      Reloads config file from disk.                          │8│
+│     q, ctrl + c    Quits program.                                          │0│
+│       +, -, =      Add/Subtract 100ms to/from update timer.                │6│
+│      Up, Down      Select in process list.                                 │5│
+│        Enter       Show detailed information for selected process.         │9│
+│      Spacebar      Expand/collapse the selected process in tree view.      │2│
+│          C         Expand/collapse the selected process' children.         │6│
+│   Pg Up, Pg Down   Jump 1 page in process list.                            │6│
+│      Home, End     Jump to first or last page in process list.             │ │
+│     Left, Right    Select previous/next sorting column.                    │ │
 │        b, n        Select previous/next network device.                    │ │
 │          i         Toggle disks io mode with big graphs.                   │ │
 │          z         Toggle totals reset for current network device          │ │
-│          a         Toggle auto scaling for the network graphs.             │ │
-│          y         Toggle synced scaling mode for network graphs.          │ │
 ╰─┘↑ page 2/4 ↓└─────────────────────────────────────────────────────────────╯─╯

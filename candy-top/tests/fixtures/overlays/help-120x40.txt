@@ -18,16 +18,18 @@
 │ Cached: 3.20 GiB  │  5, 6, 7, 8, 9, 0  Toggle GPU box.                                         │es      244 MiB  13.6│
 │ Free: 2.60 GiB    │          x         Toggle CTR (containers) box.                            │        398 MiB  11.5│
 │                   │        [, ]        Select previous/next container in CTR box.              │        502 MiB   7.9│
-│ Swap: 205 MiB / 2.│          d         Toggle disks view in MEM box.                           │ta      305 MiB   7.2│
-│                   │        F2, o       Shows options.                                          │        612 MiB   6.6│
-│                   │      F1, ?, h      Shows this window.                                      │        360 MiB   2.6│
+│ Swap: 205 MiB / 2.│          v         Toggle the VM dashboard (hides mem, net, proc, ctr).    │ta      305 MiB   7.2│
+│                   │        s, S        Next/previous VM card order (VM dashboard).             │        612 MiB   6.6│
+│                   │          d         Toggle disks view in MEM box.                           │        360 MiB   2.6│
+│                   │        F2, o       Shows options.                                          │                     │
+│                   │      F1, ?, h      Shows this window.                                      │                     │
 │                   │      ctrl + r      Reloads config file from disk.                          │                     │
 │                   │     q, ctrl + c    Quits program.                                          │                     │
-│                   │       +, -, =      Add/Subtract 100ms to/from update timer.                │                     │
-│                   │      Up, Down      Select in process list.                                 │                     │
-╰───────────────────│        Enter       Show detailed information for selected process.         │                     │
-╭─┐³net┌────────────│      Spacebar      Expand/collapse the selected process in tree view.      │                     │
-│ eth0              │          C         Expand/collapse the selected process' children.         │                     │
+╰───────────────────│       +, -, =      Add/Subtract 100ms to/from update timer.                │                     │
+╭─┐³net┌────────────│      Up, Down      Select in process list.                                 │                     │
+│ eth0              │        Enter       Show detailed information for selected process.         │                     │
+│                   │      Spacebar      Expand/collapse the selected process in tree view.      │                     │
+│                   │          C         Expand/collapse the selected process' children.         │                     │
 │                   │   Pg Up, Pg Down   Jump 1 page in process list.                            │                     │
 │                   │      Home, End     Jump to first or last page in process list.             │                     │
 │                   │     Left, Right    Select previous/next sorting column.                    │                     │
@@ -35,6 +37,4 @@
 │                   │          i         Toggle disks io mode with big graphs.                   │                     │
 │                   │          z         Toggle totals reset for current network device          │                     │
 │                   │          a         Toggle auto scaling for the network graphs.             │                     │
-│                   │          y         Toggle synced scaling mode for network graphs.          │                     │
-│                   │        f, /        To enter a process filter. Start with ! for regex.      │                     │
 ╰───────────────────╰─┘↑ page 1/2 ↓└─────────────────────────────────────────────────────────────╯─────────────────────╯

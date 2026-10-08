@@ -34,7 +34,7 @@ final class PanelsTest extends TestCase
         foreach ([true, false] as $fake) {
             $panels = Panels::standard(Harness::host(), Config::new(), $fake);
             // `gpu` draws every gpuN box (btop PR #1730), registered once.
-            $this->assertSame(['cpu', 'gpu', 'mem', 'net', 'proc', 'ctr'], array_keys($panels));
+            $this->assertSame(['cpu', 'gpu', 'mem', 'net', 'proc', 'ctr', 'vms'], array_keys($panels));
             foreach ($panels as $box => $panel) {
                 $this->assertSame($box, $panel->box());
             }
@@ -107,13 +107,14 @@ final class PanelsTest extends TestCase
 
     public function testPaintStaysInsideItsBox(): void
     {
-        $config = Config::new();
-        $layout = FrameBuilder::layout(80, 24, $config, 8);
         $ink = Ink::new(ThemeConfig::new());
-        foreach (Panels::standard(Harness::host(), $config, true) as $box => $panel) {
+        foreach (Panels::standard(Harness::host(), Config::new(), true) as $box => $panel) {
             if ($box === 'gpu' || $box === 'ctr') {
                 continue; // not in the default layout: GpuPanelTest / CtrPanelTest cover their clipping
             }
+            // The VM dashboard samples only while shown: lay it out (it hides mem/net/proc).
+            $config = $box === 'vms' ? Config::new()->with('shown_boxes', 'cpu vms') : Config::new();
+            $layout = FrameBuilder::layout(80, 24, $config, 8);
             $panel = $panel->update(($panel->collect(new PanelContext($config, $layout, $layout->box($box))))(), new PanelContext($config, $layout, $layout->box($box)))->panel;
             $rect = $layout->box($box);
             $this->assertNotNull($rect);

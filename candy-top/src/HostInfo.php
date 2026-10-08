@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Top\Collect\ContainerEngine;
 use SugarCraft\Top\Collect\Paths;
 use SugarCraft\Top\Collect\Temp;
+use SugarCraft\Top\Collect\VmFleet;
 
 /**
  * Facts about the host that are fixed for the run and that the frame
@@ -16,7 +17,9 @@ use SugarCraft\Top\Collect\Temp;
  * user/host names for the clock's `/user` `/host` tokens, and the
  * container engine candy-top runs inside ({@see ContainerEngine}, btop
  * `Cpu::container_engine`; '' on a host), shown on the cpu title in place
- * of the `x ctr` button.
+ * of the `x ctr` button, and whether it runs libvirt/KVM guests
+ * (`vmHost`, {@see VmFleet::present()}), which shows the VM dashboard's
+ * `vms` title button.
  *
  * {@see detect()} does the one-time reads; the launcher calls it so the
  * Model itself never touches the filesystem.
@@ -34,6 +37,7 @@ final class HostInfo
         public readonly bool $hasSensors,
         public readonly bool $hasCpuHz,
         public readonly string $containerEngine = '',
+        public readonly bool $vmHost = false,
     ) {
     }
 
@@ -46,6 +50,7 @@ final class HostInfo
         bool $hasSensors = false,
         bool $hasCpuHz = false,
         string $containerEngine = '',
+        bool $vmHost = false,
     ): self {
         return new self(
             self::clean($cpuName),
@@ -55,7 +60,18 @@ final class HostInfo
             $hasSensors,
             $hasCpuHz,
             $containerEngine === '' ? '' : ContainerEngine::name($containerEngine),
+            $vmHost,
         );
+    }
+
+    /**
+     * Copy saying whether this host runs libvirt/KVM guests — the cpu
+     * title then offers the VM dashboard's `vms` button (`--fake` sets it
+     * for its fake fleet).
+     */
+    public function withVmHost(bool $vmHost): self
+    {
+        return new self($this->cpuName, $this->coreCount, $this->user, $this->host, $this->hasSensors, $this->hasCpuHz, $this->containerEngine, $vmHost);
     }
 
     /** Read the live host (or a fixture tree via `$paths`). Never throws. */
@@ -86,6 +102,7 @@ final class HostInfo
             is_file($paths->sys('devices/system/cpu/cpu0/cpufreq/scaling_cur_freq')),
             // A fixture tree stands in for the whole host, so it gets an empty environment too.
             ContainerEngine::detect($paths, $paths->root === '' ? null : []),
+            VmFleet::present($paths),
         );
     }
 

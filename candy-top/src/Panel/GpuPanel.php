@@ -331,7 +331,7 @@ final class GpuPanel implements Panel, ClickCapture, OptionChoices, GpuRosterSou
         }
         $layout = $context->layout;
         if ($next === null || $layout === null
-            || !FrameBuilder::fits($layout->width, $layout->height, $next->shownBoxes(), $roster, $next->gpuBoxColumns())) {
+            || !FrameBuilder::fits($layout->width, $layout->height, $next->shownBoxes(), $roster, $next->gpuBoxColumns(), $next->string('show_gpu_info'))) {
             return [];
         }
 

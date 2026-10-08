@@ -9,7 +9,11 @@ declare(strict_types=1);
  *   php prompt_kit/tools/candy-top-theme-preview.php <theme> [cols] [rows] [keys...]
  *
  * <theme> is any color_theme value (Default, pastel, mellow.theme, ...). Keys
- * are fed after the first sample: `down` (select a row), `enter`, or a char.
+ * are fed after the data ticks: `down`/`up`/`left`/`right` (move a
+ * selection), `enter`, or a char; a `pre:` prefix feeds the key BEFORE the
+ * ticks (`pre:v` opens the VM dashboard so its cards carry history). Each
+ * key's own Cmds (a toggled box's first sample) run too.
+ * CANDY_TOP_SHOWN_BOXES overrides shown_boxes.
  * Render it with prompt_kit/tools/sgr-to-svg.php, then `rsvg-convert` to PNG.
  */
 
@@ -42,18 +46,49 @@ $config = Config::new()->with('color_theme', $theme)
     ->with('truecolor', getenv('CANDY_TOP_256') !== '1')
     ->with('lowcolor', getenv('CANDY_TOP_256') === '1')
     ->withShownBoxesSettled(2);
-$host = Harness::host();
+if (getenv('CANDY_TOP_SHOWN_BOXES')) {
+    $config = $config->with('shown_boxes', (string) getenv('CANDY_TOP_SHOWN_BOXES'));
+}
+// The fake fleet's host runs VMs: the cpu title offers the `vms` button.
+$host = Harness::host()->withVmHost(true);
+$panels = Panels::standard($host, $config, true);
 $palette = ThemeRegistry::new(null, [])->load($config->colorTheme(), $config->bool('theme_background'), false);
 $app = App::start(
     $config,
     $palette,
     $host,
-    Panels::standard($host, $config, true),
+    $panels,
     static fn (): ClockTickMsg => new ClockTickMsg(Harness::TIME, 3600.0),
     getenv('CANDY_TOP_256') === '1' ? ColorProfile::Ansi256 : ColorProfile::TrueColor,
 );
 [$app] = $app->update(new WindowSizeMsg($cols, $rows));
 [$app] = $app->update(new ClockTickMsg(Harness::TIME, 3600.0));
+$feed = static function (App $app, string $key): App {
+    [$app, $cmd] = $app->update(match ($key) {
+        'down' => new KeyMsg(KeyType::Down),
+        'up' => new KeyMsg(KeyType::Up),
+        'left' => new KeyMsg(KeyType::Left),
+        'right' => new KeyMsg(KeyType::Right),
+        'enter' => new KeyMsg(KeyType::Enter),
+        default => new KeyMsg(KeyType::Char, $key),
+    });
+    $pending = [$cmd];
+    while ($pending !== []) {
+        foreach (Cmds::run(array_shift($pending)) as $m) {
+            if (!$m instanceof TickRequest) {
+                [$app, $next] = $app->update($m);
+                $pending[] = $next;
+            }
+        }
+    }
+
+    return $app;
+};
+foreach ($keys as $key) {
+    if (str_starts_with($key, 'pre:')) {
+        $app = $feed($app, substr($key, 4));
+    }
+}
 // Pump the fake sources for CANDY_TOP_TICKS data ticks (default 40) so the
 // graphs carry history; clock ticks are dropped to keep the time fixed.
 $queue = Cmds::run($app->init());
@@ -71,10 +106,8 @@ while ($queue !== []) {
     array_push($queue, ...Cmds::run($cmd));
 }
 foreach ($keys as $key) {
-    [$app] = $app->update(match ($key) {
-        'down' => new KeyMsg(KeyType::Down),
-        'enter' => new KeyMsg(KeyType::Enter),
-        default => new KeyMsg(KeyType::Char, $key),
-    });
+    if (!str_starts_with($key, 'pre:')) {
+        $app = $feed($app, $key);
+    }
 }
 echo (string) $app->view(), "\n";

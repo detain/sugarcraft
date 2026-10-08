@@ -243,8 +243,9 @@ final class Config
             if ($box->box === 'proc') {
                 $changes['proc_box_width_percent'] = $box->widthPercent() ?? Schema::PROC_BOX_WIDTH_PERCENT;
             }
-            // btop PR #1873 apply_preset: the ctr box uses graph_symbol_proc.
-            if ($box->box !== 'ctr') {
+            // btop PR #1873 apply_preset: the ctr box uses graph_symbol_proc;
+            // so do candy-top's VM dashboard cards.
+            if ($box->box !== 'ctr' && $box->box !== 'vms') {
                 $symbolKey = str_starts_with($box->box, 'gpu') ? 'graph_symbol_gpu' : 'graph_symbol_' . $box->box;
                 $changes[$symbolKey] = $box->graphSymbol;
             }

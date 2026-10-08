@@ -65,8 +65,18 @@ final class Schema
     /** btop Config::valid_graph_symbols_def — per-box symbols may also defer to graph_symbol. */
     public const GRAPH_SYMBOLS_DEF = ['default', 'braille', 'block', 'block2', 'tty'];
 
-    /** btop Config::valid_boxes (GPU build), plus btop PR #1873's containers box. */
-    public const BOXES = ['cpu', 'mem', 'net', 'proc', 'ctr'];
+    /**
+     * btop Config::valid_boxes (GPU build), plus btop PR #1873's containers
+     * box and candy-top's VM dashboard (`vms`, {@see \SugarCraft\Top\View\VmsMode}).
+     */
+    public const BOXES = ['cpu', 'mem', 'net', 'proc', 'ctr', 'vms'];
+
+    /**
+     * The VM dashboard's card orders (candy-top's own): busiest first for
+     * cpu / mem (share of configured RAM) / disk / net (read+write,
+     * down+up) / psi (worst some avg10), name A-Z.
+     */
+    public const VMS_SORTING = ['cpu', 'mem', 'disk', 'net', 'psi', 'name'];
 
     /**
      * btop PR #1873 `Ctr::selected`: the cgroup path of the container picked
@@ -239,6 +249,8 @@ final class Schema
             Option::bool('proc_filter_containers', false),
             // candy-top beyond #1873: list libvirt/KVM guests in the ctr box.
             Option::bool('ctr_show_vms', true),
+            // candy-top's VM dashboard (`vms` box): the card order.
+            Option::string('vms_sorting', 'cpu', self::VMS_SORTING),
             Option::bool('proc_follow_detailed', true),
             Option::bool('proc_aggregate', false),
             Option::int('proc_tree_auto_collapse', 0, 0, 10000),

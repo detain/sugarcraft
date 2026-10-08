@@ -54,6 +54,8 @@ final class FrameBuilder
         'proc' => [44, 16],
         // btop PR #1873 Ctr::min_width / min_height.
         'ctr' => [44, 6],
+        // The VM dashboard (candy-top's own): one card row in a framed box.
+        'vms' => [36, 8],
     ];
 
     /** btop PR #1873: the cpu title's `x ctr` button needs a cpu box this wide. */
@@ -71,12 +73,19 @@ final class FrameBuilder
      * row). Gpu boxes beyond the detected accelerators are not counted
      * (btop PR #1730), unless nothing has been detected yet.
      *
+     * With the VM dashboard shown the cpu box's GPU-info rows
+     * (show_gpu_info, `$gpuInfo`) count too: the dashboard is sized from
+     * what the cpu box leaves, and needs at least one card row.
+     *
      * @param list<string> $boxes
      * @param ?int         $gpuColumns gpu_box_columns (null = Auto)
      * @return array{0: int, 1: int} [width, height]
      */
-    public static function minSize(array $boxes, int $termWidth = 0, ?GpuRoster $roster = null, ?int $gpuColumns = null): array
+    public static function minSize(array $boxes, int $termWidth = 0, ?GpuRoster $roster = null, ?int $gpuColumns = null, string $gpuInfo = 'Auto'): array
     {
+        // The VM dashboard eclipses mem/net/proc/ctr: only what is laid out counts.
+        $boxes = VmsMode::effective($boxes);
+        $vms = VmsMode::active($boxes);
         $cpu = in_array('cpu', $boxes, true);
         $mem = in_array('mem', $boxes, true);
         $net = in_array('net', $boxes, true);
@@ -94,7 +103,17 @@ final class FrameBuilder
             $width = self::MINIMUMS['cpu'][0];
         }
         $width = max($width, GpuGrid::minWidth(count($gpus), $termWidth, $gpuColumns));
+        $width = max($width, $vms ? self::MINIMUMS['vms'][0] : 0);
         $height = $cpu ? self::MINIMUMS['cpu'][1] : 0;
+        $height += $vms ? self::MINIMUMS['vms'][1] : 0;
+        if ($vms && $cpu) {
+            $boxed = count(array_unique(array_filter(GpuPanels::targets($boxes), static fn (int $i): bool => $i < $roster->gpuCount())));
+            $height += match ($gpuInfo) {
+                'On' => $roster->gpuCount(),
+                'Auto' => max(0, $roster->gpuCount() - $boxed),
+                default => 0,
+            };
+        }
         // btop PR #1873: the ctr box shares the proc column.
         $height += $proc
             ? self::MINIMUMS['proc'][1] + ($ctr ? self::MINIMUMS['ctr'][1] : 0)
@@ -109,9 +128,9 @@ final class FrameBuilder
      *
      * @param list<string> $boxes
      */
-    public static function fits(int $cols, int $rows, array $boxes, ?GpuRoster $roster = null, ?int $gpuColumns = null): bool
+    public static function fits(int $cols, int $rows, array $boxes, ?GpuRoster $roster = null, ?int $gpuColumns = null, string $gpuInfo = 'Auto'): bool
     {
-        [$w, $h] = self::minSize($boxes, $cols, $roster, $gpuColumns);
+        [$w, $h] = self::minSize($boxes, $cols, $roster, $gpuColumns, $gpuInfo);
 
         return $cols >= $w && $rows >= $h;
     }
@@ -133,7 +152,9 @@ final class FrameBuilder
     public static function layout(int $cols, int $rows, Config $config, int $coreCount, bool $showTemp = false, ?GpuRoster $roster = null): Layout
     {
         $roster ??= GpuRoster::none();
-        $shown = $config->shownBoxes();
+        // The VM dashboard eclipses mem/net/proc/ctr ({@see VmsMode}).
+        $shown = VmsMode::effective($config->shownBoxes());
+        $hasVms = VmsMode::active($shown);
         $gpuNames = array_values(array_filter($shown, static fn (string $b): bool => GpuPanels::index($b) !== null));
         $gpuTargets = GpuPanels::targets($shown);
         $gpuForced = $config->gpuBoxColumns();
@@ -158,7 +179,7 @@ final class FrameBuilder
         $cpuCores = null;
         $bColumns = 0;
         $bColumnSize = 0;
-        $others = $hasMem || $hasNet || $procColumn;
+        $others = $hasMem || $hasNet || $procColumn || $hasVms;
         if ($hasCpu) {
             $w = (int) round($cols * self::RATIOS['cpu'][0] / 100);
             $onlyCpu = $shown === ['cpu'];
@@ -176,6 +197,8 @@ final class FrameBuilder
                 // btop's integer `height_p / (Gpu::rows + 1)`.
                 $percent = $onlyCpu ? 100 : intdiv(self::RATIOS['cpu'][1], $gpuRows + 1) + ($gpuRows !== 0 ? 5 : 0);
                 $cpuH = max(8, (int) ceil($rows * $percent / 100));
+                // The VM dashboard wants the room: the cpu box only as tall as its cores need.
+                $cpuH = $hasVms ? min($cpuH, self::vmsCpuHeight($w, $coreCount, $temp)) : $cpuH;
             }
             if ($cpuH <= $rows - $extra) {
                 $cpuH += $extra;
@@ -289,6 +312,12 @@ final class FrameBuilder
             }
         }
 
+        // The VM dashboard: everything below the cpu box and the gpu grid.
+        if ($hasVms) {
+            $vmsY = (($cpuBottom && $hasCpu) ? 0 : $cpuH) + $gpuHeight;
+            $boxes['vms'] = Rect::new(0, $vmsY, $cols, max(0, $rows - $cpuH - $gpuHeight));
+        }
+
         return new Layout(
             width: $cols,
             height: $rows,
@@ -366,6 +395,11 @@ final class FrameBuilder
 
                 continue;
             }
+            if ($name === VmsMode::BOX) {
+                self::paintVmsChrome($surface, $rect, $ink, $border, $tty);
+
+                continue;
+            }
             $title = Lang::t('box.' . $name);
             $bottomTitle = $name === 'cpu' && $layout->cpuBottom;
             BoxChrome::paint(
@@ -389,6 +423,7 @@ final class FrameBuilder
             $name = Width::truncate($custom !== '' ? $custom : $host->cpuName, max(0, $budget));
             BoxChrome::paint($surface, $layout->cpuCores, $ink->fg('div_line'), $ink, $border, fill: false, title: $name, tty: $tty);
             self::paintCpuButtons($surface, $layout, $ink, $config, $border, $preset, $host->containerEngine, $clockWidth);
+            self::paintVmsButton($surface, $layout, $ink, $config, $border, $host, $clockWidth);
         }
 
         $mem = $layout->box('mem');
@@ -495,6 +530,98 @@ final class FrameBuilder
             $border,
             false,
             $rect,
+        );
+    }
+
+    /**
+     * The VM dashboard's static chrome (candy-top's own): the outline in
+     * the {@see VmsMode} family colour and its `ᵛvms` title (`v` in tty
+     * mode), the superscript naming the toggle key as for ctr. The panel
+     * repaints the outline with the theme's flow and adds its readouts.
+     */
+    private static function paintVmsChrome(Surface $surface, Rect $rect, Ink $ink, Border $border, bool $tty): void
+    {
+        $line = $ink->fg(self::VMS_FAMILY . '_box');
+        BoxChrome::paint($surface, $rect, $line, $ink, $border, fill: true, tty: $tty);
+        if ($rect->width >= 2 && $rect->height >= 2) {
+            BoxChrome::embed($surface, $rect->x + 2, $rect->y, self::vmsTitle($ink, $tty), $line, $border, false, $rect);
+        }
+    }
+
+    /**
+     * The cpu box height (before its GPU rows) beside the VM dashboard: the
+     * lowest from btop's minimum 8 at which calcSizes still fits every
+     * core in compact columns (`b_columns * (15 + 6 * temp) < w - w/3`)
+     * AND the cores box's rows (`ceil(cores / b_columns) + 4`) inside the
+     * box, so the dashboard gets the rows the cpu graph would mostly
+     * leave empty without hiding a core.
+     * PHP_INT_MAX (no cap) when no height does.
+     */
+    public static function vmsCpuHeight(int $width, int $coreCount, int $temp): int
+    {
+        for ($h = self::MINIMUMS['cpu'][1]; $h <= 200; $h++) {
+            $columns = max(2, (int) ceil((max(1, $coreCount) + 1) / max(1, $h - 5)));
+            if ($columns * (15 + 6 * $temp) < $width - intdiv($width, 3) && (int) ceil(max(1, $coreCount) / $columns) + 4 <= $h - 2) {
+                return $h;
+            }
+        }
+
+        return PHP_INT_MAX;
+    }
+
+    /** The box family the VM dashboard and its cards are outlined in (`mem_box` and its flow). */
+    public const VMS_FAMILY = 'mem';
+
+    /** The dashboard's embedded title: superscript toggle key + `vms`. */
+    public static function vmsTitle(Ink $ink, bool $tty): string
+    {
+        return Symbols::BOLD . $ink->fg('hi_fg') . ($tty ? 'v' : 'ᵛ') . $ink->fg('title') . Lang::t('box.vms');
+    }
+
+    /**
+     * The cpu title's `v` mouse zone (0-based [x, y, w, h]) or null — the
+     * `vms` button right after the `x ctr` button (or the engine label),
+     * drawn on a VM host ({@see HostInfo::$vmHost}) or while the
+     * dashboard is shown, and only while it clears the clock's left
+     * junction (from about 88 columns with the default clock).
+     *
+     * @return array{0: int, 1: int, 2: int, 3: int}|null
+     */
+    public static function vmsZone(Rect $cpu, int $y, string $engine, int $clockWidth, bool $show): ?array
+    {
+        $ctr = self::ctrZone($cpu, $y, $engine, $clockWidth);
+        if (!$show || $ctr === null) {
+            return null;
+        }
+        $at = $ctr[0] + $ctr[2] + 2;
+        $width = Width::string(Lang::t('button.vms')) + (mb_stripos(Lang::t('button.vms'), 'v') === false ? 2 : 0);
+        $limit = $clockWidth > 0 ? $cpu->x + intdiv($cpu->width, 2) - intdiv($clockWidth, 2) : $cpu->x + $cpu->width - 18;
+
+        return $at + $width < $limit ? [$at, $y, $width, 1] : null;
+    }
+
+    /** The `vms` title button ({@see vmsZone()}): `┐vms┌` with its `v` lit, like `menu`'s `m`. */
+    private static function paintVmsButton(Surface $surface, Layout $layout, Ink $ink, Config $config, Border $border, HostInfo $host, int $clockWidth): void
+    {
+        $cpu = $layout->box('cpu');
+        if ($cpu === null) {
+            return;
+        }
+        $y = $layout->cpuBottom ? $cpu->bottom() - 1 : $cpu->y;
+        $shown = VmsMode::active($config->shownBoxes());
+        $zone = self::vmsZone($cpu, $y, $host->containerEngine, $clockWidth, $host->vmHost || $shown);
+        if ($zone === null) {
+            return;
+        }
+        BoxChrome::embed(
+            $surface,
+            $zone[0] - 1,
+            $y,
+            Symbols::BOLD . self::hotkey(Lang::t('button.vms'), 'v', $ink),
+            $ink->fg('cpu_box'),
+            $border,
+            $layout->cpuBottom,
+            $cpu,
         );
     }
 

@@ -15,6 +15,7 @@ use SugarCraft\Top\Collect\ContainerSnapshot;
 use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Collect\ProcSnapshot;
 use SugarCraft\Top\Collect\TunableProcList;
+use SugarCraft\Top\Collect\Vm;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\Schema;
 use SugarCraft\Top\Input\KeyName;
@@ -57,6 +58,9 @@ use SugarCraft\Top\View\Region;
  * VMs: libvirt/KVM guests are listed, sorted, selected and filtered
  * exactly like containers (engine "kvm"), unless ctr_show_vms is off —
  * re-applied to the collector from the current config on every sample.
+ * With it off, a guest picked from the VM dashboard (Enter) still filters
+ * the proc box: that pick survives the unlisted-container clearing and is
+ * dropped by the proc tap once the guest has no process left.
  *
  * Mini-graphs: one 5x1 graph per drawn row, pushed once per fresh sample
  * with btop's value (`cpu < 5` but >= 0.1 reads 5, so a trickle shows)
@@ -289,8 +293,12 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
             $cap = self::historyCap($context);
             $procs = $this->procs;
             $window = self::minWindowUs($context->config);
+            // A guest picked from the VM dashboard while this box lists no VMs
+            // (ctr_show_vms off) stays picked until its processes are gone.
+            $selected = $context->config->string(Schema::CTR_SELECTED);
+            $set = self::hiddenVmPick($selected, $context->config) && !self::scanned($snapshot, $selected) ? [Schema::CTR_SELECTED => ''] : [];
 
-            return new PanelResult($this, static function () use ($collector, $snapshot, $perCore, $cap, $procs, $window): ?Msg {
+            return new PanelResult($set === [] ? $this : $this->settled(new PanelContext($context->config->with(Schema::CTR_SELECTED, ''), $context->layout, $context->box)), static function () use ($collector, $snapshot, $perCore, $cap, $procs, $window): ?Msg {
                 // A proc rescan off the data tick (sort change, Enter, a
                 // toggle) is skipped: its few-ms window would make the
                 // cgroup cpu% noise and add a history point.
@@ -300,7 +308,7 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
                 [$containers, $next] = $collector->collect($snapshot->processes, $snapshot->memTotal, $snapshot->coreCount, $perCore, $cap);
 
                 return new SampledMsg('ctr', new CtrSample($containers, $next), $procs);
-            });
+            }, $set);
         }
         if ($msg->box !== 'ctr' || !$msg->snapshot instanceof CtrSample) {
             return new PanelResult($this);
@@ -308,8 +316,10 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
         $snapshot = $msg->snapshot->snapshot;
         $config = $context->config;
         $selected = $config->string(Schema::CTR_SELECTED);
-        // btop Ctr::collect: a selection whose container is gone is cleared.
-        $set = $selected !== '' && $snapshot->indexOf($selected) === null ? [Schema::CTR_SELECTED => ''] : [];
+        // btop Ctr::collect: a selection whose container is gone is cleared —
+        // except a VM picked from the VM dashboard while VMs are not listed
+        // here: the proc tap clears that one once its processes are gone.
+        $set = $selected !== '' && $snapshot->indexOf($selected) === null && !self::hiddenVmPick($selected, $config) ? [Schema::CTR_SELECTED => ''] : [];
         $next = new self($msg->next, $msg->snapshot->collector, $snapshot, $this->graphs, $this->family, $this->start);
         $after = $set === [] ? $context : new PanelContext($config->with(Schema::CTR_SELECTED, ''), $context->layout, $context->box);
         $next = $next->settled($after)->observed($after);
@@ -362,6 +372,27 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
         );
 
         return $start === $this->start ? $this : new self($this->procs, $this->collector, $this->snapshot, $this->graphs, $this->family, $start);
+    }
+
+    /**
+     * `$selected` is a libvirt guest's scope while ctr_show_vms is off — a
+     * pick the VM dashboard's Enter made that this box cannot list.
+     */
+    private static function hiddenVmPick(string $selected, Config $config): bool
+    {
+        return $selected !== '' && !$config->bool(self::SHOW_VMS) && (Vm::scope($selected)['path'] ?? null) === $selected;
+    }
+
+    /** Whether a process of the scan sits in cgroup `$path`. */
+    private static function scanned(ProcSnapshot $snapshot, string $path): bool
+    {
+        foreach ($snapshot->processes as $p) {
+            if ($p->container?->cgroupPath === $path) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Half of update_ms, in microseconds: the shortest window a sample may cover. */

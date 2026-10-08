@@ -18,7 +18,7 @@
 │  5, 6, 7, 8, 9, 0  Toggle GPU box.                                         │6│
 │          x         Toggle CTR (containers) box.                            │ │
 │        [, ]        Select previous/next container in CTR box.              │ │
+│          v         Toggle the VM dashboard (hides mem, net, proc, ctr).    │ │
+│        s, S        Next/previous VM card order (VM dashboard).             │ │
 │          d         Toggle disks view in MEM box.                           │ │
-│        F2, o       Shows options.                                          │ │
-│      F1, ?, h      Shows this window.                                      │ │
 ╰─┘↑ page 1/4 ↓└─────────────────────────────────────────────────────────────╯─╯

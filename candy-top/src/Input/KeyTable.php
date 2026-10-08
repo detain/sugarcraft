@@ -45,6 +45,9 @@ final class KeyTable
             new KeyRow('5, 6, 7, 8, 9, 0', 'help.toggle_gpu', ['5', '6', '7', '8', '9', '0']),
             new KeyRow('x', 'help.toggle_ctr', ['x']),
             new KeyRow('[, ]', 'help.select_ctr', ['[', ']']),
+            // candy-top's VM dashboard: `v` toggles it, `s`/`S` cycle its card order (arrows/Enter as listed below).
+            new KeyRow('v', 'help.toggle_vms', ['v']),
+            new KeyRow('s, S', 'help.vms_sort', ['s', 'S']),
             new KeyRow('d', 'help.toggle_disks', ['d']),
             new KeyRow('F2, o', 'help.options', ['f2', 'o']),
             new KeyRow('F1, ?, h', 'help.help', ['f1', '?', 'h']),

@@ -79,6 +79,8 @@ final class Panels
                 : ProcPanel::new($platform->procList(), PosixProcessControl::new())->withGpu($gpuFeed),
             // btop PR #1873's containers box: taps the proc box's scan, scans on its own only while proc is hidden.
             'ctr' => CtrPanel::standard($host->coreCount, $fake, $platform),
+            // candy-top's VM dashboard (`v`): samples only while `vms` is shown.
+            'vms' => VmsPanel::standard($fake, $platform),
         ];
     }
 

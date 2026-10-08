@@ -6,8 +6,10 @@ namespace SugarCraft\Top\Panel\Ctr;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+use SugarCraft\Top\Collect\Cgroup;
 use SugarCraft\Top\Collect\ContainerInfo;
 use SugarCraft\Top\Collect\ContainerSnapshot;
+use SugarCraft\Top\Collect\Vm;
 use SugarCraft\Top\Config\Schema;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\Gfx\Just;
@@ -36,7 +38,9 @@ use SugarCraft\Top\View\Symbols;
  *    vCPU count for a KVM guest) + cpu%,
  *    the cpu history graph, and a `used` memory meter against memory.max
  *    (a VM's configured memory, else MemTotal, when unlimited);
- *  - bottom border: `selected/count` (0 = none).
+ *  - bottom border: `selected/count` (0 = none), and — beyond btop — the
+ *    `proc filter: kvm:<guest>` label when the VM dashboard picked a guest
+ *    this box does not list (ctr_show_vms off).
  *
  * Rows are written as btop's escape stream through {@see Region::ansi()},
  * so the colour law (selected bg/fg, proc_colors gradients, the bold
@@ -217,6 +221,17 @@ final class CtrView
         $len = Width::string($location);
         $r->ansi($W - 3 - max(7, $len), $H - 1, $line . str_repeat(Symbols::H_LINE, max(0, 7 - $len)) . $openDown
             . $title . Symbols::BOLD . $location . Symbols::UNBOLD . $line . $closeDown);
+
+        // A guest picked from the VM dashboard while VMs are not listed here
+        // (ctr_show_vms off) still filters the proc box: say so beside the count.
+        $vm = $selected < 0 && $selectedPath !== '' ? Vm::scope($selectedPath) : null;
+        if ($vm !== null && $vm['path'] === $selectedPath) {
+            $label = Lang::t('ctr.vm_pick', ['engine' => Vm::ENGINE, 'name' => Cgroup::safe($vm['name'])]);
+            $at = $W - 3 - max(7, $len) - Width::string($label) - 3;
+            if ($at >= 2) {
+                $r->ansi($at, $H - 1, $line . $openDown . $hi . Symbols::BOLD . $label . Symbols::UNBOLD . $line . $closeDown);
+            }
+        }
     }
 
     /** A VM's boot vCPUs after its engine in the detail title (beyond btop, which lists no VMs). */
