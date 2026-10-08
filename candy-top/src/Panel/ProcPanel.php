@@ -25,7 +25,8 @@ use SugarCraft\Top\Overlay\ReniceMenu;
 use SugarCraft\Top\Overlay\SignalMenu;
 use SugarCraft\Top\Overlay\Signals;
 use SugarCraft\Top\Panel\Proc\DetailState;
-use SugarCraft\Top\Panel\Proc\FilterEdit;
+use SugarCraft\Bits\Input\TextEdit;
+use SugarCraft\Top\Input\TextKeys;
 use SugarCraft\Top\Panel\Proc\ProcEntry;
 use SugarCraft\Top\Panel\Proc\ProcSelection;
 use SugarCraft\Top\Panel\Proc\ProcTable;
@@ -107,7 +108,7 @@ final class ProcPanel implements Panel, ClickCapture
         private ?ProcSelection $sel = null,
         private array $collapsed = [],
         private int $treeVersion = 0,
-        private ?FilterEdit $edit = null,
+        private ?TextEdit $edit = null,
         private string $oldFilter = '',
         private ?DetailState $detail = null,
         private ?ProcGraphTracker $graphs = null,
@@ -189,7 +190,7 @@ final class ProcPanel implements Panel, ClickCapture
         return $this->detail;
     }
 
-    public function filterEdit(): ?FilterEdit
+    public function filterEdit(): ?TextEdit
     {
         return $this->edit;
     }
@@ -275,13 +276,14 @@ final class ProcPanel implements Panel, ClickCapture
             $frame,
             $this->rows($config),
             $this->selection(),
-            $config->bool('proc_filtering') ? ($this->edit ?? FilterEdit::new($config->string('proc_filter'))) : null,
+            $config->bool('proc_filtering') ? ($this->edit ?? TextEdit::new($config->string('proc_filter'))) : null,
             $this->graphs(),
             $detail,
             $this->memTotal,
             $this->snapshot?->coreCount ?? 1,
             $this->followedPid,
             $this->followRow,
+            $this->returnToFollowed,
         );
     }
 
@@ -640,7 +642,7 @@ final class ProcPanel implements Panel, ClickCapture
         $text = $context->config->string('proc_filter');
 
         return new PanelResult(
-            $this->mutate(['edit' => FilterEdit::new($text), 'oldFilter' => $text]),
+            $this->mutate(['edit' => TextEdit::new($text), 'oldFilter' => $text]),
             null,
             ['proc_filtering' => true],
         );
@@ -648,7 +650,7 @@ final class ProcPanel implements Panel, ClickCapture
 
     private function filterKey(KeyMsg $msg, PanelContext $context): PanelResult
     {
-        $edit = $this->edit ?? FilterEdit::new($context->config->string('proc_filter'));
+        $edit = $this->edit ?? TextEdit::new($context->config->string('proc_filter'));
         $key = self::keyName($msg, false);
         if ($key === 'enter' || $key === 'down') {
             $result = $this->closeFilter($context, $edit->text);
@@ -664,7 +666,7 @@ final class ProcPanel implements Panel, ClickCapture
         if ($key === 'escape') {
             return $this->closeFilter($context, $this->oldFilter);
         }
-        $next = $edit->command($msg);
+        $next = TextKeys::apply($edit, $msg);
         if ($next === null) {
             return new PanelResult($this);
         }

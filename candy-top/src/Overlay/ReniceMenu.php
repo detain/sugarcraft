@@ -14,7 +14,8 @@ use SugarCraft\Top\View\Surface;
  * btop's renice menu (`N` on a selected process): a 50x13 `renice` box
  * with a nice-value field starting at 0.
  *
- * Keys: digits (and a leading `-`) type a value; backspace edits it;
+ * Keys: digits (and a leading `-`) type a value; backspace edits it
+ * (emptying the field keeps the last value it parsed to, as btop does);
  * up / k and down / j step by 1 and left / h, right / l by 5, wrapping
  * inside -20..19 (a step clears the typed text); enter / space apply it;
  * escape / q abort. A typed value is applied as typed (btop's stoi; the
@@ -88,11 +89,14 @@ final class ReniceMenu implements Overlay
         if (in_array($key, ['enter', 'space'], true)) {
             return OverlayResult::close($this->pid > 0 ? Menus::renice($this->control, $this->pid, $this->value()) : null);
         }
+        // btop re-parses the field on every redraw (`selected_nice =
+        // stoi(nice_edit)` while it is non-empty), so the stepped value
+        // follows the typing and backspacing to empty keeps the last parse.
         if (strlen($key) === 1 && (ctype_digit($key) || ($key === '-' && $this->edit === ''))) {
-            return OverlayResult::keep($this->with($this->nice, $this->edit . $key));
+            return OverlayResult::keep($this->edited($this->edit . $key));
         }
         if ($key === 'backspace' && $this->edit !== '') {
-            return OverlayResult::keep($this->with($this->nice, substr($this->edit, 0, -1)));
+            return OverlayResult::keep($this->edited(substr($this->edit, 0, -1)));
         }
         $nice = $this->value();
 
@@ -103,6 +107,14 @@ final class ReniceMenu implements Overlay
             in_array($key, ['right', 'l'], true) => OverlayResult::keep($this->with($nice + 5 > 19 ? $nice - 35 : $nice + 5, '')),
             default => OverlayResult::keep($this),
         };
+    }
+
+    /** `$edit` typed, the stepped value re-parsed from it unless it is empty. */
+    private function edited(string $edit): self
+    {
+        $typed = $this->with($this->nice, $edit);
+
+        return $edit === '' ? $typed : $this->with($typed->value(), $edit);
     }
 
     private function with(int $nice, string $edit): self

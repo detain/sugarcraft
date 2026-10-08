@@ -37,8 +37,22 @@ final class KeyName
         };
     }
 
+    /**
+     * btop PR #1476's modified-arrow names (Key_escapes `[1;2D` shift_left,
+     * `[1;4D` alt_shift_left, `[1;6D` ctrl_shift_left, the `C` rights and
+     * `[1;6B` ctrl_shift_down) — the proc box width keys.
+     */
+    public const MODIFIED_ARROWS = [
+        'shift_left', 'shift_right', 'alt_shift_left', 'alt_shift_right',
+        'ctrl_shift_left', 'ctrl_shift_right', 'ctrl_shift_down',
+    ];
+
     public static function key(KeyMsg $msg): string
     {
+        $arrow = self::modifiedArrow($msg);
+        if ($arrow !== null) {
+            return $arrow;
+        }
         if ($msg->ctrl || $msg->alt) {
             return '';
         }
@@ -64,6 +78,39 @@ final class KeyName
             KeyType::F2 => 'f2',
             default => '',
         };
+    }
+
+    /**
+     * True for a modified arrow btop has no name for (shift+up, alt+left,
+     * ...): btop's Input::get clears the unknown escape, so the key never
+     * reaches a handler or the history.
+     */
+    public static function dropped(KeyMsg $msg): bool
+    {
+        return self::modifiedArrow($msg) === '';
+    }
+
+    /**
+     * A modifier-carrying arrow: its btop name when it has one
+     * ({@see MODIFIED_ARROWS}), else '' (btop clears an unmapped
+     * multi-byte escape); null for anything that is not a modified arrow.
+     */
+    private static function modifiedArrow(KeyMsg $msg): ?string
+    {
+        $dir = match ($msg->type) {
+            KeyType::Left => 'left',
+            KeyType::Right => 'right',
+            KeyType::Up => 'up',
+            KeyType::Down => 'down',
+            default => null,
+        };
+        if ($dir === null || (!$msg->shift && !$msg->alt && !$msg->ctrl)) {
+            return null;
+        }
+        $prefix = ($msg->ctrl ? 'ctrl_' : '') . ($msg->alt ? 'alt_' : '') . ($msg->shift ? 'shift_' : '');
+        $name = $prefix . $dir;
+
+        return in_array($name, self::MODIFIED_ARROWS, true) ? $name : '';
     }
 
     /**

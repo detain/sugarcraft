@@ -100,7 +100,7 @@ final class SchemaTest extends TestCase
 
     public function testRuntimeKeysExistButAreNotPersisted(): void
     {
-        foreach (['tty_mode', 'lowcolor', 'proc_filter', 'proc_filtering', 'show_detailed', 'pause_proc_list', 'follow_process'] as $name) {
+        foreach (['tty_mode', 'tty_console', 'lowcolor', 'proc_filter', 'proc_filtering', 'show_detailed', 'pause_proc_list', 'follow_process'] as $name) {
             $option = Schema::option($name);
             $this->assertInstanceOf(Option::class, $option, $name);
             $this->assertFalse($option->persisted, $name);

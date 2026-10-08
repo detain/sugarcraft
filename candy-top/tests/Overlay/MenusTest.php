@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Tests\Overlay;
 
 use SugarCraft\Top\Overlay\Menus;
 use SugarCraft\Top\Overlay\MsgBox;
+use SugarCraft\Top\Overlay\OptionsMenu;
 use SugarCraft\Top\Overlay\OverlayStack;
 use SugarCraft\Top\Overlay\HelpMenu;
 use SugarCraft\Top\Overlay\MainMenu;
@@ -51,14 +52,17 @@ final class MenusTest extends OverlayTestCase
         return $box->title;
     }
 
-    public function testSizeErrorAndOptionsPlaceholder(): void
+    public function testSizeErrorAndOptions(): void
     {
         $size = Menus::sizeError();
         $this->assertInstanceOf(MsgBox::class, $size);
         $this->assertSame(45, $size->width);
         $this->assertSame("Error:\nTerminal size too small to\ndisplay menu or box!", self::text($size));
-        $this->assertInstanceOf(MsgBox::class, Menus::options());
-        $this->assertSame('options', Menus::options()->title);
+        $this->assertInstanceOf(OptionsMenu::class, Menus::options());
+        $this->assertSame([80, 24], Menus::options()->minSize());
+        $save = Menus::warning('Config file /x is read-only; settings were not saved.');
+        $this->assertInstanceOf(MsgBox::class, $save);
+        $this->assertSame('warning', $save->title);
         $this->assertInstanceOf(MainMenu::class, Menus::main());
         $this->assertInstanceOf(HelpMenu::class, Menus::help());
     }

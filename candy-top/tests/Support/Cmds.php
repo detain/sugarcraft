@@ -6,10 +6,12 @@ namespace SugarCraft\Top\Tests\Support;
 
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\SequenceMsg;
 
 /**
- * Runs a Cmd the way the Program would, minus the event loop: batches are
- * expanded recursively, a TickRequest is returned as-is (not fired).
+ * Runs a Cmd the way the Program would, minus the event loop: batches and
+ * sequences are expanded recursively (a sequence in order), a TickRequest
+ * is returned as-is (not fired).
  */
 final class Cmds
 {
@@ -20,7 +22,7 @@ final class Cmds
             return [];
         }
         $msg = $cmd();
-        if ($msg instanceof BatchMsg) {
+        if ($msg instanceof BatchMsg || $msg instanceof SequenceMsg) {
             $out = [];
             foreach ($msg->cmds as $inner) {
                 $out = [...$out, ...self::run($inner)];

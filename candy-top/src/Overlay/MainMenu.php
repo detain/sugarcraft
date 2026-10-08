@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Overlay;
 
-use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Top\Input\KeyName;
+use SugarCraft\Top\Msg\QuitRequestMsg;
 use SugarCraft\Top\View\Banner;
 use SugarCraft\Top\View\Surface;
 
@@ -150,7 +150,8 @@ final class MainMenu implements Overlay
         return match ($this->selected) {
             self::OPTIONS => new OverlayResult(self::new(), null, Menus::options()),
             self::HELP => new OverlayResult(self::new(), null, Menus::help()),
-            default => OverlayResult::close(Cmd::quit()),
+            // The App answers with its quit Cmd (config save first).
+            default => OverlayResult::close(static fn (): Msg => new QuitRequestMsg()),
         };
     }
 

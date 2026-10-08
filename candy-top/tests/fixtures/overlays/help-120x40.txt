@@ -9,32 +9,32 @@
 │                   │       Mouse 1      Clicks buttons and selects in process list.             │                    ││
 │                   │    Mouse scroll    Scrolls any scrollable list/text under cursor.          │                    ││
 │                   │       Esc, m       Toggles main menu.                                      │────────────────────╯│
-│                   │          1         Toggle CPU box.                                         │                     │
-╰───────────────────│          2         Toggle MEM box.                                         │─────────────────────╯
-╭─┐²mem┌────────────│          3         Toggle NET box.                                         │─────────────────────╮
-│ Total: 16.0 GiB   │          4         Toggle PROC box.                                        │           MemB  Cpu%│
-│ Used: 10.2 GiB    │          d         Toggle disks view in MEM box.                           │        198 MiB  27.8│
-│ Available: 5.80 Gi│        F2, o       Shows options.                                          │       90.0 MiB  25.0│
-│ Cached: 3.20 GiB  │      F1, ?, h      Shows this window.                                      │es      244 MiB  13.6│
-│ Free: 2.60 GiB    │     q, ctrl + c    Quits program.                                          │        398 MiB  11.5│
-│                   │       +, -, =      Add/Subtract 100ms to/from update timer.                │        502 MiB   7.9│
-│ Swap: 205 MiB / 2.│      Up, Down      Select in process list.                                 │ta      305 MiB   7.2│
-│                   │        Enter       Show detailed information for selected process.         │        612 MiB   6.6│
-│                   │      Spacebar      Expand/collapse the selected process in tree view.      │        360 MiB   2.6│
+│                   │          p         Cycle view presets forwards.                            │                     │
+╰───────────────────│      shift + p     Cycle view presets backwards.                           │─────────────────────╯
+╭─┐²mem┌────────────│          1         Toggle CPU box.                                         │─────────────────────╮
+│ Total: 16.0 GiB   │          2         Toggle MEM box.                                         │           MemB  Cpu%│
+│ Used: 10.2 GiB    │          3         Toggle NET box.                                         │        198 MiB  27.8│
+│ Available: 5.80 Gi│          4         Toggle PROC box.                                        │       90.0 MiB  25.0│
+│ Cached: 3.20 GiB  │          d         Toggle disks view in MEM box.                           │es      244 MiB  13.6│
+│ Free: 2.60 GiB    │        F2, o       Shows options.                                          │        398 MiB  11.5│
+│                   │      F1, ?, h      Shows this window.                                      │        502 MiB   7.9│
+│ Swap: 205 MiB / 2.│      ctrl + r      Reloads config file from disk.                          │ta      305 MiB   7.2│
+│                   │     q, ctrl + c    Quits program.                                          │        612 MiB   6.6│
+│                   │       +, -, =      Add/Subtract 100ms to/from update timer.                │        360 MiB   2.6│
+│                   │      Up, Down      Select in process list.                                 │                     │
+│                   │        Enter       Show detailed information for selected process.         │                     │
+│                   │      Spacebar      Expand/collapse the selected process in tree view.      │                     │
 │                   │          C         Expand/collapse the selected process' children.         │                     │
-│                   │   Pg Up, Pg Down   Jump 1 page in process list.                            │                     │
-│                   │      Home, End     Jump to first or last page in process list.             │                     │
-│                   │     Left, Right    Select previous/next sorting column.                    │                     │
-╰───────────────────│        b, n        Select previous/next network device.                    │                     │
-╭─┐³net┌────────────│          i         Toggle disks io mode with big graphs.                   │                     │
-│ eth0              │          z         Toggle totals reset for current network device          │                     │
+╰───────────────────│   Pg Up, Pg Down   Jump 1 page in process list.                            │                     │
+╭─┐³net┌────────────│      Home, End     Jump to first or last page in process list.             │                     │
+│ eth0              │     Left, Right    Select previous/next sorting column.                    │                     │
+│                   │        b, n        Select previous/next network device.                    │                     │
+│                   │          i         Toggle disks io mode with big graphs.                   │                     │
+│                   │          z         Toggle totals reset for current network device          │                     │
 │                   │          a         Toggle auto scaling for the network graphs.             │                     │
 │                   │          y         Toggle synced scaling mode for network graphs.          │                     │
 │                   │        f, /        To enter a process filter. Start with ! for regex.      │                     │
 │                   │          F         Follow selected process.                                │                     │
 │                   │          u         Pause process list.                                     │                     │
 │                   │       delete       Clear any entered filter.                               │                     │
-│                   │          c         Toggle per-core cpu usage of processes.                 │                     │
-│                   │          r         Reverse sorting order in processes box.                 │                     │
-│                   │          e         Toggle processes tree view.                             │                     │
 ╰───────────────────╰─┘↑ page 1/2 ↓└─────────────────────────────────────────────────────────────╯─────────────────────╯

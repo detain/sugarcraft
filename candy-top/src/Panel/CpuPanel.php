@@ -52,7 +52,7 @@ use SugarCraft\Top\View\Region;
  *
  * Mirrors aristocratos/btop Cpu::draw (src/btop_draw.cpp:567-1024).
  */
-final class CpuPanel implements Panel, ClockReserve
+final class CpuPanel implements Panel, ClockReserve, OptionChoices
 {
     /** btop caps `core_percent` deques at 40 (linux/btop_collect.cpp:1153). */
     public const CORE_HISTORY = 40;
@@ -310,6 +310,32 @@ final class CpuPanel implements Panel, ClockReserve
         }
 
         return $fields;
+    }
+
+    /**
+     * btop's optionsList sources this box fills: Cpu::available_fields
+     * ("Auto" + {@see graphFields()}), Cpu::available_sensors ("Auto" + every
+     * sensor seen) and Config::available_batteries ("Auto" + the battery).
+     *
+     * @return array<string, list<string>>
+     */
+    public function optionChoices(): array
+    {
+        $fields = ['Auto', ...$this->graphFields()];
+        $sensors = ['Auto', ...array_map('strval', array_keys($this->temp?->sensors ?? []))];
+        $name = $this->battery instanceof BorderBattery ? ($this->battery->last()?->name ?? '') : '';
+
+        return [
+            'cpu_graph_upper' => $fields,
+            'cpu_graph_lower' => $fields,
+            'cpu_sensor' => $sensors,
+            'selected_battery' => $name === '' ? ['Auto'] : ['Auto', $name],
+        ];
+    }
+
+    public function detectedGpus(): int
+    {
+        return \count($this->gpus);
     }
 
     private function withCpu(CpuSnapshot $s, int $cap): self

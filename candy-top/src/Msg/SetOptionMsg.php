@@ -22,8 +22,8 @@ use SugarCraft\Core\Msg;
  * the schema ({@see \SugarCraft\Top\Config\Config::with()}), drops it
  * when btop would reject it, and otherwise applies it through
  * {@see \SugarCraft\Top\App::applyConfig()}, so the relayout, tick re-arm
- * and colour-profile side effects all hold. The change is in memory only;
- * writing the config file belongs to the options menu / exit path (P-F).
+ * and colour-profile side effects all hold. A persisted change marks the
+ * config for writing on exit (btop `write_new`, phase P-F2).
  */
 final class SetOptionMsg implements Msg
 {

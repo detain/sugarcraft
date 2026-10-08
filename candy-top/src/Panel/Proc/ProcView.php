@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Proc;
 
+use SugarCraft\Bits\Input\TextEdit;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
@@ -181,13 +182,14 @@ final class ProcView
         PanelFrame $frame,
         array $rows,
         ProcSelection $sel,
-        ?FilterEdit $edit,
+        ?TextEdit $edit,
         ProcGraphTracker $graphs,
         ?DetailState $detail,
         int $memTotal,
         int $cores,
         ?int $followed = null,
         int $followRow = 0,
+        bool $returning = false,
     ): void {
         $W = $region->width();
         $H = $region->height();
@@ -196,6 +198,7 @@ final class ProcView
         }
         $config = $frame->config;
         $ink = $frame->ink;
+        $detailPid = $detail?->pid;
         if ($detail !== null && !self::detailFits($W, $H)) {
             $detail = null; // no room: the list alone (ProcPanel's selection math agrees via detailFits)
         }
@@ -213,7 +216,10 @@ final class ProcView
             self::paintDetail($region, $frame, $detail, $sel, $rows, $memTotal, $cores, $followed);
         }
         self::paintTitleRow($region, $frame, $dy, $edit);
-        self::paintBottomRow($region, $frame, $sel, $numpids, $selectMax, $followed !== null, $followRow);
+        // btop_draw.cpp:1949: ↑ also lights while the detailed pid is the
+        // followed one and closing the view will return the selection to it.
+        $upLit = $sel->selected !== 0 || ($returning && $followed !== null && $detailPid === $followed);
+        self::paintBottomRow($region, $frame, $sel, $numpids, $selectMax, $followed !== null, $followRow, $upLit);
         self::paintHeader($region, $ink, $dy, $sz, $tree, $graphsOn, $config->bool('proc_mem_bytes'));
 
         $ctx = [
@@ -337,7 +343,7 @@ final class ProcView
     }
 
     /** Filter, Omit ctr, per-core, reverse, tree and the sort selector (btop_draw.cpp:1899-1957, #1873). */
-    private static function paintTitleRow(Region $r, PanelFrame $f, int $y, ?FilterEdit $edit): void
+    private static function paintTitleRow(Region $r, PanelFrame $f, int $y, ?TextEdit $edit): void
     {
         $ink = $f->ink;
         $config = $f->config;
@@ -385,7 +391,7 @@ final class ProcView
     }
 
     /** select / info buttons and the location counter (btop_draw.cpp:1959-1985, 2190-2194). */
-    private static function paintBottomRow(Region $r, PanelFrame $f, ProcSelection $sel, int $numpids, int $selectMax, bool $following, int $followRow = 0): void
+    private static function paintBottomRow(Region $r, PanelFrame $f, ProcSelection $sel, int $numpids, int $selectMax, bool $following, int $followRow = 0, bool $upLit = false): void
     {
         $ink = $f->ink;
         $W = $r->width();
@@ -396,7 +402,7 @@ final class ProcView
         $title = $ink->fg('title');
         $selected = $sel->selected;
         $last = $numpids === 0 || ($sel->selected > 0 && $sel->start + $sel->selected >= $numpids);
-        $up = ($selected !== 0 ? $hiFg : $inactive) . '↑';
+        $up = ($upLit ? $hiFg : $inactive) . '↑';
         $down = ($last ? $inactive : $hiFg) . '↓';
         $tColor = $selected === 0 ? $inactive : $title;
         $hiColor = $selected === 0 ? $inactive : $hiFg;

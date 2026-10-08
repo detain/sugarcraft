@@ -6,19 +6,19 @@
 │    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
 ╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
 │        Key:        Description:                                            │─╯
-│          C         Expand/collapse the selected process' children.         │─╮
-│   Pg Up, Pg Down   Jump 1 page in process list.                            │%│
-│      Home, End     Jump to first or last page in process list.             │8│
-│     Left, Right    Select previous/next sorting column.                    │0│
-│        b, n        Select previous/next network device.                    │6│
-│          i         Toggle disks io mode with big graphs.                   │5│
-│          z         Toggle totals reset for current network device          │9│
-│          a         Toggle auto scaling for the network graphs.             │2│
-│          y         Toggle synced scaling mode for network graphs.          │6│
-│        f, /        To enter a process filter. Start with ! for regex.      │6│
+│      Up, Down      Select in process list.                                 │─╮
+│        Enter       Show detailed information for selected process.         │%│
+│      Spacebar      Expand/collapse the selected process in tree view.      │8│
+│          C         Expand/collapse the selected process' children.         │0│
+│   Pg Up, Pg Down   Jump 1 page in process list.                            │6│
+│      Home, End     Jump to first or last page in process list.             │5│
+│     Left, Right    Select previous/next sorting column.                    │9│
+│        b, n        Select previous/next network device.                    │2│
+│          i         Toggle disks io mode with big graphs.                   │6│
+│          z         Toggle totals reset for current network device          │6│
+│          a         Toggle auto scaling for the network graphs.             │ │
+│          y         Toggle synced scaling mode for network graphs.          │ │
+│        f, /        To enter a process filter. Start with ! for regex.      │ │
 │          F         Follow selected process.                                │ │
 │          u         Pause process list.                                     │ │
-│       delete       Clear any entered filter.                               │ │
-│          c         Toggle per-core cpu usage of processes.                 │ │
-│          r         Reverse sorting order in processes box.                 │ │
-╰─┘↑ page 2/3 ↓└─────────────────────────────────────────────────────────────╯─╯
+╰─┘↑ page 2/4 ↓└─────────────────────────────────────────────────────────────╯─╯

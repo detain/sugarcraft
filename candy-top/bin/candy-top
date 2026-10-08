@@ -19,12 +19,12 @@ namespace SugarCraft\Top\bin;
 })();
 
 use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Top\App;
 use SugarCraft\Top\Config\ConfigFile;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
+use SugarCraft\Top\Msg\ConfigSavedMsg;
 use SugarCraft\Top\Panel\Panels;
 use SugarCraft\Top\Theme\ThemeRegistry;
 
@@ -78,7 +78,8 @@ if (!stream_isatty(STDIN) || !stream_isatty(STDOUT)) {
     exit(1);
 }
 
-$loaded = ConfigFile::new($configPath)->load();
+$file = ConfigFile::new($configPath);
+$loaded = $file->load();
 foreach ($loaded->warnings as $warning) {
     fwrite(STDERR, "candy-top: {$warning}\n");
 }
@@ -90,10 +91,68 @@ $config = $loaded->config
     ->withShownBoxesSettled(0);
 
 $host = HostInfo::detect();
-$palette = ThemeRegistry::new()->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
+// btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
+$catalog = ThemeRegistry::new();
+$palette = $catalog->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
 $panels = Panels::standard($host, $config, $fake);
+// btop `lowcolor`: the 256-colour cube whenever truecolor is off.
+$config = $config->with('lowcolor', !$config->bool('truecolor'));
 
-(new Program(
-    App::start($config, $palette, $host, $panels),
-    new ProgramOptions(useAltScreen: true, framerate: 20.0),
-))->run();
+$program = new Program(
+    App::start($config, $palette, $host, $panels, file: $file, writeNew: $loaded->needsRewrite, catalog: $catalog),
+    App::programOptions($config),
+);
+// btop's SIGTERM / SIGHUP handlers run clean_quit (config save included);
+// candy-core's Program traps only SIGINT, so stop its loop here and let
+// the post-run save below do the write after the terminal is restored.
+$trapped = function_exists('pcntl_signal') ? [SIGTERM, SIGHUP] : [];
+if ($trapped !== [] && function_exists('pcntl_async_signals')) {
+    pcntl_async_signals(true);
+}
+foreach ($trapped as $signal) {
+    pcntl_signal($signal, static function () use ($program): void {
+        $program->kill();
+    });
+}
+try {
+    $final = $program->run();
+} catch (\Throwable $e) {
+    // A crash out of update()/view()/a Cmd escapes run() without its
+    // terminal teardown: put the terminal back (best effort — on a hung-up
+    // tty the writes just fail), still save what the user changed, then
+    // rethrow so PHP prints the error and trace on a usable screen.
+    // releaseTerminal() also leaves raw mode, so the trace isn't staircased;
+    // the raw reset bytes are the fallback when that teardown throws.
+    try {
+        $program->releaseTerminal();
+    } catch (\Throwable) {
+        @fwrite(STDOUT, App::terminalReset());
+        @fflush(STDOUT);
+    }
+    $crashed = $program->model();
+    if ($crashed instanceof App) {
+        $saved = ($crashed->exitSave())?->__invoke();
+        if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
+            @fwrite(STDERR, 'candy-top: ' . $saved->error . "\n");
+        }
+    }
+
+    throw $e;
+} finally {
+    // From here a signal must act normally again, not be swallowed by a
+    // handler whose program has stopped.
+    foreach ($trapped as $signal) {
+        pcntl_signal($signal, SIG_DFL);
+    }
+}
+// Every App quit path saves through its own Cmd; a signal-driven exit
+// bypasses update(), and a quit-time save that failed leaves the flag set,
+// so btop's clean_quit save runs (again) here — after the alt screen is
+// gone, so a failure can be reported where the user sees it.
+if ($final instanceof App) {
+    $saved = ($final->exitSave())?->__invoke();
+    if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
+        @fwrite(STDERR, 'candy-top: ' . $saved->error . "\n");
+        exit(1);
+    }
+}

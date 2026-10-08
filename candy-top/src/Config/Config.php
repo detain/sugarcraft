@@ -151,6 +151,52 @@ final class Config
         return $this;
     }
 
+    /**
+     * Copy with every PERSISTED option taken from $other, runtime state
+     * (tty_mode, proc_filter, show_detailed, ...) kept — what a config
+     * reload does (btop init_config re-runs Config::load over the live
+     * maps, which only ever touches `descriptions` keys). $other's values
+     * were validated when it was built, so no law re-runs here.
+     */
+    public function withPersistedFrom(Config $other): self
+    {
+        $changes = [];
+        foreach (Schema::persistedNames() as $name) {
+            $changes[$name] = $other->values[$name];
+        }
+
+        return $this->mutate($changes);
+    }
+
+    /**
+     * Whether any persisted option differs from $other — btop's `write_new`
+     * trigger (any Config::set of a `descriptions` key).
+     */
+    public function persistedDiffers(Config $other): bool
+    {
+        foreach (Schema::persistedNames() as $name) {
+            if ($this->values[$name] !== $other->values[$name]) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * $key's value in btop's menu spelling — Config::getAsString: bools
+     * `True`/`False`, ints as digits, strings as stored.
+     */
+    public function asString(string $key): string
+    {
+        $value = $this->value($key);
+
+        return match (true) {
+            \is_bool($value) => $value ? 'True' : 'False',
+            default => (string) $value,
+        };
+    }
+
     /** Copy with the bool option $key inverted — btop Config::flip. */
     public function flipped(string $key): self
     {
@@ -341,7 +387,7 @@ final class Config
     {
         $tty = $cliForce ?? ($this->bool('force_tty') || $onRealTty);
 
-        return $this->with('tty_mode', $tty);
+        return $this->with('tty_mode', $tty)->with('tty_console', $onRealTty);
     }
 
     /** Rounded box corners — btop ignores this in TTY mode, and so does this accessor. */

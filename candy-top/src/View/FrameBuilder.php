@@ -18,7 +18,8 @@ use SugarCraft\Top\Lang;
  * share (the non-GPU build's formula differs by a row on some sizes; the
  * GPU build is what Linux users run). Box ratios / minimums:
  * cpu 100w/32h (min 60x8), mem 45/40 (36x10), net 45/28 (36x6),
- * proc 55/68 (44x16).
+ * proc 55/68 (44x16) — the proc share being btop PR #1476's
+ * `proc_box_width_percent` ({@see sideWidth()}).
  *
  * {@see paintChrome()} ports what calcSizes pre-renders into `Cpu::box`,
  * `Mem::box`, `Net::box` and `Proc::box` (createBox outlines, the cpu
@@ -145,7 +146,7 @@ final class FrameBuilder
         $disksWidth = 0;
         $divider = null;
         if ($hasMem) {
-            $memW = (int) round($cols * ($hasProc ? self::RATIOS['mem'][0] : 100) / 100);
+            $memW = self::sideWidth($cols, $hasProc, $config->procBoxWidthPercent(), self::MINIMUMS['mem'][0]);
             // GPU build, zero gpus: Net::height_p * shown * 4 / (0 + 4).
             $netShare = intdiv(self::RATIOS['net'][1] * ($hasNet ? 1 : 0) * 4, 4);
             $memH = (int) floor($rows * (100 - $netShare) / 100) - $cpuH;
@@ -167,7 +168,7 @@ final class FrameBuilder
         $netW = 0;
         $netStats = null;
         if ($hasNet) {
-            $netW = (int) round($cols * ($hasProc ? self::RATIOS['net'][0] : 100) / 100);
+            $netW = self::sideWidth($cols, $hasProc, $config->procBoxWidthPercent(), self::MINIMUMS['net'][0]);
             $netH = $rows - $cpuH - $memH;
             $x = ($procLeft && $hasProc) ? $cols - $netW + 1 : 1;
             $y = ($memBelowNet && $hasMem)
@@ -208,6 +209,32 @@ final class FrameBuilder
             procLeft: $procLeft,
             showDisks: $showDisks,
         );
+    }
+
+    /**
+     * The mem / net column width — btop PR #1476 calcSizes: with the proc
+     * box shown, `round(cols * (100 - proc_box_width_percent) / 100)`
+     * clamped (std::clamp) between the box's own minimum and what leaves
+     * the proc box its 44 columns; the whole width without proc. At the
+     * default 55 % this is btop 1.4.7's `round(cols * 45 / 100)`.
+     */
+    public static function sideWidth(int $cols, bool $hasProc, int $procPercent, int $minWidth): int
+    {
+        if (!$hasProc) {
+            return $cols;
+        }
+
+        return self::clamp((int) round($cols * (100 - $procPercent) / 100), $minWidth, $cols - self::MINIMUMS['proc'][0]);
+    }
+
+    /**
+     * btop's `std::clamp(v, lo, hi)` as libstdc++ evaluates it — `v < lo ?
+     * lo : (hi < v ? hi : v)` — including the inverted-bounds case (hi < lo)
+     * the width keys can produce on a narrow terminal.
+     */
+    public static function clamp(int $v, int $lo, int $hi): int
+    {
+        return $v < $lo ? $lo : ($hi < $v ? $hi : $v);
     }
 
     /** The border family: rounded unless rounded_corners is off or TTY mode is on. */

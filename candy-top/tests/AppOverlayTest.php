@@ -27,6 +27,7 @@ use SugarCraft\Top\Overlay\HelpMenu;
 use SugarCraft\Top\Overlay\MainMenu;
 use SugarCraft\Top\Overlay\Menus;
 use SugarCraft\Top\Overlay\MsgBox;
+use SugarCraft\Top\Overlay\OptionsMenu;
 use SugarCraft\Top\Overlay\Signals;
 use SugarCraft\Top\Panel\Net\NetPanel;
 use SugarCraft\Top\Panel\Panel;
@@ -128,7 +129,7 @@ final class AppOverlayTest extends TestCase
 
     public function testMenuKeysOpenTheirMenus(): void
     {
-        foreach (['escape' => MainMenu::class, 'm' => MainMenu::class, 'f1' => HelpMenu::class, '?' => HelpMenu::class, 'h' => HelpMenu::class, 'f2' => MsgBox::class, 'o' => MsgBox::class] as $key => $class) {
+        foreach (['escape' => MainMenu::class, 'm' => MainMenu::class, 'f1' => HelpMenu::class, '?' => HelpMenu::class, 'h' => HelpMenu::class, 'f2' => OptionsMenu::class, 'o' => OptionsMenu::class] as $key => $class) {
             $this->assertInstanceOf($class, self::key(self::app(), $key)->overlay(), $key);
         }
         $vim = self::app(config: self::config(['vim_keys' => true]));
@@ -357,9 +358,10 @@ final class AppOverlayTest extends TestCase
     {
         $app = self::booted(self::app());
         $map = $app->chromeButtons();
-        $this->assertSame(['m', '-', '+'], array_keys($map));
+        $this->assertSame(['m', 'p', '-', '+'], array_keys($map));
         // btop: m at x + 11 (4 wide), - at x + width - len("2000ms") - 7, + at x + width - 5.
         $this->assertSame([11, 0, 4, 1], $map['m']);
+        $this->assertSame([17, 0, 8, 1], $map['p'], 'btop {button_y, x + 17, 1, 8}');
         $this->assertSame([120 - 6 - 7, 0, 2, 1], $map['-']);
         $this->assertSame([115, 0, 2, 1], $map['+']);
         [$menu] = $app->update(self::click(12, 0));

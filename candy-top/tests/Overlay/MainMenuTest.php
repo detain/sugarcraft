@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Overlay;
 
-use SugarCraft\Core\Msg\QuitMsg;
+use SugarCraft\Top\Msg\QuitRequestMsg;
 use SugarCraft\Top\Overlay\HelpMenu;
 use SugarCraft\Top\Overlay\MainMenu;
-use SugarCraft\Top\Overlay\MsgBox;
+use SugarCraft\Top\Overlay\OptionsMenu;
 
 /** btop Menu::mainMenu: selection, Switch to help/options, quit, mouse. */
 final class MainMenuTest extends OverlayTestCase
@@ -34,7 +34,7 @@ final class MainMenuTest extends OverlayTestCase
     {
         $options = self::feed(MainMenu::new(), ['enter']);
         $this->assertInstanceOf(MainMenu::class, $options->overlay, 'the main menu stays underneath');
-        $this->assertInstanceOf(MsgBox::class, $options->push, 'P-F1: the options placeholder');
+        $this->assertInstanceOf(OptionsMenu::class, $options->push);
 
         $help = self::feed(MainMenu::new(), ['down', 'space']);
         $this->assertInstanceOf(HelpMenu::class, $help->push);
@@ -44,7 +44,7 @@ final class MainMenuTest extends OverlayTestCase
         $quit = self::feed(MainMenu::new(), ['up', 'enter']);
         $this->assertNull($quit->overlay);
         $this->assertNotNull($quit->cmd);
-        $this->assertInstanceOf(QuitMsg::class, ($quit->cmd)());
+        $this->assertInstanceOf(QuitRequestMsg::class, ($quit->cmd)(), 'the App answers with its saving quit Cmd');
     }
 
     public function testEscapeQAndMClose(): void

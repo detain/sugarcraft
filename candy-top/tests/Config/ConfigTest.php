@@ -229,6 +229,8 @@ final class ConfigTest extends TestCase
         $base = Config::new();
         $this->assertFalse($base->withTtyModeResolved(null, false)->ttyMode());
         $this->assertTrue($base->withTtyModeResolved(null, true)->ttyMode(), 'real /dev/tty auto-detect');
+        $this->assertTrue($base->withTtyModeResolved(false, true)->bool('tty_console'), 'the console fact is kept even when the CLI turns tty mode off');
+        $this->assertFalse($base->withTtyModeResolved(true, false)->bool('tty_console'));
         $forced = $base->with('force_tty', true);
         $this->assertTrue($forced->withTtyModeResolved(null, false)->ttyMode(), 'config force_tty');
         $this->assertFalse($forced->withTtyModeResolved(false, true)->ttyMode(), 'CLI wins');

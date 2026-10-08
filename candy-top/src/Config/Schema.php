@@ -269,6 +269,10 @@ final class Schema
             // Runtime state btop keeps in the same maps but outside
             // `descriptions`: never loaded, never written.
             Option::bool('tty_mode', false, persisted: false),
+            // btop Term::current_tty.starts_with("/dev/tty"): the session runs
+            // on a real console (set by withTtyModeResolved()); the options
+            // menu's force_tty toggle leaves tty_mode alone there.
+            Option::bool('tty_console', false, persisted: false),
             Option::bool('lowcolor', false, persisted: false),
             Option::string('proc_filter', '', persisted: false),
             Option::bool('proc_filtering', false, persisted: false),
