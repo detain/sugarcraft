@@ -27,10 +27,7 @@ References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-refer
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
 ## In flight
-- **U5 wiring**: apply Platform factory into bin/Panels/CpuPanel/BorderBattery/MemPanel/Disks and switch the four
-  panel `instanceof` retune checks to the Collect\{TunableFreq,SelectableBattery,SelectableMounts,TunableProcList}
-  interfaces; FreeBsd\Cpu should re-read kern.boottime every sample (reviewer nit); append `## U5 FreeBSD collectors`
-  to candy-top/CALIBER_LEARNINGS.md. ps/iostat live captures pending (FreeBSD host ssh down).
+- U5 wiring ✅ `70c09bec9` (FreeBSD ps/iostat live captures still pending; host ssh down).
 - Census: candy-top share fixed ✅ `274ab740b`; remaining DescriptorSinkArgumentCensusTest red is sugar-crush only
   (note: sugar-crush ForkedChild/SessionRelaunch `(int)$entry` casts at real close/fcntl sinks deserve a look — not ours).
 - **P-H docs** agent running (README, drift tests, docs/_data, root README/index, MATCHUPS).

@@ -514,7 +514,7 @@ Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aris
   (`/sys/class/accel` + FFI ioctl), #1730 any-GPU box slots on the #1881 grid (`gpu_box_columns="Auto"`),
   #1552 per-process GPU util/mem; #1873 container box; #1791c tree-state persistence in an
   `$XDG_STATE_HOME` file (not config).
-- **U5 — post-v1 FreeBSD collectors** (collectors + Platform factory ✅ `18fd19467`; panel wiring pending): reference output captured in `prompt_kit/findings/freebsd-reference.md`
+- **U5 — post-v1 FreeBSD collectors** ✅ (collectors + Platform factory `18fd19467`; panel wiring `70c09bec9`; live ps/iostat capture pending — host ssh down): reference output captured in `prompt_kit/findings/freebsd-reference.md`
   (FreeBSD 14.4, sysctl/kvm-surface notes); folds in #1851/#1830/#1787/#1728.
 
 ## 5. Monorepo integration checklist (still-open add-a-lib items)
