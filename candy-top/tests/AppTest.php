@@ -339,7 +339,7 @@ final class AppTest extends TestCase
 
     public function testVisiblePanelClaimsKeysAheadOfGlobalKeys(): void
     {
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['proc'] = new ClaimingPanel('proc', ['+', '-', '=']);
         $panels['cpu'] = new ClaimingPanel('cpu', []);
         $app = self::sized(self::app(null, null, $panels), 120, 40);
@@ -371,7 +371,7 @@ final class AppTest extends TestCase
     {
         // A claiming (non-modal) panel that claims everything still cannot
         // disable `q` or `1`-`4`: those are never offered to capturesKey().
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['cpu'] = new ClaimingPanel('cpu', ['q', '1', '2', '3', '4', '+']);
         $app = self::sized(self::app(null, null, $panels), 120, 40);
 
@@ -402,7 +402,7 @@ final class AppTest extends TestCase
 
     public function testHiddenOrSizeGatedPanelsAreNotOfferedKeys(): void
     {
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['proc'] = new ClaimingPanel('proc', ['q']);
 
         $hidden = self::sized(self::app(self::config(['shown_boxes' => 'cpu mem']), null, $panels), 120, 40);
@@ -422,7 +422,7 @@ final class AppTest extends TestCase
         // proc `e` writes proc_tree and, with it on, the proc box claims `+`
         // (btop_input.cpp:491). The two halves live in different panels so the
         // claim can only flip through the App's config, not panel state.
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['net'] = new ClaimingPanel('net', ['e', 'a'], sets: [
             'e' => static fn (Config $c): array => ['proc_tree' => !$c->bool('proc_tree')],
             'a' => static fn (Config $c): array => ['net_auto' => !$c->bool('net_auto')],
@@ -462,7 +462,7 @@ final class AppTest extends TestCase
 
     public function testPanelWritesAreValidatedOneByOneAndKeepApplyConfigSideEffects(): void
     {
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['net'] = new ClaimingPanel('net', ['z'], sets: [
             'z' => static fn (): array => ['proc_sorting' => 'bogus', 'update_ms' => 1500, 'no_such_option' => true],
         ]);
@@ -477,7 +477,7 @@ final class AppTest extends TestCase
 
     public function testAsyncSetOptionMsgFromACmdStillRoutesThroughApplyConfig(): void
     {
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['net'] = new ClaimingPanel('net', ['e'], emits: [
             'e' => static fn (Config $c): SetOptionMsg => new SetOptionMsg('proc_tree', !$c->bool('proc_tree')),
         ]);
@@ -499,7 +499,7 @@ final class AppTest extends TestCase
     {
         // btop checks proc_filtering before everything (btop_input.cpp:217-222,
         // 301-342) and drops every mouse event but a click (158-161).
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['cpu'] = new ClaimingPanel('cpu', ['q', '1', '+', 'escape']);
         $panels['proc'] = new ClaimingPanel('proc', [], modalWhen: 'proc_filtering', sets: [
             'escape' => static fn (): array => ['proc_filtering' => false],
@@ -552,7 +552,7 @@ final class AppTest extends TestCase
 
     public function testHiddenModalPanelDoesNotOwnInput(): void
     {
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['proc'] = new ClaimingPanel('proc', [], modalWhen: 'proc_filtering');
         $app = self::sized(self::app(self::config(['shown_boxes' => 'cpu mem net']), null, $panels), 120, 40);
         [$app] = $app->update(new SetOptionMsg('proc_filtering', true));
@@ -563,7 +563,7 @@ final class AppTest extends TestCase
     public function testSizeNoticeOnlyHonoursQuitAndBoxToggles(): void
     {
         // btop.cpp:180-198: the size-notice loop reads `q` and `1`-`4` only.
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['proc'] = new ClaimingPanel('proc', [], modalWhen: 'proc_filtering');
         $tiny = self::sized(self::app(self::config(['proc_filtering' => true]), null, $panels), 70, 24);
         $this->assertNull($tiny->context('proc')->box, 'behind the notice no panel is visible');
@@ -588,7 +588,7 @@ final class AppTest extends TestCase
 
     public function testPanelContextFollowsResizeAndToggles(): void
     {
-        $panels = Panels::standard(self::host(), self::config(), true);
+        $panels = Panels::placeholders(self::host(), self::config(), true);
         $panels['proc'] = new ClaimingPanel('proc', ['k']);
         $app = self::sized(self::app(null, null, $panels), 120, 40);
 
@@ -659,7 +659,7 @@ final class AppTest extends TestCase
         $this->assertSame(ColorProfile::Ansi256, $back->ink->profile());
 
         // A change that leaves the derived profile alone keeps an explicit start() profile.
-        $forced = App::start(self::config(['truecolor' => false]), ThemeRegistry::new(null, [])->load('Default', true, false), self::host(), Panels::standard(self::host(), self::config(), true), null, ColorProfile::TrueColor);
+        $forced = App::start(self::config(['truecolor' => false]), ThemeRegistry::new(null, [])->load('Default', true, false), self::host(), Panels::placeholders(self::host(), self::config(), true), null, ColorProfile::TrueColor);
         [$kept] = $forced->applyConfig($forced->config->with('proc_tree', true));
         $this->assertSame(ColorProfile::TrueColor, $kept->ink->profile());
     }

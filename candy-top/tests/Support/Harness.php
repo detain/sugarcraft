@@ -36,7 +36,7 @@ final class Harness
             $config,
             ThemeConfig::new(),
             $host,
-            Panels::standard($host, $config, true),
+            Panels::placeholders($host, $config, true),
             static fn (): ClockTickMsg => new ClockTickMsg(self::TIME, 3600.0),
             ColorProfile::TrueColor,
         );

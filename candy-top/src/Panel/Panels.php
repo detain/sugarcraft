@@ -54,4 +54,23 @@ final class Panels
             'proc' => PlaceholderPanel::new('proc', $fake ? FakeProcList::new($host->coreCount) : CollectorSource::of(ProcList::new())),
         ];
     }
+
+    /**
+     * The P-A placeholder roster, frozen: frame-chrome goldens and App
+     * routing tests build on it so a phase swapping its box in
+     * {@see standard()} never rewrites another phase's fixtures.
+     *
+     * @return array<string, Panel> keyed by box name
+     */
+    public static function placeholders(HostInfo $host, Config $config, bool $fake = true): array
+    {
+        $intervalSec = $config->updateMs() / 1000;
+
+        return [
+            'cpu' => PlaceholderPanel::new('cpu', $fake ? FakeCpu::new($host->coreCount, $intervalSec) : CollectorSource::of(Cpu::new())),
+            'mem' => PlaceholderPanel::new('mem', $fake ? FakeMemory::new() : CollectorSource::of(Memory::new())),
+            'net' => PlaceholderPanel::new('net', $fake ? FakeNet::new($intervalSec) : CollectorSource::of(Net::new())),
+            'proc' => PlaceholderPanel::new('proc', $fake ? FakeProcList::new($host->coreCount) : CollectorSource::of(ProcList::new())),
+        ];
+    }
 }

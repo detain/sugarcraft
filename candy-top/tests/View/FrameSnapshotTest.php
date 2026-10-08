@@ -67,7 +67,7 @@ final class FrameSnapshotTest extends TestCase
             $config,
             TtyTheme::new(),
             $host,
-            Panels::standard($host, $config, true),
+            Panels::placeholders($host, $config, true),
             static fn (): ClockTickMsg => new ClockTickMsg(Harness::TIME),
             ColorProfile::Ansi,
         );
