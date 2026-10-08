@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tools\BuiltIn;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\PromptFence;
+use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillOrigin;
 use SugarCraft\Crush\Skills\SkillPromptLine;
@@ -166,10 +169,13 @@ final class SkillToolResolutionTest extends TestCase
     }
 
     /**
-     * M5 (skills QA fix round 1): the two announcements of one skill — the tool
-     * result a load produces and the prompt section an enabled body splices —
-     * are built from the same SkillPromptLine helpers, so neither can drift
-     * back to the raw uuid key and both carry the base directory.
+     * M5 (skills QA fix round 1): the announcements of one skill — the tool
+     * result a load produces, the prompt section an enabled body splices, and
+     * (re-review MINOR-2) the deferred contribution Runtime writes when the
+     * body is over budget — are built from the same SkillPromptLine helpers,
+     * so none can drift back to the raw uuid key and each carries the skill's
+     * on-disk base directory (the tool result and the splice as the base-dir
+     * line, the deferred channel as the escaped source path it names).
      */
     public function testTheToolResultHeaderAndTheSplicedContributionAreByteIdentical(): void
     {
@@ -188,6 +194,18 @@ final class SkillToolResolutionTest extends TestCase
         $this->assertStringContainsString('## Skill: review' . "\n\n", $skill->systemPromptContribution());
         $this->assertStringNotContainsString('synced/bundle-a/review', $skill->systemPromptContribution(),
             'the spliced body must not re-announce the uuid key the listing stopped showing');
+
+        // MINOR-2 (re-review): Runtime's third channel, over-budget deferral.
+        // Private static, so it is reached by reflection; the pin is the same
+        // byte identity, not a copy of the message it appends.
+        $deferred = (new \ReflectionMethod(Runtime::class, 'deferredSkillContribution'))
+            ->invoke(null, $skill, 9_001, CompactorConfig::new());
+        $this->assertStringStartsWith("\n\n" . SkillPromptLine::heading($skill), $deferred,
+            'the deferred channel must open on the identical heading bytes the tool result carries');
+        $this->assertStringNotContainsString('synced/bundle-a/review', $deferred,
+            'the deferred channel announces by display name too, never the uuid key');
+        $this->assertStringContainsString(PromptFence::escape(dirname($path)), $deferred,
+            'the Read pointer carries the same escaped base directory the other two announce');
     }
 
     public function testADisplayNameRouteRefusesSkillsThatAreNotModelInvocable(): void

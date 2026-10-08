@@ -836,8 +836,10 @@ final class PromptStabilityTest extends TestCase
     // MEASURED 2026-10-08 at skills QA fix round 1 (M5): 4,781 -> 4,831. One
     // mover only: the `## Skill: prefix-demo` layer gained the base-directory
     // line (73 -> 123) that systemPromptContribution() now shares with the
-    // Skill tool result — 33 B prefix + 2 B newline + 2 B gap production-side,
-    // and the 15 B directory spelling this file chose fixture-side.
+    // Skill tool result — 33 B prefix + the line's own 2 B "\n\n" terminator
+    // production-side (14 -> 49; the heading's separator pre-existed and did
+    // not move), and the 15 B directory spelling this file chose fixture-side
+    // (59 -> 74). 35 + 15 = the +50 the total moved by.
     private const STABLE_LAYERS_BYTES = 4831;
 
     /**
