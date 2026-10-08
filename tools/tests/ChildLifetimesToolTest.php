@@ -70,7 +70,7 @@ final class ChildLifetimesToolTest extends TestCase
         $this->assertSame(0, $code, "tool was red on its own repo:\n$out$err");
         $this->assertStringContainsString('0 problems', $out);
         $this->assertStringContainsString('7 findings', $out);
-        $this->assertStringContainsString('27 proc_open sites', $out);
+        $this->assertStringContainsString('28 proc_open sites', $out);
     }
 
     /**
