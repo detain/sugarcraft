@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Tools\BuiltIn;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillOrigin;
+use SugarCraft\Crush\Skills\SkillPromptLine;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\Catalog\BuiltInTool;
@@ -112,6 +113,81 @@ final class SkillToolResolutionTest extends TestCase
         $this->assertStringContainsString('synced/guid-one/review', $result->content());
         $this->assertStringContainsString('synced/guid-two/review', $result->content());
         $this->assertStringContainsString('exact keys', $result->content());
+    }
+
+    /**
+     * M2 (skills QA fix round 1): an EXACT key the registry withholds because
+     * `disabledSkills` lists it must come back naming that state — never fall
+     * through the display-name ladder, where a different enabled skill whose
+     * leaf shares that name would be loaded in its place. That fall-through
+     * silently rewrites a user's deliberate disable into another skill's
+     * instructions: here `tool` is disabled, but `bundle/tool` displays under
+     * the same leaf `tool`, so a naive fall-through would load the sibling.
+     */
+    public function testADisabledExactKeyRefusesInsteadOfLoadingTheSiblingUnderItsLeaf(): void
+    {
+        $registry = new SkillRegistry();
+        $registry->register([
+            'tool' => $this->skill('tool', $this->writeBody('disabled-one')),
+            'bundle/tool' => $this->skill('bundle/tool', $this->writeBody('sibling')),
+        ]);
+        $registry->disable('tool');
+
+        $result = (new SkillTool($registry))->execute(['id' => 'r7', 'name' => 'tool']);
+
+        $this->assertTrue($result->isError(), 'the key route answers the KEY, enabled or not');
+        $this->assertStringContainsString('disabled', $result->content());
+        $this->assertStringContainsString('disabledSkills', $result->content());
+        $this->assertStringNotContainsString('Body of sibling.', $result->content(),
+            'the disabled key must not silently re-point at the enabled sibling sharing its leaf');
+        $this->assertStringNotContainsString('Body of disabled-one.', $result->content());
+    }
+
+    /**
+     * M1 (skills QA fix round 1): the collision candidates in the ambiguity
+     * error are registry keys, i.e. repository directory spellings — they ride
+     * the same field() escape as the header lines, so a bundle folder named
+     * like a fence tag cannot forge one inside the retry hint.
+     */
+    public function testTheAmbiguityErrorDefangsFenceShapedCandidateKeys(): void
+    {
+        $registry = new SkillRegistry();
+        $registry->register([
+            'synced/<env>/review' => $this->skill('synced/<env>/review', $this->writeBody('one')),
+            'synced/plain/review' => $this->skill('synced/plain/review', $this->writeBody('two')),
+        ]);
+
+        $result = (new SkillTool($registry))->execute(['id' => 'r8', 'name' => 'review']);
+
+        $this->assertTrue($result->isError());
+        $this->assertStringNotContainsString('<env>', $result->content(), 'the raw opener must not reach the model');
+        $this->assertStringContainsString('synced/&lt;env>/review', $result->content());
+        $this->assertStringContainsString('synced/plain/review', $result->content());
+    }
+
+    /**
+     * M5 (skills QA fix round 1): the two announcements of one skill — the tool
+     * result a load produces and the prompt section an enabled body splices —
+     * are built from the same SkillPromptLine helpers, so neither can drift
+     * back to the raw uuid key and both carry the base directory.
+     */
+    public function testTheToolResultHeaderAndTheSplicedContributionAreByteIdentical(): void
+    {
+        $path = $this->writeBody('parity');
+        $skill = $this->skill('synced/bundle-a/review', $path);
+        $registry = new SkillRegistry();
+        $registry->register(['synced/bundle-a/review' => $skill]);
+
+        $result = (new SkillTool($registry))->execute(['id' => 'r9', 'name' => 'review']);
+        $this->assertFalse($result->isError());
+
+        $header = SkillPromptLine::heading($skill) . SkillPromptLine::baseDirLine($skill);
+        $this->assertStringStartsWith($header, $result->content());
+        $this->assertStringStartsWith("\n\n" . $header, $skill->systemPromptContribution());
+        $this->assertStringContainsString('## Skill: review' . "\n\n", $result->content());
+        $this->assertStringContainsString('## Skill: review' . "\n\n", $skill->systemPromptContribution());
+        $this->assertStringNotContainsString('synced/bundle-a/review', $skill->systemPromptContribution(),
+            'the spliced body must not re-announce the uuid key the listing stopped showing');
     }
 
     public function testADisplayNameRouteRefusesSkillsThatAreNotModelInvocable(): void

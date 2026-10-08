@@ -73,8 +73,10 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    block, then the `Memory` tool's `recall` — before answering about prior work. Agent-scope notes
    never reach it.
 10. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
-   `Skill::systemPromptContribution()` as a PerTurn section, name and body through
-   `PromptFence::escape()`. Held to `CompactorConfig`'s `skillBudgetPerSkill` and
+   `Skill::systemPromptContribution()` as a PerTurn section: display name, base
+   directory and body, each through the same `SkillPromptLine` escaping that opens
+   a `Skill` tool result, so the two announcements of one skill never disagree.
+   Held to `CompactorConfig`'s `skillBudgetPerSkill` and
    `skillBudgetCombined` tokens, measured with `TokenEstimate::ofText()`: a body over either keeps
    its `## Skill:` heading and is replaced by one line saying how to load it (the Skill tool, or
    Read on its file), never clipped. The budgets are the App's `compactorConfig` when it carries
@@ -85,8 +87,8 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    deferrals on `Runtime::skillDeferrals()`, and the launch names them in one notice (audit R1).
 11. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
-    already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble and the
-proactive-use mandate line beneath it (`SkillListingSection` assembles both), because
+    already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble and
+    the proactive-use mandate line beneath it (`SkillListingSection` assembles both), because
     names and descriptions are skill authors' text — a cloned checkout's `.claude/skills` among
     them, read with no trust gate. Every line goes through `SkillPromptLine::render()`: collapsed
     to one line, `PromptFence::escape()`d, then clipped to `SkillPromptLine::LISTING_MAX_BYTES`, and

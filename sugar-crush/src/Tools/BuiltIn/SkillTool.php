@@ -52,14 +52,22 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
     public const ARGUMENTS_PLACEHOLDER = '$ARGUMENTS';
 
     /** The first bytes of every body this tool returns, before the skill's display name. */
-    public const RESULT_PREFIX = '## Skill: ';
+    public const RESULT_PREFIX = SkillPromptLine::HEADING_PREFIX;
 
     /**
      * Opens the second header line: the directory the skill's SKILL.md lives
      * in, so a body's relative references (`scripts/foo.php`, `docs/x.md`)
      * resolve to a real path instead of guessing against the session CWD.
+     *
+     * This constant and {@see RESULT_PREFIX} are aliases of the spellings
+     * {@see SkillPromptLine::heading()} and {@see SkillPromptLine::baseDirLine()}
+     * print, kept as this class's own names because callers of a tool result
+     * read the header to recognise one. An enabled skill's spliced prompt
+     * section goes through the same two helpers — see
+     * {@see \SugarCraft\Crush\Skills\Skill::systemPromptContribution()} — so the
+     * two announcements of one skill cannot drift apart.
      */
-    public const RESULT_BASE_DIR_PREFIX = '> Base directory for this skill: ';
+    public const RESULT_BASE_DIR_PREFIX = SkillPromptLine::BASE_DIR_PREFIX;
 
     public function __construct(
         private SkillRegistry $registry,
@@ -142,13 +150,27 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
             );
         }
 
-        // Exact registry key first — the listing's keys always resolve, and
-        // resolving them first means a display-name collision can never
-        // shadow the canonical route.
+        // Exact registry key first — resolving a key before any display-name
+        // work means a collision can never shadow the canonical route. What the
+        // key route answers is the KEY, not only an enabled skill: a name the
+        // registry holds but withholds (the disabled case below) is still the
+        // caller's whole question, and falling through to the ladder with it
+        // would load a DIFFERENT skill sharing that leaf — the misroute the
+        // ladder exists to prevent, arriving through the one door where the
+        // model asked for something by its true name.
         $key = $name;
         $skill = $this->registry->get($key);
 
         if ($skill === null) {
+            $withheld = $this->withheldExactKey($name);
+            if ($withheld !== null) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: $withheld,
+                    isError: true,
+                );
+            }
+
             // The listing shows Skill::displayName(), the leaf of nested keys
             // like `synced/<bundle>/<name>`; the model naturally calls the
             // name it saw. Accept it when exactly one model-invocable skill
@@ -158,10 +180,21 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
             $resolved = $this->resolveDisplayName($name);
             if (count($resolved) > 1) {
                 sort($resolved);
+                // The candidates are registry keys, so they are directory names
+                // — arbitrary repository bytes (audit 15d-08). A retry hint that
+                // interpolates them raw would put a fence-tag spelling or a fresh
+                // line in front of the model precisely when it is being told to
+                // copy one verbatim, so each rides `SkillPromptLine::field()`
+                // exactly like the two header lines this method also returns.
+                $candidates = array_map(
+                    static fn(string $candidate): string => SkillPromptLine::field($candidate),
+                    $resolved,
+                );
+
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
-                    content: "Error: {$name} is ambiguous, several skills display under it: "
-                        . implode(', ', $resolved)
+                    content: 'Error: ' . SkillPromptLine::field($name) . ' is ambiguous, several skills display under it: '
+                        . implode(', ', $candidates)
                         . '. Invoke by one of those exact keys.',
                     isError: true,
                 );
@@ -206,20 +239,48 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
         // was read from — skill bodies reference `scripts/…` and `docs/…`
         // relative to their own folder, which is unresolvable without this
         // line (crush skills QA, inv1 §7). Both values are repository text:
-        // a directory name is arbitrary bytes (audit 15d-08), so the path
-        // rides through SkillPromptLine::field() like every other repo value
-        // that reaches a model-facing string. A manifest skill with no on-disk
-        // source gets no base line — dirname('') would be a lie about '.'.
-        $baseDir = $skill->sourcePath === ''
-            ? ''
-            : self::RESULT_BASE_DIR_PREFIX . SkillPromptLine::field(dirname($skill->sourcePath)) . "\n\n";
-
+        // a directory name is arbitrary bytes (audit 15d-08), so each rides
+        // SkillPromptLine::field() like every other repo value that reaches a
+        // model-facing string. The helpers are the same ones an enabled skill's
+        // prompt section calls, so the two never disagree about what naming a
+        // skill costs.
         return new ToolResult(
             toolCallId: $args['id'] ?? '',
-            content: self::RESULT_PREFIX . SkillPromptLine::field($skill->displayName())
-                . "\n\n{$baseDir}{$body}",
+            content: SkillPromptLine::heading($skill)
+                . SkillPromptLine::baseDirLine($skill)
+                . $body,
             isError: false,
         );
+    }
+
+    /**
+     * The refusal for an exact registry key the registry holds but will not
+     * hand over, or null when $name is no such key and the display-name ladder
+     * should answer instead.
+     *
+     * WHY IT HAS TO EXIST. {@see SkillRegistry::get()} answers a disabled skill
+     * with null — the very same answer it gives a name nobody registered — and
+     * the ladder below cannot tell those two nulls apart. Without this door, a
+     * call for the DISABLED flat key `tool` falls through to the leaf `tool`,
+     * finds some other enabled skill displaying under it (`bundle/tool`), and
+     * loads THAT body: a user's deliberate `disabledSkills` entry silently
+     * rewritten into a different skill's instructions, which is the exact
+     * misroute the ladder's own ambiguity check exists to prevent. Naming the
+     * state costs the model a retry it can act on instead.
+     *
+     * `disable-model-invocation: true` needs no leg here: such a skill still
+     * resolves through `get()`, so the call reaches the re-check at the door
+     * below and is refused by name on the spot.
+     */
+    private function withheldExactKey(string $name): ?string
+    {
+        if (!$this->registry->isDisabled($name)) {
+            return null;
+        }
+
+        return 'Skill ' . SkillPromptLine::field($name) . ' is disabled by the'
+            . ' `disabledSkills` setting, so the Skill tool will not load it — remove the'
+            . ' name there to invoke it, or invoke a different skill by its exact key.';
     }
 
     /**

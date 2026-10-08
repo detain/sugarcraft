@@ -59,8 +59,57 @@ final class SkillPromptLine
      */
     public const LISTING_MAX_BYTES = 1024;
 
+    /**
+     * Opens every `## Skill:` heading the prompt or a tool result carries.
+     *
+     * ONE spelling for both channels on purpose: the Skill tool's result header
+     * and an enabled skill's spliced body section are the same announcement —
+     * "these bytes are skill <X>" — and they used to be minted independently,
+     * which is how the enabled-body path kept showing a bundle's uuid path long
+     * after the listing and the tool stopped showing it (skills QA, M5).
+     */
+    public const HEADING_PREFIX = '## Skill: ';
+
+    /**
+     * Opens the heading's companion line naming the directory the SKILL.md was
+     * read from, so a body's `scripts/…` and `docs/…` references resolve.
+     */
+    public const BASE_DIR_PREFIX = '> Base directory for this skill: ';
+
     private function __construct()
     {
+    }
+
+    /**
+     * The heading line for $skill: the display name, never the registry key,
+     * terminated by the blank line that separates it from whatever follows.
+     *
+     * {@see Skill::displayName()} is what the model reads in the listing and
+     * what {@see \SugarCraft\Crush\Tools\BuiltIn\SkillTool} resolves back to a
+     * key, so the section a body lands under announces itself by the same name
+     * the skill is called by. A name without a '/' is identical to its key, so
+     * every flat skill — every built-in and every directly-installed one —
+     * renders byte-identically to before.
+     */
+    public static function heading(Skill $skill): string
+    {
+        return self::HEADING_PREFIX . self::field($skill->displayName()) . "\n\n";
+    }
+
+    /**
+     * The base-directory line for $skill, or '' when the skill has no on-disk
+     * source.
+     *
+     * A manifest skill (registered from a composer.json-style array, never
+     * written to a file) has an empty `sourcePath`, and `dirname('')` is `'.'`
+     * — a confident lie about the current directory. Silence is the honest
+     * rendering, and the caller's own text follows immediately either way.
+     */
+    public static function baseDirLine(Skill $skill): string
+    {
+        return $skill->sourcePath === ''
+            ? ''
+            : self::BASE_DIR_PREFIX . self::field(dirname($skill->sourcePath)) . "\n\n";
     }
 
     /**

@@ -5055,7 +5055,7 @@ final class Runtime
             $line .= ', or Read ' . PromptFence::escape($skill->sourcePath);
         }
 
-        return "\n\n## Skill: " . \SugarCraft\Crush\Skills\SkillPromptLine::field($skill->name) . "\n\n" . $line . '.';
+        return "\n\n" . \SugarCraft\Crush\Skills\SkillPromptLine::heading($skill) . $line . '.';
     }
 
     /**
@@ -5257,8 +5257,9 @@ final class Runtime
         //     promising verification makes a change right.
         //   - Shell discipline (user decision 2026-10-11): the paragraph
         //     after the skills clause steers reads AWAY from Bash because
-        //     Read/Grep/Glob/Lsp/RepoMap are ToolPermissionClass::Read and run
-        //     unasked, while {@see \SugarCraft\Crush\Permissions\ReadOnlyCommands}
+        //     Read/Grep/Glob/Lsp/RepoMap/BoardRead/Skill are
+        //     ToolPermissionClass::Read and run unasked, while
+        //     {@see \SugarCraft\Crush\Permissions\ReadOnlyCommands}
         //     lets a shell line through only when it proves every part of it
         //     read-only — replaying a user's 32 logged asks, 24 still prompted,
         //     mostly `cd <root> &&` chains and `python3 -c` slices. "Already

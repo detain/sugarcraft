@@ -169,6 +169,16 @@ final readonly class Skill
     /**
      * Get the system prompt contribution from this skill.
      *
+     * The heading and the optional base-directory line come from
+     * {@see SkillPromptLine::heading()} / {@see SkillPromptLine::baseDirLine()}
+     * — the very two calls {@see \SugarCraft\Crush\Tools\BuiltIn\SkillTool}
+     * makes when it returns this skill's body as a tool result. They used to be
+     * minted separately, which is how the enabled-body channel kept announcing
+     * a skill by its bundle-uuid registry key after the listing and the tool
+     * result had both moved to the display name, and kept omitting the directory
+     * a body's relative references need. Both are fixed by construction now, and
+     * a skill with no on-disk source (a manifest entry) still gets no base line.
+     *
      * Name and body pass through {@see PromptFence::escape()} for the reason
      * {@see SkillPromptLine} exists: both are text from whoever shipped the
      * skill, and a body that could close a fence or open a `<system-reminder>`
@@ -179,8 +189,9 @@ final readonly class Skill
      */
     public function systemPromptContribution(): string
     {
-        return "\n\n## Skill: " . SkillPromptLine::field($this->name)
-            . "\n\n" . PromptFence::escape($this->content);
+        return "\n\n" . SkillPromptLine::heading($this)
+            . SkillPromptLine::baseDirLine($this)
+            . PromptFence::escape($this->content);
     }
 
     /**

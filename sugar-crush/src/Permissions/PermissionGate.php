@@ -1073,7 +1073,7 @@ final class PermissionGate
     }
 
     /**
-     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/Lsp)
+     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/Lsp/RepoMap/BoardRead/Skill)
      * are implicitly allowed without an explicit rule. `WebFetch` is not one of
      * them (audit F-P6): it is denied unless a rule allows it, typically a
      * `WebFetch(domain:…)` rule ({@see PermissionRule}). Hook-approved calls would also be allowed

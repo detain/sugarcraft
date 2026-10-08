@@ -304,7 +304,9 @@ file drops to a notice instead.
 
 At prompt build, `Runtime::buildSystemPrompt()` splices each enabled body as its
 own section (`Skill::systemPromptContribution()` — a `## Skill:` heading with the
-body under it) and hands the enabled names to `SkillMatcher::listForPrompt()` as
+skill's display name, the same base-directory line the `Skill` tool result opens
+with, and the body under it) and hands the enabled names to
+`SkillMatcher::listForPrompt()` as
 exclusions, so an enabled skill is **removed from the one-line listing**. A skill
 is presented exactly once per turn: as a body where you enabled it, as a
 description line where you did not. There is no double-presentation.
