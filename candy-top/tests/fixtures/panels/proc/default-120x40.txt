@@ -1,0 +1,27 @@
+╭─┐⁴proc┌┐filter┌────────┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─╮
+│    Pid: Program: Command:              User:  MemB       Cpu%  │
+│       1 systemd  /sbin/init splash     root   125M ⣀⣀⣀⣠⣤ 42.5  │
+│    5120 containe /usr/bin/containerd-s root   367M ⣀⣀⣀⣄⣀ 16.2  │
+│     412 sshd     sshd: /usr/sbin/sshd  root   190M ⣀⣀⣀⣀⣀ 20.1  │
+│    2290 php      php bin/candy-top     joe    427M ⣀⣀⣀⣀⣀ 12.9  │
+│    6969 web01    [kvm:web01] /usr/bin/ libv+  983M ⣀⣀⣀⣀⣀  7.6  │
+│    5133 python3  [docker:3f2a1b9c0d1e] root   675M ⣀⣀⣀⣀⣀ 11.1  │
+│    1203 nginx    nginx: worker process www-+  277M ⣀⣀⣀⣀⣀  6.8  │
+│    4410 node     node server.js        joe    615M ⣀⣀⣀⣀⣀  3.9  │
+│    7001 vim      /usr/bin/vim notes.md joe    1.3G ⣀⣀⣀⣀⣀  5.3  │
+│    2210 bash     -bash                 joe    354M ⣀⣀⣀⣀⣀  9.4  │
+│    3105 redis-se redis-server 127.0.0. redis  542M ⣀⣀⣀⣀⣀  4.0  │
+│     880 postgres postgres -D /var/lib/ post+  208M ⣀⣀⣀⣀⣀  5.9  │
+│       2 kthreadd                       root     0B ⣀⣀⣀⣀⣀  0.0  │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└──────┘2/13└╯

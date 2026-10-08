@@ -535,6 +535,15 @@ final readonly class Agent
      * Those are what unification would have to reconcile. Only §17.2's argument
      * died; its answer did not.
      *
+     * ONE OF THE FIVE NOW REACHES SUB-AGENTS ANYWAY, by a different door (lane
+     * D): the discovered-skill listing rides every worker prompt because
+     * {@see \SugarCraft\Crush\Agents\AgentManager} assembles it per member at
+     * its own splice points — the manager holds the SkillRegistry this value
+     * object cannot see. The wire's `agent.prompt` fallback built from HERE
+     * therefore still lacks the layer; it only answers a worker whose resolved
+     * prompt was null, which after lane D means the registry had nothing to
+     * list. Nothing else about this method changed.
+     *
      * IT IS EXPLAINED, AND THE EXPLANATION IS A MEASUREMENT - CORRECTED IN
      * PLACE (prompt_plan.md section 16.8 rule 42), because the first revision
      * of this paragraph was FALSE and it was the step's headline claim.

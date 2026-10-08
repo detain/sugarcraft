@@ -30,6 +30,7 @@ use SugarCraft\Veil\Veil;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Commands\KeyBindingRegistry;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
+use SugarCraft\Crush\Skills\SkillMentions;
 use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
 use SugarCraft\Crush\Tui\DiffGutter;
@@ -368,6 +369,17 @@ final class Renderer
     public static function toolRowPrefix(): string
     {
         return '🔧 ' . Lang::t('tui.tool.row_label') . ' ';
+    }
+
+    /**
+     * The head prefix of a Skill tool row — `✨ skill: <name>` instead of the
+     * generic `🔧 tool: Skill`, so the collapsed transcript says WHICH skill
+     * loaded (lane B, skills-qa F1). Pairs with {@see toolRowPrefix()}: same
+     * shape, same verbatim-prefix law for the click zones.
+     */
+    public static function skillRowPrefix(): string
+    {
+        return '✨ ' . Lang::t('tui.skills.row_label') . ' ';
     }
 
     /** Below this many columns an argument hint is dropped, not truncated. */
@@ -4237,8 +4249,14 @@ final class Renderer
             if (!$attachment instanceof \SugarCraft\Crush\Attachment) {
                 continue;
             }
+            // A skill mention names itself: every skill file is SKILL.md, so the
+            // basename said nothing (lane B, skills-qa F2). Non-skill chips — and
+            // snapshots persisted before the field — keep the basename byte for
+            // byte ({@see \SugarCraft\Crush\Tests\Renderer\AttachmentChipTest}).
             $names[] = ($attachment->type === \SugarCraft\Crush\AttachmentType::Image ? '🖼 ' : '')
-                . self::oneLine($attachment->name());
+                . ($attachment->skill === null
+                    ? self::oneLine($attachment->name())
+                    : self::oneLine(Lang::t('tui.skills.row_label') . ' ' . $attachment->skill));
         }
         if ($names === []) {
             return '';
@@ -4692,9 +4710,17 @@ final class Renderer
             // assertion still passes and the row has lost the only thing on it
             // naming the tool. Pinned by
             // PaneWidthInvariantTest::testTheNarrowestToolRowKeepsAtLeastOneCellOfItsName().
-            $prefix = self::toolRowPrefix();
+            // Lane B (skills-qa F1): a Skill row prints the skill it loaded -
+            // `✨ skill: review` - because `🔧 tool: Skill` named the tool and
+            // never said what ran. The name rides the result's arguments on
+            // both settle paths; when they carry none (old transcripts, a call
+            // with no usable name), the row falls back to the generic head.
+            // The prefix swap keeps every law above intact: the head is still
+            // the verbatim row prefix, and $labelRoom reads the ACTUAL prefix.
+            $skillName = SkillMentions::invokedSkillName($result);
+            $prefix = $skillName === null ? self::toolRowPrefix() : self::skillRowPrefix();
             $labelRoom = $width - Width::of($prefix) - Width::of($status) - 1;
-            $name = Width::truncate(self::oneLine($result->name), max(1, $labelRoom));
+            $name = Width::truncate(self::oneLine($skillName ?? $result->name), max(1, $labelRoom));
             $head = self::dim($theme)->strikethrough($stopped)->render($prefix . $name);
             $label = $head . ' ' . $status;
             // Recorded for the LAYOUT question, before and regardless of

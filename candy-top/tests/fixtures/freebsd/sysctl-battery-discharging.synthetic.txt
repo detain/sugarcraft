@@ -1,0 +1,6 @@
+hw.acpi.battery.life=74
+hw.acpi.battery.time=306
+hw.acpi.battery.rate=9757
+hw.acpi.battery.state=1
+hw.acpi.battery.units=1
+hw.acpi.acline=0

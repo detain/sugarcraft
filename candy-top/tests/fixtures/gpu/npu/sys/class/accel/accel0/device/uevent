@@ -1,0 +1,2 @@
+DRIVER=intel_vpu
+PCI_SLOT_NAME=0000:00:0b.0

@@ -43,7 +43,7 @@ final class SkillToolArgumentsTest extends TestCase
 
         self::assertFalse($result->isError());
         self::assertSame(
-            "## Skill: s\n\nReview src/Foo.php.\nThen summarise src/Foo.php again.",
+            $this->header() . "Review src/Foo.php.\nThen summarise src/Foo.php again.",
             $result->content(),
         );
     }
@@ -52,28 +52,28 @@ final class SkillToolArgumentsTest extends TestCase
     {
         $result = $this->invoke('Deploy the service.', 'staging --dry-run');
 
-        self::assertSame("## Skill: s\n\nDeploy the service.\n\nARGUMENTS: staging --dry-run", $result->content());
+        self::assertSame($this->header() . "Deploy the service.\n\nARGUMENTS: staging --dry-run", $result->content());
     }
 
     public function testMissingArgsLeavesAPlaceholderFreeBodyUnchanged(): void
     {
         $result = $this->invoke('Deploy the service.', null);
 
-        self::assertSame("## Skill: s\n\nDeploy the service.", $result->content());
+        self::assertSame($this->header() . 'Deploy the service.', $result->content());
     }
 
     public function testEmptyArgsEmptiesThePlaceholderRatherThanLeakingIt(): void
     {
         $result = $this->invoke('Fix issue $ARGUMENTS now.', '   ');
 
-        self::assertSame("## Skill: s\n\nFix issue  now.", $result->content());
+        self::assertSame($this->header() . 'Fix issue  now.', $result->content());
     }
 
     public function testArgsContainingThePlaceholderAreNotExpandedTwice(): void
     {
         $result = $this->invoke('Echo: $ARGUMENTS', 'literal $ARGUMENTS here');
 
-        self::assertSame("## Skill: s\n\nEcho: literal \$ARGUMENTS here", $result->content());
+        self::assertSame($this->header() . 'Echo: literal $ARGUMENTS here', $result->content());
     }
 
     public function testShellDollarFormsInTheBodyAreLeftAlone(): void
@@ -82,7 +82,7 @@ final class SkillToolArgumentsTest extends TestCase
 
         $result = $this->invoke($body, 'x');
 
-        self::assertSame("## Skill: s\n\n{$body}\n\nARGUMENTS: x", $result->content());
+        self::assertSame($this->header() . "{$body}\n\nARGUMENTS: x", $result->content());
     }
 
     /**
@@ -125,6 +125,16 @@ final class SkillToolArgumentsTest extends TestCase
 
         self::assertSame('string', $schema['properties']['args']['type']);
         self::assertStringContainsString('$ARGUMENTS', $schema['properties']['args']['description']);
+    }
+
+    /**
+     * The two header lines every successful load now opens with: the display
+     * name marker and the skill's base directory (the fixture files sit
+     * directly in the temp dir, so dirname() is that dir — read, not guessed).
+     */
+    private function header(): string
+    {
+        return "## Skill: s\n\n> Base directory for this skill: " . sys_get_temp_dir() . "\n\n";
     }
 
     private function invoke(string $body, mixed $args): ToolResult

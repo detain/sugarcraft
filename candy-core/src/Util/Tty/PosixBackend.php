@@ -696,6 +696,12 @@ final class PosixBackend implements Backend
      * Pinned on a real pty by
      * {@see \SugarCraft\Core\Tests\Util\Tty\PosixBackendTest::testRawModeWithSttyFallbackOnRealPty()}
      * and on the seam by `PosixBackendInjectedTermiosTest`.
+     *
+     * Hung-up tolerant: a terminal that has hung up (SIGHUP, closed pty
+     * master) fails the restore syscall and no longer passes isatty(); that
+     * failure is swallowed so teardown and the caller's post-run work still
+     * happen. A failure on a still-live terminal is rethrown. Either way the
+     * snapshot is dropped first, so the destructor does not retry it.
      */
     public function restore(): void
     {
@@ -709,12 +715,37 @@ final class PosixBackend implements Backend
 
             return;
         }
-        $this->saved->restore();
+        $saved = $this->saved;
+        // Clear first: a restore that throws must not leave the snapshot
+        // armed for __destruct() to throw again at shutdown.
         $this->termios = null;
         $this->saved = null;
         $this->ownerPid = null;
+        try {
+            $saved->restore();
+        } catch (\RuntimeException $e) {
+            // A hung-up terminal (SIGHUP, the pty master closed) fails
+            // tcsetattr / stty with EIO and then no longer answers isatty()
+            // (glibc's isatty is a tcgetattr): there is nothing left to put
+            // back, and throwing would abort Program::run() before it
+            // returns the model. A failure on a terminal that is still
+            // there is a real error and still propagates.
+            if (self::stillATerminal($saved)) {
+                throw $e;
+            }
+        }
         if (is_resource($this->stream)) {
             @stream_set_blocking($this->stream, true);
+        }
+    }
+
+    /** Whether the snapshot's descriptor is still a usable terminal (false when asking fails too). */
+    private static function stillATerminal(Termios $termios): bool
+    {
+        try {
+            return $termios->isAtty();
+        } catch (\Throwable) {
+            return false;
         }
     }
 

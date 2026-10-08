@@ -26,7 +26,32 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)-&gt;view();</code></pre>
       <div class="feature"><strong>OHLC</strong><span>Candlestick chart for financial time-series.</span></div>
       <div class="feature"><strong>TimeSeries</strong><span>Streaming series with bucket aggregation.</span></div>
       <div class="feature"><strong>Picture (Sixel/Kitty/iTerm2)</strong><span>Inline raster image rendering. Auto-detects via terminal-version query.</span></div>
+      <div class="feature"><strong>Per-point / per-bar color</strong><span>btop-style value heat: <code>LineChart::withSeriesColorFn()</code> and <code>BarChart::withBarColor()</code> resolvers.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">Per-point and per-bar colors</h3>
+    <p>btop tints every graph point and meter by its value through the theme gradient. <code>LineChart::withSeriesColorFn(fn(string $dataset, int $x, float $value): ?Color)</code> colors each sample's dot, fill run and outgoing connector (<code>$dataset</code> is <code>LineChart::PRIMARY_SERIES</code> for the unnamed series; <code>$x</code> is the index in the full series; <code>null</code> keeps the series color). <code>BarChart::withBarColor(fn(Bar $bar, int $i): ?Color)</code> colors each bar's body and eighth-block cap. Passing <code>null</code> restores byte-identical default output; a non-<code>Color</code> return throws <code>UnexpectedValueException</code>.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Charts\BarChart\{Bar, BarChart};
+use SugarCraft\Charts\LineChart\LineChart;
+use SugarCraft\Core\Util\Color;
+
+$heat = static fn (float $v): Color =&gt; match (true) {
+    $v &gt;= 7 =&gt; Color::hex('#ff5555'),
+    $v &gt;= 4 =&gt; Color::hex('#f1fa8c'),
+    default =&gt; Color::hex('#50fa7b'),
+};
+
+echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)
+    -&gt;withSeriesColorFn(
+        static fn (string $dataset, int $x, float $v): ?Color =&gt;
+            $dataset === LineChart::PRIMARY_SERIES ? $heat($v) : null,
+    )
+    -&gt;view() . PHP_EOL;
+
+echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
+    -&gt;withFractionalHeights()
+    -&gt;withBarColor(static fn (Bar $bar, int $i): ?Color =&gt; $heat($bar-&gt;value * 10))
+    -&gt;view() . PHP_EOL;</code></pre>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -45,8 +70,10 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)-&gt;view();</code></pre>
 <tr><td>Sparkline</td><td>view()</td><td>Render sparkline</td></tr>
 <tr><td>BarChart</td><td>new(data, width, height)</td><td>Create bar chart</td></tr>
 <tr><td>BarChart</td><td>view()</td><td>Render bar chart</td></tr>
+<tr><td>BarChart</td><td>withBarColor(?Closure)</td><td>Per-bar color resolver fn(Bar, i): ?Color</td></tr>
 <tr><td>LineChart</td><td>new(data, width, height)</td><td>Create line chart</td></tr>
 <tr><td>LineChart</td><td>view()</td><td>Render line chart</td></tr>
+<tr><td>LineChart</td><td>withSeriesColorFn(?Closure)</td><td>Per-point color resolver fn(dataset, x, value): ?Color</td></tr>
 <tr><td>Heatmap</td><td>new(data, width, height)</td><td>Create heatmap</td></tr>
 <tr><td>Canvas</td><td>new(width, height)</td><td>Create chart canvas</td></tr>
 </table>

@@ -1,0 +1,184 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Top\bin;
+
+(static function () {
+    // This lib's own vendor/ (monorepo / split-repo checkout), then the
+    // consumer's vendor/ when installed as vendor/sugarcraft/candy-top.
+    foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $path) {
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-top: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use SugarCraft\Core\Program;
+use SugarCraft\Top\App;
+use SugarCraft\Top\Collect\Platform;
+use SugarCraft\Top\Config\ConfigFile;
+use SugarCraft\Top\Input\KeyTable;
+use SugarCraft\Top\Lang;
+use SugarCraft\Top\Msg\ConfigSavedMsg;
+use SugarCraft\Top\Panel\Panels;
+use SugarCraft\Top\Panel\ProcPanel;
+use SugarCraft\Top\State\TreeStateFile;
+use SugarCraft\Top\State\TreeStateSavedMsg;
+use SugarCraft\Top\Theme\ThemeRegistry;
+
+$args = array_slice($argv ?? [], 1);
+$fake = false;
+$configPath = null;
+for ($i = 0; $i < count($args); $i++) {
+    $arg = $args[$i];
+    if ($arg === '-h' || $arg === '--help') {
+        // The KEYS section is the help overlay's own table (one roster, no hand list).
+        $keys = [];
+        foreach (KeyTable::keyRows() as $row) {
+            $keys[$row->keyLabel()] = $row->description();
+        }
+        $rows = static fn (array $pairs, int $pad): string => implode('', array_map(
+            static fn (string $left, string $right): string => '  ' . str_pad($left, $pad) . $right . "\n",
+            array_keys($pairs),
+            $pairs,
+        ));
+        fwrite(STDOUT, Lang::t('cli.help.title') . "\n\n"
+            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>]\n\n"
+            . Lang::t('cli.help.options') . "\n" . $rows([
+                '--fake' => Lang::t('cli.help.opt.fake'),
+                '--config <path>' => Lang::t('cli.help.opt.config'),
+                '-h, --help' => Lang::t('cli.help.opt.help'),
+            ], 18) . "\n"
+            . Lang::t('cli.help.keys') . "\n" . $rows($keys, max(array_map(static fn (int|string $k): int => strlen((string) $k), array_keys($keys))) + 2));
+        exit(0);
+    }
+    if ($arg === '--fake') {
+        $fake = true;
+    } elseif ($arg === '--config' || str_starts_with($arg, '--config=')) {
+        $value = $arg === '--config' ? ($args[++$i] ?? null) : substr($arg, 9);
+        // A following flag is not a path: `--config --fake` is a missing value.
+        if ($value === null || $value === '' || ($arg === '--config' && str_starts_with($value, '-'))) {
+            fwrite(STDERR, 'candy-top: ' . Lang::t('cli.missing_value', ['option' => '--config']) . "\n");
+            exit(2);
+        }
+        $configPath = $value;
+    } else {
+        fwrite(STDERR, 'candy-top: ' . Lang::t('cli.unknown_argument', ['argument' => $arg]) . "\n");
+        exit(2);
+    }
+}
+
+// btop Term::init refuses to start without an interactive terminal on both
+// ends (btop.cpp "No tty detected!"); a TUI writing frames into a pipe or
+// reading keys from /dev/null only produces garbage or spins.
+if (!stream_isatty(STDIN) || !stream_isatty(STDOUT)) {
+    fwrite(STDERR, Lang::t('cli.no_tty') . "\n");
+    exit(1);
+}
+
+$file = ConfigFile::new($configPath);
+$loaded = $file->load();
+foreach ($loaded->warnings as $warning) {
+    fwrite(STDERR, "candy-top: {$warning}\n");
+}
+// btop auto-enables tty mode on a console: Term::current_tty.starts_with("/dev/tty")
+// (btop.cpp) — /dev/tty1 and serial consoles like /dev/ttyS0 alike.
+$tty = function_exists('posix_ttyname') ? (posix_ttyname(STDIN) ?: '') : '';
+$config = $loaded->config
+    ->withTtyModeResolved(null, str_starts_with($tty, '/dev/tty'))
+    ->withShownBoxesSettled(0);
+
+// btop picks its collector per OS at compile time; candy-top per PHP_OS here.
+$platform = Platform::detect();
+$host = $platform->hostInfo();
+// btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
+$catalog = ThemeRegistry::new();
+$palette = $catalog->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
+$panels = Panels::standard($host, $config, $fake, $platform);
+// #1791c proc_tree_persist_state: remembered tree collapse choices live in
+// $XDG_STATE_HOME/candy-top/tree-state.json (never config.conf). Loaded even
+// with the option off, so turning it on mid-session restores them and a later
+// save cannot drop them; an unusable file loads empty.
+$statePath = TreeStateFile::defaultPath();
+if ($statePath !== null && ($panels['proc'] ?? null) instanceof ProcPanel) {
+    $stateFile = TreeStateFile::new($statePath);
+    $panels['proc'] = $panels['proc']->withTreeStore($stateFile, $stateFile->load(time()));
+}
+// btop `lowcolor`: the 256-colour cube whenever truecolor is off.
+$config = $config->with('lowcolor', !$config->bool('truecolor'));
+
+$program = new Program(
+    App::start($config, $palette, $host, $panels, file: $file, writeNew: $loaded->needsRewrite, catalog: $catalog),
+    App::programOptions($config),
+);
+// btop's SIGTERM / SIGHUP handlers run clean_quit (config save included);
+// candy-core's Program traps only SIGINT, so stop its loop here and let
+// the post-run save below do the write after the terminal is restored.
+$trapped = function_exists('pcntl_signal') ? [SIGTERM, SIGHUP] : [];
+if ($trapped !== [] && function_exists('pcntl_async_signals')) {
+    pcntl_async_signals(true);
+}
+foreach ($trapped as $signal) {
+    pcntl_signal($signal, static function () use ($program): void {
+        $program->kill();
+    });
+}
+try {
+    $final = $program->run();
+} catch (\Throwable $e) {
+    // A crash out of update()/view()/a Cmd escapes run() without its
+    // terminal teardown: put the terminal back (best effort — on a hung-up
+    // tty the writes just fail), still save what the user changed, then
+    // rethrow so PHP prints the error and trace on a usable screen.
+    // releaseTerminal() also leaves raw mode, so the trace isn't staircased;
+    // the raw reset bytes are the fallback when that teardown throws.
+    try {
+        $program->releaseTerminal();
+    } catch (\Throwable) {
+        @fwrite(STDOUT, App::terminalReset());
+        @fflush(STDOUT);
+    }
+    $crashed = $program->model();
+    if ($crashed instanceof App) {
+        $saved = ($crashed->exitSave())?->__invoke();
+        if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
+            @fwrite(STDERR, 'candy-top: ' . $saved->error . "\n");
+        }
+        $state = ($crashed->stateSave())?->__invoke();
+        if ($state instanceof TreeStateSavedMsg && !$state->ok) {
+            @fwrite(STDERR, 'candy-top: ' . $state->error . "\n");
+        }
+    }
+
+    throw $e;
+} finally {
+    // From here a signal must act normally again, not be swallowed by a
+    // handler whose program has stopped.
+    foreach ($trapped as $signal) {
+        pcntl_signal($signal, SIG_DFL);
+    }
+}
+// Every App quit path saves through its own Cmd; a signal-driven exit
+// bypasses update(), and a quit-time save that failed leaves the flag set,
+// so btop's clean_quit save runs (again) here — after the alt screen is
+// gone, so a failure can be reported where the user sees it.
+if ($final instanceof App) {
+    // Same order as the crash path and App::quitCmd(): config, then tree state.
+    $saved = ($final->exitSave())?->__invoke();
+    if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
+        @fwrite(STDERR, 'candy-top: ' . $saved->error . "\n");
+    }
+    // The tree state is a convenience: a failed write is reported, never fatal.
+    $state = ($final->stateSave())?->__invoke();
+    if ($state instanceof TreeStateSavedMsg && !$state->ok) {
+        @fwrite(STDERR, 'candy-top: ' . $state->error . "\n");
+    }
+    if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
+        exit(1);
+    }
+}

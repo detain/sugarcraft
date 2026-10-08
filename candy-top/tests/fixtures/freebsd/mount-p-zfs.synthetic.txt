@@ -1,0 +1,6 @@
+zroot/ROOT/default      /                       zfs     rw              0 0
+devfs                   /dev                    devfs   rw              0 0
+/dev/ada1p1             /mnt/My\040Data         ufs     rw              2 2
+zroot/usr/home          /usr/home               zfs     rw              0 0
+tmpfs                   /tmp                    tmpfs   rw              0 0
+/usr/home/jail          /jails/www/home         nullfs  rw              0 0

@@ -30,14 +30,17 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "@dev",
-        "sugarcraft/candy-input": "@dev",
         "sugarcraft/candy-sprinkles": "@dev",
-        "sugarcraft/sugar-charts": "@dev",
+        "sugarcraft/sugar-bits": "@dev",
         "sugarcraft/sugar-dash": "@dev"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-testing": "@dev"
     },
+    "bin": [
+        "bin/candy-top"
+    ],
     "autoload": {
         "psr-4": {
             "SugarCraft\\Top\\": "src/"

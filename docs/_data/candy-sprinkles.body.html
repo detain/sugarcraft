@@ -32,8 +32,27 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
       <div class="feature"><strong>Layout</strong><span><code>joinHorizontal</code>, <code>joinVertical</code>, <code>place</code>, <code>placeOverlay</code> for popovers.</span></div>
       <div class="feature"><strong>Canvas</strong><span>Multi-layer compositor. Z-ordered overlays, alpha-aware merge, ideal for modals + tooltips.</span></div>
       <div class="feature"><strong>Theme</strong><span>SSOT colour palette. 10 named factories (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized*/ansi/adaptive). 13 colour slots (foreground/background/primary/secondary/accent/muted/error/warning/success/info/border/separator/cursor). All <code>with*()</code> setters return a new Theme. <code>adaptive()</code> reads <code>$COLORFGBG</code>: the last field's palette slot decides light vs dark by luminance (7/15 light, 0/8 dark); unset or unparseable falls back to dark.</span></div>
+      <div class="feature"><strong>Embedded titles + seams</strong><span>btop-style box titles: <code>Border::withEmbeddedTitle()</code> brackets text in junctions (<code>╭─┐cpu┌────┐12:00┌───────╮</code>) on any of six anchors; <code>Border::seam()</code> picks the <code>┬ ┴ ├ ┤ ┼</code> rune where an internal divider meets the frame, preserving the border family.</span></div>
       <div class="feature"><strong>Colour degradation</strong><span>A Style carries a <code>ColorProfile</code> and <code>render()</code> downsamples to it, as charmbracelet/colorprofile's Writer does: TrueColor → 38;2, Ansi256 → 38;5, Ansi → 30..37/90..97, <code>Ascii</code> (what <code>NO_COLOR</code> selects) drops colour but keeps bold/italic/underline and OSC 8 links, and <code>NoTty</code> strips every escape — including ones carried in by pre-styled content, a <code>transform()</code> or a border title — while padding, borders and alignment stay.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">Embedded border titles</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Border\TitleAnchor;
+use SugarCraft\Sprinkles\Style;
+
+$border = Border::rounded()
+    -&gt;withEmbeddedTitle('cpu')
+    -&gt;withEmbeddedTitle('12:00', TitleAnchor::TopCenter)
+    -&gt;withEmbeddedTitle('mem', TitleAnchor::BottomLeft)
+    -&gt;withEmbeddedTitle('disk', TitleAnchor::BottomLeft);
+
+echo Style::new()-&gt;border($border)-&gt;width(24)-&gt;render('load 0.42');
+// ╭─┐cpu┌────┐12:00┌───────╮
+// │load 0.42               │
+// ╰─┘mem└─┘disk└───────────╯
+
+echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); // ┬</code></pre>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -60,6 +79,9 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
 <tr><td>Style</td><td>padding(top, right, bottom, left)</td><td>Add padding</td></tr>
 <tr><td>Style</td><td>render(content)</td><td>Render styled content</td></tr>
 <tr><td>Border</td><td>rounded(), thick(), double(), hidden()</td><td>Border style presets</td></tr>
+<tr><td>Border</td><td>withEmbeddedTitle(text, ?anchor, ?open, ?close)</td><td>btop-style title cut into the edge (<code>╭─┐cpu┌──╮</code>); left/right inset one rune, center uses btop's clock formula, overflow shrinks with <code>…</code></td></tr>
+<tr><td>Border</td><td>embedJunctions(bool $bottom = false)</td><td>Default <code>[open, close]</code> junction pair from the border's own corners (rounded arcs squared off)</td></tr>
+<tr><td>Border</td><td>seam(left, right, up, down)</td><td>Junction rune where a divider meets the frame (<code>┬ ┴ ├ ┤ ┼</code>), in the border's own family</td></tr>
 <tr><td>Border</td><td>titles(): array</td><td>Configured border titles (getTitles() remains as a deprecated alias); over-long titles are truncated to the edge</td></tr>
 <tr><td>Table</td><td>new()</td><td>Create a table</td></tr>
 <tr><td>Table</td><td>headers(...), row(...)</td><td>Add table content</td></tr>

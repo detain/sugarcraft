@@ -1019,7 +1019,7 @@ final class TurnController
         foreach ([...$skilled['attachments'], ...$resolved['attachments'], ...$context['attachments']] as $attachment) {
             $message = $attachment->type === AttachmentType::Image
                 ? $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType)
-                : $message->attachFile($attachment->path, $attachment->data);
+                : $message->attachFile($attachment->path, $attachment->data, $attachment->skill);
         }
 
         return [$message, array_map(

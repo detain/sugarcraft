@@ -30,6 +30,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Config\StatusLineCommand;
+use SugarCraft\Crush\Skills\SkillMentions;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
@@ -5103,6 +5104,14 @@ final class Chat implements Model
                 $result = $resultsById[$pendingId]
                     ->withDescription($historyMessage->content)
                     ->withArguments($historyMessage->pendingToolArguments);
+                // Lane B (skills-qa F3): a skill that just loaded says so. The
+                // walk is newest-first and the result is array_reverse()d back
+                // below, so the notice is appended BEFORE the row here to land
+                // directly AFTER it in history.
+                $loaded = self::skillLoadedNotice($result);
+                if ($loaded !== null) {
+                    $newHistory[] = $loaded;
+                }
                 $newHistory[] = self::toolResultMessage($result, $historyMessage->reasoning);
 
                 continue;
@@ -5807,6 +5816,15 @@ final class Chat implements Model
     {
         $runner = $this->turnRunner();
         [$history, $row, $replaced] = $runner->projector()->finish($this->history, $event);
+        // Lane B (skills-qa F3): the engine path lands its row through the
+        // projector; the loaded-skill notice rides directly after it, spliced
+        // by the finished row's identity (the projector returns that object).
+        $finished = $row->toolResults[0] ?? null;
+        $loaded = $finished instanceof ToolResult ? self::skillLoadedNotice($finished) : null;
+        if ($loaded !== null) {
+            $index = array_search($row, $history, true);
+            array_splice($history, $index === false ? count($history) : $index + 1, 0, [$loaded]);
+        }
         $next = $this->mutate(['history' => $history]);
         $runner->recordToolFinished($turn, $event, $row, $replaced);
 
@@ -5823,6 +5841,27 @@ final class Chat implements Model
     private static function toolResultMessage(ToolResult $result, ?string $reasoning = null): Message
     {
         return \SugarCraft\Crush\Host\TranscriptProjector::resultRow($result, $reasoning);
+    }
+
+    /**
+     * The "✨ Loaded skill: X" row a successful Skill call leaves in the
+     * transcript (lane B, skills-qa F3 — the visible-loading affordance
+     * Claude Code prints as "Launching skill: X"). A refusal, an interrupt and
+     * an error get nothing: their own rows already say what happened, and a
+     * second line would only muddy them. An ordinary uiOnly notice row
+     * ({@see Message::notice()}) — replayed, persisted and compacted like every
+     * other transcript line, never sent to the model — so it is NOT one of the
+     * launch-notice family and stays out of those censuses on principle.
+     */
+    private static function skillLoadedNotice(ToolResult $result): ?Message
+    {
+        $name = SkillMentions::invokedSkillName($result);
+        if ($name === null || $result->isError()
+            || self::isDeniedResult($result) || self::isInterruptedResult($result)) {
+            return null;
+        }
+
+        return Message::notice('✨ ' . Lang::t('tui.skills.loaded', ['name' => $name]));
     }
 
     /**

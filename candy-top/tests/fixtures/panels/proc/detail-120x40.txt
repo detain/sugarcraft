@@ -1,0 +1,27 @@
+╭─┐5120┌┐containerd-┌─┬─┐terminate┌┐kill┌┐signals┌┐Nice┌┐hide ↵┌─╮
+│81.6%               ⡇│   Status:  Elapsed:    IO/R:     IO/W:   │
+│                    ⣷│  Sleeping  02:29:24  20.0 MiB  5.00 MiB  │
+│C                   ⣿│                                          │
+│P                   ⣿│     M:2.22% ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣤ 363 MiB       │
+│U                   ⣿│ CWD /home/root                           │
+│                    ⣿│ CMD /usr/bin/containerd-shim-runc-v2 -nam│
+│                    ⣿│                  espace moby             │
+├─┐⁴proc┌┐filter┌─────┴──┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─┤
+│    Pid: Program: Command:              User:  MemB       Cpu%  │
+│       1 systemd  /sbin/init splash     root   126M ⣀⣀⢀⣤⣤ 43.4  │
+│    5120 containe /usr/bin/containerd-s root   363M ⣀⣀⢠⣀⣀ 10.2  │
+│    6969 web01    [kvm:web01] /usr/bin/ libv+  997M ⣀⣀⢀⣀⣀  9.0  │
+│     412 sshd     sshd: /usr/sbin/sshd  root   177M ⣀⣀⢀⣀⣀ 15.1  │
+│    2290 php      php bin/candy-top     joe    439M ⣀⣀⢀⣀⣀ 11.7  │
+│    1203 nginx    nginx: worker process www-+  277M ⣀⣀⢀⣀⣀  8.6  │
+│    4410 node     node server.js        joe    604M ⣀⣀⢀⣀⣀  4.1  │
+│    5133 python3  [docker:3f2a1b9c0d1e] root   681M ⣀⣀⢀⣀⣀ 10.2  │
+│    7001 vim      /usr/bin/vim notes.md joe    1.3G ⣀⣀⢀⣀⣀  7.9  │
+│    2210 bash     -bash                 joe    363M ⣀⣀⢀⣀⣀ 11.3  │
+│     880 postgres postgres -D /var/lib/ post+  196M ⣀⣀⢀⣀⣀  5.1  │
+│    3105 redis-se redis-server 127.0.0. redis  547M ⣀⣀⢀⣀⣀  2.5  │
+│       2 kthreadd                       root     0B ⣀⣀⣀⣀⣀  0.0  │
+│                                                                │
+│                                                                │
+│                       Following process                        │
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└──────┘2/13└╯

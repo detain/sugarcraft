@@ -38,6 +38,7 @@ declare -A DESCRIPTIONS=(
     [sugar-tick]="Privacy-first coding-time tracker — port of Rtarun3606k/TakaTime."
     [candy-mines]="Minesweeper TUI — port of maxpaulus43/go-sweep on the SugarCraft stack."
     [candy-flip]="ASCII GIF viewer — port of namzug16/gifterm on the SugarCraft stack."
+    [candy-top]="btop-style terminal system monitor — port of aristocratos/btop on the SugarCraft stack."
     [honey-flap]="Flappy-Bird-style game — port of kbrgl/flapioca on the SugarCraft stack."
 )
 

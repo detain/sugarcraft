@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Skills;
 
 use SugarCraft\Crush\Attachment;
 use SugarCraft\Crush\AttachmentType;
+use SugarCraft\Crush\ToolResult;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 
 /**
@@ -42,6 +43,12 @@ final class SkillMentions
 {
     /** Most skills one prompt attaches. */
     public const MAX_MENTIONS = 3;
+
+    /** The registered name of the on-demand loader tool ({@see SkillTool::name()}). */
+    private const TOOL_NAME = 'Skill';
+
+    /** A `name` argument longer than this is not a skill name worth printing. */
+    private const MAX_NAME_CHARS = 120;
 
     /** `$` then a skill name, at the start of the prompt or after whitespace. */
     private const MENTION_PATTERN = '/(?<![^\s])\$([A-Za-z0-9][A-Za-z0-9_.:-]*)/u';
@@ -218,7 +225,7 @@ final class SkillMentions
             }
 
             $names[] = $name;
-            $attachments[] = [$skill->sourcePath, $body];
+            $attachments[] = [$skill->sourcePath, $body, $name];
         }
 
         if ($attachments === []) {
@@ -229,17 +236,56 @@ final class SkillMentions
 
         return [
             'attachments' => array_map(
-                static fn (array $pair): Attachment => new Attachment(
-                    $pair[0],
+                static fn (array $triple): Attachment => new Attachment(
+                    $triple[0],
                     AttachmentType::File,
-                    str_contains($pair[1], SkillTool::ARGUMENTS_PLACEHOLDER)
-                        ? SkillTool::substituteArguments($pair[1], $rest)
-                        : $pair[1],
+                    str_contains($triple[1], SkillTool::ARGUMENTS_PLACEHOLDER)
+                        ? SkillTool::substituteArguments($triple[1], $rest)
+                        : $triple[1],
+                    // Lane B (skills-qa F2): every skill file is SKILL.md, so the
+                    // basename chip was the same word for every skill. Carry the
+                    // name the user mentioned so the transcript says WHICH one.
+                    skill: $triple[2],
                 ),
                 $attachments,
             ),
             'notices' => $notices,
         ];
+    }
+
+    /**
+     * The skill name a finished `Skill` tool row ran, or null when $result is
+     * not a Skill call whose `name` argument is usable (absent, not a string,
+     * blank, or control-character-ridden). The single extractor both the
+     * renderer's `✨ skill: <name>` head and Chat's loaded-notice read, so the
+     * row and the notice can never disagree about what ran.
+     *
+     * Lane B (skills-qa F1/F3): the arguments ride the finished result on both
+     * settle paths - Chat::finishToolCalls and TranscriptProjector::finish each
+     * replay the placeholder's pendingToolArguments through withArguments().
+     */
+    public static function invokedSkillName(ToolResult $result): ?string
+    {
+        if ($result->name !== self::TOOL_NAME) {
+            return null;
+        }
+
+        $name = $result->arguments['name'] ?? null;
+        if (!\is_string($name)) {
+            return null;
+        }
+
+        // Fold-and-print, the disclosed lane B choice (review MINOR-3): control
+        // characters are collapsed to spaces so the printed name stays one inert
+        // line like every other model-chosen string the transcript shows — a
+        // exotic-spelling name still yields a label, never a refusal. Only what
+        // folds to nothing (or to a blob past MAX_NAME_CHARS) is refused.
+        $name = trim(preg_replace('/[\p{C}\s]+/u', ' ', $name) ?? '');
+        if ($name === '' || \strlen($name) > self::MAX_NAME_CHARS) {
+            return null;
+        }
+
+        return $name;
     }
 
     /**

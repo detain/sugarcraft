@@ -68,6 +68,7 @@
         "sugarcraft/candy-shine": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-tetris": "dev-master",
+        "sugarcraft/candy-top": "dev-master",
         "sugarcraft/candy-vcr": "dev-master",
         "sugarcraft/candy-vt": "dev-master",
         "sugarcraft/candy-wish": "dev-master",
@@ -301,6 +302,13 @@
         {
             "type": "path",
             "url": "candy-tetris",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-top",
             "options": {
                 "symlink": true
             }

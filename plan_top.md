@@ -43,7 +43,7 @@ candy-input, candy-sprinkles, sugar-charts, sugar-dash), phpunit.xml, `src/Top.p
   Used/Free meters), proc (sorter, filter, distance-fade, dual-gradient colors, vi keys, scrollbar click/drag),
   plus clock/uptime/buttons chrome. Menu set: main menu, options, help, signal popup, msgboxes (draw §5).
 - **Theme engine**: btop's 43 semantic keys + 9 gradient families ×(start,mid,end) → 101-stop caches + derived
-  `proc`/`proc_color` + TTY 16-color variant (draw §6). The upstream `themes/*.theme` files — **41**, disk-verified
+  `proc`/`proc_color` + TTY 16-color variant (draw §6). The upstream `themes/*.theme` files — **41** (+ mellow #1683 = 42 shipped), disk-verified
   2026-10-08 (`ls /home/sites/btop/themes/*.theme | wc -l`; draw §6 correct, env §4's "43" false — §8) — are
   **data to port** into `candy-top/docs/_data`-style fixtures or a themes/ dir; no
   SugarCraft lib ships them today (see §8 L-note — the brief's "sugar-dash's 43 ported btop themes" is false on
@@ -67,20 +67,20 @@ feel):
 
 | Gap (draw ref) | Pri | Target lib | Lane |
 |---|---|---|---|
-| LineChart per-POINT (x,value) color closure — residual after Audit-F11 wired per-series legend colors into the braille path (charting §8's "defect" framing superseded, §8-8) | P0 | sugar-charts | **L1** |
-| BrailleCanvas 101-stop gradient memo — kill clone-at-101-sites ramp pattern | P0 | sugar-dash | **L2** |
-| Dual-sample 5×5 quantizer: block tables + tty shades (braille packing reuses existing) (draw §2.7) | P0 | sugar-dash | **L3** |
-| graph_bg underlay glyph support `⣀`/`▄`/`░` in inactive_fg (draw §2.7 idiom, tty baseline disk-verified `░`) | P0 | sugar-dash | **L3** |
-| PositionGradient + `■` position-colored Meter (draw §2.6) | P0 | sugar-dash (+bits Progress doc) | **L4** |
-| Border::withTitle embedded-title + `┬├┴` junction placement (draw §2.4/§2.5/§3.3) | P0 | candy-sprinkles | **L5** |
-| sugar-charts BarChart withGradient (per-bar value→color) (single-color bars — charting §1.1 reads "single series only"; the per-bar color gap verified directly on `BarChart.php`, which ships no bar-color API) | P1 | sugar-charts | **L1** |
-| bits Progress position-gradient convenience + width-passing fix note (draw §10 row 6) | P1 | sugar-bits | **L4** |
-| rounded/line box presets into border presets (disk §8) | P1 | candy-sprinkles | **L5** |
-| Distance-fade helper (proc rows, draw §3.5) | P1 | sugar-dash | **L6** |
-| Per-row mini-sparkline composite (NET-NEW — technique source btop's proc-list row graphs, draw §3.5) | P1 | sugar-dash | **L6** |
-| Underline-cursor inline TextEdit (draw §2.3) | P1 | sugar-bits | **L8** |
-| Option-highlight convention (draw §5 options rows) | P1 | sugar-bits | **L8** |
-| Net autoscale hysteresis algorithm (draw §3.4) | P1 | sugar-dash (Foundation) | **L7** |
+| LineChart per-POINT (x,value) color closure — residual after Audit-F11 wired per-series legend colors into the braille path (charting §8's "defect" framing superseded, §8-8) | P0 | sugar-charts | **L1** ✅ `0153b65e4` |
+| BrailleCanvas 101-stop gradient memo — kill clone-at-101-sites ramp pattern | P0 | sugar-dash | **L2** ✅ `073913a44` |
+| Dual-sample 5×5 quantizer: block tables + tty shades (braille packing reuses existing) (draw §2.7) | P0 | sugar-dash | **L3** ✅ `37f5c6744` |
+| graph_bg underlay glyph support `⣀`/`▄`/`░` in inactive_fg (draw §2.7 idiom, tty baseline disk-verified `░`) | P0 | sugar-dash | **L3** ✅ `37f5c6744` |
+| PositionGradient + `■` position-colored Meter (draw §2.6) | P0 | sugar-dash (+bits Progress doc) | **L4** ✅ `1bbbca37f` |
+| Border::withTitle embedded-title + `┬├┴` junction placement (draw §2.4/§2.5/§3.3) | P0 | candy-sprinkles | **L5** ✅ `57cd08b9f` |
+| sugar-charts BarChart withGradient (per-bar value→color) (single-color bars — charting §1.1 reads "single series only"; the per-bar color gap verified directly on `BarChart.php`, which ships no bar-color API) | P1 | sugar-charts | **L1** ✅ `0153b65e4` |
+| bits Progress position-gradient convenience + width-passing fix note (draw §10 row 6) | P1 | sugar-bits | **L4** ✅ `1bbbca37f` |
+| rounded/line box presets into border presets (disk §8) | P1 | candy-sprinkles | **L5** ✅ `57cd08b9f` |
+| Distance-fade helper (proc rows, draw §3.5) | P1 | sugar-dash | **L6** ✅ `0859cfa4f` |
+| Per-row mini-sparkline composite (NET-NEW — technique source btop's proc-list row graphs, draw §3.5) | P1 | sugar-dash | **L6** ✅ `0859cfa4f` |
+| Underline-cursor inline TextEdit (draw §2.3) | P1 | sugar-bits | **L8** ✅ `39c65280c` |
+| Option-highlight convention (draw §5 options rows) | P1 | sugar-bits | **L8** ✅ `39c65280c` |
+| Net autoscale hysteresis algorithm (draw §3.4) | P1 | sugar-dash (Foundation) | **L7** ✅ `07a1e5e6f` |
 
 The lane target libs are siblings (charts/dash/bits/sprinkles), but the lanes are NOT mutually independent:
 within dash there is an ordering chain **L2 → L3 → L6** — L3's `setGradient` rides L2's `withGradient`, and
@@ -90,7 +90,7 @@ pre-L2/L3 dash tree stalls. L4 and L5 stand alone within dash/sprinkles. sugar-c
 change is independent. L7 depends on L1+L2 (gradient ramp lookup). L8 is independent.
 candy-top app assembly (Phase 3+) depends on ALL lanes landed.
 
-### L1 — sugar-charts: per-point color callback + bar gradient
+### ✅ L1 — sugar-charts: per-point color callback + bar gradient — `0153b65e4`
 
 **Closes:** charting §8's per-series color defect — **superseded on disk**: Audit-F11 (commit `1ad48ebba`, an
 ancestor of scaffold master `31e4dd8ff`) already routes per-series colors into the braille path —
@@ -134,7 +134,7 @@ workaround in this lane; its docblock rationale is half-superseded by F11, retir
 end: full `sugar-charts` suite, then `candy-query` suite (its 1483T/4203A era figure, tea-era record) to prove
 zero behavior drift on default path.
 
-### L2 — sugar-dash: BrailleCanvas::withGradient (101-stop ramp)
+### ✅ L2 — sugar-dash: BrailleCanvas::withGradient (101-stop ramp) — `073913a44`
 
 **Closes:** draw §2.7 coloring law (`Theme::g(gradient).at(clamp)`) — today every consumer hand-rolls the ramp;
 the audit headline (draw report era notes) is "kill clone-at-101-sites": with the canvas immutable clone-on-write
@@ -166,7 +166,7 @@ Files: `BrailleCanvas.php` + tests. Est. ~90 LOC src / ~180 LOC tests. **Regress
 dash, charting §1) + its consumers from L1's list; sugar-dash own suite (5,945T era figure — tea/dash record) at
 lane end; candy-query dashboard filter.
 
-### L3 — sugar-dash: dual-sample quantizer tables + graph_bg underlay
+### ✅ L3 — sugar-dash: dual-sample quantizer tables + graph_bg underlay — `37f5c6744`
 
 **Closes:** draw §0 gap 1 ("no class … implements this sampling law") + draw §10 rows 1, 4, 5. BrailleGrid/
 BrailleCanvas are storage canvases; the **quantizer** mapping two adjacent samples to one cell-glyph via the
@@ -224,7 +224,7 @@ candy-testing `assertCellGrid`; underlay polarity (non-blank-only color emission
 tests. **Regressions:** none to existing classes (new file + constants); dash suite + charts (which will consume
 it after L1). `tools/check-child-lifetimes.php` / path-repos rc=0 unaffected (no proc_open).
 
-### L4 — Position-colored meter (dash Meter/PositionGradient + bits Progress note)
+### ✅ L4 — Position-colored meter (dash Meter/PositionGradient + bits Progress note) — `1bbbca37f`
 
 **Closes:** draw §0 gap 2 + §2.6 (btop `Draw::Meter`, btop_draw.cpp:397-419): every `■` (U+25A0) cell is colored
 at **its own position** — `y = round(i*100/width)`; filled cells (`value >= y`) take
@@ -263,7 +263,7 @@ sugar-glow, sugar-stickers, candy-query's bits surface — all verified `require
 composer.json; candy-shell does **not** and is dropped from this gate), dash consumers (candy-query,
 sugar-charts). Run bits suite era figures + sugar-prompt 158T + glow + stickers + query filter.
 
-### L5 — candy-sprinkles: Border::withTitle + junction seams
+### ✅ L5 — candy-sprinkles: Border::withTitle + junction seams — `57cd08b9f`
 
 **Closes:** draw §0 gap 3 + §10 rows 8, 9. Verified on disk: `Border.php:42-122` has normal/rounded/thick/double/
 block/ascii/hidden presets (charting §6 — so "rounded/line presets into Stereotype" from the brief is moot:
@@ -294,7 +294,7 @@ byte-identical to untouched style; seam matrix — all 16 seam-flag combos → e
 record); consumers sugar-boxer (default border `Border::rounded()`, VERIFIED SugarBoxer.php:814-871), candy-top
 later, crush (untouched surface — additive only). Gate: full sprinkles + boxer (187T/375A era) suites.
 
-### L6 — sugar-dash: distance-fade + ProcRowComposer mini-sparkline composite
+### ✅ L6 — sugar-dash: distance-fade + ProcRowComposer mini-sparkline composite — `0859cfa4f`
 
 **Closes:** draw §0 gap 6, and §3.5 proc coloring + per-row 5×1 cpu graphs (§3.5 lifecycle: created on first
 cpu>0, erased after 10 consecutive samples <0.1%, skipped on the selected row, sits on graph_bg). Today the
@@ -329,7 +329,7 @@ formula. Est. ~200 LOC src / ~300 LOC tests. **Regressions:** dash-only new file
 (`MultiSeriesCell` is the adjacent prior-art consumer, nothing moves out of it; its inline raster copies stay —
 retirement is a follow-up decision, §8-4).
 
-### L7 — sugar-dash Foundation: net autoscale hysteresis + ThemeGradientStore
+### ✅ L7 — sugar-dash Foundation: net autoscale hysteresis + ThemeGradientStore — `07a1e5e6f`
 
 **Closes:** draw §0 gap 4 (theme registry/loader unbuilt — "candy-core has the interpolation primitive but no
 palette registry") and §3.4 autoscale (collect.cpp:2993-3073 law). Both are reusable system-monitor foundations
@@ -354,7 +354,7 @@ mid-stop exactness at 50 (snapshot byte via Color::blend1d, charting §4). Est. 
 **Regressions:** new Foundation files, nothing rewired; gate dash suite. candy-top's Theme/ (Phase 3) will consume
 GradientStore + port the `.theme` ini loader in-app (loader is app-specific key vocabulary, §8).
 
-### L8 — sugar-bits: underline-cursor TextEdit + option-highlight convention
+### ✅ L8 — sugar-bits: underline-cursor TextEdit + option-highlight convention — `39c65280c`
 
 **Closes:** draw §0 gap 5 + §2.3 (Draw::TextEdit — inline filter/option editor: underline-as-cursor, no real
 terminal cursor; empty field renders `Fx::ul + " " + Fx::uul`; window carved keeping ~half columns each side of
@@ -393,7 +393,7 @@ throttle-in-update not subscriptions — candy-query App.php:906-919 canonical g
 candy-top/
   bin/candy-top            # launcher per candy-query/bin/candy-query:8-53 IIFE-autoload shape, Program(
                            #   App::start(...), new ProgramOptions(useAltScreen:true, mouseMode:..., framerate: 20.0))
-  src/Collect/             # ALL readers: injectable $paths + \Closure $clock (HostLoadSampler shape,
+  src/Collect/             # ✅ b2d9207cc — ALL readers: injectable $paths + \Closure $clock (HostLoadSampler shape,
                            #   HostLoadSampler.php:27-28,66-77), UNMEASURED=-1.0 / 'n/a' sentinel law
                            #   (ProcAvailability, tea §2 — E731 COMP-2 option (b)).
     Cpu.php                # /proc/stat cpu0..N jiffies deltas (user,nice,system,idle,iowait,irq,softirq,steal);
@@ -430,7 +430,7 @@ candy-top/
     MemView.php NetView.php DiskView.php ProcView.php  # mirror draw §3.3/§3.4/§3.5; proc via L6 ProcRowComposer
     Overlays.php           # menus/help/signals/msgboxes (draw §5) — veil-styled dim = SGR-strip + inactive_fg
                            #   (draw §1 overlay law, sugar-veil backdrop, draw §10 row 36)
-  src/Theme/
+  src/Theme/               # ✅ 672c64680 (+ themes/ 41 files, btop oracle; mellow = 42nd)
     ThemeConfig.php        # 43 semantic keys + 9 families (hexes: draw §6 verbatim Default table);
                            #   .theme ini parser `theme[key]="#hex"` (+ # comments, 'r g b', #GG gray forms)
                            #   → dash GradientStore (L7) ramps; pseudo-derivations proc/proc_color injected
@@ -439,10 +439,10 @@ candy-top/
                            #   under candy-top/themes/*.theme — loaded by path, Default+TTY builtin-first
                            #   (draw §6 discovery order), live-cycle via options (preview-behind-overlay)
     TtyTheme.php           # 16-color stepped variant: gradient stops at 33/66 (draw §6 degradation)
-  src/Config/              # rc reader/writer ~/.config/candy-top/config.conf, key=value, subset of draw §9
+  src/Config/              # ✅ 7c893a54b — rc reader/writer ~/.config/candy-top/config.conf, key=value, subset of draw §9
                            #   defaults; unknown keys ignored (forward-compat), AtomicJsonFile-style atomic write
                            #   per candy-core P2 (withPermissions(0600) not needed — public config)
-  src/Lang/ + lang/en.php  # i18n wrapper Lang::t for user-facing strings (AGENTS.md i18n law)
+  src/Lang/ + lang/en.php  # ✅ 7c893a54b — i18n wrapper Lang::t for user-facing strings (AGENTS.md i18n law)
 ```
 
 **TEA wiring recipe** (inline, per tea §1 — every panel deviates nowhere):
@@ -469,32 +469,72 @@ from P-A.
 
 | Phase | Deliverable | Acceptance demo | Suite growth |
 |---|---|---|---|
-| P-A | Frame + theme load + clock + quit + resize, fake collectors | `php bin/candy-top` draws 6 bordered panels w/ embedded clock, `q` exits clean, resize reflows seams | +~15 tests (frame snapshot, resize coercion) |
-| P-B | CPU + MEM panels: real Cpu/Memory, DualSampleGraph upper/lower, per-core grid, Meter row, load/freq | live per-core % ticking, gradient ramps visible | +~20 (snapshot golden ×2 panels, collector delta math) |
-| P-C | NET panels: Net collector, dual graphs, hysteresis autoscale, stats sub-box, iface buttons b/n/z/a/y | up/down graph autoscales on scp burst, `z` zeroes | +~20 (hysteresis table, iface pick policy) |
-| P-D | DISK + BATTERY: Mounts/DiskIo/Temp/Battery, mem_graphs vs meters toggle, io_mode mirror graphs (L3 invert), border battery + watts | `i` flips disk graph modes | +~15 |
-| P-E | PROC list: ProcList, sorter incl cpu-lazy rotation (draw §3.5: pull >30% or >max-of-top-6 hogs forward, btop_shared.cpp:132-150), filter `f`/`!` regex, distance fade + metric blend (L6), vi/arrows/page keys, scrollbar click/drag, detailed view, kill/signal popup | full scroll+filter+sort loop; `k` signal grid 5-col 16-skip | +~30 |
-| P-F | Config menu + keybindings overlay: options screen via L8 OptionRow/TextEdit, presets load-only (draw §4 triples), `ctrl_r` hot-reload | edit `update_ms` live via `+/-` persisted | +~15 |
-| P-G | Themes ported (all shipped `.theme` files), TTY mode fallback, VHS demo tape (`candy-top/.vhs/top.tape`: `Set Theme "TokyoNight"`, quoted values, `Type "php examples/top.php"`, deterministic seeded collectors per tea §5 — fake /proc fixtures), polish, README examples/ | CI re-renders demo GIF; `--tty` demo | +~10 |
+| ✅ P-A `b1bd8fc12` (+ candy-core resize repaint `5442e8b1f`) | Frame + theme load + clock + quit + resize, fake collectors | `php bin/candy-top` draws 6 bordered panels w/ embedded clock, `q` exits clean, resize reflows seams | +~15 tests (frame snapshot, resize coercion) |
+| ✅ P-B `8e4559946` | CPU + MEM panels: real Cpu/Memory, DualSampleGraph upper/lower, per-core grid, Meter row, load/freq | live per-core % ticking, gradient ramps visible | +~20 (snapshot golden ×2 panels, collector delta math) |
+| ✅ P-C `7ac64e5f3` | NET panels: Net collector, dual graphs, hysteresis autoscale, stats sub-box, iface buttons b/n/z/a/y | up/down graph autoscales on scp burst, `z` zeroes | +~20 (hysteresis table, iface pick policy) |
+| ✅ P-D `a856be8bd` | DISK + BATTERY: Mounts/DiskIo/Temp/Battery, mem_graphs vs meters toggle, io_mode mirror graphs (L3 invert), border battery + watts | `i` flips disk graph modes | +~15 |
+| ✅ P-E `52f994d15` | PROC list: ProcList, sorter incl cpu-lazy rotation (draw §3.5: pull >30% or >max-of-top-6 hogs forward, btop_shared.cpp:132-150), filter `f`/`!` regex, distance fade + metric blend (L6), vi/arrows/page keys, scrollbar click/drag, detailed view, kill/signal popup | full scroll+filter+sort loop; `k` signal grid 5-col 16-skip | +~30 |
+| ✅ P-F (F1 overlays/menus ✅ `083176989`; F2 options/presets/persistence/reload ✅ `16b9dcdaa` + candy-core hangup-safe restore ✅ `fe9cdecdb`) | Config menu + keybindings overlay: options screen via L8 OptionRow/TextEdit, presets load-only (draw §4 triples), `ctrl_r` hot-reload | edit `update_ms` live via `+/-` persisted | +~15 |
+| ✅ P-G (mellow #1683 ✅ `632e08d49`; VHS tape ✅ `3469999a7`; TTY polish check ✅ `500696d7e`) | Themes ported (all shipped `.theme` files), TTY mode fallback, VHS demo tape (`candy-top/.vhs/top.tape`: `Set Theme "TokyoNight"`, quoted values, `Type "php examples/top.php"`, deterministic seeded collectors per tea §5 — fake /proc fixtures), polish, README examples/ | CI re-renders demo GIF; `--tty` demo | +~10 |
+| ✅ P-H | **Documentation of every feature** — sibling-lib half ✅ `776bd06b5`; candy-top half ✅ `4956d682f`. (user-requested 2026-10-08). candy-top: full `README.md` (install, run, every panel, every key binding, mouse, config keys table generated/derived from `Config\Schema`, presets, themes list + adding user themes, TTY mode, collectors + data sources + permissions, adopted upstream-PR features from Wave U), `docs/_data/candy-top.{json,body.html}` refresh then `php tools/gen-docs.php`, `CALIBER_LEARNINGS.md`, examples/. Sibling libs — document each lane API in that lib's README + `docs/_data/<slug>.body.html` (+ gen-docs): sugar-charts (withSeriesColorFn, withBarColor), sugar-dash (BrailleCanvas gradient, Gradient101, DualSampleGraph, Meter position mode, NetAutoScale, GradientStore, DistanceFade, ProcRow*), candy-sprinkles (withEmbeddedTitle, embedJunctions, seam), sugar-bits (TextEdit, OptionRow, Progress width arg). Refresh stale "scaffold" wording in root README/docs/index.html; MATCHUPS 🟡→🟢 at v1. Add a docs drift test where cheap (e.g. README key-binding / config-key tables re-derived from source, like sugar-crush's drift guards). | README/doc pages cover every shipped feature; drift tests green | +~5 (drift guards) |
+
+
+### Wave U — adopted upstream btop PRs (evaluated 2026-10-08)
+
+Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aristocratos/btop PRs: 16 ADOPT,
+7 ADOPT-LATER, 9 N/A). Every new config key is additive (btop and our reader both skip unknown keys); new
+*values* (`graph_symbol=block2`, `proc_sorting=io *`) make stock btop warn+default; the presets 4th field
+(#1476) is written only when the user set it (stock btop discards a presets string containing it). Config schema for all Wave U keys/values ✅ `96dcdc43a`.
+
+- ✅ `02f178b91` **U0 — fix now (no config):** #1869 try every `nvidia-smi` candidate (incl. `/usr/lib/wsl/lib/nvidia-smi`)
+  before memoizing absence; #1856 add rename/parenthesis stat regression fixtures (parser already correct).
+- ✅ `02f178b91` **U1 — collector additions:** #1739 zswap (meminfo Zswap/Zswapped, `show_zswap=true`, Used = on-disk swap);
+  #1785 per-core freq (`cpuN/cpufreq`, `show_core_freq=off|value|graph`) + extract `Freq::label()` (#1792);
+  #1573 iface IPs via `net_get_interfaces()` (`net_hide_ip=false`); ProcList bundle — #1859 argv[0] basename
+  span (`proc_command_basename=false`), #1823 `/proc/pid/io` rates (EACCES → "-", never 0), #1873 container
+  tag from `/proc/pid/cgroup` (`proc_filter_containers`, `O` key).
+- ✅ `b071eb8b7` **U1b — VM awareness (user-requested; not a btop PR):** tag KVM/QEMU guest processes with their VM —
+  from cgroup v2 `machine.slice/machine-qemu\x2d<id>\x2d<name>.scope` (unescape `\x2d`) + cmdline
+  `-name guest=<name>`, `-uuid`, `-smp`, `-m size=<KiB>k`; detect by cgroup/cmdline, NOT exe name (`/usr/bin/kvm`
+  on Ubuntu). Extends the #1873 Cgroup/ContainerRef parser (engine `kvm`); proc list shows the guest name,
+  `proc_filter_containers` covers VMs; per-vCPU threads via `debug-threads=on` `CPU N/KVM` comms. Reference
+  output: `prompt_kit/findings/kvm-reference.md`. Optional libvirt enrichment (one `virsh domstats --raw` per
+  cadence, root/libvirt group) and a VM box → U4.
+- ✅ `503ee9bb7` **U2 — lib lane:** #1783 `block2` sextant graph symbols in sugar-dash `DualSampleGraph` + Schema value.
+- **U3 — folded into phases:** P-A/P-B: #1858 hidden panels never build/render + graph width/height clamp
+  ≥1 (DualSampleGraph throws <1), #1614 `max(1,…)` cpu-panel gpu sub-graph widths, #1008 keep last value on
+  UNMEASURED. P-B: #1785 view, #1747 `mem_selected` focused graph, #1739 view. P-C: #1573. P-D: #1700
+  `disks_order`. P-E: #1859, #1823 IO/R IO/W columns ≥90 cols + `io read|write|total` sort, #1546 cwd in
+  detail view (selected pid only), #1791a tree sort by branch totals, #1873 filter. P-F: #1476
+  `proc_box_width_percent=55` + Shift/Alt+Shift arrows + preset 4th field, #1411 options-tab digits = box
+  toggles, #1791b grouped option headings, #1849 theme/config reload invalidates every render memo (battery
+  meter included). P-G: #1683 mellow theme (42nd; bump the two 41-pinned tests) + #1849 theme-switch test.
+- **U4 — post-v1 (phase P-I, GPU/NPU):** ✅ `a8f442188` multi-vendor GPU/NPU data model, #1854 AMD sysfs + amdgpu.ids
+  names, #1888 multi Intel GPU (DRM fdinfo/sysfs), #985 Intel NPU (`intel_vpu`), #1839 AMD NPU
+  (`/sys/class/accel` detection; FFI ioctl stats deferred), #1552 collector side (nvidia pmon) — collectors, not yet wired; then #1730 any-GPU box slots on the #1881 grid (`gpu_box_columns="Auto"`),
+  #1552 per-process GPU util/mem; #1873 container box; #1791c tree-state persistence ✅ `41b18d59f` in an
+  `$XDG_STATE_HOME` file (not config).
+- **U5 — post-v1 FreeBSD collectors** ✅ (collectors + Platform factory `18fd19467`; panel wiring `70c09bec9`; live ps/iostat capture pending — host ssh down): reference output captured in `prompt_kit/findings/freebsd-reference.md`
+  (FreeBSD 14.4, sysctl/kvm-surface notes); folds in #1851/#1830/#1787/#1728.
 
 ## 5. Monorepo integration checklist (still-open add-a-lib items)
 
 Scaffold (composer.json/phpunit.xml/src/Top.php/tests/README/CALIBER_LEARNINGS) already landed @ `31e4dd8ff`.
 Remaining per AGENTS.md "Adding a lib — checklist":
-- root `composer.json`: require `sugarcraft/candy-top: "@dev"` + `repositories[]` entry (root manifest keeps its
+- ✅ `03d5ef164` root `composer.json`: require `sugarcraft/candy-top: "@dev"` + `repositories[]` entry (root manifest keeps its
   own — lib manifests never get one, path-repo-closure law)
-- `MATCHUPS.md`: row `aristocratos/btop → SugarTop/CandyTop → candy-top/ → SugarCraft\Top\ → 🔴` (no btop row
+- ✅ `03d5ef164` `MATCHUPS.md`: row `aristocratos/btop → SugarTop/CandyTop → candy-top/ → SugarCraft\Top\ → 🔴` (no btop row
   exists yet — verified on disk in `docs/MATCHUPS.md` directly; the charting report has no MATCHUPS section)
   + note the user naming ruling (§8)
-- `PROJECT_NAMES.md`: record `candy-top` under a naming-exception note (heuristic says system/app → `sugar-`;
+- ✅ `03d5ef164` `PROJECT_NAMES.md`: record `candy-top` under a naming-exception note (heuristic says system/app → `sugar-`;
   owner explicitly chose `candy-top`, §8)
-- root `README.md` lib table row
-- `docs/_data/candy-top.json` + `docs/_data/candy-top.body.html`, then `php tools/gen-docs.php` (never hand-edit
+- ✅ `03d5ef164` root `README.md` lib table row
+- ✅ `03d5ef164` `docs/_data/candy-top.json` + `docs/_data/candy-top.body.html`, then `php tools/gen-docs.php` (never hand-edit
   `docs/lib/candy-top.html`)
-- `media/icons/candy-top.png`
+- ✅ `03d5ef164` `media/icons/candy-top.png`
 - `.github/workflows/vhs.yml`: `all=(… candy-top …)` array entry + the P-G tape
-- `codecov.yml`: flag + component for candy-top
-- `scripts/affected-libs.php` — verify auto-discovery already lists candy-top (it maps monorepo→split dirs
+- ✅ `03d5ef164` `codecov.yml`: flag + component for candy-top
+- ✅ `03d5ef164` `scripts/affected-libs.php` — verify auto-discovery already lists candy-top (it maps monorepo→split dirs
   dynamically; current state per brief: already picks it up)
 - packagist: owner-side entry pending (`github.com/sugarcraft/candy-top` synced @ `01bab2d8`) — note only
 - candy-top `composer.json` deps review after lanes: candy-flip/candy-vt/mosaic stay OUT (tea §6 minimal set);

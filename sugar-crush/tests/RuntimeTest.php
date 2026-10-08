@@ -3905,7 +3905,9 @@ DOC;
         // `WebFetch` joined the divergence in audit F-P6: it moves no file,
         // so it is still read-only HERE, but an outbound fetch whose URL the
         // model composes is not safe to run unasked, so the gate no longer
-        // lists it. `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`,
+        // lists it. `Skill` LEFT the divergence on the skills QA pass: loading
+        // one escaped text file into context is what `Read` does unasked, so
+        // the gate re-classed it read too and the two rosters now agree on it. `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`,
         // `AskUser`, `PlanExit`, `SendMessage`, `Subagents`,
         // `InterruptAgent` and `BoardPost` diverge because the gate classes
         // them no-ask, not read: each touches only harness-owned state
@@ -3914,7 +3916,7 @@ DOC;
         // user, the messaging three write the sub-agent mailboxes and run
         // cards, and `BoardPost` appends to its batch's board file).
         $this->assertSame(
-            ['AskUser', 'BoardPost', 'Compress', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'Skill', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
+            ['AskUser', 'BoardPost', 'Compress', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '

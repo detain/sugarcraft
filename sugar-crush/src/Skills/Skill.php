@@ -115,6 +115,29 @@ final readonly class Skill
     }
 
     /**
+     * The skill's name as a human and the model should READ it: the last
+     * '/'-separated segment of the registry key.
+     *
+     * Bundle walkers key nested skills by their discovery path — a synced
+     * import lands as `synced/<uuid>_<uuid>/docx` — and that full key is the
+     * skill's identity in the registry (lookup, shadowing, disable), which is
+     * why the key itself cannot shrink. What can shrink is what the listing
+     * shows: the uuid pair carries no information a reader can use, and the
+     * byte budget it eats is budget taken from the description. Display, and
+     * display only, uses the leaf.
+     *
+     * Names without a '/' are returned unchanged, so every flat skill — every
+     * built-in and every directly-installed one — is display-identical to its
+     * key and resolves the same way through {@see \SugarCraft\Crush\Tools\BuiltIn\SkillTool}.
+     */
+    public function displayName(): string
+    {
+        $slash = strrpos($this->name, '/');
+
+        return $slash === false ? $this->name : substr($this->name, $slash + 1);
+    }
+
+    /**
      * Unanchored substring probe over the description: any token longer than
      * three bytes that appears anywhere in the prompt is a match.
      *
@@ -146,6 +169,16 @@ final readonly class Skill
     /**
      * Get the system prompt contribution from this skill.
      *
+     * The heading and the optional base-directory line come from
+     * {@see SkillPromptLine::heading()} / {@see SkillPromptLine::baseDirLine()}
+     * — the very two calls {@see \SugarCraft\Crush\Tools\BuiltIn\SkillTool}
+     * makes when it returns this skill's body as a tool result. They used to be
+     * minted separately, which is how the enabled-body channel kept announcing
+     * a skill by its bundle-uuid registry key after the listing and the tool
+     * result had both moved to the display name, and kept omitting the directory
+     * a body's relative references need. Both are fixed by construction now, and
+     * a skill with no on-disk source (a manifest entry) still gets no base line.
+     *
      * Name and body pass through {@see PromptFence::escape()} for the reason
      * {@see SkillPromptLine} exists: both are text from whoever shipped the
      * skill, and a body that could close a fence or open a `<system-reminder>`
@@ -156,8 +189,9 @@ final readonly class Skill
      */
     public function systemPromptContribution(): string
     {
-        return "\n\n## Skill: " . SkillPromptLine::field($this->name)
-            . "\n\n" . PromptFence::escape($this->content);
+        return "\n\n" . SkillPromptLine::heading($this)
+            . SkillPromptLine::baseDirLine($this)
+            . PromptFence::escape($this->content);
     }
 
     /**

@@ -309,7 +309,11 @@ SKILL;
         $contribution = $skill->systemPromptContribution();
 
         // Assert
-        $expected = "\n\n## Skill: test-skill\n\n## Custom Skill Content\n\nThis skill provides specific functionality.";
+        // M5 (fix round 1): the contribution now renders the display name and
+        // carries the base-dir line, byte-parity with the Skill tool result —
+        // '/path/test' is the sourcePath, so dirname() is '/path'.
+        $expected = "\n\n## Skill: test-skill\n\n> Base directory for this skill: /path\n\n"
+            . "## Custom Skill Content\n\nThis skill provides specific functionality.";
         $this->assertSame($expected, $contribution);
     }
 

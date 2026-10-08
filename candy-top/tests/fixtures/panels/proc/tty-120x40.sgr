@@ -1,0 +1,4 @@
+[0m[31m│[0m[1;97m    Pid: Program: Command:              User:  MemB       Cpu%[0m  [0m[31m│[0m
+[0m[31m│[0m[1;97;41m       1 systemd  /sbin/init splash     root   125M ░░▒▒▒ 42.5  [0m[31m│[0m
+[0m[31m│[0m[37m    5120 [0m[32mcontaine[0m[37m /usr/bin/containerd-s root  [0m[32m 367M[0m[37m [0m[90m░[0m[32m░▒░░[0m[37m [0m[32m16.2[0m[37m  [0m[31m│[0m
+[0m[31m│[0m[37m     412 [0m[32msshd    [0m[37m sshd: /usr/sbin/sshd  root  [0m[32m 190M[0m[37m [0m[90m░[0m[32m░░░░[0m[37m [0m[32m20.1[0m[37m  [0m[31m│[0m

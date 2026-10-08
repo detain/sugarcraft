@@ -1,0 +1,40 @@
+╭─┐¹cpu┌──┐menu┌┐preset *██████╗─█████╗─███╗───██╗██████╗2██╗3:2██╗─████████╗─██████╗─██████╗─────────────┐- 2000ms +┌─╮
+│ CPU 51%               ██╔════╝██╔══██╗████╗  ██║██╔══██╗╚██╗ ██╔╝ ╚══██╔══╝██╔═══██╗██╔══██╗                         │
+│ Load AVG: 5.42 5.66 3.██║     ███████║██╔██╗ ██║██║  ██║ ╚████╔╝     ██║   ██║   ██║██████╔╝                         │
+│ up 1d 00:00:00        ██║     ██╔══██║██║╚██╗██║██║  ██║  ╚██╔╝      ██║   ██║┐Ry██║██╔═══╝X┌───────────────────────╮│
+│                       ╚██████╗██║  ██║██║ ╚████║██████╔╝   ██║       ██║   ╚██████╔╝██║         C6    13%           ││
+│                        ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝    ╚═╝       ╚═╝    ╚═════╝8╚═╝         C7    60%           ││
+│                   ╭─┐tab→┌─────────────────────────────────────────────────────────────────────╮                    ││
+│                   │   0general           [cpu]          2mem           3net           4proc    │                    ││
+│                   ├─────────────────────────────┬──────────────────────────────────────────────┤                    ││
+│                   │  Graphs                     │ Cpu lower graph.                             │                    ││
+│                   │                             │                                              │────────────────────╯│
+│                   │       Cpu graph upper       │ Sets the CPU/GPU stat shown in lower half of │                     │
+╰───────────────────│             Auto            │ the CPU graph.                               │─────────────────────╯
+╭─┐²mem┌────────────│     Cpu graph lower 1/12    │                                              │─────────────────────╮
+│ Total: 16.0 GiB   │ ←           Auto          → │ CPU:                                         │           MemB  Cpu%│
+│ Used: 10.2 GiB    │       Cpu invert lower      │ "total" = Total cpu usage.                   │        198 MiB  27.8│
+│ Available: 5.80 Gi│             True            │ "user" = User mode cpu usage.                │       90.0 MiB  25.0│
+│ Cached: 3.20 GiB  │       Cpu single graph      │ "system" = Kernel mode cpu usage.            │es      244 MiB  13.6│
+│ Free: 2.60 GiB    │            False            │ + more depending on kernel.                  │        398 MiB  11.5│
+│                   │        Show gpu info        │                                              │        502 MiB   7.9│
+│ Swap: 205 MiB / 2.│             Auto            │ GPU:                                         │ta      305 MiB   7.2│
+│                   │  Temperature sensors        │ "gpu-totals" = GPU usage split/device. (Auto)│        612 MiB   6.6│
+│                   │                             │ "gpu-vram-totals" = VRAM usage split by GPU. │        360 MiB   2.6│
+│                   │          Check temp         │ "gpu-pwr-totals" = Power usage split by GPU. │                     │
+│                   │             True            │ "gpu-average" = Avg usage of all GPUs.       │                     │
+│                   │          Cpu sensor         │ "gpu-vram-total" = VRAM usage of all GPUs.   │                     │
+│                   │             Auto            │ "gpu-pwr-total" = Power usage of all GPUs.   │                     │
+╰───────────────────│        Show coretemp        │ Not all stats are supported on all devices.  │                     │
+╭─┐³net┌────────────│             True            │                                              │                     │
+│ eth0              │         Cpu core map        │                                              │                     │
+│                   │                             │                                              │                     │
+│                   │          Temp scale         │                                              │                     │
+│                   │           celsius           │                                              │                     │
+│                   │  CPU status                 │                                              │                     │
+│                   │                             │                                              │                     │
+│                   │        Show cpu freq        │                                              │                     │
+│                   │             True            │                                              │                     │
+│                   ╰─┘↑ page 1/2 ↓└──────────────┴──────────────────────────────────────────────╯                     │
+│                         ╰─┘upload└────────────────╯││                                                                │
+╰────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯

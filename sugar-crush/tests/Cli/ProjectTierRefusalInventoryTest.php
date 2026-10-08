@@ -225,7 +225,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/WorktreeConfig.php|.sugar-crush/config.json' => self::REPOSITORY,
         // The settings layering's project tier. Both files arrive with a CLONE,
         // and neither feeds this collector — see the gap list in
-        // {@see testTheEightThatFeedTheCollectorAndTheSevenThatAreNamedGaps()}
+        // {@see testTheNineThatFeedTheCollectorAndTheSevenThatAreNamedGaps()}
         // for why a silent refusal is right for these two specifically. THREE
         // rows joined the repository-chosen block in this change-set; the row
         // above is the third and it is a RECLASSIFICATION, not a new path, so
@@ -246,7 +246,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Host/Commands/MemoryCommand.php|.sugar-crush/memory' => self::REPOSITORY,
         'Context/ProjectMemoryWriter.php|.sugar-crush/memory' => self::REPOSITORY,
         'Memory/ForeignMemoryImporter.php|.opencode/memory' => self::REPOSITORY,
-        'Skills/ForeignSkillDiscovery.php|.opencode/skills' => self::REPOSITORY,
         'Skills/SkillLoader.php|.sugar-crush/skills' => self::REPOSITORY,
         'Workflows/WorkflowRegistry.php|.sugar-crush/workflows' => self::REPOSITORY,
 
@@ -257,6 +256,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // PROJECT_SUBDIR/USER_SUBDIR pair, which are the same string twice).
         'Agents/ForeignAgentPresetRegistry.php|.claude/agents' => self::BOTH,
         'Skills/ForeignSkillDiscovery.php|.claude/skills' => self::BOTH,
+        'Skills/ForeignSkillDiscovery.php|.opencode/skills' => self::BOTH,
+        'Skills/ForeignSkillDiscovery.php|.agents/skills' => self::BOTH,
         'Skills/SkillDiscovery.php|.sugar-crush/skills' => self::BOTH,
 
         // User-tier: rooted at `~`, so nobody but the user chose the location.
@@ -390,11 +391,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is FORTY-SEVEN occurrences — one per entry
-     * in {@see DOT_PATHS} — of THIRTY-TWO distinct paths. NINETEEN of those
+     * APPEARS IN. On this tree that is FORTY-EIGHT occurrences — one per entry
+     * in {@see DOT_PATHS} — of THIRTY-THREE distinct paths. TWENTY of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
-     * they are FIFTEEN distinct paths — which is the figure
+     * they are SIXTEEN distinct paths — which is the figure
      * {@see testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade()} asserts,
      * on PATHS. All four figures are measured off the map above, and each is
      * written next to the thing it counts because the pair has been mixed up in
@@ -466,10 +467,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * FIFTEEN repository-chosen paths, and the enumeration in
+     * SIXTEEN repository-chosen paths, and the enumeration in
      * {@see Bootstrap::projectTierRefusals()}'s own doc-block must name every one
      * of them. It named FOUR, then FIVE, both hand-written, while `src/` held
-     * ten; it now names fifteen. See that doc-block for which of the three
+     * ten; it now names sixteen. See that doc-block for which of the three
      * additions is a NEW path and which is one literal reclassified.
      *
      * `BOTH` counts here: a string serving the project tier is repository-chosen
@@ -479,7 +480,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     {
         $repository = $this->repositoryChosenPaths();
 
-        $this->assertCount(15, $repository);
+        $this->assertCount(16, $repository);
 
         // SCOPED TO THE DOC-BLOCKS THAT MAKE THE CLAIM, not to the file. Asserted
         // file-wide, this passed while the enumeration itself was missing a name,
@@ -563,16 +564,16 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(32, $distinct, 'distinct dot-DIRECTORY paths in src/');
-        self::assertCount(15, $this->repositoryChosenPaths(), 'of which repository-chosen');
+        self::assertCount(33, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(16, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
             \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
             'public static function projectTierRefusals()',
         );
 
-        self::assertStringContainsString('FIFTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('THIRTY-TWO distinct', $enumeration);
+        self::assertStringContainsString('SIXTEEN repository-chosen', $enumeration);
+        self::assertStringContainsString('THIRTY-THREE distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -588,7 +589,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
-            28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO'];
+            28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
+            33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY', 21 => 'TWENTY-ONE'];
 
@@ -628,8 +630,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * Which of the FIFTEEN reach the collector, and which are gated elsewhere.
-     * EIGHT and SEVEN — stated here so "eight feeders" cannot quietly stand in
+     * Which of the SIXTEEN reach the collector, and which are gated elsewhere.
+     * NINE and SEVEN — stated here so "nine feeders" cannot quietly stand in
      * for "and seven paths nobody drains".
      *
      * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
@@ -646,7 +648,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * feeder column stays EIGHT. P7.S6 added a SEVENTH gap, `.sugar-crush/memory`
      * — the sentinel directory `Chat::memoryImport()` records for `/memory import`
      * — gated AT ITS CALL SITE and answered in the command's own response, never
-     * drained here, so the feeder column again stays EIGHT.
+     * drained here, so the feeder column again stays EIGHT. The agents-spec
+     * skill tree (`.agents/skills`) made it NINE and SEVEN: its refusals drain
+     * through the same `$manager->refusedDirectories()` seam the other skill
+     * trees use — the same shape of move, recorded the same way.
      *
      * `.sugar-crush/commands` NEARLY WENT BACK TO THE GAP COLUMN, and the union
      * check below could not have stopped it: `assertSame($union, $paths)` plus
@@ -668,9 +673,9 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * matching evidence row in the same edit. The positive direction is what
      * this covers, and it is the direction the defect ran in.
      */
-    public function testTheEightThatFeedTheCollectorAndTheSevenThatAreNamedGaps(): void
+    public function testTheNineThatFeedTheCollectorAndTheSevenThatAreNamedGaps(): void
     {
-        $feeders = ['.claude/agents', '.claude/skills', '.opencode/agents',
+        $feeders = ['.agents/skills', '.claude/agents', '.claude/skills', '.opencode/agents',
             '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/commands',
             '.sugar-crush/skills', '.sugar-crush/workflows'];
         $gaps = ['.opencode/memory', '.sugar-crush/hooks.yaml',
@@ -678,7 +683,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             '.sugar-crush/settings.json', '.sugar-crush/settings.local.json',
             '.sugar-crush/rules'];
 
-        $this->assertCount(8, $feeders, 'the EIGHT this test is named for');
+        $this->assertCount(9, $feeders, 'the NINE this test is named for');
         $this->assertCount(7, $gaps, 'and the SEVEN');
 
         $union = array_merge($feeders, $gaps);
@@ -727,6 +732,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * @var array<string, string>
      */
     private const DRAIN_EVIDENCE = [
+        '.agents/skills' => '$manager->refusedDirectories()',
         '.claude/agents' => '$registry->refusedDirectories()',
         '.claude/skills' => '$manager->refusedDirectories()',
         '.opencode/agents' => '$registry->refusedDirectories()',

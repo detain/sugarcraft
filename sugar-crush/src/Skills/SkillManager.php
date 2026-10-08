@@ -27,7 +27,8 @@ final class SkillManager
     /**
      * Load all skills from standard locations: the native built-in, project
      * and user trees, and the foreign imports other coding CLIs leave under
-     * `.claude/skills` / `.opencode/skills`, interleaved tier by tier.
+     * `.agents/skills` / `.claude/skills` / `.opencode/skills`, interleaved
+     * tier by tier.
      *
      * Registers Stage-1 manifests only (name/description/flags) via
      * SkillLoader::manifestTiers() (the unmerged tiers behind
@@ -61,11 +62,11 @@ final class SkillManager
      * manifest arrays have nowhere to carry it, so routing the foreign walk
      * through them would discover the skills and throw away the provenance
      * the palette badges them with. This class is also the first layer that
-     * holds the registry, which is what the two-source merge below needs.
+     * holds the registry, which is what the multi-source merge below needs.
      *
      * WHICH SKILL KEEPS A NAME is decided tier first, format second:
      *
-     *     built-in < project (claude < opencode < native) < user (claude < opencode < native)
+     *     built-in < project (spec < claude < opencode < native) < user (spec < claude < opencode < native)
      *
      * THE TIER IS THE FIRST KEY ({@see SkillOrigin::precedence()}): the user
      * beats the project (audit 15d-03(b)). This used to be "native wins a name
@@ -81,10 +82,13 @@ final class SkillManager
      * wins: a repository carrying both `.claude/skills/deploy` and
      * `.sugar-crush/skills/deploy` gets the native one, and installing another
      * CLI with a skill of the same name as one in your own `~/.sugar-crush/
-     * skills` does not re-point it. Between the two foreign trees the fixed
-     * order (opencode over Claude) decides; that pair has no principled
-     * winner, so what matters is that it is deterministic rather than
-     * dependent on scan order.
+     * skills` does not re-point it. Among the foreign trees the fixed order
+     * spec < claude < opencode decides — the least tool-specific convention
+     * loses to the more tool-specific ones, since the tree a named tool wrote
+     * carries that tool's assumptions and is the likelier to be the one its
+     * author meant for the tool they actually use. The pair had no principled
+     * winner even at two conventions, so what matters is that it is
+     * deterministic rather than dependent on scan order.
      *
      * Every loser is recorded, not dropped silently: each skill a later
      * registration replaces lands in {@see skipped()} naming the skill that
@@ -104,6 +108,7 @@ final class SkillManager
      */
     public function loadAll(string $projectRoot = '.'): void
     {
+        $agents = $this->foreign->agentsTiers($projectRoot);
         $claude = $this->foreign->claudeTiers($projectRoot);
         $opencode = $this->foreign->opencodeTiers($projectRoot);
         $native = $this->loader->manifestTiers($projectRoot);
@@ -118,7 +123,7 @@ final class SkillManager
         $holders = [];
 
         foreach (SkillOrigin::precedence() as $tier) {
-            foreach ([$claude[$tier->value] ?? [], $opencode[$tier->value] ?? []] as $tree) {
+            foreach ([$agents[$tier->value] ?? [], $claude[$tier->value] ?? [], $opencode[$tier->value] ?? []] as $tree) {
                 foreach ($tree as $skill) {
                     $this->registry->register([$skill]);
                     $this->claim($holders, $skill->name, $skill->sourcePath, self::tierOf($skill));

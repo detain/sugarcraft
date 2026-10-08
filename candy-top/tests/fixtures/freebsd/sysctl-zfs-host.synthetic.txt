@@ -1,0 +1,10 @@
+hw.pagesize=4096
+hw.physmem=17112539136
+vm.stats.vm.v_page_count=4097280
+vm.stats.vm.v_free_count=1048576
+vm.stats.vm.v_active_count=524288
+vm.stats.vm.v_wire_count=2097152
+vm.stats.vm.v_laundry_count=131072
+vfs.bufspace=104857600
+kstat.zfs.misc.arcstats.size=6442450944
+kstat.zfs.misc.arcstats.c_min=536870912

@@ -22,6 +22,7 @@ return [
     'barchart.dim_nonneg'      => 'la largeur/hauteur du graphique à barres doit être >= 0',
     'barchart.bar_width_min'   => 'barWidth doit être >= 1',
     'barchart.bar_gap_nonneg'  => 'barGap doit être >= 0',
+    'barchart.color_return'   => 'le résolveur de couleur du graphique en barres doit renvoyer {expected} ou null, {given} reçu',
 
     // Heatmap/Heatmap.php
     'heatmap.dim_nonneg'       => 'la largeur/hauteur de la heatmap doit être >= 0',
@@ -30,6 +31,7 @@ return [
 
     // LineChart/LineChart.php
     'linechart.dim_nonneg'     => 'la largeur/hauteur du graphique linéaire doit être >= 0',
+    'linechart.color_return'  => 'le résolveur de couleur de série du graphique linéaire doit renvoyer {expected} ou null, {given} reçu',
 
     // LineChart/Waveline.php
     'waveline.dim_nonneg'      => 'la largeur/hauteur de la waveline doit être >= 0',

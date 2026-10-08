@@ -898,8 +898,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * foreign-imported skills, see {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()})
      * so it reaches {@see App::$availableSkills} on every {@see complete()}
      * call — the seam {@see \SugarCraft\Crush\Cli\Bootstrap} uses to make
-     * skills discovered from ~/.claude/skills, {project}/.claude/skills,
-     * {project}/.opencode/skills, and ~/.config/opencode/skills (see {@see
+     * skills discovered from the agents-spec, Claude and opencode trees —
+     * project and user, both opencode user trees included (see {@see
      * \SugarCraft\Crush\Skills\ForeignSkillDiscovery}) actually visible to a
      * real `bin/sugarcrush` run instead of only to their own unit tests.
      */

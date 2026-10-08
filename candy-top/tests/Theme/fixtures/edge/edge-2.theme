@@ -1,0 +1,5 @@
+theme[process_start]="#112233"
+theme[process_mid]=""
+theme[process_end]="10 20 30"
+theme[used_start]="#zz"
+theme[free_mid]="#12345"

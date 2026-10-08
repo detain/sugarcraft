@@ -98,6 +98,7 @@ called out in the table below.
 | **CandyMines** (`candy-mines/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyFlip** (`candy-flip/`) | 🟢 ready | ASCII GIF viewer (ext-gd). |
 | **SugarReel** (`sugar-reel/`) | 🟢 ready | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty) — ffmpeg pipe + pure-PHP GIF fallback, delta repaint, seek, speed, audio companion. |
+| **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 42 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
 | **HoneyFlap** (`honey-flap/`) | 🟢 ready | Flappy Bird clone — the bird is a HoneyBounce projectile. |
 
 <!-- Windows ConPTY backend for candy-pty: tracked as a future row. -->
@@ -117,6 +118,10 @@ package. Suffixes are short, technical, and describe the role.
 
 `Candy-` (Files) is the file manager naming. Don't mint new prefixes without a discussion in
 [`PROJECT_NAMES.md`](../PROJECT_NAMES.md).
+
+`Candy-` (Top) is a recorded naming exception: a system-monitor app would read `Sugar-` by the
+apps heuristic, but the owner chose `candy-top` (a system monitor is "system" in the `Candy-`
+sense). The ruling and both sides of the argument live in [`PROJECT_NAMES.md`](../PROJECT_NAMES.md).
 
 ---
 
@@ -176,6 +181,7 @@ reference projects supplied the ideas, not the code.
 | CandySprinkles (candy-sprinkles/) | [lipgloss](https://github.com/charmbracelet/lipgloss) |
 | CandyTesting (candy-testing/) | none — first-party |
 | CandyTetris (candy-tetris/) | [tetrigo](https://github.com/Broderick-Westrope/tetrigo) |
+| CandyTop (candy-top/) | [btop](https://github.com/aristocratos/btop) |
 | CandyVcr (candy-vcr/) | [x/vcr](https://github.com/charmbracelet/x/tree/main/vcr) |
 | CandyVt (candy-vt/) | [x/vt](https://github.com/charmbracelet/x/tree/main/vt) |
 | CandyWish (candy-wish/) | [wish](https://github.com/charmbracelet/wish) |
@@ -210,6 +216,6 @@ reference projects supplied the ideas, not the code.
 | SugarWishlist (sugar-wishlist/) | [wishlist](https://github.com/charmbracelet/wishlist) |
 
 The table above lists every package in the two status tables — 41
-libraries and 20 apps, 61 rows total. Several projects outside Charm's
+libraries and 21 apps, 62 rows total. Several projects outside Charm's
 orbit inspired individual packages; each package's README carries its own
 attribution.

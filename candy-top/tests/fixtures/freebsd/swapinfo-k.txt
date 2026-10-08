@@ -1,0 +1,2 @@
+Device          1K-blocks     Used    Avail Capacity
+/dev/mirror/swap   4194300        0  4194300     0%

@@ -18,6 +18,7 @@ use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Skills\SkillListingSection;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
 use SugarCraft\Crush\Skills\SkillPromptLine;
@@ -1767,7 +1768,8 @@ final class BaseSystemPromptTest extends TestCase
             // preamble, so it is never read in the slot of the harness's own voice.
             $preamble = (new \ReflectionClass(Runtime::class))->getConstant('SKILL_LISTING_AUTHORITY_PREAMBLE');
             self::assertIsString($preamble, 'Runtime::SKILL_LISTING_AUTHORITY_PREAMBLE must exist as a string constant');
-            $open = strpos($prompt, "<available-skills>\n" . $preamble . "\n\nAvailable skills (invoke via Skill tool):\n");
+            $open = strpos($prompt, "<available-skills>\n" . $preamble . "\n"
+                . SkillListingSection::MANDATE . "\n\nAvailable skills (invoke via Skill tool):\n");
             $close = strpos($prompt, "\n</available-skills>");
             $at = strpos($prompt, $line);
             self::assertIsInt($open, 'the listing must open its fence with the provenance preamble directly under the opener');
@@ -1786,8 +1788,9 @@ final class BaseSystemPromptTest extends TestCase
      * every fence, in the harness's own voice, while their text was written by
      * whoever shipped the skill.
      *
-     * Exact bytes for a clean project skill — opener, preamble, blank line,
-     * caption, badged line, closer — through the one production assembler, plus
+     * Exact bytes for a clean project skill — opener, preamble, mandate line,
+     * blank line, caption, badged line, closer — through the one production
+     * assembler (SkillListingSection), plus
      * the wording constraints the other two preambles keep: ASCII, no roster
      * tag spelled, no line-leading heading marker, none of the register needles.
      */
@@ -1831,13 +1834,13 @@ final class BaseSystemPromptTest extends TestCase
                 1,
                 substr_count(
                     $prompt,
-                    "\n\n<available-skills>\n" . $preamble . "\n\n"
+                    "\n\n<available-skills>\n" . $preamble . "\n" . SkillListingSection::MANDATE . "\n\n"
                         . "Available skills (invoke via Skill tool):\n"
                         . "- [project] lister: Lists things.\n"
                         . "</available-skills>\n\n<env>",
                 ),
-                'the listing is one fence — opener, preamble, blank line, caption, badged line, closer — '
-                    . 'directly ahead of the env block',
+                'the listing is one fence — opener, preamble, mandate line, blank line, caption, '
+                    . 'badged line, closer — directly ahead of the env block',
             );
             self::assertSame(1, substr_count($prompt, '<available-skills>'));
             self::assertSame(1, substr_count($prompt, '</available-skills>'));

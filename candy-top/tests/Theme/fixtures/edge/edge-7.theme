@@ -1,0 +1,5 @@
+theme[temp_start]="#000000"
+theme[temp_mid]="#ffffff"
+theme[temp_end]="#000000"
+theme[upload_start]="#ff0000"
+theme[upload_end]="#000001"

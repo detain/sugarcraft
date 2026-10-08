@@ -1,0 +1,5 @@
+theme[inactive_fg]="-3 10 10"
+theme[temp_end]="-1 5 5"
+theme[cpu_start]="-1 0 0"
+theme[used_mid]="0 -7 400"
+theme[upload_end]="10 20 -30"

@@ -6,6 +6,7 @@ namespace SugarCraft\Sprinkles;
 
 use SugarCraft\Sprinkles\Border\BorderTitle;
 use SugarCraft\Sprinkles\Border\TitleAnchor;
+use SugarCraft\Core\Util\Width;
 
 /**
  * The 13 corner / edge / interior runes that make up a rectangular box
@@ -15,7 +16,10 @@ use SugarCraft\Sprinkles\Border\TitleAnchor;
  * Mirrors lipgloss `Border`. All runes must occupy a single terminal cell.
  *
  * Titles may be attached to any of six anchor positions via
- * {@see withTitle()}.  Rendered by {@see Style} when a border is applied.
+ * {@see withTitle()} (laid onto the edge) or {@see withEmbeddedTitle()}
+ * (bracketed by junctions, btop-style `─┐cpu┌─`).  Rendered by
+ * {@see Style} when a border is applied. {@see seam()} answers the
+ * junction rune where an internal divider meets the frame.
  */
 final class Border
 {
@@ -140,22 +144,121 @@ final class Border
         $anchor ??= TitleAnchor::TopLeft;
         $titles = $this->titles;
         $titles[$anchor->name][] = new BorderTitle($text, $anchor);
-        return new self(
-            $this->top,
-            $this->bottom,
-            $this->left,
-            $this->right,
-            $this->topLeft,
-            $this->topRight,
-            $this->bottomLeft,
-            $this->bottomRight,
-            $this->middleLeft,
-            $this->middleRight,
-            $this->middle,
-            $this->middleTop,
-            $this->middleBottom,
-            $titles,
-        );
+        return $this->withTitleList($titles);
+    }
+
+    /**
+     * Attach a title EMBEDDED in the edge: bracketed by junction runes so
+     * it reads as cut into the line — `╭─┐cpu┌───╮` on the top edge,
+     * `╰─┘mem└───╯` on the bottom. Mirrors btop `Draw::createBox` (title /
+     * title2 args) and `Draw::update_clock` (btop_draw.cpp, Symbols
+     * `title_left ┐ / title_right ┌`, `title_left_down ┘ / title_right_down └`).
+     *
+     * Placement law (btop):
+     *  - Left anchors sit one edge rune in from the corner (`╭─┐`).
+     *  - Right anchors mirror that (`┌─╮`).
+     *  - Center anchors place the opening junction at
+     *    `floor(run/2) - floor(len/2)` edge runes into the run — btop's
+     *    clock formula, which leans one cell right of true centre on
+     *    even/even sizes; kept byte-faithful on purpose.
+     *  - Adjacent embeds on one anchor are glued by one edge rune
+     *    (`┐a┌─┐b┌`), so a left title + right clock is two anchors.
+     *  - Overflow shrinks the text to fit with a trailing `…`
+     *    (btop `uresize`); an embed with no room for one text cell plus
+     *    both junctions is dropped and the edge stays a plain run.
+     *
+     * The text is painted verbatim inside the edge's title colour — pass
+     * pre-styled text (e.g. a bold Style render) for btop's bold titles.
+     *
+     * Erasing a stale, wider embed when the text shrinks (btop's
+     * `update_clock` overwrites the old span with h_lines) is deliberately
+     * NOT provided: a re-render rebuilds the whole edge, and the cell-diff
+     * renderer only repaints the cells that changed.
+     *
+     * @param string|null $open  Junction before the text; null derives it
+     *                           from the border's corner on that side
+     *                           (`┐` top / `┘` bottom; rounded corners map
+     *                           to their square form as btop does).
+     * @param string|null $close Junction after the text; null derives
+     *                           `┌` top / `└` bottom likewise.
+     * @throws \InvalidArgumentException When `$open`/`$close` is not exactly
+     *                                   one terminal cell wide.
+     */
+    public function withEmbeddedTitle(
+        string $text,
+        ?TitleAnchor $anchor = null,
+        ?string $open = null,
+        ?string $close = null,
+    ): self {
+        // An empty embed would still paint `┐┌` — treat it as no title so
+        // the edge stays byte-identical to an untitled border.
+        if ($text === '') {
+            return $this;
+        }
+        // The layout budgets exactly one cell per junction; anything else
+        // would push the closing corner off the edge.
+        foreach (['open' => $open, 'close' => $close] as $name => $rune) {
+            if ($rune !== null && Width::string($rune) !== 1) {
+                throw new \InvalidArgumentException(
+                    "Embedded title \${$name} junction must be exactly one cell wide, got " . var_export($rune, true)
+                );
+            }
+        }
+        $anchor ??= TitleAnchor::TopLeft;
+        $titles = $this->titles;
+        $titles[$anchor->name][] = new BorderTitle($text, $anchor, embedded: true, open: $open, close: $close);
+        return $this->withTitleList($titles);
+    }
+
+    /**
+     * The default `[open, close]` junction pair for an embedded title on
+     * the top (`$bottom = false`) or bottom edge. Taken from the border's
+     * own opposite corners so every family stays consistent — `┐┌`/`┘└`
+     * for normal and rounded, `┓┏`/`┛┗` thick, `╗╔`/`╝╚` double, `++`
+     * ascii — with the rounded arcs squared off, matching btop which
+     * always embeds with square junctions even on rounded boxes.
+     *
+     * @return array{0:string,1:string}
+     */
+    public function embedJunctions(bool $bottom = false): array
+    {
+        $square = ['╭' => '┌', '╮' => '┐', '╰' => '└', '╯' => '┘'];
+        return $bottom
+            ? [$square[$this->bottomRight] ?? $this->bottomRight, $square[$this->bottomLeft] ?? $this->bottomLeft]
+            : [$square[$this->topRight] ?? $this->topRight, $square[$this->topLeft] ?? $this->topLeft];
+    }
+
+    /**
+     * The rune for a point where lines leave in the given directions —
+     * the junction a seam (an internal divider) makes where it meets a
+     * frame or another seam. btop's divider law (Symbols `div_left ├`,
+     * `div_right ┤`, `div_up ┬`, `div_down ┴`): a vertical seam landing on
+     * the top edge is `seam(left: true, right: true, down: true)` → `┬`.
+     *
+     * Every answer comes from this border's own runes, so the family is
+     * preserved (thick → `┳`, double → `╦`). Two-arm turns use the
+     * corners as-is (rounded borders keep their arcs). A single arm has no
+     * half-line rune in the Border model, so it degrades to the straight
+     * edge rune on that axis; no arms is a blank cell.
+     */
+    public function seam(bool $left, bool $right, bool $up, bool $down): string
+    {
+        return match ([$left, $right, $up, $down]) {
+            [false, false, false, false] => ' ',
+            [true,  true,  true,  true]  => $this->middle,
+            [true,  true,  false, true]  => $this->middleTop,
+            [true,  true,  true,  false] => $this->middleBottom,
+            [false, true,  true,  true]  => $this->middleLeft,
+            [true,  false, true,  true]  => $this->middleRight,
+            [false, true,  false, true]  => $this->topLeft,
+            [true,  false, false, true]  => $this->topRight,
+            [false, true,  true,  false] => $this->bottomLeft,
+            [true,  false, true,  false] => $this->bottomRight,
+            [true,  true,  false, false],
+            [true,  false, false, false],
+            [false, true,  false, false] => $this->top,
+            default                      => $this->left, // up+down, up-only, down-only
+        };
     }
 
     /**
@@ -187,6 +290,12 @@ final class Border
                 $titles[$anchorName][] = new BorderTitle((string) $text, $anchorEnum);
             }
         }
+        return $this->withTitleList($titles);
+    }
+
+    /** @param array<string, list<BorderTitle>> $titles */
+    private function withTitleList(array $titles): self
+    {
         return new self(
             $this->top,
             $this->bottom,

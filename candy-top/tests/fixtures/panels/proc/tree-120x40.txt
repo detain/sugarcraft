@@ -1,0 +1,27 @@
+╭─┐⁴proc┌┐filter┌──────┐pause┌┐per-core┌┐reverse┌┐tree┌┐← pid →┌─╮
+│Tree:                                   User:  MemB       Cpu%  │
+│[-]─1 systemd (init)                    root   125M ⣀⣀⣀⣠⣤ 42.5  │
+│ │ [+]─412 sshd (sshd:)                 root   2.3G ⣀⣀⣀⣀⣠ 47.7  │
+│ │  ├─880 postgres                      post+  208M ⣀⣀⣀⣀⣀  5.9  │
+│ │  ├─1203 nginx (nginx:)               www-+  277M ⣀⣀⣀⣀⣀  6.8  │
+│ │  ├─3105 redis-server                 redis  542M ⣀⣀⣀⣀⣀  4.0  │
+│ │  ├─4410 node                         joe    615M ⣀⣀⣀⣀⣀  3.9  │
+│ │ [-]─5120 containerd-shim (container) root   367M ⣀⣀⣀⣄⣀ 16.2  │
+│ │  │  └─5133 python3 ([docker:3f2a1b9) root   675M ⣀⣀⣀⣀⣀ 11.1  │
+│ │  └─6969 web01 ([kvm:web01] qemu-sys) libv+  983M ⣀⣀⣀⣀⣀  7.6  │
+│ └─2 kthreadd                           root     0B ⣀⣀⣀⣀⣀  0.0  │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+│                                                                │
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└──────┘2/10└╯

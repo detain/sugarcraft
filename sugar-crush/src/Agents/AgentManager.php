@@ -15,6 +15,8 @@ use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\ProviderResponseException;
 use SugarCraft\Crush\Providers\TransientFailure;
+use SugarCraft\Crush\Skills\SkillListingSection;
+use SugarCraft\Crush\Skills\SkillMatcher;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\Tools\McpToolBridge;
@@ -1036,6 +1038,14 @@ final class AgentManager
 
                 $systemPrompt .= $skill->systemPromptContribution();
             }
+
+            // Lane D, same layer the batch splice carries: bodies were just
+            // folded above, the listing excludes exactly those names, and an
+            // empty registry appends nothing.
+            $systemPrompt = self::appendPromptLayer(
+                $systemPrompt,
+                $this->skillListingSection($subAgent->agent),
+            );
 
             // Run completion.
             //
@@ -2170,8 +2180,15 @@ final class AgentManager
      * callers (Chat's batch turn, a workflow stage) carry session context in
      * that field that nothing else re-supplies. Dropping it would trade one
      * wrong prompt for a whole class of contextless runs. So a declaring
-     * agent gets `shared . own + skills` and a silent member keeps the
-     * shared prompt byte-for-byte as before.
+     * agent gets `shared . own + skills + listing` and a silent member keeps
+     * the shared prompt byte-for-byte as before — with ONE lane D addition:
+     * the session's fenced `<available-skills>` layer is appended to every
+     * member after its bodies (silent ones too, it being a capability layer
+     * rather than a declaration), which for an empty registry renders '' and
+     * leaves this method's bytes exactly what they were. The null-map answer
+     * moves with it: null now means "nothing declared anything AND nothing
+     * there was to list", the only case where forwarding the shared prompt
+     * verbatim loses no layer.
      *
      * FAILS CLOSED, BEFORE DISPATCH, LIKE THE GRANTS. A granted-but-missing
      * skill refuses the batch with the name in hand — the E643 severity
@@ -2197,8 +2214,24 @@ final class AgentManager
             // member; the env block is the session's words, and the shared
             // prompt the merge already keeps carries that side. Pinned by the
             // reaching E654 tests.
+            // Lane D: the discovered-skill listing rides EVERY member, so the
+            // silent one too — it is a session capability layer, not a
+            // declaration. A non-empty section therefore COUNTS as a
+            // declaration for the null-map question below: forwarding the
+            // shared prompt verbatim would silently drop the very layer this
+            // line exists to deliver. With an empty registry the section is ''
+            // and every byte below is the pre-lane-D shape, which is what the
+            // verbatim-forward pins keep green.
+            $section = $this->skillListingSection($agent->agent);
+
             if ($agent->agent->prompt === '' && $agent->agent->skillNames === []) {
-                $prompts[$agent->id] = $sharedPrompt;
+                if ($section === '') {
+                    $prompts[$agent->id] = $sharedPrompt;
+                    continue;
+                }
+
+                $prompts[$agent->id] = self::appendPromptLayer($sharedPrompt ?? '', $section);
+                $anyDeclared = true;
                 continue;
             }
 
@@ -2220,12 +2253,68 @@ final class AgentManager
                 $own .= $skill->systemPromptContribution();
             }
 
+            // Bodies first, listing last: the layer's own mandate text reads
+            // as an index over what follows it in the same prompt only if the
+            // granted bodies are already above — and the exclusion set makes
+            // the two halves disjoint anyway (see skillListingSection()).
+            $own = self::appendPromptLayer($own, $section);
+
             $prompts[$agent->id] = ($sharedPrompt === null || $sharedPrompt === '')
                 ? $own
                 : $sharedPrompt . "\n\n" . $own;
         }
 
         return $anyDeclared ? $prompts : null;
+    }
+
+    /**
+     * The fenced Level-1 `<available-skills>` listing for one sub-agent, or ''
+     * when the session discovered nothing to list (skills QA, lane D).
+     *
+     * THE SAME LAYER THE MAIN CHAT SEES. Runtime::systemPromptSections()
+     * renders it per turn for the session's own prompt; this is the sibling
+     * call for sub-agent prompts, assembled through the SAME
+     * {@see SkillListingSection::render()} so fence geometry can never drift
+     * between the two carriers. Without it a sub-agent is told to consult its
+     * granted bodies but never told what else exists — the `Skill` tool it
+     * may hold (inherited grant, or a `tools:` list naming it) has no
+     * discoverable targets, which is exactly the Level-1/Level-2 dead wire
+     * crush_feat.md sections 7 E1/E2 named for the main prompt.
+     *
+     * THE EXCLUSION MIRRORS RUNTIME'S, PER MEMBER: the names whose full bodies
+     * this very prompt already folds (the E643 loop above) are dropped from
+     * the one-line listing, so a skill is presented exactly once — as a body
+     * where it was granted, as a line where it was not. It is per-member
+     * because the grant is per-member; the walk itself is metadata-only
+     * (registry entries are stage-1 manifests), so a batch pays one filtered
+     * sort per declaration, no body reads.
+     *
+     * NOT GATED ON THE GRANT, deliberately, and the same way the main prompt
+     * is not: Runtime lists discovered skills whether or not `disabledTools`
+     * kept `Skill` out of the engine set. Whether this member may CALL the
+     * tool is the preset's `tools:` contract, resolved at
+     * {@see resolveGrantedTools()}; the listing is the session's statement of
+     * what exists.
+     */
+    private function skillListingSection(Agent $agent): string
+    {
+        return SkillListingSection::render(
+            (new SkillMatcher())->listForPrompt($this->skillRegistry, $agent->skillNames),
+        );
+    }
+
+    /**
+     * Layer a prompt segment under a blank-line separator, tolerating either
+     * side being empty — the seam the batch splice needs because a silent
+     * member's own words are exactly the empty string.
+     */
+    private static function appendPromptLayer(string $base, string $layer): string
+    {
+        if ($layer === '') {
+            return $base;
+        }
+
+        return $base === '' ? $layer : $base . "\n\n" . $layer;
     }
 
     /**

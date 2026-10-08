@@ -198,9 +198,18 @@ final class Progress
 
     /**
      * Closure invoked per filled cell to produce a {@see Color}:
-     * `fn(int $cell, int $totalCells, float $percent): Color`.
+     * `fn(int $cell, int $filledCells, float $percent, int $barWidth): Color`.
      * Wins over every other colour setting when set. Mirrors
      * upstream `WithColorFunc`.
+     *
+     * `$filledCells` is the FILLED count, not the bar width — so the
+     * fourth arg carries the bar's true cell width (filled + empty,
+     * after any percent suffix is reserved). That gives btop's
+     * position COLOURING — cell `$i` at `round(($i + 1) * 100 / $barWidth)`
+     * through a 101-stop ramp — but not its fill count (Progress fills
+     * `round(percent * width)` cells); for exact btop fill use sugar-dash
+     * `Meter::withGradient(..., positionWise: true)`. The arg is appended, so existing three-param closures keep
+     * working (PHP drops surplus args to user closures).
      *
      * Pass `null` to clear.
      */
@@ -350,7 +359,7 @@ final class Progress
         // Precedence (highest first): colorFunc > multi-stop gradient
         // > 2-stop gradient > flat fillColor > no colour.
         if ($this->colorFunc !== null && $filledCells > 0) {
-            $full = $this->renderColorFunc($filledCells);
+            $full = $this->renderColorFunc($filledCells, $filledCells + $emptyCells);
         } elseif (count($this->gradientStops) >= 2 && $filledCells > 0) {
             $full = $this->renderMultiStopGradient($filledCells);
         } elseif ($this->gradientStart !== null && $this->gradientEnd !== null && $filledCells > 0) {
@@ -423,9 +432,9 @@ final class Progress
     /**
      * Render `$cells` filled glyphs by invoking the user's colour
      * closure for each. Closure shape:
-     * `fn(int $cell, int $totalCells, float $percent): Color`.
+     * `fn(int $cell, int $filledCells, float $percent, int $barWidth): Color`.
      */
-    private function renderColorFunc(int $cells): string
+    private function renderColorFunc(int $cells, int $barWidth): string
     {
         if ($cells <= 0 || $this->colorFunc === null) {
             return '';
@@ -433,7 +442,7 @@ final class Progress
         $out = '';
         for ($i = 0; $i < $cells; $i++) {
             /** @var Color $c */
-            $c = ($this->colorFunc)($i, $cells, $this->percent);
+            $c = ($this->colorFunc)($i, $cells, $this->percent, $barWidth);
             $out .= $c->toFg($this->profile) . $this->fullChar . Ansi::reset();
         }
         return $out;

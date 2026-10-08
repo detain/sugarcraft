@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Reviews code for quality, security, and consistency; use before committing or opening a PR on anything non-trivial.
-tools: [Read, Grep, Glob, Bash]
+tools: [Read, Grep, Glob, Bash, Skill]
 disallowedTools: [Write, Edit]
 model: sonnet
 permissionMode: plan

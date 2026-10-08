@@ -1,0 +1,5 @@
+Name    Mtu Network         Address               Ipkts Ierrs Idrop      Ibytes     Opkts Oerrs      Obytes  Coll
+em0*   1500 <Link#1>        08:00:27:aa:bb:cc       100     0     0       50000       100     0       40000     0
+tun0   1500 <Link#2>                                500     0     0      900000       400     0      800000     0
+tun0      - fe80::%tun0/64  fe80::5%tun0              0     -     -           0         0     -           0     -
+tun0      - 2001:db8::/64   2001:db8::5             500     -     -      900000       400     -      800000     -

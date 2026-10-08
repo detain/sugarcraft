@@ -73,8 +73,10 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    block, then the `Memory` tool's `recall` — before answering about prior work. Agent-scope notes
    never reach it.
 10. **Enabled skill bodies** — every skill in `$app->enabledSkills` contributes its full
-   `Skill::systemPromptContribution()` as a PerTurn section, name and body through
-   `PromptFence::escape()`. Held to `CompactorConfig`'s `skillBudgetPerSkill` and
+   `Skill::systemPromptContribution()` as a PerTurn section: display name, base
+   directory and body, each through the same `SkillPromptLine` escaping that opens
+   a `Skill` tool result, so the two announcements of one skill never disagree.
+   Held to `CompactorConfig`'s `skillBudgetPerSkill` and
    `skillBudgetCombined` tokens, measured with `TokenEstimate::ofText()`: a body over either keeps
    its `## Skill:` heading and is replaced by one line saying how to load it (the Skill tool, or
    Read on its file), never clipped. The budgets are the App's `compactorConfig` when it carries
@@ -85,7 +87,8 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    deferrals on `Runtime::skillDeferrals()`, and the launch names them in one notice (audit R1).
 11. **Skill listing** — `SkillMatcher::listForPrompt()` names the remaining *discovered* skills at
     level-1 metadata (name and description), excluding those whose bodies the previous slot
-    already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble, because
+    already carries. PerTurn. Fenced `available-skills` with the skill-listing preamble and
+    the proactive-use mandate line beneath it (`SkillListingSection` assembles both), because
     names and descriptions are skill authors' text — a cloned checkout's `.claude/skills` among
     them, read with no trust gate. Every line goes through `SkillPromptLine::render()`: collapsed
     to one line, `PromptFence::escape()`d, then clipped to `SkillPromptLine::LISTING_MAX_BYTES`, and
@@ -406,9 +409,12 @@ The provenance voice rides under its opener, split from the escaped body by a bl
 `Runtime::USER_RULES_AUTHORITY_PREAMBLE` asserts operator authorship and states where it outranks
 and where it yields; `Runtime::INSTRUCTIONS_AUTHORITY_PREAMBLE` asserts repository-maintainer
 authorship and disclaims precedence over the harness layers above;
-`Runtime::SKILL_LISTING_AUTHORITY_PREAMBLE` says the listing is harness-assembled while each
-entry's text is its skill author's, explains the provenance badge and disclaims precedence the same
-way; the `repo-map` and
+`SkillListingSection::PREAMBLE` (aliased as `Runtime::SKILL_LISTING_AUTHORITY_PREAMBLE`) says the
+listing is harness-assembled while each entry's text is its skill author's, explains the provenance
+badge and disclaims precedence the same way, and `SkillListingSection::MANDATE` rides directly
+beneath it — one line telling the model that when a listed description covers the task it must load
+and follow that skill through the `Skill` tool before starting, balanced against the preamble's
+statement that the listing is advisory metadata; the `repo-map` and
 `project-memory` fences open with count-bearing headers their block classes render instead of
 preambles, because those layers describe derived state rather than claim authority.
 

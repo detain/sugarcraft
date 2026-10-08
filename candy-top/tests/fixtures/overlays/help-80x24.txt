@@ -1,0 +1,24 @@
+╭─┐¹c██████╗e█████╗e███╗*┌─██╗██████╗2██╗3:2██╗─████████╗─██████╗─██████╗ms +┌─╮
+│ CP██╔════╝██╔══██╗████╗  ██║██╔══██╗╚██╗e██╔╝5╚══██╔══╝██╔═══██╗██╔══██╗────╮│
+│ Lo██║AVG: ███████║██╔██╗ ██║██║  ██║0╚████╔╝    C██║  5██║   ██║██████╔╝    ││
+│ up██║ 00:0██╔══██║██║╚██╗██║██║  ██║1 ╚██╔╝%    C██║  2██║   ██║██╔═══╝     ││
+│   ╚██████╗██║  ██║██║ ╚████║██████╔╝2  ██║0%    C██║  1╚██████╔╝██║         ││
+│    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
+╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
+│        Key:        Description:                                            │─╯
+│       Mouse 1      Clicks buttons and selects in process list.             │─╮
+│    Mouse scroll    Scrolls any scrollable list/text under cursor.          │%│
+│       Esc, m       Toggles main menu.                                      │8│
+│          p         Cycle view presets forwards.                            │0│
+│      shift + p     Cycle view presets backwards.                           │6│
+│          1         Toggle CPU box.                                         │5│
+│          2         Toggle MEM box.                                         │9│
+│          3         Toggle NET box.                                         │2│
+│          4         Toggle PROC box.                                        │6│
+│          d         Toggle disks view in MEM box.                           │6│
+│        F2, o       Shows options.                                          │ │
+│      F1, ?, h      Shows this window.                                      │ │
+│      ctrl + r      Reloads config file from disk.                          │ │
+│     q, ctrl + c    Quits program.                                          │ │
+│       +, -, =      Add/Subtract 100ms to/from update timer.                │ │
+╰─┘↑ page 1/4 ↓└─────────────────────────────────────────────────────────────╯─╯

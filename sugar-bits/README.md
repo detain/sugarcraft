@@ -27,7 +27,8 @@ composer require sugarcraft/sugar-bits
 ## Components
 
 9 first-party components: Help, Key, Progress (includes AnimatedProgress
-spring-variant), Timer, Stopwatch, Paginator, Tree, Table, Tabs.
+spring-variant), Timer, Stopwatch, Paginator, Tree, Table, Tabs — plus
+two btop-derived render helpers, `Input\TextEdit` and `Menu\OptionRow`.
 8 deprecated alias re-exports from `sugarcraft/candy-forms`:
 Cursor, TextInput, TextArea, Viewport, ItemList, FilePicker, Scrollbar,
 Spinner.
@@ -52,6 +53,8 @@ Spinner.
 | `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
 | `Scrollbar\Scrollbar` | Scrollbar indicator for scrollable viewports _(deprecated alias — re-exported from `SugarCraft\Forms\Scrollbar`)_ | — |
+| `Input\TextEdit` | Inline single-line editor value object with an underline caret (no hardware cursor), grapheme-cluster caret, cell-budget windowing, digits-only mode — btop `Draw::TextEdit` | — |
+| `Menu\OptionRow` | Static renderer for btop's two-line options-menu row (bold centred name + `← value →` / `↵` line, live `TextEdit` while editing) | — |
 
 ### Vim mode
 
@@ -321,6 +324,106 @@ $paginator = $t->paginator();    // Paginator instance
 | `paginator(): Paginator` | Return a `Paginator` instance wired to the table's current page state |
 
 Pagination works with sort and filter: changing the sort order, filter query, or page size automatically re-clamps the cursor to the first row of the current page so the cursor never points to a row outside the current page boundary.
+
+## btop helpers — TextEdit, OptionRow, position-coloured Progress
+
+Three pieces added for [candy-top](https://github.com/detain/sugarcraft/tree/master/candy-top) (the btop-inspired system monitor) that are
+useful to any TUI drawing overlays, option screens or gradient meters.
+
+### `Input\TextEdit` — underline-caret inline editor
+
+A pure immutable value object (not a Model–Update–View component) mirroring btop
+`Draw::TextEdit` — the proc filter bar and options-menu value editor. The
+caret is drawn as an SGR underline (`TextEdit::UL` / `TextEdit::UUL`) on
+the cluster under it, so several editors can be on screen while the
+hardware cursor stays hidden. For a focusable, blinking, validated input
+use `TextInput` instead.
+
+```php
+use SugarCraft\Bits\Input\TextEdit;
+
+$edit = TextEdit::new('firefox')   // caret defaults to the end
+    ->home()->right()->right()     // caret on "r"
+    ->insert('X')                  // "fiXrefox"
+    ->backspace();                 // "firefox", caret 2
+echo $edit->view();                // "fi\e[4mr\e[24mefox"
+echo TextEdit::new('a-very-long-filter-string')->view(10); // "er-string\e[4m \e[24m"
+
+$pid = TextEdit::new('', numeric: true)->insert('12')->insert('a')->insert('3');
+echo $pid->text();                 // "123" — non-digit input is rejected whole
+```
+
+- `new(string $text = '', ?int $caret = null, bool $numeric = false)`;
+  accessors `text()` / `caret()` / `numeric()` / `length()`.
+- Editing: `left()` / `right()` / `home()` / `end()` / `withCaret(int)`
+  (clamped) / `insert(string)` / `backspace()` / `delete()` / `clear()`.
+- The caret counts **grapheme clusters** (a ZWJ emoji or combining
+  sequence moves and deletes as one); `view(int $limit = 0)` budgets in
+  **display cells**, windowing around the caret with btop's half-budget
+  law. Unlike btop, the end-caret cell is charged to the budget, so
+  output never exceeds `$limit`. `$limit <= 0` is unlimited.
+- `withNumeric(bool $on = true)` strips existing non-digits (keeping the
+  caret on the same surviving digit) so `text()` is always parseable.
+
+### `Menu\OptionRow` — btop options-menu geometry
+
+`OptionRow::render(...)` returns the two-line row from btop
+`Menu::optionsMenu`: line 1 the bold name centred in `$nameCol` (default
+`OptionRow::NAME_COL` = 29), line 2 `"  " + value centred in $valueCol
+(VALUE_COL = 25) + "  "`, with `←` / `→` on the selected row (while not editing) when
+`$hasArrows` and `↵` (or `E` with `tty: true`) when `$editable`. Passing a
+`TextEdit` with `editing: true` renders its underline-caret view in
+`valueCol - 1` cells.
+
+```php
+use SugarCraft\Bits\Input\TextEdit;
+use SugarCraft\Bits\Menu\OptionRow;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Sprinkles\Style;
+
+echo OptionRow::render(
+    'Update ms',
+    TextEdit::new('2000', numeric: true),
+    selected: true,
+    editing: true,
+    hasArrows: true,
+    editable: true,
+    selBg: Style::new()->background(Color::hex('#3d59a1')),
+    selFg: Style::new()->foreground(Color::hex('#ffffff')),
+);
+```
+
+Centering follows btop `cjust` (the odd spare column goes on the left,
+the opposite of `Width::padCenter()`); over-wide text truncates to the
+column in display cells. The selected style deliberately bleeds into the
+value line, so the selected option reads as one two-row block. Optional
+`title:` / `main:` styles colour the unselected name / value.
+
+### `Progress::withColorFunc` — bar width as a 4th argument
+
+The colour closure is now called
+`fn(int $i, int $filledCells, float $percent, int $barWidth): Color` —
+`$barWidth` is the true cell width (filled + empty, after any percent
+suffix). That lets each filled cell take its colour from its *position*
+on a 101-stop ramp, btop-style. Three-parameter closures keep working.
+
+```php
+use SugarCraft\Bits\Progress\Progress;
+use SugarCraft\Core\Util\Color;
+
+$ramp = Color::hex('#50fa7b')->blend1d(Color::hex('#ff5555'), 101);
+echo Progress::new()
+    ->withWidth(20)
+    ->withShowPercent(false)
+    ->withPercent(0.6)
+    ->withColorFunc(static fn (int $i, int $filled, float $pct, int $barWidth): Color
+        => $ramp[(int) round(($i + 1) * 100 / $barWidth)])
+    ->view();
+```
+
+This gives btop's *colouring*, not its fill count (Progress fills
+`round(percent * width)` cells). For an exact btop meter use sugar-dash
+`Meter::withGradient($stops, positionWise: true)`.
 
 ## Snapshot tests
 

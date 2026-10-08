@@ -655,7 +655,9 @@ final class SystemPromptWiringTest extends TestCase
             'the enabled body must reach the provider prompt exactly once (P7.S3)',
         );
         $this->assertStringContainsString(
-            "## Skill: enabled-body-skill\n\n# enabled-body-skill\n\nBody.\n",
+            "## Skill: enabled-body-skill\n\n"
+            . '> Base directory for this skill: ' . dirname($skill->sourcePath) . "\n\n"
+            . "# enabled-body-skill\n\nBody.\n",
             $prompt,
             'the spliced bytes must be exactly Skill::systemPromptContribution() for the SKILL.md the loader read',
         );

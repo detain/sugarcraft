@@ -3258,10 +3258,11 @@ final class DocFigureProseDriftTest extends TestCase
      * E686 tranche-9 (AS): the SKILLS.md tier counts and the merge orders the
      * page's precedence paragraphs state are re-counted from the walks they
      * cite — three native directory calls in priority order in
-     * {@see SkillLoader::manifestTiers()} (folded by loadAllManifests()), four
-     * foreign tree suffixes across the two discoverers in
-     * {@see ForeignSkillDiscovery}, the tier-first, then claude/opencode/native
-     * registration order in {@see SkillManager::loadAll()} (audit 15d-03(b)),
+     * {@see SkillLoader::manifestTiers()} (folded by loadAllManifests()), seven
+     * foreign tree suffixes across the three discoverers in
+     * {@see ForeignSkillDiscovery}, the tier-first, then
+     * spec/claude/opencode/native registration order in
+     * {@see SkillManager::loadAll()} (audit 15d-03(b)),
      * and the user-after-project append inside tiers().
      */
     public function testSkillsPageTierCountsMatchTheWalksTheyCite(): void
@@ -3271,10 +3272,10 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/walks ' . \preg_quote($bold, '/') . 'three' . \preg_quote($bold, '/') . ' native locations; a separate discovery class walks ' . \preg_quote($bold, '/') . 'four' . \preg_quote($bold, '/') . ' foreign ones/', $skills),
+            preg_match('/walks ' . \preg_quote($bold, '/') . 'three' . \preg_quote($bold, '/') . ' native locations; a separate discovery class walks ' . \preg_quote($bold, '/') . 'seven' . \preg_quote($bold, '/') . ' foreign ones/', $skills),
             'the opening sentence no longer states both tier counts in one breath — re-pin with the prose, do not delete it',
         );
-        $wordNumbers = ['three' => 3, 'four' => 4];
+        $wordNumbers = ['three' => 3, 'seven' => 7];
 
         $loader = self::sourceOf('Skills/SkillLoader.php');
         $tiersBody = self::bodyExcerpt($loader, 'manifestTiers', 1500);
@@ -3284,6 +3285,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the native walk no longer calls its three directory methods through $this — the pin lost its ground',
         );
         self::assertSame(3, $wordNumbers['three'] ?? -1, 'the sentence spelled its native count as something other than three');
+        self::assertSame(7, $wordNumbers['seven'] ?? -1, 'the sentence spelled its foreign count as something other than seven');
         self::assertSame(
             ['builtInSkillsDir', 'projectSkillsDir', 'userSkillsDir'],
             $native[1],
@@ -3311,15 +3313,15 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/\| built-in \|.*\| project \|.*\| user \|/', $skills),
             'the tier table no longer lists built-in, project, user top to bottom — lowest precedence first, as SkillOrigin::precedence() orders them',
         );
-        self::assertStringContainsString('built-in < project: claude < opencode < native < user: claude < opencode < native', $skills, 'the precedence diagram no longer matches the tier-then-format order SkillManager::loadAll() registers in');
+        self::assertStringContainsString('built-in < project: spec < claude < opencode < native < user: spec < claude < opencode < native', $skills, 'the precedence diagram no longer matches the tier-then-format order SkillManager::loadAll() registers in');
 
         $foreign = self::sourceOf('Skills/ForeignSkillDiscovery.php');
         self::assertSame(
-            2,
+            3,
             preg_match_all('/self::tiers\(([^)]*)\)/', $foreign, $tierCalls),
-            'ForeignSkillDiscovery no longer builds its trees through tiers() — the four-suffix count lost its ground',
+            'ForeignSkillDiscovery no longer builds its trees through tiers() — the seven-suffix count lost its ground',
         );
-        self::assertCount(2, $tierCalls[0], 'a third foreign convention arrived — the page names exactly two discoverers');
+        self::assertCount(3, $tierCalls[0], 'a fourth foreign convention arrived — the page names exactly three discoverers');
         $suffixes = [];
         foreach ($tierCalls[1] as $arguments) {
             preg_match_all("/'([^']+)'/", $arguments, $quoted);
@@ -3328,25 +3330,28 @@ final class DocFigureProseDriftTest extends TestCase
             }
         }
 
-        self::assertSame(4, count($suffixes), 'the two discoverers no longer pass four tree suffixes between them — "four foreign ones" went stale');
+        self::assertSame(7, count($suffixes), 'the three discoverers no longer pass seven tree suffixes between them — "seven foreign ones" went stale');
         self::assertSame(
             1,
-            preg_match('/' . \preg_quote($bold, '/') . 'four' . \preg_quote($bold, '/') . ' foreign ones/', $skills),
+            preg_match('/' . \preg_quote($bold, '/') . 'seven' . \preg_quote($bold, '/') . ' foreign ones/', $skills),
             'the foreign count left the opening sentence',
         );
-        self::assertStringContainsString('`<root>/.claude/skills`, `~/.claude/skills`, `<root>/.opencode/skills`, `~/.config/opencode/skills`', $skills, 'the page no longer enumerates the four foreign trees the discoverers walk');
+        self::assertStringContainsString('`<root>/.agents/skills`, `~/.agents/skills`, `<root>/.claude/skills`, `~/.claude/skills`, `<root>/.opencode/skills`, `~/.opencode/skills`, `~/.config/opencode/skills`', $skills, 'the page no longer enumerates the seven foreign trees the discoverers walk, lowest cross-convention priority first');
         self::assertStringContainsString('`src/Skills/ForeignSkillDiscovery.php`', $skills, 'the page lost its pointer to the discovery class');
 
         $managerBody = self::bodyExcerpt(self::sourceOf('Skills/SkillManager.php'), 'loadAll');
         $tierLoopAt = strpos($managerBody, 'foreach (SkillOrigin::precedence() as $tier)');
+        $agentsAt = strpos($managerBody, '$agents[$tier->value]');
         $claudeAt = strpos($managerBody, '$claude[$tier->value]');
         $opencodeAt = strpos($managerBody, '$opencode[$tier->value]');
         $nativeAt = strpos($managerBody, 'registerFromManifest(');
         self::assertIsInt($tierLoopAt, 'loadAll() no longer walks SkillOrigin::precedence() tier by tier — "the tier decides first" is that loop');
+        self::assertIsInt($agentsAt);
         self::assertIsInt($claudeAt);
         self::assertIsInt($opencodeAt);
         self::assertIsInt($nativeAt);
-        self::assertTrue($tierLoopAt < $claudeAt, 'the foreign trees are no longer registered inside the tier loop — the tier would no longer decide first');
+        self::assertTrue($tierLoopAt < $agentsAt, 'the foreign trees are no longer registered inside the tier loop — the tier would no longer decide first');
+        self::assertTrue($agentsAt < $claudeAt, 'loadAll() no longer registers the .agents/skills spec tree before Claude inside a tier — the page says the fixed order is spec < claude < opencode, which needs this order');
         self::assertTrue($claudeAt < $opencodeAt, 'loadAll() no longer registers Claude before opencode inside a tier — the page says opencode wins cross-convention, which needs this order');
         self::assertTrue($opencodeAt < $nativeAt, 'the native manifests no longer land AFTER a tier\'s foreign trees — "inside one tier, native wins" is this order');
 

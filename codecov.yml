@@ -102,6 +102,9 @@ flag_management:
     - name: candy-tetris
       paths: ["candy-tetris/src/**"]
       carryforward: true
+    - name: candy-top
+      paths: ["candy-top/src/**"]
+      carryforward: true
     - name: candy-files
       paths: ["candy-files/src/**"]
       carryforward: true
@@ -359,6 +362,12 @@ component_management:
         - "candy-tetris/src/**"
       flag_regexes:
         - "^candy-tetris$"
+    - component_id: candy-top
+      name: candy-top
+      paths:
+        - "candy-top/src/**"
+      flag_regexes:
+        - "^candy-top$"
     - component_id: candy-files
       name: candy-files
       paths:

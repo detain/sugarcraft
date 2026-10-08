@@ -596,6 +596,128 @@ final class ProgramTest extends TestCase
         fclose($out);
     }
 
+    /**
+     * A resize must repaint from scratch: on a shrink the line-diff path
+     * erased the vanished rows with cursorTo(row > height), which a real
+     * terminal clamps onto the new last row — wiping the row just painted
+     * there (candy-top's bottom border vanished after a tmux resize).
+     */
+    public function testResizeRepaintsFromScratchInsteadOfDiffing(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $model = new class () implements Model {
+            use \SugarCraft\Core\SubscriptionCapable;
+
+            public int $rows = 0;
+
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+
+            public function update(Msg $msg): array
+            {
+                $next = clone $this;
+                if ($msg instanceof WindowSizeMsg) {
+                    $next->rows = $msg->rows;
+                }
+
+                return [$next, null];
+            }
+
+            public function view(): string
+            {
+                return implode("\n", array_map(static fn (int $i): string => 'row' . $i, range(1, max(1, $this->rows))));
+            }
+        };
+        $opts = new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+            windowSize: ['cols' => 20, 'rows' => 4],
+        );
+        $program = new Program($model, $opts);
+        $loop->addTimer(0.1, static fn () => $program->send(new WindowSizeMsg(20, 2)));
+        $loop->addTimer(0.4, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        rewind($out);
+        $bytes = (string) stream_get_contents($out);
+        $full = Ansi::cursorTo(1, 1) . Ansi::eraseToEnd();
+        $this->assertSame(2, substr_count($bytes, $full), 'startup frame and post-resize frame both paint from scratch');
+        $this->assertStringNotContainsString(Ansi::cursorTo(3, 1) . Ansi::eraseLine(), $bytes);
+        $this->assertStringContainsString($full . "row1\r\nrow2", $bytes);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * Inline mode is exempt from the resize reset: its renderer already
+     * repaints the whole region via cursorRestore, and a reset would
+     * re-save the cursor below the old frame and paint a duplicate.
+     */
+    public function testResizeInInlineModeKeepsTheSavedOrigin(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $model = new class () implements Model {
+            use \SugarCraft\Core\SubscriptionCapable;
+
+            public int $cols = 0;
+
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+
+            public function update(Msg $msg): array
+            {
+                $next = clone $this;
+                if ($msg instanceof WindowSizeMsg) {
+                    $next->cols = $msg->cols;
+                }
+
+                return [$next, null];
+            }
+
+            public function view(): string
+            {
+                return 'width ' . $this->cols;
+            }
+        };
+        $opts = new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            inlineMode: true,
+            input: $in,
+            output: $out,
+            loop: $loop,
+            windowSize: ['cols' => 20, 'rows' => 4],
+        );
+        $program = new Program($model, $opts);
+        $loop->addTimer(0.1, static fn () => $program->send(new WindowSizeMsg(30, 4)));
+        $loop->addTimer(0.4, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+        $program->run();
+
+        rewind($out);
+        $bytes = (string) stream_get_contents($out);
+        $this->assertSame(1, substr_count($bytes, Ansi::cursorSave()), 'the inline origin is saved once, never re-saved on resize');
+        $this->assertStringContainsString(Ansi::cursorRestore() . Ansi::eraseToEnd() . 'width 30', $bytes);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
     public function testColorProfileOverrideReplacesAutoDetect(): void
     {
         [$in, $out, $writer] = $this->pipes();

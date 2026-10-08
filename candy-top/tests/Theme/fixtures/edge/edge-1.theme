@@ -1,0 +1,4 @@
+theme[main_bg]=""
+theme[cpu_mid]=""
+theme[temp_end]=""
+theme[process_start]="#112233"

@@ -37,6 +37,13 @@ final class LineChart extends Chart
     private const DATASET_COLORS = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan'];
 
     /**
+     * Series name the unnamed primary `$data` series is plotted under —
+     * the `$dataset` argument a {@see withSeriesColorFn()} resolver
+     * receives for it.
+     */
+    public const PRIMARY_SERIES = '_primary';
+
+    /**
      * @param list<int|float>            $data
      * @param array<string,list<int|float>> $datasets  named multi-series
      * @param array<string,string>       $datasetPoints  per-series rune override
@@ -45,6 +52,7 @@ final class LineChart extends Chart
      * @param ?array<string,string>      $lineStyle  axis runeset override (a Graph::LINE_* preset); null = LINE_THIN
      * @param list<MarkLine>             $markLines  horizontal reference-line annotations; [] (default) draws nothing
      * @param bool                       $unicodeConnectors  draw connectors with `│ ─ ╱ ╲` instead of ASCII `| - / \`
+     * @param ?\Closure                  $seriesColorFn  per-point color resolver, see {@see withSeriesColorFn()}; null = per-series colors only
      */
     public function __construct(
         public readonly array $data,
@@ -82,6 +90,7 @@ final class LineChart extends Chart
         public readonly bool $unicodeConnectors = false,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
+        public readonly ?\Closure $seriesColorFn = null,
     ) {
         parent::__construct(
             width: $width,
@@ -313,6 +322,29 @@ final class LineChart extends Chart
     }
 
     /**
+     * Per-point color resolver: `fn(string $dataset, int $x, float $value): ?Color`.
+     * A non-null Color overrides the series color for that sample's dot,
+     * its fill run, and the connector segment leaving it; null falls
+     * through to the existing per-series resolution (legend color in
+     * braille mode, unstyled in cell mode). `$dataset` is the series name
+     * ({@see PRIMARY_SERIES} for the unnamed `$data` series) and `$x` the
+     * sample's index in that series. WHY: btop colors every graph point
+     * by its value through the theme gradient, so one color per series is
+     * too coarse for value-heat graphs. Mirrors btop's per-value
+     * `Theme::g(...).at(value)` lookup (btop_draw.cpp Graph::_create).
+     *
+     * Passing null restores the default path, which renders
+     * byte-identically to a chart that never set a resolver.
+     *
+     * @throws \UnexpectedValueException at render time when the resolver
+     *         returns anything other than a Color or null
+     */
+    public function withSeriesColorFn(?\Closure $fn): self
+    {
+        return $this->lineChartCopy(seriesColorFn: $fn, seriesColorFnSet: true);
+    }
+
+    /**
      * X-axis labels (rendered under the axis when `withAxes(true)` is set).
      * @param list<string> $labels
      */
@@ -362,6 +394,8 @@ final class LineChart extends Chart
     public function markLines(array $marks): self { return $this->withMarkLines($marks); }
     /** Short-form alias for {@see withUnicodeConnectors()}. */
     public function unicodeConnectors(bool $on = true): self { return $this->withUnicodeConnectors($on); }
+    /** Short-form alias for {@see withSeriesColorFn()}. */
+    public function seriesColorFn(?\Closure $fn): self { return $this->withSeriesColorFn($fn); }
 
     // ─── Chart Property Overrides ───────────────────────────────────────
     // Override Chart's methods to use lineChartCopy() so LineChart properties are preserved
@@ -556,7 +590,7 @@ final class LineChart extends Chart
         $plotH = max(1, $this->height - $gutterBottom);
 
         // Plot primary + named series on the same axes.
-        $allSeries = ['_primary' => $this->data] + $this->datasets;
+        $allSeries = [self::PRIMARY_SERIES => $this->data] + $this->datasets;
         if ($this->brailleCanvas !== null) {
             // Audit F11: braille mode — series rasterize into a dot grid
             // (2×4 dots per cell) so per-dataset legend colors reach the
@@ -564,19 +598,24 @@ final class LineChart extends Chart
             // space above/below the dot region.
             $this->renderBrailleSeries($canvas, $allSeries, (float) $min, (float) $max, $gutterLeft, $plotW, $plotH, $progress);
         } else {
+            /** @var array<string,Style> $pointStyleMemo */
+            $pointStyleMemo = [];
             foreach ($allSeries as $name => $values) {
                 if ($values === []) {
                     continue;
                 }
                 $points  = count($values) > $plotW ? array_slice($values, -$plotW) : $values;
                 $count   = count($points);
-                $rune    = $name === '_primary'
+                $rune    = $name === self::PRIMARY_SERIES
                     ? $this->point
                     : ($this->datasetPoints[$name] ?? $this->point);
 
                 // Compute max point index based on animation progress
                 // Clamp to [0, count] to ensure we don't try to access beyond array bounds
                 $maxPointIndex = min($count, max(0, (int) floor($count * $progress)));
+                // Tail-slicing drops leading samples; resolver x stays the
+                // sample's index in the full series.
+                $xOffset = count($values) - $count;
 
                 $coords = [];
                 foreach ($points as $i => $v) {
@@ -592,11 +631,16 @@ final class LineChart extends Chart
                         break;
                     }
                     [$x, $y] = $coords[$i];
-                    $canvas->setCell($x, $y, $rune);
+                    // No resolver → no per-point style: the unstyled
+                    // default stays byte-identical.
+                    $style = $this->seriesColorFn === null
+                        ? null
+                        : $this->pointStyle((string) $name, $xOffset + $i, (float) $points[$i], null, $pointStyleMemo);
+                    $canvas->setCell($x, $y, $rune, $style);
                     // Draw connector to next point if within animation bounds
                     if ($i + 1 < $maxPointIndex) {
                         [$x2, $y2] = $coords[$i + 1];
-                        self::drawConnector($canvas, $x, $y, $x2, $y2, $this->unicodeConnectors);
+                        self::drawConnector($canvas, $x, $y, $x2, $y2, $this->unicodeConnectors, $style);
                     }
                     // Area fill: paint from baseline up to the point row.
                     if ($this->fill) {
@@ -604,7 +648,7 @@ final class LineChart extends Chart
                         $top = min($baseline, $y);
                         $bottom = max($baseline, $y);
                         for ($fy = $top; $fy <= $bottom; $fy++) {
-                            $canvas->setCell($x, $fy, $rune);
+                            $canvas->setCell($x, $fy, $rune, $style);
                         }
                     }
                 }
@@ -685,6 +729,8 @@ final class LineChart extends Chart
         $styleMemo = [];
         /** @var array<int, array<int, Style|null>> [cellY][cellX] last series to touch wins */
         $cellStyles = [];
+        /** @var array<string,Style> $pointStyleMemo */
+        $pointStyleMemo = [];
 
         foreach ($allSeries as $name => $values) {
             if ($values === []) {
@@ -698,7 +744,8 @@ final class LineChart extends Chart
             if ($colorName !== null && !array_key_exists($colorName, $styleMemo)) {
                 $styleMemo[$colorName] = self::styleForColor($colorName);
             }
-            $style = $colorName === null ? null : $styleMemo[$colorName];
+            $seriesStyle = $colorName === null ? null : $styleMemo[$colorName];
+            $xOffset = count($values) - $count;
 
             $coords = [];
             foreach ($points as $i => $v) {
@@ -711,6 +758,9 @@ final class LineChart extends Chart
 
             for ($i = 0; $i < $maxPointIndex; $i++) {
                 [$dx, $dy] = $coords[$i];
+                $style = $this->seriesColorFn === null
+                    ? $seriesStyle
+                    : $this->pointStyle((string) $name, $xOffset + $i, (float) $points[$i], $seriesStyle, $pointStyleMemo);
                 $grid->set($dx, $dy);
                 $cellStyles[intdiv($dy, 4)][intdiv($dx, 2)] = $style;
                 if ($i + 1 < $maxPointIndex) {
@@ -734,6 +784,31 @@ final class LineChart extends Chart
                 $canvas->setCell($gutterLeft + $cx, (int) $cy, $grid->rune($cx, (int) $cy), $style);
             }
         }
+    }
+
+    /**
+     * Run the per-point resolver for one sample. A returned Color becomes
+     * a foreground style memoized by its SGR identity (so a gradient
+     * resolver handing back fresh Color objects per sample still shares
+     * one Style per distinct color); null keeps `$fallback`, the series'
+     * own style.
+     *
+     * @param array<string,Style> $memo
+     */
+    private function pointStyle(string $dataset, int $x, float $value, ?Style $fallback, array &$memo): ?Style
+    {
+        $color = ($this->seriesColorFn)($dataset, $x, $value);
+        if ($color === null) {
+            return $fallback;
+        }
+        if (!$color instanceof Color) {
+            throw new \UnexpectedValueException(Lang::t('linechart.color_return', [
+                'expected' => Color::class,
+                'given'    => get_debug_type($color),
+            ]));
+        }
+        $key = $color->r . ',' . $color->g . ',' . $color->b . ',' . ($color->ansiIndex ?? '-');
+        return $memo[$key] ??= Style::new()->fg($color);
     }
 
     /**
@@ -935,6 +1010,8 @@ final class LineChart extends Chart
         ?bool $unicodeConnectors = null,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
+        ?\Closure $seriesColorFn = null,
+        bool $seriesColorFnSet = false,
     ): self {
         return new self(
             data:               $data               ?? $this->data,
@@ -972,6 +1049,7 @@ final class LineChart extends Chart
             unicodeConnectors: $unicodeConnectors ?? $this->unicodeConnectors,
             brailleCanvas:     $brailleCanvas     ?? $this->brailleCanvas,
             theme:             $theme             ?? $this->theme,
+            seriesColorFn:     $seriesColorFnSet ? $seriesColorFn : $this->seriesColorFn,
         );
     }
 
@@ -984,9 +1062,10 @@ final class LineChart extends Chart
      * Draw a coarse connector between two points using line-art glyphs —
      * ASCII `| - \ /` by default, or the Unicode `│ ─ ╱ ╲` set when the
      * `unicodeConnectors` flag is on (slope mapping identical to
-     * {@see Waveline::connectorRune()}).
+     * {@see Waveline::connectorRune()}). `$style` is the per-point style
+     * of the segment's starting sample (null = unstyled).
      */
-    private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2, bool $unicode): void
+    private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2, bool $unicode, ?Style $style = null): void
     {
         if ($x2 < $x1) {
             return;
@@ -1000,7 +1079,7 @@ final class LineChart extends Chart
             $vertical = $unicode ? '│' : '|';
             $step = $y2 > $y1 ? 1 : -1;
             for ($y = $y1 + $step; $y !== $y2; $y += $step) {
-                $c->setCell($x1, $y, $vertical);
+                $c->setCell($x1, $y, $vertical, $style);
             }
             return;
         }
@@ -1009,7 +1088,7 @@ final class LineChart extends Chart
         if ($dy === 0) {
             $horizontal = $unicode ? '─' : '-';
             for ($x = $x1 + 1; $x < $x2; $x++) {
-                $c->setCell($x, $y1, $horizontal);
+                $c->setCell($x, $y1, $horizontal, $style);
             }
             return;
         }
@@ -1018,7 +1097,7 @@ final class LineChart extends Chart
         for ($x = $x1 + 1; $x < $x2; $x++) {
             $t   = ($x - $x1) / $dx;
             $row = (int) round($y1 + $t * $dy);
-            $c->setCell($x, $row, $slope);
+            $c->setCell($x, $row, $slope, $style);
         }
     }
 }

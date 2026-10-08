@@ -484,11 +484,13 @@ final class Message implements \JsonSerializable
     /**
      * Attach a file. `$contents` is the snapshot {@see Attachment::$data} the
      * wire inlines; see {@see Attachment} for why it is captured once.
+     * `$skill` (lane B) names the skill when the attachment IS a mentioned
+     * skill's body, so the transcript chip can say which SKILL.md it is.
      */
-    public function attachFile(string $path, ?string $contents = null): self
+    public function attachFile(string $path, ?string $contents = null, ?string $skill = null): self
     {
         return $this->mutate([
-            'attachments' => [...$this->attachments, new Attachment($path, AttachmentType::File, $contents)],
+            'attachments' => [...$this->attachments, new Attachment($path, AttachmentType::File, $contents, skill: $skill)],
         ]);
     }
 
@@ -921,6 +923,7 @@ final class Message implements \JsonSerializable
                         // so a path-only row persists exactly as it always did.
                         ...($a->data === null ? [] : ['dataBase64' => base64_encode($a->data)]),
                         ...($a->mimeType === null ? [] : ['mimeType' => $a->mimeType]),
+                        ...($a->skill === null ? [] : ['skill' => $a->skill]),
                     ]
                     : $a,
                 $this->attachments,
@@ -1016,6 +1019,9 @@ final class Message implements \JsonSerializable
                     $type,
                     $bytes($a['dataBase64'] ?? null),
                     $string($a['mimeType'] ?? null),
+                    // Snapshots written before lane B carry no key: null, and
+                    // the chip falls back to the basename exactly as it did.
+                    $string($a['skill'] ?? null),
                 );
             }
         }

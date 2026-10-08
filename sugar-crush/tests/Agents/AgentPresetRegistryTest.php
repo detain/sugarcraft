@@ -548,7 +548,7 @@ YAML;
             'Implements features and fixes bugs in PHP code; writes new files, edits existing code, and runs tests.',
             $preset->description
         );
-        $this->assertSame(['Read', 'Write', 'Edit', 'Bash', 'Grep'], $preset->tools);
+        $this->assertSame(['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Skill'], $preset->tools);
         $this->assertSame(PermissionMode::AcceptEdits, $preset->permissionMode);
         $this->assertSame(Isolation::Worktree, $preset->isolation);
     }

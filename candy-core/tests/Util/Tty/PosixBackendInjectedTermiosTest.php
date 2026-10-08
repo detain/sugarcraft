@@ -92,6 +92,45 @@ final class PosixBackendInjectedTermiosTest extends TestCase
         $this->assertSame(1, $stub->makeRawCalls, 'enableRawMode must short-circuit when termios already set');
     }
 
+    /**
+     * A hung-up terminal (tmux kill-session → SIGHUP, pty master gone) makes
+     * the restore tcsetattr fail. Teardown must not throw — Program::run()
+     * would never return its model — and the snapshot must be dropped so
+     * __destruct() does not throw a second time at shutdown.
+     */
+    public function testRestoreToleratesAHungUpTerminal(): void
+    {
+        $stub = new SpyTermios();
+        $stub->hungUp = true;
+        $backend = new PosixBackend(\STDIN, $stub);
+        $backend->enableRawMode();
+
+        $backend->restore();
+        $this->assertSame(1, $stub->saved->restoreCalls, 'the restore is still attempted');
+
+        $backend->restore();
+        $backend->__destruct();
+        $this->assertSame(1, $stub->saved->restoreCalls, 'the failed snapshot is not retried');
+    }
+
+    /** A restore failure on a terminal that is still there is a real error. */
+    public function testRestoreFailureOnALiveTerminalStillThrows(): void
+    {
+        $stub = new SpyTermios();
+        $stub->failRestore = true;
+        $backend = new PosixBackend(\STDIN, $stub);
+        $backend->enableRawMode();
+
+        try {
+            $backend->restore();
+            $this->fail('a live tty restore failure must propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('tcsetattr failed', $e->getMessage());
+        }
+        $backend->__destruct();
+        $this->assertSame(1, $stub->saved->restoreCalls, 'dropped anyway: the destructor does not throw it again');
+    }
+
     public function testRestoreWithoutPriorEnableIsNoop(): void
     {
         $stub = new SpyTermios();
@@ -135,6 +174,12 @@ final class SpyTermios implements Termios
     public int $applyCalls = 0;
     public int $restoreCalls = 0;
 
+    /** The tty hung up: restore() fails and isAtty() says no (tcgetattr EIO). */
+    public bool $hungUp = false;
+
+    /** restore() fails while the tty is still there. */
+    public bool $failRestore = false;
+
     public SpyTermios $saved;
     public SpyTermios $raw;
 
@@ -151,6 +196,8 @@ final class SpyTermios implements Termios
     {
         $this->currentCalls++;
         $snapshot = new self('snapshot');
+        $snapshot->hungUp = $this->hungUp;
+        $snapshot->failRestore = $this->failRestore;
         $this->saved = $snapshot;
         return $snapshot;
     }
@@ -171,10 +218,13 @@ final class SpyTermios implements Termios
     public function restore(): void
     {
         $this->restoreCalls++;
+        if ($this->hungUp || $this->failRestore) {
+            throw new \RuntimeException('tcsetattr failed on fd 0 with when=0');
+        }
     }
 
     public function isAtty(): bool
     {
-        return true;
+        return !$this->hungUp;
     }
 }

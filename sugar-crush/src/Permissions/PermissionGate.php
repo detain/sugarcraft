@@ -1073,7 +1073,7 @@ final class PermissionGate
     }
 
     /**
-     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/Lsp)
+     * DontAsk: auto-denies anything not pre-approved. Read-only tools (Read/Grep/Glob/Lsp/RepoMap/BoardRead/Skill)
      * are implicitly allowed without an explicit rule. `WebFetch` is not one of
      * them (audit F-P6): it is denied unless a rule allows it, typically a
      * `WebFetch(domain:…)` rule ({@see PermissionRule}). Hook-approved calls would also be allowed
@@ -1386,15 +1386,28 @@ final class PermissionGate
     /**
      * The built-in tools this gate treats as read-only: those whose
      * `#[BuiltInTool]` declaration says {@see ToolPermissionClass::Read}
-     * (today `Read`, `Grep`, `Glob`, `Lsp`), read from {@see ToolCatalog}.
+     * (today `Read`, `Grep`, `Glob`, `Lsp`, `RepoMap`, `BoardRead` and
+     * `Skill`), read from {@see ToolCatalog}.
      *
      * A DECISION, NOT A CENSUS: the class is declared per tool, and "read-only"
-     * here means "safe to run unasked". `WebSearch`, `Skill` and `doctor`
-     * declare {@see ToolPermissionClass::Ask}: each reaches something outside
-     * this process (a search endpoint, a skill body that may carry
-     * `allowed-tools`, a capability probe), so leaving them to Ask costs a
-     * prompt while calling them reads would spend a judgement this class
-     * cannot make.
+     * here means "safe to run unasked". `WebSearch` and `doctor` declare
+     * {@see ToolPermissionClass::Ask}: each reaches something outside
+     * this process (a search endpoint, a capability probe), so leaving them to
+     * Ask costs a prompt while calling them reads would spend a judgement this
+     * class cannot make.
+     *
+     * `Skill` LEFT the Ask class on the skills QA pass: a Level-2 load reads
+     * one text file — the skill's own SKILL.md — into the conversation, which
+     * is exactly what `Read` does unasked, and Claude Code and opencode both
+     * treat skill loading as safe. The Ask declaration had inverted the
+     * progressive-disclosure design it was meant to protect: every load popped
+     * a modal under `default`/`plan`, and under `dont-ask` the tool was denied
+     * outright, so the model could never reach a skill body at all. The body's
+     * CONTENT is still classified untrusted — it is repository text, escaped
+     * on the way into any prompt string (audit 15d-02) and carrying no
+     * authority over harness layers; a skill's `allowed-tools` frontmatter is
+     * metadata no gate here enforces either way, so Ask bought no real
+     * judgement.
      *
      * `WebFetch` LEFT the read-only class in audit F-P6. It writes nothing
      * locally, but a fetch is an outbound request whose URL the model composes:

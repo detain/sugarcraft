@@ -1,0 +1,6 @@
+em0: flags=8803<UP,BROADCAST,SIMPLEX,MULTICAST> metric 0 mtu 1500
+	ether 08:00:27:aa:bb:cc
+	media: Ethernet autoselect
+	status: no carrier
+tun0: flags=8051<UP,POINTOPOINT,RUNNING,MULTICAST> metric 0 mtu 1500
+	inet6 2001:db8::5 prefixlen 64

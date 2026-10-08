@@ -1,0 +1,16 @@
+╭─┐⁴proc┌┐filter┌─────┐tree┌┐← cpu lazy →┌─╮
+│    Pid: Program Comm User:  MemB  Cpu%   │
+│       1 systemd init root   125M  42.5   │
+│    5120 contain cont root   367M  16.2   │
+│     412 sshd    sshd root   190M  20.1   │
+│    2290 php     php  joe    427M  12.9   │
+│    6969 web01   [kvm libv+  983M   7.6   │
+│    5133 python3 [doc root   675M  11.1   │
+│    1203 nginx   ngin www-+  277M   6.8   │
+│    4410 node    node joe    615M   3.9   │
+│    7001 vim     vim  joe    1.3G   5.3   │
+│    2210 bash    -bas joe    354M   9.4   │
+│    3105 redis-s redi redis  542M   4.0   │
+│     880 postgre post post+  208M   5.9   │
+│       2 kthread      root     0B   0.0   │
+╰┘↑ select ↓└┘info ↵└┘signals└┘N─────┘1/13└╯
