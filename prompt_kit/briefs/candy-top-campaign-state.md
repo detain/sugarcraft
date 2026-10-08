@@ -30,7 +30,9 @@ skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000
 - U5 wiring ✅ `70c09bec9` (FreeBSD ps/iostat live captures still pending; host ssh down).
 - Census: candy-top share fixed ✅ `274ab740b`; remaining DescriptorSinkArgumentCensusTest red is sugar-crush only
   (note: sugar-crush ForkedChild/SessionRelaunch `(int)$entry` casts at real close/fcntl sinks deserve a look — not ours).
-- **P-H docs** agent running (README, drift tests, docs/_data, root README/index, MATCHUPS).
+- P-H candy-top docs ✅ `4956d682f` (README tables drift-pinned by tests/Docs; regen CANDY_TOP_UPDATE_DOCS=1).
+- P-G TTY polish: check found no src discrepancies; TtyModeFrameTest + goldens under review.
+- Next: U4 (P-I GPU/NPU multi-vendor, container/VM box, #1791c tree-state XDG file) — any new Schema key/KeyRow needs the README regen.
 
 ## Next
 1. **P-H candy-top half** (after P-F2 commits): full `candy-top/README.md` (install, run, `--fake`/`--config`/tty,
