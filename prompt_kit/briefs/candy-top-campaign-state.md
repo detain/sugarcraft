@@ -21,14 +21,14 @@ _Last updated: 2026-10-08 (before /compact)._
 Lib lanes L1 `0153b65e4` · L2 `073913a44` · L3 `37f5c6744` · L4 `1bbbca37f` · L5 `57cd08b9f` · L6 `0859cfa4f` ·
 L7 `07a1e5e6f` · L8 `39c65280c` · integration `03d5ef164` · candy-top Theme `672c64680` · Collect `b2d9207cc` ·
 Config+Lang `7c893a54b` · proc_open census fix `ea1949fd2` · Wave U0+U1 collectors `02f178b91` · Wave U2 block2
-`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12` · P-C net panel `7ac64e5f3` (+ sugar-dash NetAutoScale::rescaleNow) · P-B cpu+mem `8e4559946` · P-E proc `52f994d15` · P-D disks+battery `a856be8bd` · P-G mellow theme `632e08d49`.
+`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12` · P-C net panel `7ac64e5f3` (+ sugar-dash NetAutoScale::rescaleNow) · P-B cpu+mem `8e4559946` · P-E proc `52f994d15` · P-D disks+battery `a856be8bd` · P-G mellow theme `632e08d49` · P-F1 overlays/menus `083176989` · P-G VHS tape `3469999a7`.
 btop-derived byte-exact oracles: `prompt_kit/tools/btop-{graph,netscale,theme}-oracle.cpp`.
 References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-reference,freebsd-reference}.md`.
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
 ## In flight at handoff (UNCOMMITTED in the working tree)
 Launched 2026-10-08 in parallel (shared brief: `prompt_kit/briefs/candy-top-panel-phase-common.md`):
-- **P-F1 overlays/menus** (implementer running; brief `prompt_kit/briefs/candy-top-pf-common.md`) → then **P-F2** options menu/presets/persistence (#1476/#1411/#1791b/#1849).
+- **P-F2** options menu/presets/persistence (#1476/#1411/#1791b/#1849) — implementer running; also fixes P-F1 review leftovers (follow ↑ arrow, backdrop refresh on menu switch, renice backspace keeps last parsed, chrome drag).
 Each agent reports an exact file list; commit only that list (lang/en.php, Panels.php, CALIBER_LEARNINGS.md
 are shared → stage partially). Chrome goldens use frozen `Panels::placeholders()` (`4186902f5`, `c1613c6aa`).
 
