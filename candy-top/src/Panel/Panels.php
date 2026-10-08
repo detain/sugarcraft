@@ -50,7 +50,7 @@ final class Panels
         return [
             'cpu' => PlaceholderPanel::new('cpu', $fake ? FakeCpu::new($host->coreCount, $intervalSec) : CollectorSource::of(Cpu::new())),
             'mem' => PlaceholderPanel::new('mem', $fake ? FakeMemory::new() : CollectorSource::of(Memory::new())),
-            'net' => PlaceholderPanel::new('net', $fake ? FakeNet::new($intervalSec) : CollectorSource::of(Net::new())),
+            'net' => \SugarCraft\Top\Panel\Net\NetPanel::new($fake ? FakeNet::new($intervalSec) : CollectorSource::of(Net::new())),
             'proc' => PlaceholderPanel::new('proc', $fake ? FakeProcList::new($host->coreCount) : CollectorSource::of(ProcList::new())),
         ];
     }

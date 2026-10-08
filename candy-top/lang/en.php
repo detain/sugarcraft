@@ -297,4 +297,7 @@ return [
     'cli.help.key.quit' => 'Quit',
     'cli.help.key.toggle' => 'Toggle cpu / mem / net / proc box',
     'cli.help.key.step' => 'Add / subtract 100 ms to the update timer (1000 ms while held)',
+    // ---- net panel (phase P-C) ----
+    // No new keys: NetPanel reuses net.download/upload/zero/auto/sync/top/total
+    // and help.net_* above. Button labels are held to btop's four cells.
 ];

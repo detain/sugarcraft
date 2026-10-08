@@ -212,6 +212,37 @@ final class NetAutoScaleTest extends TestCase
         $this->assertSame(NetAutoScale::FLOOR, $s->downloadMax());
     }
 
+    public function testRescaleNowAppliesImmediatelyWithoutOfferingASample(): void
+    {
+        $s = NetAutoScale::new()->offer(1_000_000, 1_000_000);
+        $this->assertSame(1_300_000, $s->downloadMax());
+
+        // Six held samples → integer mean of the last five, ×1.3.
+        $now = $s->rescaleNow([9, 50_000, 50_000, 50_000, 50_000, 60_000], [20_000, 20_000]);
+        $this->assertSame(67_600, $now->downloadMax()); // mean 52000 × 1.3
+        // ≤5 held → the newest sample is the current speed: 20000 × 1.3.
+        $this->assertSame(26_000, $now->uploadMax());
+        $this->assertTrue($now->rescaled);
+        $this->assertFalse($now->rescalePending());
+        $this->assertSame([0, 0], $now->counters(NetAutoScale::DOWNLOAD));
+        $this->assertSame(1_300_000, $s->downloadMax(), 'immutable');
+
+        // No rescale is left armed: an in-band offer keeps the new ceiling.
+        $next = $now->offer(50_000, 20_000);
+        $this->assertSame($now->downloadMax(), $next->downloadMax());
+    }
+
+    public function testRescaleNowWithEmptyHistoryFallsToTheFloorAndSyncCopies(): void
+    {
+        $s = NetAutoScale::new(true)->offer(1_000_000, 10)->rescaleNow([], [400_000]);
+        $this->assertSame(NetAutoScale::FLOOR, $s->downloadMax());
+        $this->assertSame(NetAutoScale::FLOOR, $s->uploadMax(), 'sync copies the download ceiling and stops');
+
+        $kept = NetAutoScale::new()->offer(100_000, 200_000)->rescaleNow();
+        $this->assertSame(130_000, $kept->downloadMax(), 'omitted histories keep the held window');
+        $this->assertSame(260_000, $kept->uploadMax());
+    }
+
     public function testNegativeSpeedsClampToZero(): void
     {
         $s = NetAutoScale::new()->offer(-5_000, -1);
