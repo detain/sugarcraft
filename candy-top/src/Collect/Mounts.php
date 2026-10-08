@@ -24,6 +24,11 @@ namespace SugarCraft\Top\Collect;
  *    mount point is remounted (its device or fstype changes);
  *  - display name = basename of the mount point, "root" for "/".
  *
+ * Selection (disks_filter, use_fstab, only_physical, zfs_hide_datasets)
+ * is a {@see MountSelection}, retuned per sample by the disks panel with
+ * {@see withSelection()}; /etc/fstab is read while use_fstab is on and
+ * cached by its mtime, as btop's `fstab_time` does.
+ *
  * Deviation: btop runs statvfs on a std::async future so a hung network
  * share cannot freeze the frame; PHP has no such primitive here, so the
  * $space closure is injectable and callers that mount network shares
@@ -41,13 +46,15 @@ final class Mounts
      * @param \Closure(string): (array{0: int, 1: int}|null) $space mountpoint → [total, free] bytes
      * @param \Closure(): float                              $clock monotonic seconds
      * @param array<string, array{at: float, mount: string}>  $ignored failed mount points: when, and "device fstype"
+     * @param array{0: int, 1: list<string>}|null            $fstab   cached /etc/fstab [mtime, mount points]
      */
     private function __construct(
         private readonly Paths $paths,
         private readonly \Closure $space,
         private readonly \Closure $clock,
-        private readonly bool $physicalOnly,
+        private readonly MountSelection $selection,
         private readonly array $ignored,
+        private readonly ?array $fstab = null,
     ) {
     }
 
@@ -61,9 +68,20 @@ final class Mounts
             $paths ?? Paths::system(),
             $space ?? self::statvfs(...),
             $clock ?? static fn (): float => hrtime(true) / 1e9,
-            $physicalOnly,
+            MountSelection::new($physicalOnly),
             [],
         );
+    }
+
+    /** The same collector (ignore list kept) under another disks selection. */
+    public function withSelection(MountSelection $selection): self
+    {
+        return new self($this->paths, $this->space, $this->clock, $selection, $this->ignored, $this->fstab);
+    }
+
+    public function selection(): MountSelection
+    {
+        return $this->selection;
     }
 
     /**
@@ -77,7 +95,10 @@ final class Mounts
         }
 
         $now = ($this->clock)();
-        $fstypes = $this->physicalOnly ? $this->physicalFsTypes() : null;
+        $sel = $this->selection;
+        $cache = $sel->useFstab ? $this->readFstab() : $this->fstab;
+        $fstab = $sel->useFstab ? $cache[1] ?? null : null;
+        $fstypes = $sel->physicalOnly && $fstab === null ? $this->physicalFsTypes() : null;
         $ignored = [];
         $seen = [];
         $mounts = [];
@@ -91,7 +112,7 @@ final class Mounts
             if (isset($seen[$mountpoint])) {
                 continue;
             }
-            if ($fstypes !== null && !in_array($fstype, $fstypes, true)) {
+            if (!$sel->accepts($device, $mountpoint, $fstype, $fstypes, $fstab)) {
                 continue;
             }
             $seen[$mountpoint] = true;
@@ -120,7 +141,30 @@ final class Mounts
         }
 
         // Ignores for mount points that disappeared are dropped with them.
-        return [new MountsSnapshot($mounts), new self($this->paths, $this->space, $this->clock, $this->physicalOnly, $ignored)];
+        return [new MountsSnapshot($mounts), new self($this->paths, $this->space, $this->clock, $this->selection, $ignored, $cache)];
+    }
+
+    /**
+     * /etc/fstab's mount points, re-parsed only when its mtime changed
+     * (btop `fs::last_write_time("/etc/fstab") != fstab_time`); null when
+     * unreadable.
+     *
+     * @return array{0: int, 1: list<string>}|null
+     */
+    private function readFstab(): ?array
+    {
+        $path = $this->paths->path('/etc/fstab');
+        clearstatcache(true, $path);
+        $mtime = @filemtime($path);
+        if ($mtime === false) {
+            return null;
+        }
+        if ($this->fstab !== null && $this->fstab[0] === $mtime) {
+            return $this->fstab;
+        }
+        $text = Read::file($path);
+
+        return $text === null ? null : [$mtime, MountSelection::fstab($text)];
     }
 
     /**

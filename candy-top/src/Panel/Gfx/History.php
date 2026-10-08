@@ -71,6 +71,17 @@ final class History
         return ($this->series[$key] ?? []) !== [];
     }
 
+    /**
+     * Only the named series — btop erases a disk's deques with the disk
+     * when it unmounts, so a remount starts a fresh history.
+     *
+     * @param list<string> $keys
+     */
+    public function only(array $keys): self
+    {
+        return new self(array_intersect_key($this->series, array_flip($keys)));
+    }
+
     /** @return list<string> */
     public function keys(): array
     {

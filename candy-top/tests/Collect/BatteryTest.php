@@ -128,6 +128,17 @@ final class BatteryTest extends TestCase
         $this->assertSame(40, $picked->percent);
     }
 
+    public function testWithSelectedRetunesTheChoice(): void
+    {
+        $battery = Battery::new($this->tree->paths(), 'BAT9');
+        $this->assertSame('BAT9', $battery->selected());
+        $this->assertNull($battery->withSelected('Auto')->selected());
+        $this->assertNull($battery->withSelected(null)->selected());
+        $this->assertSame('BAT0', $battery->withSelected('BAT0')->selected());
+        [$snap] = $battery->sample();
+        $this->assertSame('BAT0', $snap->name, 'an unknown selection auto-selects');
+    }
+
     public function testNoPowerSupplyDirectory(): void
     {
         $this->tree->remove('sys/class/power_supply');

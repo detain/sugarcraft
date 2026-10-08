@@ -16,6 +16,7 @@ use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Panel\Gfx\History;
 use SugarCraft\Top\Panel\Gfx\NamedSources;
+use SugarCraft\Top\Panel\Mem\Disks;
 use SugarCraft\Top\Panel\Mem\DisksSection;
 use SugarCraft\Top\Panel\Mem\MemView;
 use SugarCraft\Top\Source\CollectorSource;
@@ -59,10 +60,11 @@ final class MemPanel implements Panel
         return new self(NamedSources::of(['mem' => $memory]), null, History::new(), null);
     }
 
-    /** The roster entry {@see Panels::standard()} uses. */
+    /** The roster entry {@see Panels::standard()} uses, with the P-D disks section installed. */
     public static function standard(Config $config, bool $fake = false): self
     {
-        return self::new($fake ? FakeMemory::new() : CollectorSource::of(Memory::new(null, $config->bool('zfs_arc_cached'))));
+        return self::new($fake ? FakeMemory::new() : CollectorSource::of(Memory::new(null, $config->bool('zfs_arc_cached'))))
+            ->withDisks(Disks::standard($config, $fake));
     }
 
     /** Install (or remove) the P-D disks section. */
@@ -183,7 +185,7 @@ final class MemPanel implements Panel
         $disksSnap = $samples->get('disks');
         $disksNext = $nextSet->get('disks');
         if ($disks !== null && $disksSnap !== null && $disksNext !== null) {
-            $disks = $disks->withSample($disksSnap, $disksNext, $context);
+            $disks = $disks->withSample($disksSnap, $disksNext, $context, $snapshot);
         }
 
         return new self($sources, $disks, $history, $snapshot);

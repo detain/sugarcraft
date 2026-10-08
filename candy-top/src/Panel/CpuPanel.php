@@ -20,6 +20,7 @@ use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Panel\Cpu\BatteryBadge;
+use SugarCraft\Top\Panel\Cpu\BorderBattery;
 use SugarCraft\Top\Panel\Cpu\CpuView;
 use SugarCraft\Top\Panel\Gfx\History;
 use SugarCraft\Top\Panel\Gfx\NamedSources;
@@ -51,7 +52,7 @@ use SugarCraft\Top\View\Region;
  *
  * Mirrors aristocratos/btop Cpu::draw (src/btop_draw.cpp:567-1024).
  */
-final class CpuPanel implements Panel
+final class CpuPanel implements Panel, ClockReserve
 {
     /** btop caps `core_percent` deques at 40 (linux/btop_collect.cpp:1153). */
     public const CORE_HISTORY = 40;
@@ -132,7 +133,7 @@ final class CpuPanel implements Panel
                 FakeCpu::new($host->coreCount, $config->updateMs() / 1000),
                 FakeFreq::new($host->coreCount, $perCore),
                 FakeTemp::new(max(1, intdiv($host->coreCount, 2))),
-            );
+            )->withBattery(BorderBattery::standard($config, true));
         }
         $sensor = $config->string('cpu_sensor');
 
@@ -141,7 +142,7 @@ final class CpuPanel implements Panel
             CollectorSource::of(Freq::new(null, FreqMode::tryFrom($config->string('freq_mode')) ?? FreqMode::First, $perCore)),
             CollectorSource::of(Temp::new(null, $sensor === 'Auto' ? null : $sensor)),
             CollectorSource::of(Gpu::new()),
-        );
+        )->withBattery(BorderBattery::standard($config, $fake));
     }
 
     /** Install (or remove) the P-D battery badge. */
@@ -153,6 +154,12 @@ final class CpuPanel implements Panel
     public function box(): string
     {
         return 'cpu';
+    }
+
+    /** The battery badge's clock reserve (btop update_clock `show_battery and has_battery`). */
+    public function reservesClock(PanelContext $context): bool
+    {
+        return $this->battery?->present($context->config) ?? false;
     }
 
     public function collect(PanelContext $context): ?\Closure
