@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kit\Tests;
 
+use SugarCraft\Kit\AutoWidth;
 use SugarCraft\Kit\HelpText;
 use SugarCraft\Kit\Theme;
 use SugarCraft\Core\Util\Width;
@@ -289,5 +290,112 @@ final class HelpTextTest extends TestCase
     {
         $out = HelpText::render('', ['café' => ['-x' => 'y']], theme: Theme::plain());
         $this->assertStringStartsWith("CAFÉ\n", $out);
+    }
+
+    // ---- renderPage (E453, multi-line-preserving page variant) ----------
+
+    public function testRenderPageReturnsCleanPageByteIdentical(): void
+    {
+        $page = "USAGE\n  myapp [flags]\n\nFLAGS\n  -v  verbose logging\n";
+
+        $this->assertSame($page, HelpText::renderPage($page));
+    }
+
+    /**
+     * The defect E453 fixes: an authored page's newlines survive sanitizing,
+     * while escape bytes and stray controls (tab, CR) do not.
+     */
+    public function testRenderPagePreservesRowsThroughPoison(): void
+    {
+        $page = "USAGE\x1b[2J\n  my\ta [flags]\r\n\x07FLAGS\n  -v  verbose\n";
+
+        $this->assertSame("USAGE\n  mya [flags]\nFLAGS\n  -v  verbose\n", HelpText::renderPage($page));
+    }
+
+    /**
+     * null is the DEFAULT here on purpose (unlike render()/renderRows()):
+     * a page ships already laid out, so an advertised terminal width must
+     * not silently re-flow it.
+     */
+    public function testRenderPageDefaultNeverWrapsEvenWithTerminalWidth(): void
+    {
+        $this->pinTerminalColumns(20);
+        $long = str_repeat('word ', 20);
+
+        $out = HelpText::renderPage("HEAD\n{$long}\nTAIL\n");
+
+        $this->assertSame(["HEAD", $long, "TAIL", ""], explode("\n", $out));
+    }
+
+    public function testRenderPageAutoResolvesTerminalWidth(): void
+    {
+        $this->pinTerminalColumns(20);
+        $page = "HEAD\n" . str_repeat('word ', 20) . "TAIL";
+
+        $out = HelpText::renderPage($page, AutoWidth::Auto);
+
+        $this->assertNotSame($page, $out, 'the auto width must re-flow the over-long row');
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(20, Width::string($line), "line fits: '{$line}'");
+        }
+    }
+
+    public function testRenderPageExplicitWidthWrapsOnlyLongRows(): void
+    {
+        $long  = str_repeat('alpha beta ', 6) . 'gamma';
+        $page  = "short row\n{$long}\nanother short";
+
+        $out = HelpText::renderPage($page, 30);
+
+        $rows = explode("\n", $out);
+        $this->assertContains('short row', $rows, 'fitting rows come back untouched');
+        $this->assertContains('another short', $rows);
+        foreach ($rows as $line) {
+            $this->assertLessThanOrEqual(30, Width::string($line), "line fits: '{$line}'");
+        }
+        // Wrapping reflows whitespace at break points only — every word of
+        // the page survives, none is invented.
+        $this->assertSame(
+            preg_split('/\s+/', $page, -1, PREG_SPLIT_NO_EMPTY),
+            preg_split('/\s+/', $out, -1, PREG_SPLIT_NO_EMPTY),
+        );
+    }
+
+    public function testRenderPageWrapsWideCharactersCellAware(): void
+    {
+        $out = HelpText::renderPage("日本語のテキストです", 6);
+
+        $this->assertGreaterThan(1, count($lines = explode("\n", $out)));
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(6, Width::string($line), "cells fit: '{$line}'");
+        }
+        $this->assertSame('日本語のテキストです', implode('', $lines), 'no characters lost or gained');
+    }
+
+    public function testRenderPageWidthBelowOneThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        HelpText::renderPage("a\nb", 0);
+    }
+
+    public function testRenderPageIsIdempotent(): void
+    {
+        $poison = "USAGE\x1b]0;evil\x07\n  my\ta [flags]\r\n\x07FLAGS\n";
+
+        $once  = HelpText::renderPage($poison);
+        $twice = HelpText::renderPage($once);
+
+        $this->assertSame($once, $twice);
+    }
+
+    /**
+     * Polarity guard: render()'s single-line flattening contract is UNCHANGED
+     * by the page variant — a newline in the description still collapses.
+     */
+    public function testRenderStillFlattensNewlinesInDescription(): void
+    {
+        $out = HelpText::render('myapp', [], description: "a\nb", theme: Theme::plain());
+
+        $this->assertSame("USAGE\n  myapp\n\nab", $out);
     }
 }

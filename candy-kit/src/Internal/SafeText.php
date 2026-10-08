@@ -53,4 +53,37 @@ final class SafeText
 
         return $stripped;
     }
+
+    /**
+     * Strip escape sequences and control bytes from a multi-line page,
+     * preserving the line structure.
+     *
+     * The counterpart of {@see line()} for authored pages (E453, round of
+     * the crush_libs rerun): sugar-crush's translated `help` screen is one
+     * catalogue string whose embedded newlines ARE the layout, so the
+     * line-wise flattening in {@see line()} destroys it. Here every byte
+     * {@see line()} would remove still goes — escape sequences via
+     * {@see Ansi::strip()}, the remaining C0 controls and DEL — except the
+     * line feed (0x0a), which survives so the page keeps its rows. Tab
+     * (0x09) and carriage return (0x0d) are deliberately NOT exempt: tabs
+     * render at terminal-dependent widths a cell-grid cannot account for,
+     * and dropping CR means CRLF input normalizes to bare LF rows instead
+     * of leaving a stray control at each row end.
+     *
+     * @internal For the page-preserving presenters (HelpText::renderPage).
+     */
+    public static function page(string $s): string
+    {
+        $stripped = preg_replace('/[\x00-\x09\x0b-\x1f\x7f]/', '', Ansi::strip($s));
+
+        if ($stripped === null) {
+            // Same fail-loud shape as {@see line()}: a single-pass
+            // character-class substitution cannot exhaust the PCRE limits,
+            // so null means a bug, and coalescing it to '' would report a
+            // failed strip as a legitimately blank page.
+            throw new \RuntimeException('SafeText::page(): C0/DEL strip failed: ' . preg_last_error_msg());
+        }
+
+        return $stripped;
+    }
 }

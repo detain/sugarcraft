@@ -179,6 +179,41 @@ final class SafeTextTest extends TestCase
     }
 
     /**
+     * E453: the page variant keeps LF rows — the layout of an authored
+     * multi-line page — while stripping everything {@see SafeText::line()}
+     * strips. Tab and CR are NOT exempt: tabs render at terminal-dependent
+     * widths, and dropping CR normalizes CRLF input to bare LF rows.
+     */
+    public function testPageKeepsLineFeedsAndStripsEveryOtherControl(): void
+    {
+        $input = "a\x1b[2Jb\nc\td\x07e\r\nf\x7fg";
+
+        $this->assertSame("ab\ncde\nfg", SafeText::page($input));
+    }
+
+    public function testPageLeavesCleanMultiLineTextIdentical(): void
+    {
+        $page = "USAGE\n  myapp [flags]\n\nFLAGS\n  -v  verbose — café\n";
+
+        $this->assertSame($page, SafeText::page($page));
+    }
+
+    /**
+     * Same fail-loud source contract as {@see line()} — pinned on the body
+     * because the null arm is untriggerable by construction (see the
+     * reasoning above {@see testPcreFailureThrowsInsteadOfSwallowingEmpty}).
+     */
+    public function testPagePcreFailureThrowsInsteadOfSwallowingEmpty(): void
+    {
+        $body = self::methodSource(SafeText::class, 'page');
+
+        $this->assertStringNotContainsString("?? ''", $body);
+        $this->assertStringContainsString('=== null', $body);
+        $this->assertStringContainsString('throw new \\RuntimeException', $body);
+        $this->assertStringContainsString('preg_last_error_msg()', $body);
+    }
+
+    /**
      * @return string the declared body of $class::$method, for source-level pins
      *                of branches that are unreachable by construction
      */
