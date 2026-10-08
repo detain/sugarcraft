@@ -236,6 +236,42 @@ final class PaletteTest extends TestCase
         $this->assertSame('', $stripped);
     }
 
+    /**
+     * A3b: the 13 shapes from the campaign probe. ECMA-48 intermediates
+     * (0x20-0x2F), finals 0x40/0x5B-0x5F, and the Fe escapes ESC 7/8/c all
+     * leaked through the old regex.
+     *
+     * @return array<string, array{string, string}>
+     */
+    public static function stripAnsiProbeShapes(): array
+    {
+        return [
+            'CSI sgr (baseline)' => ["\x1b[31mred\x1b[0m", 'red'],
+            'CSI w/ intermediate !' => ["a\x1b[!pb", 'ab'],           // DECSTR
+            'CSI w/ intermediate $' => ["a\x1b[2\$pb", 'ab'],         // DECRQM
+            'CSI final @ (ICL)' => ["a\x1b[5@b", 'ab'],
+            'CSI final _' => ["a\x1b[1_b", 'ab'],
+            'ESC ( charset' => ["a\x1b(Bb", 'ab'],
+            'ESC ) charset' => ["a\x1b)0b", 'ab'],
+            'ESC 7 save-cursor' => ["a\x1b7b", 'ab'],
+            'ESC 8 restore-cursor' => ["a\x1b8b", 'ab'],
+            'ESC c RIS' => ["a\x1bcb", 'ab'],
+            'OSC' => ["a\x1b]0;title\x07b", 'ab'],
+            'DCS' => ["a\x1bPq#0\x1b\\b", 'ab'],
+            'plain' => ['no escape', 'no escape'],
+        ];
+    }
+
+    /**
+     * @dataProvider stripAnsiProbeShapes
+     */
+    public function testStripAnsiCleansEveryProbeShape(string $input, string $expected): void
+    {
+        $stripped = Palette::stripAnsi($input);
+        $this->assertSame($expected, $stripped);
+        $this->assertStringNotContainsString("\x1b", $stripped);
+    }
+
     // -------------------------------------------------------------------------
     // Color conversion shortcut
     // -------------------------------------------------------------------------

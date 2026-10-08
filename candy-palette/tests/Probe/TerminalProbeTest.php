@@ -504,4 +504,107 @@ final class TerminalProbeTest extends TestCase
         $this->assertFalse($report->has(Capability::Hyperlinks));
         $this->assertTrue($report->has(Capability::BasicAscii));
     }
+
+    // ─── A3b: env suppression short-circuits the whole capability ladder ────
+
+    /**
+     * A terminfo blob that advertises both TrueColor and Sixel, with a public
+     * call counter so the pins can prove the suppression gate never even
+     * shells out to infocmp.
+     */
+    private function suppressedLadderProbe(array $env): TerminalProbe
+    {
+        return new class($env) extends TerminalProbe {
+            public int $infocmpCalls = 0;
+
+            protected function infocmpAvailable(): bool
+            {
+                return true;
+            }
+
+            protected function runCommand(string $cmd): ?string
+            {
+                if (str_contains($cmd, 'infocmp')) {
+                    $this->infocmpCalls++;
+
+                    return "\tTc,\n\tRGB,\n\tsixel,\n";
+                }
+                return null;
+            }
+
+            protected function isInteractive(): bool
+            {
+                return false;
+            }
+        };
+    }
+
+    public function testNoColorBeatsTrueColorTerminfo(): void
+    {
+        $probe = $this->suppressedLadderProbe(['NO_COLOR' => '1', 'TERM' => 'xterm-256color']);
+        $report = $probe->runProbe();
+
+        $this->assertSame(0, $probe->infocmpCalls, 'suppression must skip the terminfo phase entirely');
+        $this->assertTrue($report->has(Capability::NoColor));
+        $this->assertFalse($report->has(Capability::TrueColor));
+        $this->assertFalse($report->has(Capability::Sixel));
+    }
+
+    public function testAnyNonEmptyNoColorValueSuppresses(): void
+    {
+        // NO_COLOR spec: the VALUE is irrelevant — any non-empty string disables.
+        $probe = $this->suppressedLadderProbe(
+            ['NO_COLOR' => 'please-no', 'TERM' => 'xterm-256color'],
+        );
+        $report = $probe->runProbe();
+
+        $this->assertTrue($report->has(Capability::NoColor));
+        $this->assertFalse($report->has(Capability::TrueColor));
+    }
+
+    public function testClicolorZeroBeatsTrueColorTerminfo(): void
+    {
+        $probe = $this->suppressedLadderProbe(['CLICOLOR' => '0', 'TERM' => 'xterm-256color']);
+        $report = $probe->runProbe();
+
+        $this->assertSame(0, $probe->infocmpCalls);
+        $this->assertTrue($report->has(Capability::NoColor));
+        $this->assertFalse($report->has(Capability::Sixel));
+    }
+
+    public function testClicolorForceOverridesNoColor(): void
+    {
+        // CLICOLOR_FORCE=1 is the operator's counter-override and must win.
+        $probe = $this->suppressedLadderProbe(
+            ['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1', 'TERM' => 'xterm-256color'],
+        );
+        $report = $probe->runProbe();
+
+        $this->assertTrue($report->has(Capability::TrueColor));
+        $this->assertSame('env:CLICOLOR_FORCE', $report->source(Capability::TrueColor));
+        $this->assertFalse($report->has(Capability::NoColor));
+    }
+
+    public function testTermDumbSuppressesTerminfoLeg(): void
+    {
+        $probe = $this->suppressedLadderProbe(['TERM' => 'dumb']);
+        $report = $probe->runProbe();
+
+        $this->assertTrue($report->has(Capability::NoColor));
+        $this->assertFalse($report->has(Capability::TrueColor));
+        $this->assertFalse($report->has(Capability::Sixel));
+    }
+
+    public function testUnsuppressedEnvStillDetectsViaTerminfo(): void
+    {
+        // Regression guard: the gate only fires on suppression; normal
+        // detection keeps its terminfo legs.
+        $probe = $this->suppressedLadderProbe(['TERM' => 'xterm-256color']);
+        $report = $probe->runProbe();
+
+        $this->assertSame(1, $probe->infocmpCalls);
+        $this->assertTrue($report->has(Capability::TrueColor));
+        $this->assertSame('terminfo:Tc|RGB', $report->source(Capability::TrueColor));
+        $this->assertTrue($report->has(Capability::Sixel));
+    }
 }
