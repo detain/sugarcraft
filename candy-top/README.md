@@ -301,7 +301,7 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 <!-- BEGIN generated:config -->
 | Key | Type | Default | Allowed values | Options menu | Description |
 |---|---|---|---|---|---|
-| `color_theme` | string | `"Default"` | any text | 0 general › Appearance | Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.<br>Themes should be placed in "$XDG_CONFIG_HOME/candy-top/themes" or the candy-top themes directory. |
+| `color_theme` | string | `"pastel"` | any text | 0 general › Appearance | Name of a btop++/bpytop/bashtop formatted ".theme" file, "Default" and "TTY" for builtin themes.<br>candy-top's default is the bundled "pastel" theme (btop's is "Default").<br>Themes should be placed in "$XDG_CONFIG_HOME/candy-top/themes" or the candy-top themes directory. |
 | `theme_background` | bool | `true` | `true`, `false` | 0 general › Appearance | If the theme set background should be shown, set to False if you want terminal background transparency. |
 | `truecolor` | bool | `true` | `true`, `false` | 0 general › Appearance | Sets if 24-bit truecolor should be used, will convert 24-bit colors to 256 color (6x6x6 color cube) if false. |
 | `force_tty` | bool | `false` | `true`, `false` | 0 general › Terminal and input | Set to true to force tty mode regardless if a real tty has been detected or not.<br>Will force 16-color mode and TTY theme, set all graph symbols to "tty" and swap out other non tty friendly symbols. |
@@ -407,6 +407,12 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 
 ## Themes
 
+The default theme is **`pastel`**, candy-top's own: bright candy-shop pastels (bubblegum pink, lavender, electric mint, glowing peach, sky blue and lemon) on a deep plum-ink background. Load and temperature run mint → lemon → pink, the cpu graph sky → lavender → pink, and each box outline flows from one pastel into the next.
+
+![candy-top with the pastel theme](https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.assets/theme-pastel.png)
+
+This is a deliberate deviation from btop, whose default is its builtin `Default` theme. `Default` is still in the list, and a btop config that sets `color_theme` (for example btop's own `color_theme = "Default"`) keeps its theme. `pastel` paints its own background, so it looks the same on dark and light terminals. With `theme_background = false` it uses the terminal's background instead, which suits dark terminals only: on a light one the near-white text is unreadable, so choose a light theme there (`flexoki-light`, `paper`, `solarized_light`, ...). Without `truecolor` its colours are mapped to the nearest 256-colour entries and the outlines are drawn flat. A side-by-side of `Default`, `mellow` and `pastel` is in [`.assets/theme-compare.png`](.assets/theme-compare.png).
+
 `color_theme` names a btop/bpytop/bashtop `.theme` file, or one of the builtins `Default` and `TTY`. Themes are read from two directories:
 
 1. The user directory, `$XDG_CONFIG_HOME/candy-top/themes`, or `~/.config/candy-top/themes`.
@@ -417,12 +423,24 @@ The list starts with `Default` and `TTY`, then every `*.theme` file from both di
 To add a theme, drop any btop `.theme` file (`theme[key]="#rrggbb"` lines; `"r g b"` triplets and `#gg` greys also work) into the user directory, then pick it with `←`/`→` on `color_theme` in the options menu, or set `color_theme = "name"`. A user file with the same name as a bundled one shadows the bundled theme; the bundled copy stays in the list and can still be selected there (it is then saved by full path). The theme list is scanned at startup and again on `ctrl+r`. An unknown or unreadable theme falls back to `Default`. `theme_background = false` drops the theme's background for a transparent terminal.
 
 <!-- BEGIN generated:themes -->
-42 bundled theme files (`candy-top/themes/`) plus the builtin `Default` and `TTY`:
+43 bundled theme files (`candy-top/themes/`) plus the builtin `Default` and `TTY`:
 
-`Default` · `TTY` · `HotPurpleTrafficLight` · `adapta` · `adwaita-dark` · `adwaita` · `ayu` · `dracula` · `dusklight` · `elementarish` · `everforest-dark-hard` · `everforest-dark-medium` · `everforest-light-medium` · `flat-remix-light` · `flat-remix` · `flexoki-dark` · `flexoki-light` · `gotham` · `greyscale` · `gruvbox_dark` · `gruvbox_dark_v2` · `gruvbox_light` · `gruvbox_material_dark` · `horizon` · `kanagawa-dragon` · `kanagawa-lotus` · `kanagawa-wave` · `kyli0x` · `matcha-dark-sea` · `mellow` · `monokai` · `night-owl` · `nord` · `onedark` · `orange` · `paper` · `phoenix-night` · `solarized_dark` · `solarized_light` · `tokyo-night` · `tokyo-storm` · `tomorrow-night` · `twilight` · `whiteout`
+`Default` · `TTY` · `HotPurpleTrafficLight` · `adapta` · `adwaita-dark` · `adwaita` · `ayu` · `dracula` · `dusklight` · `elementarish` · `everforest-dark-hard` · `everforest-dark-medium` · `everforest-light-medium` · `flat-remix-light` · `flat-remix` · `flexoki-dark` · `flexoki-light` · `gotham` · `greyscale` · `gruvbox_dark` · `gruvbox_dark_v2` · `gruvbox_light` · `gruvbox_material_dark` · `horizon` · `kanagawa-dragon` · `kanagawa-lotus` · `kanagawa-wave` · `kyli0x` · `matcha-dark-sea` · `mellow` · `monokai` · `night-owl` · `nord` · `onedark` · `orange` · `paper` · `pastel` · `phoenix-night` · `solarized_dark` · `solarized_light` · `tokyo-night` · `tokyo-storm` · `tomorrow-night` · `twilight` · `whiteout`
 <!-- END generated:themes -->
 
-The bundled themes are ported from btop (Apache-2.0; see `themes/LICENSE` and `themes/README.md`). `mellow` comes from btop PR #1683. Theme colours are rendered byte-exact against btop's theme engine (see `tests/Theme/BtopThemeOracleTest.php`).
+### Box outline flows
+
+candy-top reads four pairs of optional theme keys that btop does not have: `cpu_box_mid`/`cpu_box_end`, `mem_box_mid`/`mem_box_end`, `net_box_mid`/`net_box_end` and `proc_box_mid`/`proc_box_end`. When a box's `_end` key is set, its outline sweeps diagonally from `<box>_box` at the top-left corner, through `_mid` (optional) to `_end` at the bottom-right. Every line drawn in the box colour flows: the outline, title and button junctions, the clock and battery junctions, and the dividers inside the box. Inner sub-box lines drawn in `div_line` (the cpu info box, the mem/disks split, the net stats box, the proc detail view and the gpu stats box) get a quieter echo of the same flow. Titles, hotkeys and labels keep their own colours. The gpu boxes follow the `cpu` flow and the ctr box follows the `proc` flow, as they already use those box colours.
+
+```ini
+theme[cpu_box]="#bfa3ff"
+theme[cpu_box_mid]="#ff9ad2"
+theme[cpu_box_end]="#ffc49a"
+```
+
+Flows are drawn in truecolor only. With 256 colours, the 16-colour `TTY` theme or `tty_mode`, the outline uses the flat `<box>_box` colour. btop ignores these keys, so a theme that uses them still loads in btop with flat outlines. Themes that do not set them, which includes `Default` and every btop theme, look exactly as they do in btop.
+
+The bundled themes are ported from btop (Apache-2.0; see `themes/LICENSE` and `themes/README.md`). `mellow` comes from btop PR #1683. `pastel` is original to candy-top. Theme colours are rendered byte-exact against btop's theme engine (see `tests/Theme/BtopThemeOracleTest.php`).
 
 ## TTY mode
 

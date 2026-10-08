@@ -14,7 +14,7 @@ use SugarCraft\Top\Theme\TtyTheme;
  * Byte-parity against btop itself: the fixture is produced by
  * prompt_kit/tools/btop-theme-oracle.cpp, which compiles btop's own
  * btop_theme.cpp resolution code verbatim (see that file's header to
- * regenerate). Covers Default, all 42 shipped themes, the edge themes under
+ * regenerate). Covers Default, all 43 shipped themes, the edge themes under
  * tests/Theme/fixtures/edge/, and the builtin TTY theme.
  */
 final class BtopThemeOracleTest extends TestCase
@@ -56,7 +56,7 @@ final class BtopThemeOracleTest extends TestCase
         foreach (glob(__DIR__ . '/fixtures/edge/*.theme') ?: [] as $path) {
             self::assertContains(pathinfo($path, PATHINFO_FILENAME), $names);
         }
-        self::assertCount(1 + 42 + count(glob(__DIR__ . '/fixtures/edge/*.theme') ?: []), $names);
+        self::assertCount(1 + 43 + count(glob(__DIR__ . '/fixtures/edge/*.theme') ?: []), $names);
     }
 
     #[DataProvider('themeNames')]

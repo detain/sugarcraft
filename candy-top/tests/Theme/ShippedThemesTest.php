@@ -13,9 +13,10 @@ use SugarCraft\Top\Theme\ThemeRegistry;
 /** Every bundled upstream theme parses cleanly and resolves every key. */
 final class ShippedThemesTest extends TestCase
 {
-    public function testExactly42ThemesShipped(): void
+    /** 42 from btop (41 upstream + PR #1683 mellow) plus candy-top's own pastel. */
+    public function testExactly43ThemesShipped(): void
     {
-        self::assertCount(42, glob(ThemeRegistry::bundledDir() . '/*.theme') ?: []);
+        self::assertCount(43, glob(ThemeRegistry::bundledDir() . '/*.theme') ?: []);
     }
 
     /** @return iterable<string, array{string}> */

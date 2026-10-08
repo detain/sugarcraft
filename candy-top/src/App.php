@@ -51,6 +51,7 @@ use SugarCraft\Top\Panel\ProcPanel;
 use SugarCraft\Top\Panel\SampleTap;
 use SugarCraft\Top\Theme\Palette;
 use SugarCraft\Top\Theme\ThemeRegistry;
+use SugarCraft\Top\View\BorderFlow;
 use SugarCraft\Top\View\ClockFormat;
 use SugarCraft\Top\View\FrameBuilder;
 use SugarCraft\Top\View\GpuRoster;
@@ -509,6 +510,7 @@ final class App implements Model
             );
         }
         FrameBuilder::paintClock($surface, $this->layout, $this->ink, $this->config, $this->clockText(), $this->clockReserved());
+        BorderFlow::paint($surface, $this->layout, $this->ink, $this->config);
 
         return $surface;
     }

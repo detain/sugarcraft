@@ -138,4 +138,15 @@ final class SurfaceTest extends TestCase
         $r->sub(Rect::new(2, 0, 10, 1))->put(0, 0, 'XY');
         $this->assertSame(['        ', '  abXY  ', '        '], $s->plainLines());
     }
+
+    public function testRestyleKeepsTheGlyphAndCanonicalisesTheStyle(): void
+    {
+        $s = Surface::new(3, 1);
+        $s->put(0, 0, '─x', "\x1b[31m");
+        $s->restyle(0, 0, "\x1b[1m\x1b[32m");
+        $s->restyle(5, 0, "\x1b[33m"); // out of bounds: no-op
+        $this->assertSame('─', $s->glyph(0, 0));
+        $this->assertSame("\x1b[1;32m", $s->style(0, 0));
+        $this->assertSame("\x1b[31m", $s->style(1, 0));
+    }
 }

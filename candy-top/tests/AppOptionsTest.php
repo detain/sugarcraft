@@ -194,7 +194,7 @@ final class AppOptionsTest extends TestCase
     public function testColorThemePreviewsBehindAFrozenMenu(): void
     {
         $catalog = ThemeRegistry::fromDirs(ThemeRegistry::bundledDir());
-        $app = self::app(self::config(['background_update' => false]), catalog: $catalog);
+        $app = self::app(self::config(['background_update' => false, 'color_theme' => 'Default']), catalog: $catalog);
         [$app] = self::press($app, 'o');
         $before = $app->surface()?->style(0, 39);
         [$app, $cmd] = self::press($app, 'right');

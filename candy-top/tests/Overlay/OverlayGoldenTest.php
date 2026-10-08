@@ -111,7 +111,8 @@ final class OverlayGoldenTest extends TestCase
     #[DataProvider('grids')]
     public function testCellGridGolden(string $name, int $cols, int $rows, ?\Closure $overlay, array $keys, array $options): void
     {
-        $config = Config::new();
+        // The Harness palette is Default; name it so the options menu shows it.
+        $config = Config::new()->with('color_theme', 'Default');
         foreach ($options as $k => $v) {
             $config = $config->with($k, $v);
         }

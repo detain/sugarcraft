@@ -20,6 +20,12 @@ use SugarCraft\Top\Config\Schema;
 final class SchemaTest extends TestCase
 {
     /**
+     * Deliberate candy-top defaults that differ from btop's (the btop value
+     * stays in {@see btopDefaults()}); a btop.conf that sets the key still wins.
+     */
+    private const DEVIATIONS = ['color_theme' => 'pastel'];
+
+    /**
      * btop's persisted key order (descriptions, Linux + GPU_SUPPORT) with
      * the default from the typed maps; `// #NNNN` rows are Wave U keys.
      *
@@ -89,7 +95,7 @@ final class SchemaTest extends TestCase
     {
         $option = Schema::option($name);
         $this->assertNotNull($option, $name);
-        $this->assertSame($default, $option->default);
+        $this->assertSame(self::DEVIATIONS[$name] ?? $default, $option->default);
         $this->assertTrue($option->persisted);
         $this->assertSame(match (true) {
             \is_bool($default) => OptionType::Bool,

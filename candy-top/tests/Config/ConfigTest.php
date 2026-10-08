@@ -17,7 +17,7 @@ final class ConfigTest extends TestCase
         $config = Config::new();
         $this->assertSame(Schema::defaults(), $config->toArray());
         $this->assertSame(2000, $config->updateMs());
-        $this->assertSame('Default', $config->colorTheme());
+        $this->assertSame('pastel', $config->colorTheme(), 'candy-top default (btop: Default)');
         $this->assertSame('braille', $config->graphSymbol());
         $this->assertSame(['cpu', 'mem', 'net', 'proc'], $config->shownBoxes());
         $this->assertSame('cpu lazy', $config->procSorting());

@@ -32,11 +32,15 @@ use SugarCraft\Dash\Foundation\GradientStore;
  *   gradient pass sees the raw channels exactly as btop's `rgbs` does (a
  *   300 start bends the whole ramp; a negative end red marks the end unset).
  *
- * Gradients are byte-identical to btop's for Default, all 42 shipped themes
+ * Gradients are byte-identical to btop's for Default, all 43 shipped themes
  * and the edge cases pinned in tests/fixtures/btop-theme-oracle.json
  * (generated from btop's own code by prompt_kit/tools/btop-theme-oracle.cpp).
  * Only deviation: a non-numeric decimal falls back to Default instead of
  * aborting the process (btop's stoi throws).
+ *
+ * candy-top extension: the optional {@see BOX_FLOW_KEYS} give a box outline
+ * a colour flow ({@see boxFlow()}); they never touch the 48 btop keys or
+ * the gradients, so the oracle parity above is unaffected.
  *
  * Default/TTY values and the resolution law are ported from btop
  * (Copyright 2021 Aristocratos, Apache-2.0; see candy-top/themes/LICENSE).
@@ -112,6 +116,24 @@ final class ThemeConfig implements Palette
     /** Keys btop never back-fills from Default; they get the dedicated fallbacks instead. */
     private const OPTIONAL = ['meter_bg', 'process_start', 'process_mid', 'process_end', 'graph_text'];
 
+    /**
+     * candy-top's optional border-flow keys ({@see boxFlow()}), outside
+     * btop's vocabulary: a box outline flows `<box>_box` → `<box>_box_mid`
+     * → `<box>_box_end` when `_end` is set. btop's loader ignores them.
+     *
+     * Caveat for custom themes: {@see \SugarCraft\Top\View\BorderFlow}
+     * recolours a cell only when its style is EXACTLY the flat `<box>_box`
+     * (or `div_line`) escape. If a theme gives `<box>_box` the same colour
+     * as another key drawn with box-drawing glyphs inside that box, those
+     * glyphs flow too; and a line drawn in any other colour (or with bold)
+     * stays flat. Keep `<box>_box` and `div_line` distinct from the text
+     * colours.
+     */
+    public const BOX_FLOW_KEYS = [
+        'cpu_box_mid', 'cpu_box_end', 'mem_box_mid', 'mem_box_end',
+        'net_box_mid', 'net_box_end', 'proc_box_mid', 'proc_box_end',
+    ];
+
     /** btop's rgbs sentinel for "no color". */
     private const UNSET = [-1, -1, -1];
 
@@ -119,6 +141,9 @@ final class ThemeConfig implements Palette
     private readonly array $colors;
 
     private readonly GradientStore $gradients;
+
+    /** @var array<string, BoxFlow> box family ("cpu", "mem", "net", "proc") → its outline flow */
+    private readonly array $flows;
 
     /**
      * Gradients btop builds outside the plain start/mid/end law — blank (all
@@ -139,6 +164,7 @@ final class ThemeConfig implements Palette
     ) {
         [$this->colors, $raw] = self::resolve($source, $themeBackground);
         [$this->gradients, $this->fixed] = self::buildGradients($this->colors, $raw);
+        $this->flows = self::resolveFlows($source, $this->colors);
     }
 
     /** btop's builtin "Default" theme. */
@@ -149,13 +175,13 @@ final class ThemeConfig implements Palette
 
     /**
      * Resolve a raw key → value map (as {@see ThemeFile::parse()} yields).
-     * Unknown keys are ignored.
+     * Unknown keys are ignored; btop's 48 plus {@see BOX_FLOW_KEYS} are kept.
      *
      * @param array<string, string> $source
      */
     public static function fromSource(array $source, string $name = 'custom'): self
     {
-        return new self($name, array_intersect_key($source, self::DEFAULT_THEME), true);
+        return new self($name, array_intersect_key($source, self::DEFAULT_THEME + array_flip(self::BOX_FLOW_KEYS)), true);
     }
 
     /** Parse and resolve `.theme` text. */
@@ -206,6 +232,16 @@ final class ThemeConfig implements Palette
             throw new \OutOfBoundsException(sprintf('Unknown theme key "%s"', $key));
         }
         return $this->colors[$key] ?? null;
+    }
+
+    /**
+     * The outline flow for box family `$box` ("cpu", "mem", "net", "proc"),
+     * or null when the theme sets no valid `<box>_box_end` — the box is then
+     * drawn flat in `<box>_box`, exactly as btop draws it.
+     */
+    public function boxFlow(string $box): ?BoxFlow
+    {
+        return $this->flows[$box] ?? null;
     }
 
     /** @return array<string, ?Color> every semantic key, in Default order */
@@ -395,6 +431,28 @@ final class ThemeConfig implements Palette
             $inherit('graph_text', 'inactive_fg');
         }
         return [$colors, $raw];
+    }
+
+    /**
+     * Border flows from the optional `<box>_box_mid`/`_end` keys. Only `#hex`
+     * and `R G B` values count; anything else (or an empty `_end`) leaves the
+     * box flat. An invalid or empty `_mid` gives a two-stop flow.
+     *
+     * @param array<string, string> $source
+     * @param array<string, ?Color> $colors
+     * @return array<string, BoxFlow>
+     */
+    private static function resolveFlows(array $source, array $colors): array
+    {
+        $flows = [];
+        foreach (['cpu', 'mem', 'net', 'proc'] as $box) {
+            $start = $colors[$box . '_box'] ?? null;
+            $end = self::parseColor($source[$box . '_box_end'] ?? '');
+            if ($start !== null && $end !== null) {
+                $flows[$box] = BoxFlow::new($start, self::parseColor($source[$box . '_box_mid'] ?? ''), $end);
+            }
+        }
+        return $flows;
     }
 
     /**

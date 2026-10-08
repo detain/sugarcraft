@@ -20,7 +20,7 @@ declare(strict_types=1);
 
 return [
     // ---- config option descriptions (btop_config.cpp descriptions) ----------
-    'config.desc.color_theme' => "Name of a btop++/bpytop/bashtop formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes.\nThemes should be placed in \"\$XDG_CONFIG_HOME/candy-top/themes\" or the candy-top themes directory.",
+    'config.desc.color_theme' => "Name of a btop++/bpytop/bashtop formatted \".theme\" file, \"Default\" and \"TTY\" for builtin themes.\ncandy-top's default is the bundled \"pastel\" theme (btop's is \"Default\").\nThemes should be placed in \"\$XDG_CONFIG_HOME/candy-top/themes\" or the candy-top themes directory.",
     'config.desc.theme_background' => 'If the theme set background should be shown, set to False if you want terminal background transparency.',
     'config.desc.truecolor' => 'Sets if 24-bit truecolor should be used, will convert 24-bit colors to 256 color (6x6x6 color cube) if false.',
     'config.desc.force_tty' => "Set to true to force tty mode regardless if a real tty has been detected or not.\nWill force 16-color mode and TTY theme, set all graph symbols to \"tty\" and swap out other non tty friendly symbols.",
@@ -433,7 +433,7 @@ return [
     'options.heading.telemetry' => 'Telemetry',
     'options.heading.gpu_display' => 'Display',
     'options.heading.names' => 'Names',
-    'options.desc.color_theme' => "Set color theme.\n\nChoose from all theme files in the bundled\ncandy-top themes directory and\n\"~/.config/candy-top/themes\".\n\n\"Default\" for builtin default theme.\n\"TTY\" for builtin 16-color theme.\n\nFor theme updates see:\nhttps://github.com/aristocratos/btop",
+    'options.desc.color_theme' => "Set color theme.\n\nChoose from all theme files in the bundled\ncandy-top themes directory and\n\"~/.config/candy-top/themes\".\n\n\"pastel\" is candy-top's default theme.\n\"Default\" for btop's builtin theme.\n\"TTY\" for builtin 16-color theme.\n\nFor theme updates see:\nhttps://github.com/aristocratos/btop",
     'options.desc.theme_background' => "If the theme set background should be shown.\n\nSet to False if you want terminal background\ntransparency.",
     'options.desc.truecolor' => "Sets if 24-bit truecolor should be used.\n\nWill convert 24-bit colors to 256 color\n(6x6x6 color cube) if False.\n\nSet to False if your terminal doesn't have\ntruecolor support and can't convert to\n256-color.",
     'options.desc.force_tty' => "TTY mode.\n\nSet to true to force tty mode regardless\nif a real tty has been detected or not.\n\nWill force 16-color mode and TTY theme,\nset all graph symbols to \"tty\" and swap\nout other non tty friendly symbols.",

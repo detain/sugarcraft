@@ -11,7 +11,7 @@ namespace SugarCraft\Top\Theme;
  * Search priority follows btop's custom → user → system walk, adapted to
  * candy-top paths: an optional custom dir (btop's `--themes-dir`), the user
  * dir `$XDG_CONFIG_HOME/candy-top/themes` (else `$HOME/.config/candy-top/themes`),
- * then the 42 themes bundled in `candy-top/themes/`. The filename
+ * then the 43 themes bundled in `candy-top/themes/`. The filename
  * sort is stable, so when two directories ship the same filename the
  * higher-priority copy sits first and wins every lookup — a user can shadow
  * a bundled theme by dropping a same-named file in their config dir.

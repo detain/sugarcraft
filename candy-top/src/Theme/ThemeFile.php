@@ -17,7 +17,7 @@ namespace SugarCraft\Top\Theme;
  * - btop skips a comment only when `#` is the first byte right after the
  *   previous entry, so a commented-out `#theme[x]="…"` that follows a blank
  *   line is re-read as a live entry. Here any line whose first non-blank
- *   character is `#` is a comment. Of the 42 shipped themes only gotham has
+ *   character is `#` is a comment. Of the 43 shipped themes only gotham has
  *   such a line, and its next line re-sets the same key, so every shipped
  *   theme resolves identically.
  * - An unquoted value has trailing whitespace (incl. a CRLF `\r`) trimmed;
@@ -32,7 +32,8 @@ final class ThemeFile
 
     /**
      * Parse `.theme` text. Keys outside the btop vocabulary are dropped (btop
-     * ignores them); a key given twice keeps its last value.
+     * ignores them), except candy-top's {@see ThemeConfig::BOX_FLOW_KEYS};
+     * a key given twice keeps its last value.
      *
      * @return array<string, string>
      */
@@ -53,7 +54,7 @@ final class ThemeFile
                 continue;
             }
             $name = substr($line, $open + 1, $close - $open - 1);
-            if (!array_key_exists($name, ThemeConfig::DEFAULT_THEME)) {
+            if (!array_key_exists($name, ThemeConfig::DEFAULT_THEME) && !in_array($name, ThemeConfig::BOX_FLOW_KEYS, true)) {
                 continue;
             }
             $eq = strpos($line, '=', $close + 1);

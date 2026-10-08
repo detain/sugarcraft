@@ -148,7 +148,7 @@ final class ThemeRegistryTest extends TestCase
     public function testNewDiscoversBundledThemesAndCustomDirFirst(): void
     {
         $r = ThemeRegistry::new($this->tmp . '/user', []);
-        self::assertCount(2 + 42 + 1, $r->entries());
+        self::assertCount(2 + 43 + 1, $r->entries());
         self::assertSame(['Default', 'TTY'], array_slice($r->names(), 0, 2));
         self::assertContains('nord', $r->names());
         self::assertContains('HotPurpleTrafficLight', $r->names());

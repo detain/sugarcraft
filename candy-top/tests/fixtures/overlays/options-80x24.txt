@@ -13,12 +13,12 @@
 │ ←         Default         → │ candy-top themes directory and               │6│
 │       Theme background      │ "~/.config/candy-top/themes".                │5│
 │             True            │                                              │9│
-│          Truecolor          │ "Default" for builtin default theme.         │2│
-│             True            │ "TTY" for builtin 16-color theme.            │6│
-│  Terminal and input         │                                              │6│
-│                             │ For theme updates see:                       │ │
-│          Force tty          │ https://github.com/aristocratos/btop         │ │
-│            False            │                                              │ │
+│          Truecolor          │ "pastel" is candy-top's default theme.       │2│
+│             True            │ "Default" for btop's builtin theme.          │6│
+│  Terminal and input         │ "TTY" for builtin 16-color theme.            │6│
+│                             │                                              │ │
+│          Force tty          │ For theme updates see:                       │ │
+│            False            │ https://github.com/aristocratos/btop         │ │
 ╰─┘↑ page 1/6 ↓└──────────────┴──────────────────────────────────────────────╯ │
 │               ╰─┘upload└────────╯││                                          │
 ╰──────────────────────────────────╯╰──────────────────────────────────────────╯

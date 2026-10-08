@@ -1,0 +1,114 @@
+# Btop++ / candy-top Pastel theme
+# Bright candy-shop pastels (bubblegum, lavender, mint, peach, sky, lemon)
+# on a deep plum-ink background. candy-top's default theme.
+# Original to candy-top (SugarCraft), MIT licence.
+
+# Main background, empty = terminal default
+theme[main_bg]="#1a1528"
+
+# Main text color
+theme[main_fg]="#f4efff"
+
+# Title color for boxes
+theme[title]="#fff6fc"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#ff8fcf"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#44357a"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#fff59c"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#8076ab"
+
+# Color of text appearing on top of graphs, i.e uptime and current network graph scaling
+theme[graph_text]="#b9b0dc"
+
+# Background color of the percentage meters
+theme[meter_bg]="#6a6488"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#7dffc8"
+
+# Cpu box outline color
+theme[cpu_box]="#bfa3ff"
+
+# Memory/disks box outline color
+theme[mem_box]="#7df5c2"
+
+# Net up/down box outline color
+theme[net_box]="#8fd4ff"
+
+# Processes box outline color
+theme[proc_box]="#ff9ad2"
+
+# Box outline flows (candy-top extension; btop ignores these keys and draws
+# the flat *_box colour): each outline sweeps from its *_box colour at the
+# top-left through *_box_mid to *_box_end at the bottom-right
+theme[cpu_box_mid]="#ff9ad2"
+theme[cpu_box_end]="#ffc49a"
+theme[mem_box_mid]="#8fd4ff"
+theme[mem_box_end]="#bfa3ff"
+theme[net_box_mid]="#bfa3ff"
+theme[net_box_end]="#ff9ad2"
+theme[proc_box_mid]="#ffc49a"
+theme[proc_box_end]="#ffb3e0"
+
+# Box divider line and small boxes line color
+theme[div_line]="#6b5fa0"
+
+# Temperature graph colors
+theme[temp_start]="#7dffc8"
+theme[temp_mid]="#fff38f"
+theme[temp_end]="#ff7fb3"
+
+# CPU graph colors
+theme[cpu_start]="#8fe3ff"
+theme[cpu_mid]="#c6a6ff"
+theme[cpu_end]="#ff88c8"
+
+# Mem/Disk free meter
+theme[free_start]="#4fc79a"
+theme[free_mid]="#7dffc8"
+theme[free_end]="#c8ffe6"
+
+# Mem/Disk cached meter
+theme[cached_start]="#5fa8f0"
+theme[cached_mid]="#8fd4ff"
+theme[cached_end]="#d2f0ff"
+
+# Mem/Disk available meter
+theme[available_start]="#f09a6a"
+theme[available_mid]="#ffbb8f"
+theme[available_end]="#ffe0c8"
+
+# Mem/Disk used meter
+theme[used_start]="#ef6aa8"
+theme[used_mid]="#ff95cf"
+theme[used_end]="#ffcbe6"
+
+# Download graph colors
+theme[download_start]="#8a8cf5"
+theme[download_mid]="#8fd4ff"
+theme[download_end]="#9dffd8"
+
+# Upload graph colors
+theme[upload_start]="#c08af5"
+theme[upload_mid]="#ff9ad2"
+theme[upload_end]="#ffd2a3"
+
+# Process box color gradient for threads, mem and cpu usage
+theme[process_start]="#7dffc8"
+theme[process_mid]="#fff38f"
+theme[process_end]="#ff88b8"
+
+# Process list banner and followed-process colors
+theme[proc_pause_bg]="#b8427f"
+theme[proc_follow_bg]="#5566cc"
+theme[proc_banner_bg]="#8457c9"
+theme[proc_banner_fg]="#fff8fd"
+theme[followed_bg]="#5566cc"
+theme[followed_fg]="#fff8fd"

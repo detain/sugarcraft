@@ -98,7 +98,7 @@ called out in the table below.
 | **CandyMines** (`candy-mines/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyFlip** (`candy-flip/`) | 🟢 ready | ASCII GIF viewer (ext-gd). |
 | **SugarReel** (`sugar-reel/`) | 🟢 ready | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty) — ffmpeg pipe + pure-PHP GIF fallback, delta repaint, seek, speed, audio companion. |
-| **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 42 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
+| **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 43 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
 | **HoneyFlap** (`honey-flap/`) | 🟢 ready | Flappy Bird clone — the bird is a HoneyBounce projectile. |
 
 <!-- Windows ConPTY backend for candy-pty: tracked as a future row. -->

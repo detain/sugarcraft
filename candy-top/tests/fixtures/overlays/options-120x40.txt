@@ -13,12 +13,12 @@
 ╰───────────────────│ ←         Default         → │ candy-top themes directory and               │─────────────────────╯
 ╭─┐²mem┌────────────│       Theme background      │ "~/.config/candy-top/themes".                │─────────────────────╮
 │ Total: 16.0 GiB   │             True            │                                              │           MemB  Cpu%│
-│ Used: 10.2 GiB    │          Truecolor          │ "Default" for builtin default theme.         │        198 MiB  27.8│
-│ Available: 5.80 Gi│             True            │ "TTY" for builtin 16-color theme.            │       90.0 MiB  25.0│
-│ Cached: 3.20 GiB  │  Terminal and input         │                                              │es      244 MiB  13.6│
-│ Free: 2.60 GiB    │                             │ For theme updates see:                       │        398 MiB  11.5│
-│                   │          Force tty          │ https://github.com/aristocratos/btop         │        502 MiB   7.9│
-│ Swap: 205 MiB / 2.│            False            │                                              │ta      305 MiB   7.2│
+│ Used: 10.2 GiB    │          Truecolor          │ "pastel" is candy-top's default theme.       │        198 MiB  27.8│
+│ Available: 5.80 Gi│             True            │ "Default" for btop's builtin theme.          │       90.0 MiB  25.0│
+│ Cached: 3.20 GiB  │  Terminal and input         │ "TTY" for builtin 16-color theme.            │es      244 MiB  13.6│
+│ Free: 2.60 GiB    │                             │                                              │        398 MiB  11.5│
+│                   │          Force tty          │ For theme updates see:                       │        502 MiB   7.9│
+│ Swap: 205 MiB / 2.│            False            │ https://github.com/aristocratos/btop         │ta      305 MiB   7.2│
 │                   │           Vim keys          │                                              │        612 MiB   6.6│
 │                   │            False            │                                              │        360 MiB   2.6│
 │                   │        Disable mouse        │                                              │                     │

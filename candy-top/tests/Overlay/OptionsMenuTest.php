@@ -218,16 +218,19 @@ final class OptionsMenuTest extends OverlayTestCase
     public function testColorThemeCyclesTheThemeList(): void
     {
         $registry = ThemeRegistry::fromDirs(ThemeRegistry::bundledDir());
-        $c = self::context(themes: $registry);
+        $c = self::context(['color_theme' => 'Default'], themes: $registry);
         $menu = OptionsMenu::new();
         $this->assertSame(['color_theme' => 'TTY'], $menu->update(self::key('right'), $c)->set);
+        // candy-top's default (pastel) sits in the list like any bundled file.
+        $this->assertSame(['color_theme' => 'phoenix-night.theme'], $menu->update(self::key('right'), self::context(themes: $registry))->set);
+        $this->assertSame(['color_theme' => 'paper.theme'], $menu->update(self::key('left'), self::context(themes: $registry))->set);
         $last = $registry->entries()[count($registry->entries()) - 1];
         $this->assertSame(['color_theme' => $registry->configValue($last)], $menu->update(self::key('left'), $c)->set, 'wraps to the last theme file');
         $nord = self::context(['color_theme' => 'nord.theme'], themes: $registry);
         $set = $menu->update(self::key('right'), $nord)->set;
         $this->assertNotSame('nord.theme', $set['color_theme']);
         $this->assertStringEndsWith('.theme', $set['color_theme'], 'btop writes the file name');
-        $this->assertSame(['color_theme' => 'TTY'], $menu->update(self::key('right'), self::context())->set, 'no catalog: Default and TTY only');
+        $this->assertSame(['color_theme' => 'TTY'], $menu->update(self::key('right'), self::context(['color_theme' => 'Default']))->set, 'no catalog: Default and TTY only');
     }
 
     public function testEditingFreeTextAndInts(): void

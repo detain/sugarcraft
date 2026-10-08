@@ -16,7 +16,10 @@ use SugarCraft\Top\Theme\ThemeConfig;
 
 /**
  * A deterministic App: fake sources, 8-core host, fixed clock
- * (2023-11-14 22:13:20 UTC + 1h uptime), truecolor Default theme.
+ * (2023-11-14 22:13:20 UTC + 1h uptime), truecolor Default theme. The
+ * default config names that palette (`color_theme = Default`) so the
+ * options menu agrees with what is drawn; candy-top's own default theme
+ * (pastel) is pinned by tests/View/PastelThemeFrameTest.php.
  */
 final class Harness
 {
@@ -30,7 +33,7 @@ final class Harness
     public static function app(?Config $config = null): App
     {
         $host = self::host();
-        $config ??= Config::new();
+        $config ??= Config::new()->with('color_theme', 'Default');
 
         return App::start(
             $config,

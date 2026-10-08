@@ -184,7 +184,8 @@ final class ConfigReaderTest extends TestCase
         $result = ConfigReader::parse((string) file_get_contents(__DIR__ . '/fixtures/btop-1.3.0.conf'));
         $this->assertSame([], $result->warnings);
         $this->assertTrue($result->needsRewrite, 'foreign header');
-        $this->assertSame(Config::new()->toArray(), $result->config->toArray());
+        // Its color_theme = "Default" is kept: btop's builtin wins over candy-top's pastel default.
+        $this->assertSame(Config::new()->with('color_theme', 'Default')->toArray(), $result->config->toArray());
     }
 
     public function testWriterOutputRoundTrips(): void

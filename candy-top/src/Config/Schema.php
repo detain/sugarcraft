@@ -186,7 +186,7 @@ final class Schema
         );
 
         $list = [
-            Option::string('color_theme', 'Default'),
+            Option::string('color_theme', 'pastel'), // Deliberate deviation: candy-top's own default theme (btop's is the builtin "Default", still selectable).
             Option::bool('theme_background', true),
             Option::bool('truecolor', true),
             Option::bool('force_tty', false),

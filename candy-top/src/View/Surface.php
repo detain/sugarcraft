@@ -185,6 +185,57 @@ final class Surface
         }
     }
 
+    /**
+     * Replace the style of the cell at ($x, $y), keeping its glyph — a
+     * post-pass recolour (e.g. {@see BorderFlow}). Out of bounds is a no-op.
+     */
+    public function restyle(int $x, int $y, string $sgr): void
+    {
+        if ($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) {
+            return;
+        }
+        $this->cells[$y][$x][1] = self::canonical($sgr);
+    }
+
+    /**
+     * Restyle, inside `$rect`, every box-drawing cell (U+2500..U+257F) whose
+     * style is a key of `$styles` — the {@see BorderFlow} hot loop, kept
+     * here so it reads the cell array directly (it runs every frame).
+     *
+     * `$memo` (by reference, owned by the caller and reused across frames)
+     * maps `(((y * width + x) << 1) | tag)` to the new canonical SGR, where
+     * tag is `$styles[$style]` (0 or 1); `$resolve(int $tag, int $x, int $y):
+     * string` fills a miss, so a steady state does no colour maths at all.
+     *
+     * @param array<string, int> $styles canonical style → tag (0 or 1)
+     * @param array<int, string> $memo
+     * @param \Closure(int, int, int): string $resolve
+     */
+    public function restyleBoxDrawing(Rect $rect, array $styles, array &$memo, \Closure $resolve): void
+    {
+        $clip = $rect->intersect($this->bounds);
+        $right = $clip->right();
+        $bottom = $clip->bottom();
+        for ($y = $clip->y; $y < $bottom; $y++) {
+            $row = &$this->cells[$y];
+            for ($x = $clip->x; $x < $right; $x++) {
+                $cell = $row[$x];
+                if (!isset($styles[$cell[1]])) {
+                    continue;
+                }
+                $g = $cell[0];
+                // U+2500..U+257F is UTF-8 E2 94 80..E2 95 BF.
+                if (\strlen($g) !== 3 || $g[0] !== "\xE2" || ($g[1] !== "\x94" && $g[1] !== "\x95")) {
+                    continue;
+                }
+                $tag = $styles[$cell[1]];
+                $key = (($y * $this->width + $x) << 1) | $tag;
+                $row[$x][1] = $memo[$key] ??= self::canonical($resolve($tag, $x, $y));
+            }
+            unset($row);
+        }
+    }
+
     /** Glyph at ($x, $y): '' for the right half of a wide cluster. */
     public function glyph(int $x, int $y): string
     {
