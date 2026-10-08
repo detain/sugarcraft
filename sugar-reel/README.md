@@ -27,7 +27,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
 (new \SugarCraft\Core\Program($player))->run();
 ```
 
-> **Status:** Step 7 ✓ — full implementation with ffmpeg decode pipe,
+> **Status:** complete — full implementation with ffmpeg decode pipe,
 > pure-PHP GIF fallback, all rendering modes (ascii/ansi256/truecolor/
 > half-block/sixel/kitty/iTerm2), delta repaint, seek, speed control,
 > and a runnable example.
@@ -143,7 +143,7 @@ $reel = $reel->withHeaders(['Cookie' => 'session=…']);
 
 `Reel::play()` builds its own candy-core `Program` and blocks. To drive playback
 from a host that already owns a `Program`/event loop, use `Reel::toPlayer()` to
-get the TEA `Player` model **paused** and mount it yourself. Building the model
+get the `Player` model **paused** and mount it yourself. Building the model
 opens the source, so its `ffmpeg` child is spawned immediately — a host that
 mounts and never starts must still call `stop()` to release it.
 
@@ -261,7 +261,7 @@ video file (mp4/gif/avi/webm)
                     └─────────┬──────────────┘
                               │
                     ┌─────────┴──────────────┐
-                    │   Player (TEA Model)    │
+                    │   Player (MVC model)    │
                     │   tick() → view()       │
                     └─────────┬──────────────┘
                               │
@@ -278,7 +278,7 @@ video file (mp4/gif/avi/webm)
 
 ## Prior art
 
-SugarReel has no single upstream. Its decode → render → pace pipeline draws on
+The decode → render → pace pipeline draws on
 three terminal-video projects, credited here:
 
 - [maxcurzi/tplay](https://github.com/maxcurzi/tplay) — Rust terminal media player.
@@ -288,7 +288,7 @@ three terminal-video projects, credited here:
 The rendering stack is reused from the SugarCraft ecosystem rather than
 reinvented: [candy-mosaic](../candy-mosaic) (image → cell renderers),
 [candy-flip](../candy-flip) (downsampling / dithering), [candy-palette](../candy-palette)
-(color mapping), and [candy-core](../candy-core) (TEA runtime + frame pacing).
+(color mapping), and [candy-core](../candy-core) (Model–Update–View runtime + frame pacing).
 
 ## Known limitations
 

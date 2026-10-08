@@ -10,7 +10,7 @@
 
 # SugarCalendar
 
-PHP port of [EthanEFung/bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) — interactive date picker component for terminal UIs. Inspired by the jQuery Datepicker widget.
+sugar-calendar — an interactive date picker component for terminal UIs, for PHP 8.3+.
 
 ## Features
 
@@ -81,3 +81,7 @@ if ($key === 'esc')   $picker = $picker->ClearDate();
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [EthanEFung/bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker); SugarCraft is developed as a native PHP project.

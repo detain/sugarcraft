@@ -10,7 +10,7 @@
 
 # SugarReadline
 
-PHP port of [erikgeiser/promptkit](https://github.com/erikgeiser/promptkit) — interactive line-editing prompt library for terminal UIs.
+sugar-readline — an interactive line-editing prompt library for terminal UIs, for PHP 8.3+.
 
 ## Features
 
@@ -208,3 +208,7 @@ Each prompt is a state machine with three states: pending, submitted, aborted.
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [erikgeiser/promptkit](https://github.com/erikgeiser/promptkit); SugarCraft is developed as a native PHP project.

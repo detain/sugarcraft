@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-Flappy-Bird-style game on the SugarCraft stack — port of [`kbrgl/flapioca`](https://github.com/kbrgl/flapioca). The bird's vertical motion is a HoneyBounce projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
+honey-flap — a Flappy-Bird-style game for the terminal, built on the SugarCraft stack, for PHP 8.3+. The bird's vertical motion is a HoneyBounce projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
 
 ## Run it
 
@@ -92,3 +92,7 @@ vendor/bin/phpunit
 Game frame output is pinned via `candy-testing`'s `assertGoldenAnsi` golden-file
 snapshots. Any change to the ANSI playfield output must be intentional — re-record the
 fixture with `--update-golden` to accept a new canonical render.
+
+## Credits & inspiration
+
+Design antecedent: [kbrgl/flapioca](https://github.com/kbrgl/flapioca); SugarCraft is developed as a native PHP project.

@@ -14,7 +14,7 @@
 ![demo](.vhs/dashboard.gif)
 ![push demo](.vhs/push.gif)
 
-Privacy-first coding-time tracker — port of [`Rtarun3606k/TakaTime`](https://github.com/Rtarun3606k/TakaTime). Storage is JSONL on local disk (no cloud, no MongoDB), the dashboard is a SugarCharts-driven TUI that reads it.
+sugar-tick — a privacy-first coding-time tracker for PHP 8.3+. Storage is JSONL on local disk (no cloud, no database server), the dashboard is a SugarCharts-driven TUI that reads it.
 
 ## Run it
 
@@ -60,3 +60,7 @@ sugar-tick uses [candy-async](https://github.com/detain/sugarcraft/tree/master/c
 composer install
 vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Design antecedent: [Rtarun3606k/TakaTime](https://github.com/Rtarun3606k/TakaTime); SugarCraft is developed as a native PHP project.

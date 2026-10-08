@@ -13,7 +13,7 @@
 
 
 
-PHP port of [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) — floating alert notification component for terminal UIs. Alerts float to the top of your TUI like bubbles in soda.
+sugar-toast — a floating alert notification component for terminal UIs, for PHP 8.3+. Alerts float to the top of your TUI like bubbles in soda.
 
 ## Features
 
@@ -148,7 +148,7 @@ schedule a single timer for exactly that moment:
 ```php
 $delay = $toast->secondsUntilNextExpiry();   // seconds until the soonest expiry, or null
 if ($delay !== null) {
-    // e.g. in a candy-core TEA app:
+    // e.g. in a candy-core app:
     $cmd = Cmd::tick($delay, fn () => new ToastTickMsg());
 }
 
@@ -357,3 +357,7 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup); SugarCraft is developed as a native PHP project.

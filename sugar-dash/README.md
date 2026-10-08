@@ -1,6 +1,6 @@
 # SugarCraft\Dash
 
-A comprehensive TUI component library for PHP 8.3+, ported from the Charmbracelet ecosystem (bubbletea, bubble-grid, lipgloss). Provides 200+ components organized into 13 namespaces for building rich terminal user interfaces.
+sugar-dash — a comprehensive TUI component library for PHP 8.3+. Provides 200+ components organized into 13 namespaces for building rich terminal user interfaces.
 
 ## Installation
 
@@ -52,12 +52,12 @@ composer require sugarcraft/sugar-dash
 | `Cell` | Single terminal cell (rune + Style) — sugar-dash SSOT, distinct from `\SugarCraft\Vt\Cell\Cell` | |
 | `Buffer` | Cell grid buffer for drawing — sugar-dash SSOT, distinct from `\SugarCraft\Vt\Buffer\Buffer` | `getCell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
 | `Rect` | Rectangle geometry (rectmath bounds model: minX/minY/maxX/maxY) — distinct from `\SugarCraft\Core\Rect` (offset+size model) | `contains()`, `intersect()`, `dx()`, `dy()` |
-| `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dash SSOT, distinct from `\SugarCraft\Sprinkles\Style` (lipgloss padding/margin/borders) | `fg()`, `bg()`, `bold()`, etc. |
+| `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dash SSOT, distinct from `\SugarCraft\Sprinkles\Style` (padding/margin/borders) | `fg()`, `bg()`, `bold()`, etc. |
 | `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dash SSOT, NOT drop-in compatible with `\SugarCraft\Sprinkles\StyleParser` | |
 | `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
 | `Theme` | Pre-defined theme palettes (10 colour slots + helpers) — sugar-dash SSOT, distinct from `\SugarCraft\Sprinkles\Theme` (13 slots, readonly only) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
 
-> **Dual-SSOT note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `candy-sprinkles`/`candy-core`/`candy-vt`. The lineage differs (charmbracelet/inline-termui for sugar-dash, lipgloss/ratatui/VT-emulator for the others) and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
+> **Dual-SSOT note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `candy-sprinkles`/`candy-core`/`candy-vt`. The two families have distinct design lineages and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
 
 ---
 
@@ -417,7 +417,7 @@ composer require sugarcraft/sugar-dash
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Module` | Elm-arch interface aligned with `Core\Model`: `init(): ?Closure`, `update(Msg): array{0:Module,1:?Cmd}`, `view(): string`, plus `name(): string`, `minSize(): array{0:int,1:int}` |
+| `Module` | MVC-style Model–Update–View interface aligned with `Core\Model`: `init(): ?Closure`, `update(Msg): array{0:Module,1:?Cmd}`, `view(): string`, plus `name(): string`, `minSize(): array{0:int,1:int}` |
 | `BaseModule` | Abstract helper — `withState(array): static` for immutable state, default `update()` returns `[self,null]` |
 | `LegacyModule` | Deprecated array-state interface — superseded by `Module` |
 | `LegacyModuleAdapter` | `@internal` wrapper that adapts `LegacyModule` to the `Module` contract |
@@ -550,3 +550,7 @@ The `examples/` directory contains standalone demo files that showcase individua
 ## License
 
 MIT License - See LICENSE file for details.
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
