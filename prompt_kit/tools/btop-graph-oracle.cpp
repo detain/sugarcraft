@@ -3,7 +3,23 @@
 // Body of Graph::_create + the Graph ctor copied verbatim from
 // aristocratos/btop src/btop_draw.cpp (graph_symbols :89-133, _create :422-492,
 // ctor :496-522) with only the terminal plumbing stubbed out so the output is
-// a comparable token stream:
+// a comparable token stream.
+//
+// block2 (sextant) family: upstream PR aristocratos/btop#1783 "block2 graph
+// symbols", head commit f3fb5b8c6b3020e9020cf49a7fed5123b86ec925 (still open
+// at port time), src/btop_draw.cpp at that commit:
+//   - the block2_up / block2_down tables (:118-132), copied verbatim;
+//   - _create (:437-506): `clamp_max` (3 for block2, else 4) replacing the
+//     literal 4 in the band quantizer, the family-dependent `mod`
+//     (block2 0.6f/0.2f, others 0.3f/0.1f — same float values as before),
+//     and the horizon->vert rename; nothing else in _create changed.
+// The PR's other draw change, the UTF-8-aware first-glyph trim in
+// Graph::operator() (:540-557), is the incremental path and is not part of
+// this oracle (the ctor path below never trims). Pre-PR families produce
+// byte-identical output under the PR's _create; block2 cases are appended
+// after them so the RNG stream, and therefore every older case, is unchanged.
+//
+// Stubs:
 //   Mv::r(n)            -> "~" x n   (transparent cell: whatever is under it shows)
 //   Theme::g(..).at(k)  -> "{k}"     (gradient index 0..100)
 //   Fx::reset           -> "{R}"
@@ -55,6 +71,21 @@ static const std::unordered_map<string, vector<string>> graph_symbols = {
 		"▌", "▛", "▛", "█", "█",
 		"▌", "▛", "▛", "█", "█"
 	}},
+	// The size of all charts is assumed to be 5x5, so pad with spaces.
+	{"block2_up", {
+		" ", "🬞", "🬦", "▐", " ",
+		"🬏", "🬭", "🬵", "🬷", " ",
+		"🬓", "🬱", "🬹", "🬻", " ",
+		"▌", "🬲", "🬺", "█", " ",
+		" ", " ", " ", " ", " "
+	}},
+	{"block2_down", {
+		" ", "🬁", "🬉", "▐", " ",
+		"🬀", "🬂", "🬊", "🬨", " ",
+		"🬄", "🬆", "🬎", "🬬", " ",
+		"▌", "🬕", "🬝", "█", " ",
+		 " ", " ", " ", " ", " ",
+	}},
 	{"tty_up", {
 		" ", "░", "░", "▒", "▒",
 		"░", "░", "▒", "▒", "█",
@@ -86,15 +117,20 @@ struct Graph {
 	std::unordered_map<bool, vector<string>> graphs = { {true, {}}, {false, {}}};
 
 	void _create(const deque<long long>& data, int data_offset) {
-		bool mult = (data.size() - data_offset > 1);
 		const auto& graph_symbol = graph_symbols.at(symbol + '_' + (invert ? "down" : "up"));
-		array<int, 2> result;
-		const float mod = (height == 1) ? 0.3 : 0.1;
+		const int clamp_max = (symbol == "block2") ? 3 : 4;
+		const float mod = (symbol == "block2")
+                    ? ((height == 1) ? 0.6f : 0.2f)
+                    : ((height == 1) ? 0.3f : 0.1f);
+		bool mult = (data.size() - data_offset > 1);
+
 		long long data_value = 0;
 		if (mult and data_offset > 0) {
 			last = data.at(data_offset - 1);
 			if (max_value > 0) last = clamp((last + offset) * 100 / max_value, 0ll, 100ll);
 		}
+
+		array<int, 2> result;
 		for (int i = data_offset; i < (int)data.size(); i++) {
 			if (not tty_mode and mult) current = not current;
 			if (i < 0) {
@@ -105,28 +141,28 @@ struct Graph {
 				data_value = data.at(i);
 				if (max_value > 0) data_value = clamp((data_value + offset) * 100 / max_value, 0ll, 100ll);
 			}
-			for (int horizon = 0; horizon < height; horizon++) {
-				const int cur_high = (height > 1) ? round(100.0 * (height - horizon) / height) : 100;
-				const int cur_low = (height > 1) ? round(100.0 * (height - (horizon + 1)) / height) : 0;
+			for (int vert = 0; vert < height; vert++) {
+				const int cur_high = (height > 1) ? round(100.0 * (height - vert) / height) : 100;
+				const int cur_low = (height > 1) ? round(100.0 * (height - (vert + 1)) / height) : 0;
 				int ai = 0;
 				for (const auto& value : {last, data_value}) {
-					const int clamp_min = (no_zero and horizon == height - 1 and not (mult and i == data_offset and ai == 0)) ? 1 : 0;
+					const int clamp_min = (no_zero and vert == height - 1 and not (mult and i == data_offset and ai == 0)) ? 1 : 0;
 					if (value >= cur_high)
-						result[ai++] = 4;
+						result[ai++] = clamp_max;
 					else if (value <= cur_low)
 						result[ai++] = clamp_min;
 					else {
-						result[ai++] = clamp((int)round((float)(value - cur_low) * 4 / (cur_high - cur_low) + mod), clamp_min, 4);
+						result[ai++] = clamp((int)round((float)(value - cur_low) * clamp_max / (cur_high - cur_low) + mod), clamp_min, clamp_max);
 					}
 				}
 				if (height == 1) {
-					if (result.at(0) + result.at(1) == 0) graphs.at(current).at(horizon) += Mv_r(1);
+					if (result.at(0) + result.at(1) == 0) graphs.at(current).at(vert) += Mv_r(1);
 					else {
-						if (not color_gradient.empty()) graphs.at(current).at(horizon) += G(color_gradient, clamp(max(last, data_value), 0ll, 100ll));
-						graphs.at(current).at(horizon) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
+						if (not color_gradient.empty()) graphs.at(current).at(vert) += G(color_gradient, clamp(max(last, data_value), 0ll, 100ll));
+						graphs.at(current).at(vert) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
 					}
 				}
-				else graphs.at(current).at(horizon) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
+				else graphs.at(current).at(vert) += graph_symbol.at((result.at(0) * 5 + result.at(1)));
 			}
 			if (mult and i >= 0) last = data_value;
 		}
@@ -188,7 +224,7 @@ int main() {
 	// Values chosen to straddle band edges at heights 1..5 plus out-of-range.
 	const vector<long long> pool = {-25, -1, 0, 1, 2, 5, 7, 12, 13, 19, 20, 21, 25, 30, 33, 37, 38, 40, 45, 50, 55, 60, 62,
 		63, 66, 67, 70, 75, 80, 87, 88, 95, 99, 100, 101, 150, 250};
-	const vector<string> families = {"braille", "block", "tty"};
+	const vector<string> families = {"braille", "block", "tty", "block2"};
 	const vector<int> heights = {1, 2, 5};
 	const vector<array<long long, 2>> scales = {{0, 0}, {50, -5}, {0, 10}};
 	std::printf("[\n");

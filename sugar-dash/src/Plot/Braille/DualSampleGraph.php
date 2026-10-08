@@ -21,10 +21,14 @@ use SugarCraft\Dash\Plot\Gradient101;
  * sample deque; every {@see push()} rebuilds that frame from the retained
  * history, so the newest sample always lands in the rightmost cell.
  *
- * Three symbol families mirror btop's `graph_symbols` map: braille (two
+ * Four symbol families mirror btop's `graph_symbols` map: braille (two
  * samples per cell), block (quadrants; bands 1/2 share a glyph, so the
- * five bands collapse to four visible heights) and tty (shades only, one
- * sample per cell, its glyph still keyed on the previous sample).
+ * five bands collapse to four visible heights), block2 (2×3 sextants,
+ * U+1FB00 block: bands 0..3, so its quantizer clamps at 3 with a larger
+ * rounding bias — see {@see quantizer()}) and tty (shades only, one sample
+ * per cell, its glyph still keyed on the previous sample). Sextant glyphs
+ * need font support (Iosevka, Cascadia, JetBrains Mono 2.3+, or a
+ * terminal with built-in box drawing); braille stays the default.
  *
  * Deviations, all presentation-side: btop returns an empty string before
  * the first sample, here the blank padded frame keeps the layout width
@@ -39,16 +43,29 @@ use SugarCraft\Dash\Plot\Gradient101;
  * leading half-cell under no_zero.
  *
  * Mirrors aristocratos/btop Draw::Graph (Graph::Graph + Graph::_create,
- * src/btop_draw.cpp) and Symbols::graph_symbols.
+ * src/btop_draw.cpp) and Symbols::graph_symbols; block2 mirrors upstream
+ * PR aristocratos/btop#1783 at f3fb5b8c6b3020e9020cf49a7fed5123b86ec925.
+ * That PR also makes Graph::operator()'s first-glyph trim UTF-8 aware
+ * (it erased a fixed 3 bytes, which would split a 4-byte sextant); this
+ * port rebuilds the frame from the sample history on every push and keeps
+ * cells as whole glyphs, so it has no byte trim to fix.
  */
 final class DualSampleGraph implements SizedItem
 {
     public const FAMILY_BRAILLE = 'braille';
     public const FAMILY_BLOCK = 'block';
     public const FAMILY_TTY = 'tty';
+    /** Sextant family from btop PR #1783 ("block2"). */
+    public const FAMILY_BLOCK2 = 'block2';
+
+    /** @var list<string> every family, in btop's valid_graph_symbols order */
+    public const FAMILIES = [self::FAMILY_BRAILLE, self::FAMILY_BLOCK, self::FAMILY_BLOCK2, self::FAMILY_TTY];
 
     /**
      * Verbatim port of btop's Symbols::graph_symbols. Index = prev*5 + cur.
+     * block2_* are verbatim from btop PR #1783: 5×5 like the rest ("The
+     * size of all charts is assumed to be 5x5, so pad with spaces"), with
+     * only bands 0..3 reachable, so row 4 and column 4 are padding.
      *
      * @var array<string, list<string>>
      */
@@ -81,6 +98,20 @@ final class DualSampleGraph implements SizedItem
             '▌', '▛', '▛', '█', '█',
             '▌', '▛', '▛', '█', '█',
         ],
+        'block2_up' => [
+            ' ', '🬞', '🬦', '▐', ' ',
+            '🬏', '🬭', '🬵', '🬷', ' ',
+            '🬓', '🬱', '🬹', '🬻', ' ',
+            '▌', '🬲', '🬺', '█', ' ',
+            ' ', ' ', ' ', ' ', ' ',
+        ],
+        'block2_down' => [
+            ' ', '🬁', '🬉', '▐', ' ',
+            '🬀', '🬂', '🬊', '🬨', ' ',
+            '🬄', '🬆', '🬎', '🬬', ' ',
+            '▌', '🬕', '🬝', '█', ' ',
+            ' ', ' ', ' ', ' ', ' ',
+        ],
         'tty_up' => [
             ' ', '░', '░', '▒', '▒',
             '░', '░', '▒', '▒', '█',
@@ -100,7 +131,7 @@ final class DualSampleGraph implements SizedItem
     /**
      * btop's graph_bg idiom reads `graph_symbols.at(<family>_up).at(6)`:
      * band (1,1), the lowest non-blank level in both halves — a neutral
-     * floor line (⣀ / ▄ / ░).
+     * floor line (⣀ / ▄ / 🬭 / ░).
      */
     private const UNDERLAY_INDEX = 6;
 
@@ -232,7 +263,7 @@ final class DualSampleGraph implements SizedItem
         return $this->mutate(['underlayColor' => null]);
     }
 
-    /** The family's graph_bg glyph: ⣀ braille, ▄ block, ░ tty. */
+    /** The family's graph_bg glyph: ⣀ braille, ▄ block, 🬭 block2, ░ tty. */
     public function underlayGlyph(): string
     {
         return self::SYMBOLS[$this->family . '_up'][self::UNDERLAY_INDEX];
@@ -388,8 +419,7 @@ final class DualSampleGraph implements SizedItem
         if ($n > 0) {
             $table = self::SYMBOLS[$this->family . '_' . ($this->invert ? 'down' : 'up')];
             $mult = ($n - $dataOffset) > 1;
-            // C++ `const float mod`: the sum below is single precision.
-            $mod = self::f32($height === 1 ? 0.3 : 0.1);
+            [$clampMax, $mod] = $this->quantizer();
             $last = 0;
             $dataValue = 0;
             if ($mult && $dataOffset > 0) {
@@ -415,13 +445,13 @@ final class DualSampleGraph implements SizedItem
                         $clampMin = ($this->noZero && $horizon === $height - 1
                             && !($mult && $i === $dataOffset && $ai === 0)) ? 1 : 0;
                         if ($value >= $curHigh) {
-                            $result[$ai] = 4;
+                            $result[$ai] = $clampMax;
                         } elseif ($value <= $curLow) {
                             $result[$ai] = $clampMin;
                         } else {
-                            $q = self::f32(self::f32(($value - $curLow) * 4) / ($curHigh - $curLow));
+                            $q = self::f32(self::f32(($value - $curLow) * $clampMax) / ($curHigh - $curLow));
                             $band = (int) round(self::f32($q + $mod));
-                            $result[$ai] = max($clampMin, min(4, $band));
+                            $result[$ai] = max($clampMin, min($clampMax, $band));
                         }
                     }
 
@@ -500,6 +530,23 @@ final class DualSampleGraph implements SizedItem
         return $out;
     }
 
+    /**
+     * btop's per-family band ceiling and rounding bias (PR #1783 `_create`):
+     * block2 has four bands (0..3) per half-cell and biases rounding up
+     * harder (0.6 at height 1, 0.2 taller) to offset its coarser bands'
+     * pull toward 0; every other family keeps 4 and 0.3 / 0.1.
+     *
+     * @return array{int, float} [clamp_max, mod]; mod is a C++ `float`, so
+     *   the sum it joins is single precision
+     */
+    private function quantizer(): array
+    {
+        if ($this->family === self::FAMILY_BLOCK2) {
+            return [3, self::f32($this->height === 1 ? 0.6 : 0.2)];
+        }
+        return [4, self::f32($this->height === 1 ? 0.3 : 0.1)];
+    }
+
     /** btop's percent law: clamp((v + offset) * 100 / max_value, 0, 100), truncating. */
     private function scale(int $value): int
     {
@@ -555,9 +602,9 @@ final class DualSampleGraph implements SizedItem
 
     private static function assertFamily(string $family): void
     {
-        if (!in_array($family, [self::FAMILY_BRAILLE, self::FAMILY_BLOCK, self::FAMILY_TTY], true)) {
+        if (!in_array($family, self::FAMILIES, true)) {
             throw new \InvalidArgumentException(sprintf(
-                'Unknown DualSampleGraph family "%s" (expected braille, block or tty)',
+                'Unknown DualSampleGraph family "%s" (expected braille, block, block2 or tty)',
                 $family,
             ));
         }

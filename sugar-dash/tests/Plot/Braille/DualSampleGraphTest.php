@@ -19,7 +19,11 @@ use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
  *  - height 1 (mod 0.3, band = round(v*4/100 + 0.3)): bands 1/2/3/4 start
  *    at v = 5 / 30 / 55 / 80 (4 → 0.46 → 0, 5 → 0.5 → 1, …).
  *  - height 2 (mod 0.1): top row spans 50..100, bottom 0..50.
- *  - braille glyphs are derived from dot bits, block glyphs from quadrants.
+ *  - braille glyphs are derived from dot bits, block glyphs from quadrants,
+ *    block2 glyphs from sextant cell bits.
+ *  - block2 (btop PR #1783): bands 0..3, height 1 band = round(v*3/100 + 0.6)
+ *    so bands 1/2/3 start at v = 1 / 30 / 64 (29 → 1.47, 31 → 1.53,
+ *    63 → 2.49, 64 → 2.52); taller graphs use mod 0.2.
  */
 final class DualSampleGraphTest extends TestCase
 {
@@ -101,9 +105,57 @@ final class DualSampleGraphTest extends TestCase
         $this->assertNotContains('▓', $btop);
     }
 
+    public function testBlock2TablesMatchSextantPacking(): void
+    {
+        // Sextant cell bits: TL=1 TR=2 ML=4 MR=8 BL=16 BR=32. U+1FB00.. holds
+        // patterns 1..62 minus 21 (left column, ▌) and 42 (right column, ▐).
+        $glyph = static function (int $bits): string {
+            return match ($bits) {
+                0 => ' ',
+                21 => '▌',
+                42 => '▐',
+                63 => '█',
+                default => mb_chr(0x1FB00 + $bits - 1 - ($bits > 21 ? 1 : 0) - ($bits > 42 ? 1 : 0)),
+            };
+        };
+        // Band b lights b cells of a column, from the bottom (up) or top (down).
+        $leftUp = [16, 4, 1];
+        $rightUp = [32, 8, 2];
+        $leftDown = [1, 4, 16];
+        $rightDown = [2, 8, 32];
+        for ($prev = 0; $prev <= 4; $prev++) {
+            for ($cur = 0; $cur <= 4; $cur++) {
+                $i = $prev * 5 + $cur;
+                if ($prev === 4 || $cur === 4) {
+                    // Unreachable with clamp_max 3: btop pads the 5×5 shape with spaces.
+                    $this->assertSame(' ', DualSampleGraph::SYMBOLS['block2_up'][$i], "up pad $prev,$cur");
+                    $this->assertSame(' ', DualSampleGraph::SYMBOLS['block2_down'][$i], "down pad $prev,$cur");
+                    continue;
+                }
+                $up = array_sum(array_slice($leftUp, 0, $prev)) + array_sum(array_slice($rightUp, 0, $cur));
+                $down = array_sum(array_slice($leftDown, 0, $prev)) + array_sum(array_slice($rightDown, 0, $cur));
+                $this->assertSame($glyph($up), DualSampleGraph::SYMBOLS['block2_up'][$i], "up $prev,$cur");
+                $this->assertSame($glyph($down), DualSampleGraph::SYMBOLS['block2_down'][$i], "down $prev,$cur");
+            }
+        }
+    }
+
+    public function testSextantGlyphsAreOneCellWide(): void
+    {
+        foreach (['block2_up', 'block2_down'] as $name) {
+            foreach (DualSampleGraph::SYMBOLS[$name] as $i => $g) {
+                $this->assertSame(1, Width::string($g), "{$name}[{$i}]");
+            }
+        }
+    }
+
     public function testEveryTableHas25Entries(): void
     {
-        $this->assertCount(6, DualSampleGraph::SYMBOLS);
+        $this->assertCount(8, DualSampleGraph::SYMBOLS);
+        foreach (DualSampleGraph::FAMILIES as $family) {
+            $this->assertArrayHasKey($family . '_up', DualSampleGraph::SYMBOLS);
+            $this->assertArrayHasKey($family . '_down', DualSampleGraph::SYMBOLS);
+        }
         foreach (DualSampleGraph::SYMBOLS as $name => $table) {
             $this->assertCount(25, $table, $name);
             $this->assertSame(' ', $table[0], $name);
@@ -122,6 +174,55 @@ final class DualSampleGraphTest extends TestCase
         yield 'braille down' => ['braille', true, '⠈⠙⠻⢿⡇'];
         yield 'block up' => ['block', false, '▗▄▟█▌'];
         yield 'block down' => ['block', true, '▝▀▜█▌'];
+    }
+
+    /** @return iterable<string, array{bool, string}> */
+    public static function block2HeightOne(): iterable
+    {
+        // Pairs (0,1)=(0,1) (29,31)=(1,2) (63,64)=(2,3) (100,0)=(3,0) (1,100)=(1,3).
+        yield 'up' => [false, '🬞🬵🬻▌🬷'];
+        yield 'down' => [true, '🬁🬊🬬▌🬨'];
+    }
+
+    #[DataProvider('block2HeightOne')]
+    public function testBlock2HeightOneBandEdges(bool $invert, string $expected): void
+    {
+        $g = DualSampleGraph::new(5, 1, DualSampleGraph::FAMILY_BLOCK2, $invert)
+            ->withData(0, 1, 29, 31, 63, 64, 100, 0, 1, 100);
+        $this->assertSame($expected, self::plain($g));
+    }
+
+    public function testBlock2RoundingBiasLiftsSmallValues(): void
+    {
+        // v=1: braille round(0.04 + 0.3) = 0 (blank); block2 round(0.03 + 0.6) = 1.
+        $this->assertSame(' ', self::plain(DualSampleGraph::new(1, 1)->withData(1, 1)));
+        $this->assertSame('🬭', self::plain(DualSampleGraph::new(1, 1, 'block2')->withData(1, 1)));
+    }
+
+    public function testBlock2HeightTwoUsesModPointTwo(): void
+    {
+        // Bottom row 0..50: 25 → 1.5 + 0.2 → 2; 100 saturates at 3. Top row: 25 → 0.
+        $up = DualSampleGraph::new(1, 2, 'block2')->withData(25, 100);
+        $this->assertSame("▐\n🬻", self::plain($up));
+        // Invert: down table, rows reversed.
+        $down = DualSampleGraph::new(1, 2, 'block2', true)->withData(25, 100);
+        $this->assertSame("🬬\n▐", self::plain($down));
+    }
+
+    public function testBlock2TallGraph(): void
+    {
+        // Rows of 20: 100 saturates every row (3); 50 → 0, 0, round(10*3/20 + 0.2) = 2, 3, 3.
+        $g = DualSampleGraph::new(1, 5, 'block2')->withData(100, 50);
+        $this->assertSame("▌\n▌\n🬺\n█\n█", self::plain($g));
+        $inv = DualSampleGraph::new(1, 5, 'block2', true)->withData(100, 50);
+        $this->assertSame("█\n█\n🬝\n▌\n▌", self::plain($inv));
+    }
+
+    public function testBlock2NoZeroFloorIsBandOne(): void
+    {
+        // no_zero lifts the bottom row to band 1 per half: (1,1) = 🬭, the graph_bg glyph.
+        $this->assertSame('🬭', self::plain(DualSampleGraph::new(1, 1, 'block2', noZero: true)->withData(0, 0)));
+        $this->assertSame(" \n🬭", self::plain(DualSampleGraph::new(1, 2, 'block2', noZero: true)->withData(0, 0)));
     }
 
     #[DataProvider('heightOneFamilies')]
@@ -305,7 +406,7 @@ final class DualSampleGraphTest extends TestCase
     public function testPushScrollsAndEqualsWithData(): void
     {
         $values = [0, 100, 30, 55, 80, 5, 0, 100, 42, 7, 99];
-        foreach (['braille', 'block', 'tty'] as $family) {
+        foreach (DualSampleGraph::FAMILIES as $family) {
             $pushed = DualSampleGraph::new(4, 3, $family);
             foreach ($values as $v) {
                 $pushed = $pushed->push($v);
@@ -406,6 +507,7 @@ final class DualSampleGraphTest extends TestCase
         $this->assertSame('⣀', DualSampleGraph::new(1, 1, 'braille', true)->underlayGlyph());
         $this->assertSame('▄', DualSampleGraph::new(1, 1, 'block')->underlayGlyph());
         $this->assertSame('░', DualSampleGraph::new(1, 1, 'tty')->underlayGlyph());
+        $this->assertSame('🬭', DualSampleGraph::new(1, 1, DualSampleGraph::FAMILY_BLOCK2, true)->underlayGlyph());
     }
 
     public function testStaticUnderlayStrip(): void
@@ -413,6 +515,7 @@ final class DualSampleGraphTest extends TestCase
         $this->assertSame(self::fg(1, 2, 3) . '▄▄▄' . self::RESET, DualSampleGraph::underlay('block', 3, Color::rgb(1, 2, 3), ColorProfile::TrueColor));
         $this->assertSame('⣀⣀', DualSampleGraph::underlay('braille', 2, Color::rgb(1, 2, 3), ColorProfile::NoTty));
         $this->assertSame('', DualSampleGraph::underlay('tty', 0, Color::rgb(1, 2, 3), ColorProfile::TrueColor));
+        $this->assertSame('🬭🬭🬭', DualSampleGraph::underlay('block2', 3, Color::rgb(1, 2, 3), ColorProfile::NoTty));
         $this->expectException(\InvalidArgumentException::class);
         DualSampleGraph::underlay('dots', 1, Color::rgb(1, 2, 3));
     }
@@ -453,7 +556,7 @@ final class DualSampleGraphTest extends TestCase
     public function testEveryRowIsExactlyWidthCells(): void
     {
         $data = [-5, 0, 3, 50, 99, 100, 250, 12, 66];
-        foreach (['braille', 'block', 'tty'] as $family) {
+        foreach (DualSampleGraph::FAMILIES as $family) {
             foreach ([1, 2, 4] as $height) {
                 foreach ([0, 1, 4, 9] as $len) {
                     $g = DualSampleGraph::new(6, $height, $family, noZero: true)
