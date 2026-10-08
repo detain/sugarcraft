@@ -66,6 +66,13 @@ namespace SugarCraft\Top\Collect;
  */
 final class ProcList
 {
+    // P-E opt-ins (withPerCore / withFilterKernel / withDetail): the proc
+    // panel re-applies proc_per_core, proc_filter_kernel and the detailed
+    // pid from the CURRENT config before every scan; withDetail reads
+    // /proc/[pid]/cwd (#1546), the io counters and the start time for that
+    // one pid only (ProcSnapshot::$detail), and every scan reports MemTotal
+    // (ProcSnapshot::$memTotal, the Mem% denominator).
+
     private const int KTHREADD = 2;
 
     /**
@@ -85,6 +92,7 @@ final class ProcList
         private readonly array $users,
         private readonly bool $readIo = false,
         private readonly ?float $previousUptime = null,
+        private readonly ?int $detailPid = null,
     ) {
     }
 
@@ -125,19 +133,33 @@ final class ProcList
      */
     public function withIo(bool $readIo): self
     {
-        return $readIo === $this->readIo ? $this : new self(
-            $this->paths,
-            $this->userLookup,
-            $this->perCore,
-            $this->filterKernel,
-            $this->pageSize,
-            $this->clkTck,
-            $this->previousTotal,
-            $this->known,
-            $this->users,
-            $readIo,
-            $this->previousUptime,
-        );
+        return $readIo === $this->readIo ? $this : $this->copy(['readIo' => $readIo]);
+    }
+
+    /**
+     * btop proc_per_core (the `c` key): cpu as a share of ONE core instead
+     * of the whole machine. Takes effect from the next scan; the per-pid
+     * baselines carry over, so there is no unmeasured gap.
+     */
+    public function withPerCore(bool $perCore): self
+    {
+        return $perCore === $this->perCore ? $this : $this->copy(['perCore' => $perCore]);
+    }
+
+    /** btop proc_filter_kernel: drop kthreadd (pid 2) and its children. */
+    public function withFilterKernel(bool $filterKernel): self
+    {
+        return $filterKernel === $this->filterKernel ? $this : $this->copy(['filterKernel' => $filterKernel]);
+    }
+
+    /**
+     * Read the detailed-view extras ({@see ProcDetail}: cwd #1546, elapsed,
+     * io totals) for `$pid` on every scan; null stops. Only that one pid
+     * pays the extra reads (btop Proc::_collect_details).
+     */
+    public function withDetail(?int $pid): self
+    {
+        return $pid === $this->detailPid ? $this : $this->copy(['detailPid' => $pid]);
     }
 
     /**
@@ -154,13 +176,11 @@ final class ProcList
         $known = [];
         $users = $this->users;
         $processes = [];
+        $detail = null;
 
-        foreach (Read::entries($this->paths->proc()) as $entry) {
-            if (!ctype_digit($entry)) {
-                continue;
-            }
-            $pid = (int) $entry;
-            $dir = $this->paths->proc($entry);
+        $root = $this->paths->proc();
+        foreach (self::pids($root) as $pid) {
+            $dir = $root . '/' . $pid;
 
             $stat = self::parseStat(Read::file($dir . '/stat'));
             if ($stat === null) {
@@ -202,6 +222,10 @@ final class ProcList
                 unset($cached['ioR'], $cached['ioW']);
             }
 
+            if ($pid === $this->detailPid) {
+                $detail = $this->readDetail($pid, $dir, $stat['start'], $uptime, $this->readIo ? [$io[2], $io[3]] : null);
+            }
+
             $known[$pid] = ['cpuT' => $stat['cpuT']] + $cached;
             $processes[] = new Process(
                 $pid,
@@ -226,21 +250,86 @@ final class ProcList
         }
 
         return [
-            new ProcSnapshot($processes, $coreCount),
-            new self(
-                $this->paths,
-                $this->userLookup,
-                $this->perCore,
-                $this->filterKernel,
-                $this->pageSize,
-                $this->clkTck,
-                $total ?? $this->previousTotal,
-                $known,
-                $users,
-                $this->readIo,
-                $uptime >= 0.0 ? $uptime : null,
-            ),
+            new ProcSnapshot($processes, $coreCount, $this->readMemTotal(), $detail),
+            $this->copy([
+                'previousTotal' => $total ?? $this->previousTotal,
+                'known' => $known,
+                'users' => $users,
+                'previousUptime' => $uptime >= 0.0 ? $uptime : null,
+            ]),
         ];
+    }
+
+    /**
+     * @param array{0: int, 1: int}|null $io the io counters this scan already read, null to read them here
+     */
+    private function readDetail(int $pid, string $dir, int $start, float $uptime, ?array $io): ProcDetail
+    {
+        $cwd = @readlink($dir . '/cwd');
+        [$read, $write] = $io ?? self::parseIo(Read::file($dir . '/io'));
+
+        return new ProcDetail(
+            $pid,
+            $cwd === false ? null : $cwd,
+            $uptime >= 0.0 ? max(0.0, $uptime - $start / $this->clkTck) : Sentinel::UNMEASURED,
+            $read,
+            $write,
+        );
+    }
+
+    /** MemTotal in bytes — the Mem% denominator (btop Mem::get_totalMem). */
+    private function readMemTotal(): int
+    {
+        $raw = Read::file($this->paths->proc('meminfo'));
+
+        return $raw !== null && preg_match('/^MemTotal:\s+(\d+)\s*kB/m', $raw, $m) === 1
+            ? (int) $m[1] * 1024
+            : Sentinel::UNMEASURED_INT;
+    }
+
+    /**
+     * @param array<string, mixed> $o constructor arguments to override
+     */
+    private function copy(array $o): self
+    {
+        return new self(
+            $this->paths,
+            $this->userLookup,
+            $o['perCore'] ?? $this->perCore,
+            $o['filterKernel'] ?? $this->filterKernel,
+            $this->pageSize,
+            $this->clkTck,
+            array_key_exists('previousTotal', $o) ? $o['previousTotal'] : $this->previousTotal,
+            $o['known'] ?? $this->known,
+            $o['users'] ?? $this->users,
+            $o['readIo'] ?? $this->readIo,
+            array_key_exists('previousUptime', $o) ? $o['previousUptime'] : $this->previousUptime,
+            array_key_exists('detailPid', $o) ? $o['detailPid'] : $this->detailPid,
+        );
+    }
+
+    /**
+     * The numeric /proc entries in ascending pid order. Cheaper than
+     * Read::entries (no natsort over every entry, no array_filter closure),
+     * which matters at a thousand-plus pids per scan.
+     *
+     * @return list<int>
+     */
+    private static function pids(string $root): array
+    {
+        $names = @scandir($root, SCANDIR_SORT_NONE);
+        if ($names === false) {
+            return [];
+        }
+        $pids = [];
+        foreach ($names as $name) {
+            if (ctype_digit($name)) {
+                $pids[] = (int) $name;
+            }
+        }
+        sort($pids, SORT_NUMERIC);
+
+        return $pids;
     }
 
     /**
@@ -300,10 +389,23 @@ final class ProcList
         if ($raw === null) {
             return [Sentinel::UNMEASURED_INT, Sentinel::UNMEASURED_INT];
         }
-        $read = preg_match('/^read_bytes:\s*(\d+)/m', $raw, $r) === 1 ? (int) $r[1] : Sentinel::UNMEASURED_INT;
-        $write = preg_match('/^write_bytes:\s*(\d+)/m', $raw, $w) === 1 ? (int) $w[1] : Sentinel::UNMEASURED_INT;
+        return [self::ioField($raw, 'read_bytes:'), self::ioField($raw, 'write_bytes:')];
+    }
 
-        return [$read, $write];
+    /** One `key: N` counter at a line start (no regex: this runs per pid per scan). */
+    private static function ioField(string $raw, string $key): int
+    {
+        if (str_starts_with($raw, $key)) {
+            $at = strlen($key);
+        } elseif (($line = strpos($raw, "\n" . $key)) !== false) {
+            $at = $line + 1 + strlen($key);
+        } else {
+            return Sentinel::UNMEASURED_INT;
+        }
+        $digits = ltrim(substr($raw, $at, 24), " \t");
+        $len = strspn($digits, '0123456789');
+
+        return $len === 0 ? Sentinel::UNMEASURED_INT : (int) substr($digits, 0, $len);
     }
 
     /** Δcounter / Δseconds; a counter that went backwards reads 0 (btop). */
@@ -371,7 +473,7 @@ final class ProcList
             if (str_starts_with($line, 'cpu ')) {
                 $fields = preg_split('/\s+/', trim(substr($line, 4))) ?: [];
                 $total = array_sum(array_map('intval', array_slice($fields, 0, 8)));
-            } elseif (preg_match('/^cpu\d+ /', $line) === 1) {
+            } elseif (str_starts_with($line, 'cpu') && isset($line[3]) && ctype_digit($line[3])) {
                 $cores++;
             }
         }

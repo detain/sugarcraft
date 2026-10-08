@@ -51,7 +51,7 @@ final class Panels
             'cpu' => CpuPanel::standard($host, $config, $fake),
             'mem' => MemPanel::standard($config, $fake),
             'net' => \SugarCraft\Top\Panel\Net\NetPanel::new($fake ? FakeNet::new($intervalSec) : CollectorSource::of(Net::new())),
-            'proc' => PlaceholderPanel::new('proc', $fake ? FakeProcList::new($host->coreCount) : CollectorSource::of(ProcList::new())),
+            'proc' => ProcPanel::new($fake ? FakeProcList::demo($host->coreCount) : CollectorSource::of(ProcList::new())),
         ];
     }
 
