@@ -53,7 +53,7 @@ final class PlatformWiringTest extends TestCase
     {
         $probe = new FixtureProbe(FixtureProbe::fixture('sysctl-cpufreq.synthetic.txt'));
         $panel = CpuPanel::standard(PanelPaint::host(), Config::new(), false, self::freeBsd($probe));
-        // gpu stays the cross-platform Collect\Gpu; keep the live host out of the test.
+        // gpu is Collect\Gpu\Accelerators (nvidia-smi only on FreeBSD); keep the live host out of the test.
         $config = Config::new()->with('show_gpu_info', 'Off')->with('check_temp', false)->with('show_battery', false);
 
         $off = ($panel->collect(PanelPaint::context('cpu', $config, null)))();
@@ -149,6 +149,12 @@ final class PlatformWiringTest extends TestCase
         $this->assertInstanceOf(FreeBsd\Memory::class, self::prop($panels['mem'], 'sources')->get('mem')->collector());
         $this->assertInstanceOf(FreeBsd\Net::class, self::prop($panels['net'], 'source')->collector());
         $this->assertInstanceOf(FreeBsd\ProcList::class, $panels['proc']->source()->collector());
+        $this->assertSame(
+            self::describe(CollectorSource::of(Collect\Gpu\Accelerators::nvidiaOnly())),
+            self::describe(self::prop($panels['gpu'], 'source')),
+            'FreeBSD gpu boxes read nvidia-smi only',
+        );
+        $this->assertSame(self::describe(self::prop($panels['gpu'], 'source')), self::describe($cpu->get('gpu')));
     }
 
     public function testLinuxRosterBuildsTheSameCollectorsAsBefore(): void
@@ -162,7 +168,9 @@ final class PlatformWiringTest extends TestCase
             'cpu' => CollectorSource::of(Collect\Cpu::new()),
             'freq' => CollectorSource::of(Collect\Freq::new(null, FreqMode::tryFrom('highest') ?? FreqMode::First, true)),
             'temp' => CollectorSource::of(Collect\Temp::new(null, 'coretemp/Package id 0')),
-            'gpu' => CollectorSource::of(Collect\Gpu::new()),
+            // U4: the multi-vendor accelerators replace the bare nvidia-smi Collect\Gpu.
+            'gpu' => CollectorSource::of(Collect\Gpu\Accelerators::detect()),
+            'gpuBoxes' => CollectorSource::of(Collect\Gpu\Accelerators::detect()),
             'battery' => CollectorSource::of(Collect\Battery::new(null, 'BAT0')),
             'mem' => CollectorSource::of(Collect\Memory::new(null, false)),
             'mounts' => CollectorSource::of(Collect\Mounts::new()),
@@ -178,6 +186,7 @@ final class PlatformWiringTest extends TestCase
             'freq' => $cpu->get('freq'),
             'temp' => $cpu->get('temp'),
             'gpu' => $cpu->get('gpu'),
+            'gpuBoxes' => self::prop($panels['gpu'], 'source'),
             'battery' => self::prop($panels['cpu']->battery(), 'source'),
             'mem' => self::prop($panels['mem'], 'sources')->get('mem'),
             'mounts' => $disks->mounts(),

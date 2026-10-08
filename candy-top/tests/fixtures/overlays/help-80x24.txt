@@ -15,10 +15,10 @@
 │          2         Toggle MEM box.                                         │9│
 │          3         Toggle NET box.                                         │2│
 │          4         Toggle PROC box.                                        │6│
-│          d         Toggle disks view in MEM box.                           │6│
+│  5, 6, 7, 8, 9, 0  Toggle GPU box.                                         │6│
+│          d         Toggle disks view in MEM box.                           │ │
 │        F2, o       Shows options.                                          │ │
 │      F1, ?, h      Shows this window.                                      │ │
 │      ctrl + r      Reloads config file from disk.                          │ │
 │     q, ctrl + c    Quits program.                                          │ │
-│       +, -, =      Add/Subtract 100ms to/from update timer.                │ │
 ╰─┘↑ page 1/4 ↓└─────────────────────────────────────────────────────────────╯─╯

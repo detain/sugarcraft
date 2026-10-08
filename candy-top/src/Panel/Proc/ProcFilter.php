@@ -22,6 +22,11 @@ namespace SugarCraft\Top\Panel\Proc;
  * with proc_filter_containers on, every process in a container — or, for
  * candy-top, in a KVM/QEMU guest — is omitted.
  *
+ * {@see gpuHidden()} is btop #1552's proc_gpu_only test (the head of its
+ * matches_filter): with the filter on, a process with no GPU time and no
+ * GPU memory is omitted. The panel only passes it on while per-process GPU
+ * data exists ({@see GpuUsage::measured()}).
+ *
  * Mirrors aristocratos/btop Proc::matches_filter / ctr_hidden
  * (src/btop_shared.cpp).
  */
@@ -53,6 +58,11 @@ final class ProcFilter
             || stripos($p->cmd, $filter) !== false
             || stripos($p->user, $filter) !== false
             || ($p->container !== null && stripos($p->container->name, $filter) !== false);
+    }
+
+    public static function gpuHidden(ProcEntry $entry, bool $gpuOnly): bool
+    {
+        return $gpuOnly && $entry->gpuIdle();
     }
 
     public static function containerHidden(ProcEntry $entry, bool $filterContainers): bool

@@ -1,0 +1,30 @@
+╭─┐⁴proc┌┐filter┌───────────────────────────────────────────────────────────────────────────────────────────────┐gpu-only┌┐Omit ctr┌┐pause┌┐per-core┌┐reverse┌┐tree┌┐← cpu lazy →┌─╮
+│    Pid: Program:         Command:                                                                           Threads: User:        IO/R   IO/W  MemB       Cpu%  GMem       Gpu%  │
+│       1 systemd          /sbin/init splash                                                                         1 root           0B     0B  117M ⣀⣀⣀⢀⣤ 38.7     - ⣀⣀⣀⣀⣀    -  │
+│    5120 containerd-shim  /usr/bin/containerd-shim-runc-v2 -namespace moby                                          2 root            -      -  375M ⣀⣀⣀⢠⣀ 22.6     - ⣀⣀⣀⣀⣀    -  │
+│     412 sshd             sshd: /usr/sbin/sshd -D                                                                   2 root            -      -  199M ⣀⣀⣀⢀⣀ 24.3     - ⣀⣀⣀⣀⣀    -  │
+│    2290 php              php bin/candy-top                                                                         2 joe            0B    40K  414M ⣀⣀⣀⢀⣀ 13.3     - ⣀⣀⣀⣀⣀    -  │
+│    6969 web01            [kvm:web01] /usr/bin/qemu-system-x86_64 -name guest=web01,debug-threads=on -smp 4        10 libvirt-q+    62K    58K  971M ⣀⣀⣀⢀⣀  7.5  4.0G ⣀⣀⣀⢀⣀ 18.8  │
+│    5133 python3          [docker:3f2a1b9c0d1e] /usr/local/bin/python3 /app/worker.py                               3 root            -      -  675M ⣀⣀⣀⢀⣀ 13.7  6.7G ⣀⣀⣀⢰⣿ 87.2  │
+│    4410 node             node server.js                                                                            4 joe           45K    40K  620M ⣀⣀⣀⢀⣀  4.3  180M ⣀⣀⣀⢀⣀  4.4  │
+│    1203 nginx            nginx: worker process                                                                     4 www-data     117K     0B  283M ⣀⣀⣀⢀⣀  5.8     - ⣀⣀⣀⣀⣀    -  │
+│    7001 vim              /usr/bin/vim notes.md                                                                     1 joe           83K     0B  1.3G ⣀⣀⣀⢀⣀  3.1     - ⣀⣀⣀⣀⣀    -  │
+│    2210 bash             -bash                                                                                     1 joe          128K    33K  350M ⣀⣀⣀⢀⣀  7.0     - ⣀⣀⣀⣀⣀    -  │
+│    3105 redis-server     redis-server 127.0.0.1:6379                                                               3 redis         27K     0B  531M ⣀⣀⣀⢀⣀  5.6     - ⣀⣀⣀⣀⣀    -  │
+│     880 postgres         postgres -D /var/lib/postgresql                                                           3 postgres     143K    34K  222M ⣀⣀⣀⢀⣀  7.9  512M ⣀⣀⣀⣀⣀  0.0  │
+│       2 kthreadd                                                                                                   1 root            -      -    0B ⣀⣀⣀⣀⣀  0.0     - ⣀⣀⣀⣀⣀    -  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+│                                                                                                                                                                                  │
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└┘Follow└────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘1/13└╯

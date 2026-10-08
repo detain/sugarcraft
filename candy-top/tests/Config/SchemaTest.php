@@ -39,13 +39,16 @@ final class SchemaTest extends TestCase
             ['proc_command_basename', false], // #1859
             ['proc_tree_persist_state', false], // #1791c
             ['proc_colors', true], ['proc_gradient', true],
-            ['proc_per_core', false], ['proc_mem_bytes', true], ['proc_cpu_graphs', true], ['proc_info_smaps', false],
+            ['proc_per_core', false], ['proc_mem_bytes', true], ['proc_cpu_graphs', true],
+            ['proc_gpu_graphs', true], ['proc_gpu_only', false], // #1552
+            ['proc_info_smaps', false],
             ['proc_box_width_percent', 55], // #1476
             ['proc_left', false], ['proc_filter_kernel', false],
             ['proc_filter_containers', false], // #1873
             ['proc_follow_detailed', true],
             ['proc_aggregate', false], ['proc_tree_auto_collapse', 0], ['keep_dead_proc_usage', false],
             ['cpu_graph_upper', 'Auto'], ['cpu_graph_lower', 'Auto'], ['show_gpu_info', 'Auto'],
+            ['gpu_box_columns', 'Auto'], // #1881
             ['cpu_invert_lower', true], ['cpu_single_graph', false], ['cpu_bottom', false], ['show_uptime', true],
             ['show_cpu_watts', true], ['check_temp', true], ['cpu_sensor', 'Auto'], ['show_coretemp', true],
             ['cpu_core_map', ''], ['temp_scale', 'celsius'], ['base_10_sizes', false], ['show_cpu_freq', true],
@@ -101,7 +104,7 @@ final class SchemaTest extends TestCase
 
     public function testRuntimeKeysExistButAreNotPersisted(): void
     {
-        foreach (['tty_mode', 'tty_console', 'lowcolor', 'proc_filter', 'proc_filtering', 'show_detailed', 'pause_proc_list', 'follow_process'] as $name) {
+        foreach (['tty_mode', 'tty_console', 'lowcolor', 'proc_filter', 'proc_filtering', 'show_detailed', 'pause_proc_list', 'follow_process', 'gpu_panel_slots'] as $name) {
             $option = Schema::option($name);
             $this->assertInstanceOf(Option::class, $option, $name);
             $this->assertFalse($option->persisted, $name);
@@ -129,9 +132,9 @@ final class SchemaTest extends TestCase
         $this->assertSame(['celsius', 'fahrenheit', 'kelvin', 'rankine'], Schema::TEMP_SCALES);
         $this->assertSame(['first', 'range', 'lowest', 'highest', 'average'], Schema::FREQ_MODES);
         $this->assertSame(
-            ['pid', 'name', 'command', 'threads', 'user', 'memory', 'cpu direct', 'cpu lazy', 'io read', 'io write', 'io total'],
+            ['pid', 'name', 'command', 'threads', 'user', 'memory', 'cpu direct', 'cpu lazy', 'io read', 'io write', 'io total', 'gpu', 'gpu memory'],
             Schema::PROC_SORTING,
-            "btop's eight first so sort cycling keeps btop's order; #1823 io sorts appended",
+            "btop's eight first so sort cycling keeps btop's order; #1823 io and #1552 gpu sorts appended",
         );
         $this->assertSame(['off', 'value', 'graph'], Schema::SHOW_CORE_FREQ_VALUES);
         $this->assertSame(['default', 'used', 'available', 'cached', 'free', 'swap_used'], Schema::MEM_METRICS_VALUES);

@@ -372,6 +372,60 @@ final class CpuPanelTest extends TestCase
         $this->assertStringNotContainsString('GPU', $grid);
     }
 
+    /**
+     * U4: the #1008 GPU hold is bounded — a GPU whose queries keep failing
+     * reads n/a after GpuHold::limit() samples (5 at a 10 s update_ms)
+     * instead of freezing its last numbers, and its graphs restart empty.
+     */
+    public function testGpuHoldIsBounded(): void
+    {
+        $config = Config::new()->with('update_ms', 10000);
+        $host = PanelPaint::host(true, 8);
+        $layout = PanelPaint::layout(120, 40, $config, $host);
+        $good = new GpuSnapshot([new GpuDevice(0, 'RTX', 40.0, 2 * 1024 ** 3, 8 * 1024 ** 3, 60.0, 50.0, powerLimit: 100.0)]);
+        $panel = CpuPanel::new(FakeCpu::new(8), null, null, new ScriptedSource([$good, ...array_fill(0, 6, new GpuSnapshot([]))]));
+        $held = PanelPaint::feed($panel, $config, $layout, 6);
+        $this->assertSame(40.0, $held->gpus()[0]->utilization, 'five failed queries still hold');
+        $this->assertSame(40, $held->history()->last('gpu:0:gpu-totals'));
+        $gone = PanelPaint::feed($held, $config, $layout, 1);
+        $this->assertCount(1, $gone->gpus(), 'the device keeps its slot');
+        $this->assertSame([-1.0, -1, -1.0], [$gone->gpus()[0]->utilization, $gone->gpus()[0]->memUsed, $gone->gpus()[0]->temp]);
+        $this->assertFalse($gone->history()->has('gpu:0:gpu-totals'));
+        $grid = PanelPaint::grid(PanelPaint::surface($gone, $config, $layout, $host), $layout->box('cpu'));
+        $this->assertStringNotContainsString('40%', $grid);
+    }
+
+    /** btop PR #1730 gpu_hidden: under Auto a GPU with its own gpu box leaves the cpu box. */
+    public function testAutoListsOnlyGpusWithoutAGpuBox(): void
+    {
+        $two = [new GpuDevice(0, 'A', 10.0, 1, 2, 30.0, 1.0), new GpuDevice(1, 'B', 20.0, 1, 2, 30.0, 1.0)];
+        $boxed = Config::new()->with('shown_boxes', 'cpu gpu0 mem net proc');
+        $this->assertSame([1], array_keys(CpuView::listedGpus($two, $boxed)));
+        $this->assertSame([0, 1], array_keys(CpuView::listedGpus($two, $boxed->with('show_gpu_info', 'On'))));
+        $this->assertSame([0, 1], array_keys(CpuView::listedGpus($two, Config::new())));
+
+        $panel = PanelPaint::feed(CpuPanel::new(FakeCpu::new(8), null, null, new ScriptedSource([new GpuSnapshot($two)])), $boxed, null, 1);
+        $this->assertTrue($panel->wantsGpus($boxed), 'GPU 1 is still listed');
+        $this->assertFalse($panel->wantsGpus($boxed->with('shown_boxes', 'cpu gpu0 gpu1')), 'every GPU boxed: no cpu-box sample');
+        $this->assertTrue($panel->wantsGpus($boxed->with('shown_boxes', 'cpu gpu0 gpu1')->with('show_gpu_info', 'On')));
+        $this->assertFalse($panel->wantsGpus($boxed->with('show_gpu_info', 'Off')));
+        $this->assertTrue(CpuPanel::new(FakeCpu::new(1))->wantsGpus($boxed->with('shown_boxes', 'cpu gpu0')), 'nothing known yet: sample');
+        // btop gpu_in_cpu_panel: a gpu-* graph keeps sampling with every GPU boxed (else it freezes).
+        $allBoxed = $boxed->with('shown_boxes', 'cpu gpu0 gpu1');
+        foreach (['gpu-totals', 'gpu-average', 'gpu-pwr-total'] as $field) {
+            $this->assertTrue($panel->wantsGpus($allBoxed->with('cpu_graph_upper', $field)), $field);
+            $this->assertTrue($panel->wantsGpus($allBoxed->with('cpu_graph_lower', $field)), $field);
+            $this->assertFalse($panel->wantsGpus($allBoxed->with('cpu_graph_lower', $field)->with('show_gpu_info', 'Off')), 'Off never samples');
+        }
+        $this->assertFalse($panel->wantsGpus($allBoxed->with('cpu_graph_upper', 'user')));
+
+        $host = PanelPaint::host(true, 8);
+        $layout = PanelPaint::layout(160, 50, $boxed, $host);
+        $grid = PanelPaint::grid(PanelPaint::surface($panel, $boxed, $layout, $host), $layout->box('cpu'));
+        $this->assertStringContainsString('GPU1', $grid);
+        $this->assertStringNotContainsString('GPU0', $grid);
+    }
+
     /** #1008: one N/A answer never drops a GPU column; the last reading stays. */
     public function testGpuColumnsHoldThroughAnUnmeasuredQuery(): void
     {

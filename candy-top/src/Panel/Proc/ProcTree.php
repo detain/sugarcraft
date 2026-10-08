@@ -17,11 +17,12 @@ namespace SugarCraft\Top\Panel\Proc;
  *     filter or not matching the text filter is hidden — but its
  *     descendants are still visited, and the first match restarts at
  *     depth 0 and shows its whole subtree; a COLLAPSED process absorbs
- *     every descendant's cpu, cumulative cpu, memory and threads (state
- *     X excluded) and hides them; proc_aggregate sums children into
- *     parents without hiding them;
+ *     every descendant's cpu, cumulative cpu, memory, threads and #1552
+ *     GPU use (state X excluded) and hides them; proc_aggregate sums
+ *     children into parents without hiding them; #1552 proc_gpu_only
+ *     hides a GPU-idle process like a non-matching text filter does;
  *  3. `tree_sort` orders each sibling group by threads / memory / cpu /
- *     io and numbers the visible rows depth-first. #1791a: with
+ *     io / gpu and numbers the visible rows depth-first. #1791a: with
  *     proc_aggregate off the sibling key is the BRANCH TOTAL (own value
  *     plus every non-dead descendant's), so collapsing or expanding a
  *     branch never moves it; btop sorts by the node's own value;
@@ -38,7 +39,7 @@ namespace SugarCraft\Top\Panel\Proc;
  */
 final class ProcTree
 {
-    private const AGG = ['cpu', 'cpuC', 'mem', 'threads'];
+    private const AGG = ['cpu', 'cpuC', 'mem', 'threads', 'gpu', 'gpuMem'];
 
     private function __construct()
     {
@@ -57,6 +58,7 @@ final class ProcTree
         bool $filterContainers,
         bool $aggregate,
         array $collapsed,
+        bool $gpuOnly = false,
     ): array {
         if ($entries === []) {
             return [];
@@ -70,13 +72,14 @@ final class ProcTree
             'filter' => $filter,
             'ctr' => $filterContainers,
             'aggregate' => $aggregate,
+            'gpuOnly' => $gpuOnly,
             'filtered' => [],
             'depth' => [],
             'seen' => [],
             'v' => [],
         ];
         foreach ($entries as $i => $e) {
-            $st['v'][$i] = ['cpu' => $e->cpu, 'cpuC' => $e->cpuC, 'mem' => $e->mem, 'threads' => $e->threads];
+            $st['v'][$i] = ['cpu' => $e->cpu, 'cpuC' => $e->cpuC, 'mem' => $e->mem, 'threads' => $e->threads, 'gpu' => $e->gpu, 'gpuMem' => $e->gpuMem];
         }
 
         $roots = [];
@@ -235,8 +238,10 @@ final class ProcTree
         if (ProcFilter::containerHidden($e, $st['ctr'])) {
             $filtering = true;
             $st['filtered'][$i] = true;
-        } elseif (!$found && $st['filter'] !== '') {
-            if (!ProcFilter::matches($e, $st['filter'])) {
+        } elseif (!$found && ($st['filter'] !== '' || $st['gpuOnly'])) {
+            // btop #1552 puts the gpu-only test at the head of matches_filter
+            // (the process's OWN use; an empty text filter matches all).
+            if (ProcFilter::gpuHidden($e, $st['gpuOnly']) || ($st['filter'] !== '' && !ProcFilter::matches($e, $st['filter']))) {
                 $filtering = true;
                 $st['filtered'][$i] = true;
             } else {
@@ -297,7 +302,7 @@ final class ProcTree
             $child = self::withTotals($st, $child);
             $node['c'][$k] = $child;
             if ($sumChildren && $st['e'][$child['i']]->process->state !== 'X') {
-                foreach (['cpu', 'cpuC', 'mem', 'threads', 'ioRead', 'ioWrite'] as $f) {
+                foreach (['cpu', 'cpuC', 'mem', 'threads', 'gpu', 'gpuMem', 'ioRead', 'ioWrite'] as $f) {
                     $t[$f] += $child['t'][$f];
                 }
             }
@@ -330,6 +335,8 @@ final class ProcTree
             'io read' => static fn (array $t): float => (float) $t['ioRead'],
             'io write' => static fn (array $t): float => (float) $t['ioWrite'],
             'io total' => static fn (array $t): float => (float) ($t['ioRead'] + $t['ioWrite']),
+            'gpu' => static fn (array $t): float => (float) $t['gpu'],
+            'gpu memory' => static fn (array $t): int => (int) $t['gpuMem'],
             default => null,
         };
     }
@@ -395,6 +402,8 @@ final class ProcTree
                     'cpuC' => (float) $v['cpuC'],
                     'mem' => (int) $v['mem'],
                     'threads' => (int) $v['threads'],
+                    'gpu' => (float) $v['gpu'],
+                    'gpuMem' => (int) $v['gpuMem'],
                     'prefix' => $prefix[$i] ?? '',
                     'depth' => $st['depth'][$i] ?? 0,
                     'collapsed' => $st['collapsed'][$e->pid()] ?? false,

@@ -23,11 +23,13 @@ use SugarCraft\Top\Lang;
  *  - New keys are additive: show_zswap (#1739), show_core_freq (#1785),
  *    net_hide_ip (#1573), proc_command_basename (#1859),
  *    proc_filter_containers (#1873), mem_selected (#1747), disks_order
- *    (#1700), proc_box_width_percent (#1476). Stock btop and our reader both
+ *    (#1700), proc_box_width_percent (#1476), proc_gpu_graphs and
+ *    proc_gpu_only (#1552). Stock btop and our reader both
  *    skip unknown keys, so either file still loads in the other program.
  *  - New *values* of existing enums are a soft break: `block2` in
- *    graph_symbol / graph_symbol_<box> (#1783) and `io read|write|total` in
- *    proc_sorting (#1823). Stock btop warns and keeps its default.
+ *    graph_symbol / graph_symbol_<box> (#1783), `io read|write|total`
+ *    (#1823) and `gpu` / `gpu memory` (#1552) in proc_sorting. Stock btop
+ *    warns and keeps its default.
  *  - The presets 4th field `proc:P:G:W` (#1476) is a strict superset of
  *    btop's grammar — every 3-field string parses identically — and is only
  *    ever written back when the user wrote it; stock btop rejects a whole
@@ -35,6 +37,11 @@ use SugarCraft\Top\Lang;
  *  - From #1873 only proc_filter_containers is adopted; its `ctr` box is
  *    deferred (Wave U4), so a #1873-btop config naming `ctr` in shown_boxes
  *    or presets is rejected here.
+ *  - U4 gpu boxes: gpu_box_columns (#1881) is additive; shown_boxes and
+ *    the presets accept `gpuN` for any index N, at most 6 (#1730) — a
+ *    superset of btop 1.4.7's gpu0-gpu5, which drops gpu6+ with a warning.
+ *    The runtime gpu_panel_slots (#1730 current_gpu_panel_slots) is never
+ *    written.
  * Placement follows each PR's position in btop's `descriptions`.
  */
 final class Schema
@@ -55,7 +62,13 @@ final class Schema
     public const GRAPH_SYMBOLS_DEF = ['default', 'braille', 'block', 'block2', 'tty'];
 
     /** btop Config::valid_boxes (GPU build). */
-    public const BOXES = ['cpu', 'mem', 'net', 'proc', 'gpu0', 'gpu1', 'gpu2', 'gpu3', 'gpu4', 'gpu5'];
+    public const BOXES = ['cpu', 'mem', 'net', 'proc'];
+
+    /**
+     * btop PR #1881 gpu_box_columns: "Auto" (as many columns as the
+     * terminal fits) or a forced column count 1..GPU_BOX_COLUMNS_MAX.
+     */
+    public const GPU_BOX_COLUMNS_MAX = 6;
 
     /** btop Config::temp_scales. */
     public const TEMP_SCALES = ['celsius', 'fahrenheit', 'kelvin', 'rankine'];
@@ -85,11 +98,15 @@ final class Schema
      * btop Proc::sort_vector (btop_shared.cpp) — the values proc_sorting can
      * take. btop PR #1823 appends the three io sorts after btop's eight, so
      * left/right sort cycling keeps btop's order first; stock 1.4.7 rejects
-     * them and falls back to "cpu lazy".
+     * them and falls back to "cpu lazy". btop PR #1552's "gpu" / "gpu
+     * memory" go after them: the PR inserts them before "cpu direct",
+     * which would move stock btop's cycle positions, so candy-top appends
+     * them like #1823's io sorts.
      */
     public const PROC_SORTING = [
         'pid', 'name', 'command', 'threads', 'user', 'memory', 'cpu direct', 'cpu lazy',
         'io read', 'io write', 'io total',
+        'gpu', 'gpu memory',
     ];
 
     /** btop Logger::log_levels. */
@@ -197,6 +214,9 @@ final class Schema
             Option::bool('proc_per_core', false),
             Option::bool('proc_mem_bytes', true),
             Option::bool('proc_cpu_graphs', true),
+            // btop PR #1552: per-process GPU mini-graphs and the GPU-only filter.
+            Option::bool('proc_gpu_graphs', true),
+            Option::bool('proc_gpu_only', false),
             Option::bool('proc_info_smaps', false),
             // btop PR #1476 stores any int and clamps at use; candy-top
             // rejects out-of-range values instead (a stored 150 would be a
@@ -212,6 +232,8 @@ final class Schema
             Option::string('cpu_graph_upper', 'Auto'),
             Option::string('cpu_graph_lower', 'Auto'),
             Option::string('show_gpu_info', 'Auto', self::SHOW_GPU_VALUES),
+            // btop PR #1881 (U4 gpu boxes): the gpu box grid's column count.
+            Option::string('gpu_box_columns', 'Auto', validator: self::validateGpuBoxColumns(...)),
             Option::bool('cpu_invert_lower', true),
             Option::bool('cpu_single_graph', false),
             Option::bool('cpu_bottom', false),
@@ -284,6 +306,9 @@ final class Schema
             Option::bool('show_detailed', false, persisted: false),
             Option::bool('pause_proc_list', false, persisted: false),
             Option::bool('follow_process', false, persisted: false),
+            // btop PR #1730 Config::current_gpu_panel_slots (U4 gpu boxes):
+            // the panel slot of each shown gpu box, see GpuPanels.
+            Option::string(GpuPanels::SLOTS_KEY, '', validator: GpuPanels::validateSlots(...), persisted: false),
         ];
 
         $byName = [];
@@ -295,9 +320,11 @@ final class Schema
     }
 
     /**
-     * btop stringValid("shown_boxes") minus the terminal-size check, which
-     * needs a live terminal and belongs to the app. Applies to menu/`with()`
-     * edits only; the file loader skips it like btop does.
+     * btop stringValid("shown_boxes") minus the terminal-size check and the
+     * GPU-count check, which need a live terminal / GPU sample and belong
+     * to the app. btop PR #1730: `gpuN` for any index N, at most
+     * {@see GpuPanels::MAX} of them. Applies to menu/`with()` edits only;
+     * the file loader skips it like btop does.
      */
     private static function validateBoxes(string $value): void
     {
@@ -306,9 +333,23 @@ final class Schema
             throw new InvalidOptionValue(Lang::t('config.warn.no_boxes'), 'shown_boxes');
         }
         foreach ($boxes as $box) {
-            if (!\in_array($box, self::BOXES, true)) {
+            if (!GpuPanels::valid($box)) {
                 throw new InvalidOptionValue(Lang::t('config.warn.invalid_boxes'), 'shown_boxes');
             }
+        }
+        if (\count(GpuPanels::targets(array_values($boxes))) > GpuPanels::MAX) {
+            throw new InvalidOptionValue(Lang::t('config.warn.too_many_gpu_boxes'), 'shown_boxes');
+        }
+    }
+
+    /** btop PR #1881 stringValid("gpu_box_columns"): "Auto" or an integer 1-6. */
+    private static function validateGpuBoxColumns(string $value): void
+    {
+        if ($value === 'Auto') {
+            return;
+        }
+        if (preg_match('/^\d{1,9}$/D', $value) !== 1 || (int) $value < 1 || (int) $value > self::GPU_BOX_COLUMNS_MAX) {
+            throw new InvalidOptionValue(Lang::t('config.warn.invalid_gpu_box_columns'), 'gpu_box_columns');
         }
     }
 

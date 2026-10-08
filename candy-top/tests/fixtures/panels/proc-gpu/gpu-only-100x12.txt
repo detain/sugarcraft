@@ -1,0 +1,12 @@
+╭─┐⁴proc┌┐filter┌─────────────┐gpu-only┌┐Omit ctr┌┐pause┌┐per-core┌┐reverse┌┐tree┌┐← gpu memory →┌─╮
+│    Pid: Program:         Command:              Threads: User:       MemB       Cpu%  GMem  Gpu%  │
+│    5133 python3          [docker:3f2a1b9c0d1e] /us    3 root        675M ⣀⣀⣀⢀⣀ 13.7  6.7G  87.2  │
+│    6969 web01            [kvm:web01] /usr/bin/qemu   10 libvirt-q+  971M ⣀⣀⣀⢀⣀  7.5  4.0G  18.8  │
+│     880 postgres         postgres -D /var/lib/post    3 postgres    222M ⣀⣀⣀⢀⣀  7.9  512M   0.0  │
+│    4410 node             node server.js               4 joe         620M ⣀⣀⣀⢀⣀  4.3  180M   4.4  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└┘Follow└─────────────────────────────────┘0/4└╯

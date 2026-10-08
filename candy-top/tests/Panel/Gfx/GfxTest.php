@@ -70,6 +70,15 @@ final class GfxTest extends TestCase
     }
 
     /** btop #1008 at the series level. */
+    public function testHistoryWithoutPrefixesDropsWholeSeriesFamilies(): void
+    {
+        $h = History::new()->push('gpu:1:a', 5, 4)->push('gpu:10:a', 6, 4)->push('gpu:1:b', 7, 4)->push('total', 8, 4);
+        $this->assertSame(['gpu:10:a', 'total'], $h->withoutPrefixes('gpu:1:')->keys(), '`gpu:1:` never matches `gpu:10:`');
+        $this->assertSame(['total'], $h->withoutPrefixes('gpu:1:', 'gpu:10:')->keys());
+        $this->assertSame($h->keys(), $h->withoutPrefixes()->keys());
+        $this->assertSame(['gpu:1:a', 'gpu:10:a', 'gpu:1:b', 'total'], $h->keys(), 'immutable');
+    }
+
     public function testHistoryHoldsCapsAndRounds(): void
     {
         $h = History::new();

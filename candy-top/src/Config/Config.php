@@ -134,21 +134,23 @@ final class Config
     /**
      * Copy with shown_boxes settled against the machine — btop.cpp's
      * post-load `set_boxes` check: the file loader accepts shown_boxes
-     * verbatim, so an unknown box name, or a gpuN beyond the $gpuCount GPUs
-     * actually detected, resets the list to "cpu mem net proc". An empty
-     * list is legitimate (btop then draws no boxes) and is kept.
+     * verbatim, so an unknown box name, a gpuN beyond the $gpuCount GPUs
+     * actually detected, or more than {@see GpuPanels::MAX} gpu boxes
+     * (btop PR #1730) resets the list to "cpu mem net proc". A null
+     * $gpuCount skips only the index check (the GPUs have not been
+     * sampled). An empty list is legitimate (btop then draws no boxes) and
+     * is kept.
      */
-    public function withShownBoxesSettled(int $gpuCount): self
+    public function withShownBoxesSettled(?int $gpuCount): self
     {
-        foreach ($this->shownBoxes() as $box) {
-            $valid = \in_array($box, Schema::BOXES, true)
-                && (!str_starts_with($box, 'gpu') || (int) substr($box, 3) < $gpuCount);
-            if (!$valid) {
-                return $this->mutate(['shown_boxes' => (string) Schema::defaults()['shown_boxes']]);
-            }
+        $boxes = $this->shownBoxes();
+        $valid = \count(GpuPanels::targets($boxes)) <= GpuPanels::MAX;
+        foreach ($boxes as $box) {
+            $gpu = GpuPanels::index($box);
+            $valid = $valid && GpuPanels::valid($box) && ($gpu === null || $gpuCount === null || $gpu < $gpuCount);
         }
 
-        return $this;
+        return $valid ? $this : $this->mutate(['shown_boxes' => (string) Schema::defaults()['shown_boxes']]);
     }
 
     /**
@@ -219,7 +221,8 @@ final class Config
      * terminal-size gate (the app checks the minimum size before calling).
      * P=1 sets cpu_bottom / mem_below_net / proc_left for those boxes; each
      * box's graph symbol lands on graph_symbol_<box> (gpuN share
-     * graph_symbol_gpu); the box list becomes shown_boxes. A proc box also
+     * graph_symbol_gpu); the box list becomes shown_boxes (gpu slots back
+     * to the default order, btop set_boxes). A proc box also
      * sets proc_box_width_percent (btop PR #1476): its W field clamped to
      * 0-100, or the 55 default when W is absent or `default` — so applying
      * a preset always resets a width the user nudged with Shift+arrows.
@@ -396,11 +399,27 @@ final class Config
         return $this->bool('rounded_corners') && !$this->ttyMode();
     }
 
+    /** btop PR #1881 gpu_box_columns: null for "Auto", else the forced column count (1-6). */
+    public function gpuBoxColumns(): ?int
+    {
+        $value = $this->string('gpu_box_columns');
+
+        return $value === 'Auto' ? null : (int) $value;
+    }
+
     /**
      * @param array<string, bool|int|string> $changes Already validated.
      */
     private function mutate(array $changes): self
     {
+        // btop set_boxes clears current_gpu_panel_slots: a new shown_boxes
+        // written without its slots (options menu, preset, reload, file)
+        // starts from the default slot order (btop PR #1730).
+        if (isset($changes['shown_boxes']) && !isset($changes[GpuPanels::SLOTS_KEY])
+            && $changes['shown_boxes'] !== $this->values['shown_boxes']) {
+            $changes[GpuPanels::SLOTS_KEY] = '';
+        }
+
         return new self(array_replace($this->values, $changes));
     }
 

@@ -26,8 +26,11 @@ final class Presets
     /** btop caps custom presets at 9 (digits 1-9 after the built-in 0). */
     public const MAX_PRESETS = 9;
 
-    /** btop caps a preset at 4 boxes — one per screen region. */
-    public const MAX_BOXES = 4;
+    /**
+     * btop PR #1730 max_preset_boxes: the four fixed boxes plus up to
+     * {@see GpuPanels::MAX} gpu boxes (btop 1.4.7 capped a preset at 4).
+     */
+    public const MAX_BOXES = 10;
 
     /** @param list<Preset> $presets */
     private function __construct(
@@ -130,6 +133,7 @@ final class Presets
     private static function parseOne(string $raw): Preset
     {
         $boxes = [];
+        $gpus = 0;
         foreach (self::split($raw, ',') as $i => $box) {
             if ($i + 1 > self::MAX_BOXES) {
                 throw self::fail('config.preset.too_many_boxes');
@@ -140,8 +144,12 @@ final class Presets
             }
             [$name, $position, $symbol] = $vals;
             $width = $vals[3] ?? null;
-            if (!\in_array($name, Schema::BOXES, true)) {
+            // btop PR #1730 valid_box_name(check_gpu_count = false): any gpuN.
+            if (!GpuPanels::valid($name)) {
                 throw self::fail('config.preset.invalid_box');
+            }
+            if (GpuPanels::index($name) !== null && ++$gpus > GpuPanels::MAX) {
+                throw self::fail('config.preset.too_many_gpu_boxes');
             }
             if ($position !== '0' && $position !== '1') {
                 throw self::fail('config.preset.invalid_position');
