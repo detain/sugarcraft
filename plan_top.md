@@ -67,20 +67,20 @@ feel):
 
 | Gap (draw ref) | Pri | Target lib | Lane |
 |---|---|---|---|
-| LineChart per-POINT (x,value) color closure — residual after Audit-F11 wired per-series legend colors into the braille path (charting §8's "defect" framing superseded, §8-8) | P0 | sugar-charts | **L1** |
-| BrailleCanvas 101-stop gradient memo — kill clone-at-101-sites ramp pattern | P0 | sugar-dash | **L2** |
-| Dual-sample 5×5 quantizer: block tables + tty shades (braille packing reuses existing) (draw §2.7) | P0 | sugar-dash | **L3** |
-| graph_bg underlay glyph support `⣀`/`▄`/`░` in inactive_fg (draw §2.7 idiom, tty baseline disk-verified `░`) | P0 | sugar-dash | **L3** |
-| PositionGradient + `■` position-colored Meter (draw §2.6) | P0 | sugar-dash (+bits Progress doc) | **L4** |
-| Border::withTitle embedded-title + `┬├┴` junction placement (draw §2.4/§2.5/§3.3) | P0 | candy-sprinkles | **L5** |
-| sugar-charts BarChart withGradient (per-bar value→color) (single-color bars — charting §1.1 reads "single series only"; the per-bar color gap verified directly on `BarChart.php`, which ships no bar-color API) | P1 | sugar-charts | **L1** |
-| bits Progress position-gradient convenience + width-passing fix note (draw §10 row 6) | P1 | sugar-bits | **L4** |
-| rounded/line box presets into border presets (disk §8) | P1 | candy-sprinkles | **L5** |
-| Distance-fade helper (proc rows, draw §3.5) | P1 | sugar-dash | **L6** |
-| Per-row mini-sparkline composite (NET-NEW — technique source btop's proc-list row graphs, draw §3.5) | P1 | sugar-dash | **L6** |
-| Underline-cursor inline TextEdit (draw §2.3) | P1 | sugar-bits | **L8** |
-| Option-highlight convention (draw §5 options rows) | P1 | sugar-bits | **L8** |
-| Net autoscale hysteresis algorithm (draw §3.4) | P1 | sugar-dash (Foundation) | **L7** |
+| LineChart per-POINT (x,value) color closure — residual after Audit-F11 wired per-series legend colors into the braille path (charting §8's "defect" framing superseded, §8-8) | P0 | sugar-charts | **L1** ✅ `0153b65e4` |
+| BrailleCanvas 101-stop gradient memo — kill clone-at-101-sites ramp pattern | P0 | sugar-dash | **L2** ✅ `073913a44` |
+| Dual-sample 5×5 quantizer: block tables + tty shades (braille packing reuses existing) (draw §2.7) | P0 | sugar-dash | **L3** ✅ `37f5c6744` |
+| graph_bg underlay glyph support `⣀`/`▄`/`░` in inactive_fg (draw §2.7 idiom, tty baseline disk-verified `░`) | P0 | sugar-dash | **L3** ✅ `37f5c6744` |
+| PositionGradient + `■` position-colored Meter (draw §2.6) | P0 | sugar-dash (+bits Progress doc) | **L4** ✅ `1bbbca37f` |
+| Border::withTitle embedded-title + `┬├┴` junction placement (draw §2.4/§2.5/§3.3) | P0 | candy-sprinkles | **L5** ✅ `57cd08b9f` |
+| sugar-charts BarChart withGradient (per-bar value→color) (single-color bars — charting §1.1 reads "single series only"; the per-bar color gap verified directly on `BarChart.php`, which ships no bar-color API) | P1 | sugar-charts | **L1** ✅ `0153b65e4` |
+| bits Progress position-gradient convenience + width-passing fix note (draw §10 row 6) | P1 | sugar-bits | **L4** ✅ `1bbbca37f` |
+| rounded/line box presets into border presets (disk §8) | P1 | candy-sprinkles | **L5** ✅ `57cd08b9f` |
+| Distance-fade helper (proc rows, draw §3.5) | P1 | sugar-dash | **L6** ✅ `0859cfa4f` |
+| Per-row mini-sparkline composite (NET-NEW — technique source btop's proc-list row graphs, draw §3.5) | P1 | sugar-dash | **L6** ✅ `0859cfa4f` |
+| Underline-cursor inline TextEdit (draw §2.3) | P1 | sugar-bits | **L8** ✅ `39c65280c` |
+| Option-highlight convention (draw §5 options rows) | P1 | sugar-bits | **L8** ✅ `39c65280c` |
+| Net autoscale hysteresis algorithm (draw §3.4) | P1 | sugar-dash (Foundation) | **L7** ✅ `07a1e5e6f` |
 
 The lane target libs are siblings (charts/dash/bits/sprinkles), but the lanes are NOT mutually independent:
 within dash there is an ordering chain **L2 → L3 → L6** — L3's `setGradient` rides L2's `withGradient`, and
@@ -90,7 +90,7 @@ pre-L2/L3 dash tree stalls. L4 and L5 stand alone within dash/sprinkles. sugar-c
 change is independent. L7 depends on L1+L2 (gradient ramp lookup). L8 is independent.
 candy-top app assembly (Phase 3+) depends on ALL lanes landed.
 
-### L1 — sugar-charts: per-point color callback + bar gradient
+### ✅ L1 — sugar-charts: per-point color callback + bar gradient — `0153b65e4`
 
 **Closes:** charting §8's per-series color defect — **superseded on disk**: Audit-F11 (commit `1ad48ebba`, an
 ancestor of scaffold master `31e4dd8ff`) already routes per-series colors into the braille path —
@@ -134,7 +134,7 @@ workaround in this lane; its docblock rationale is half-superseded by F11, retir
 end: full `sugar-charts` suite, then `candy-query` suite (its 1483T/4203A era figure, tea-era record) to prove
 zero behavior drift on default path.
 
-### L2 — sugar-dash: BrailleCanvas::withGradient (101-stop ramp)
+### ✅ L2 — sugar-dash: BrailleCanvas::withGradient (101-stop ramp) — `073913a44`
 
 **Closes:** draw §2.7 coloring law (`Theme::g(gradient).at(clamp)`) — today every consumer hand-rolls the ramp;
 the audit headline (draw report era notes) is "kill clone-at-101-sites": with the canvas immutable clone-on-write
@@ -166,7 +166,7 @@ Files: `BrailleCanvas.php` + tests. Est. ~90 LOC src / ~180 LOC tests. **Regress
 dash, charting §1) + its consumers from L1's list; sugar-dash own suite (5,945T era figure — tea/dash record) at
 lane end; candy-query dashboard filter.
 
-### L3 — sugar-dash: dual-sample quantizer tables + graph_bg underlay
+### ✅ L3 — sugar-dash: dual-sample quantizer tables + graph_bg underlay — `37f5c6744`
 
 **Closes:** draw §0 gap 1 ("no class … implements this sampling law") + draw §10 rows 1, 4, 5. BrailleGrid/
 BrailleCanvas are storage canvases; the **quantizer** mapping two adjacent samples to one cell-glyph via the
@@ -224,7 +224,7 @@ candy-testing `assertCellGrid`; underlay polarity (non-blank-only color emission
 tests. **Regressions:** none to existing classes (new file + constants); dash suite + charts (which will consume
 it after L1). `tools/check-child-lifetimes.php` / path-repos rc=0 unaffected (no proc_open).
 
-### L4 — Position-colored meter (dash Meter/PositionGradient + bits Progress note)
+### ✅ L4 — Position-colored meter (dash Meter/PositionGradient + bits Progress note) — `1bbbca37f`
 
 **Closes:** draw §0 gap 2 + §2.6 (btop `Draw::Meter`, btop_draw.cpp:397-419): every `■` (U+25A0) cell is colored
 at **its own position** — `y = round(i*100/width)`; filled cells (`value >= y`) take
@@ -263,7 +263,7 @@ sugar-glow, sugar-stickers, candy-query's bits surface — all verified `require
 composer.json; candy-shell does **not** and is dropped from this gate), dash consumers (candy-query,
 sugar-charts). Run bits suite era figures + sugar-prompt 158T + glow + stickers + query filter.
 
-### L5 — candy-sprinkles: Border::withTitle + junction seams
+### ✅ L5 — candy-sprinkles: Border::withTitle + junction seams — `57cd08b9f`
 
 **Closes:** draw §0 gap 3 + §10 rows 8, 9. Verified on disk: `Border.php:42-122` has normal/rounded/thick/double/
 block/ascii/hidden presets (charting §6 — so "rounded/line presets into Stereotype" from the brief is moot:
@@ -294,7 +294,7 @@ byte-identical to untouched style; seam matrix — all 16 seam-flag combos → e
 record); consumers sugar-boxer (default border `Border::rounded()`, VERIFIED SugarBoxer.php:814-871), candy-top
 later, crush (untouched surface — additive only). Gate: full sprinkles + boxer (187T/375A era) suites.
 
-### L6 — sugar-dash: distance-fade + ProcRowComposer mini-sparkline composite
+### ✅ L6 — sugar-dash: distance-fade + ProcRowComposer mini-sparkline composite — `0859cfa4f`
 
 **Closes:** draw §0 gap 6, and §3.5 proc coloring + per-row 5×1 cpu graphs (§3.5 lifecycle: created on first
 cpu>0, erased after 10 consecutive samples <0.1%, skipped on the selected row, sits on graph_bg). Today the
@@ -329,7 +329,7 @@ formula. Est. ~200 LOC src / ~300 LOC tests. **Regressions:** dash-only new file
 (`MultiSeriesCell` is the adjacent prior-art consumer, nothing moves out of it; its inline raster copies stay —
 retirement is a follow-up decision, §8-4).
 
-### L7 — sugar-dash Foundation: net autoscale hysteresis + ThemeGradientStore
+### ✅ L7 — sugar-dash Foundation: net autoscale hysteresis + ThemeGradientStore — `07a1e5e6f`
 
 **Closes:** draw §0 gap 4 (theme registry/loader unbuilt — "candy-core has the interpolation primitive but no
 palette registry") and §3.4 autoscale (collect.cpp:2993-3073 law). Both are reusable system-monitor foundations
@@ -354,7 +354,7 @@ mid-stop exactness at 50 (snapshot byte via Color::blend1d, charting §4). Est. 
 **Regressions:** new Foundation files, nothing rewired; gate dash suite. candy-top's Theme/ (Phase 3) will consume
 GradientStore + port the `.theme` ini loader in-app (loader is app-specific key vocabulary, §8).
 
-### L8 — sugar-bits: underline-cursor TextEdit + option-highlight convention
+### ✅ L8 — sugar-bits: underline-cursor TextEdit + option-highlight convention — `39c65280c`
 
 **Closes:** draw §0 gap 5 + §2.3 (Draw::TextEdit — inline filter/option editor: underline-as-cursor, no real
 terminal cursor; empty field renders `Fx::ul + " " + Fx::uul`; window carved keeping ~half columns each side of
@@ -393,7 +393,7 @@ throttle-in-update not subscriptions — candy-query App.php:906-919 canonical g
 candy-top/
   bin/candy-top            # launcher per candy-query/bin/candy-query:8-53 IIFE-autoload shape, Program(
                            #   App::start(...), new ProgramOptions(useAltScreen:true, mouseMode:..., framerate: 20.0))
-  src/Collect/             # ALL readers: injectable $paths + \Closure $clock (HostLoadSampler shape,
+  src/Collect/             # ✅ b2d9207cc — ALL readers: injectable $paths + \Closure $clock (HostLoadSampler shape,
                            #   HostLoadSampler.php:27-28,66-77), UNMEASURED=-1.0 / 'n/a' sentinel law
                            #   (ProcAvailability, tea §2 — E731 COMP-2 option (b)).
     Cpu.php                # /proc/stat cpu0..N jiffies deltas (user,nice,system,idle,iowait,irq,softirq,steal);
@@ -430,7 +430,7 @@ candy-top/
     MemView.php NetView.php DiskView.php ProcView.php  # mirror draw §3.3/§3.4/§3.5; proc via L6 ProcRowComposer
     Overlays.php           # menus/help/signals/msgboxes (draw §5) — veil-styled dim = SGR-strip + inactive_fg
                            #   (draw §1 overlay law, sugar-veil backdrop, draw §10 row 36)
-  src/Theme/
+  src/Theme/               # ✅ 672c64680 (+ themes/ 41 files, btop oracle)
     ThemeConfig.php        # 43 semantic keys + 9 families (hexes: draw §6 verbatim Default table);
                            #   .theme ini parser `theme[key]="#hex"` (+ # comments, 'r g b', #GG gray forms)
                            #   → dash GradientStore (L7) ramps; pseudo-derivations proc/proc_color injected
