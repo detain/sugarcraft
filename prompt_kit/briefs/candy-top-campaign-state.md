@@ -3,7 +3,7 @@
 Authoritative plan: `plan_top.md` (✅ + commit hash marks = reviewed, fixed, committed). This file is the
 supervisor's working state for resuming after a context reset. Update it whenever the in-flight set changes.
 
-_Last updated: 2026-10-08 (before /compact)._
+_Last updated: 2026-10-08 (second /compact, P-F2 in flight)._
 
 ## Operating rules (user-mandated)
 - Commit straight to `master`, author/committer **Joe Huss <detain@interserver.net> only**, **no Co-Authored-By**,
@@ -27,24 +27,41 @@ References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-refer
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
 ## In flight at handoff (UNCOMMITTED in the working tree)
-Launched 2026-10-08 in parallel (shared brief: `prompt_kit/briefs/candy-top-panel-phase-common.md`):
-- **P-F2** options menu/presets/persistence (#1476/#1411/#1791b/#1849) — implementer running (sugar-bits require committed `892cc0e7b`, candy-top vendor relinked); also fixes P-F1 review leftovers (follow ↑ arrow, backdrop refresh on menu switch, renice backspace keeps last parsed, chrome drag).
-Each agent reports an exact file list; commit only that list (lang/en.php, Panels.php, CALIBER_LEARNINGS.md
-are shared → stage partially). Chrome goldens use frozen `Panels::placeholders()` (`4186902f5`, `c1613c6aa`).
+- **P-F2** options menu / presets / config persistence / ctrl+r reload (#1476 proc_box_width_percent + Shift/Alt+Shift
+  arrows + preset 4th field, #1411 tab digits, #1791b section headings, #1849 reload clears memos) + FilterEdit →
+  sugar-bits TextEdit + P-F1 leftovers (proc ↑ arrow when following, frozen backdrop refresh on menu close/switch,
+  renice backspace keeps last parsed value, cpu title buttons on mouse drag). Brief: `prompt_kit/briefs/candy-top-pf-common.md`
+  + the scope list in the P-F2 agent prompt (summarised here). sugar-bits require committed `892cc0e7b`; candy-top
+  vendor relinked (`php scripts/refresh-deps.php --mode=linked --libs=candy-top`; candy-testing now installed).
+  Implementer agent was running at /compact. Every uncommitted path under `candy-top/` is P-F2's (only stray
+  untracked file outside it: `server.ansi` at repo root — NOT campaign, never stage it).
+  **If the agent is gone after the reset:** inspect `git status`/`git diff candy-top`; if the work looks complete
+  (suite green: `cd candy-top && vendor/bin/phpunit`), launch an independent reviewer on it; if incomplete, launch
+  a new implementer to finish the P-F2 scope above from the current tree (don't discard work). Then review → fix →
+  commit → plan mark (plan row `| P-F (F1 overlays/menus ✅ `083176989`; F2 pending) |` → mark F2 ✅ + hash).
 
 ## Next
-- P-F carry-overs (see candy-top/CALIBER_LEARNINGS.md Deferred sections): App-owned overlay/menu stack + click map (mapped button clicks must not broadcast to proc), signal/nice menus + pause/follow/kill buttons, refused-toggle size msgbox, tty_mode → TTY theme load, FilterEdit → sugar-bits TextEdit when sugar-bits is required, SetOptionMsg shown_boxes fit check.
+1. **P-H candy-top half** (after P-F2 commits): full `candy-top/README.md` (install, run, `--fake`/`--config`/tty,
+   every panel, every key from `Input\KeyTable`, mouse, options menu, presets, config-key table derived from
+   `Config\Schema`, themes list (42) + user themes, TTY mode, collectors/data sources/permissions, VM/container
+   tags, adopted Wave U PR features, deviations from btop listed in CALIBER_LEARNINGS), README demo GIF embed
+   (`https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.vhs/top.gif`), docs drift tests (README
+   key table ⇔ KeyTable, config table ⇔ Schema, like sugar-crush's drift guards), `docs/_data/candy-top.{json,body.html}`
+   refresh then `php tools/gen-docs.php` (never hand-edit docs/lib/*.html), refresh stale "scaffold" wording in root
+   README / docs/index.html, MATCHUPS 🟡→🟢, CALIBER_LEARNINGS tidy. Review → fix → commit → mark P-H ✅.
+2. **P-G remainder**: TTY polish check (`--tty` / tty_mode demo) — mark P-G fully ✅ when done (mellow `632e08d49`
+   and tape `3469999a7` already done).
+3. Post-v1 (only after the above; ask nothing, proceed): U4 (P-I GPU/NPU multi-vendor, container/VM box,
+   #1791c tree-state persistence in XDG state file), U5 FreeBSD collectors (reference `prompt_kit/findings/freebsd-reference.md`).
 - Perf note: real ProcList 40-47 ms @1160 pids, 56-72 ms with io (kernel floor); sampling is on the loop thread.
-- After P-A commits: launch **P-B (cpu+mem), P-C (net), P-D (disk+battery), P-E (proc)** in parallel, each a
-  Panel file + one `Panels::standard()` line, folding in their Wave U3 items (plan Wave U section) — e.g.
-  P-B #1785/#1747/#1739 + #1614/#1008 rules; P-C #1573; P-D #1700; P-E #1859/#1823/#1546/#1791a/#1873 +
-  U1b VM tags; Gpu `withProcesses()` must be enabled where per-process GPU memory is shown.
-- Then **P-F** (options menu via OptionRow/TextEdit, presets, keybind overlay; #1476/#1411/#1791b/#1849; hold-
-  repeat ±1000ms; refused-toggle message box), **P-G** (TTY polish, mellow theme #1683 → bump 41-pinned tests,
-  VHS tape + vhs.yml `all=(…)` entry), **P-H candy-top half** (full README incl. config-key table from Schema,
-  keys, mouse, themes, collectors/permissions, VM/container tags; docs/_data refresh + gen-docs; drift tests;
-  refresh stale "scaffold" wording in README/docs/index.html; MATCHUPS 🟡→🟢 at v1).
-- Post-v1: U4 (P-I GPU/NPU multi-vendor, container/VM box, tree-state persistence), U5 FreeBSD.
+- Deviations/deferrals are recorded per phase in `candy-top/CALIBER_LEARNINGS.md` (P-A…P-F sections).
+
+## Process notes
+- Snapshot-test every commit in isolation: `git checkout-index -a --prefix=$JOB_TMP/idx/` then
+  `cp -a candy-top/vendor $JOB_TMP/idx/candy-top/vendor` and run phpunit there (JOB_TMP=/home/my/.claude/jobs/b8d2a5fd/tmp).
+- Shared files (lang/en.php, Panels.php, CALIBER_LEARNINGS.md) staged partially via python + `git hash-object -w`
+  + `git update-index --cacheinfo` when another unit's edits are present.
+- Never run `refresh-deps.php` with an uncommitted composer.json (it `git checkout`s `*/composer.json`).
 
 ## Known open issues (not campaign-caused)
 - candy-core `DescriptorSinkArgumentCensusTest` has 2 failures from sugar-crush commit `f41b307ae`
