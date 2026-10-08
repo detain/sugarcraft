@@ -493,7 +493,7 @@ Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aris
   #1573 iface IPs via `net_get_interfaces()` (`net_hide_ip=false`); ProcList bundle — #1859 argv[0] basename
   span (`proc_command_basename=false`), #1823 `/proc/pid/io` rates (EACCES → "-", never 0), #1873 container
   tag from `/proc/pid/cgroup` (`proc_filter_containers`, `O` key).
-- **U1b — VM awareness (user-requested; not a btop PR):** tag KVM/QEMU guest processes with their VM —
+- ✅ `b071eb8b7` **U1b — VM awareness (user-requested; not a btop PR):** tag KVM/QEMU guest processes with their VM —
   from cgroup v2 `machine.slice/machine-qemu\x2d<id>\x2d<name>.scope` (unescape `\x2d`) + cmdline
   `-name guest=<name>`, `-uuid`, `-smp`, `-m size=<KiB>k`; detect by cgroup/cmdline, NOT exe name (`/usr/bin/kvm`
   on Ubuntu). Extends the #1873 Cgroup/ContainerRef parser (engine `kvm`); proc list shows the guest name,
