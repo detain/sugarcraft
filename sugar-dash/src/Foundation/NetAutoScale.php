@@ -129,33 +129,7 @@ final class NetAutoScale
             }
         }
 
-        $rescaled = false;
-        foreach ([self::DOWNLOAD, self::UPLOAD] as $dir) {
-            $synced = false;
-            foreach ([0, 1] as $sel) {
-                if (!$this->rescalePending && $counts[$dir][$sel] < self::TRIGGER) {
-                    continue;
-                }
-                $hist = $history[$dir];
-                $avg = count($hist) > self::WINDOW
-                    ? self::mean(array_slice($hist, -self::WINDOW))
-                    : $speed[$dir];
-                $max[$dir] = max(
-                    self::saturate($avg * ($sel === 0 ? self::FAST_FACTOR : self::SLOW_FACTOR)),
-                    self::FLOOR,
-                );
-                $counts[$dir] = [0, 0];
-                $rescaled = true;
-                $synced = $this->sync;
-                break;
-            }
-            if ($synced) {
-                $other = self::other($dir);
-                $max[$other] = $max[$dir];
-                $counts[$other] = [0, 0];
-                break;
-            }
-        }
+        $rescaled = $this->rescalePass($this->rescalePending, $max, $counts, $speed, $history);
 
         return $this->mutate(
             max: $max,
@@ -192,6 +166,47 @@ final class NetAutoScale
             counts: [self::DOWNLOAD => [0, 0], self::UPLOAD => [0, 0]],
             history: $history,
             rescalePending: true,
+        );
+    }
+
+    /**
+     * Rescale NOW from the held samples, without offering a new one — btop's
+     * `Runner::run("net", no_update = true)` after `b`/`n`/`a`/`y`, where
+     * Net::collect skips the counter pass but still runs the rescale pass
+     * with `rescale = true`, so the graph is redrawn against the new ceiling
+     * in the same frame instead of one tick later.
+     *
+     * Pass the newly selected interface's samples (oldest first) to swap
+     * the averaging window, as in {@see forceRescale()}; its newest sample
+     * becomes the "current speed" btop falls back to when 5 or fewer are
+     * held (0 for an empty list). Omitted directions keep their window.
+     * Counters reset; the ceiling uses the fast factor (×1.3, floor 10 KiB);
+     * with sync the download ceiling is copied onto upload.
+     *
+     * @param list<int>|null $downloadHistory
+     * @param list<int>|null $uploadHistory
+     */
+    public function rescaleNow(?array $downloadHistory = null, ?array $uploadHistory = null): self
+    {
+        $history = $this->history;
+        $speed = $this->speed;
+        foreach ([self::DOWNLOAD => $downloadHistory, self::UPLOAD => $uploadHistory] as $dir => $samples) {
+            if ($samples !== null) {
+                $history[$dir] = self::window($samples);
+                $speed[$dir] = $history[$dir] === [] ? 0 : $history[$dir][count($history[$dir]) - 1];
+            }
+        }
+        $max = $this->max;
+        $counts = [self::DOWNLOAD => [0, 0], self::UPLOAD => [0, 0]];
+        $this->rescalePass(true, $max, $counts, $speed, $history);
+
+        return $this->mutate(
+            max: $max,
+            counts: $counts,
+            speed: $speed,
+            history: $history,
+            rescalePending: false,
+            rescaled: true,
         );
     }
 
@@ -232,6 +247,50 @@ final class NetAutoScale
     public function rescalePending(): bool
     {
         return $this->rescalePending;
+    }
+
+    /**
+     * btop's `if (net_auto)` rescale pass: per direction, a forced rescale
+     * or a counter at {@see TRIGGER} sets the ceiling and resets that
+     * direction's counters; with sync it is copied onto the other direction
+     * and the pass ends. Returns whether any direction rescaled.
+     *
+     * @param array{download:int, upload:int} $max
+     * @param array{download:array{0:int,1:int}, upload:array{0:int,1:int}} $counts
+     * @param array{download:int, upload:int} $speed
+     * @param array{download:list<int>, upload:list<int>} $history
+     */
+    private function rescalePass(bool $force, array &$max, array &$counts, array $speed, array $history): bool
+    {
+        $rescaled = false;
+        foreach ([self::DOWNLOAD, self::UPLOAD] as $dir) {
+            $synced = false;
+            foreach ([0, 1] as $sel) {
+                if (!$force && $counts[$dir][$sel] < self::TRIGGER) {
+                    continue;
+                }
+                $hist = $history[$dir];
+                $avg = count($hist) > self::WINDOW
+                    ? self::mean(array_slice($hist, -self::WINDOW))
+                    : $speed[$dir];
+                $max[$dir] = max(
+                    self::saturate($avg * ($sel === 0 ? self::FAST_FACTOR : self::SLOW_FACTOR)),
+                    self::FLOOR,
+                );
+                $counts[$dir] = [0, 0];
+                $rescaled = true;
+                $synced = $this->sync;
+                break;
+            }
+            if ($synced) {
+                $other = self::other($dir);
+                $max[$other] = $max[$dir];
+                $counts[$other] = [0, 0];
+                break;
+            }
+        }
+
+        return $rescaled;
     }
 
     /**

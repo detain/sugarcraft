@@ -173,7 +173,10 @@ final class Config
      * terminal-size gate (the app checks the minimum size before calling).
      * P=1 sets cpu_bottom / mem_below_net / proc_left for those boxes; each
      * box's graph symbol lands on graph_symbol_<box> (gpuN share
-     * graph_symbol_gpu); the box list becomes shown_boxes.
+     * graph_symbol_gpu); the box list becomes shown_boxes. A proc box also
+     * sets proc_box_width_percent (btop PR #1476): its W field clamped to
+     * 0-100, or the 55 default when W is absent or `default` — so applying
+     * a preset always resets a width the user nudged with Shift+arrows.
      */
     public function withPreset(Preset $preset): self
     {
@@ -187,6 +190,9 @@ final class Config
             };
             if ($position !== null) {
                 $changes[$position] = $box->alternate;
+            }
+            if ($box->box === 'proc') {
+                $changes['proc_box_width_percent'] = $box->widthPercent() ?? Schema::PROC_BOX_WIDTH_PERCENT;
             }
             $symbolKey = str_starts_with($box->box, 'gpu') ? 'graph_symbol_gpu' : 'graph_symbol_' . $box->box;
             $changes[$symbolKey] = $box->graphSymbol;
@@ -213,7 +219,7 @@ final class Config
         return $this->string('color_theme');
     }
 
-    /** Global graph symbol family: braille | block | tty. */
+    /** Global graph symbol family: braille | block | block2 | tty. */
     public function graphSymbol(): string
     {
         return $this->string('graph_symbol');
@@ -255,6 +261,54 @@ final class Config
     public function procSorting(): string
     {
         return $this->string('proc_sorting');
+    }
+
+    /**
+     * Copy with proc_box_width_percent clamped into [0, 100] — the
+     * Shift/Alt+Shift+arrow key path of btop PR #1476, which pins at the
+     * bounds instead of erroring. The layout further clamps to the min/max
+     * box widths the window allows without touching the stored value.
+     */
+    public function withProcBoxWidthPercent(int $percent): self
+    {
+        return $this->with('proc_box_width_percent', max(0, min(100, $percent)));
+    }
+
+    /** proc_box_width_percent (btop PR #1476): proc box width % when mem or net is shown, 0-100. */
+    public function procBoxWidthPercent(): int
+    {
+        return $this->int('proc_box_width_percent');
+    }
+
+    /** show_core_freq (btop PR #1785): off | value | graph — per-core frequency in the cpu box. */
+    public function showCoreFreq(): string
+    {
+        return $this->string('show_core_freq');
+    }
+
+    /**
+     * mem_selected (btop PR #1747): "default" for the stacked mem meters, or
+     * the one metric (used | available | cached | free | swap_used) drawn
+     * as a single full-height graph.
+     */
+    public function memSelected(): string
+    {
+        return $this->string('mem_selected');
+    }
+
+    /**
+     * disks_order (btop PR #1700) as a list: mountpoints (and the `swap`
+     * pseudo-disk) to show first, in order. Whitespace-split like btop's
+     * ssplit, duplicates dropped keeping the first — btop's
+     * apply_disks_order skips a mountpoint already placed.
+     *
+     * @return list<string>
+     */
+    public function disksOrder(): array
+    {
+        $tokens = preg_split('/\s+/', $this->string('disks_order'), -1, \PREG_SPLIT_NO_EMPTY);
+
+        return array_values(array_unique($tokens === false ? [] : $tokens));
     }
 
     /** temp_scale: celsius | fahrenheit | kelvin | rankine. */

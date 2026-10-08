@@ -17,7 +17,13 @@ namespace SugarCraft\Top\Collect;
  *  - used = total − available, falling back to total − free when the
  *    adjusted available overshoots total (the ARC can briefly report more
  *    than physical RAM);
- *  - swap_used = SwapTotal − SwapFree.
+ *  - swap_used = SwapTotal − SwapFree;
+ *  - zswap (btop #1739, Linux ≥ 5.19): `Zswap:` is the compressed pool
+ *    held in RAM, `Zswapped:` the original size of the pages in it. Both
+ *    land in the snapshot raw (UNMEASURED_INT when the kernel has no such
+ *    lines); MemorySnapshot::swapUsedOnDisk() gives btop's show_zswap
+ *    "Used" (swap_used − Zswapped). `swapUsed` itself stays the plain
+ *    SwapTotal − SwapFree figure so the choice is the view's (show_zswap).
  *
  * Stateless: sample() returns $this as the next collector.
  */
@@ -82,6 +88,8 @@ final class Memory
                 $swapTotal,
                 $swapTotal > 0 ? $swapTotal - $swapFree : 0,
                 $swapTotal > 0 ? $swapFree : 0,
+                $kb['Zswap'] ?? Sentinel::UNMEASURED_INT,
+                $kb['Zswapped'] ?? Sentinel::UNMEASURED_INT,
             ),
             $this,
         ];

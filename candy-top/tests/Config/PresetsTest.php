@@ -73,6 +73,13 @@ final class PresetsTest extends TestCase
             'gpu6' => ['gpu6:0:default', 'Invalid box name in config value presets!'],
             'position' => ['cpu:2:default', 'Invalid position value in config value presets!'],
             'graph' => ['cpu:0:dots', 'Invalid graph name in config value presets!'],
+            'W on a mem box' => ['mem:0:block2:50', 'Malformatted preset in config value presets!'],
+            'W on a non-proc box' => ['net:0:default:80', 'Malformatted preset in config value presets!'],
+            'five fields on proc' => ['proc:0:default:80:1', 'Malformatted preset in config value presets!'],
+            'W not a number' => ['proc:0:default:wide', 'Invalid proc width percent in config value presets!'],
+            'W negative' => ['proc:0:default:-5', 'Invalid proc width percent in config value presets!'],
+            'W trailing junk' => ['proc:0:default:80abc', 'Invalid proc width percent in config value presets!'],
+            'W overflows int' => ['proc:0:default:99999999999', 'Invalid proc width percent in config value presets!'],
         ];
     }
 
@@ -86,6 +93,57 @@ final class PresetsTest extends TestCase
             $this->assertSame($message, $e->getMessage());
             $this->assertSame('presets', $e->option);
         }
+    }
+
+    public function testBlock2IsAValidPresetGraphSymbol(): void
+    {
+        $box = Presets::parse('cpu:0:block2,mem:0:block2')->at(1)->boxes[0];
+        $this->assertSame('block2', $box->graphSymbol);
+    }
+
+    public function testProcFourthFieldParsesAsStrictSuperset(): void
+    {
+        $presets = Presets::parse('cpu:0:default,proc:1:braille:80 proc:0:tty:default cpu:1:block,proc:0:default');
+
+        $quad = $presets->at(1)->boxes[1];
+        $this->assertSame('proc', $quad->box);
+        $this->assertTrue($quad->alternate);
+        $this->assertSame('braille', $quad->graphSymbol);
+        $this->assertSame('80', $quad->width);
+        $this->assertSame(80, $quad->widthPercent());
+
+        $this->assertSame('default', $presets->at(2)->boxes[0]->width);
+        $this->assertNull($presets->at(2)->boxes[0]->widthPercent(), '`default` W → the 55 default applies');
+
+        $triple = $presets->at(3)->boxes[1];
+        $this->assertNull($triple->width, 'btop 3-field box parses identically');
+        $this->assertNull($triple->widthPercent());
+    }
+
+    public function testProcWidthClampsTo100WhenApplied(): void
+    {
+        $box = Presets::parse('proc:0:default:250')->at(1)->boxes[0];
+        $this->assertSame('250', $box->width, 'stored as written');
+        $this->assertSame(100, $box->widthPercent());
+        $this->assertSame(0, Presets::parse('proc:0:default:0')->at(1)->boxes[0]->widthPercent());
+        $this->assertSame(7, Presets::parse('proc:0:default:007')->at(1)->boxes[0]->widthPercent());
+    }
+
+    public function testFourthFieldWrittenBackOnlyWhenTheUserWroteIt(): void
+    {
+        $raw = 'cpu:0:default,proc:1:braille:80 proc:0:tty:default mem:0:block,proc:0:default';
+        $this->assertSame($raw, Presets::parse($raw)->toString());
+
+        $btop = (string) Schema::option('presets')?->default;
+        $this->assertSame($btop, Presets::parse($btop)->toString(), 'btop strings never gain a W');
+        $this->assertStringNotContainsString(':55', Presets::parse($btop)->toString());
+        $this->assertSame(Presets::BUILTIN, Presets::new()->at(0)->toString());
+    }
+
+    public function testFourthFieldValueObject(): void
+    {
+        $this->assertSame('proc:0:default:40', (new PresetBox('proc', false, 'default', '40'))->toString());
+        $this->assertSame('proc:0:default', (new PresetBox('proc', false, 'default'))->toString());
     }
 
     public function testAtOutOfRangeThrows(): void

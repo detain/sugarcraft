@@ -13,7 +13,10 @@ use SugarCraft\Top\Lang;
  * Mirrors aristocratos/btop Config::presetsValid + Config::preset_list and
  * the `p`/`P` cycle in btop_input.cpp. Format: presets separated by
  * whitespace, boxes by `,`, each box a `name:P:G` triple — P is `0|1`
- * (alternate position), G a graph symbol or `default`.
+ * (alternate position), G a graph symbol or `default`. btop PR #1476 lets
+ * the proc box carry a 4th field, `proc:P:G:W`, W a width percent (digits,
+ * clamped to 0-100 when applied) or `default`; a strict superset, so every
+ * btop 1.4.7 string parses identically.
  */
 final class Presets
 {
@@ -132,10 +135,11 @@ final class Presets
                 throw self::fail('config.preset.too_many_boxes');
             }
             $vals = self::split($box, ':');
-            if (\count($vals) !== 3) {
+            if (\count($vals) !== 3 && !(\count($vals) === 4 && $vals[0] === 'proc')) {
                 throw self::fail('config.preset.malformed');
             }
             [$name, $position, $symbol] = $vals;
+            $width = $vals[3] ?? null;
             if (!\in_array($name, Schema::BOXES, true)) {
                 throw self::fail('config.preset.invalid_box');
             }
@@ -145,10 +149,29 @@ final class Presets
             if (!\in_array($symbol, Schema::GRAPH_SYMBOLS_DEF, true)) {
                 throw self::fail('config.preset.invalid_graph');
             }
-            $boxes[] = new PresetBox($name, $position === '1', $symbol);
+            if ($width !== null && $width !== 'default' && !self::isPercentToken($width)) {
+                throw self::fail('config.preset.invalid_width');
+            }
+            $boxes[] = new PresetBox($name, $position === '1', $symbol, $width);
         }
 
         return new Preset($boxes);
+    }
+
+    /**
+     * btop PR #1476 accepts any W `stoi` parses (`intValid("", W)`); this is
+     * stricter — plain digits within int range — matching how candy-top
+     * parses every other int (Option::parse), so `-5`/`80abc` are rejected
+     * rather than half-read.
+     */
+    private static function isPercentToken(string $token): bool
+    {
+        if (!ctype_digit($token)) {
+            return false;
+        }
+        $trimmed = ltrim($token, '0');
+
+        return \strlen($trimmed) <= 10 && ($trimmed === '' || (int) $trimmed <= Option::INT_MAX);
     }
 
     /**

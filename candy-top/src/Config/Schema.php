@@ -16,6 +16,26 @@ use SugarCraft\Top\Lang;
  * order (only these are accepted by Config::load — btop builds `valid_names`
  * from it), `bools`/`ints`/`strings` give the defaults, `intValid` /
  * `stringValid` / `presetsValid` give the value law.
+ *
+ * Wave U (adopted open upstream PRs, evaluated in
+ * prompt_kit/findings/btop-upstream-prs.md) extends the 1.4.7 roster. The
+ * compatibility law for a btop.conf <-> config.conf round trip:
+ *  - New keys are additive: show_zswap (#1739), show_core_freq (#1785),
+ *    net_hide_ip (#1573), proc_command_basename (#1859),
+ *    proc_filter_containers (#1873), mem_selected (#1747), disks_order
+ *    (#1700), proc_box_width_percent (#1476). Stock btop and our reader both
+ *    skip unknown keys, so either file still loads in the other program.
+ *  - New *values* of existing enums are a soft break: `block2` in
+ *    graph_symbol / graph_symbol_<box> (#1783) and `io read|write|total` in
+ *    proc_sorting (#1823). Stock btop warns and keeps its default.
+ *  - The presets 4th field `proc:P:G:W` (#1476) is a strict superset of
+ *    btop's grammar — every 3-field string parses identically — and is only
+ *    ever written back when the user wrote it; stock btop rejects a whole
+ *    presets string containing one and resets presets to its default.
+ *  - From #1873 only proc_filter_containers is adopted; its `ctr` box is
+ *    deferred (Wave U4), so a #1873-btop config naming `ctr` in shown_boxes
+ *    or presets is rejected here.
+ * Placement follows each PR's position in btop's `descriptions`.
  */
 final class Schema
 {
@@ -28,11 +48,11 @@ final class Schema
     /** btop's update_ms floor. */
     public const MIN_UPDATE_MS = 100;
 
-    /** btop Config::valid_graph_symbols. */
-    public const GRAPH_SYMBOLS = ['braille', 'block', 'tty'];
+    /** btop Config::valid_graph_symbols, plus `block2` sextants (btop PR #1783 — stock 1.4.7 rejects it). */
+    public const GRAPH_SYMBOLS = ['braille', 'block', 'block2', 'tty'];
 
     /** btop Config::valid_graph_symbols_def — per-box symbols may also defer to graph_symbol. */
-    public const GRAPH_SYMBOLS_DEF = ['default', 'braille', 'block', 'tty'];
+    public const GRAPH_SYMBOLS_DEF = ['default', 'braille', 'block', 'block2', 'tty'];
 
     /** btop Config::valid_boxes (GPU build). */
     public const BOXES = ['cpu', 'mem', 'net', 'proc', 'gpu0', 'gpu1', 'gpu2', 'gpu3', 'gpu4', 'gpu5'];
@@ -43,6 +63,15 @@ final class Schema
     /** btop Config::freq_modes (Linux only). */
     public const FREQ_MODES = ['first', 'range', 'lowest', 'highest', 'average'];
 
+    /** btop PR #1785 Config::show_core_freq_values — per-core frequency in the cpu box. */
+    public const SHOW_CORE_FREQ_VALUES = ['off', 'value', 'graph'];
+
+    /** btop PR #1747 Config::mem_metrics_values — mem_selected: one focused mem graph, or "default". */
+    public const MEM_METRICS_VALUES = ['default', 'used', 'available', 'cached', 'free', 'swap_used'];
+
+    /** btop PR #1476 Proc::width_p — default proc box width % when mem or net is shown. */
+    public const PROC_BOX_WIDTH_PERCENT = 55;
+
     /** btop Config::show_gpu_values. */
     public const SHOW_GPU_VALUES = ['Auto', 'On', 'Off'];
 
@@ -52,8 +81,16 @@ final class Schema
     /** btop Config::disable_preset_options. */
     public const DISABLE_PRESET_OPTIONS = ['Off', 'Default', 'Custom', 'All'];
 
-    /** btop Proc::sort_vector (btop_shared.cpp) — the values proc_sorting can take. */
-    public const PROC_SORTING = ['pid', 'name', 'command', 'threads', 'user', 'memory', 'cpu direct', 'cpu lazy'];
+    /**
+     * btop Proc::sort_vector (btop_shared.cpp) — the values proc_sorting can
+     * take. btop PR #1823 appends the three io sorts after btop's eight, so
+     * left/right sort cycling keeps btop's order first; stock 1.4.7 rejects
+     * them and falls back to "cpu lazy".
+     */
+    public const PROC_SORTING = [
+        'pid', 'name', 'command', 'threads', 'user', 'memory', 'cpu direct', 'cpu lazy',
+        'io read', 'io write', 'io total',
+    ];
 
     /** btop Logger::log_levels. */
     public const LOG_LEVELS = ['DISABLED', 'ERROR', 'WARNING', 'INFO', 'DEBUG'];
@@ -149,14 +186,20 @@ final class Schema
             Option::string('proc_sorting', 'cpu lazy', self::PROC_SORTING),
             Option::bool('proc_reversed', false),
             Option::bool('proc_tree', false),
+            Option::bool('proc_command_basename', false),
             Option::bool('proc_colors', true),
             Option::bool('proc_gradient', true),
             Option::bool('proc_per_core', false),
             Option::bool('proc_mem_bytes', true),
             Option::bool('proc_cpu_graphs', true),
             Option::bool('proc_info_smaps', false),
+            // btop PR #1476 stores any int and clamps at use; candy-top
+            // rejects out-of-range values instead (a stored 150 would be a
+            // silent 100), and withProcBoxWidthPercent() clamps the key path.
+            Option::int('proc_box_width_percent', self::PROC_BOX_WIDTH_PERCENT, 0, 100),
             Option::bool('proc_left', false),
             Option::bool('proc_filter_kernel', false),
+            Option::bool('proc_filter_containers', false),
             Option::bool('proc_follow_detailed', true),
             Option::bool('proc_aggregate', false),
             Option::int('proc_tree_auto_collapse', 0, 0, 10000),
@@ -177,14 +220,18 @@ final class Schema
             Option::bool('base_10_sizes', false),
             Option::bool('show_cpu_freq', true),
             Option::string('freq_mode', 'first', self::FREQ_MODES),
+            Option::string('show_core_freq', 'off', self::SHOW_CORE_FREQ_VALUES),
             Option::string('clock_format', '%X'),
             Option::bool('background_update', true),
             Option::string('custom_cpu_name', ''),
             Option::string('disks_filter', ''),
+            Option::string('disks_order', ''),
             Option::bool('mem_graphs', true),
+            Option::string('mem_selected', 'default', self::MEM_METRICS_VALUES),
             Option::bool('mem_below_net', false),
             Option::bool('zfs_arc_cached', true),
             Option::bool('show_swap', true),
+            Option::bool('show_zswap', true),
             Option::bool('swap_disk', true),
             Option::bool('show_disks', true),
             Option::bool('only_physical', true),
@@ -202,6 +249,7 @@ final class Schema
             Option::bool('net_sync', true),
             Option::string('net_iface', ''),
             Option::string('base_10_bitrate', 'Auto', self::BASE_10_BITRATE_VALUES),
+            Option::bool('net_hide_ip', false),
             Option::bool('show_battery', true),
             Option::string('selected_battery', 'Auto'),
             Option::bool('show_battery_watts', true),

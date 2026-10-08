@@ -1,0 +1,5 @@
+A host laid out like / for the Wave U1b VM-awareness tests (Vm, Cgroup,
+ProcList). Mirrors prompt_kit/findings/kvm-reference.md (Ubuntu 24.04
+libvirt, cgroup v2, /usr/bin/kvm) plus a cgroup v1 libvirt guest, a bare
+qemu-system-x86_64, a libvirt helper, a docker container and negatives.
+Kept apart from ../proc so the main fixture's pid roster does not move.

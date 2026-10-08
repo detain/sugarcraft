@@ -22,6 +22,12 @@ namespace SugarCraft\Top\Collect;
  * "connected" (btop: IFF_RUNNING) from sysfs `carrier`, falling back to
  * `operstate` up/unknown. Autoscale hysteresis is NOT here — that is
  * sugar-dash NetAutoScale's job on the rate stream.
+ *
+ * Addresses (btop #1573) come from net_get_interfaces() (getifaddrs, no
+ * shell-out), re-read every sample since DHCP/VPN change them. The
+ * source is injectable; by default it is the live call only when reading
+ * the live host (Paths::system()) — a fixture tree gets no addresses, so
+ * the host's real IPs never leak into fixture-driven snapshots.
  */
 final class Net
 {
@@ -36,21 +42,30 @@ final class Net
         private readonly ?float $lastAt,
         private readonly ?string $selected,
         private readonly ?string $pinned,
+        private readonly \Closure $addresses,
     ) {
     }
 
     /**
      * @param (\Closure(): float)|null $clock defaults to hrtime-based monotonic seconds
+     * @param (\Closure(): array<string, array<string, mixed>>)|null $addresses net_get_interfaces()-shaped
+     *        source; null = the live call for Paths::system(), none for a fixture root
      */
-    public static function new(?Paths $paths = null, ?\Closure $clock = null, ?string $iface = null): self
+    public static function new(?Paths $paths = null, ?\Closure $clock = null, ?string $iface = null, ?\Closure $addresses = null): self
     {
+        $paths ??= Paths::system();
+        $addresses ??= $paths->root === '' && function_exists('net_get_interfaces')
+            ? static fn (): array => @net_get_interfaces() ?: []
+            : static fn (): array => [];
+
         return new self(
-            $paths ?? Paths::system(),
+            $paths,
             $clock ?? static fn (): float => hrtime(true) / 1e9,
             [],
             null,
             null,
             $iface === '' ? null : $iface,
+            $addresses,
         );
     }
 
@@ -60,7 +75,7 @@ final class Net
      */
     public function withInterface(?string $iface): self
     {
-        return new self($this->paths, $this->clock, $this->state, $this->lastAt, $iface, $iface);
+        return new self($this->paths, $this->clock, $this->state, $this->lastAt, $iface, $iface, $this->addresses);
     }
 
     /**
@@ -79,7 +94,7 @@ final class Net
         }
         $state[$iface] = $s;
 
-        return new self($this->paths, $this->clock, $state, $this->lastAt, $this->selected, $this->pinned);
+        return new self($this->paths, $this->clock, $state, $this->lastAt, $this->selected, $this->pinned, $this->addresses);
     }
 
     /**
@@ -94,6 +109,7 @@ final class Net
         }
 
         $elapsed = $this->lastAt === null ? 0.0 : $now - $this->lastAt;
+        $ips = self::addressesByName(($this->addresses)());
         $state = [];
         $interfaces = [];
 
@@ -142,6 +158,8 @@ final class Net
                 $out['tx'][1],
                 (float) $s['rxTop'],
                 (float) $s['txTop'],
+                $ips[$name][0] ?? '',
+                $ips[$name][1] ?? '',
             );
         }
 
@@ -149,7 +167,7 @@ final class Net
 
         return [
             new NetSnapshot($interfaces, $selected),
-            new self($this->paths, $this->clock, $state, $now, $selected, $this->pinned),
+            new self($this->paths, $this->clock, $state, $now, $selected, $this->pinned, $this->addresses),
         ];
     }
 
@@ -179,6 +197,42 @@ final class Net
         }
 
         return $sorted[0]->name;
+    }
+
+    /**
+     * First IPv4 and preferred IPv6 per interface. Families are told apart
+     * by the address text, not the AF_* number (which differs per OS);
+     * an IPv6 zone suffix ("%eth0") is dropped.
+     *
+     * @param array<mixed> $raw net_get_interfaces() shape
+     * @return array<string, array{0: string, 1: string}>
+     */
+    private static function addressesByName(array $raw): array
+    {
+        $out = [];
+        foreach ($raw as $name => $info) {
+            if (!is_string($name) || !is_array($info) || !is_array($info['unicast'] ?? null)) {
+                continue;
+            }
+            $v4 = '';
+            $v6 = '';
+            $v6LinkLocal = '';
+            foreach ($info['unicast'] as $entry) {
+                $address = is_array($entry) && is_string($entry['address'] ?? null) ? explode('%', $entry['address'], 2)[0] : '';
+                if ($v4 === '' && filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+                    $v4 = $address;
+                } elseif (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+                    if (preg_match('/^fe[89ab]/i', $address) === 1) {
+                        $v6LinkLocal = $v6LinkLocal === '' ? $address : $v6LinkLocal;
+                    } elseif ($v6 === '') {
+                        $v6 = $address;
+                    }
+                }
+            }
+            $out[$name] = [$v4, $v6 !== '' ? $v6 : $v6LinkLocal];
+        }
+
+        return $out;
     }
 
     private function connected(string $name): bool

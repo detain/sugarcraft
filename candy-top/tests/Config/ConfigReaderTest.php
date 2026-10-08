@@ -206,4 +206,93 @@ final class ConfigReaderTest extends TestCase
         $expected = $config->with('tty_mode', false)->toArray();
         $this->assertSame($expected, $result->config->toArray(), 'runtime tty_mode is not persisted');
     }
+
+    public function testWaveUKeysParseFromFile(): void
+    {
+        $result = ConfigReader::parse(self::header() . <<<'CONF'
+            graph_symbol = "block2"
+            graph_symbol_proc = "block2"
+            presets = "cpu:0:block2,proc:1:default:70"
+            proc_sorting = "io total"
+            proc_command_basename = True
+            proc_box_width_percent = 40
+            proc_filter_containers = true
+            show_core_freq = "value"
+            disks_order = "/ swap /home"
+            mem_selected = "cached"
+            show_zswap = False
+            net_hide_ip = true
+            CONF);
+
+        $this->assertSame([], $result->warnings);
+        $config = $result->config;
+        $this->assertSame('block2', $config->graphSymbol());
+        $this->assertSame('block2', $config->graphSymbolFor('proc'));
+        $this->assertSame(70, $config->presets()->at(1)->boxes[1]->widthPercent());
+        $this->assertSame('io total', $config->procSorting());
+        $this->assertTrue($config->bool('proc_command_basename'));
+        $this->assertSame(40, $config->procBoxWidthPercent());
+        $this->assertTrue($config->bool('proc_filter_containers'));
+        $this->assertSame('value', $config->showCoreFreq());
+        $this->assertSame(['/', 'swap', '/home'], $config->disksOrder());
+        $this->assertSame('cached', $config->memSelected());
+        $this->assertFalse($config->bool('show_zswap'));
+        $this->assertTrue($config->bool('net_hide_ip'));
+    }
+
+    public function testInvalidWaveUValuesKeepDefaultAndWarn(): void
+    {
+        $result = ConfigReader::parse(self::header() . <<<'CONF'
+            graph_symbol_cpu = "block3"
+            proc_sorting = "io"
+            proc_box_width_percent = 101
+            show_core_freq = "on"
+            mem_selected = "swap"
+            show_zswap = maybe
+            presets = "proc:0:default:wide"
+            CONF);
+
+        $this->assertSame([
+            'Invalid graph symbol identifier for graph_symbol_cpu: block3',
+            'Invalid value for proc_sorting: io',
+            'Config value proc_box_width_percent set too high (>100).',
+            'Invalid value for show_core_freq: on',
+            'Invalid value for mem_selected: swap',
+            'Got an invalid bool value for config name: show_zswap',
+            'Invalid proc width percent in config value presets!',
+        ], $result->warnings);
+        $this->assertSame(Config::new()->toArray(), $result->config->toArray());
+    }
+
+    public function testWaveUConfigRoundTripsThroughWriter(): void
+    {
+        $config = Config::new()
+            ->with('graph_symbol', 'block2')
+            ->with('graph_symbol_gpu', 'block2')
+            ->with('presets', 'cpu:0:default,proc:1:braille:80 proc:0:tty:default mem:0:block2')
+            ->with('proc_sorting', 'io write')
+            ->with('proc_command_basename', true)
+            ->withProcBoxWidthPercent(62)
+            ->with('proc_filter_containers', true)
+            ->with('show_core_freq', 'graph')
+            ->with('disks_order', '/home swap /')
+            ->with('mem_selected', 'available')
+            ->with('show_zswap', false)
+            ->with('net_hide_ip', true);
+
+        $written = ConfigWriter::render($config);
+        $this->assertStringContainsString("\npresets = \"cpu:0:default,proc:1:braille:80 proc:0:tty:default mem:0:block2\"\n", $written);
+
+        $result = ConfigReader::parse($written);
+        $this->assertSame([], $result->warnings);
+        $this->assertSame($config->toArray(), $result->config->toArray());
+    }
+
+    public function testDefaultWriteNeverEmitsAPresetWidthField(): void
+    {
+        $written = ConfigWriter::render(Config::new()->withPreset(Config::new()->presets()->at(1)));
+        preg_match('/^presets = "(.*)"$/m', $written, $m);
+        $this->assertSame('cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty', $m[1]);
+        $this->assertDoesNotMatchRegularExpression('/proc:\d:\w+:/', $m[1], 'stock btop would reject the string');
+    }
 }

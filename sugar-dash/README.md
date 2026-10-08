@@ -195,6 +195,225 @@ composer require sugarcraft/sugar-dash
 | `Canvas` | Drawing canvas | | |
 | `Scrollbar` | Custom scrollbar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/scrollbar.gif) |
 
+### btop-derived graphs, meters & process rows
+
+Ported from [aristocratos/btop](https://github.com/aristocratos/btop) for
+[candy-top](https://github.com/detain/sugarcraft/tree/master/candy-top);
+every class is a standalone immutable value object, and the integer
+colour/quantization laws are byte-faithful to btop (several are pinned
+against oracle fixtures generated from btop's own C++).
+
+| Type | Description | Key Methods/Factories |
+|------|-------------|----------------------|
+| `Plot\Gradient101` | btop `Theme::generateGradients`: expand ≥2 stops into a 101-entry ramp (index = percent) with btop's truncating integer law | `expand(list<Color>): list<Color>` |
+| `Plot\Braille\BrailleCanvas` | Dot canvas — now with an optional value→colour ramp | `withGradient(stops, ?scale)`, `withValue()`, `withoutGradient()`, `gradient()`, `value()` |
+| `Plot\Braille\DualSampleGraph` | btop `Draw::Graph`: two adjacent samples quantized into one glyph; braille / block / block2 / tty families | `new(width, height, family, invert, noZero, maxValue, offset)`, `push()`, `withData()`, `withGradient()`, `withUnderlay()`, `underlay()`, `render()` |
+| `Plot\Chart\Meter` | Analog meter — now with btop's one-row position-coloured `■` bar | `withGradient(stops, positionWise)`, `withGlyph()`, `withInvert()`, `withMeterBg()`, `memoStats()`, `resetMemo()` |
+| `Foundation\NetAutoScale` | btop net-graph ceiling hysteresis (grow/shrink only after 5 sustained samples) | `new(sync)`, `offer(down, up)`, `downloadMax()`, `uploadMax()`, `maxFor()`, `counters()`, `forceRescale()` |
+| `Foundation\GradientStore` | Named 101-entry ramps — `at('cpu', 73)` is btop `Theme::g("cpu")[73]` | `new()`, `fromStops()`, `ramp()`, `withGradient()`, `at()`, `gradient()`, `has()`, `names()` |
+| `Plot\DistanceFade` | btop proc-list distance fade (text dims, metrics blend to grey away from the selection) | `ramp()`, `distance()`, `fadeIndex()`, `fadeColor()`, `metricPosition()`, `metricColor()`, `flatMetricColor()`, `metricValues()` |
+| `Plot\ProcRow\ProcRowComposer` | One btop process-list row: pid, name, cmd, threads, user, mem, 5×1 cpu graph on graph_bg, cpu% | `new(width)` (box inner width), `row(ProcRow, row, selected, selectMax, ?graph, followed)`, `withColumns()`, `withPalette()`, `withProcColors()`, `withProcGradient()`, `withFamily()` |
+| `Plot\ProcRow\ProcRow` | Process DTO (pid, name, cmd, threads, user, cpu, memPercent, ?memLabel) | `new(...)` |
+| `Plot\ProcRow\ProcColumns` | btop column widths | `btop(boxWidth, cpuGraphs)`, `new(prog, cmd, threads, user, cpuGraphs)`, `width()` |
+| `Plot\ProcRow\ProcRowPalette` | Theme slots + the `proc` / `proc_color` / `process` ramps | `btop()`, `new(...)`, `withRamps()`, `withSelected()`, `withFollowed()` |
+| `Plot\ProcRow\ProcGraphTracker` | Per-pid mini-graph lifecycle (create on cpu > 0, drop after 10 idle samples) | `new(width, family)`, `observe(pid, cpu)`, `retain(pids)`, `graph(pid)`, `sample(cpu)` |
+
+Run `php examples/dual-sample-graph.php` for all three graph families,
+an inverted graph, the underlay mini-graph and position-mode meters.
+
+#### Gradient101 + BrailleCanvas gradients
+
+`Gradient101::expand($stops)` is the shared ramp: two stops are one
+0..100 leg, three stops split at 50 (btop's start/mid/end), more stops
+split evenly. `BrailleCanvas::withGradient($stops, ?Closure $scale = null)`
+attaches such a ramp; afterwards every `setPoint()` / `setLine()` with a
+`null` colour paints the ramp colour at the canvas' current value
+(`withValue()`), while an explicit colour still wins. `$scale` maps a raw
+sample onto 0..1 (clamped) — the place for btop's
+`(v + offset) * 100 / max_value` law. The ramp, scale and value survive
+`setSize()`; `withoutGradient()` detaches it.
+
+```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Dash\Plot\Gradient101;
+
+$stops = [Color::hex('#80d0a3'), Color::hex('#dcd179'), Color::hex('#d45454')]; // btop Default cpu
+$ramp  = Gradient101::expand($stops);   // 101 Colors; $ramp[50] is #dcd179
+
+$canvas = BrailleCanvas::new(16, 8)
+    ->withGradient($stops, scale: static fn (int|float $v): float => $v / 100);
+$x = 0;
+foreach ([10, 35, 60, 90, 40, 20, 75, 100] as $v) {
+    $h = (int) round($v / 100 * 7);
+    $canvas = $canvas->withValue($v)->setLine($x, 7, $x, 7 - $h)->setLine($x + 1, 7, $x + 1, 7 - $h);
+    $x += 2;
+}
+echo $canvas->render();
+```
+
+#### DualSampleGraph
+
+btop's history graph. Each cell pairs the previous and current sample,
+each quantized to a band 0..4 per graph row, and looks the pair up in
+btop's 5×5 `graph_symbols` table — so braille packs two samples per cell,
+and every `push()` scrolls the frame half a cell (a whole cell in `tty`).
+
+- `new(int $width, int $height, string $family = FAMILY_BRAILLE, bool $invert = false, bool $noZero = false, int $maxValue = 0, int $offset = 0)` —
+  families `FAMILY_BRAILLE` (`⣿`), `FAMILY_BLOCK` (quadrants; bands 1/2
+  share a glyph), `FAMILY_BLOCK2` (2×3 sextants, btop PR #1783 — needs a font
+  with Symbols for Legacy Computing; underlay `🬭`) and `FAMILY_TTY` (shades,
+  one sample per cell). `DualSampleGraph::FAMILIES` lists all four.
+- Values are percents 0..100 unless `$maxValue > 0`, which applies btop's
+  `clamp((v + offset) * 100 / maxValue, 0, 100)` (a positive `$offset`
+  alone implies `maxValue` 100). `$invert` draws top-down (btop's upload
+  graph); `$noZero` keeps the bottom row at band ≥ 1 so idle still shows a
+  floor line.
+- `push(...$values)` appends, `withData(...$values)` replaces the
+  history. History is retained up to the widest width seen (floor
+  `HISTORY_CELLS` = 1024), so shrinking and growing back redraws old
+  samples.
+- `withGradient($stops)` colours through a `Gradient101` ramp: a one-row
+  graph colours each cell by `max(prev, cur)`, taller graphs colour each
+  row by its vertical position.
+- `withUnderlay(Color $inactiveFg)` paints btop's `graph_bg` glyph
+  (`⣀` / `▄` / `░`, see `underlayGlyph()`) wherever a one-row graph is
+  transparent; static `underlay($family, $cells, $inactiveFg)` returns the
+  bare strip for callers that compose it themselves.
+- `render(?ColorProfile)` returns `height` lines; it implements `Sizer`,
+  so `setSize()` drops it into any layout.
+
+```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
+
+$stops = [Color::hex('#80d0a3'), Color::hex('#dcd179'), Color::hex('#d45454')];
+
+echo DualSampleGraph::new(12, 3)
+    ->withGradient($stops)
+    ->withData(5, 12, 30, 55, 80, 95, 70, 45, 20, 10, 35, 60)
+    ->render(), "\n";
+
+// Upload-style: block glyphs, grows downward, raw bytes/s scaled to a 2 KiB ceiling.
+echo DualSampleGraph::new(12, 2, DualSampleGraph::FAMILY_BLOCK, invert: true, maxValue: 2048)
+    ->push(128, 512, 1024, 2048, 1500, 900)
+    ->render(), "\n";
+
+// A btop proc-list mini-graph: 5×1, never fully blank, on the grey underlay.
+echo DualSampleGraph::new(5, 1, noZero: true)
+    ->withUnderlay(Color::hex('#404040'))
+    ->push(0, 40, 90)
+    ->render(), "\n";
+```
+
+#### Meter position mode
+
+`Meter::withGradient(array $stops, bool $positionWise = false)` attaches a
+`Gradient101` ramp. With `positionWise: false` the analog body is coloured
+by the meter's value. With `positionWise: true` the meter renders btop's
+one-row `Draw::Meter` bar instead: cell `i` (1-based) sits at
+`y = round(i * 100 / width)`, is filled while `value >= y` and takes ramp
+colour `y` — so a 50% bar on green→red is green-to-yellow, never all
+yellow — and the unfilled tail is painted in `meter_bg`.
+
+- `withWidth()` honours widths down to 1 cell in position mode (a layout
+  `setSize()` width wins when set).
+- `withGlyph(string = '■')`, `withInvert(bool = true)` (leftmost cell takes
+  the ramp's high end, e.g. a discharging battery),
+  `withMeterBg(?Color)` (null = btop's `#404040`).
+- Rendered bars are memoized process-wide per shape (stops, width, invert,
+  glyph, meter_bg) × value 0..100, like btop's per-meter
+  `std::array<string,101>` cache, bounded to 64 shapes / 4 MiB.
+  `Meter::memoStats()` / `Meter::resetMemo()` expose and clear it;
+  `Meter::cacheKey(...)` is the shape key.
+
+```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Dash\Plot\Chart\Meter;
+
+$stops = [Color::hex('#80d0a3'), Color::hex('#dcd179'), Color::hex('#d45454')];
+
+echo Meter::new(0.62)->withWidth(20)->withGradient($stops, positionWise: true)->render(), "\n";
+echo Meter::new(0.30)->withWidth(20)->withGradient($stops, positionWise: true)
+    ->withInvert()->withGlyph('▮')->withMeterBg(Color::hex('#202020'))->render(), "\n";
+```
+
+#### NetAutoScale + GradientStore
+
+`NetAutoScale` is btop's network-graph ceiling, per direction: a speed
+above the ceiling bumps a *fast* counter, one under a tenth of it (with
+the ceiling above 10 KiB) bumps a *slow* counter, and only a counter
+reaching 5 rescales — to `avg × 1.3` (grow) or `avg × 3` (shrink) of the
+last 5 samples, floored at `NetAutoScale::FLOOR` (10 KiB/s). The first
+`offer()` always rescales. `new(sync: true)` mirrors btop's `net_sync`
+(one shared ceiling). `forceRescale(?$downHistory, ?$upHistory)` arms a
+rescale on the next offer; the public `$rescaled` flag says whether the
+last offer moved a ceiling.
+
+`GradientStore` is the named-ramp registry a themed monitor reads per
+cell. `fromStops()` takes btop-style flat keys (`<name>_start` /
+`_mid` / `_end`; keys without `_start` are ignored), `withGradient()`
+registers or replaces one (start-only fills all 101 entries), and
+`at($name, $percent)` clamps the percent and throws
+`\OutOfBoundsException` for an unknown name. Expanded ramps are memoized
+process-wide (`MEMO_CAP` = 256).
+
+```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Dash\Foundation\{GradientStore, NetAutoScale};
+
+$scale = NetAutoScale::new()->offer(50_000, 4_000);   // first offer rescales
+// $scale->downloadMax() === 65000, $scale->uploadMax() === 10240 (floor)
+for ($i = 0; $i < 5; $i++) {
+    $scale = $scale->offer(200_000, 4_000);           // 5 sustained samples above → grow
+}
+// $scale->downloadMax() === 260000
+
+$store = GradientStore::fromStops([
+    'cpu_start' => Color::hex('#80d0a3'),
+    'cpu_mid'   => Color::hex('#dcd179'),
+    'cpu_end'   => Color::hex('#d45454'),
+])->withGradient('proc', Color::hex('#cccccc'), end: Color::hex('#404040'));
+echo $store->at('cpu', 73)->toHex();                  // #d99868
+```
+
+#### Process rows: ProcRowComposer, DistanceFade, ProcGraphTracker
+
+`ProcRowComposer::new($width)` (the box's inner width) renders btop's normal-view process
+row, exactly `width()` cells wide, with btop's own column sizing
+(`ProcColumns::btop()`; pass `withColumns(ProcColumns::new(...))` for a
+custom layout). The selected (`$row + 1 === $selected`) or `followed`
+row is a bold highlight bar; every other row fades its text by distance
+from the selection and colours cpu/name, mem and threads by value
+(`withProcGradient()` / `withProcColors()` toggle btop's
+`proc_gradient` / `proc_colors`). Control characters in name/cmd/user
+become spaces. Colours come from `ProcRowPalette` (`btop()` is btop's
+Default theme; `withRamps()` accepts ramps from a `GradientStore`).
+
+`DistanceFade` exposes the underlying law as static helpers — including
+btop's deliberate off-by-one (`$selected` is 1-based, `$row` 0-based).
+`ProcGraphTracker` owns the per-pid 5×1 `DualSampleGraph`s: `observe()`
+once per pid per fresh collection, `retain($livePids)` to sweep dead
+pids; `sample()` lifts any cpu in [0.1, 5) to 5 so a barely-busy
+process still shows.
+
+```php
+use SugarCraft\Dash\Plot\ProcRow\{ProcGraphTracker, ProcRow, ProcRowComposer};
+
+$composer = ProcRowComposer::new(78);   // inner width of an 80-column proc box
+$tracker  = ProcGraphTracker::new();
+$procs = [
+    ProcRow::new(1234, 'php', 'php bin/candy-top', threads: 3, user: 'joe', cpu: 42.5, memPercent: 3.2),
+    ProcRow::new(888, 'mysqld', '/usr/sbin/mysqld', threads: 38, user: 'mysql', cpu: 7.1, memPercent: 11.0),
+];
+foreach ([10.0, 30.0, 42.5] as $cpu) {   // three collection ticks
+    $tracker = $tracker->observe(1234, $cpu)->observe(888, 7.1);
+}
+foreach ($procs as $row => $p) {
+    echo $composer->row($p, $row, selected: 1, selectMax: count($procs), graph: $tracker->graph($p->pid)), "\n";
+}
+```
+
 ---
 
 ## Components Namespace
@@ -546,6 +765,7 @@ The `examples/` directory contains standalone demo files that showcase individua
 | `dashboard-data.php` | Data display components demo |
 | `dashboard-devtools.php` | Devtools components demo |
 | `dashboard-layout.php` | Layout containers demo |
+| `dual-sample-graph.php` | btop-style `DualSampleGraph` in all three families (braille / block / tty), inverted + underlay graphs, and position-coloured `Meter` bars |
 
 ## License
 

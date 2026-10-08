@@ -469,14 +469,14 @@ from P-A.
 
 | Phase | Deliverable | Acceptance demo | Suite growth |
 |---|---|---|---|
-| P-A | Frame + theme load + clock + quit + resize, fake collectors | `php bin/candy-top` draws 6 bordered panels w/ embedded clock, `q` exits clean, resize reflows seams | +~15 tests (frame snapshot, resize coercion) |
-| P-B | CPU + MEM panels: real Cpu/Memory, DualSampleGraph upper/lower, per-core grid, Meter row, load/freq | live per-core % ticking, gradient ramps visible | +~20 (snapshot golden ×2 panels, collector delta math) |
-| P-C | NET panels: Net collector, dual graphs, hysteresis autoscale, stats sub-box, iface buttons b/n/z/a/y | up/down graph autoscales on scp burst, `z` zeroes | +~20 (hysteresis table, iface pick policy) |
+| ✅ P-A `b1bd8fc12` (+ candy-core resize repaint `5442e8b1f`) | Frame + theme load + clock + quit + resize, fake collectors | `php bin/candy-top` draws 6 bordered panels w/ embedded clock, `q` exits clean, resize reflows seams | +~15 tests (frame snapshot, resize coercion) |
+| ✅ P-B `8e4559946` | CPU + MEM panels: real Cpu/Memory, DualSampleGraph upper/lower, per-core grid, Meter row, load/freq | live per-core % ticking, gradient ramps visible | +~20 (snapshot golden ×2 panels, collector delta math) |
+| ✅ P-C `7ac64e5f3` | NET panels: Net collector, dual graphs, hysteresis autoscale, stats sub-box, iface buttons b/n/z/a/y | up/down graph autoscales on scp burst, `z` zeroes | +~20 (hysteresis table, iface pick policy) |
 | P-D | DISK + BATTERY: Mounts/DiskIo/Temp/Battery, mem_graphs vs meters toggle, io_mode mirror graphs (L3 invert), border battery + watts | `i` flips disk graph modes | +~15 |
 | P-E | PROC list: ProcList, sorter incl cpu-lazy rotation (draw §3.5: pull >30% or >max-of-top-6 hogs forward, btop_shared.cpp:132-150), filter `f`/`!` regex, distance fade + metric blend (L6), vi/arrows/page keys, scrollbar click/drag, detailed view, kill/signal popup | full scroll+filter+sort loop; `k` signal grid 5-col 16-skip | +~30 |
 | P-F | Config menu + keybindings overlay: options screen via L8 OptionRow/TextEdit, presets load-only (draw §4 triples), `ctrl_r` hot-reload | edit `update_ms` live via `+/-` persisted | +~15 |
 | P-G | Themes ported (all shipped `.theme` files), TTY mode fallback, VHS demo tape (`candy-top/.vhs/top.tape`: `Set Theme "TokyoNight"`, quoted values, `Type "php examples/top.php"`, deterministic seeded collectors per tea §5 — fake /proc fixtures), polish, README examples/ | CI re-renders demo GIF; `--tty` demo | +~10 |
-| P-H | **Documentation of every feature** (user-requested 2026-10-08). candy-top: full `README.md` (install, run, every panel, every key binding, mouse, config keys table generated/derived from `Config\Schema`, presets, themes list + adding user themes, TTY mode, collectors + data sources + permissions, adopted upstream-PR features from Wave U), `docs/_data/candy-top.{json,body.html}` refresh then `php tools/gen-docs.php`, `CALIBER_LEARNINGS.md`, examples/. Sibling libs — document each lane API in that lib's README + `docs/_data/<slug>.body.html` (+ gen-docs): sugar-charts (withSeriesColorFn, withBarColor), sugar-dash (BrailleCanvas gradient, Gradient101, DualSampleGraph, Meter position mode, NetAutoScale, GradientStore, DistanceFade, ProcRow*), candy-sprinkles (withEmbeddedTitle, embedJunctions, seam), sugar-bits (TextEdit, OptionRow, Progress width arg). Refresh stale "scaffold" wording in root README/docs/index.html; MATCHUPS 🟡→🟢 at v1. Add a docs drift test where cheap (e.g. README key-binding / config-key tables re-derived from source, like sugar-crush's drift guards). | README/doc pages cover every shipped feature; drift tests green | +~5 (drift guards) |
+| P-H | **Documentation of every feature** — sibling-lib half ✅ `776bd06b5`; candy-top half pending. (user-requested 2026-10-08). candy-top: full `README.md` (install, run, every panel, every key binding, mouse, config keys table generated/derived from `Config\Schema`, presets, themes list + adding user themes, TTY mode, collectors + data sources + permissions, adopted upstream-PR features from Wave U), `docs/_data/candy-top.{json,body.html}` refresh then `php tools/gen-docs.php`, `CALIBER_LEARNINGS.md`, examples/. Sibling libs — document each lane API in that lib's README + `docs/_data/<slug>.body.html` (+ gen-docs): sugar-charts (withSeriesColorFn, withBarColor), sugar-dash (BrailleCanvas gradient, Gradient101, DualSampleGraph, Meter position mode, NetAutoScale, GradientStore, DistanceFade, ProcRow*), candy-sprinkles (withEmbeddedTitle, embedJunctions, seam), sugar-bits (TextEdit, OptionRow, Progress width arg). Refresh stale "scaffold" wording in root README/docs/index.html; MATCHUPS 🟡→🟢 at v1. Add a docs drift test where cheap (e.g. README key-binding / config-key tables re-derived from source, like sugar-crush's drift guards). | README/doc pages cover every shipped feature; drift tests green | +~5 (drift guards) |
 
 
 ### Wave U — adopted upstream btop PRs (evaluated 2026-10-08)
@@ -484,16 +484,23 @@ from P-A.
 Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aristocratos/btop PRs: 16 ADOPT,
 7 ADOPT-LATER, 9 N/A). Every new config key is additive (btop and our reader both skip unknown keys); new
 *values* (`graph_symbol=block2`, `proc_sorting=io *`) make stock btop warn+default; the presets 4th field
-(#1476) is written only when the user set it (stock btop discards a presets string containing it).
+(#1476) is written only when the user set it (stock btop discards a presets string containing it). Config schema for all Wave U keys/values ✅ `96dcdc43a`.
 
-- **U0 — fix now (no config):** #1869 try every `nvidia-smi` candidate (incl. `/usr/lib/wsl/lib/nvidia-smi`)
+- ✅ `02f178b91` **U0 — fix now (no config):** #1869 try every `nvidia-smi` candidate (incl. `/usr/lib/wsl/lib/nvidia-smi`)
   before memoizing absence; #1856 add rename/parenthesis stat regression fixtures (parser already correct).
-- **U1 — collector additions:** #1739 zswap (meminfo Zswap/Zswapped, `show_zswap=true`, Used = on-disk swap);
+- ✅ `02f178b91` **U1 — collector additions:** #1739 zswap (meminfo Zswap/Zswapped, `show_zswap=true`, Used = on-disk swap);
   #1785 per-core freq (`cpuN/cpufreq`, `show_core_freq=off|value|graph`) + extract `Freq::label()` (#1792);
   #1573 iface IPs via `net_get_interfaces()` (`net_hide_ip=false`); ProcList bundle — #1859 argv[0] basename
   span (`proc_command_basename=false`), #1823 `/proc/pid/io` rates (EACCES → "-", never 0), #1873 container
   tag from `/proc/pid/cgroup` (`proc_filter_containers`, `O` key).
-- **U2 — lib lane:** #1783 `block2` sextant graph symbols in sugar-dash `DualSampleGraph` + Schema value.
+- ✅ `b071eb8b7` **U1b — VM awareness (user-requested; not a btop PR):** tag KVM/QEMU guest processes with their VM —
+  from cgroup v2 `machine.slice/machine-qemu\x2d<id>\x2d<name>.scope` (unescape `\x2d`) + cmdline
+  `-name guest=<name>`, `-uuid`, `-smp`, `-m size=<KiB>k`; detect by cgroup/cmdline, NOT exe name (`/usr/bin/kvm`
+  on Ubuntu). Extends the #1873 Cgroup/ContainerRef parser (engine `kvm`); proc list shows the guest name,
+  `proc_filter_containers` covers VMs; per-vCPU threads via `debug-threads=on` `CPU N/KVM` comms. Reference
+  output: `prompt_kit/findings/kvm-reference.md`. Optional libvirt enrichment (one `virsh domstats --raw` per
+  cadence, root/libvirt group) and a VM box → U4.
+- ✅ `503ee9bb7` **U2 — lib lane:** #1783 `block2` sextant graph symbols in sugar-dash `DualSampleGraph` + Schema value.
 - **U3 — folded into phases:** P-A/P-B: #1858 hidden panels never build/render + graph width/height clamp
   ≥1 (DualSampleGraph throws <1), #1614 `max(1,…)` cpu-panel gpu sub-graph widths, #1008 keep last value on
   UNMEASURED. P-B: #1785 view, #1747 `mem_selected` focused graph, #1739 view. P-C: #1573. P-D: #1700
@@ -507,6 +514,8 @@ Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aris
   (`/sys/class/accel` + FFI ioctl), #1730 any-GPU box slots on the #1881 grid (`gpu_box_columns="Auto"`),
   #1552 per-process GPU util/mem; #1873 container box; #1791c tree-state persistence in an
   `$XDG_STATE_HOME` file (not config).
+- **U5 — post-v1 FreeBSD collectors:** reference output captured in `prompt_kit/findings/freebsd-reference.md`
+  (FreeBSD 14.4, sysctl/kvm-surface notes); folds in #1851/#1830/#1787/#1728.
 
 ## 5. Monorepo integration checklist (still-open add-a-lib items)
 

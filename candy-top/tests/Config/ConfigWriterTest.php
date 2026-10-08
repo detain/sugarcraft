@@ -36,7 +36,7 @@ final class ConfigWriterTest extends TestCase
             $out,
         );
         $this->assertStringContainsString(
-            "\n#* Default symbols to use for graph creation, \"braille\", \"block\" or \"tty\".\n#* \"braille\" offers the highest resolution",
+            "\n#* Default symbols to use for graph creation, \"braille\", \"block\", \"block2\" or \"tty\".\n#* \"braille\" offers the highest resolution",
             $out,
         );
         $this->assertStringContainsString("\nnet_upload = 100\n", $out);
@@ -44,6 +44,26 @@ final class ConfigWriterTest extends TestCase
         $this->assertStringContainsString("\nproc_sorting = \"cpu lazy\"\n", $out);
         $this->assertStringContainsString("\nrounded_corners = true\n", $out);
         $this->assertStringEndsWith("custom_gpu_name5 = \"\"\n", $out);
+    }
+
+    public function testWaveUKeysWrittenWithDescriptionsNextToBtopNeighbours(): void
+    {
+        $out = ConfigWriter::render(Config::new());
+
+        foreach ([
+            "\nproc_tree = false\n\n#* Show only the executable basename in process commands, preserving arguments.\n#* The detailed view still shows the full command.\nproc_command_basename = false\n",
+            "\nproc_info_smaps = false\n\n#* Percentage value for proc box width when mem or net is shown.\n",
+            "\nproc_box_width_percent = 55\n\n#* Show proc box on left side",
+            "\nproc_filter_kernel = false\n\n#* (Linux) Hide processes running in containers",
+            "\nproc_filter_containers = false\n",
+            "\n#* Show per-core CPU frequency, available values: \"off\", \"value\", \"graph\".\nshow_core_freq = \"off\"\n",
+            "\ndisks_order = \"\"\n",
+            "\n#* Focuses only one kind of memory metric, available values: \"default\", \"used\", \"available\", \"cached\", \"free\", or \"swap_used\".\nmem_selected = \"default\"\n",
+            "\nshow_swap = true\n\n#* (Linux) If zswap usage should be shown in memory box.\nshow_zswap = true\n",
+            "\n#* Toggles ip address visibility in the net box.\nnet_hide_ip = false\n",
+        ] as $block) {
+            $this->assertStringContainsString($block, $out);
+        }
     }
 
     public function testEveryPersistedKeyWrittenOnceInOrderAndRuntimeKeysNever(): void
