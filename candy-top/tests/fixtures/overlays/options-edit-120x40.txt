@@ -10,11 +10,11 @@
 │                   │  Appearance                 │ Manually set which boxes to show.            │                    ││
 │                   │                             │                                              │────────────────────╯│
 │                   │         Color theme         │ Available values are "cpu mem net proc".     │                     │
-╰───────────────────│           Default           │ Separate values with whitespace.             │─────────────────────╯
-╭─┐²mem┌────────────│       Theme background      │                                              │─────────────────────╮
-│ Total: 16.0 GiB   │             True            │ Toggle between presets with key "p".         │           MemB  Cpu%│
+╰───────────────────│           Default           │ Or "gpuN" for GPU index N.                   │─────────────────────╯
+╭─┐²mem┌────────────│       Theme background      │ Up to 6 GPU boxes can be shown at once.      │─────────────────────╮
+│ Total: 16.0 GiB   │             True            │ Separate values with whitespace.             │           MemB  Cpu%│
 │ Used: 10.2 GiB    │          Truecolor          │                                              │        198 MiB  27.8│
-│ Available: 5.80 Gi│             True            │                                              │       90.0 MiB  25.0│
+│ Available: 5.80 Gi│             True            │ Toggle between presets with key "p".         │       90.0 MiB  25.0│
 │ Cached: 3.20 GiB  │  Terminal and input         │                                              │es      244 MiB  13.6│
 │ Free: 2.60 GiB    │                             │                                              │        398 MiB  11.5│
 │                   │          Force tty          │                                              │        502 MiB   7.9│

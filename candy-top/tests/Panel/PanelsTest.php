@@ -27,11 +27,12 @@ use SugarCraft\Top\View\Surface;
 
 final class PanelsTest extends TestCase
 {
-    public function testStandardRosterCoversTheFourBoxes(): void
+    public function testStandardRosterCoversTheFourBoxesAndTheGpuPanel(): void
     {
         foreach ([true, false] as $fake) {
             $panels = Panels::standard(Harness::host(), Config::new(), $fake);
-            $this->assertSame(['cpu', 'mem', 'net', 'proc'], array_keys($panels));
+            // `gpu` draws every gpuN box (btop PR #1730), registered once.
+            $this->assertSame(['cpu', 'gpu', 'mem', 'net', 'proc'], array_keys($panels));
             foreach ($panels as $box => $panel) {
                 $this->assertSame($box, $panel->box());
             }
@@ -47,6 +48,18 @@ final class PanelsTest extends TestCase
         $this->assertInstanceOf(ProcPanel::class, $live);
         $this->assertInstanceOf(PosixProcessControl::class, $live->processControl());
         $this->assertInstanceOf(FakeProcessControl::class, ProcPanel::new(FakeMemory::new())->processControl(), 'the default is inert');
+    }
+
+    public function testTheProcBoxCarriesItsOwnGpuSource(): void
+    {
+        // #1552 Gpu%/GMem: --fake joins the demo pids, live samples the host's accelerators.
+        $fake = Panels::standard(Harness::host(), Config::new(), true)['proc'];
+        $this->assertInstanceOf(ProcPanel::class, $fake);
+        $this->assertInstanceOf(\SugarCraft\Top\Source\Fake\FakeGpuProcesses::class, $fake->gpuSource());
+        $live = Panels::standard(Harness::host(), Config::new(), false)['proc'];
+        $this->assertInstanceOf(ProcPanel::class, $live);
+        $this->assertNotNull($live->gpuSource());
+        $this->assertNull(ProcPanel::new(FakeMemory::new())->gpuSource(), 'no GPU source unless wired');
     }
 
     public function testCollectSamplesOffTheUpdatePathAndUpdateStoresIt(): void
@@ -85,6 +98,9 @@ final class PanelsTest extends TestCase
         $layout = FrameBuilder::layout(80, 24, $config, 8);
         $ink = Ink::new(ThemeConfig::new());
         foreach (Panels::standard(Harness::host(), $config, true) as $box => $panel) {
+            if ($box === 'gpu') {
+                continue; // no gpu box in the default layout: GpuPanelTest covers its clipping
+            }
             $panel = $panel->update(($panel->collect(new PanelContext($config, $layout, $layout->box($box))))(), new PanelContext($config, $layout, $layout->box($box)))->panel;
             $rect = $layout->box($box);
             $this->assertNotNull($rect);

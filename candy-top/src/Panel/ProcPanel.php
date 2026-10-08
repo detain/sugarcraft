@@ -26,6 +26,9 @@ use SugarCraft\Top\Overlay\ReniceMenu;
 use SugarCraft\Top\Overlay\SignalMenu;
 use SugarCraft\Top\Overlay\Signals;
 use SugarCraft\Top\Panel\Proc\DetailState;
+use SugarCraft\Top\Panel\Proc\GpuUsage;
+use SugarCraft\Top\Panel\Proc\ProcGpuColumns;
+use SugarCraft\Top\Panel\Proc\ProcGpuSample;
 use SugarCraft\Bits\Input\TextEdit;
 use SugarCraft\Top\Input\TextKeys;
 use SugarCraft\Top\Panel\Proc\ProcEntry;
@@ -88,6 +91,16 @@ use SugarCraft\Top\View\Region;
  * are claimed through {@see ClickCapture}, so the App hands a click on
  * one to this box alone.
  *
+ * btop PR #1552 (Wave U4): with a GPU source ({@see withGpu()}) the Cmd
+ * also samples it — per-process collection switched on, and only while
+ * {@see ProcGpuColumns::wanted()} — and {@see GpuUsage} joins its rows to
+ * the pids (summed over GPUs, held until the next measured GPU snapshot).
+ * Once per-process GPU data has been measured the box shows `GMem` /
+ * `Gpu%` (+ a GPU mini-graph with proc_gpu_graphs) where the width allows
+ * ({@see ProcView::sizes()}), the `gpu-only` title button, and applies
+ * proc_gpu_only; `g` flips proc_gpu_only (`ctrl+g` too — with vim_keys
+ * `g` stays btop's "top of list"), "gpu" / "gpu memory" join the sorts.
+ *
  * Mirrors aristocratos/btop Proc::draw / Proc::selection
  * (src/btop_draw.cpp), Input::process's proc block (src/btop_input.cpp)
  * and Proc::collect's post-processing (src/linux/btop_collect.cpp).
@@ -134,6 +147,9 @@ final class ProcPanel implements Panel, ClickCapture
         private int $stateSavedRev = 0,
         private int $flushRev = 0,
         private bool $treeRestored = false,
+        private ?Source $gpu = null,
+        private ?GpuUsage $gpuUsage = null,
+        private ?ProcGraphTracker $gpuGraphs = null,
     ) {
         $this->treeState ??= TreeState::empty();
         $this->sel ??= ProcSelection::new();
@@ -151,6 +167,52 @@ final class ProcPanel implements Panel, ClickCapture
     public static function new(Source $source, ?ProcessControl $control = null): self
     {
         return new self($source, control: $control);
+    }
+
+    /**
+     * Join per-process GPU use from `$gpu` (btop #1552) — a GPU collector
+     * source (`Platform::gpu()`; per-process collection is switched on at
+     * collect time, {@see ProcGpuColumns::tuned()}) or a fake feed. Null
+     * removes it: no GPU columns, filter or sampling.
+     */
+    public function withGpu(?Source $gpu): self
+    {
+        return $this->mutate(['gpu' => $gpu, 'gpuUsage' => GpuUsage::none(), 'gpuGraphs' => null, 'rowsKey' => '']);
+    }
+
+    /** The GPU source, null without one. */
+    public function gpuSource(): ?Source
+    {
+        return $this->gpu;
+    }
+
+    /** The per-pid GPU values the rows were joined with. */
+    public function gpuUsage(): GpuUsage
+    {
+        return $this->gpuUsage ?? GpuUsage::none();
+    }
+
+    /** Whether per-process GPU data exists: the columns, button and proc_gpu_only apply. */
+    public function gpuAvailable(): bool
+    {
+        return $this->gpu !== null && $this->gpuUsage()->measured();
+    }
+
+    /**
+     * Whether proc_gpu_only may judge the rows: per-process GPU values from
+     * the latest GPU sample. A narrow box stops sampling the GPU and drops
+     * the values ({@see GpuUsage::cleared()}); filtering on those zeros
+     * would empty the list until the next tick.
+     */
+    private function gpuFilterable(): bool
+    {
+        return $this->gpu !== null && $this->gpuUsage()->fresh();
+    }
+
+    /** The per-process GPU mini-graphs (#1552 proc_gpu_graphs). */
+    public function gpuGraphs(): ProcGraphTracker
+    {
+        return $this->gpuGraphs ?? ProcGraphTracker::new();
     }
 
     /**
@@ -240,9 +302,9 @@ final class ProcPanel implements Panel, ClickCapture
      */
     public function rows(Config $config): array
     {
-        return ProcTable::key($config, $this->treeVersion) === $this->rowsKey
+        return ProcTable::key($config, $this->treeVersion, $this->gpuFilterable()) === $this->rowsKey
             ? $this->rows
-            : ProcTable::build($this->entries, $config, $this->collapsed)[0];
+            : ProcTable::build($this->entries, $config, $this->collapsed, $this->gpuFilterable())[0];
     }
 
     /** The selected row's pid, or null (btop selected_pid). */
@@ -277,9 +339,18 @@ final class ProcPanel implements Panel, ClickCapture
     public function collect(PanelContext $context): ?\Closure
     {
         $source = $this->configured($context->config, $context->box?->width ?? 0);
+        $gpu = $this->gpu !== null && ProcGpuColumns::wanted($context->config, $context->box?->width)
+            ? ProcGpuColumns::tuned($this->gpu)
+            : null;
 
-        return static function () use ($source): Msg {
+        return static function () use ($source, $gpu): Msg {
             [$snapshot, $next] = $source->sample();
+            if ($gpu !== null && $snapshot instanceof ProcSnapshot) {
+                [$gpuSnapshot, $gpuNext] = $gpu->sample();
+                if ($gpuSnapshot instanceof \SugarCraft\Top\Collect\GpuSnapshot) {
+                    $snapshot = new ProcGpuSample($snapshot, $gpuSnapshot, $gpuNext);
+                }
+            }
 
             return new SampledMsg('proc', $snapshot, $next);
         };
@@ -309,9 +380,15 @@ final class ProcPanel implements Panel, ClickCapture
     public function update(Msg $msg, PanelContext $context): PanelResult
     {
         if ($msg instanceof SampledMsg) {
-            return $msg->box === 'proc' && $msg->snapshot instanceof ProcSnapshot
-                ? new PanelResult($this->sampled($msg->snapshot, $msg->next, $context))
-                : new PanelResult($this);
+            if ($msg->box !== 'proc') {
+                return new PanelResult($this);
+            }
+
+            return match (true) {
+                $msg->snapshot instanceof ProcGpuSample => new PanelResult($this->withGpuSample($msg->snapshot)->sampled($msg->snapshot->proc, $msg->next, $context)),
+                $msg->snapshot instanceof ProcSnapshot => new PanelResult($this->withoutGpuSample()->sampled($msg->snapshot, $msg->next, $context)),
+                default => new PanelResult($this),
+            };
         }
         if ($msg instanceof TreeStateFlushMsg) {
             // Only the tick of the latest user change writes (debounce). It is
@@ -362,15 +439,34 @@ final class ProcPanel implements Panel, ClickCapture
             $this->followedPid,
             $this->followRow,
             $this->returnToFollowed,
+            $this->gpuGraphs(),
+            $this->gpuAvailable(),
         );
     }
 
     // ---- sampling -----------------------------------------------------------
 
+    /**
+     * #1552 join: fold a GPU snapshot into the per-pid values (held until
+     * the next measured one) and carry the GPU source forward.
+     */
+    private function withGpuSample(ProcGpuSample $sample): self
+    {
+        return $this->mutate(['gpu' => $sample->gpuNext, 'gpuUsage' => $this->gpuUsage()->withSnapshot($sample->gpu)]);
+    }
+
+    /** A sample without the GPU (not wanted this tick): its values are dropped, availability kept. */
+    private function withoutGpuSample(): self
+    {
+        return $this->gpu === null ? $this : $this->mutate(['gpuUsage' => $this->gpuUsage()->cleared()]);
+    }
+
     /** The source with this frame's opt-ins applied. */
     private function configured(Config $config, int $width): Source
     {
-        $io = $width >= 90 || str_starts_with($config->procSorting(), 'io ');
+        // #1823 io only while its columns are drawn (they yield to #1552's GPU columns) or an io sort is on.
+        $io = ProcView::sizes($width, $config->bool('proc_cpu_graphs'), $this->gpuAvailable(), $config->bool('proc_gpu_graphs'))['io'] > 0
+            || str_starts_with($config->procSorting(), 'io ');
         $detailPid = $config->bool('show_detailed') ? $this->detail?->pid : null;
         $perCore = $config->bool('proc_per_core');
         $kernel = $config->bool('proc_filter_kernel');
@@ -397,7 +493,7 @@ final class ProcPanel implements Panel, ClickCapture
                 $fresh = null;
                 foreach ($snap->processes as $p) {
                     if ($p->pid === $detail->pid) {
-                        $fresh = ProcEntry::of($p, $p->cpu >= 0.0 ? $p->cpu : ($this->carry[$p->pid] ?? 0.0), $p->ioRead, $p->ioWrite);
+                        $fresh = $this->entry($p, $p->cpu >= 0.0 ? $p->cpu : ($this->carry[$p->pid] ?? 0.0));
                         break;
                     }
                 }
@@ -418,7 +514,7 @@ final class ProcPanel implements Panel, ClickCapture
             // io is never carried: an UNMEASURED rate means the collector
             // was not reading io (columns off), the file is unreadable
             // (EACCES) or this is the pid's first io sample — all "-".
-            $fresh[$p->pid] = ProcEntry::of($p, $cpu, $p->ioRead, $p->ioWrite);
+            $fresh[$p->pid] = $this->entry($p, $cpu);
         }
         // Keep the previous order (btop sorts its persistent vector in
         // place); new pids join at the end in scan order.
@@ -455,9 +551,23 @@ final class ProcPanel implements Panel, ClickCapture
                 $graphs = $graphs->observe($row->pid(), $row->cpu);
             }
         }
+        // #1552 GPU mini-graphs: the same law, only while their slot is drawn.
+        $gpuGraphs = $next->gpuGraphs();
+        $width = $context->box?->width ?? 0;
+        if (ProcView::sizes($width, $config->bool('proc_cpu_graphs'), $next->gpuAvailable(), $config->bool('proc_gpu_graphs'))['ggraph'] > 0) {
+            $family = ProcView::family($config);
+            if ($gpuGraphs->family() !== $family) {
+                $gpuGraphs = ProcGraphTracker::new(5, $family);
+            }
+            $sel = $next->selection();
+            foreach (array_slice($next->rows, $sel->start, max(0, $next->selectMax($config, $context))) as $row) {
+                $gpuGraphs = $gpuGraphs->observe($row->pid(), $row->gpu);
+            }
+        }
         $sweep = $this->sweep + 1;
         if ($sweep >= self::SWEEP) {
             $graphs = $graphs->retain(array_keys($fresh));
+            $gpuGraphs = $gpuGraphs->retain(array_keys($fresh));
             $sweep = 0;
         }
 
@@ -475,7 +585,15 @@ final class ProcPanel implements Panel, ClickCapture
             );
         }
 
-        return $next->mutate(['graphs' => $graphs, 'sweep' => $sweep, 'detail' => $detail]);
+        return $next->mutate(['graphs' => $graphs, 'gpuGraphs' => $gpuGraphs, 'sweep' => $sweep, 'detail' => $detail]);
+    }
+
+    /** A sampled process as a row: the #1008-carried cpu, io as sampled, #1552 GPU use joined by pid. */
+    private function entry(\SugarCraft\Top\Collect\Process $p, float $cpu): ProcEntry
+    {
+        $usage = $this->gpuUsage();
+
+        return ProcEntry::of($p, $cpu, $p->ioRead, $p->ioWrite, $usage->utilization($p->pid), $usage->memory($p->pid));
     }
 
     // ---- keys ---------------------------------------------------------------
@@ -483,6 +601,9 @@ final class ProcPanel implements Panel, ClickCapture
     private function key(KeyMsg $msg, PanelContext $context): PanelResult
     {
         $config = $context->config;
+        if (self::isCtrlG($msg)) {
+            return $this->toggleGpuOnly($context);
+        }
         $key = self::keyName($msg, $config->bool('vim_keys'));
         $tree = $config->bool('proc_tree');
 
@@ -494,7 +615,7 @@ final class ProcPanel implements Panel, ClickCapture
             $key === 'N' => $this->menuKey($context, static fn (int $pid, string $name, ProcessControl $c): Overlay => ReniceMenu::new($pid, $name, $c)),
             $key === 'u' => $this->set($context, ['pause_proc_list' => !$config->bool('pause_proc_list')]),
             $key === 'F' => $this->follow($context),
-            $key === 'left', $key === 'right' => $this->set($context, ['proc_sorting' => self::cycleSort($config->procSorting(), $key === 'right' ? 1 : -1)]),
+            $key === 'left', $key === 'right' => $this->gpuResampled($context, $this->set($context, ['proc_sorting' => self::cycleSort($config->procSorting(), $key === 'right' ? 1 : -1)])),
             $key === 'f', $key === '/' => $this->openFilter($context),
             $key === 'e' => $this->toggleTree($context),
             $key === 'E' && $tree => $this->treeChange($context, ProcTree::toggleAll($this->entries, $this->collapsed)),
@@ -502,6 +623,7 @@ final class ProcPanel implements Panel, ClickCapture
             $key === 'c' => $this->set($context, ['proc_per_core' => !$config->bool('proc_per_core')]),
             $key === '%' => $this->set($context, ['proc_mem_bytes' => !$config->bool('proc_mem_bytes')]),
             $key === 'O' => $this->set($context, ['proc_filter_containers' => !$config->bool('proc_filter_containers')]),
+            $key === 'g' => $this->toggleGpuOnly($context),
             $key === 'delete' => $config->string('proc_filter') !== '' ? $this->set($context, ['proc_filter' => '']) : new PanelResult($this),
             $key === 'enter' => $this->enter($context),
             in_array($key, ['+', '-', '=', 'space', 'C'], true) && $tree => $this->treeKey($key, $context),
@@ -549,6 +671,45 @@ final class ProcPanel implements Panel, ClickCapture
         }
 
         return $name;
+    }
+
+    /**
+     * btop #1552 `g`: flip proc_gpu_only (+ update_following, which every
+     * {@see set()} does). Also `ctrl+g` and the title button — the only
+     * ways with vim_keys, where `g` is btop's "top of list" (the PR's
+     * handler sits ahead of the vim block and would shadow it).
+     */
+    private function toggleGpuOnly(PanelContext $context): PanelResult
+    {
+        return $this->gpuResampled($context, $this->set($context, ['proc_gpu_only' => !$context->config->bool('proc_gpu_only')]));
+    }
+
+    /**
+     * A write that turns on proc_gpu_only or a gpu sort while the GPU
+     * values are not fresh (a narrow box stopped sampling them): add a
+     * collect Cmd under the post-write config so they arrive now, not a
+     * tick later (btop runs the collector right away, `no_update = false`;
+     * MemPanel's `d` does the same). Until then the filter does not judge
+     * and the gpu sorts keep the previous order (stable sort on zeros).
+     */
+    private function gpuResampled(PanelContext $context, PanelResult $result): PanelResult
+    {
+        $panel = $result->panel;
+        if (!$panel instanceof self || $this->gpu === null || $this->gpuUsage()->fresh()) {
+            return $result;
+        }
+        $after = $this->after($context->config, $result->set);
+        if (!$after->bool('proc_gpu_only') && !in_array($after->procSorting(), ProcGpuColumns::SORTS, true)) {
+            return $result;
+        }
+
+        return new PanelResult($panel, $panel->collect(new PanelContext($after, $context->layout, $context->box)), $result->set, $result->overlay);
+    }
+
+    /** A bare ctrl+g (no alt). */
+    private static function isCtrlG(KeyMsg $msg): bool
+    {
+        return $msg->ctrl && !$msg->alt && $msg->type === KeyType::Char && strtolower($msg->rune) === 'g';
     }
 
     /** btop: left/right step through Proc::sort_vector, wrapping. */
@@ -1051,6 +1212,9 @@ final class ProcPanel implements Panel, ClickCapture
         // Title / bottom-row buttons first (btop resolves mouse_mappings before Input::process).
         $sel = $this->selection();
         $button = $this->buttonAt($m, $context);
+        if ($button === 'g') {
+            return $this->toggleGpuOnly($context); // not via the key: vim_keys maps `g` to home
+        }
         if ($button !== null) {
             return $this->key(self::synthetic($button), $context);
         }
@@ -1111,7 +1275,7 @@ final class ProcPanel implements Panel, ClickCapture
         $lx = $m->x - 1 - $box->x;
         $ly = $m->y - 1 - $box->y;
         $shown = $this->detailDrawn($config, $context);
-        $buttons = ProcView::buttons($box->width, $box->height, $config, false, $this->selection()->selected, $shown ? $this->detail : null, $this->selectedPid($config));
+        $buttons = ProcView::buttons($box->width, $box->height, $config, false, $this->selection()->selected, $shown ? $this->detail : null, $this->selectedPid($config), $this->gpuAvailable());
         foreach ($buttons as $key => [$bx, $by, $bw]) {
             if ($ly === $by && $lx >= $bx && $lx < $bx + $bw) {
                 return (string) $key;
@@ -1173,11 +1337,11 @@ final class ProcPanel implements Panel, ClickCapture
     /** Rows (and the sorted base order) for `$config`, memoised by its key. */
     private function rebuilt(Config $config): self
     {
-        $key = ProcTable::key($config, $this->treeVersion);
+        $key = ProcTable::key($config, $this->treeVersion, $this->gpuFilterable());
         if ($key === $this->rowsKey) {
             return $this;
         }
-        [$rows, $sorted] = ProcTable::build($this->entries, $config, $this->collapsed);
+        [$rows, $sorted] = ProcTable::build($this->entries, $config, $this->collapsed, $this->gpuFilterable());
 
         return $this->mutate(['rows' => $rows, 'entries' => $sorted, 'rowsKey' => $key]);
     }

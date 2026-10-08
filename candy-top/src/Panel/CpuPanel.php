@@ -9,13 +9,13 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Top\Collect\CpuSnapshot;
 use SugarCraft\Top\Collect\FreqMode;
 use SugarCraft\Top\Collect\FreqSnapshot;
-use SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\GpuDevice;
 use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Collect\TempSnapshot;
 use SugarCraft\Top\Collect\TunableFreq;
 use SugarCraft\Top\Config\Config;
+use SugarCraft\Top\Config\GpuPanels;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Panel\Cpu\BatteryBadge;
@@ -23,9 +23,12 @@ use SugarCraft\Top\Panel\Cpu\BorderBattery;
 use SugarCraft\Top\Panel\Cpu\CpuView;
 use SugarCraft\Top\Panel\Gfx\History;
 use SugarCraft\Top\Panel\Gfx\NamedSources;
+use SugarCraft\Top\Panel\Gpu\GpuHold;
+use SugarCraft\Top\Panel\Gpu\GpuSampling;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeCpu;
 use SugarCraft\Top\Source\Fake\FakeFreq;
+use SugarCraft\Top\Source\Fake\FakeGpu;
 use SugarCraft\Top\Source\Fake\FakeTemp;
 use SugarCraft\Top\Source\Samples;
 use SugarCraft\Top\Source\Source;
@@ -39,7 +42,10 @@ use SugarCraft\Top\View\Region;
  * battery badge seam ({@see BatteryBadge}).
  *
  * Data: one Cmd per tick samples Cpu, Freq, Temp and (unless
- * show_gpu_info is Off) Gpu together through {@see NamedSources}. Every
+ * show_gpu_info is Off, or Auto with every known GPU in a gpu box of its
+ * own) the GPUs together through {@see NamedSources}; the GPU source is
+ * retuned per collect for shown_gpus / per-process use
+ * ({@see GpuSampling}). Every
  * reading lands in a {@see History}, which holds the last good value on
  * UNMEASURED (btop #1008), so graphs never dip/spike on a failed read and
  * readouts never flip to `n/a`. Per-core frequency is only read while
@@ -75,7 +81,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
      * @param list<string>          $fields    cpu_percent fields seen (btop Cpu::available_fields minus "Auto")
      * @param array<int, bool>      $inactive  cores whose latest reading was UNMEASURED (offline)
      * @param array{0: float, 1: float, 2: float} $load last good load averages
-     * @param list<GpuDevice>       $gpus      last non-empty GPU list
+     * @param GpuHold               $gpuHold   last GPU list, held per #1008 for a bounded time
      */
     private function __construct(
         private readonly NamedSources $sources,
@@ -89,7 +95,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         private readonly float $uptime,
         private readonly ?FreqSnapshot $freq,
         private readonly ?TempSnapshot $temp,
-        private readonly array $gpus,
+        private readonly GpuHold $gpuHold,
     ) {
     }
 
@@ -113,7 +119,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
             -1.0,
             null,
             null,
-            [],
+            GpuHold::new(),
         );
     }
 
@@ -123,7 +129,9 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
      * show_core_freq) seed the collectors; runtime changes of
      * show_core_freq / check_temp / show_gpu_info are honoured at collect
      * time. `$platform` picks the host's collector family (default: the
-     * running OS, {@see Platform::detect()}).
+     * running OS, {@see Platform::detect()}); its GPU source is the
+     * multi-vendor {@see \SugarCraft\Top\Collect\Gpu\Accelerators}
+     * (nvidia-smi only on FreeBSD).
      */
     public static function standard(HostInfo $host, Config $config, bool $fake = false, ?Platform $platform = null): self
     {
@@ -133,6 +141,8 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
                 FakeCpu::new($host->coreCount, $config->updateMs() / 1000),
                 FakeFreq::new($host->coreCount, $perCore),
                 FakeTemp::new(max(1, intdiv($host->coreCount, 2))),
+                // The same accelerators the fake gpu boxes show (U4).
+                FakeGpu::new(),
             )->withBattery(BorderBattery::standard($config, true));
         }
         $sensor = $config->string('cpu_sensor');
@@ -142,7 +152,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
             $platform->cpu(),
             $platform->freq(FreqMode::tryFrom($config->string('freq_mode')) ?? FreqMode::First, $perCore),
             $platform->temp($sensor === 'Auto' ? null : $sensor),
-            CollectorSource::of(Gpu::new()),
+            $platform->gpu(),
         )->withBattery(BorderBattery::standard($config, $fake, $platform));
     }
 
@@ -174,11 +184,12 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         if ($config->bool('check_temp')) {
             $members[] = 'temp';
         }
-        if ($config->string('show_gpu_info') !== 'Off') {
+        if ($this->wantsGpus($config)) {
             $members[] = 'gpu';
         }
         $sampling = $this->sources->only($members);
         $sampling = $sampling->with('freq', self::tuneFreq($sampling->get('freq'), $perCore));
+        $sampling = $sampling->with('gpu', GpuSampling::tune($sampling->get('gpu'), $config));
         $sampling = $sampling->with('battery', $this->battery?->source($context));
 
         return static function () use ($sampling): Msg {
@@ -225,7 +236,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         }
         $gpu = $samples->get('gpu');
         if ($gpu instanceof GpuSnapshot) {
-            $self = $self->withGpu($gpu, $cap);
+            $self = $self->withGpu($gpu, $cap, GpuHold::limit($context->config->updateMs()));
         }
         $battery = $samples->get('battery');
         $batteryNext = $next->get('battery');
@@ -288,7 +299,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
     /** @return list<GpuDevice> */
     public function gpus(): array
     {
-        return $this->gpus;
+        return $this->gpuHold->devices();
     }
 
     public function battery(): ?BatteryBadge
@@ -306,7 +317,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
     public function graphFields(): array
     {
         $fields = ['total', ...$this->fields];
-        if ($this->gpus !== []) {
+        if ($this->gpus() !== []) {
             $fields = [...$fields, ...self::GPU_FIELDS, ...self::GPU_SHARED_FIELDS];
         }
 
@@ -336,7 +347,42 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
 
     public function detectedGpus(): int
     {
-        return \count($this->gpus);
+        return \count($this->gpus());
+    }
+
+    /**
+     * Whether a collect samples the GPUs: show_gpu_info On, or Auto while
+     * some known GPU has no gpu box of its own (btop draws GPU info in the
+     * cpu box only then — `gpu_auto and Gpu::shown < Gpu::count`, PR #1730's
+     * gpu_hidden), none is known yet, or cpu_graph_upper / lower names a
+     * gpu-* field (btop gpu_in_cpu_panel); never when Off.
+     */
+    public function wantsGpus(Config $config): bool
+    {
+        $mode = $config->string('show_gpu_info');
+        if ($mode !== 'Auto') {
+            return $mode === 'On';
+        }
+        // btop gpu_in_cpu_panel: a graph showing a gpu-* field keeps the
+        // GPUs sampled even when every GPU has a box of its own.
+        $gpuFields = [...self::GPU_FIELDS, ...self::GPU_SHARED_FIELDS];
+        foreach (['cpu_graph_upper', 'cpu_graph_lower'] as $key) {
+            if (\in_array($config->string($key), $gpuFields, true)) {
+                return true;
+            }
+        }
+        $known = \count($this->gpus());
+        if ($known === 0) {
+            return true;
+        }
+        $boxed = array_flip(GpuPanels::targets($config->shownBoxes()));
+        for ($i = 0; $i < $known; $i++) {
+            if (!isset($boxed[$i])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function withCpu(CpuSnapshot $s, int $cap): self
@@ -397,22 +443,29 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         return $this->mutate(history: $history, temp: $s, tempSet: true);
     }
 
-    private function withGpu(GpuSnapshot $s, int $cap): self
+    /**
+     * Fold a GPU sample in. #1008, bounded ({@see GpuHold}): a failed
+     * query (no GPUs) or a device that measured nothing keeps the last
+     * values for `$hold` samples; past that the device reads n/a and its
+     * graphs restart empty.
+     */
+    private function withGpu(GpuSnapshot $s, int $cap, int $hold): self
     {
-        if (!$s->available()) {
-            return $this; // a transient failure keeps the last devices (#1008)
-        }
+        [$gpuHold, $expired] = $this->gpuHold->apply($s->devices, $hold);
         $history = $this->history;
+        if ($expired !== []) {
+            $history = $history->withoutPrefixes(...array_map(static fn (int $i): string => "gpu:{$i}:", $expired));
+        }
+        if (!$s->available()) {
+            // A failed query: the hold decides; no history moves.
+            return $this->mutate(history: $history, gpuHold: $gpuHold);
+        }
         $util = [];
         $used = 0;
         $total = 0;
         $watts = 0.0;
         $limit = 0.0;
-        $previous = $this->gpus;
-        $devices = [];
-        foreach ($s->devices as $i => $d) {
-            $d = self::holdDevice($d, $previous[$i] ?? null);
-            $devices[] = $d;
+        foreach ($gpuHold->devices() as $i => $d) {
             $pwr = $d->watts >= 0 && $d->powerLimit > 0 ? min(100.0, $d->watts * 100.0 / $d->powerLimit) : -1.0;
             $history = $history
                 ->push("gpu:{$i}:gpu-totals", $d->utilization, $cap)
@@ -436,18 +489,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
             ->push('gpu-vram-total', $total > 0 ? $used * 100.0 / $total : -1.0, $cap)
             ->push('gpu-pwr-total', $limit > 0 ? min(100.0, $watts * 100.0 / $limit) : -1.0, $cap);
 
-        return $this->mutate(history: $history, gpus: $devices);
-    }
-
-    /**
-     * #1008 for GPUs: a column that measured once keeps its last value
-     * when one query answers N/A, so the row never loses a column (btop's
-     * columns follow the device's supported_functions, not one reading).
-     */
-    private static function holdDevice(GpuDevice $d, ?GpuDevice $prev): GpuDevice
-    {
-        // GpuDevice owns the merge so vendor/kind/busId/driver survive it.
-        return $d->heldFrom($prev);
+        return $this->mutate(history: $history, gpuHold: $gpuHold);
     }
 
     /** show_core_freq != off asks the Freq collector for per-core reads (btop #1785). */
@@ -471,7 +513,6 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
      * @param ?list<string>                          $fields
      * @param ?array<int, bool>                      $inactive
      * @param ?array{0: float, 1: float, 2: float}   $load
-     * @param ?list<GpuDevice>                       $gpus
      */
     private function mutate(
         ?NamedSources $sources = null,
@@ -488,7 +529,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         bool $freqSet = false,
         ?TempSnapshot $temp = null,
         bool $tempSet = false,
-        ?array $gpus = null,
+        ?GpuHold $gpuHold = null,
     ): self {
         return new self(
             $sources ?? $this->sources,
@@ -502,7 +543,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
             $uptime ?? $this->uptime,
             $freqSet ? $freq : $this->freq,
             $tempSet ? $temp : $this->temp,
-            $gpus ?? $this->gpus,
+            $gpuHold ?? $this->gpuHold,
         );
     }
 }

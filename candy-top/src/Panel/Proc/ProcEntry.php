@@ -20,7 +20,11 @@ use SugarCraft\Top\Collect\Process;
  *  - `cpu`: btop cpu_p, >= 0;
  *  - `cpuC`: btop cpu_c (cumulative, the "cpu lazy" key), >= 0;
  *  - `ioRead` / `ioWrite`: bytes/s, Sentinel::UNMEASURED when unknown
- *    (rendered "-", sorted as 0 like btop's io_read_b default).
+ *    (rendered "-", sorted as 0 like btop's io_read_b default);
+ *  - `gpu` / `gpuMem`: btop #1552 gpu_p (percent, summed over the pid's
+ *    GPUs and clamped to 0-100 as the PR does) and gpu_m (bytes), 0 for a
+ *    process no GPU snapshot lists — joined in by the panel from
+ *    {@see GpuUsage}.
  */
 final class ProcEntry
 {
@@ -35,11 +39,13 @@ final class ProcEntry
         public readonly string $prefix = '',
         public readonly int $depth = 0,
         public readonly bool $collapsed = false,
+        public readonly float $gpu = 0.0,
+        public readonly int $gpuMem = 0,
     ) {
     }
 
     /** The sampled values, #1008 carry already applied by the caller. */
-    public static function of(Process $p, float $cpu, float $ioRead, float $ioWrite): self
+    public static function of(Process $p, float $cpu, float $ioRead, float $ioWrite, float $gpu = 0.0, int $gpuMem = 0): self
     {
         return new self(
             $p,
@@ -49,12 +55,20 @@ final class ProcEntry
             max(0, $p->threads),
             $ioRead,
             $ioWrite,
+            gpu: max(0.0, min(100.0, $gpu)),
+            gpuMem: max(0, $gpuMem),
         );
     }
 
     public function pid(): int
     {
         return $this->process->pid;
+    }
+
+    /** btop #1552's GPU-only test: no GPU time and no GPU memory. */
+    public function gpuIdle(): bool
+    {
+        return $this->gpu <= 0.0 && $this->gpuMem === 0;
     }
 
     /** read + write bytes/s with unknown halves as 0 (btop "io total"). */
@@ -66,7 +80,7 @@ final class ProcEntry
     /**
      * A copy with tree-derived values.
      *
-     * @param array{cpu?: float, cpuC?: float, mem?: int, threads?: int, prefix?: string, depth?: int, collapsed?: bool} $o
+     * @param array{cpu?: float, cpuC?: float, mem?: int, threads?: int, prefix?: string, depth?: int, collapsed?: bool, gpu?: float, gpuMem?: int} $o
      */
     public function with(array $o): self
     {
@@ -81,6 +95,8 @@ final class ProcEntry
             $o['prefix'] ?? $this->prefix,
             $o['depth'] ?? $this->depth,
             $o['collapsed'] ?? $this->collapsed,
+            $o['gpu'] ?? $this->gpu,
+            $o['gpuMem'] ?? $this->gpuMem,
         );
     }
 }

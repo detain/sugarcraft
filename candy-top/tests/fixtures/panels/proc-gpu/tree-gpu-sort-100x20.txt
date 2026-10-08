@@ -1,0 +1,20 @@
+╭─┐⁴proc┌┐filter┌────────────────────┐gpu-only┌┐Omit ctr┌┐pause┌┐per-core┌┐reverse┌┐tree┌┐← gpu →┌─╮
+│Tree:                                      Threads: User:       MemB       Cpu%  GMem       Gpu%  │
+│[-]─1 systemd (init)                              1 root        117M ⣀⣀⣀⢀⣤ 38.7     - ⣀⣀⣀⣀⣀    -  │
+│ │ [-]─5120 containerd-shim (containerd-shim-)    2 root        375M ⣀⣀⣀⢠⣀ 22.6     - ⣀⣀⣀⣀⣀    -  │
+│ │  │  └─5133 python3 ([docker:3f2a1b9c0d1e] )    3 root        675M ⣀⣀⣀⢀⣀ 13.7  6.7G ⣀⣀⣀⢰⣿ 87.2  │
+│ │  ├─6969 web01 ([kvm:web01] qemu-system-x86)   10 libvirt-q+  971M ⣀⣀⣀⢀⣀  7.5  4.0G ⣀⣀⣀⢀⣀ 18.8  │
+│ │  ├─4410 node                                   4 joe         620M ⣀⣀⣀⢀⣀  4.3  180M ⣀⣀⣀⢀⣀  4.4  │
+│ │ [-]─412 sshd (sshd:)                           2 root        199M ⣀⣀⣀⢀⣀ 24.3     - ⣀⣀⣀⣀⣀    -  │
+│ │  │ [-]─2210 bash (-bash)                       1 joe         350M ⣀⣀⣀⢀⣀  7.0     - ⣀⣀⣀⣀⣀    -  │
+│ │  │     ├─2290 php                              2 joe         414M ⣀⣀⣀⢀⣀ 13.3     - ⣀⣀⣀⣀⣀    -  │
+│ │  │     └─7001 vim                              1 joe         1.3G ⣀⣀⣀⢀⣀  3.1     - ⣀⣀⣀⣀⣀    -  │
+│ │  ├─880 postgres                                3 postgres    222M ⣀⣀⣀⢀⣀  7.9  512M ⣀⣀⣀⣀⣀  0.0  │
+│ │  ├─1203 nginx (nginx:)                         4 www-data    283M ⣀⣀⣀⢀⣀  5.8     - ⣀⣀⣀⣀⣀    -  │
+│ │  └─3105 redis-server                           3 redis       531M ⣀⣀⣀⢀⣀  5.6     - ⣀⣀⣀⣀⣀    -  │
+│ └─2 kthreadd                                     1 root          0B ⣀⣀⣀⣀⣀  0.0     - ⣀⣀⣀⣀⣀    -  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰┘↑ select ↓└┘info ↵└┘terminate└┘kill└┘signals└┘Nice└┘Follow└────────────────────────────────┘0/13└╯

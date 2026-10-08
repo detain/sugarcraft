@@ -24,7 +24,9 @@ use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Config\ConfigFile;
 use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
+use SugarCraft\Top\Source\Fake\FakeGpu;
 use SugarCraft\Top\Msg\ConfigSavedMsg;
+use SugarCraft\Top\Panel\GpuPanel;
 use SugarCraft\Top\Panel\Panels;
 use SugarCraft\Top\Panel\ProcPanel;
 use SugarCraft\Top\State\TreeStateFile;
@@ -89,17 +91,20 @@ foreach ($loaded->warnings as $warning) {
 // btop auto-enables tty mode on a console: Term::current_tty.starts_with("/dev/tty")
 // (btop.cpp) — /dev/tty1 and serial consoles like /dev/ttyS0 alike.
 $tty = function_exists('posix_ttyname') ? (posix_ttyname(STDIN) ?: '') : '';
-$config = $loaded->config
-    ->withTtyModeResolved(null, str_starts_with($tty, '/dev/tty'))
-    ->withShownBoxesSettled(0);
+$config = $loaded->config->withTtyModeResolved(null, str_starts_with($tty, '/dev/tty'));
 
 // btop picks its collector per OS at compile time; candy-top per PHP_OS here.
 $platform = Platform::detect();
 $host = $platform->hostInfo();
+// btop Shared::init → Gpu::init: the accelerators are known before shown_boxes
+// is settled (a gpuN beyond them resets the list) and before the first frame,
+// so the gpu slot keys 5-0 work at once. One bounded sample, outside the loop.
+$gpuProbe = $fake ? null : GpuPanel::probe($config, $platform);
+$config = $config->withShownBoxesSettled($fake ? FakeGpu::new()->count() : count($gpuProbe?->accelerators() ?? []));
 // btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
 $catalog = ThemeRegistry::new();
 $palette = $catalog->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
-$panels = Panels::standard($host, $config, $fake, $platform);
+$panels = Panels::standard($host, $config, $fake, $platform, $gpuProbe);
 // #1791c proc_tree_persist_state: remembered tree collapse choices live in
 // $XDG_STATE_HOME/candy-top/tree-state.json (never config.conf). Loaded even
 // with the option off, so turning it on mid-session restores them and a later

@@ -35,7 +35,7 @@ candy-top reads btop's config format and btop's `.theme` files, and its keys, me
 - Optional PHP extensions:
   - `ext-posix` shows user names in the process list (otherwise numeric uids), sends signals (`posix_kill`) and detects a real console (`posix_ttyname`).
   - `ext-pcntl` renices processes (`pcntl_setpriority`; PHP's `proc_nice()` cannot renice another pid) and traps SIGTERM/SIGHUP so the config is still saved.
-- Optional: `nvidia-smi` for [GPU](#gpu) readings.
+- Optional: `nvidia-smi` for NVIDIA [GPU](#gpu) readings. AMD and Intel GPUs and Intel/AMD NPUs are read from sysfs on Linux and need no extra tools.
 
 ## Install
 
@@ -56,7 +56,7 @@ vendor/bin/candy-top --help              # options plus the full key list
 
 | Flag | Effect |
 |---|---|
-| `--fake` | Uses the seeded fake collectors (`Source\Fake\*`) instead of the live host. The data is deterministic and the pids are invented, so it suits demos and VHS tapes. |
+| `--fake` | Uses the seeded fake collectors (`Source\Fake\*`) instead of the live host. The data is deterministic and the pids are invented, so it suits demos and VHS tapes. The fake host has two GPUs and one NPU (gpu boxes `gpu0`-`gpu2`), with per-process GPU use. |
 | `--config <path>`, `--config=<path>` | Reads the config from `<path>` instead of `$XDG_CONFIG_HOME/candy-top/config.conf`. That file is also where the config is saved. A missing value is an error (exit 2). So is a following argument that starts with `-` in the space-separated form (`--config -x`); `--config=-x` is accepted as a path. |
 | `-h`, `--help` | Prints usage and the KEYS section, which is generated from the same key table as the help overlay, then exits 0. Works without a tty. |
 
@@ -66,7 +66,7 @@ From a monorepo checkout, `php candy-top/bin/candy-top` works as well. `php cand
 
 ## The boxes
 
-The screen is split into four boxes, laid out by a PHP re-implementation of btop's `calcSizes`. Keys `1` to `4` toggle the boxes, and the `shown_boxes` option sets which are shown. Placement flags move the boxes around: `cpu_bottom` puts cpu at the bottom, `mem_below_net` swaps mem and net, `proc_left` moves proc to the left, and `proc_box_width_percent` sets the proc width. Box titles and buttons are drawn into the borders, and each button's hotkey letter is highlighted. A clock (`clock_format`) sits in the top border. When the terminal is smaller than the layout's minimum, btop's "Terminal size too small" notice is shown instead. `q` and `1` to `4` still work behind that notice.
+The screen is split into four boxes, plus up to six [gpu boxes](#gpu-boxes), laid out by a PHP re-implementation of btop's `calcSizes`. Keys `1` to `4` toggle the four boxes, keys `5` to `0` toggle gpu box slots, and the `shown_boxes` option sets which are shown. Placement flags move the boxes around: `cpu_bottom` puts cpu at the bottom, `mem_below_net` swaps mem and net, `proc_left` moves proc to the left, and `proc_box_width_percent` sets the proc width. Box titles and buttons are drawn into the borders, and each button's hotkey letter is highlighted. A clock (`clock_format`) sits in the top border. When the terminal is smaller than the layout's minimum, btop's "Terminal size too small" notice is shown instead. `q`, `1` to `4` and the gpu slot keys `5` to `0` still work behind that notice.
 
 Hidden boxes are never sampled or drawn (btop #1858). Every graph dimension is clamped to at least 1 cell, so even odd layouts cannot crash a graph.
 
@@ -78,7 +78,7 @@ Hidden boxes are never sampled or drawn (btop #1858). Every graph dimension is c
 - **Temperature.** `check_temp`, `cpu_sensor` (choose from a list in the options menu), `show_coretemp`, `cpu_core_map` and `temp_scale` (`celsius`, `fahrenheit`, `kelvin`, `rankine`) control the temperature readings.
 - **Load, uptime and the `- 2000ms +` button.** The footer shows load averages and the uptime (`show_uptime`). The update-interval button in the border steps `update_ms`.
 - **Battery.** A badge in the top border shows the percentage, a charge meter, the status, time to empty or full, and the draw in watts (`show_battery_watts`). It appears only when `show_battery` is on and a battery is present. `selected_battery` chooses between several batteries, and the clock makes room for the badge.
-- **GPU sub-graphs.** These appear when `show_gpu_info` is `On` or `Auto` and a GPU answers. With `cpu_graph_lower = Auto`, the lower graph becomes `gpu-totals`, one graph per GPU separated by a divider column, with widths split as in btop #1614. The other choices are `gpu-vram-totals` and `gpu-pwr-totals` (one graph per GPU), and `gpu-average`, `gpu-vram-total` and `gpu-pwr-total` (one shared graph). The cores box also lists a brief row for each GPU. See [GPU](#gpu).
+- **GPU sub-graphs.** These appear when a GPU answers and `show_gpu_info` is `On`, or `Auto` while some GPU has no [gpu box](#gpu-boxes) of its own (btop #1730). Under `Auto` the cpu box lists only the GPUs without a box; `On` lists every GPU. With `cpu_graph_lower = Auto`, the lower graph becomes `gpu-totals`, one graph per listed GPU separated by a divider column, with widths split as in btop #1614. The other choices are `gpu-vram-totals` and `gpu-pwr-totals` (one graph per GPU), and `gpu-average`, `gpu-vram-total` and `gpu-pwr-total` (one shared graph). The cores box also lists a brief row for each listed GPU. NPUs never appear in the cpu box. The cpu box keeps sampling the GPUs while `cpu_graph_upper` or `cpu_graph_lower` names a `gpu-*` field, even when every GPU has its own box. See [GPU](#gpu).
 
 ### mem
 
@@ -100,15 +100,29 @@ Hidden boxes are never sampled or drawn (btop #1858). Every graph dimension is c
 ### proc
 
 - **List.** Columns are pid, program, command, threads, user, memory, cpu% and a per-process mini cpu graph (`proc_cpu_graphs`). The colours come from the cpu gradient (`proc_colors`), with a darkening fade away from the selection (`proc_gradient`). When the box is at least 90 columns wide, IO/R and IO/W columns are added (btop #1823). `/proc/[pid]/io` is sampled while those columns show or an `io *` sort is active, so the io sorts also work in a narrower box, where the columns stay hidden. A process whose io file is unreadable shows `-`, never `0`.
-- **Sorting.** `←` and `→` cycle through `pid`, `name`, `command`, `threads`, `user`, `memory`, `cpu direct`, `cpu lazy`, `io read`, `io write` and `io total`. `r` reverses the order. `cpu lazy` is btop's smoothed sort, which pulls hogs forward over time.
-- **Tree view.** `e` turns on the tree view. Space or `+`/`-` collapses or expands the selected branch, `C` collapses or expands its children, and `E` does all branches. `proc_aggregate` adds child usage to the parent. `proc_tree_auto_collapse` collapses wide branches on entry. Siblings are sorted by branch totals (btop #1791a).
+- **GPU columns** (btop #1552). Once per-process GPU data has been measured on the host, the box adds `Gpu%` (GPU utilisation, summed over the process's GPUs and clamped to 100), a per-process mini GPU graph (`proc_gpu_graphs`, on by default) and `GMem` (GPU memory). They need room: with both mini graphs on, `Gpu%` and its graph appear from 86 columns and `GMem` from 92. Turning `proc_gpu_graphs` or `proc_cpu_graphs` off lowers each threshold by 5 (81/87), and turning both off by 10. While GPU data is measured the IO columns yield to them and need 106 columns (101 with one mini graph off, 96 with both off) instead of 90. Per-process data comes from `nvidia-smi --query-compute-apps` plus `nvidia-smi pmon` on NVIDIA and from DRM fdinfo on amdgpu, i915 and xe; it is held between GPU samples, and a pid the GPU sample no longer lists reads 0. It is collected only while a `Gpu%` column fits, `proc_gpu_only` is on, or a gpu sort is active.
+- **Sorting.** `←` and `→` cycle through `pid`, `name`, `command`, `threads`, `user`, `memory`, `cpu direct`, `cpu lazy`, `io read`, `io write`, `io total`, `gpu` and `gpu memory`. `r` reverses the order. `cpu lazy` is btop's smoothed sort, which pulls hogs forward over time. The two gpu sorts (btop #1552) sort by per-process GPU utilisation and GPU memory.
+- **Tree view.** `e` turns on the tree view. Space or `+`/`-` collapses or expands the selected branch, `C` collapses or expands its children, and `E` does all branches. `proc_aggregate` adds child usage, GPU use included, to the parent. `proc_tree_auto_collapse` collapses wide branches on entry. Siblings are sorted by branch totals (btop #1791a).
 - **Filter.** `f` or `/` starts a live filter. A plain filter is a case-insensitive substring of the pid, name, command, user or container/VM name. A filter starting with `!` is a regular expression, searched in the pid, name and user and fully matched against the command. Enter keeps the filter, Esc restores the previous one, and `delete` clears it. `proc_filter_kernel` hides kernel threads. `proc_filter_containers`, toggled by `O`, hides processes in containers and VMs.
+- **GPU-only filter** (btop #1552). `proc_gpu_only` shows only processes with non-zero GPU utilisation or GPU memory. `g` toggles it, as does `ctrl+g` and the `gpu-only` button in the box title. With `vim_keys`, `g` stays "top of list", so use `ctrl+g`. The filter and the button apply only once per-process GPU data has been measured; on a host without it the option is inert. In the tree view a GPU-idle process is hidden the way a non-matching text filter hides it.
 - **Other display options.** `c` switches to per-core cpu% (`proc_per_core`). `%` switches memory between bytes and percent (`proc_mem_bytes`). `proc_command_basename` (btop #1859) shows only the executable's basename in the list.
 - **Detailed view.** Enter on a selected row opens a detail pane with the status, elapsed time, parent, user, threads, nice, memory, IO totals, cwd (btop #1546) and the full command. Enter again closes it. With `proc_follow_detailed` on, the list follows the detailed process.
 - **Signals.** Each of these acts on the selected row, or on the detailed process when no row is selected. `t` asks for confirmation, then sends SIGTERM. `k` asks for confirmation, then sends SIGKILL (`K` with `vim_keys`). `s` opens the signal chooser and `N` opens the renice menu. A failure (EPERM, ESRCH, ...) opens an error box.
 - **Follow and pause.** `F` keeps the selected process centred as the list re-sorts, and `u` pauses list updates (`pause_proc_list`). While either is active, a banner sits on the list's last row.
 - **Mouse.** Click a row to select it, and click the selected row to open its detail view. Click the `[-]`/`[+]` marker to collapse or expand a branch. Clicking the scrollbar pages at the arrows, drags the thumb, or jumps proportionally. The wheel scrolls by 3 rows.
 - **Containers and VMs.** These are tagged in the command column. See [Containers and VMs](#containers-and-vms).
+
+### gpu boxes
+
+Up to six gpu boxes can be shown at once (btop #1730), one per accelerator: `gpu0`, `gpu1`, ... in `shown_boxes`, numbered GPUs first and then NPUs. Data, collectors and caveats are in [GPU](#gpu).
+
+- **Slots and keys.** The number keys `5`, `6`, `7`, `8`, `9` and `0` toggle gpu box slots 0 to 5, and each box's title shows its slot key (none for `0`). Opening a slot shows the first accelerator, from the slot's index on, that has no box yet. A toggle that would not fit the terminal opens the size-error box instead. Slots are runtime state: they are never saved, and changing `shown_boxes` any other way (options menu, preset, reload) resets them.
+- **Retargeting.** While more than one accelerator exists and the box is wide enough, the title carries a `← gpuN →` selector. Clicking an arrow moves that box to the previous or next accelerator that has no box, keeping its slot. A move that would not fit is ignored.
+- **Grid** (btop #1881). Gpu boxes are placed side by side, all one width and height, with one blank column between them. `gpu_box_columns` is `Auto` (as many per row as the terminal fits, a box being at least 34 columns wide) or a number from 1 to 6 to force the columns, still capped by what fits.
+- **Detail levels** (btop #1881). The box width picks how much is drawn. `Full` (56 columns or more) shows everything, `Compact` (44 or more) drops the encoder/decoder and memory sections, and `Minimal` also drops the power row.
+- **Contents.** A utilisation graph (`graph_symbol_gpu`, mirrored with `gpu_mirror_graph`) and meter, temperature, power with P-state, clocks, encoder/decoder use and VRAM used/total with its own graph, each where the device reports it. The stats sub-box is titled with `custom_gpu_nameN` or the model name.
+- **NPUs** (btop #985, #1839). An NPU box is titled `npu`, its meter reads `NPU` and its memory reads `ram` instead of `vram`.
+- **Startup and presets.** At startup a `gpuN` beyond the detected accelerators resets `shown_boxes` to the default, as btop does. A preset naming an accelerator that does not exist is refused with the size-error box.
 
 ## Menus and overlays
 
@@ -181,6 +195,7 @@ Context rules, following btop's input handling:
 | `2` | Toggle MEM box. | `2` |
 | `3` | Toggle NET box. | `3` |
 | `4` | Toggle PROC box. | `4` |
+| `5, 6, 7, 8, 9, 0` | Toggle GPU box. | `5`, `6`, `7`, `8`, `9`, `0` |
 | `d` | Toggle disks view in MEM box. | `d` |
 | `F2, o` | Shows options. | `f2`, `o` |
 | `F1, ?, h` | Shows this window. | `f1`, `?`, `h` |
@@ -209,6 +224,7 @@ Context rules, following btop's input handling:
 | `E` | Collapse/expand all processes in tree view. | `E` |
 | `%` | Toggles memory display mode in processes box. | `%` |
 | `O` | Toggle hiding containers and VMs in process list. | `O` |
+| `g, ctrl + g` | Toggle GPU-only process filter (vim_keys: ctrl + g). | `g`, `ctrl+g` |
 | `Selected +, -` | Expand/collapse the selected process in tree view. | `+`, `-`, `=` |
 | `Selected t` | Terminate selected process with SIGTERM - 15. | `t` |
 | `Selected k (vim K)` | Kill selected process with SIGKILL - 9. | `k` |
@@ -277,13 +293,13 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 | `terminal_sync` | bool | `true` | `true`, `false` | 0 general › Runtime and rendering | **Accepted for btop.conf compatibility, not used yet.** Use terminal synchronized output sequences to reduce flickering on supported terminals. |
 | `graph_symbol` | string | `"braille"` | `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Default symbols to use for graph creation, "braille", "block", "block2" or "tty".<br>"braille" offers the highest resolution but might not be included in all fonts.<br>"block" has half the resolution of braille but uses more common characters.<br>"block2"'s resolution is between braille and block, but it has a cleaner look than braille (needs a font with Unicode 13 sextants).<br>"tty" uses only 3 different symbols but will work with most fonts and should work in a real TTY.<br>Note that "tty" only has half the horizontal resolution of the other two, so will show a shorter historical view.<br>Stock btop 1.4.7 does not know "block2" and falls back to its default with a warning. |
 | `graph_symbol_cpu` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Graph symbol to use for graphs in cpu box, "default", "braille", "block", "block2" or "tty". |
-| `graph_symbol_gpu` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | **Accepted for btop.conf compatibility, not used yet.** Graph symbol to use for graphs in gpu box, "default", "braille", "block", "block2" or "tty". |
+| `graph_symbol_gpu` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Graph symbol to use for graphs in gpu box, "default", "braille", "block", "block2" or "tty". |
 | `graph_symbol_mem` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Graph symbol to use for graphs in mem box, "default", "braille", "block", "block2" or "tty". |
 | `graph_symbol_net` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Graph symbol to use for graphs in net box, "default", "braille", "block", "block2" or "tty". |
 | `graph_symbol_proc` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Graph symbol to use for graphs in proc box, "default", "braille", "block", "block2" or "tty". |
-| `shown_boxes` | string | `"cpu mem net proc"` | validated text (see description) | 0 general › Layout | Manually set which boxes to show. Available values are "cpu mem net proc" and "gpu0" through "gpu5", separate values with whitespace. |
+| `shown_boxes` | string | `"cpu mem net proc"` | validated text (see description) | 0 general › Layout | Manually set which boxes to show. Available values are "cpu mem net proc" and "gpuN" for GPU index N, separate values with whitespace. Up to 6 GPU boxes can be shown at once. |
 | `update_ms` | int | `2000` | `100`–`86400000` | 0 general › Runtime and rendering | Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs. |
-| `proc_sorting` | string | `"cpu lazy"` | `pid`, `name`, `command`, `threads`, `user`, `memory`, `cpu direct`, `cpu lazy`, `io read`, `io write`, `io total` | 4 proc › Order and tree | Processes sorting, "pid" "name" "command" "threads" "user" "memory" "cpu lazy" "cpu direct" "io read" "io write" "io total",<br>"cpu lazy" sorts top process over time (easier to follow), "cpu direct" updates top process directly.<br>"io read", "io write" and "io total" sort by disk IO rate; stock btop 1.4.7 does not know them and falls back to "cpu lazy" with a warning. |
+| `proc_sorting` | string | `"cpu lazy"` | `pid`, `name`, `command`, `threads`, `user`, `memory`, `cpu direct`, `cpu lazy`, `io read`, `io write`, `io total`, `gpu`, `gpu memory` | 4 proc › Order and tree | Processes sorting, "pid" "name" "command" "threads" "user" "memory" "cpu lazy" "cpu direct" "io read" "io write" "io total" "gpu" "gpu memory",<br>"cpu lazy" sorts top process over time (easier to follow), "cpu direct" updates top process directly.<br>"io read", "io write" and "io total" sort by disk IO rate, "gpu" and "gpu memory" by per-process GPU use; stock btop 1.4.7 does not know them and falls back to "cpu lazy" with a warning. |
 | `proc_reversed` | bool | `false` | `true`, `false` | 4 proc › Order and tree | Reverse sorting order, True or False. |
 | `proc_tree` | bool | `false` | `true`, `false` | 4 proc › Order and tree | Show processes as a tree. |
 | `proc_command_basename` | bool | `false` | `true`, `false` | 4 proc › Rows and selection | Show only the executable basename in process commands, preserving arguments.<br>The detailed view still shows the full command. |
@@ -293,6 +309,8 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 | `proc_per_core` | bool | `false` | `true`, `false` | 4 proc › Rows and selection | If process cpu usage should be of the core it's running on or usage of the total available cpu power. |
 | `proc_mem_bytes` | bool | `true` | `true`, `false` | 4 proc › Rows and selection | Show process memory as bytes instead of percent. |
 | `proc_cpu_graphs` | bool | `true` | `true`, `false` | 4 proc › Rows and selection | Show cpu graph for each process. |
+| `proc_gpu_graphs` | bool | `true` | `true`, `false` | 4 proc › Rows and selection | Show gpu graph for each process. |
+| `proc_gpu_only` | bool | `false` | `true`, `false` | 4 proc › Rows and selection | Show only processes with active GPU usage or GPU memory allocation in the process list. |
 | `proc_info_smaps` | bool | `false` | `true`, `false` | 4 proc › Rows and selection | **Accepted for btop.conf compatibility, not used yet.** Use /proc/[pid]/smaps for memory information in the process info box (very slow but more accurate) |
 | `proc_box_width_percent` | int | `55` | `0`–`100` | 0 general › Layout | Percentage value for proc box width when mem or net is shown.<br>Values 0-100; the width is clamped to the narrowest/widest layout the window allows. |
 | `proc_left` | bool | `false` | `true`, `false` | 0 general › Layout | Show proc box on left side of screen instead of right. |
@@ -305,6 +323,7 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 | `cpu_graph_upper` | string | `"Auto"` | any text | 1 cpu › Graphs | Sets the CPU stat shown in upper half of the CPU graph, "total" is always available.<br>Select from a list of detected attributes from the options menu. |
 | `cpu_graph_lower` | string | `"Auto"` | any text | 1 cpu › Graphs | Sets the CPU stat shown in lower half of the CPU graph, "total" is always available.<br>Select from a list of detected attributes from the options menu. |
 | `show_gpu_info` | string | `"Auto"` | `Auto`, `On`, `Off` | 1 cpu › Graphs | If gpu info should be shown in the cpu box. Available values = "Auto", "On" and "Off". |
+| `gpu_box_columns` | string | `"Auto"` | validated text (see description) | 5 gpu › Display | How many gpu boxes to place side by side instead of stacking them vertically.<br>"Auto" uses as many columns as the terminal width allows, or set a number (1-6) to force it. |
 | `cpu_invert_lower` | bool | `true` | `true`, `false` | 1 cpu › Graphs | Toggles if the lower CPU graph should be inverted. |
 | `cpu_single_graph` | bool | `false` | `true`, `false` | 1 cpu › Graphs | Set to True to completely disable the lower CPU graph. |
 | `cpu_bottom` | bool | `false` | `true`, `false` | 0 general › Layout | Show cpu box at bottom of screen instead of top. |
@@ -355,14 +374,14 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 | `save_config_on_exit` | bool | `true` | `true`, `false` | 0 general › Diagnostics and persistence | Automatically save current settings to config file on exit. |
 | `nvml_measure_pcie_speeds` | bool | `true` | `true`, `false` | 5 gpu › Telemetry | **Accepted for btop.conf compatibility, not used yet.** Measure PCIe throughput on NVIDIA cards, may impact performance on certain cards. |
 | `rsmi_measure_pcie_speeds` | bool | `true` | `true`, `false` | 5 gpu › Telemetry | **Accepted for btop.conf compatibility, not used yet.** Measure PCIe throughput on AMD cards, may impact performance on certain cards. |
-| `gpu_mirror_graph` | bool | `true` | `true`, `false` | 5 gpu › Display | **Accepted for btop.conf compatibility, not used yet.** Horizontally mirror the GPU graph. |
-| `shown_gpus` | string | `"nvidia amd intel apple"` | any text | 5 gpu › Display | **Accepted for btop.conf compatibility, not used yet.** Set which GPU vendors to show. Available values are "nvidia amd intel apple" |
-| `custom_gpu_name0` | string | `""` | any text | 5 gpu › Names | **Accepted for btop.conf compatibility, not used yet.** Custom gpu0 model name, empty string to disable. |
-| `custom_gpu_name1` | string | `""` | any text | 5 gpu › Names | **Accepted for btop.conf compatibility, not used yet.** Custom gpu1 model name, empty string to disable. |
-| `custom_gpu_name2` | string | `""` | any text | 5 gpu › Names | **Accepted for btop.conf compatibility, not used yet.** Custom gpu2 model name, empty string to disable. |
-| `custom_gpu_name3` | string | `""` | any text | 5 gpu › Names | **Accepted for btop.conf compatibility, not used yet.** Custom gpu3 model name, empty string to disable. |
-| `custom_gpu_name4` | string | `""` | any text | 5 gpu › Names | **Accepted for btop.conf compatibility, not used yet.** Custom gpu4 model name, empty string to disable. |
-| `custom_gpu_name5` | string | `""` | any text | 5 gpu › Names | **Accepted for btop.conf compatibility, not used yet.** Custom gpu5 model name, empty string to disable. |
+| `gpu_mirror_graph` | bool | `true` | `true`, `false` | 5 gpu › Display | Horizontally mirror the GPU graph. |
+| `shown_gpus` | string | `"nvidia amd intel apple"` | any text | 5 gpu › Display | Set which GPU vendors to show. Available values are "nvidia amd intel apple" |
+| `custom_gpu_name0` | string | `""` | any text | 5 gpu › Names | Custom gpu0 model name, empty string to disable. |
+| `custom_gpu_name1` | string | `""` | any text | 5 gpu › Names | Custom gpu1 model name, empty string to disable. |
+| `custom_gpu_name2` | string | `""` | any text | 5 gpu › Names | Custom gpu2 model name, empty string to disable. |
+| `custom_gpu_name3` | string | `""` | any text | 5 gpu › Names | Custom gpu3 model name, empty string to disable. |
+| `custom_gpu_name4` | string | `""` | any text | 5 gpu › Names | Custom gpu4 model name, empty string to disable. |
+| `custom_gpu_name5` | string | `""` | any text | 5 gpu › Names | Custom gpu5 model name, empty string to disable. |
 <!-- END generated:config -->
 
 ## Themes
@@ -407,15 +426,15 @@ Collectors are chosen per OS at run time (`SugarCraft\Top\Collect\Platform`). Th
 | disks | `/proc/mounts` + statvfs, `/proc/diskstats`, `/sys/block` (physical filter), `/etc/fstab` (cached by mtime) |
 | net | `/proc/net/dev`, `/sys/class/net/<if>/{carrier,operstate}`, addresses via `net_get_interfaces()` |
 | proc | `/proc/[pid]/{stat,status,cmdline,cgroup,io}`, with `cwd` read for the detailed pid only |
-| gpu | `nvidia-smi` (see [GPU](#gpu)) |
+| gpu | `nvidia-smi` (NVIDIA); amdgpu, i915/xe, intel_vpu and amdxdna nodes under `/sys/class/drm` and `/sys/class/accel`; per-process GPU use from `nvidia-smi` and `/proc/[pid]/fdinfo` (see [GPU](#gpu)) |
 
 Permissions:
 
 - Everything works unprivileged.
-- `/proc/[pid]/io` and `cwd` of other users' processes need root or `CAP_SYS_PTRACE`. Without it, the IO columns show `-` and the cwd is empty.
+- `/proc/[pid]/io` and `cwd` of other users' processes need root or `CAP_SYS_PTRACE`. Without it, the IO columns show `-` and the cwd is empty. The same applies to `/proc/[pid]/fdinfo`, so without it the per-process GPU columns on AMD and Intel cover only your own processes.
 - Signals and lowering nice values on other users' processes need the usual privileges. A refusal opens btop's error box.
 
-Per-process cmdline, status and cgroup are read once per process lifetime. Only `stat` is re-read each tick, plus `io` while the IO columns show (box at least 90 columns wide) or an `io *` sort is active.
+Per-process cmdline, status and cgroup are read once per process lifetime. Only `stat` is re-read each tick, plus `io` while the IO columns show (box at least 90 columns wide, 106 once per-process GPU data is measured) or an `io *` sort is active.
 
 ### FreeBSD
 
@@ -426,6 +445,7 @@ The FreeBSD output parsing for `ps`, `netstat -W`, `ifconfig` and `iostat` has b
 Known limitations on FreeBSD:
 
 - No per-process IO (FreeBSD exposes only block-op counts), so the IO columns show `-`.
+- GPUs come from `nvidia-smi` only (no AMD, Intel or NPU readings).
 - No zswap.
 - No container or jail tags.
 - One aggregate battery (`acpi`).
@@ -447,19 +467,33 @@ KVM/QEMU guests are tagged too, with engine `kvm`. This candy-top extension is n
 
 ## GPU
 
-GPU readings come from an `nvidia-smi` shell-out. That is NVIDIA only, because btop's NVML/ROCm libraries need FFI. The readings are index, utilisation, memory used/total, temperature, power draw, name, and the power limit where the driver offers it.
+GPUs and NPUs are read by a multi-vendor collector (`Collect\Gpu\Accelerators`), a PHP re-implementation of btop's `Gpu::collect` without its NVML/ROCm/PMU libraries, which would need FFI. Several vendors at once are normal, such as an Intel iGPU next to an NVIDIA card. The backends present are picked on the first sample:
 
-- Every candidate binary is tried before the GPU is given up as absent. The candidates are each `PATH` hit, then the WSL2 location `/usr/lib/wsl/lib/nvidia-smi` and container-toolkit locations (btop #1869). A GPU-less host stops spawning after that.
-- Queries are spaced by the update interval, bounded by a timeout, and backed off exponentially after a failure, so a wedged driver never freezes the UI.
-- GPU data appears in the cpu box only: sub-graphs, plus a brief row per GPU in the cores box (see [cpu](#cpu)). There are no separate GPU boxes yet. A `gpuN` in `shown_boxes` resets the list to the default at startup, and the `gpu_*`, `shown_gpus` and `custom_gpu_name*` keys are accepted for compatibility only.
+- **NVIDIA**: an `nvidia-smi` shell-out for utilisation, memory, temperature, power and power limit, clocks, P-state, fan and encoder/decoder use. Every candidate binary is tried before the GPU is given up as absent: each `PATH` hit, then the WSL2 location `/usr/lib/wsl/lib/nvidia-smi` and container-toolkit locations (btop #1869). A GPU-less host stops spawning after that. Queries are at least 5 s apart, bounded by a timeout, and backed off exponentially after a failure, so a wedged driver never freezes the UI.
+- **AMD** (btop #1854): amdgpu sysfs nodes (busy percentages, VRAM, hwmon temperature, power, clocks, fan). Names come from `amdgpu.ids`, then `pci.ids`. A card in runtime suspend is not woken.
+- **Intel** (btop #1888): every i915 and xe card, with utilisation from DRM fdinfo, clocks, and power and temperature on discrete cards. VRAM is not read, because neither driver exposes it in sysfs.
+- **NPUs**: Intel NPUs through `intel_vpu` sysfs (btop #985: utilisation, memory in use, clock) and AMD Ryzen AI NPUs through `amdxdna` (btop #1839, detection only: the device is listed, every reading `n/a`).
+
+On FreeBSD only the NVIDIA backend runs. `shown_gpus` filters the GPU vendors live (NPUs are never filtered), and `custom_gpu_nameN` renames a device in its gpu box.
+
+GPUs are numbered `0..n-1` in backend order (NVIDIA, AMD, Intel) and NPUs number after them. A device keeps its index when its backend briefly drops it, so its graphs never jump to another device. The readings feed the [gpu boxes](#gpu-boxes), the cpu box's [GPU sub-graphs](#cpu) and the proc box's [GPU columns](#proc).
+
+A device that stops answering keeps its last values (btop #1008), but only for a bounded time: once it has measured nothing for `max(5, ceil(30 s / update_ms))` samples in a row, it is shown unmeasured (`n/a`) and its graph history is dropped, so a GPU that is gone for good does not show frozen numbers.
+
+**Cost.** The cpu box, the gpu boxes and the proc box can each run their own GPU sampler, each sampled only while its consumer is shown (btop #1858); every `nvidia-smi` sampler queries at most once per 5 s. Per-process data is collected only while the proc box wants it (see [proc](#proc)). On NVIDIA that adds `nvidia-smi --query-compute-apps` and `nvidia-smi pmon` spawns: the `pmon` query takes about 0.25-1 s and runs on the UI loop every 5 s while the columns are wanted. On AMD and Intel the DRM fdinfo walk is spread across samples.
 
 ## Adopted upstream btop PRs
 
-candy-top includes these open btop pull requests (evaluated 2026-10-08). New keys are additive, so a btop.conf loads in candy-top and a candy-top config.conf loads in stock btop. The exceptions are new values (`block2` and the `io *` sorts), which stock btop rejects with a warning before falling back to its default, and the presets W field described above.
+candy-top includes these open btop pull requests (evaluated 2026-10-08). New keys are additive, so a btop.conf loads in candy-top and a candy-top config.conf loads in stock btop. The exceptions are new values (`block2`, the `io *` sorts and the `gpu` / `gpu memory` sorts), which stock btop rejects with a warning before falling back to its default, and the presets W field described above.
 
 | PR | Feature |
 |---|---|
 | #1869 | Try every `nvidia-smi` candidate (WSL2 path included) before memoising "no GPU". |
+| #1730 | GPU boxes for any GPU index: up to 6 `gpuN` boxes, slot keys `5`-`0`, `← gpuN →` title selectors, and the cpu box listing only GPUs without a box under `show_gpu_info = Auto`. |
+| #1881 | GPU box grid (`gpu_box_columns`) with Full, Compact and Minimal detail levels. |
+| #985 / #1839 | Intel and AMD NPUs, numbered after the GPUs in boxes titled `npu`. The AMD NPU is detected only, without readings. |
+| #1854 / #1888 | AMD GPUs from amdgpu sysfs (with `amdgpu.ids` names) and multiple Intel i915/xe GPUs. |
+| #1552 | Per-process `Gpu%` / `GMem` columns and mini GPU graph (`proc_gpu_graphs`), `proc_gpu_only` filter (`g`, `ctrl+g`), and `gpu` / `gpu memory` sorting. |
 | #1856 | Process names with spaces or parentheses parse correctly (regression fixtures). |
 | #1739 | zswap row and on-disk swap `Used` (`show_zswap`). |
 | #1785 / #1792 | Per-core CPU frequency (`show_core_freq` = `off`/`value`/`graph`) and the shared frequency label. |
@@ -470,7 +504,7 @@ candy-top includes these open btop pull requests (evaluated 2026-10-08). New key
 | #1783 | `block2` sextant graph symbols (`graph_symbol*`). |
 | #1858 | Hidden boxes are never sampled or drawn, and graph sizes are clamped to at least 1. |
 | #1614 | GPU sub-graph widths in the cpu box. |
-| #1008 | Keep the last value when a collector briefly fails. |
+| #1008 | Keep the last value when a collector briefly fails (bounded for GPUs, see [GPU](#gpu)). |
 | #1747 | `mem_selected`: a single focused mem graph. |
 | #1700 | `disks_order`. |
 | #1546 | Process cwd in the detailed view. |
@@ -487,13 +521,14 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 
 **Not implemented (yet)**
 
-- No GPU boxes (`5`, `gpu0`-`gpu5`). GPUs show only inside the cpu box, from `nvidia-smi` only (no AMD/Intel, no per-process GPU use).
+- No PCIe TX/RX line in the gpu boxes (nothing measures PCIe throughput), and no Apple GPUs.
+- AMD NPUs are detected but not measured; Intel GPUs report no VRAM.
 - No container box.
 - No `ctrl+z` suspend.
 - No CPU package watts (`show_cpu_watts` has no RAPL reader).
 - No ZFS pool IO.
 - No MAC-address fallback for an interface without an IP.
-- Accepted but not acted on: `terminal_sync` (synchronized output is always on), `log_level` (no log file), `disk_free_priv` (free space is always the unprivileged figure), `keep_dead_proc_usage`, `proc_info_smaps`, and the GPU telemetry keys. The options menu marks these keys "not used yet".
+- Accepted but not acted on: `terminal_sync` (synchronized output is always on), `log_level` (no log file), `disk_free_priv` (free space is always the unprivileged figure), `keep_dead_proc_usage`, `proc_info_smaps`, and the PCIe keys `nvml_measure_pcie_speeds` and `rsmi_measure_pcie_speeds`. The options menu marks these keys "not used yet".
 - `freq_mode`, `cpu_sensor` and `zfs_arc_cached` take effect after a restart; the menu says so.
 
 **Behaves differently**
@@ -515,6 +550,11 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 - Remembered tree collapse choices (#1791c) are stored in `$XDG_STATE_HOME/candy-top/tree-state.json`, not in btop's internal `proc_tree_state` config key.
 - A remembered tree choice is applied once (at startup, when `proc_tree_persist_state` is turned on, and on entering the tree view), then only to newly appearing processes. btop re-applies it on every collect. So `E` is not undone by the next sample, but a process sharing the name chain of one you just collapsed or expanded is not updated until it is recreated or candy-top restarts.
 - The IO columns take exactly the 14 cells they draw, so Cpu% stays in place.
+- The `gpu` and `gpu memory` sorts come after `io total` in the sort cycle. btop #1552 inserts them before `cpu direct`; appending them keeps the stock sort positions.
+- GPU box drawing is clipped above the box's bottom border; btop overdraws the border when the grid makes a box shorter than its sections.
+- A `gpuN` in `shown_boxes` that names an accelerator which is not detected is not drawn, and a preset naming one is refused with the size-error box.
+- A GPU that stops answering is held only for `max(5, ceil(30 s / update_ms))` samples, then shown as `n/a`; btop holds its last values indefinitely.
+- The cpu box, the gpu boxes and the proc box may each run their own GPU sampler (each `nvidia-smi` query at least 5 s apart); btop collects GPUs once per update.
 - `F` follow and `u` pause are panel state, not config.
 - The banner has no version line.
 - The help page indicator sits on the box border.

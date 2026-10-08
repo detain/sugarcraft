@@ -10,6 +10,8 @@ namespace SugarCraft\Top\View;
  * `Mem::divider`, `Net::b_*`, `Proc::select_max`) as one immutable value.
  *
  * Every rectangle is absolute and 0-based. A box that is not shown is null.
+ * Gpu boxes (btop PR #1730/#1881) are keyed by their `gpuN` box name in
+ * `boxes` like any other box, with their grid geometry in `gpuBoxes`.
  */
 final class Layout
 {
@@ -17,7 +19,8 @@ final class Layout
     public const BOXES = ['cpu', 'mem', 'net', 'proc'];
 
     /**
-     * @param array<string, Rect> $boxes shown boxes keyed by name
+     * @param array<string, Rect>   $boxes    shown boxes keyed by name (gpu boxes included)
+     * @param array<string, GpuBox> $gpuBoxes shown gpu boxes keyed by name, slot order
      */
     public function __construct(
         public readonly int $width,
@@ -35,7 +38,16 @@ final class Layout
         public readonly bool $memBelowNet = false,
         public readonly bool $procLeft = false,
         public readonly bool $showDisks = false,
+        public readonly array $gpuBoxes = [],
+        public readonly int $gpuColumns = 1,
+        public readonly int $gpuHeight = 0,
     ) {
+    }
+
+    /** The laid-out gpu box named `$name` (`gpu3`), null when not shown. */
+    public function gpuBox(string $name): ?GpuBox
+    {
+        return $this->gpuBoxes[$name] ?? null;
     }
 
     public function box(string $name): ?Rect
@@ -49,7 +61,8 @@ final class Layout
     }
 
     /**
-     * Shown boxes in draw order.
+     * Shown boxes in draw order — btop's Runner: cpu, the gpu boxes (slot
+     * order), mem, net, proc.
      *
      * @return array<string, Rect>
      */
@@ -59,6 +72,11 @@ final class Layout
         foreach (self::BOXES as $name) {
             if (isset($this->boxes[$name])) {
                 $out[$name] = $this->boxes[$name];
+            }
+            if ($name === 'cpu') {
+                foreach ($this->gpuBoxes as $gpu => $box) {
+                    $out[$gpu] = $box->rect;
+                }
             }
         }
 

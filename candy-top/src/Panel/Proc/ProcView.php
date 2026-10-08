@@ -58,8 +58,16 @@ final class ProcView
     }
 
     /**
+     * The narrowest command column (plain view) the optional columns may
+     * leave: the narrowest btop's own wide layout produces (width 75), and
+     * the least that keeps the `Command:` header whole — `Threads:` is
+     * drawn 4 cells to the left of its column, over the command's tail.
+     */
+    public const MIN_CMD = 12;
+
+    /**
      * btop's field sizes for a proc box `$width` cells wide (borders
-     * included), with #1823's io_size (14 when width >= 90).
+     * included), with #1823's io_size (14) and #1552's GPU columns.
      *
      * Deviation from the #1823 diff: it takes `io_size + 1` (15) cells from
      * cmd/tree but draws only 14 (`rjust(6) + ' ' + rjust(6) + ' '`, the
@@ -68,23 +76,49 @@ final class ProcView
      * the IO columns. Taking exactly the 14 drawn cells keeps Cpu% at the
      * same right-edge position in both layouts.
      *
-     * @return array{user: int, thread: int, prog: int, cmd: int, tree: int, io: int}
+     * #1552 (only with `$gpu`, i.e. per-process GPU data exists): `Gpu%`
+     * takes 6 cells plus a 5-cell mini-graph with proc_gpu_graphs, `GMem`
+     * 6 more — the PR's gpu_cols / gpu_graph_cols. The PR shows them from
+     * width 70 / 78 (65 / 73 with neither graph kind), but subtracts them
+     * from cmd_size without raising those thresholds, so at widths 75-81
+     * the command column shrinks to -2..4 cells and in btop's narrow
+     * layout (< 75) they come and go as the program column jumps from 8 to
+     * 16. candy-top shows each only in the wide layout (>= 75) and only
+     * while the plain-view command column keeps {@see MIN_CMD} cells:
+     * Gpu% from 86, GMem from 92 (81 / 87 without GPU graphs, 5 less
+     * again without cpu graphs, never below 75) — monotone in the width. Gpu% goes first,
+     * then GMem, then #1823's IO (still >= 90, now also only while the
+     * command keeps MIN_CMD cells; without GPU columns that always holds).
+     *
+     * @return array{user: int, thread: int, prog: int, cmd: int, tree: int, io: int, gpu: int, gmem: int, ggraph: int}
      */
-    public static function sizes(int $width, bool $graphs): array
+    public static function sizes(int $width, bool $graphs, bool $gpu = false, bool $gpuGraphs = true): array
     {
         $user = $width < 75 ? 5 : 10;
         $thread = $width < 75 ? -1 : 4;
-        $io = $width < 90 ? -1 : 14;
+        $prog = $width > 70 ? 16 : ($width > 55 ? 8 : $width - $user - $thread - 33);
+        // The plain-view command column before any optional column.
+        $base = $width - $prog - $user - $thread - 33 + ($graphs ? 0 : 5);
+        $wide = $width >= 75;
+        $ggraph = $gpuGraphs ? 5 : 0;
+        $showGpu = $gpu && $wide && $base - 6 - $ggraph >= self::MIN_CMD;
+        $showMem = $showGpu && $base - 12 - $ggraph >= self::MIN_CMD;
+        $gpuUsed = $showGpu ? 6 + $ggraph + ($showMem ? 6 : 0) : 0;
+        $io = $width >= 90 && $base - $gpuUsed - 14 >= self::MIN_CMD ? 14 : -1;
         $ioUsed = $io > 0 ? $io : 0;
-        $prog = $width > 70 ? 16 : ($width > 55 ? 8 : $width - $user - $thread - $ioUsed - 33);
-        $cmd = $width > 55 ? $width - $prog - $user - $thread - $ioUsed - 33 : -1;
-        $tree = $width - $user - $thread - $ioUsed - 23;
+        $cmd = $width > 55 ? $width - $prog - $user - $thread - $ioUsed - $gpuUsed - 33 : -1;
+        $tree = $width - $user - $thread - $ioUsed - $gpuUsed - 23;
         if (!$graphs) {
             $cmd += 5;
             $tree += 5;
         }
 
-        return ['user' => $user, 'thread' => $thread, 'prog' => $prog, 'cmd' => $cmd, 'tree' => $tree, 'io' => $io];
+        return [
+            'user' => $user, 'thread' => $thread, 'prog' => $prog, 'cmd' => $cmd, 'tree' => $tree, 'io' => $io,
+            'gpu' => $showGpu ? 6 : -1,
+            'gmem' => $showMem ? 6 : -1,
+            'ggraph' => $showGpu ? $ggraph : 0,
+        ];
     }
 
     /**
@@ -114,11 +148,12 @@ final class ProcView
     /**
      * The proc box's clickable spots this frame, local to the box:
      * key => [x, y, width] (btop Input::mouse_mappings). Keys are btop's
-     * own: f, delete, O, c, r, e, left, right, info_enter, enter.
+     * own: f, delete, g (#1552 gpu-only, only with `$gpu`), O, c, r, e,
+     * left, right, info_enter, enter.
      *
      * @return array<string, array{0: int, 1: int, 2: int}>
      */
-    public static function buttons(int $width, int $height, Config $config, bool $filtering, int $selected, ?DetailState $detail, ?int $selectedPid): array
+    public static function buttons(int $width, int $height, Config $config, bool $filtering, int $selected, ?DetailState $detail, ?int $selectedPid, bool $gpu = false): array
     {
         if ($detail !== null && !self::detailFits($width, $height)) {
             $detail = null;
@@ -128,7 +163,7 @@ final class ProcView
         $filterText = $config->string('proc_filter');
         $showOmit = $width > 72 + self::sortLen($config);
         if (!$filtering) {
-            $shown = Width::truncate($filterText, max(6, $width - ($showOmit ? 78 : 66)));
+            $shown = Width::truncate($filterText, self::filterSize($width, $config, $gpu));
             $fLen = $shown === '' ? Width::string(Lang::t('proc.filter')) : Width::string($shown) + 2;
             $map['f'] = [10, $dy, $fLen];
             if ($shown !== '') {
@@ -139,6 +174,9 @@ final class ProcView
         $sortPos = $width - $sortLen - 8;
         if ($showOmit) {
             $map['O'] = [$sortPos - 41, $dy, Width::string(Lang::t('proc.omit_ctr'))];
+        }
+        if (self::showGpuOnly($width, $config, $gpu)) {
+            $map['g'] = [$sortPos - 51, $dy, Width::string(Lang::t('proc.gpu_only'))];
         }
         if ($width > 55 + $sortLen) {
             $map['c'] = [$sortPos - 24, $dy, Width::string(Lang::t('proc.per_core'))];
@@ -190,6 +228,8 @@ final class ProcView
         ?int $followed = null,
         int $followRow = 0,
         bool $returning = false,
+        ?ProcGraphTracker $gpuGraphs = null,
+        bool $gpu = false,
     ): void {
         $W = $region->width();
         $H = $region->height();
@@ -209,13 +249,13 @@ final class ProcView
         $numpids = count($rows);
         $sel = $sel->clamp($numpids, $selectMax);
         $graphsOn = $config->bool('proc_cpu_graphs');
-        $sz = self::sizes($W, $graphsOn);
+        $sz = self::sizes($W, $graphsOn, $gpu, $config->bool('proc_gpu_graphs'));
         $tree = $config->bool('proc_tree');
 
         if ($detail !== null) {
             self::paintDetail($region, $frame, $detail, $sel, $rows, $memTotal, $cores, $followed);
         }
-        self::paintTitleRow($region, $frame, $dy, $edit);
+        self::paintTitleRow($region, $frame, $dy, $edit, $gpu);
         // btop_draw.cpp:1949: ↑ also lights while the detailed pid is the
         // followed one and closing the view will return the selection to it.
         $upLit = $sel->selected !== 0 || ($returning && $followed !== null && $detailPid === $followed);
@@ -232,6 +272,7 @@ final class ProcView
             'family' => self::family($config),
             'memTotal' => $memTotal,
             'followed' => $followed,
+            'gpuGraphs' => $gpuGraphs ?? ProcGraphTracker::new(5, self::family($config)),
         ];
         $visible = array_slice($rows, $sel->start, max(0, $selectMax));
         foreach ($visible as $lc => $entry) {
@@ -342,8 +383,32 @@ final class ProcView
         return Width::string(self::sortLabel($config->procSorting()));
     }
 
-    /** Filter, Omit ctr, per-core, reverse, tree and the sort selector (btop_draw.cpp:1899-1957, #1873). */
-    private static function paintTitleRow(Region $r, PanelFrame $f, int $y, ?TextEdit $edit): void
+    /**
+     * #1552's gpu-only button: btop draws it at sort_pos - 43 once the box
+     * is wider than 70 + sort_len — the cells #1873's `Omit ctr` already
+     * holds here (sort_pos - 42) — so candy-top puts it one button further
+     * left, at sort_pos - 52, from 82 + sort_len, and only while
+     * per-process GPU data exists.
+     */
+    private static function showGpuOnly(int $width, Config $config, bool $gpu): bool
+    {
+        return $gpu && $width > 82 + self::sortLen($config);
+    }
+
+    /** The filter text's room: btop's `width - 66`, less each button squeezed in left of pause. */
+    private static function filterSize(int $width, Config $config, bool $gpu): int
+    {
+        $sortLen = self::sortLen($config);
+
+        return max(6, $width - match (true) {
+            self::showGpuOnly($width, $config, $gpu) => 88,
+            $width > 72 + $sortLen => 78,
+            default => 66,
+        });
+    }
+
+    /** Filter, gpu-only, Omit ctr, per-core, reverse, tree and the sort selector (btop_draw.cpp:1899-1957, #1873, #1552). */
+    private static function paintTitleRow(Region $r, PanelFrame $f, int $y, ?TextEdit $edit, bool $gpu = false): void
     {
         $ink = $f->ink;
         $config = $f->config;
@@ -355,7 +420,7 @@ final class ProcView
         $sortPos = $W - $sortLen - 8;
         $showOmit = $W > 72 + $sortLen;
 
-        $filterSize = max(6, $W - ($showOmit ? 78 : 66));
+        $filterSize = self::filterSize($W, $config, $gpu);
         $filtering = $edit !== null;
         $text = $filtering ? $edit->view($filterSize) : Width::truncate($config->string('proc_filter'), $filterSize);
         $inner = ($text !== '' ? self::BOLD : '')
@@ -364,6 +429,9 @@ final class ProcView
             . ($filtering ? $hi . ' ↵' : '');
         self::embed($r, 9, $y, $inner, $line, $f->border, false);
 
+        if (self::showGpuOnly($W, $config, $gpu)) {
+            self::embed($r, $sortPos - 52, $y, ($config->bool('proc_gpu_only') ? self::BOLD : '') . FrameBuilder::hotkey(Lang::t('proc.gpu_only'), 'g', $ink), $line, $f->border, false);
+        }
         if ($showOmit) {
             self::embed($r, $sortPos - 42, $y, ($config->bool('proc_filter_containers') ? self::BOLD : '') . FrameBuilder::hotkey(Lang::t('proc.omit_ctr'), 'O', $ink), $line, $f->border, false);
         }
@@ -425,7 +493,7 @@ final class ProcView
     }
 
     /**
-     * @param array{user: int, thread: int, prog: int, cmd: int, tree: int, io: int} $sz
+     * @param array{user: int, thread: int, prog: int, cmd: int, tree: int, io: int, gpu: int, gmem: int, ggraph: int} $sz
      */
     private static function paintHeader(Region $r, Ink $ink, int $dy, array $sz, bool $tree, bool $graphs, bool $memBytes): void
     {
@@ -448,13 +516,20 @@ final class ProcView
             $col += $r->put($col, $y, self::rjust(Lang::t('proc.col.io_read'), 6) . ' ' . self::rjust(Lang::t('proc.col.io_write'), 6) . ' ', $s);
         }
         $col += $r->put($col, $y, self::rjust($memBytes ? Lang::t('proc.col.mem') : Lang::t('proc.col.mem_percent'), 5) . ' ', $s);
-        $r->put($col, $y, self::rjust(Lang::t('proc.col.cpu'), $graphs ? 10 : 5), $s);
+        $col += $r->put($col, $y, self::rjust(Lang::t('proc.col.cpu'), $graphs ? 10 : 5), $s);
+        // #1552: ` GMem` then ` Gpu%` over its mini-graph.
+        if ($sz['gmem'] > 0) {
+            $col += $r->put($col, $y, ' ' . self::rjust(Lang::t('proc.col.gpu_mem'), 5), $s);
+        }
+        if ($sz['gpu'] > 0) {
+            $r->put($col, $y, ' ' . self::rjust(Lang::t('proc.col.gpu'), 5 + $sz['ggraph']), $s);
+        }
     }
 
     /**
-     * One process row (btop_draw.cpp:2063-2172).
+     * One process row (btop_draw.cpp:2063-2172; #1552's GMem / Gpu% tail).
      *
-     * @param array{user: int, thread: int, prog: int, cmd: int, tree: int, io: int} $sz
+     * @param array{user: int, thread: int, prog: int, cmd: int, tree: int, io: int, gpu: int, gmem: int, ggraph: int} $sz
      * @param array<string, mixed> $ctx
      */
     private static function paintRow(
@@ -566,7 +641,49 @@ final class ProcView
         }
         $col += $r->put($col, $y, ' ', $end);
         $col += $r->put($col, $y, self::rjust(ProcRowComposer::cpuLabel($e->cpu), 4), $cpuS);
-        $r->put($col, $y, '  ', $end);
+        if ($sz['gpu'] <= 0) {
+            $r->put($col, $y, '  ', $end);
+
+            return;
+        }
+        // btop #1552: `c_color + rjust(cpu, 4) + ' ' + end`, then GMem and
+        // Gpu% in c_color, the GPU graph on its own graph_bg underlay.
+        $col += $r->put($col, $y, ' ', $end);
+        if ($sz['gmem'] > 0) {
+            $col += $r->put($col, $y, self::rjust(self::gpuMemLabel($e->gpuMem, (bool) $ctx['mega']), 5), $cpuS);
+            $col += $r->put($col, $y, ' ', $end);
+        }
+        if ($sz['ggraph'] > 0) {
+            /** @var ProcGraphTracker $gpuGraphs */
+            $gpuGraphs = $ctx['gpuGraphs'];
+            $bg = DualSampleGraph::SYMBOLS[$gpuGraphs->family() . '_up'][6];
+            foreach (self::graphCells($gpuGraphs->graph($p->pid)) as $cell) {
+                $col += $r->put($col, $y, $cell ?? $bg, $cell === null ? $underlay : $glyph);
+            }
+        }
+        $col += $r->put($col, $y, self::rjust(self::gpuLabel($e->gpu, $e->gpuMem), 5), $cpuS);
+        $r->put($col, $y, ' ', $end);
+    }
+
+    /**
+     * btop #1552's Gpu% cell: "-" for a process with no GPU time and no GPU
+     * memory, else `{:.1f}` of the clamped percent cut to 4 characters
+     * without a dangling point ("100", "12.3", "0.0").
+     */
+    public static function gpuLabel(float $gpu, int $gpuMem): string
+    {
+        if ($gpu <= 0.0 && $gpuMem === 0) {
+            return '-';
+        }
+        $s = substr(sprintf('%.1f', max(0.0, min(100.0, $gpu))), 0, 4);
+
+        return str_ends_with($s, '.') ? substr($s, 0, -1) : $s;
+    }
+
+    /** btop #1552's GMem cell: "-" with none, else floating_humanizer(gpu_m, shorten). */
+    public static function gpuMemLabel(int $bytes, bool $mega = false): string
+    {
+        return $bytes <= 0 ? '-' : ProcUnits::human($bytes, true, 0, false, $mega);
     }
 
     /** The detailed-view box (btop_draw.cpp:1830-1880, 2002-2036; #1546 cwd). */

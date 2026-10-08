@@ -8,6 +8,8 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Dash\Plot\Braille\DualSampleGraph;
 use SugarCraft\Top\Collect\Freq;
 use SugarCraft\Top\Collect\GpuDevice;
+use SugarCraft\Top\Config\Config;
+use SugarCraft\Top\Config\GpuPanels;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\CpuPanel;
 use SugarCraft\Top\Panel\Net\Humanizer;
@@ -69,7 +71,7 @@ final class CpuView
         $bcs = $layout->coreColumnSize;
         $bcols = max(1, $layout->coreColumns);
         $extra = $hideCores ? max(6, 6 * $bcs) : (($bcols === 1 && !$showTemps) ? 8 : 0);
-        $gpus = $p->gpus();
+        $gpus = self::listedGpus($p->gpus(), $config);
         $gpuMode = $config->string('show_gpu_info');
         $showGpu = $gpus !== [] && ($gpuMode === 'On' || $gpuMode === 'Auto');
 
@@ -127,7 +129,7 @@ final class CpuView
             self::loadAvg($box, $f, $p, $cores, $cy);
         }
         if ($showGpu) {
-            self::gpuRows($box, $f, $p, $cores, $cy, $showTemps, $family);
+            self::gpuRows($box, $f, $p, $cores, $cy, $showTemps, $family, $gpus);
         }
 
         $p->battery()?->paint($box, $f);
@@ -148,10 +150,29 @@ final class CpuView
     }
 
     /**
-     * One graph area: a cpu_percent field, a shared GPU series, or one
-     * graph per GPU side by side (`gpu-*-totals`) — the #1614 width math.
+     * The GPUs this box lists, keyed by GPU index — btop PR #1730
+     * gpu_hidden: with show_gpu_info Auto a GPU that has a gpu box of its
+     * own is left out (On lists every GPU).
      *
      * @param list<GpuDevice> $gpus
+     * @return array<int, GpuDevice>
+     */
+    public static function listedGpus(array $gpus, Config $config): array
+    {
+        if ($config->string('show_gpu_info') !== 'Auto') {
+            return $gpus;
+        }
+        $boxed = array_flip(GpuPanels::targets($config->shownBoxes()));
+
+        return array_filter($gpus, static fn (int $i): bool => !isset($boxed[$i]), \ARRAY_FILTER_USE_KEY);
+    }
+
+    /**
+     * One graph area: a cpu_percent field, a shared GPU series, or one
+     * graph per listed GPU side by side (`gpu-*-totals`) — the #1614
+     * width math over btop PR #1730's draw count.
+     *
+     * @param array<int, GpuDevice> $gpus listed GPUs keyed by index
      */
     private static function graphs(Region $box, PanelFrame $f, CpuPanel $p, string $field, int $y, int $h, int $graphW, bool $invert, string $family, array $gpus): void
     {
@@ -161,7 +182,9 @@ final class CpuView
         $history = $p->history();
         if (in_array($field, CpuPanel::GPU_FIELDS, true)) {
             $widths = self::gpuGraphWidths($graphW, count($gpus));
-            foreach ($widths as $i => [$x, $w]) {
+            $indexes = array_keys($gpus);
+            foreach ($widths as $k => [$x, $w]) {
+                $i = $indexes[$k];
                 if ($gpus[$i]->utilization >= 0 || $history->has("gpu:{$i}:{$field}")) {
                     self::graph($box, $f, $x, $y, $w, $h, $family, $invert, $history->series("gpu:{$i}:{$field}"));
                 }
@@ -169,7 +192,7 @@ final class CpuView
                     $gw = $widths[0][1];
                     $box->put($x + 1, $y + $h - 1 - intdiv($h, 2), ($gw > 5 ? Lang::t('cpu.gpu') : '') . $i); // after the graph's Fx::reset
                 }
-                if ($i + 1 < count($gpus)) {
+                if ($k + 1 < count($gpus)) {
                     for ($r = 0; $r < $h; $r++) {
                         $box->put($x + $w, $y + $r, Symbols::V_LINE, $f->ink->fg('div_line'));
                     }
@@ -378,13 +401,16 @@ final class CpuView
      * while the device has EVER measured that value (the panel holds the
      * last good reading, #1008), so one failed query never drops it.
      */
-    private static function gpuRows(Region $box, PanelFrame $f, CpuPanel $p, Rect $c, int $cy, bool $showTemps, string $family): void
+    /**
+     * @param array<int, GpuDevice> $gpus listed GPUs keyed by index
+     */
+    private static function gpuRows(Region $box, PanelFrame $f, CpuPanel $p, Rect $c, int $cy, bool $showTemps, string $family, array $gpus): void
     {
         $ink = $f->ink;
         $history = $p->history();
         $bcols = max(1, $f->layout->coreColumns);
-        $gpus = $p->gpus();
-        $count = count($gpus);
+        // btop prints the GPU number while more than one GPU exists at all.
+        $count = count($p->gpus());
         $graphW = $c->width < 42 ? 4 : 5;
         $human = Humanizer::new($f->config->bool('base_10_sizes'));
         $mainFg = $ink->fg('main_fg');

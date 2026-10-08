@@ -15,19 +15,20 @@
 │ Total: 16.0 GiB   │          2         Toggle MEM box.                                         │           MemB  Cpu%│
 │ Used: 10.2 GiB    │          3         Toggle NET box.                                         │        198 MiB  27.8│
 │ Available: 5.80 Gi│          4         Toggle PROC box.                                        │       90.0 MiB  25.0│
-│ Cached: 3.20 GiB  │          d         Toggle disks view in MEM box.                           │es      244 MiB  13.6│
-│ Free: 2.60 GiB    │        F2, o       Shows options.                                          │        398 MiB  11.5│
-│                   │      F1, ?, h      Shows this window.                                      │        502 MiB   7.9│
-│ Swap: 205 MiB / 2.│      ctrl + r      Reloads config file from disk.                          │ta      305 MiB   7.2│
-│                   │     q, ctrl + c    Quits program.                                          │        612 MiB   6.6│
-│                   │       +, -, =      Add/Subtract 100ms to/from update timer.                │        360 MiB   2.6│
+│ Cached: 3.20 GiB  │  5, 6, 7, 8, 9, 0  Toggle GPU box.                                         │es      244 MiB  13.6│
+│ Free: 2.60 GiB    │          d         Toggle disks view in MEM box.                           │        398 MiB  11.5│
+│                   │        F2, o       Shows options.                                          │        502 MiB   7.9│
+│ Swap: 205 MiB / 2.│      F1, ?, h      Shows this window.                                      │ta      305 MiB   7.2│
+│                   │      ctrl + r      Reloads config file from disk.                          │        612 MiB   6.6│
+│                   │     q, ctrl + c    Quits program.                                          │        360 MiB   2.6│
+│                   │       +, -, =      Add/Subtract 100ms to/from update timer.                │                     │
 │                   │      Up, Down      Select in process list.                                 │                     │
 │                   │        Enter       Show detailed information for selected process.         │                     │
 │                   │      Spacebar      Expand/collapse the selected process in tree view.      │                     │
-│                   │          C         Expand/collapse the selected process' children.         │                     │
-╰───────────────────│   Pg Up, Pg Down   Jump 1 page in process list.                            │                     │
-╭─┐³net┌────────────│      Home, End     Jump to first or last page in process list.             │                     │
-│ eth0              │     Left, Right    Select previous/next sorting column.                    │                     │
+╰───────────────────│          C         Expand/collapse the selected process' children.         │                     │
+╭─┐³net┌────────────│   Pg Up, Pg Down   Jump 1 page in process list.                            │                     │
+│ eth0              │      Home, End     Jump to first or last page in process list.             │                     │
+│                   │     Left, Right    Select previous/next sorting column.                    │                     │
 │                   │        b, n        Select previous/next network device.                    │                     │
 │                   │          i         Toggle disks io mode with big graphs.                   │                     │
 │                   │          z         Toggle totals reset for current network device          │                     │
@@ -36,5 +37,4 @@
 │                   │        f, /        To enter a process filter. Start with ! for regex.      │                     │
 │                   │          F         Follow selected process.                                │                     │
 │                   │          u         Pause process list.                                     │                     │
-│                   │       delete       Clear any entered filter.                               │                     │
 ╰───────────────────╰─┘↑ page 1/2 ↓└─────────────────────────────────────────────────────────────╯─────────────────────╯

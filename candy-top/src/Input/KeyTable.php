@@ -11,10 +11,12 @@ namespace SugarCraft\Top\Input;
  * ({@see bindings()}).
  *
  * Rows follow btop's `help_text` (src/btop_menu.cpp:172-218) minus what
- * candy-top does not do (yet): `5` (no gpu boxes) and `ctrl + z` (no
- * suspend). btop PR #1476 adds the proc-width rows after `Selected N`;
+ * candy-top does not do (yet): `ctrl + z` (no suspend). btop's `5` row
+ * lists every gpu slot key, 5 through 0 (btop PR #1730). btop PR #1476 adds the proc-width rows after `Selected N`;
  * `O` is candy-top's #1873 extension; the vim_keys rows (btop documents
  * those only in its options text) are listed so the roster is complete.
+ * `g, ctrl + g` is btop #1552's gpu-only filter (`ctrl + g` because
+ * vim_keys keeps `g` for "top").
  *
  * {@see bindings()} is pinned against the handlers by KeyTableTest, which
  * drives every key through a running App and fails on any key that acts
@@ -39,6 +41,7 @@ final class KeyTable
             new KeyRow('2', 'help.toggle_mem', ['2']),
             new KeyRow('3', 'help.toggle_net', ['3']),
             new KeyRow('4', 'help.toggle_proc', ['4']),
+            new KeyRow('5, 6, 7, 8, 9, 0', 'help.toggle_gpu', ['5', '6', '7', '8', '9', '0']),
             new KeyRow('d', 'help.toggle_disks', ['d']),
             new KeyRow('F2, o', 'help.options', ['f2', 'o']),
             new KeyRow('F1, ?, h', 'help.help', ['f1', '?', 'h']),
@@ -67,6 +70,7 @@ final class KeyTable
             new KeyRow('E', 'help.collapse_all', ['E']),
             new KeyRow('%', 'help.mem_mode', ['%']),
             new KeyRow('O', 'help.omit_containers', ['O']),
+            new KeyRow('g, ctrl + g', 'help.gpu_only', ['g', 'ctrl+g']),
             new KeyRow('keys.selected_plus_minus', 'help.expand', ['+', '-', '='], true),
             new KeyRow('keys.selected_t', 'help.terminate', ['t'], true),
             new KeyRow('keys.selected_k', 'help.kill', ['k'], true),

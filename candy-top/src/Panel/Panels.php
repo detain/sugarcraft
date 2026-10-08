@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Panel;
 
 use SugarCraft\Top\Collect\Cpu;
+use SugarCraft\Top\Collect\GpuSnapshot;
 use SugarCraft\Top\Collect\Memory;
 use SugarCraft\Top\Collect\Net;
 use SugarCraft\Top\Collect\Platform;
@@ -14,6 +15,7 @@ use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeCpu;
+use SugarCraft\Top\Source\Fake\FakeGpuProcesses;
 use SugarCraft\Top\Source\Fake\FakeMemory;
 use SugarCraft\Top\Source\Fake\FakeNet;
 use SugarCraft\Top\Source\Fake\FakeProcessControl;
@@ -47,21 +49,26 @@ final class Panels
      * @param Platform|null $platform the host's collector family, threaded
      *                                through every panel factory (default:
      *                                the running OS, {@see Platform::detect()})
-     * @return array<string, Panel> keyed by box name
+     * @param GpuSnapshot|null $gpuProbe the startup accelerator sample
+     *                                ({@see GpuPanel::probe()}, btop Gpu::init)
+     *                                seeding the gpu boxes' roster
+     * @return array<string, Panel> keyed by box name; `gpu` draws every gpuN box
      */
-    public static function standard(HostInfo $host, Config $config, bool $fake = false, ?Platform $platform = null): array
+    public static function standard(HostInfo $host, Config $config, bool $fake = false, ?Platform $platform = null, ?GpuSnapshot $gpuProbe = null): array
     {
         $intervalSec = $config->updateMs() / 1000;
         $platform ??= Platform::detect();
 
         return [
             'cpu' => CpuPanel::standard($host, $config, $fake, $platform),
+            'gpu' => GpuPanel::standard($fake, $platform, $gpuProbe),
             'mem' => MemPanel::standard($config, $fake, $platform),
             'net' => \SugarCraft\Top\Panel\Net\NetPanel::new($fake ? FakeNet::new($intervalSec) : $platform->net()),
             'proc' => $fake
                 // --fake pids are invented: the signal / renice menus must never reach a live process.
-                ? ProcPanel::new(FakeProcList::demo($host->coreCount), FakeProcessControl::new())
-                : ProcPanel::new($platform->procList(), PosixProcessControl::new()),
+                // #1552 Gpu%/GMem: the proc box samples its own accelerator source (per-pid rows on demand).
+                ? ProcPanel::new(FakeProcList::demo($host->coreCount), FakeProcessControl::new())->withGpu(FakeGpuProcesses::demo())
+                : ProcPanel::new($platform->procList(), PosixProcessControl::new())->withGpu($platform->gpu()),
         ];
     }
 

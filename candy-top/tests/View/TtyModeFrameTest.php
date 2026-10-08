@@ -142,10 +142,11 @@ final class TtyModeFrameTest extends TestCase
         $lines = self::running(80, 24, self::config()->with('rounded_corners', true))->surface()?->plainLines() ?? [];
         $this->assertStringStartsWith('┌─┐1cpu┌', $lines[0]);
         $this->assertStringEndsWith('┐', $lines[0]);
-        $this->assertStringStartsWith('└', $lines[7]);
-        $this->assertStringContainsString('┐2mem┌', $lines[8]);
+        // The fake host has two GPUs: btop's gpus_extra_height grows the cpu box by two rows.
+        $this->assertStringStartsWith('└', $lines[9]);
+        $this->assertStringContainsString('┐2mem┌', $lines[10]);
         $this->assertStringContainsString('┐3net┌', $lines[17]);
-        $this->assertStringContainsString('┐4proc┌', $lines[8]);
+        $this->assertStringContainsString('┐4proc┌', $lines[10]);
     }
 
     private static function config(): Config

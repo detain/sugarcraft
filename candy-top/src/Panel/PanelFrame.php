@@ -16,6 +16,8 @@ use SugarCraft\Top\View\Rect;
  * {@see Layout} (sub-box rectangles such as cpuCores / netStats /
  * memDivider), its own box rectangle, the resolved theme, the border
  * family, config and host facts. Rebuilt by the App per view().
+ * `name` is the box being painted (`cpu`, `gpu3`, ...): the gpu panel
+ * draws every gpu box and tells them apart by it.
  */
 final class PanelFrame
 {
@@ -26,6 +28,7 @@ final class PanelFrame
         public readonly Border $border,
         public readonly Config $config,
         public readonly HostInfo $host,
+        public readonly string $name = '',
     ) {
     }
 

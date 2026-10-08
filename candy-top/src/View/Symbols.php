@@ -19,6 +19,11 @@ final class Symbols
 
     public const V_LINE = '│';
 
+    /** btop Symbols::left / right — the gpu box target selector arrows (PR #1730). */
+    public const LEFT = '←';
+
+    public const RIGHT = '→';
+
     /** Bold on / off, btop Fx::b / Fx::ub. */
     public const BOLD = "\x1b[1m";
 

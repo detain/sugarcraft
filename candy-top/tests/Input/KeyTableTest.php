@@ -17,7 +17,10 @@ use SugarCraft\Top\Input\KeyName;
 use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Msg\ClockTickMsg;
 use SugarCraft\Top\Msg\SetOptionMsg;
+use SugarCraft\Top\Panel\GpuPanel;
+use SugarCraft\Top\Panel\Panel;
 use SugarCraft\Top\Panel\Panels;
+use SugarCraft\Top\Source\Fake\FakeGpu;
 use SugarCraft\Top\Tests\Support\Cmds;
 use SugarCraft\Top\Tests\Support\Harness;
 use SugarCraft\Top\Theme\ThemeConfig;
@@ -51,11 +54,11 @@ final class KeyTableTest extends TestCase
     {
         $bindings = KeyTable::bindings();
         $this->assertSame(array_values(array_unique($bindings)), $bindings);
-        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', ...KeyName::MODIFIED_ARROWS] as $key) {
+        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '5', '0', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', ...KeyName::MODIFIED_ARROWS] as $key) {
             $this->assertContains($key, $bindings);
         }
-        foreach (['ctrl+z', '5'] as $later) {
-            $this->assertNotContains($later, $bindings, $later . ' is not wired yet (no suspend / no gpu box)');
+        foreach (['ctrl+z'] as $later) {
+            $this->assertNotContains($later, $bindings, $later . ' is not wired yet (no suspend)');
         }
         foreach ($bindings as $b) {
             $this->assertIsString($b);
@@ -91,21 +94,13 @@ final class KeyTableTest extends TestCase
     private static function states(): array
     {
         $boot = static function (Config $config, string ...$keys): App {
-            $app = App::start($config, ThemeConfig::new(), Harness::host(), Panels::standard(Harness::host(), $config, true), static fn (): ClockTickMsg => new ClockTickMsg(Harness::TIME), ColorProfile::TrueColor);
-            [$app] = $app->update(new WindowSizeMsg(120, 40));
-            foreach (Cmds::run($app->init()) as $m) {
-                if (!$m instanceof TickRequest) {
-                    [$app] = $app->update($m);
-                }
-            }
-            foreach ($keys as $k) {
-                [$app] = $app->update($k === 'enter' ? new KeyMsg(KeyType::Enter) : new KeyMsg(KeyType::Down));
-            }
-
-            return $app;
+            return self::boot(Panels::standard(Harness::host(), $config, true), $config, ...$keys);
         };
         $filtered = $boot(Config::new(), 'down');
         [$filtered] = $filtered->update(new SetOptionMsg('proc_filter', 'n'));
+        // Six accelerators, so every gpu slot key (5-0) can open a box somewhere.
+        $sixGpus = Panels::standard(Harness::host(), Config::new(), true);
+        $sixGpus['gpu'] = GpuPanel::new(FakeGpu::new(6, 0))->withRoster(GpuPanel::rosterOf(FakeGpu::new(6, 0)->sample()[0]->devices, []));
 
         return [
             'idle' => $boot(Config::new()),
@@ -116,7 +111,25 @@ final class KeyTableTest extends TestCase
             'vim' => $boot(Config::new()->with('vim_keys', true), 'down', 'down'),
             'detail' => $boot(Config::new(), 'down', 'enter'),
             'filtered' => $filtered,
+            'six gpus' => self::boot($sixGpus, Config::new()),
         ];
+    }
+
+    /** @param array<string, \SugarCraft\Top\Panel\Panel> $panels */
+    private static function boot(array $panels, Config $config, string ...$keys): App
+    {
+        $app = App::start($config, ThemeConfig::new(), Harness::host(), $panels, static fn (): ClockTickMsg => new ClockTickMsg(Harness::TIME), ColorProfile::TrueColor);
+        [$app] = $app->update(new WindowSizeMsg(120, 40));
+        foreach (Cmds::run($app->init()) as $m) {
+            if (!$m instanceof TickRequest) {
+                [$app] = $app->update($m);
+            }
+        }
+        foreach ($keys as $k) {
+            [$app] = $app->update($k === 'enter' ? new KeyMsg(KeyType::Enter) : new KeyMsg(KeyType::Down));
+        }
+
+        return $app;
     }
 
     /** @return array<string, KeyMsg> btop name => key */
@@ -141,7 +154,7 @@ final class KeyTableTest extends TestCase
         for ($c = 0x21; $c <= 0x7e; $c++) {
             $out[chr($c)] = new KeyMsg(KeyType::Char, chr($c));
         }
-        foreach (['c', 'r', 'z', 'l'] as $c) {
+        foreach (['c', 'r', 'z', 'l', 'g'] as $c) {
             $out['ctrl+' . $c] = new KeyMsg(KeyType::Char, $c, ctrl: true);
         }
 
