@@ -117,7 +117,8 @@ final class SkillLoader
      *
      * QUIET BY DEFAULT, and that changed when the foreign trees went live.
      * These files are OTHER TOOLS' — {@see ForeignSkillDiscovery} walks
-     * `~/.claude/skills` and `~/.config/opencode/skills` — so "fix your
+     * `~/.claude/skills`, `~/.opencode/skills`, `~/.config/opencode/skills`
+     * and `~/.agents/skills` — so "fix your
      * SKILL.md" is not advice the user of this CLI can act on, and one
      * unparseable third-party skill meant an `error_log()` line (i.e. stderr)
      * on EVERY launch. Stderr is not free here: the TUI renders to stdout under
@@ -923,7 +924,8 @@ final class SkillLoader
         // costs the user nothing: the content they expected is the content
         // loaded. That is the common case on a machine that syncs one skill
         // into several tools' trees (skillshare links the same SKILL.md into
-        // `~/.claude/skills` and `~/.config/opencode/skills`), and reporting
+        // `~/.claude/skills`, `~/.opencode/skills`, `~/.config/opencode/skills`
+        // and `~/.agents/skills`), and reporting
         // each of those would bury the shadowing that matters — a repository
         // replacing a skill with a different one — in a launch notice full of
         // duplicates.

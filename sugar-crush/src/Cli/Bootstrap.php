@@ -4771,8 +4771,9 @@ final class Bootstrap
      * Discover every skill reachable from $root and hand back the populated
      * registry: built-in (src/Skills/BuiltIn), user (~/.sugar-crush/skills),
      * project ({$root}/.sugar-crush/skills), and foreign imports from other
-     * coding CLIs' conventions — {$root}/.claude/skills, ~/.claude/skills,
-     * {$root}/.opencode/skills, ~/.config/opencode/skills (see {@see
+     * coding CLIs' conventions — {$root}/.agents/skills, ~/.agents/skills,
+     * {$root}/.claude/skills, ~/.claude/skills, {$root}/.opencode/skills,
+     * ~/.opencode/skills, ~/.config/opencode/skills (see {@see
      * \SugarCraft\Crush\Skills\ForeignSkillDiscovery}).
      *
      * The foreign half of that list was ASPIRATIONAL until crush_code.md
