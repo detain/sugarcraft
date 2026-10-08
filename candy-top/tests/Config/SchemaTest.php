@@ -37,6 +37,7 @@ final class SchemaTest extends TestCase
             ['shown_boxes', 'cpu mem net proc'], ['update_ms', 2000], ['proc_sorting', 'cpu lazy'],
             ['proc_reversed', false], ['proc_tree', false],
             ['proc_command_basename', false], // #1859
+            ['proc_tree_persist_state', false], // #1791c
             ['proc_colors', true], ['proc_gradient', true],
             ['proc_per_core', false], ['proc_mem_bytes', true], ['proc_cpu_graphs', true], ['proc_info_smaps', false],
             ['proc_box_width_percent', 55], // #1476
@@ -216,6 +217,7 @@ final class SchemaTest extends TestCase
         $names = Schema::persistedNames();
         $after = static fn (string $key): string => $names[array_search($key, $names, true) - 1];
         $this->assertSame('proc_tree', $after('proc_command_basename'));
+        $this->assertSame('proc_command_basename', $after('proc_tree_persist_state'));
         $this->assertSame('proc_info_smaps', $after('proc_box_width_percent'));
         $this->assertSame('proc_filter_kernel', $after('proc_filter_containers'));
         $this->assertSame('freq_mode', $after('show_core_freq'));

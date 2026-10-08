@@ -26,6 +26,9 @@ use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Msg\ConfigSavedMsg;
 use SugarCraft\Top\Panel\Panels;
+use SugarCraft\Top\Panel\ProcPanel;
+use SugarCraft\Top\State\TreeStateFile;
+use SugarCraft\Top\State\TreeStateSavedMsg;
 use SugarCraft\Top\Theme\ThemeRegistry;
 
 $args = array_slice($argv ?? [], 1);
@@ -97,6 +100,15 @@ $host = $platform->hostInfo();
 $catalog = ThemeRegistry::new();
 $palette = $catalog->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
 $panels = Panels::standard($host, $config, $fake, $platform);
+// #1791c proc_tree_persist_state: remembered tree collapse choices live in
+// $XDG_STATE_HOME/candy-top/tree-state.json (never config.conf). Loaded even
+// with the option off, so turning it on mid-session restores them and a later
+// save cannot drop them; an unusable file loads empty.
+$statePath = TreeStateFile::defaultPath();
+if ($statePath !== null && ($panels['proc'] ?? null) instanceof ProcPanel) {
+    $stateFile = TreeStateFile::new($statePath);
+    $panels['proc'] = $panels['proc']->withTreeStore($stateFile, $stateFile->load(time()));
+}
 // btop `lowcolor`: the 256-colour cube whenever truecolor is off.
 $config = $config->with('lowcolor', !$config->bool('truecolor'));
 
@@ -137,6 +149,10 @@ try {
         if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
             @fwrite(STDERR, 'candy-top: ' . $saved->error . "\n");
         }
+        $state = ($crashed->stateSave())?->__invoke();
+        if ($state instanceof TreeStateSavedMsg && !$state->ok) {
+            @fwrite(STDERR, 'candy-top: ' . $state->error . "\n");
+        }
     }
 
     throw $e;
@@ -152,9 +168,17 @@ try {
 // so btop's clean_quit save runs (again) here — after the alt screen is
 // gone, so a failure can be reported where the user sees it.
 if ($final instanceof App) {
+    // Same order as the crash path and App::quitCmd(): config, then tree state.
     $saved = ($final->exitSave())?->__invoke();
     if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
         @fwrite(STDERR, 'candy-top: ' . $saved->error . "\n");
+    }
+    // The tree state is a convenience: a failed write is reported, never fatal.
+    $state = ($final->stateSave())?->__invoke();
+    if ($state instanceof TreeStateSavedMsg && !$state->ok) {
+        @fwrite(STDERR, 'candy-top: ' . $state->error . "\n");
+    }
+    if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
         exit(1);
     }
 }

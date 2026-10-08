@@ -45,6 +45,7 @@ use SugarCraft\Top\Panel\Panel;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\PanelResult;
+use SugarCraft\Top\Panel\ProcPanel;
 use SugarCraft\Top\Theme\Palette;
 use SugarCraft\Top\Theme\ThemeRegistry;
 use SugarCraft\Top\View\ClockFormat;
@@ -99,6 +100,8 @@ use SugarCraft\Top\View\Surface;
  * path writes it first when save_config_on_exit is on, and switching
  * save_config_on_exit off writes at once — always inside a Cmd, through
  * the injected {@see ConfigFile} (none in tests: nothing is written).
+ * Every quit path also writes the proc box's pending tree state
+ * ({@see stateSave()}, #1791c) — an XDG state file, never config.conf.
  *
  * Config channel: panels get a fresh {@see PanelContext} (current Config,
  * Layout and their box) on every input call and write options through
@@ -1071,9 +1074,26 @@ final class App implements Model
      */
     public function quitCmd(): \Closure
     {
-        $save = $this->exitSave();
+        $saves = array_values(array_filter([$this->exitSave(), $this->stateSave()]));
+        if ($saves === []) {
+            return Cmd::quit();
+        }
+        $saves[] = Cmd::quit();
 
-        return $save === null ? Cmd::quit() : Cmd::sequence($save, Cmd::quit());
+        return Cmd::sequence(...$saves);
+    }
+
+    /**
+     * The proc tree-state write (#1791c, `proc_tree_persist_state`) still
+     * pending at exit, or null. Runs on every quit path next to the config
+     * save, and from `bin/candy-top` after the Program returns (signals,
+     * crash); answers {@see \SugarCraft\Top\State\TreeStateSavedMsg}.
+     */
+    public function stateSave(): ?\Closure
+    {
+        $proc = $this->panels['proc'] ?? null;
+
+        return $proc instanceof ProcPanel ? $proc->treeStateSave($this->config) : null;
     }
 
     /**

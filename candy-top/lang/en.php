@@ -535,4 +535,8 @@ return [
     'help.proc_width_max' => 'Proc box to max width (min with proc_left).',
     'help.proc_width_min' => 'Proc box to min width (max with proc_left).',
     'help.proc_width_reset' => 'Reset the proc box width percentage to 55%.',
+    // ---- tree state (U4 #1791c) ----
+    'config.desc.proc_tree_persist_state' => "Persist manual tree expand/collapse choices by process-name ancestry across runs.\nStored in \$XDG_STATE_HOME/candy-top/tree-state.json, not in this file.",
+    'options.desc.proc_tree_persist_state' => "Remember manual tree expansion.\n\nSave manual expand/collapse choices across\ncandy-top runs using process-name ancestry.\n\nPIDs are not saved because they change.\n\nStored in \$XDG_STATE_HOME/candy-top/\ntree-state.json (else ~/.local/state).",
+    'state.warn.write_failed' => 'Could not save tree state to {path}: {reason}',
 ];
