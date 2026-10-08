@@ -205,7 +205,7 @@ ssh -o BatchMode=yes wishuser@host echo ok
 | PTY allocation fails | `RuntimeException` from `PtySystem::open()`; connection closed; error logged |
 | Rate-limit exceeded | Connection closed with SSH DISCONNECT; no response body |
 | `sshd` misconfigured (no `ForceCommand`) | PHP supervisor sees no session metadata; `Session::fromEnvironment()` returns default/zero values |
-| Child process hangs | `InProcessTransport` pump loop waits forever — set a deadline via `Context::withDeadline()` upstream to force-cleanup |
+| Child process hangs | `InProcessTransport` pump loop waits forever — set a deadline via `Context::withDeadline()` earlier in the chain to force-cleanup |
 
 ---
 

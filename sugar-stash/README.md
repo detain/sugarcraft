@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-Three-pane git TUI on the SugarCraft stack — port of [`jesseduffield/lazygit`](https://github.com/jesseduffield/lazygit). Status / branches / log laid out side-by-side, single-key stage / unstage, refresh, and ahead/behind branch summary.
+sugar-stash — a three-pane git TUI for PHP 8.3+, built on the SugarCraft stack. Status / branches / log laid out side-by-side, single-key stage / unstage, refresh, and ahead/behind branch summary.
 
 ```bash
 composer require sugarcraft/sugar-stash
@@ -141,3 +141,7 @@ sugar-stash uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy)
 composer install
 vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Design antecedent: [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit); SugarCraft is developed as a native PHP project.

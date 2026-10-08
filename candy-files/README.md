@@ -13,7 +13,7 @@
 
 ![demo](.vhs/navigate.gif)
 
-Dual-pane terminal file manager built on the SugarCraft stack — port of [`yorukot/superfile`](https://github.com/yorukot/superfile), with the Midnight Commander look.
+Dual-pane terminal file manager built on the SugarCraft stack for PHP 8.3+, with the Midnight Commander look.
 
 ```
 ┌────────────────────────────────────┐  ┌────────────────────────────────────┐
@@ -153,3 +153,9 @@ The direct constructor is kept for backward compatibility only — new code shou
 ## Status
 
 Phase 10 entry — copy / move / rename / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). Three-phase confirm gate (`c`/`m`/`R` arms, `y` confirms, anything else cancels). Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+Design antecedent: [`yorukot/superfile`](https://github.com/yorukot/superfile).

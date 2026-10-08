@@ -97,8 +97,8 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Foundation for candy-sprinkles</strong> — step-10 wires candy-sprinkles' existing Solver to consume candy-layout.</li>
-      <li><strong>Foundation for sugar-bits / candy-forms</strong> — step-14/15 layout extraction.</li>
+      <li><strong>Foundation for candy-sprinkles</strong> — candy-sprinkles consumes its solver.</li>
+      <li><strong>Foundation for sugar-bits / candy-forms</strong> — extracted as the shared layout foundation.</li>
       <li><strong>Swap solver without breaking call-sites</strong> — <code>LayoutSolver</code> (<code>solve()</code> alone; construction lives on the concrete classes) is the only public contract.</li>
     </ul>
 

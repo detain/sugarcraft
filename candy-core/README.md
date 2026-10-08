@@ -16,8 +16,10 @@
 composer require sugarcraft/candy-core
 ```
 
-PHP port of [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) —
-the Elm-architecture TUI runtime at the heart of the Charmbracelet stack.
+candy-core — the Model–Update–View TUI runtime for PHP 8.3+: every app is a
+`Model`, an `update()` that folds messages into new state, and a `view()`
+that renders it — driven by an event loop with subscriptions, commands and
+a full-screen diffing renderer.
 
 ```php
 use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program};
@@ -93,7 +95,7 @@ final class Counter implements Model
 
 ## Subscriptions
 
-Elm-style subscription reconciliation lets a Model declare recurring events
+Subscription reconciliation lets a Model declare recurring events
 (ticks, key events, signals) without managing timers manually. After each
 `update()` cycle the runtime diffs the returned `Subscriptions` set against
 the active one — new subscriptions start, dropped ones cancel, stable ones
@@ -214,31 +216,27 @@ final class App implements Model, \SugarCraft\Core\ScreenStackCapable
 
 ## Status
 
-- **Phase 0** (foundation utilities): 🟢 complete.
-- **Phase 3** (runtime): 🟢 v1 — Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the v2 Cmd surface (`Suspend` / `Interrupt` / `Resume` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` / `wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
+- **Foundation utilities**: 🟢 complete.
+- **Runtime**: 🟢 Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the Cmd surface (`Suspend` / `Interrupt` / `Resume` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` / `wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
 
-See [../CONVERSION.md](../CONVERSION.md) for the full roadmap and the
-[v2 parity sweep](../CONVERSION.md#phase-11--v2-parity-sweep-bubble-tea--lipgloss--bubbles)
-table tracking each Bubble Tea v2 / Lipgloss v2 / Bubbles v2
-feature.
 
 ## Companion libraries
 
 SugarCraft is the foundation — the rest of the SugarCraft stack
 builds on it. From the same monorepo:
 
-- **CandySprinkles** (← lipgloss) — declarative styling + layout.
-- **SugarBits** (← bubbles) — 14 prebuilt components.
-- **SugarPrompt** (← huh) — multi-page form library.
-- **SugarCharts** (← ntcharts) — sparkline / bar / line / heatmap / OHLC.
-- **CandyShell** (← gum) — composer-installable CLI of 13 subcommands.
-- **CandyShine** (← glamour) — Markdown → ANSI renderer.
-- **CandyZone** (← bubblezone) — mouse-zone tracker.
-- **HoneyBounce** (← harmonica) — spring physics + Newtonian projectile sim.
-- **CandyKit** (← fang) — opinionated CLI presentation helpers.
-- **CandyFreeze** (← freeze) — code → SVG screenshot.
-- **CandyWish** (← wish) — SSH server middleware framework.
-- **SugarSpark** (← sequin) — ANSI escape-sequence inspector.
+- **CandySprinkles** — declarative styling + layout.
+- **SugarBits** — 14 prebuilt components.
+- **SugarPrompt** — multi-page form library.
+- **SugarCharts** — sparkline / bar / line / heatmap / OHLC.
+- **CandyShell** — composer-installable CLI of 13 subcommands.
+- **CandyShine** — Markdown → ANSI renderer.
+- **CandyZone** — mouse-zone tracker.
+- **HoneyBounce** — spring physics + Newtonian projectile sim.
+- **CandyKit** — opinionated CLI presentation helpers.
+- **CandyFreeze** — code → SVG screenshot.
+- **CandyWish** — SSH server middleware framework.
+- **SugarSpark** — ANSI escape-sequence inspector.
 
 See the matchup table in [../MATCHUPS.md](../MATCHUPS.md) for status,
 package names, and namespace mappings.
@@ -303,7 +301,7 @@ full API surface (`register`, `translate`, `setLocale`, `locale`,
 ## Composing Cmds
 
 The runtime ships several Cmd combinators. The cheat-sheet below
-maps Bubble Tea idioms to the PHP equivalents:
+maps common orchestration needs to the PHP combinators:
 
 | Need | Use |
 |---|---|
@@ -604,3 +602,7 @@ echo $action->label;          // 'delete foo'
 ```sh
 cd candy-core && composer install && vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

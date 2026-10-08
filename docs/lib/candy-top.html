@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyTop — SugarCraft</title>
-<meta name="description" content="CandyTop: btop-style terminal system monitor for PHP. Port of aristocratos/btop — cpu, mem, disks, net, process, containers and GPU/NPU boxes, btop themes and config, Linux and FreeBSD collectors.">
+<meta name="description" content="CandyTop: Terminal system monitor for PHP — cpu, mem, disks, net, process, containers and GPU/NPU boxes, 42 themes and btop-compatible config, Linux and FreeBSD collectors.">
 <meta property="og:title" content="CandyTop — SugarCraft">
-<meta property="og:description" content="Terminal system monitor — cpu, memory, disk, network, process, container and GPU boxes with braille graphs, gradient meters, btop's 42 themes and btop-compatible config. Port of btop.">
+<meta property="og:description" content="Terminal system monitor — cpu, memory, disk, network, process, container and GPU boxes with braille graphs, gradient meters, 42 themes and btop-compatible config.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-top.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-top.html">
 <meta property="og:type" content="website">
@@ -38,9 +38,9 @@
       <img class="detail-icon" src="../img/icons/candy-top.png" alt="CandyTop">
       <div>
         <h2>📈 CandyTop</h2>
-        <p class="detail-sub">btop-style terminal system monitor</p>
+        <p class="detail-sub">Terminal system monitor</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">port of <a href="https://github.com/aristocratos/btop" style="color: inherit;">aristocratos/btop</a></span>
+          <span class="tag-chip accent">inspired by <a href="https://github.com/aristocratos/btop" style="color: inherit;">aristocratos/btop</a></span>
           <span class="tag-chip">system-monitor</span>
           <span class="tag-chip">tui</span>
           <span class="tag-chip">charts</span>
@@ -51,7 +51,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-top"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-top" alt="CandyTop code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A full-screen terminal system monitor in pure PHP: a port of <a href="https://github.com/aristocratos/btop">btop</a> (v1.4.7 plus a set of adopted upstream pull requests) on the SugarCraft stack. <strong>cpu, memory + disks, network, process and containers boxes drawn with braille / block / sextant graphs, gradient meters and btop's own themes</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> or FreeBSD <code>sysctl</code> collectors and driven by the <a href="candy-core.html">CandyCore</a> Model/Cmd runtime. It reads btop's config format, so a <code>btop.conf</code> works unchanged.</p>
+    <p class="lede" style="margin-top: 28px;">Originally inspired by <a href="https://github.com/aristocratos/btop">btop</a> (v1.4.7 plus a set of adopted upstream pull requests) and built on the SugarCraft stack, candy-top is a full-screen terminal system monitor in pure PHP. <strong>cpu, memory + disks, network, process and containers boxes drawn with braille / block / sextant graphs, gradient meters and themes in the btop tradition</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> or FreeBSD <code>sysctl</code> collectors and driven by the <a href="candy-core.html">CandyCore</a> Model/Cmd runtime. It reads btop's config format, so a <code>btop.conf</code> works unchanged.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-top</code></pre>
@@ -85,6 +85,7 @@ vendor/bin/candy-top --help               # options + the full key list</code></
       <li><a href="https://github.com/sugarcraft/candy-top">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-top/blob/master/README.md">Full README</a> — key bindings, config keys, themes, collectors</li>
       <li><a href="https://github.com/sugarcraft/candy-top/tree/master/tests">Test suite</a></li>
+      <li>Originally inspired by <a href="https://github.com/aristocratos/btop">btop</a> (C++); SugarCraft is developed as a native PHP project.</li>
     </ul>
   </div>
 </section>

@@ -10,7 +10,7 @@
 ## Goal
 
 Ship `SugarCraft\Pty\Windows\ConPtySystem` and have the full P0–P5
-acceptance criteria from the [PTY plan](../PTY_PLAN.md) hold identically
+acceptance criteria from the [PTY plan](PTY_PLAN.md) hold identically
 on Windows.
 
 ---
@@ -111,7 +111,7 @@ Parity with the Linux/Darwin acceptance matrix from `pty-matrix.yml`
 
 ## Cross-links
 
-- Parent plan: [PTY_PLAN.md](../PTY_PLAN.md) § Non-goals (line 53)
+- Parent plan: [PTY_PLAN.md](PTY_PLAN.md) § Non-goals (line 53)
 - Parent plan: [sugarcraft-is-a-mono-logical-twilight.md](./sugarcraft-is-a-mono-logical-twilight.md) § Non-goals (line 53) + § Deferred (line 827)
 - Implementation: [plans/leftover/phase-12-deferred/step-04-windows-conpty.md](./leftover/phase-12-deferred/step-04-windows-conpty.md)
-- libc FFI counterpart: [candy-pty](../candy-pty/) (already shipped for Linux/Darwin)
+- libc FFI counterpart: [candy-pty](../../candy-pty/) (already shipped for Linux/Darwin)

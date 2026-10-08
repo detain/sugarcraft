@@ -10,7 +10,7 @@
 
 # CandyLog
 
-PHP port of [charmbracelet/log](https://github.com/charmbracelet/log) — a minimal, colorful leveled logging library.
+candy-log — a minimal, colorful leveled logging library for PHP 8.3+.
 
 ## Features
 
@@ -240,3 +240,7 @@ Used internally by formatters when `$reportCaller` is enabled on the `Logger`.
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

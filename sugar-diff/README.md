@@ -1,6 +1,6 @@
 # SugarDiff
 
-Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. Extracted from `sugar-crush` (`Tools\Concerns\BuildsUnifiedDiff` + the `Tui\DiffGutter` region model) so every SugarCraft surface that shows or produces patches shares one faithful implementation. First-party: there is no 1:1 upstream Go library; this is the ecosystem's own engine.
+Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. Extracted from `sugar-crush` (`Tools\Concerns\BuildsUnifiedDiff` + the `Tui\DiffGutter` region model) so every SugarCraft surface that shows or produces patches shares one faithful implementation. First-party: this is the ecosystem's own engine.
 
 ## Installation
 

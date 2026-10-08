@@ -19,7 +19,7 @@ It ships as a Composer package. The pre-built bundle is committed under
 `dist/`, and a one-class PHP shim tells `sugarcrush serve` where it is, so
 PHP users get the UI from `composer require` alone and never need Node.
 
-> **Status: multi-session (roadmap O-5b, O-6a/b/c).** Everything a turn
+> **Status: multi-session.** Everything a turn
 > needs — the sessions sidebar, a virtualised transcript (Markdown, code,
 > reasoning folds), tool cards with diffs, permission cards, a composer that
 > queues, steers or interrupts, and a status bar — plus tabs and a tiled grid
@@ -92,7 +92,7 @@ documents the protocol and the UI).
   permission mode (changeable).
 - **Reconnects** after 0.5 s doubling to 15 s (±30 % jitter) with a fresh
   ticket, resuming every followed session from its gap-free `seq` cursor.
-- **Side panels** (roadmap O-6c; the *panels* button): **Agents** — the
+- **Side panels** (the *panels* button): **Agents** — the
   session's delegated runs as a live tree, also under each `Task` card, each
   opening into an agent view with the run's own transcript, a box to message it
   (or continue it once finished) and pause / resume / cancel, plus

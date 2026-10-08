@@ -6,7 +6,7 @@ declare(strict_types=1);
  * COMPOSITION: candy-core Program/Model  +  candy-forms Spinner (sub-program)
  *
  * Demonstrates the "program-within-a-program" pattern: a candy-core root
- * `Model` owns two child models and routes the Elm-architecture
+ * `Model` owns two child models and routes the Model–Update–View
  * `update()`/`view()` contract down to whichever child is focused. One child
  * is a hand-written counter; the other is a candy-forms `Spinner` — a fully
  * independent model embedded as a sub-program.

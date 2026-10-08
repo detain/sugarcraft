@@ -1,6 +1,6 @@
 # CandyMouse
 
-Self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) plus `ZoneClickTracker` for press/release deduplication. No external Manager wiring needed.
+Self-contained Mark/Scan/Get mouse hit-testing plus `ZoneClickTracker` for press/release deduplication. No external Manager wiring needed.
 
 ```
 composer require sugarcraft/candy-mouse: dev-master
@@ -56,7 +56,7 @@ if ($click !== null) {
 | `Selection` | Press → drag → release text-selection state machine over a selectable region |
 | `SelectionRange` | Normalised, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
 
-`Selection` / `SelectionRange` were ported upstream from sugar-crush's
+`Selection` / `SelectionRange` were lifted from sugar-crush's
 `Tui\TextSelection`, and sugar-crush now runs on them: `Tui\TextSelection` is
 an immutable adapter over a cloned `Selection` machine, reads its geometry and
 copied text through `SelectionRange`, and speaks the same 1-based cells end to
@@ -91,7 +91,7 @@ the cells it painted after it. The same holds for a leading `\n`: a zone
 that painted nothing before the newline starts on the first row it paints,
 at column 1, whatever column it opened on — `'123456789' . zone("\nabc")`
 and a bare `zone("\nabc")` opened at column 1 are both cols 1-3 of row 2.
-This departs from upstream bubblezone, which keeps the open position: opened
+This departs from the original design's behaviour, which keeps the open position: opened
 past the content's last column it reports an inverted rectangle no click
 ever matches; opened short of it (`'12' . zone("\nabcdef")`) a box that
 claims unpainted cols 3-6 of row 1 while missing the painted cols 1-2 of
@@ -103,17 +103,17 @@ A zone spanning multiple rows (e.g. `"line1\nline2"`) is stored as the **smalles
 
 ## See also
 
-[candy-zone](../candy-zone) is the TEA-facing façade (`Manager`, hover /
+[candy-zone](../candy-zone) is the app-facing façade (`Manager`, hover /
 drag / multi-click trackers, package-level `Zones`) layered over this
 low-level Mark/Scan/Zone primitive. It delegates its marker wrapping and
 bounding-box scanning to `SugarCraft\Mouse` — reach for candy-zone when you
-want the Bubble Tea-style zone workflow, and for candy-mouse directly when you
+want the Manager-based zone workflow, and for candy-mouse directly when you
 just need self-contained hit-testing.
 
 ## Coverage
 
 [![codecov](https://codecov.io/gh/sugarcraft/candy-mouse/branch/master/graph/badge.svg?flag=candy-mouse)](https://codecov.io/gh/sugarcraft/candy-mouse)
 
-## Upstream
+## Credits & inspiration
 
-Inspired by [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone) — the Mark/Scan/Get pattern mirrors bubblezone's API. `ZoneClickTracker` addresses [bubblezone issue #10](https://github.com/lrstanley/bubblezone/issues/10).
+Originally inspired by [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone) and the wider Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project. The Mark/Scan/Get pattern follows bubblezone's API; `ZoneClickTracker` addresses [bubblezone issue #10](https://github.com/lrstanley/bubblezone/issues/10).

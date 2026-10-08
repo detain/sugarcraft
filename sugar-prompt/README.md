@@ -16,8 +16,7 @@
 composer require sugarcraft/sugar-prompt
 ```
 
-PHP port of [charmbracelet/huh](https://github.com/charmbracelet/huh) —
-interactive form library built on top of SugarCraft + SugarBits.
+sugar-prompt — an interactive form library for terminal UIs, built on SugarCraft + SugarBits, for PHP 8.3+.
 
 ```php
 use SugarCraft\Prompt\Form;
@@ -34,7 +33,7 @@ $form = Form::new(
 
 > Every field exposes short-form aliases (`title`, `desc`, `placeholder`,
 > `width`, `height`, `validator`, `options`, `min`, `max`, …). The
-> upstream-mirroring long forms (`withTitle`, `withDescription`, …)
+> long forms (`withTitle`, `withDescription`, …)
 > work identically — pick whichever reads better at the call site.
 
 > **Namespace note:** `SugarCraft\Prompt\*` is a maintained back-compat
@@ -110,7 +109,7 @@ Form::groups(
 | `withShowErrors(bool)` | Toggle the inline `! error` line on validation failures. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
 | `withTimeout(int $ms)` | Auto-abort after `$ms` of wall clock. |
-| `withKeyMap(KeyMap)` (or the `Form` constructor's `$keyMap` prop) | Override the bindings for `Next` / `Prev` / `Submit` / `Quit` (and per-field nav) on a single form. Mirrors upstream huh #272. |
+| `withKeyMap(KeyMap)` (or the `Form` constructor's `$keyMap` prop) | Override the bindings for `Next` / `Prev` / `Submit` / `Quit` (and per-field nav) on a single form. |
 | `validateAll(): array<string,string>` | Run all field validators and return `[fieldKey => errorMessage]` for fields that failed. Use after `Form::run()` to collect cross-field validation failures that cannot be expressed per-field. |
 
 ### Reading values after submit
@@ -326,7 +325,7 @@ renders above the form listing every failed field and its error message.
 ## Spinner
 
 A standalone blocking spinner for scripts and CLIs that need a visible
-"working…" indicator without a full Bubble Tea program:
+"working…" indicator without a full Model–Update–View program:
 
 ```php
 use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
@@ -396,3 +395,6 @@ cd sugar-prompt && composer install && vendor/bin/phpunit
 
 ![themes](.vhs/themes.gif)
 
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

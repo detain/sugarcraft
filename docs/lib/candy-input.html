@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — CandyInput</title>
-<meta name="description" content="CandyInput: Terminal escape sequence decoder — keys, Kitty keyboard protocol, SGR 1006 mouse, focus, bracketed paste. The missing input layer for PHP TUI.">
+<meta name="description" content="CandyInput: Terminal escape sequence decoder — keys, Kitty keyboard protocol, SGR 1006 mouse, focus, bracketed paste. The input layer PHP TUIs have been missing.">
 <meta property="og:title" content="SugarCraft — CandyInput">
-<meta property="og:description" content="EscapeDecoder consumes raw TTY bytes and emits typed Events. Supports legacy keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Pioneering for PHP TUI.">
+<meta property="og:description" content="EscapeDecoder consumes raw TTY bytes and emits typed Events. Supports legacy keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Original for PHP TUIs.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-input.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-input.html">
 <meta property="og:type" content="website">
@@ -40,7 +40,7 @@
         <h2>🍬 CandyInput</h2>
         <p class="detail-sub">Terminal escape sequence decoder</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">pioneering (no upstream)</span>
+          <span class="tag-chip accent">original — no 1:1 Go counterpart</span>
           <span class="tag-chip">input</span>
           <span class="tag-chip">foundation-package</span>
         </div>
@@ -48,7 +48,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-input"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-input" alt="CandyInput code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Reentrant and fuzz-friendly. Unblocks sugar-readline migration to real-TTY input (step-21).</p>
+    <p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Reentrant and fuzz-friendly. Unblocks sugar-readline migration to real-TTY input.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-input:@dev</code></pre>
@@ -111,6 +111,7 @@ while (true) {
       <li><a href="https://github.com/sugarcraft/candy-input">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-input/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-input/tree/master/tests">Test suite</a></li>
+      <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

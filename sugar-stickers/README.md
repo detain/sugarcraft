@@ -10,7 +10,7 @@
 
 # SugarStickers
 
-PHP port of [76creates/stickers](https://github.com/76creates/stickers) — Lipgloss utility building blocks. Provides FlexBox layout and Table components for terminal UIs.
+sugar-stickers — layout building blocks for terminal UIs, for PHP 8.3+. Provides FlexBox layout and Table components.
 
 ## Features
 
@@ -89,7 +89,7 @@ use SugarCraft\Stickers\Scrollbar;
 $viewport = Viewport::withContent(str_repeat("Line\n", 50), 80, 24);
 $viewport = $viewport->withScrollbar(true);
 
-// Use as a model in your BubbleTea app
+// Use as a model in your SugarCraft app
 $model = $viewport;
 ```
 
@@ -111,3 +111,7 @@ behaviour is always correct.
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [76creates/stickers](https://github.com/76creates/stickers); SugarCraft is developed as a native PHP project.

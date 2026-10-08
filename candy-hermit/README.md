@@ -10,7 +10,7 @@
 
 # CandyHermit
 
-PHP port of [Genekkion/theHermit](https://github.com/Genekkion/theHermit) — fuzzy finder / quick-fix overlay for terminal UIs. Renders a filterable list overlay on top of a background view while the background continues to update.
+candy-hermit — a fuzzy finder / quick-fix overlay for terminal UIs, for PHP 8.3+. Renders a filterable list overlay on top of a background view while the background continues to update.
 
 ## Install
 
@@ -243,7 +243,7 @@ public function view(string $backgroundView): string
 ```
 
 The method was originally declared `View()`. It is now lowercase `view()`,
-matching PSR-1 and the TEA render contract of {@see Model::view()}. Nothing to
+matching PSR-1 and the Model–Update–View render contract of {@see Model::view()}. Nothing to
 migrate: PHP resolves method names case-insensitively, so an existing
 `$hermit->View($bg)` call still binds here.
 
@@ -359,7 +359,7 @@ daemon, test suite) detach them at session teardown with
 
 ## Model Interface
 
-Implement the `Model` interface to use Hermit inside a larger Bubble-Tea-style application:
+Implement the `Model` interface to use Hermit inside a larger Model–Update–View application:
 
 ```php
 use SugarCraft\Hermit\Hermit;
@@ -371,10 +371,10 @@ class MyModel implements Model {
 }
 ```
 
-## Upstream
-
-Mirrors [Genekkion/theHermit](https://github.com/Genekkion/theHermit) — fuzzy finder / quick-fix overlay.
-
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Originally inspired by [Genekkion/theHermit](https://github.com/Genekkion/theHermit) — fuzzy finder / quick-fix overlay for terminal UIs; SugarCraft is developed as a native PHP project.

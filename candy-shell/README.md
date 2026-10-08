@@ -16,9 +16,8 @@
 composer require sugarcraft/candy-shell
 ```
 
-PHP port of [charmbracelet/gum](https://github.com/charmbracelet/gum) —
-a composer-installable CLI of SugarCraft TUI primitives, useful for
-shell scripts.
+candy-shell — a composer-installable CLI of SugarCraft TUI primitives for
+shell scripts, for PHP 8.3+.
 
 ```sh
 # Apply styling.
@@ -132,9 +131,8 @@ and does not trigger autoloading.
 
 ## Flag reference (selected highlights)
 
-The audit lists upstream-gum flags that are not yet wired in CandyShell.
-The shipped surface today covers the 80 % case for shell scripts; see
-[AUDIT_2026_05_06.md](../AUDIT_2026_05_06.md) for the full delta. Common
+Some flags from the original `gum` CLI surface are not wired here yet; the
+shipped surface covers the 80 % case for shell scripts. Common
 flags across commands:
 
 - `--limit N` / `--no-limit` / `--ordered` / `--selected="a,b"` —
@@ -204,11 +202,10 @@ discovered by walking up from the package directory to find the nearest
   external command run by `spin`.
 - `130` — interrupted (Ctrl-C / SIGINT). Matches POSIX shell convention.
 
-## Porting from gum
+## Compatibility with `gum` invocations
 
 Most `gum X` invocations work as `candyshell X` verbatim. Known
-behavioural differences (also see
-[AUDIT_2026_05_06.md](../AUDIT_2026_05_06.md)):
+behavioural differences:
 
 - `format` accepts `-t/--type` (`markdown`, `code`, `template`, `emoji`)
   alongside `--theme`. Template support is the lightweight `{{VAR}}`
@@ -216,7 +213,7 @@ behavioural differences (also see
 - `--timeout`, `--show-help`, `--strip-ansi`, and the `--cursor-mode`
   flags now accept their gum-equivalent values on every command. Where
   a flag is meaningless to a non-interactive command (`format`, `join`,
-  `log`, `style`, `table`) it is still accepted for parity but treated
+  `log`, `style`, `table`) it is still accepted but treated
   as a no-op.
 - `confirm --default=yes|no` is the form to use; the older `--default-yes`
   alias is preserved.
@@ -291,5 +288,8 @@ isolation and has no fuzzy logic.
 ## Related
 
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
-- Upstream: [charmbracelet/gum](https://github.com/charmbracelet/gum)
+- Originally inspired by [charmbracelet/gum](https://github.com/charmbracelet/gum)
 
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

@@ -11,9 +11,7 @@
 <!-- BADGES:END -->
 
 
-PHP port of [charmbracelet/harmonica](https://github.com/charmbracelet/harmonica) —
-damped-spring physics + Newtonian projectile simulation for animation.
-Pure math; no terminal dependency.
+honey-bounce — damped-spring physics and Newtonian projectile simulation for animation, for PHP 8.3+. Pure math; no terminal dependency.
 
 ```sh
 composer require sugarcraft/honey-bounce
@@ -130,8 +128,8 @@ Gravity constants: `Projectile::GRAVITY` (9.81) and
 `SugarCraft\Bounce\Gravity` exposes the same vectors as static
 accessors at the package level — `Gravity::standard()`,
 `Gravity::terminal()`, `Gravity::standardYDown()`,
-`Gravity::terminalYDown()` — so call sites translating from harmonica's
-package-level `Gravity` / `TerminalGravity` constants read uniformly.
+`Gravity::terminalYDown()` — so gravity presets read
+uniformly across call sites.
 
 ## Damping-ratio regimes
 
@@ -152,19 +150,18 @@ no decay would never settle).
 
 Both `Vector` and `Point` are **3D** (`x`, `y`, `z`) — the constructor's
 `$z` defaults to `0.0` so existing 2D call sites still compile
-unchanged. Use the third dimension when porting demos that need a Z
+unchanged. Use the third dimension when a scene needs a Z
 axis (parallax / depth-shaded particle systems).
 
-The Y-axis convention is **Y-up** by default to match upstream
-harmonica: `Gravity::standard()` returns `(0, -9.81, 0)` so increasing
+The Y-axis convention is **Y-up** by default: `Gravity::standard()` returns `(0, -9.81, 0)` so increasing
 Y means "up the screen". Terminal renderers usually grow downward —
 flip to `Gravity::standardYDown()` (or its `Projectile::gravityYDown()`
 alias) when you want gravity to pull toward the bottom of the grid
 without manually negating every coordinate.
 
 `Projectile::update()` returns a **new `Projectile`** instance each
-call (immutable-with-pattern); upstream `Projectile.Update()` returns
-the new `Point` and mutates the receiver in place. Read the new
+call (immutable-with-pattern) — `update()` never mutates the
+receiver. Read the new
 position from `result->position` rather than `$p->position()`.
 
 ## SpringChain
@@ -287,8 +284,7 @@ using the Newton-Raphson algorithm from the W3C CSS Easing spec.
   `velocity()` / `acceleration()` / `gravity()` / `terminalGravity()` /
   `gravityYDown()` / `terminalGravityYDown()` / `GRAVITY` /
   `TERMINAL_GRAVITY`.
-- **`Gravity`** — package-level static accessors mirroring harmonica's
-  `Gravity` / `TerminalGravity` constants: `standard()`, `terminal()`,
+- **`Gravity`** — package-level static accessors: `standard()`, `terminal()`,
   `standardYDown()`, `terminalYDown()`.
 - **`Vector`** — immutable 3D vector with `add` / `sub` / `scale` /
   `length` / `dot` / `cross` / `Vector::zero()`.
@@ -323,3 +319,6 @@ fixture with `--update-golden` to accept a new canonical trajectory.
 
 ![spring](.vhs/spring.gif)
 
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

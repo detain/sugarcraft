@@ -1,6 +1,6 @@
 # candy-top
 
-A full-screen terminal system monitor for PHP. candy-top is a port of [btop](https://github.com/aristocratos/btop) (aristocratos/btop v1.4.7, plus a set of adopted upstream pull requests) built on the SugarCraft TUI stack. It shows live CPU, memory, disk, network and process panels with braille, block or sextant graphs, gradient meters and btop's own themes. Everything runs on the [candy-core](../candy-core) Model/Cmd runtime, and the drawing uses [sugar-dash](../sugar-dash), [sugar-bits](../sugar-bits) and [candy-sprinkles](../candy-sprinkles).
+A full-screen terminal system monitor for PHP 8.3+, built on the SugarCraft TUI stack. candy-top shows live CPU, memory, disk, network, process and container panels with braille, block or sextant graphs, gradient meters and themes in the btop tradition, and follows the feature set of aristocratos/btop v1.4.7 plus a set of adopted upstream pull requests. Everything runs on the [candy-core](../candy-core) Model/Cmd runtime, and the drawing uses [sugar-dash](../sugar-dash), [sugar-bits](../sugar-bits) and [candy-sprinkles](../candy-sprinkles).
 
 ![candy-top demo](https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.vhs/top.gif)
 
@@ -66,7 +66,7 @@ From a monorepo checkout, `php candy-top/bin/candy-top` works as well. `php cand
 
 ## The boxes
 
-The screen is split into four boxes, plus the [containers box](#ctr) and up to six [gpu boxes](#gpu-boxes), laid out by a port of btop's `calcSizes`. Keys `1` to `4` toggle the four boxes, `x` toggles the containers box, keys `5` to `0` toggle gpu box slots, and the `shown_boxes` option sets which are shown. Placement flags move the boxes around: `cpu_bottom` puts cpu at the bottom, `mem_below_net` swaps mem and net, `proc_left` moves proc to the left, and `proc_box_width_percent` sets the proc width. Box titles and buttons are drawn into the borders, and each button's hotkey letter is highlighted. A clock (`clock_format`) sits in the top border. When the terminal is smaller than the layout's minimum, btop's "Terminal size too small" notice is shown instead. `q`, `1` to `4` and the gpu slot keys `5` to `0` still work behind that notice (`x` does not, as in btop #1873).
+The screen is split into four boxes, plus the [containers box](#ctr) and up to six [gpu boxes](#gpu-boxes), laid out by a PHP re-implementation of btop's `calcSizes`. Keys `1` to `4` toggle the four boxes, `x` toggles the containers box, keys `5` to `0` toggle gpu box slots, and the `shown_boxes` option sets which are shown. Placement flags move the boxes around: `cpu_bottom` puts cpu at the bottom, `mem_below_net` swaps mem and net, `proc_left` moves proc to the left, and `proc_box_width_percent` sets the proc width. Box titles and buttons are drawn into the borders, and each button's hotkey letter is highlighted. A clock (`clock_format`) sits in the top border. When the terminal is smaller than the layout's minimum, btop's "Terminal size too small" notice is shown instead. `q`, `1` to `4` and the gpu slot keys `5` to `0` still work behind that notice (`x` does not, as in btop #1873).
 
 Hidden boxes are never sampled or drawn (btop #1858). Every graph dimension is clamped to at least 1 cell, so even odd layouts cannot crash a graph.
 
@@ -188,7 +188,7 @@ The width is clamped to the narrowest and widest layout the window allows.
 
 The table below is generated from `SugarCraft\Top\Input\KeyTable`, the same roster the help overlay and `--help` print. `tests/Docs/ReadmeKeyTableDriftTest.php` fails when the two disagree, and `tests/Input/KeyTableTest.php` checks each documented key against the real handlers.
 
-Context rules, ported from btop's input handling:
+Context rules, following btop's input handling:
 
 - `ctrl+c` always quits.
 - An open menu takes every key first.
@@ -487,7 +487,7 @@ The [containers box](#ctr) groups the tagged processes per container and adds ea
 
 ## GPU
 
-GPUs and NPUs are read by a multi-vendor collector (`Collect\Gpu\Accelerators`), a port of btop's `Gpu::collect` without its NVML/ROCm/PMU libraries, which would need FFI. Several vendors at once are normal, such as an Intel iGPU next to an NVIDIA card. The backends present are picked on the first sample:
+GPUs and NPUs are read by a multi-vendor collector (`Collect\Gpu\Accelerators`), a PHP re-implementation of btop's `Gpu::collect` without its NVML/ROCm/PMU libraries, which would need FFI. Several vendors at once are normal, such as an Intel iGPU next to an NVIDIA card. The backends present are picked on the first sample:
 
 - **NVIDIA**: an `nvidia-smi` shell-out for utilisation, memory, temperature, power and power limit, clocks, P-state, fan and encoder/decoder use. Every candidate binary is tried before the GPU is given up as absent: each `PATH` hit, then the WSL2 location `/usr/lib/wsl/lib/nvidia-smi` and container-toolkit locations (btop #1869). A GPU-less host stops spawning after that. Queries are at least 5 s apart, bounded by a timeout, and backed off exponentially after a failure, so a wedged driver never freezes the UI.
 - **AMD** (btop #1854): amdgpu sysfs nodes (busy percentages, VRAM, hwmon temperature, power, clocks, fan). Names come from `amdgpu.ids`, then `pci.ids`. A card in runtime suspend is not woken.
@@ -594,8 +594,12 @@ vendor/bin/phpunit
 - **Golden fixtures.** Goldens live under `tests/fixtures/` (frames, panels, overlays). Regenerate them with `CANDY_TOP_UPDATE_GOLDENS=1 vendor/bin/phpunit <test>` and review the diff.
 - **README tables.** The key, config and theme blocks above are generated. After a deliberate roster change, run `CANDY_TOP_UPDATE_DOCS=1 vendor/bin/phpunit tests/Docs` and review the README diff.
 - **i18n.** User-facing strings are `Lang::t()` keys in `lang/en.php`.
-- **Architecture.** For the architecture (TEA model, panel seam, input precedence, overlays) and per-phase notes, read `CALIBER_LEARNINGS.md` and `plan_top.md` at the monorepo root.
+- **Architecture.** For the architecture (Model–Update–View runtime, panel seam, input precedence, overlays) and implementation notes, read `CALIBER_LEARNINGS.md` at the monorepo root.
 
 ## License
 
 MIT. The bundled themes and the ported btop logic are Apache-2.0 (Copyright 2021 Aristocratos); see `themes/LICENSE`.
+
+## Credits & inspiration
+
+Design antecedent: [aristocratos/btop](https://github.com/aristocratos/btop); SugarCraft is developed as a native PHP project.

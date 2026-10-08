@@ -10,7 +10,7 @@ the plugin system with JSON protocol, and the module registry.
 ### Module interface (`Module`)
 
 The `Module` interface extends `SugarCraft\Core\Model`, aligning with
-the Elm-architecture pattern used throughout SugarCraft:
+the MVC-style Model–Update–View architecture used throughout SugarCraft:
 
 ```php
 use SugarCraft\Dash\Module\Module;
@@ -231,7 +231,7 @@ catches it and falls back to cache.
 ### NotificationQueue — dual-ring pattern
 
 `Components\Toast\NotificationQueue` implements a dual-ring queue per
-Homedash pattern:
+the dashboard convention:
 
 ```
 items[max 20]  ── active, dismissable ring
@@ -285,7 +285,7 @@ $queue = $queue->withMaxItems(5)->withMaxHistory(100);
 
 #### Level enum
 
-`Level` is a PHP 8.1 enum with four cases:
+`Level` is a native PHP enum with four cases:
 
 ```php
 use SugarCraft\Dash\Components\Toast\Level;
@@ -322,7 +322,7 @@ Error → red, Success → green). The adapter preserves the `title` if set.
 ### Breakpoint — responsive layout helper
 
 `Layout\Breakpoint` provides four static methods for responsive layout
-decisions. Default thresholds (90 / 140) are the Homedash convention values.
+decisions. Default thresholds (90 / 140) are the conventional dashboard values.
 
 | Method | Behaviour | Defaults |
 |--------|-----------|----------|
@@ -557,17 +557,17 @@ protected function tearDown(): void
 
 ## Foundation namespace — dual-SSOT primitives
 
-`SugarCraft\Dash\Foundation\*` carries the inline-termui-derived primitives
+`SugarCraft\Dash\Foundation\*` carries the internal primitives
 sugar-dash uses internally. Most of these are **intentionally distinct**
-from same-named canonical types elsewhere in the monorepo — different
-upstream lineage means different API shapes.
+from same-named canonical types elsewhere in the monorepo — the two
+families grew independently, so their API shapes differ.
 
 | Dash Foundation | Canonical sibling | Status | Why distinct |
 |-----------------|-------------------|--------|--------------|
 | `Foundation\Color` | `\SugarCraft\Core\Util\Color` | **Alias** — same class via `class_alias` | True duplicate; sugar-dash now redirects via shim. Prefer the Core FQN in new code. |
-| `Foundation\Style` | `\SugarCraft\Sprinkles\Style` | Both canonical | Dash carries `toAnsi(ColorProfile)` + public `?Color $foreground/$background`; Sprinkles carries lipgloss padding/margin/borders + private `$fg/$bg`. Consumers access `$style->foreground->r` on the Dash shape. |
+| `Foundation\Style` | `\SugarCraft\Sprinkles\Style` | Both canonical | Dash carries `toAnsi(ColorProfile)` + public `?Color $foreground/$background`; Sprinkles carries padding/margin/borders + private `$fg/$bg`. Consumers access `$style->foreground->r` on the Dash shape. |
 | `Foundation\Theme` | `\SugarCraft\Sprinkles\Theme` | Both canonical | Dash has 10 colour slots + `bar()/text()/fg()/bg()/color()/highlight()` helpers; Sprinkles has 13 colour slots (adds muted/info/border/separator/cursor) with readonly properties only. |
-| `Foundation\Rect` | `\SugarCraft\Core\Rect` | Both canonical | Dash uses the rectmath bounds model (`minX, minY, maxX, maxY`); Core\Rect uses the ratatui offset+size model (`x, y, width, height`). Choose by upstream semantics. |
+| `Foundation\Rect` | `\SugarCraft\Core\Rect` | Both canonical | Dash uses the rectmath bounds model (`minX, minY, maxX, maxY`); Core\Rect uses an offset+size model (`x, y, width, height`). Choose by the geometry model your code needs. |
 | `Foundation\Buffer` | `\SugarCraft\Vt\Buffer\Buffer` | Both canonical | Dash Buffer is an immutable ANSI renderer (`Sizer`/`Drawable`); Vt Buffer is a mutable VT-output grid for terminal emulation. |
 | `Foundation\Cell` | `\SugarCraft\Vt\Cell\Cell` | Both canonical | Dash Cell holds `(rune, Style)`; Vt Cell holds `(grapheme, Sgr, continuation, hyperlink)`. |
 | `Foundation\StyleParser` | `\SugarCraft\Sprinkles\StyleParser` | Both canonical | Parses the same `[text](fg:red,bg:blue)` syntax, but produces Dash `Cell/Style` (which expose public `?Color $foreground`). NOT drop-in compatible with `Sprinkles\StyleParser`. |
@@ -578,12 +578,10 @@ imports — not the Sprinkles/Core/Vt siblings. Type signatures across
 sugar-dash assume the Dash shapes. The exception is `Color`, which is
 the same class via alias and can be imported from either namespace.
 
-Background: surfaced during the canonical-primitives audit (step 03.05).
-See `sugar-dash/CALIBER_LEARNINGS.md` entries
+Rationale notes live in `sugar-dash/CALIBER_LEARNINGS.md` entries
 `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`,
 `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`,
-`[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]` for the full
-investigation log.
+`[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
 
 ---
 

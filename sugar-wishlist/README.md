@@ -13,9 +13,9 @@
 
 ![demo](.vhs/picker.gif)
 
-A PHP take on the concept of [`charmbracelet/wishlist`](https://github.com/charmbracelet/wishlist) (Charmed's SSH host directory, itself inspired by Charlie Gleason's original `wishlist`) — a TUI directory of SSH endpoints. Launch `wishlist`, pick a host, hit Enter, and the current process is replaced with `ssh` connecting to it.
+sugar-wishlist — a TUI directory of SSH endpoints for PHP 8.3+. Launch `wishlist`, pick a host, hit Enter, and the current process is replaced with `ssh` connecting to it.
 
-This is a re-implementation, not a format-compatible port: the config schema here is a **flat top-level list** of endpoint objects. Upstream's nested `host:`-keyed `wishlist.yml` is deliberately *not* accepted — feeding one in fails loudly with `wishlist yaml: unparseable line`, never silently.
+The config schema here is a **flat top-level list** of endpoint objects; another tool's nested `host:`-keyed `wishlist.yml` is deliberately *not* accepted — feeding one in fails loudly with `wishlist yaml: unparseable line`, never silently.
 
 ```
 ── wishlist ──
@@ -145,4 +145,8 @@ sugar-wishlist uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuz
 
 ## Status
 
-Phase 10.28 — SSH config import. 257 tests / 1160 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.
+SSH config import is supported. 257 tests / 1160 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

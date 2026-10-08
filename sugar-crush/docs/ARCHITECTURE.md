@@ -19,10 +19,10 @@ bin/sugarcrush                argv → pre-flight → dispatch
       │
       └─ Cli\Bootstrap              ALL wiring lives here
              │
-             └─ App\App             THE root TEA Model handed to Program,
+             └─ App\App             THE root model handed to Program,
                     │                and the engine state object Runtime takes
                     │  hosts
-                    └─ Chat         a TEA Model too — hosted, not the root
+                    └─ Chat         a model too — hosted, not the root
                            │  Backend seam:  complete(history): Message
                            └─ Backend\EngineBackend
                                   │
@@ -43,7 +43,7 @@ which is the whole of the next warning.
 
 The order in it is deliberate, and its size is whatever `wc -l bin/sugarcrush`
 says today — this sentence used to carry a line count and quotes none on
-purpose (E686: the figure rotted within rounds). `--help`, `--version` and the eight
+purpose — quoted figures rot within rounds. `--help`, `--version` and the eight
 subcommands (`doctor`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list`,
 `serve`, `attach`, `acp`, `completion bash|zsh|fish`) are answered **before** `Program`, `Bootstrap::app()`
 or `NonInteractive` is reached, because every one of them but `attach` and `acp` is a question about
@@ -79,7 +79,7 @@ over the terminal.
 
 ## `Cli\Bootstrap` — the wiring, all of it
 
-One class, thousands of lines, every one of its methods static (E686: the size and
+One class, thousands of lines, every one of its methods static (the size and
 method-count figures this sentence carried had both rotted; the all-static
 property is the load-bearing claim and is pinned live), and it is large on
 purpose:
@@ -135,9 +135,9 @@ pull-based seams for a doctor report or a debug pane, with
 
 ---
 
-## `Chat` — a TEA model, and the one that is not the root
+## `Chat` — the hosted model, not the root
 
-`src/Chat.php` is `final class Chat implements Model` in candy-core's TEA shape:
+`src/Chat.php` is `final class Chat implements Model` in candy-core's Model–Update–View shape:
 `init()`, `update(Msg): [Model, ?Cmd]`, `view()`. Side effects are `Cmd`s and
 never happen in `view()`.
 
@@ -376,7 +376,7 @@ big-endian length plus a `serialize()`d array, decoded with
   (`Support\ToolCallCancelled`), cancelled and resumable. A sequential tool run
   in the turn child itself has no stop point and runs to its end, after which
   the soft cancel ends the turn.
-- **Agent hard cancel (P-E1).** In the Agent View (or the agent dashboard) a
+- **Agent hard cancel.** In the Agent View (or the agent dashboard) a
   second cancel of the same run within 3 s escalates the soft mailbox cancel:
   Chat calls `CancellationToken::cancelAgent()` for a run
   whose `Task` call this turn holds, and the parent's cancel poll writes one
@@ -509,7 +509,7 @@ it), and a fully empty reply is re-requested up to twice with nothing appended.
 Each extra call needs a step left and must clear the spend cap; once they run
 out the turn ends as before, so a delegated `Task` still reports "ended without
 a final report".
-(E686 tranche-8: every line-number anchor this paragraph carried had rotted
+(every line-number anchor this paragraph carried had rotted
 within rounds — the page's own rule is to cite symbols by name, never by line.)
 
 **Every step measures its own request before sending it.** Chat's context
@@ -575,7 +575,7 @@ empty reply or a summary no smaller than its source makes no block, and the
 step goes out as it stands; past the spend cap no summary is asked for. Each
 relief is tried at most once per step.
 
-The ledger is the session's, not the turn's (roadmap 2.2-2). `Host\TurnRunner`
+The ledger is the session's, not the turn's. `Host\TurnRunner`
 keeps it between turns and stores it beside the transcript
 (`EnhancedSessionStore::saveContextLedger()`, table `context_ledgers`, deleted
 with the session, copied by a branch, snapshotted by each checkpoint and put
@@ -636,7 +636,7 @@ names it:
 4. `RepoMapBlock` — a `<repo-map>` of the workspace's Composer sub-packages and
    its PSR-4 source directories, memoized per session;
 5. `SymbolMapBlock` — a `<symbol-map>`: the definitions the rest of the
-   workspace references most, ranked by PageRank (roadmap 5.5-5), captured
+   workspace references most, ranked by PageRank, captured
    once per session by `EngineBackend` before a turn's fork; the slot appears
    only when the session holds a capture;
 6. `<user-rules>` — the user-tier rule files `RuleLoader` returns, each in its
@@ -653,13 +653,13 @@ names it:
     auto-invocable skill, each line badged with its tier (`[built-in]`,
     `[user]`, `[project]`), fenced `<available-skills>` behind its preamble and mandate line;
 12. `PlanModeSection` — the plan-mode contract, a `<system-reminder>` present
-    only while the turn's gate is in `plan` mode (roadmap 5.7-1): what runs,
+    only while the turn's gate is in `plan` mode: what runs,
     what the gate refuses, and that the one write is a Markdown plan in
     `.sugar-crush/plans/`. PerTurn and directly ahead of the last slot, so
     switching the mode moves only the prompt's tail;
 13. `EnvironmentBlock` LAST — its static half: cwd, git-repo flag, platform,
     OS, PHP, model, date, memoized per session. The git status, log and diffs
-    left the system prompt at step 1.A-1 for the `<turn-context>` row below.
+    left the system prompt entirely for the `<turn-context>` row below.
 
 Item 11 is what makes the `Skill` tool worth having: without the listing, the
 model has no reason to call it, and a populated registry would still be
@@ -681,7 +681,7 @@ records that decision and what it costs.
 
 The **symbol-level** map is built the way Aider's repo map is, by one
 pipeline (`RepoMap\RepoMapBuilder`) with two consumers: the `RepoMap` tool
-(`Tools\BuiltIn\RepoMapTool`, roadmap 5.5-4) builds a fresh one on demand,
+(`Tools\BuiltIn\RepoMapTool`) builds a fresh one on demand,
 focused on the files and identifiers the model names, and item 5 above carries
 an unfocused one per session. It lists the files
 `git ls-files` reports (so `.gitignore` decides what is code; symlinks are
@@ -711,13 +711,13 @@ work kept for the next — past 3,000 code files, past a 4-second tokenizing
 budget, or without memory headroom, and `SUGARCRUSH_DISABLE_SYMBOL_MAP`
 turns it off.
 
-The ordering is a caching decision, not a stylistic one, and it is the P3.S1
-invariant recorded in `Runtime::buildSystemPrompt()` and restated in
+The ordering is a caching decision, not a stylistic one, and it is the
+stable-prefix invariant recorded in `Runtime::buildSystemPrompt()` and restated in
 `MemoryBlock`'s own source: sections run stable-first, by mutation frequency,
 and the env block sits **last**. It sat last because it polled
 `git status --porcelain` on every call, and any earlier position would have
 voided the cacheable prefix of every layer behind it from the first edit of a
-session. Step 1.A-1 removed the volatility instead: the system prompt is now
+session. A later change removed the volatility instead: the system prompt is now
 byte-identical across the steps of a session, and what changes while the agent
 works travels outside it.
 
@@ -819,7 +819,7 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 `Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool. The other two, `BoardReadTool` and
 `BoardPostTool`, are on no launch: `TaskTool` hands them, bound to the batch's
-shared board, to the runs of a parallel `Task` batch's members (roadmap 4.5).
+shared board, to the runs of a parallel `Task` batch's members.
 
 Domain matters here: **twenty-eight is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable on every launch but answers every call with a "no
@@ -934,7 +934,7 @@ batch one; `CustomProvider` and `OpenAIProvider` take no `toolCallParser` at
 all.
 
 A block that names `fallbackModels` comes back from `ProviderFactory::create()`
-wrapped in a `FallbackProvider` (roadmap 5.13b): it answers as the provider it
+wrapped in a `FallbackProvider`: it answers as the provider it
 wraps — name, capabilities, the served-model and prompt-cache seams — and on a
 transient or context-overflow failure (the shared `TransientFailure` /
 `ContextOverflow` verdicts) re-sends the request to the block's next model,
@@ -1184,7 +1184,7 @@ believes it owns.
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
 `react/promise`, and `react/http`, `react/socket` and `ratchet/rfc6455` for
-`sugarcrush serve`'s HTTP + WebSocket transport), fifteen SugarCraft siblings: `candy-core` (TEA runtime,
+`sugarcrush serve`'s HTTP + WebSocket transport), fifteen SugarCraft siblings: `candy-core` (the MVC-style runtime —
 `Program`, `Model`, `Cmd`), `candy-forms`, `candy-sprinkles` (styles),
 `candy-shine`, `candy-fuzzy`, `sugar-veil`, `sugar-mcp` (stdio MCP transport),
 `sugar-diff` (the settings editor's save preview),

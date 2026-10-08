@@ -1,11 +1,11 @@
 {
     "title": "HoneyBounce — SugarCraft",
-    "description": "HoneyBounce: Damped spring physics + Newtonian projectile sim. PHP port of harmonica.",
+    "description": "HoneyBounce: Damped spring physics + Newtonian projectile sim for smooth TUI animation.",
     "ogTitle": "HoneyBounce — SugarCraft",
-    "ogDescription": "Damped spring physics + Newtonian projectile sim. Port of harmonica.",
+    "ogDescription": "Damped spring physics + Newtonian projectile sim for smooth TUI animation.",
     "emoji": "🐝",
     "displayName": "HoneyBounce",
     "tagline": "Damped spring physics + Newtonian projectile sim",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/harmonica\" style=\"color: inherit;\">harmonica</a></span>\n          <span class=\"tag-chip\">physics</span>\n          <span class=\"tag-chip\">animation</span>\n          <span class=\"tag-chip\">math</span>\n          <span class=\"tag-chip\">no-deps</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/harmonica\" style=\"color: inherit;\">charmbracelet/harmonica</a></span>\n          <span class=\"tag-chip\">physics</span>\n          <span class=\"tag-chip\">animation</span>\n          <span class=\"tag-chip\">math</span>\n          <span class=\"tag-chip\">no-deps</span>"
 }

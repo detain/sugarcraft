@@ -16,9 +16,7 @@
 composer require sugarcraft/sugar-charts
 ```
 
-PHP port of [NimbleMarkets/ntcharts](https://github.com/NimbleMarkets/ntcharts) —
-terminal charts for SugarCraft. v0 ships the canvas foundation plus three
-self-contained chart types.
+sugar-charts — terminal charts for PHP 8.3+. v0 ships the canvas foundation plus three self-contained chart types.
 
 ```php
 use SugarCraft\Charts\Sparkline\Sparkline;
@@ -54,7 +52,7 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 > read better: `withLegendPosition()` → `legendPos()`, `withTitlePosition()` → `titlePos()`
 > (Position shortens to `Pos`), `withDataLabelFormatter()` → `dataLabelFormat()`,
 > `withFractionalHeights()` → `fractional()`, and `withXYRange()` → `xyRange()`. These
-> deviations are pinned by `tests/AliasCompletenessTest.php`. The upstream-mirroring
+> deviations are pinned by `tests/AliasCompletenessTest.php`. The
 > `with*` long forms always still work; pick the form that reads best at the call site.
 
 ## Components
@@ -303,4 +301,7 @@ cd sugar-charts && composer install && vendor/bin/phpunit
 ## Related
 
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
-- Upstream: [NimbleMarkets/ntcharts](https://github.com/NimbleMarkets/ntcharts)
+
+## Credits & inspiration
+
+Design antecedent: [NimbleMarkets/ntcharts](https://github.com/NimbleMarkets/ntcharts); SugarCraft is developed as a native PHP project.

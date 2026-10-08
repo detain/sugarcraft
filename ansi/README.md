@@ -1,6 +1,6 @@
 # SugarCraft & sugar-crush ANSI Art
 
-ANSI logo/splash art for **SugarCraft** (a PHP port of the Charmbracelet TUI ecosystem) and **sugar-crush** (a terminal-based AI coding agent). Render any piece in a 256-color/truecolor terminal:
+ANSI logo/splash art for **SugarCraft** (a native-PHP terminal UI ecosystem) and **sugar-crush** (a terminal-based AI coding agent). Render any piece in a 256-color/truecolor terminal:
 
 ```sh
 cat ansi/sugarcraft/1-sugarcraft-wordmark.ansi
@@ -3762,3 +3762,7 @@ The three measured columns are re-derived from the files themselves rather than 
 | `sugar-table-9-tc-s-1.ansi` | 70x15 | truecolor | 152 | rope-walker's cordage specification: eight strands by fibre colour with lay, diameter, circumference and MBS |
 | `sugar-table-9-tc-s-2.ansi` | 65x16 | truecolor | 159 | orchardist variety-rootstock compatibility: eight scions onto five stocks with heat-coloured graft take |
 <!-- END sugar-table SLOTS -->
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
