@@ -84,4 +84,81 @@ final class FreqTest extends TestCase
         $this->assertSame('12 GHz', Freq::normalize(12345.0));
         $this->assertSame('1.0 THz', Freq::normalize(1000000.0));
     }
+
+    public function testPerCoreIsOffByDefault(): void
+    {
+        [$snap] = Freq::new(FixtureTree::committed())->sample();
+
+        $this->assertSame([], $snap->perCore);
+        $this->assertSame([], $snap->perCoreMin);
+        $this->assertSame([], $snap->perCoreMax);
+    }
+
+    public function testPerCoreReadsCpuNCpufreqKeyedByIndex(): void
+    {
+        $freq = Freq::new(FixtureTree::committed())->withPerCore(true);
+        [$snap, $next] = $freq->sample();
+
+        $this->assertSame([0 => 3400.0, 1 => 2200.0, 2 => Sentinel::UNMEASURED, 10 => 1200.5], $snap->perCore, 'offline cpu2 → sentinel, numeric order');
+        $this->assertSame([0 => 800.0, 1 => 800.0, 2 => Sentinel::UNMEASURED, 10 => 400.0], $snap->perCoreMin);
+        $this->assertSame([0 => 4500.0, 1 => 4500.0, 2 => Sentinel::UNMEASURED, 10 => 3000.0], $snap->perCoreMax);
+        $this->assertSame('3.4 GHz', $snap->label, 'aggregate keeps policy semantics');
+        $this->assertSame($freq, $next);
+        $this->assertSame($freq, $freq->withPerCore(true));
+        [$off] = $freq->withPerCore(false)->sample();
+        $this->assertSame([], $off->perCore);
+    }
+
+    public function testPerCoreFallsBackToCpuinfoPerProcessor(): void
+    {
+        $tree = FixtureTree::copy();
+        try {
+            foreach (['cpu0', 'cpu1', 'cpu10'] as $cpu) {
+                $tree->remove("sys/devices/system/cpu/{$cpu}/cpufreq");
+            }
+            $tree->write('proc/cpuinfo', "processor\t: 0\ncpu MHz\t\t: 2400.000\n\nprocessor\t: 1\ncpu MHz\t\t: 1800.5\n\nprocessor\t: 2\nmodel name\t: x\n");
+            [$snap] = Freq::new($tree->paths(), perCore: true)->sample();
+
+            $this->assertSame([0 => 2400.0, 1 => 1800.5, 2 => Sentinel::UNMEASURED, 10 => Sentinel::UNMEASURED], $snap->perCore);
+            $this->assertSame(Sentinel::UNMEASURED, $snap->perCoreMax[1]);
+            $this->assertCount(4, $snap->perCoreMin);
+        } finally {
+            $tree->destroy();
+        }
+    }
+
+    public function testPerCoreOnEmptyTreeIsEmpty(): void
+    {
+        $tree = FixtureTree::empty();
+        try {
+            [$snap] = Freq::new($tree->paths(), perCore: true)->sample();
+            $this->assertSame([], $snap->perCore);
+        } finally {
+            $tree->destroy();
+        }
+    }
+
+    public function testLabelIsTheSharedFormatter(): void
+    {
+        $this->assertSame('3.4 GHz', Freq::label(3449.0));
+        $this->assertSame('800 MHz', Freq::label(800.0));
+        $this->assertSame('', Freq::label(Sentinel::UNMEASURED));
+        $this->assertSame('', Freq::label(0.0));
+        $this->assertSame('', Freq::label(INF));
+        $this->assertSame('', Freq::label(NAN));
+        $this->assertSame('1 MHz', Freq::label(1.0), 'upstream cutoff is <= 0, not <= 1');
+    }
+
+    public function testLivePerCoreSmoke(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux' || !is_dir('/sys/devices/system/cpu')) {
+            $this->markTestSkipped('needs a Linux /sys');
+        }
+        [$snap] = Freq::new(perCore: true)->sample();
+
+        foreach ($snap->perCore as $cpu => $mhz) {
+            $this->assertIsInt($cpu);
+            $this->assertTrue($mhz === Sentinel::UNMEASURED || $mhz > 1.0);
+        }
+    }
 }

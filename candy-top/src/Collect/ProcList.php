@@ -36,6 +36,31 @@ namespace SugarCraft\Top\Collect;
  * mid page-fault on dead NFS) can block that read. It is paid once per
  * process lifetime here (cached with name/user), not every scan, which
  * bounds the exposure but cannot remove it from userspace.
+ *
+ * Wave U1 additions (btop upstream PRs):
+ *  - #1859: argv[0]'s basename offset is computed from the first
+ *    NUL-delimited cmdline segment, before flattening (basenameOffset()).
+ *    Deliberate deviation: when the whole cmdline is ONE segment
+ *    containing a space and it is a rewritten title rather than a path —
+ *    it does not start with '/', or its first space-delimited token ends
+ *    with ':' (nginx "nginx: master process /usr/sbin/nginx", sshd
+ *    "sshd: joe@pts/0") — only that first token is treated as the path;
+ *    btop would cut those at the last '/' of the title ("0"). An absolute
+ *    single segment is a path, possibly with a space in it: it is cut
+ *    before its first " -" option when there is one (chrome joins its argv
+ *    with spaces: "/opt/google/chrome/chrome --type=renderer
+ *    --user-data-dir=/home/x" → "chrome"), else the whole segment gets the
+ *    plain last-'/' rule (an argument-less "/opt/My App/app" → "app"). A
+ *    space-joined absolute argv with a slashed non-option argument still
+ *    cuts at that argument's last '/', as btop does;
+ *  - #1823: /proc/[pid]/io read_bytes / write_bytes rates over the
+ *    /proc/uptime delta (btop: Δbytes / max(0.1, Δuptime)). One extra
+ *    open per pid per scan, so it is opt-in (withIo) — the view turns it
+ *    on only when an IO column, an io sort or the detail view needs it.
+ *    Unreadable (EACCES for other uids) → UNMEASURED, never 0;
+ *  - #1873: the container from /proc/[pid]/cgroup (Cgroup::fromProcFile),
+ *    cached with cmd/user — a process moved to another cgroup later keeps
+ *    the first value, as in btop.
  */
 final class ProcList
 {
@@ -43,7 +68,7 @@ final class ProcList
 
     /**
      * @param \Closure(int): ?string $userLookup uid → login name
-     * @param array<int, array{start: int, cpuT: int, name: string, cmd: string, user: string, uid: int}> $known
+     * @param array<int, array{start: int, cpuT: int, cmd: string, user: string, uid: int, argv0: int, container: ?ContainerRef, ioR?: int, ioW?: int}> $known
      * @param array<int, string> $users uid → resolved name cache
      */
     private function __construct(
@@ -56,6 +81,8 @@ final class ProcList
         private readonly ?int $previousTotal,
         private readonly array $known,
         private readonly array $users,
+        private readonly bool $readIo = false,
+        private readonly ?float $previousUptime = null,
     ) {
     }
 
@@ -63,6 +90,7 @@ final class ProcList
      * @param int|null $pageSize bytes per RSS page; null detects it from
      *                           /proc/self/smaps (btop: sysconf(_SC_PAGE_SIZE)), else 4096
      * @param (\Closure(int): ?string)|null $userLookup defaults to posix_getpwuid when ext-posix is loaded
+     * @param bool $readIo read /proc/[pid]/io each scan (see withIo())
      */
     public static function new(
         ?Paths $paths = null,
@@ -71,6 +99,7 @@ final class ProcList
         ?int $pageSize = null,
         int $clkTck = 100,
         ?\Closure $userLookup = null,
+        bool $readIo = false,
     ): self {
         $paths ??= Paths::system();
 
@@ -84,6 +113,28 @@ final class ProcList
             null,
             [],
             [],
+            $readIo,
+        );
+    }
+
+    /**
+     * Toggle the per-pid /proc/[pid]/io read (btop #1823). Off costs
+     * nothing; on, rates appear from the second scan that reads io.
+     */
+    public function withIo(bool $readIo): self
+    {
+        return $readIo === $this->readIo ? $this : new self(
+            $this->paths,
+            $this->userLookup,
+            $this->perCore,
+            $this->filterKernel,
+            $this->pageSize,
+            $this->clkTck,
+            $this->previousTotal,
+            $this->known,
+            $this->users,
+            $readIo,
+            $this->previousUptime,
         );
     }
 
@@ -95,6 +146,7 @@ final class ProcList
         [$total, $coreCount] = $this->readCpuTimes();
         $uptime = $this->readUptime();
         $interval = $total !== null && $this->previousTotal !== null ? max(1, $total - $this->previousTotal) : null;
+        $ioSeconds = $this->readIo && $uptime >= 0.0 && $this->previousUptime !== null ? max(0.1, $uptime - $this->previousUptime) : null;
         $multiplier = $this->perCore ? max(1, $coreCount) : 1;
 
         $known = [];
@@ -133,6 +185,21 @@ final class ProcList
             $lifetime = $uptime >= 0.0 ? $uptime * $this->clkTck - $stat['start'] : -1.0;
             $cumulative = $uptime >= 0.0 ? 100.0 * $stat['cpuT'] / max(1.0, $lifetime) : Sentinel::UNMEASURED;
 
+            $io = [Sentinel::UNMEASURED, Sentinel::UNMEASURED, Sentinel::UNMEASURED_INT, Sentinel::UNMEASURED_INT];
+            if ($this->readIo) {
+                [$ioR, $ioW] = self::parseIo(Read::file($dir . '/io'));
+                $io = [
+                    self::rate($ioR, $cached['ioR'] ?? null, $ioSeconds),
+                    self::rate($ioW, $cached['ioW'] ?? null, $ioSeconds),
+                    $ioR,
+                    $ioW,
+                ];
+                $cached['ioR'] = $ioR;
+                $cached['ioW'] = $ioW;
+            } else {
+                unset($cached['ioR'], $cached['ioW']);
+            }
+
             $known[$pid] = ['cpuT' => $stat['cpuT']] + $cached;
             $processes[] = new Process(
                 $pid,
@@ -147,6 +214,12 @@ final class ProcList
                 $stat['rss'] * $this->pageSize,
                 $cpu,
                 $cumulative,
+                $cached['argv0'],
+                $io[0],
+                $io[1],
+                $io[2],
+                $io[3],
+                $cached['container'],
             );
         }
 
@@ -162,6 +235,8 @@ final class ProcList
                 $total ?? $this->previousTotal,
                 $known,
                 $users,
+                $this->readIo,
+                $uptime >= 0.0 ? $uptime : null,
             ),
         ];
     }
@@ -198,10 +273,52 @@ final class ProcList
     }
 
     /**
-     * cmdline + Uid, read once per process lifetime.
+     * btop #1859 Tools::command_basename_offset over the raw argv[0]:
+     * "" / "firefox" / "/" / "/usr/bin/" → 0, "./firefox" → 2,
+     * "../bin/firefox" → 7, "/usr/bin/firefox" → 9. Byte offset.
+     */
+    public static function basenameOffset(string $argv0): int
+    {
+        $slash = strrpos($argv0, '/');
+        if ($slash === false || $slash === strlen($argv0) - 1) {
+            return 0;
+        }
+
+        return $slash + 1;
+    }
+
+    /**
+     * read_bytes / write_bytes from a /proc/[pid]/io body; UNMEASURED_INT
+     * for each one missing or the file unreadable.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private static function parseIo(?string $raw): array
+    {
+        if ($raw === null) {
+            return [Sentinel::UNMEASURED_INT, Sentinel::UNMEASURED_INT];
+        }
+        $read = preg_match('/^read_bytes:\s*(\d+)/m', $raw, $r) === 1 ? (int) $r[1] : Sentinel::UNMEASURED_INT;
+        $write = preg_match('/^write_bytes:\s*(\d+)/m', $raw, $w) === 1 ? (int) $w[1] : Sentinel::UNMEASURED_INT;
+
+        return [$read, $write];
+    }
+
+    /** Δcounter / Δseconds; a counter that went backwards reads 0 (btop). */
+    private static function rate(int $now, ?int $before, ?float $seconds): float
+    {
+        if ($seconds === null || $before === null || $before < 0 || $now < 0) {
+            return Sentinel::UNMEASURED;
+        }
+
+        return $now >= $before ? ($now - $before) / $seconds : 0.0;
+    }
+
+    /**
+     * cmdline + Uid + cgroup, read once per process lifetime.
      *
      * @param array<int, string> $users uid → name cache, extended in place
-     * @return array{cmd: string, user: string, uid: int}|null
+     * @return array{cmd: string, user: string, uid: int, argv0: int, container: ?ContainerRef}|null
      */
     private function readStatic(string $dir, array &$users): ?array
     {
@@ -216,8 +333,25 @@ final class ProcList
         }
         // NUL-separated argv; kernel threads have an empty cmdline. btop caps at 1000.
         $cmd = substr(rtrim(str_replace("\0", ' ', $cmdline)), 0, 1000);
+        $segments = explode("\0", rtrim($cmdline, "\0"));
+        $argv0 = $segments[0];
+        if (count($segments) === 1 && str_contains($argv0, ' ')) {
+            $first = explode(' ', $argv0, 2)[0];
+            if (!str_starts_with($argv0, '/') || str_ends_with($first, ':')) {
+                $argv0 = $first; // rewritten argv: a title, not a path
+            } elseif (($dash = strpos($argv0, ' -')) !== false) {
+                $argv0 = substr($argv0, 0, $dash); // space-joined argv (chrome): the path ends before the first option
+            }
+        }
+        $offset = self::basenameOffset($argv0);
 
-        return ['cmd' => $cmd, 'user' => $users[$uid], 'uid' => $uid];
+        return [
+            'cmd' => $cmd,
+            'user' => $users[$uid],
+            'uid' => $uid,
+            'argv0' => $offset < strlen($cmd) ? $offset : 0,
+            'container' => Cgroup::fromProcFile(Read::file($dir . '/cgroup')),
+        ];
     }
 
     /**

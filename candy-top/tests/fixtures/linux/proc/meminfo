@@ -6,3 +6,6 @@ Cached:          6000000 kB
 SwapCached:            0 kB
 SwapTotal:       4000000 kB
 SwapFree:        3000000 kB
+Zswap:            200000 kB
+Zswapped:         600000 kB
+Dirty:               100 kB

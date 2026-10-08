@@ -84,4 +84,48 @@ final class MemoryTest extends TestCase
         $this->assertSame(Sentinel::UNMEASURED_INT, $snap->used);
         $this->assertSame(Sentinel::UNMEASURED, $snap->percent('used'));
     }
+
+    public function testZswapFieldsAndOnDiskUsed(): void
+    {
+        [$snap] = Memory::new($this->tree->paths())->sample();
+        $k = 1024;
+
+        $this->assertTrue($snap->hasZswap());
+        $this->assertSame(200000 * $k, $snap->zswap);
+        $this->assertSame(600000 * $k, $snap->zswapped);
+        $this->assertSame(1000000 * $k, $snap->swapUsed, 'swapUsed stays SwapTotal − SwapFree');
+        $this->assertSame(400000 * $k, $snap->swapUsedOnDisk(), 'btop show_zswap Used = swap_used − Zswapped');
+        $this->assertSame(10.0, $snap->swapPercent('swap_used_disk'));
+        $this->assertSame(5.0, $snap->swapPercent('zswap'));
+    }
+
+    public function testPre519KernelHasNoZswap(): void
+    {
+        $this->tree->write('proc/meminfo', "MemTotal: 1000 kB\nMemFree: 100 kB\nMemAvailable: 400 kB\nCached: 200 kB\nSwapTotal: 100 kB\nSwapFree: 40 kB\n");
+        [$snap] = Memory::new($this->tree->paths())->sample();
+
+        $this->assertFalse($snap->hasZswap());
+        $this->assertSame(Sentinel::UNMEASURED_INT, $snap->zswap);
+        $this->assertSame(Sentinel::UNMEASURED_INT, $snap->zswapped);
+        $this->assertSame(60 * 1024, $snap->swapUsedOnDisk(), 'falls back to plain swap_used');
+        $this->assertSame(Sentinel::UNMEASURED, $snap->swapPercent('zswap'));
+    }
+
+    public function testZswappedRacingAheadOfSwapUsedClampsToZero(): void
+    {
+        $this->tree->write('proc/meminfo', "MemTotal: 1000 kB\nMemFree: 100 kB\nSwapTotal: 100 kB\nSwapFree: 90 kB\nZswap: 5 kB\nZswapped: 30 kB\n");
+        [$snap] = Memory::new($this->tree->paths())->sample();
+
+        $this->assertSame(0, $snap->swapUsedOnDisk());
+        $this->assertSame(0.0, $snap->swapPercent('swap_used_disk'));
+    }
+
+    public function testUnreadableMeminfoLeavesZswapUnmeasured(): void
+    {
+        $this->tree->remove('proc/meminfo');
+        [$snap] = Memory::new($this->tree->paths())->sample();
+
+        $this->assertFalse($snap->hasZswap());
+        $this->assertSame(Sentinel::UNMEASURED_INT, $snap->swapUsedOnDisk());
+    }
 }

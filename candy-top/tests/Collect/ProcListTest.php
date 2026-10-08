@@ -216,4 +216,253 @@ final class ProcListTest extends TestCase
             $tree->destroy();
         }
     }
+
+    // ---- btop #1856: stat parsing survives a comm with ')' / newline and a rename ----
+
+    public function testCommContainingCloseParenAndFieldsSplitsAtLastParen(): void
+    {
+        // comm "x) S 999 (y" — a first-')' split would read state S, ppid 999.
+        $this->tree->write('proc/77/stat', "77 (x) S 999 (y) R 1 77 77 0 -1 0 0 0 0 0 30 20 0 0 20 0 3 0 4000 0 123 0\n");
+        $this->tree->write('proc/77/status', "Name:\tx\nUid:\t0\t0\t0\t0\n");
+        $this->tree->write('proc/77/cmdline', "/bin/x\0");
+        [$snap] = $this->procs()->sample();
+
+        $p = self::byPid($snap, 77);
+        $this->assertSame('x) S 999 (y', $p?->name);
+        $this->assertSame('R', $p?->state);
+        $this->assertSame(1, $p?->ppid);
+        $this->assertSame(3, $p?->threads);
+        $this->assertSame(123 * 4096, $p?->mem);
+    }
+
+    public function testCommContainingNewlineParses(): void
+    {
+        $this->tree->write('proc/78/stat', "78 (two\nlines) S 1 78 78 0 -1 0 0 0 0 0 30 20 0 0 20 0 2 0 4000 0 50 0\n");
+        $this->tree->write('proc/78/status', "Name:\ttwo\\nlines\nUid:\t0\t0\t0\t0\n");
+        $this->tree->write('proc/78/cmdline', "/bin/two\0");
+        [$snap] = $this->procs()->sample();
+
+        $p = self::byPid($snap, 78);
+        $this->assertSame("two\nlines", $p?->name);
+        $this->assertSame(2, $p?->threads);
+        $this->assertSame(50 * 4096, $p?->mem);
+    }
+
+    /**
+     * prctl(PR_SET_NAME) between scans changes the space count in comm;
+     * btop's cached name offset then read starttime as RSS ("11 MiB → 36G").
+     */
+    public function testRenameBetweenScansKeepsFieldsAligned(): void
+    {
+        $this->tree->write('proc/79/stat', "79 (worker) S 1 79 79 0 -1 0 0 0 0 0 30 20 0 0 20 0 20 0 9000000 0 2816 0\n");
+        $this->tree->write('proc/79/status', "Name:\tworker\nUid:\t0\t0\t0\t0\n");
+        $this->tree->write('proc/79/cmdline', "/usr/bin/worker\0--pool\0");
+        [, $procs] = $this->procs()->sample();
+
+        $this->tree->write('proc/stat', "cpu  11000 0 0 0 0 0 0 0 0 0\ncpu0 1 0 0 0\ncpu1 1 0 0 0\n");
+        $this->tree->write('proc/79/stat', "79 (my renamed w k) S 1 79 79 0 -1 0 0 0 0 0 130 20 0 0 20 0 20 0 9000000 0 2816 0\n");
+        [$snap] = $procs->sample();
+
+        $p = self::byPid($snap, 79);
+        $this->assertSame('my renamed w k', $p?->name, 'name re-read from stat every scan');
+        $this->assertSame(2816 * 4096, $p?->mem, 'RSS, not starttime');
+        $this->assertSame(20, $p?->threads);
+        $this->assertSame('/usr/bin/worker --pool', $p?->cmd, 'same starttime → same process, cache kept');
+        $this->assertSame(10.0, $p?->cpu, '100 jiffies of 1000 → baseline survived the rename');
+    }
+
+    // ---- btop #1859: argv[0] basename offset ----
+
+    /**
+     * @return iterable<string, array{string, int}>
+     */
+    public static function basenameOffsets(): iterable
+    {
+        yield 'empty' => ['', 0];
+        yield 'bare' => ['firefox', 0];
+        yield 'root' => ['/', 0];
+        yield 'trailing slash' => ['/usr/bin/', 0];
+        yield 'dot' => ['./firefox', 2];
+        yield 'dotdot' => ['../bin/firefox', 7];
+        yield 'absolute' => ['/usr/bin/firefox', 9];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('basenameOffsets')]
+    public function testBasenameOffsetMirrorsBtop(string $argv0, int $offset): void
+    {
+        $this->assertSame($offset, ProcList::basenameOffset($argv0));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function basenameCommands(): iterable
+    {
+        yield 'nix store' => ['/nix/store/hash-firefox/bin/firefox', 'firefox'];
+        yield 'spaces in path' => ['/path with spaces/my program', 'my program'];
+        yield 'unicode' => ['/路徑/程式', '程式'];
+        yield 'bare' => ['firefox', 'firefox'];
+        yield 'trailing slash' => ['/usr/bin/', '/usr/bin/'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('basenameCommands')]
+    public function testCmdBasenamePreservesArgumentsWithSlashes(string $executable, string $basename): void
+    {
+        $this->tree->write('proc/42/cmdline', "{$executable}\0--profile\0/home/user/profile\0--url\0https://example.org/a/b\0");
+        [$snap] = $this->procs()->sample();
+
+        $p = self::byPid($snap, 42);
+        $this->assertSame("{$executable} --profile /home/user/profile --url https://example.org/a/b", $p?->cmd, 'cmd stays full');
+        $this->assertSame("{$basename} --profile /home/user/profile --url https://example.org/a/b", $p?->cmdBasename());
+    }
+
+    public function testFixtureAndKernelThreadOffsets(): void
+    {
+        [$snap] = $this->procs()->sample();
+
+        $this->assertSame(9, self::byPid($snap, 42)?->cmdBasenameOffset);
+        $this->assertSame('app --flag', self::byPid($snap, 42)?->cmdBasename());
+        $this->assertSame('init splash', self::byPid($snap, 1)?->cmdBasename());
+        $this->assertSame(0, self::byPid($snap, 2)?->cmdBasenameOffset);
+        $this->assertSame('', self::byPid($snap, 2)?->cmdBasename());
+    }
+
+    public function testRewrittenArgvTitleIsNotCutAtItsLastSlash(): void
+    {
+        $this->tree->write('proc/42/cmdline', "sshd: joe@pts/0\0\0\0");
+        $this->tree->write('proc/1/cmdline', "/opt/google/chrome/chrome --type=renderer --user-data-dir=/home/x/.cfg");
+        [$snap] = $this->procs()->sample();
+
+        $this->assertSame('sshd: joe@pts/0', self::byPid($snap, 42)?->cmdBasename());
+        $this->assertSame('chrome --type=renderer --user-data-dir=/home/x/.cfg', self::byPid($snap, 1)?->cmdBasename());
+    }
+
+    public function testArgumentlessAbsolutePathWithSpaceKeepsLastSlashRule(): void
+    {
+        $this->tree->write('proc/42/cmdline', "/opt/My App/app\0");
+        $this->tree->write('proc/1/cmdline', "nginx: master process /usr/sbin/nginx -c /etc/nginx/nginx.conf");
+        [$snap] = $this->procs()->sample();
+
+        $this->assertSame('app', self::byPid($snap, 42)?->cmdBasename(), 'an absolute single segment is a path');
+        $this->assertSame('nginx: master process /usr/sbin/nginx -c /etc/nginx/nginx.conf', self::byPid($snap, 1)?->cmdBasename(), 'relative title: first token only');
+    }
+
+    public function testAbsoluteSingleSegmentWithColonTitleIsATitle(): void
+    {
+        $this->tree->write('proc/42/cmdline', "/usr/sbin/sshd: joe@pts/0");
+        $this->tree->write('proc/1/cmdline', "/opt/My App/app --flag=/x/y");
+        [$snap] = $this->procs()->sample();
+
+        $this->assertSame('sshd: joe@pts/0', self::byPid($snap, 42)?->cmdBasename(), 'first token ends with ":" → title');
+        $this->assertSame('app --flag=/x/y', self::byPid($snap, 1)?->cmdBasename(), 'path with a space, cut before its first option');
+    }
+
+    // ---- btop #1823: /proc/[pid]/io rates ----
+
+    public function testIoIsOffByDefaultAndAllSentinel(): void
+    {
+        [, $procs] = $this->procs()->sample();
+        [$snap] = $procs->sample();
+
+        $p = self::byPid($snap, 42);
+        $this->assertSame(Sentinel::UNMEASURED, $p?->ioRead);
+        $this->assertSame(Sentinel::UNMEASURED, $p?->ioWrite);
+        $this->assertSame(Sentinel::UNMEASURED_INT, $p?->ioReadTotal);
+        $this->assertSame(Sentinel::UNMEASURED, $p?->ioTotal());
+    }
+
+    public function testIoRatesOverUptimeDelta(): void
+    {
+        $procs = $this->procs()->withIo(true);
+        $this->assertSame($procs, $procs->withIo(true));
+        [$first, $procs] = $procs->sample();
+
+        $p = self::byPid($first, 42);
+        $this->assertSame(1048576, $p?->ioReadTotal);
+        $this->assertSame(524288, $p?->ioWriteTotal, 'cancelled_write_bytes not subtracted (btop)');
+        $this->assertSame(Sentinel::UNMEASURED, $p?->ioRead, 'no baseline yet — "-" not 0');
+
+        $this->tree->write('proc/uptime', "1002.00 1900.00\n");
+        $this->tree->write('proc/42/io', "rchar: 1\nwchar: 1\nread_bytes: 3145728\nwrite_bytes: 524288\ncancelled_write_bytes: 0\n");
+        [$snap] = $procs->sample();
+
+        $p = self::byPid($snap, 42);
+        $this->assertSame(1048576.0, $p?->ioRead, '2 MiB over 2 s');
+        $this->assertSame(0.0, $p?->ioWrite, 'measured idle IS 0');
+        $this->assertSame(1048576.0, $p?->ioTotal());
+        $this->assertSame(0.0, self::byPid($snap, 1)?->ioRead);
+    }
+
+    public function testUnreadableIoIsSentinelNeverZero(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root reads any mode');
+        }
+        $procs = $this->procs();
+        chmod($this->tree->root . '/proc/1/io', 0000);
+        try {
+            [, $procs] = $procs->withIo(true)->sample();
+            $this->tree->write('proc/uptime', "1002.00 1900.00\n");
+            [$snap] = $procs->sample();
+        } finally {
+            chmod($this->tree->root . '/proc/1/io', 0644);
+        }
+
+        $p = self::byPid($snap, 1);
+        $this->assertNotNull($p, 'EACCES on io never drops the row');
+        $this->assertSame(Sentinel::UNMEASURED, $p->ioRead);
+        $this->assertSame(Sentinel::UNMEASURED, $p->ioWrite);
+        $this->assertSame(Sentinel::UNMEASURED_INT, $p->ioReadTotal);
+        $this->assertSame(0.0, self::byPid($snap, 42)?->ioRead);
+    }
+
+    public function testIoBaselineDoesNotSurviveTogglingOffOrPidRecycle(): void
+    {
+        [, $procs] = $this->procs()->withIo(true)->sample();
+        [, $procs] = $procs->withIo(false)->sample();
+        $this->tree->write('proc/uptime', "1002.00 1900.00\n");
+        [$snap, $procs] = $procs->withIo(true)->sample();
+        $this->assertSame(Sentinel::UNMEASURED, self::byPid($snap, 42)?->ioRead, 'a stale baseline would fabricate a rate');
+
+        $this->tree->write('proc/uptime', "1004.00 1900.00\n");
+        $this->tree->write('proc/42/stat', "42 (other) S 1 42 42 0 -1 0 0 0 0 0 900 100 0 0 20 0 1 0 77777 0 10 0\n");
+        [$snap] = $procs->sample();
+        $this->assertSame(Sentinel::UNMEASURED, self::byPid($snap, 42)?->ioRead, 'recycled pid: no inherited counters');
+    }
+
+    // ---- btop #1873: container tag ----
+
+    public function testContainerTagFromCgroupCachedPerLifetime(): void
+    {
+        [$snap, $procs] = $this->procs()->sample();
+
+        $c = self::byPid($snap, 42)?->container;
+        $this->assertSame('docker', $c?->engine);
+        $this->assertSame('3f2a9c1b04de', $c?->name);
+        $this->assertNull(self::byPid($snap, 1)?->container, '/init.scope is the host');
+        $this->assertNull(self::byPid($snap, 2)?->container, 'no cgroup file → host');
+
+        $this->tree->write('proc/42/cgroup', "0::/user.slice\n");
+        [$snap] = $procs->sample();
+        $this->assertSame('docker', self::byPid($snap, 42)?->container?->engine, 'read once per lifetime (btop)');
+    }
+
+    public function testLiveIoCostSmoke(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux' || !is_readable('/proc/self/io')) {
+            $this->markTestSkipped('needs a Linux /proc with io accounting');
+        }
+        [, $procs] = ProcList::new(readIo: true)->sample();
+        [$snap] = $procs->sample();
+
+        $self = null;
+        foreach ($snap->processes as $p) {
+            $this->assertTrue($p->ioRead === Sentinel::UNMEASURED || $p->ioRead >= 0.0);
+            if ($p->pid === getmypid()) {
+                $self = $p;
+            }
+        }
+        $this->assertNotNull($self);
+        $this->assertGreaterThanOrEqual(0, $self->ioReadTotal, 'own io is always readable');
+    }
 }

@@ -147,4 +147,61 @@ final class NetTest extends TestCase
         $this->assertNull($snap->selected());
         $this->assertSame($net, $next);
     }
+
+    public function testAddressesFromInjectedNetGetInterfaces(): void
+    {
+        $calls = 0;
+        $source = static function () use (&$calls): array {
+            $calls++;
+
+            return [
+                'lo' => ['unicast' => [['flags' => 1, 'family' => 17], ['family' => 2, 'address' => '127.0.0.1'], ['family' => 10, 'address' => '::1']], 'up' => true],
+                'eth0' => ['unicast' => [
+                    ['family' => 17],
+                    ['family' => 10, 'address' => 'fe80::216:3eff:fe27:59b2%eth0'],
+                    ['family' => 2, 'address' => '192.0.2.10'],
+                    ['family' => 2, 'address' => '192.0.2.11'],
+                    ['family' => 10, 'address' => '2001:db8::10'],
+                ]],
+                'wlan0' => ['unicast' => [['family' => 10, 'address' => 'fe80::1%wlan0'], ['family' => 30, 'address' => 'garbage']]],
+                'ghost0' => ['unicast' => [['family' => 2, 'address' => '10.0.0.1']]],
+                7 => 'not an interface',
+            ];
+        };
+        [$snap, $net] = Net::new($this->tree->paths(), fn (): float => $this->now, addresses: $source)->sample();
+
+        $eth = $snap->interfaces['eth0'];
+        $this->assertSame('192.0.2.10', $eth->ipv4, 'first IPv4 wins');
+        $this->assertSame('2001:db8::10', $eth->ipv6, 'global IPv6 preferred over link-local');
+        $this->assertSame('192.0.2.10', $eth->ip());
+        $wlan = $snap->interfaces['wlan0'];
+        $this->assertSame('', $wlan->ipv4);
+        $this->assertSame('fe80::1', $wlan->ipv6, 'link-local only as a last resort, zone dropped');
+        $this->assertSame('fe80::1', $wlan->ip(), 'btop falls back to IPv6');
+        $this->assertSame('127.0.0.1', $snap->interfaces['lo']->ip());
+        $this->assertArrayNotHasKey('ghost0', $snap->interfaces, 'addresses never invent interfaces');
+
+        $this->now += 1.0;
+        $net->withInterface('eth0')->sample();
+        $this->assertSame(2, $calls, 're-read every sample (DHCP/VPN change them)');
+    }
+
+    public function testFixtureRootGetsNoHostAddressesByDefault(): void
+    {
+        [$snap] = $this->net()->sample();
+
+        foreach ($snap->interfaces as $iface) {
+            $this->assertSame('', $iface->ip(), $iface->name);
+        }
+    }
+
+    public function testLiveHostAddressesSmoke(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux' || !function_exists('net_get_interfaces') || !is_readable('/proc/net/dev')) {
+            $this->markTestSkipped('needs Linux /proc and net_get_interfaces()');
+        }
+        [$snap] = Net::new()->sample();
+
+        $this->assertSame('127.0.0.1', $snap->interfaces['lo']->ipv4 ?? null);
+    }
 }
