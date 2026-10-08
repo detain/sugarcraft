@@ -41,6 +41,23 @@ final class Kernel32 implements Kernel32Interface
     private static ?\FFI $ffi = null;
 
     /**
+     * Live ctrl-handler trampolines and the closures behind them.
+     *
+     * WHY A STATIC AT ALL: SetConsoleCtrlHandler is handed a raw function
+     * POINTER. The CData that OWNS the FFI trampoline behind that pointer is
+     * GC-managed — if a local variable were the only reference, PHP would
+     * free the trampoline the moment the method returned, and every later
+     * call through the pointer Windows kept (a Ctrl+C, or plain process
+     * detach) would be a use-after-free. Retaining the CData here keeps the
+     * pointer valid for the life of the process, which matches the Windows
+     * registration model: a handler stays registered until explicitly
+     * removed. Registrations are one-per-handler-per-process; the array is
+     * deliberately never pruned, because releasing an entry could free a
+     * trampoline a still-registered copy shares.
+     */
+    private static array $ctrlHandlerKeepAlive = [];
+
+    /**
      * Return a new Kernel32 instance.
      *
      * FFI is shared per-process via a static variable; each new instance
@@ -380,6 +397,13 @@ CPROTO
      */
     public function setConsoleCtrlHandler(\Closure $handler, bool $add = true): bool
     {
+        // NOT YET INTEGRATED: no production path reaches this method today.
+        // The Windows signal machinery it belongs to (WindowsBackend's
+        // drainSignals()/onResize()/InterruptFlags trio) has zero
+        // production callers; wiring that is a separate ruling, recorded in
+        // crush_libs.md's candy-core RE-VERIFY 2026-10-08 block. This method
+        // is kept CORRECT rather than deleted so the future wiring starts
+        // from a safe base — see the retention below.
         if (!\method_exists(\FFI::class, 'dynamicFunction')) {
             @trigger_error(
                 'Kernel32::setConsoleCtrlHandler requires PHP FFI with '
@@ -396,10 +420,20 @@ CPROTO
             \FFI::dynamicFunction($handler),
         );
 
-        return (bool) $this->ffi()->SetConsoleCtrlHandler(
+        $ok = (bool) $this->ffi()->SetConsoleCtrlHandler(
             \FFI::cast('void*', $cHandler),
             $add ? 1 : 0,
         );
+
+        if ($ok) {
+            // Retain BOTH sides of the registration: the trampoline CData
+            // whose address Windows stored, and the closure it dispatches —
+            // a successful SetConsoleCtrlHandler hands the pointer to the OS
+            // and PHP's GC knows nothing about that reference.
+            self::$ctrlHandlerKeepAlive[] = [$cHandler, $handler];
+        }
+
+        return $ok;
     }
 
     // ─── Wide-string helper ──────────────────────────────────────────────────
@@ -407,8 +441,15 @@ CPROTO
     /**
      * Convert a PHP string to a null-terminated UTF-16LE wchar_t array.
      *
-     * The caller MUST free the returned pointer via {@see FFI::free()}
-     * when no longer needed.
+     * WHAT THIS DOCBLOCK USED TO SAY: that the caller MUST free the
+     * returned pointer via FFI::free(). WHAT IS TRUE: the opposite. The
+     * buffer comes from lib()->new(), a GC-managed FFI allocation, and PHP
+     * releases it when the returned CData leaves scope — there is nothing
+     * for the caller to do, and calling FFI::free() on it would be a bug
+     * (free() is the duty of OWNED allocations, and this is not one). The
+     * sole caller, createFile(), passes the pointer to CreateFileW — which
+     * copies the name during the call — and lets it fall out of scope;
+     * that is the correct lifecycle, and it was already the behaviour.
      */
     public function toWideString(string $str): \FFI\CData
     {
