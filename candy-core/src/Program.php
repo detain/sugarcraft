@@ -717,6 +717,23 @@ final class Program
             // Recorded for both the startup dispatch and SIGWINCH-driven
             // updates; the model still receives the Msg via update() below.
             $this->recorder?->recordResize($msg->cols, $msg->rows);
+            // A resize invalidates the line-diff baseline: the terminal has
+            // reflowed (or dropped) the rows the renderer thinks it painted,
+            // and on a shrink diffLines() erases the vanished rows with
+            // cursorTo(row > height), which the terminal clamps onto the new
+            // LAST row — wiping the row it just painted there. Repaint from
+            // scratch instead, as Bubble Tea's renderer does on resize.
+            // Inline mode is exempt: it already repaints its whole region
+            // (cursorRestore + eraseToEnd) on every change, and a reset
+            // there would re-save the cursor BELOW the previous frame and
+            // paint a duplicate copy of the UI on every resize.
+            if (!$this->options->inlineMode) {
+                $this->renderer->reset();
+                $this->lastRenderedBody = null;
+                $this->lastImageSignature = '';
+                $this->lastImageRows = [];
+                $this->dirty = true;
+            }
         }
         if ($msg instanceof AsyncCmd) {
             // Generation guard (mirrors the deferTick law): a promise may settle
