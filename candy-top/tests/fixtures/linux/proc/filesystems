@@ -1,0 +1,6 @@
+nodev	sysfs
+nodev	tmpfs
+nodev	proc
+	ext4
+	vfat
+	squashfs
