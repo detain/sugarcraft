@@ -684,6 +684,129 @@ final class ParserTest extends TestCase
         $this->assertSame('b', $oscs[0]['detail'], 'Cancelled payload must not bleed');
     }
 
+    /**
+     * C1 (lane A3a): every cross-type C1 introducer pair discards the
+     * pending payload instead of bleeding it into the foreign sequence's
+     * dispatch — an APC fragment arriving as OSC data is a title-injection
+     * vector from untrusted peers. Same-type continuation stays pinned in
+     * testC1ReintroducerPreservesStringPayload.
+     *
+     * @return array{string, string, string, string} [origin opener, introducer, foreign type, origin type]
+     */
+    public static function crossTypeIntroducerProvider(): iterable
+    {
+        yield 'sos -> osc' => ["\x1bX", "\x9d", 'osc', 'sos'];
+        yield 'sos -> pm'  => ["\x1bX", "\x9e", 'pm', 'sos'];
+        yield 'sos -> apc' => ["\x1bX", "\x9f", 'apc', 'sos'];
+        yield 'pm -> sos'  => ["\x1b^", "\x98", 'sos', 'pm'];
+        yield 'pm -> osc'  => ["\x1b^", "\x9d", 'osc', 'pm'];
+        yield 'pm -> apc'  => ["\x1b^", "\x9f", 'apc', 'pm'];
+        yield 'apc -> sos' => ["\x1b_", "\x98", 'sos', 'apc'];
+        yield 'apc -> osc' => ["\x1b_", "\x9d", 'osc', 'apc'];
+        yield 'apc -> pm'  => ["\x1b_", "\x9e", 'pm', 'apc'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('crossTypeIntroducerProvider')]
+    public function testCrossTypeIntroducerDispatchesWithoutStalePayload(string $opener, string $introducer, string $foreign, string $origin): void
+    {
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        // 'FRAG' collected in the origin sequence must NEVER reach any
+        // dispatch; only the foreign sequence's own 'NEW' may.
+        $parser->feed($opener . 'FRAG' . $introducer . 'NEW' . "\x9c");
+
+        $events = $handler->filter($foreign);
+        $this->assertCount(1, $events, "the foreign $foreign sequence should dispatch once");
+        $this->assertSame('NEW', $events[0]['detail'], 'stale payload must not bleed across types');
+        $this->assertCount(0, $handler->filter($origin), "the abandoned $origin sequence must not dispatch its fragment");
+    }
+
+    public function testOscAndDcsSwallowForeignIntroducersAsPayload(): void
+    {
+        // OSC/DCS parity (pre-existing, re-pinned by the C2 extension):
+        // in OscString/DcsString the C1 introducers are Put bytes, so no
+        // cross-type jump exists to leak at all.
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b]FRAG\x98NEW\x9c");
+        $parser->feed("\x1bPqFRAG\x9dNEW\x9c");
+
+        $oscs = $handler->filter('osc');
+        $dcs  = $handler->filter('dcs');
+        $this->assertCount(1, $oscs);
+        $this->assertSame("FRAG\x98NEW", $oscs[0]['detail']);
+        $this->assertCount(0, $handler->filter('sos'));
+        $this->assertCount(1, $dcs);
+        $this->assertSame("FRAG\x9dNEW", $dcs[0]['detail']['data']);
+    }
+
+    public function testCrossTypeIntroducerFromApcIntoOscIsTheProbeShape(): void
+    {
+        // Exact p8a probe: "\x1b_a\x9Db0;t\x07" used to dispatch
+        // oscDispatch('ab0;t') — the APC fragment 'a' forged into the OSC
+        // payload. Post-fix the OSC carries only 'b0;t'.
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b_a\x9Db0;t\x07");
+
+        $apcs = $handler->filter('apc');
+        $oscs = $handler->filter('osc');
+        $this->assertCount(1, $oscs);
+        $this->assertSame('b0;t', $oscs[0]['detail']);
+        // The abandoned APC fragment is discarded, not dispatched.
+        $this->assertCount(0, $apcs, 'a cancelled APC must not dispatch its stale fragment');
+    }
+
+    public function testRawUtf8InsideApcStaysInPayloadAndPrintsNothing(): void
+    {
+        // C2 (lane A3a): before the Put-range extension the UTF-8 lead in
+        // the anywhere table won over the narrow 0x20-0x7F Put, so the CJK
+        // rune ESCAPED the sequence — printChar fired mid-string and the
+        // bytes vanished from the dispatch.
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b_a中b\x9c");
+
+        $prints = $handler->filter('print');
+        $this->assertCount(0, $prints, 'no byte of an APC payload may print');
+        $apcs = $handler->filter('apc');
+        $this->assertCount(1, $apcs);
+        $this->assertSame("a中b", $apcs[0]['detail'], 'raw >=0x80 bytes stay in the payload');
+    }
+
+    public function testRawUtf8InsideSosAndPmStayInPayload(): void
+    {
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1bXqé\x9c");
+        $parser->feed("\x1b^r€\x9c");
+
+        $this->assertCount(0, $handler->filter('print'));
+        $sos = $handler->filter('sos');
+        $pm  = $handler->filter('pm');
+        $this->assertSame("qé", $sos[0]['detail']);
+        $this->assertSame("r€", $pm[0]['detail']);
+    }
+
+    public function testHighRawByteInsideOscStillNeverEscapes(): void
+    {
+        // OSC already had the 0xFF extension — pin the neighbouring shape
+        // so a future table edit cannot shrink OSC back into the defect.
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        $parser->feed("\x1b]0;t中tle\x9c");
+
+        $this->assertCount(0, $handler->filter('print'));
+        $oscs = $handler->filter('osc');
+        $this->assertSame("0;t中tle", $oscs[0]['detail']);
+    }
+
     public function testC1ReintroducerPreservesStringPayload(): void
     {
         $handler = new DebugHandler();

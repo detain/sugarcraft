@@ -228,4 +228,23 @@ final class HyperlinkParsingTest extends TestCase
         $this->assertSame('', $oscImpl->hyperlinkUri());
         $this->assertSame('', $oscImpl->hyperlinkId());
     }
+    public function testCloseSequenceThroughParserClearsTheId(): void
+    {
+        // C3 (lane A3a) end-to-end: open with an id, close with a param-
+        // carrying terminator ('ESC]8;id=x;ST'); both accessors must be
+        // empty afterwards, matching the class doc.
+        $oscImpl = new OscHandlerImpl();
+        $adapter = new HandlerAdapter($this->createStub(CsiHandler::class), $oscImpl);
+        $parser  = new Parser($adapter);
+
+        $parser->feed("\x1b]8;id=x;https://example.com\x1b\\");
+        $this->assertSame('https://example.com', $oscImpl->hyperlinkUri());
+        $this->assertSame('x', $oscImpl->hyperlinkId());
+
+        $parser->feed("\x1b]8;id=x;\x1b\\");
+
+        $this->assertSame('', $oscImpl->hyperlinkUri(), 'empty URI closes the hyperlink');
+        $this->assertSame('', $oscImpl->hyperlinkId(), 'the id resets with the link');
+    }
+
 }

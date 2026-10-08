@@ -147,6 +147,24 @@ final class Transitions
             $set($state, 0x19, Action::Put->value, $state);
             $setRange($state, 0x1C, 0x1F, Action::Put->value, $state);
             $setRange($state, 0x20, 0x7F, Action::Put->value, $state);
+            // C2 (lane A3a): OSC/DCS parity — raw bytes >= 0x80 belong to
+            // the payload. Left to the anywhere table, the Utf8 lead edge
+            // (Collect -> Utf8) won in these three states, so a multi-byte
+            // rune inside an SOS/PM/APC payload ESCAPED the sequence: the
+            // rune was printed to the screen and lost from the dispatch.
+            $setRange($state, 0x80, 0xFF, Action::Put->value, $state);
+            // The four string introducers keep their anywhere Start edge
+            // (unlike OSC/DCS, which swallow them): same-type
+            // re-introduction preserving the payload is deliberately
+            // pinned (ParserTest::testC1ReintroducerPreservesStringPayload)
+            // and cross-type introduction discards the stale payload in
+            // Parser::start() (C1 guard) instead of bleeding it. DCS/CSI
+            // introducers (0x90/0x9B) follow payload bytes here exactly as
+            // they already did in OscString/DcsString.
+            $set($state, 0x98, Action::Start->value, $SS);
+            $set($state, 0x9D, Action::Start->value, $OS);
+            $set($state, 0x9E, Action::Start->value, $PS);
+            $set($state, 0x9F, Action::Start->value, $AS);
             $set($state, 0x1B, Action::Dispatch->value, $E);
             $set($state, 0x9C, Action::Dispatch->value, $G);
             $setMany($state, [0x18, 0x1A], Action::None->value, $G);

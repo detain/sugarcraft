@@ -435,10 +435,39 @@ final class Parser
 
     private function start(int $byte, State $from): void
     {
+        // C1 (lane A3a): a DIFFERENT-type string introducer mid-sequence is
+        // an implicit cancel of the pending one — its payload must not ride
+        // into the new sequence's dispatch (an APC fragment arriving as OSC
+        // title data is a title-injection vector from untrusted peers).
+        // Same-type re-introduction deliberately KEEPS the buffer
+        // (testC1ReintroducerPreservesStringPayload).
+        $target = $this->introducerTarget($byte);
+        if ($target !== null
+            && $target !== $from
+            && \in_array($from, self::STRING_STATES, true)
+        ) {
+            $this->stringBuffer = '';
+        }
+
         // For DCS, the byte that triggers Start IS the final command.
         if ($from === State::DcsEntry || $from === State::DcsParam || $from === State::DcsIntermediate) {
             $this->cmd = ($this->cmd & ~0xFF) | $byte;
         }
+    }
+
+    /**
+     * The string state a C1 introducer byte opens, or null for any other
+     * byte. Used by the cross-type discard in {@see start()}.
+     */
+    private function introducerTarget(int $byte): ?State
+    {
+        return match ($byte) {
+            0x98 => State::SosString,
+            0x9D => State::OscString,
+            0x9E => State::PmString,
+            0x9F => State::ApcString,
+            default => null,
+        };
     }
 
     private function put(int $byte): void

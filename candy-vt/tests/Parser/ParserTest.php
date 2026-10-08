@@ -378,14 +378,19 @@ final class ParserTest extends TestCase
         $this->assertSame('ABCD', $sos[0]['detail'], 'bytes collected before the C1 re-introducer must not be dropped');
     }
 
-    public function testCrossKindC1IntroducerPreservesPayload(): void
+    public function testCrossKindC1IntroducerDiscardsStalePayload(): void
     {
-        // SOS "AB", then 8-bit PM re-introducer 0x9E switches kind, then "CD", ST 0x9C.
-        // The "AB" leads through into the PM payload rather than being discarded.
+        // SOS "AB", then 8-bit PM introducer 0x9E switches KIND, then "CD", ST 0x9C.
+        // A3a ruling (2026-10-08, p8a C1): a cross-kind introducer is an
+        // implicit cancel — the abandoned fragment must NOT ride into the
+        // foreign payload (title-injection vector from untrusted peers).
+        // Same-kind re-introduction still preserves the buffer, pinned by
+        // testStringInterruptedByC1IntroducerStillDispatchesPayload above.
         $h = $this->parse("\x1bXAB\x9eCD\x9c");
         $pm = $h->filter('pm');
         $this->assertCount(1, $pm, 'exactly one PM dispatch expected');
-        $this->assertSame('ABCD', $pm[0]['detail'], 'payload collected before the C1 re-introducer must survive');
+        $this->assertSame('CD', $pm[0]['detail'], 'the abandoned SOS fragment must not bleed into the PM payload');
+        $this->assertCount(0, $h->filter('sos'), 'the cancelled SOS must not dispatch');
     }
 
     // ─── Cancellation ──────────────────────────────────────────────────────
