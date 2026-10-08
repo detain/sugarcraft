@@ -43,5 +43,6 @@
   {"name": "SugarTick", "slug": "sugar-tick", "category": "app", "description": "Privacy-first coding-time tracker — JSONL on disk, SugarCharts-driven dashboard. No cloud, no MongoDB.", "url": "lib/sugar-tick.html"},
   {"name": "CandyMines", "slug": "candy-mines", "category": "app", "description": "Minesweeper — customisable board, recursive flood-fill, win/lose detection. Pure-state Board; first-click safety.", "url": "lib/candy-mines.html"},
   {"name": "CandyFlip", "slug": "candy-flip", "category": "app", "description": "ASCII GIF viewer — ext-gd decode, downsample to a cell grid, render as ANSI 24-bit blocks or ASCII.", "url": "lib/candy-flip.html"},
+  {"name": "CandyTop", "slug": "candy-top", "category": "app", "description": "btop-style system monitor — cpu, mem, net, disk and process panels with braille graphs and btop themes over Linux /proc + /sys collectors.", "url": "lib/candy-top.html"},
   {"name": "HoneyFlap", "slug": "honey-flap", "category": "app", "description": "Flappy-Bird in your terminal — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate.", "url": "lib/honey-flap.html"}
 ]

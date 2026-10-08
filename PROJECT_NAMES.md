@@ -102,6 +102,22 @@ standalone functionality, and keeps the app's prefix (no `Candy-` for an
 app's web face, per the prefix law below). A package that is useful on its
 own still needs a two-word name of its own.
 
+### Exception: `candy-top` (prefix ruling on a system-monitor app)
+
+| Name | Prefix heuristic says | Owner ruling | Decision |
+|---|---|---|---|
+| **CandyTop** (`candy-top/`, `sugarcraft/candy-top`, `SugarCraft\Top\`) | `Sugar-` — it is a full-screen **app** (port of aristocratos/btop), and the prefix law puts apps under `Sugar-`; the add-a-lib review flagged that "a system monitor app arguably reads sugar-top". | `Candy-` — the owner explicitly chose `candy-top`. | Owner decision, recorded 2026-10-08 (`plan_top.md` §8 decision 1): keep `candy-top`. |
+
+Both sides, for the record: **for `Sugar-`**, candy-top ships no reusable
+primitives — every rendering gap it needed was closed in `sugar-dash`,
+`sugar-charts`, `sugar-bits` and `candy-sprinkles`, and the app only
+assembles them, which is exactly the `Sugar-` "components / apps" role.
+**For `Candy-`**, the AGENTS.md naming line gives `Candy-` to
+"foundation / **system**", and a system monitor is about as literally
+"system" as a package gets (it reads `/proc` and `/sys`, not user data);
+`Candy-` apps already exist (CandyFiles, CandyQuery, CandyFlip). The ruling
+stands; it is not a precedent that apps default to `Candy-`.
+
 ---
 
 ## ✅ Strong (keep / build around)
@@ -140,6 +156,7 @@ own still needs a two-word name of its own.
 | **CandyMouse** | candy + mouse = self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) + ZoneClickTracker. Mirrors bubblezone semantics but no external Manager wiring — scanner is owned by each consumer. |
 | **CandyMines** | candy + mines = Minesweeper. clear. |
 | **CandyLister** | candy + lister = scrollable tree/list view component (port of treilik/bubblelister). literal. |
+| **CandyTop** | candy + top = the `top`/`btop` family of system monitors. port of aristocratos/btop; `Candy-` by owner ruling (see the `candy-top` exception above — the heuristic alone would say `Sugar-`). |
 | **CandyQuery** | candy + query = terminal SQL browser. multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. |
 | **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |
 | **SugarDiff** | sugar + diff = unified-diff engine. component/data per prefix law; extracted from sugar-crush (BuildsUnifiedDiff + DiffGutter numbering model); first-party — no 1:1 upstream. |

@@ -1,0 +1,23 @@
+<p class="lede" style="margin-top: 28px;">A full-screen terminal system monitor in the spirit of <a href="https://github.com/aristocratos/btop">btop</a>, written in pure PHP on the SugarCraft stack: <strong>cpu, memory, network, disk and process panels drawn with braille graphs, gradient meters and btop's own themes</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> collectors and driven by the <a href="candy-core.html">CandyCore</a> Model/Cmd runtime.</p>
+
+    <p><strong>Status: scaffold, in progress.</strong> The package skeleton has landed; the rendering primitives it needs (dual-sample braille graphs, position-colored meters, border-embedded titles, the 101-stop gradient store) are being added to <a href="sugar-dash.html">SugarDash</a>, <a href="sugar-charts.html">SugarCharts</a>, <a href="sugar-bits.html">SugarBits</a> and <a href="candy-sprinkles.html">CandySprinkles</a> first, and the app is assembled on top of them.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-top:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">What's planned</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Six panels</strong><span>cpu (graphs, per-core grid, load / freq footer, battery + clock), mem + swap, net with autoscale, disk io, a sortable / filterable process list.</span></div>
+      <div class="feature"><strong>btop's drawing language</strong><span>Dual-sample braille and block graphs, 101-stop gradients, position-colored meters, titles embedded in the borders.</span></div>
+      <div class="feature"><strong>Linux collectors</strong><span>Injectable-path readers for <code>/proc/stat</code>, <code>meminfo</code>, <code>net/dev</code>, <code>diskstats</code>, per-pid stats, thermal, hwmon and power-supply sysfs.</span></div>
+      <div class="feature"><strong>Themes + input</strong><span>btop's theme files ported as data; kitty keyboard + SGR mouse, vim keys, a btop-compatible config subset.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-top">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-top/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-top/tree/master/tests">Test suite</a></li>
+    </ul>
+  </div>
+</section>
