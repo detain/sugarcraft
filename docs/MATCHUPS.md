@@ -1,7 +1,7 @@
 # SugarCraft library & app status
 
 The authoritative index of every package in the SugarCraft project —
-**41 libraries and 20 apps (61 packages total)** — with its status at a
+**41 libraries and 21 apps (62 packages total)** — with its status at a
 glance. The final section,
 [Inspirational reference projects](#inspirational-reference-projects),
 maps each package back to the Go projects that sparked its design.
