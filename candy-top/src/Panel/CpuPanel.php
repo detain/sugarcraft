@@ -446,35 +446,8 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
      */
     private static function holdDevice(GpuDevice $d, ?GpuDevice $prev): GpuDevice
     {
-        if ($prev === null || $prev->index !== $d->index) {
-            return $d;
-        }
-        $f = static fn (float $now, float $old): float => $now >= 0 ? $now : $old;
-        $n = static fn (int $now, int $old): int => $now >= 0 ? $now : $old;
-
-        return new GpuDevice(
-            $d->index,
-            $d->name,
-            $f($d->utilization, $prev->utilization),
-            $n($d->memUsed, $prev->memUsed),
-            $n($d->memTotal, $prev->memTotal),
-            $f($d->temp, $prev->temp),
-            $f($d->watts, $prev->watts),
-            $f($d->memUtilization, $prev->memUtilization),
-            $f($d->powerLimit, $prev->powerLimit),
-            $f($d->clockGraphics, $prev->clockGraphics),
-            $f($d->clockMem, $prev->clockMem),
-            $f($d->clockGraphicsMax, $prev->clockGraphicsMax),
-            $f($d->clockMemMax, $prev->clockMemMax),
-            $f($d->fanSpeed, $prev->fanSpeed),
-            $d->pstate,
-            $n($d->pcieGen, $prev->pcieGen),
-            $n($d->pcieWidth, $prev->pcieWidth),
-            $f($d->tempMem, $prev->tempMem),
-            $f($d->encoderUtilization, $prev->encoderUtilization),
-            $f($d->decoderUtilization, $prev->decoderUtilization),
-            $d->uuid,
-        );
+        // GpuDevice owns the merge so vendor/kind/busId/driver survive it.
+        return $d->heldFrom($prev);
     }
 
     /** show_core_freq != off asks the Freq collector for per-core reads (btop #1785). */

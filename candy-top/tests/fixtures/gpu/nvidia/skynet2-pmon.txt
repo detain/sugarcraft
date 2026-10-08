@@ -1,0 +1,8 @@
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa     fb   ccpm    command 
+# Idx           #    C/G      %      %      %      %      %      %     MB     MB    name 
+    0    2094147     C     92     52      -      -      -      -  90480      0    sglang::schedul
+    1    2094383     C     91     50      -      -      -      -  90478      0    sglang::schedul
+    2     377306     C      -      -      -      -      -      -    550      0    python3        
+    2     377813     C     99     60      -      -      -      -  47594      0    sgl_diffusion::
+    3     377306     C      -      -      -      -      -      -    550      0    python3        
+    3     377814     C    100     70      -      -      -      -  47560      0    sgl_diffusion::

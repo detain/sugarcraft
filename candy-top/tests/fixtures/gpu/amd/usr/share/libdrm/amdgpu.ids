@@ -1,0 +1,12 @@
+# List of AMDGPU IDs — TRIMMED candy-top fixture (libdrm amdgpu.ids, 2025-06)
+#
+# Syntax:
+# device_id,	revision_id,	product_name        <-- single tab after comma
+
+1.0.0
+1586,	C1,	Radeon 8060S Graphics
+1586,	C2,	Radeon 8050S Graphics
+1586,	D5,	Radeon 8040S Graphics
+73BF,	C0,	AMD Radeon RX 6900 XT
+73BF,	C1,	AMD Radeon RX 6800 XT
+73BF,	C3,	AMD Radeon RX 6800

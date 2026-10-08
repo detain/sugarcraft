@@ -234,6 +234,9 @@ final class GpuTest extends TestCase
             if (str_starts_with($argv[1], '--query-compute-apps=')) {
                 return [GpuOutcome::Ok, self::fixture('skynet2-compute-apps.csv')];
             }
+            if ($argv[1] === 'pmon') {
+                return [GpuOutcome::Ok, (string) file_get_contents(dirname(__DIR__) . '/fixtures/gpu/nvidia/skynet2-pmon.txt')];
+            }
 
             return [GpuOutcome::Ok, self::fixture($argv[1] === '--query-gpu=' . implode(',', Gpu::QUERY_EXTENDED)
                 ? 'skynet2-query-extended.csv'
@@ -280,7 +283,7 @@ final class GpuTest extends TestCase
     {
         [$snap] = Gpu::new($this->skynet2(), fn (): float => $this->now, candidates: ['nvidia-smi'], processes: true)->sample();
 
-        $this->assertSame(2, $this->calls, 'device query + compute-apps query');
+        $this->assertSame(3, $this->calls, 'device query + compute-apps query + pmon');
         $this->assertSame('--query-compute-apps=pid,gpu_uuid,used_memory', $this->argvs[1][1]);
         $this->assertNotNull($snap->processes);
         $this->assertCount(6, $snap->processes);
@@ -547,7 +550,7 @@ final class GpuTest extends TestCase
 
         $this->now += 5.0;
         [$snap] = $gpu->withProcesses()->sample();
-        $this->assertSame(3, $this->calls, 'device + compute-apps once opted in');
+        $this->assertSame(4, $this->calls, 'device + compute-apps + pmon once opted in');
         $this->assertNotNull($snap->processes);
     }
 
@@ -566,6 +569,9 @@ final class GpuTest extends TestCase
                 $appsCalls++;
 
                 return $appsHang ? [GpuOutcome::Timeout, ''] : [GpuOutcome::Ok, self::fixture('skynet2-compute-apps.csv')];
+            }
+            if ($argv[1] === 'pmon') {
+                return [GpuOutcome::Absent, '']; // pmon has its own schedule (see the pmon tests)
             }
             $this->calls++;
 
@@ -703,5 +709,132 @@ final class GpuTest extends TestCase
 
         $this->assertSame('Evil31mGPU', $snap->devices[0]->name);
         $this->assertSame('GPU-2Jabc', $snap->devices[0]->uuid);
+    }
+
+    public function testPmonAddsPerProcessUtilization(): void
+    {
+        [$snap] = Gpu::new($this->skynet2(), fn (): float => $this->now, candidates: ['nvidia-smi'], processes: true)->sample();
+
+        $this->assertSame(['nvidia-smi', ...Gpu::PMON_ARGS], $this->argvs[2]);
+        $p = $snap->processes[0];
+        $this->assertSame([2094147, 0, 92.0, 52.0, 0.0, 0.0], [$p->pid, $p->gpuIndex, $p->utilization, $p->memUtilization, $p->encoderUtilization, $p->decoderUtilization]);
+        $this->assertSame(90480 * 1048576, $p->usedMemory, 'compute-apps memory kept');
+        $this->assertSame(0.0, $snap->processes[2]->utilization, '"-" = idle, not unmeasured');
+        $this->assertCount(6, $snap->processes, 'every pmon row matched a compute-apps row');
+        $this->assertSame([2094147 => 92.0, 2094383 => 91.0, 377306 => 0.0, 377813 => 99.0, 377814 => 100.0], $snap->utilizationByPid());
+    }
+
+    public function testPmonOnlyGraphicsProcessIsAppendedAndOldHeaderParses(): void
+    {
+        $pmon = "# gpu        pid  type    sm   mem   enc   dec    fb   command\n"
+            . "# Idx          #   C/G     %     %     %     %    MB   name\n"
+            . "    0       4242     G     7     3     -     -    64   Xorg\n"
+            . "    0         11     C    50    20     1     2    12   cuda app\n"
+            . "    9       4243     G     1     1     -     -     -   ghost\n";
+        $runner = static fn (array $argv): array => match (true) {
+            str_starts_with($argv[1], '--query-compute-apps=') => [GpuOutcome::Ok, "11, GPU-a, 12\n"],
+            $argv[1] === 'pmon' => [GpuOutcome::Ok, $pmon],
+            default => [GpuOutcome::Ok, "0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, P0, 3, 8, N/A, GPU-a, Fake\n"],
+        };
+        [$snap] = Gpu::new($runner, candidates: ['nvidia-smi'], processes: true)->sample();
+
+        $this->assertCount(3, $snap->processes);
+        $this->assertSame([11, 0, 12 * 1048576, 50.0, 20.0, 1.0, 2.0], [
+            $snap->processes[0]->pid, $snap->processes[0]->gpuIndex, $snap->processes[0]->usedMemory,
+            $snap->processes[0]->utilization, $snap->processes[0]->memUtilization,
+            $snap->processes[0]->encoderUtilization, $snap->processes[0]->decoderUtilization,
+        ]);
+        $xorg = $snap->processes[1];
+        $this->assertSame([4242, 0, 'GPU-a', 64 * 1048576, 7.0], [$xorg->pid, $xorg->gpuIndex, $xorg->gpuUuid, $xorg->usedMemory, $xorg->utilization]);
+        $ghost = $snap->processes[2];
+        $this->assertSame([-1, Sentinel::UNAVAILABLE, Sentinel::UNMEASURED_INT], [$ghost->gpuIndex, $ghost->gpuUuid, $ghost->usedMemory]);
+    }
+
+    public function testPmonTimeoutsBackOffPmonAloneNeverTheMemoryQuery(): void
+    {
+        $pmonCalls = 0;
+        $appsCalls = 0;
+        $runner = function (array $argv) use (&$pmonCalls, &$appsCalls): array {
+            if ($argv[1] === 'pmon') {
+                $pmonCalls++;
+
+                return [GpuOutcome::Timeout, ''];
+            }
+            if (str_starts_with($argv[1], '--query-compute-apps=')) {
+                $appsCalls++;
+            }
+
+            return $this->skynet2()($argv);
+        };
+        $gpu = Gpu::new($runner, fn (): float => $this->now, candidates: ['nvidia-smi'], processes: true);
+        [$snap, $gpu] = $gpu->sample();
+        $this->assertCount(6, $snap->processes, 'compute-apps rows survive a pmon hang');
+        $this->assertSame(Sentinel::UNMEASURED, $snap->processes[0]->utilization);
+
+        for ($i = 0; $i < 40; $i++) {
+            $this->now += 5.0;
+            [$snap, $gpu] = $gpu->sample();
+            $this->assertCount(6, $snap->processes ?? [], 'memory measured every interval');
+        }
+        $this->assertSame(41, $appsCalls, 'compute-apps never backed off by pmon');
+        // pmon: t=0 (→10 s), t=10 (→20 s), t=30 (3rd → off 600 s): three hangs in 200 s.
+        $this->assertSame(3, $pmonCalls);
+        $this->assertTrue($gpu->pmonSupported(), 'a hang is transient, not "unsupported"');
+    }
+
+    public function testPmonNonTimeoutFailuresMemoizeUnsupported(): void
+    {
+        $pmonCalls = 0;
+        $runner = function (array $argv) use (&$pmonCalls): array {
+            if ($argv[1] === 'pmon') {
+                $pmonCalls++;
+
+                return $pmonCalls === 2 ? [GpuOutcome::Ok, "not pmon output\n"] : [GpuOutcome::Absent, ''];
+            }
+
+            return $this->skynet2()($argv);
+        };
+        $gpu = Gpu::new($runner, fn (): float => $this->now, candidates: ['nvidia-smi'], processes: true);
+        for ($i = 0; $i < 6; $i++) {
+            [$snap, $gpu] = $gpu->sample();
+            $this->now += 5.0;
+            $this->assertCount(6, $snap->processes ?? []);
+        }
+
+        $this->assertSame(Gpu::PMON_MAX_FAILURES, $pmonCalls, 'exit != 0 and header-less output both count; then no respawn');
+        $this->assertFalse($gpu->pmonSupported());
+        $this->assertTrue($gpu->withProcesses(false)->withProcesses()->pmonSupported(), 'a fresh opt-in retries');
+    }
+
+    public function testComputeAppsFailureStillRunsPmon(): void
+    {
+        $runner = function (array $argv): array {
+            if (str_starts_with($argv[1], '--query-compute-apps=')) {
+                return [GpuOutcome::Absent, ''];
+            }
+
+            return $this->skynet2()($argv);
+        };
+        [$snap] = Gpu::new($runner, candidates: ['nvidia-smi'], processes: true)->sample();
+
+        $this->assertCount(6, $snap->processes ?? [], 'rows from pmon alone');
+        $this->assertSame(90480 * 1048576, $snap->processes[0]->usedMemory, 'pmon fb column');
+        $this->assertSame(92.0, $snap->processes[0]->utilization);
+        $this->assertSame('GPU-e16d248c-c1a9-3302-01d6-82c18e02c9ce', $snap->processes[0]->gpuUuid);
+    }
+
+    public function testComputeAppsTimeoutSkipsPmonThatCycle(): void
+    {
+        $runner = function (array $argv): array {
+            if (str_starts_with($argv[1], '--query-compute-apps=')) {
+                return [GpuOutcome::Timeout, ''];
+            }
+
+            return $this->skynet2()($argv);
+        };
+        [$snap] = Gpu::new($runner, candidates: ['nvidia-smi'], processes: true)->sample();
+
+        $this->assertNull($snap->processes);
+        $this->assertSame(['--query-gpu=' . implode(',', Gpu::QUERY_EXTENDED)], array_column($this->argvs, 1), 'one bounded wait per interval');
     }
 }

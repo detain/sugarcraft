@@ -1,0 +1,2 @@
+DRIVER=amdxdna
+PCI_SLOT_NAME=0000:c6:00.1
