@@ -60,7 +60,9 @@ namespace SugarCraft\Top\Collect;
  *    Unreadable (EACCES for other uids) → UNMEASURED, never 0;
  *  - #1873: the container from /proc/[pid]/cgroup (Cgroup::fromProcFile),
  *    cached with cmd/user — a process moved to another cgroup later keeps
- *    the first value, as in btop.
+ *    the first value, as in btop. Wave U1b: KVM/QEMU guests too (engine
+ *    "kvm", ContainerRef::$vm), from the same cgroup read plus the cmdline
+ *    already read — no extra file per process.
  */
 final class ProcList
 {
@@ -350,7 +352,7 @@ final class ProcList
             'user' => $users[$uid],
             'uid' => $uid,
             'argv0' => $offset < strlen($cmd) ? $offset : 0,
-            'container' => Cgroup::fromProcFile(Read::file($dir . '/cgroup')),
+            'container' => Cgroup::fromProcFile(Read::file($dir . '/cgroup'), $cmdline),
         ];
     }
 

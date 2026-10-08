@@ -127,6 +127,40 @@ final class FreqTest extends TestCase
         }
     }
 
+    public function testPerCoreUsesTheAggregatePlausibilityRule(): void
+    {
+        $tree = FixtureTree::copy();
+        try {
+            // 500 kHz = 0.5 MHz and 1 kHz are failed reads, as is ≥ 999999999 MHz.
+            $tree->write('sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq', "500\n");
+            $tree->write('sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq', "999999999000\n");
+            $tree->write('sys/devices/system/cpu/cpu1/cpufreq/scaling_min_freq', "1000\n");
+            [$snap] = Freq::new($tree->paths(), perCore: true)->sample();
+
+            $this->assertSame(Sentinel::UNMEASURED, $snap->perCore[0]);
+            $this->assertSame(Sentinel::UNMEASURED, $snap->perCore[1]);
+            $this->assertSame(Sentinel::UNMEASURED, $snap->perCoreMin[1], '1 MHz is not a frequency');
+            $this->assertSame(1200.5, $snap->perCore[10], 'plausible cores untouched');
+
+            // The same raw reading through the aggregate path agrees.
+            foreach (array_diff(scandir($tree->root . '/sys/devices/system/cpu/cpufreq') ?: [], ['.', '..', 'boost']) as $policy) {
+                $tree->write("sys/devices/system/cpu/cpufreq/{$policy}/scaling_cur_freq", "500\n");
+            }
+            $tree->write('proc/cpuinfo', "processor\t: 0\ncpu MHz\t\t: 0.5\n\nprocessor\t: 1\ncpu MHz\t\t: 9999999999\n");
+            [$agg] = Freq::new($tree->paths())->sample();
+            $this->assertSame(Sentinel::UNMEASURED, $agg->mhz);
+
+            foreach (['cpu0', 'cpu1', 'cpu10'] as $cpu) {
+                $tree->remove("sys/devices/system/cpu/{$cpu}/cpufreq");
+            }
+            [$fallback] = Freq::new($tree->paths(), perCore: true)->sample();
+            $this->assertSame(Sentinel::UNMEASURED, $fallback->perCore[0], 'cpuinfo fallback: 0.5 MHz rejected');
+            $this->assertSame(Sentinel::UNMEASURED, $fallback->perCore[1], 'cpuinfo fallback: absurd value rejected');
+        } finally {
+            $tree->destroy();
+        }
+    }
+
     public function testPerCoreOnEmptyTreeIsEmpty(): void
     {
         $tree = FixtureTree::empty();

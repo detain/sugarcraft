@@ -379,6 +379,101 @@ final class GpuTest extends TestCase
         $this->assertSame(['/usr/lib/wsl/lib/nvidia-smi'], array_column($this->argvs, 0), 'winner pinned');
     }
 
+    public function testPinnedBinaryThatKeepsFailingIsUnpinnedAndTheSweepReruns(): void
+    {
+        $gone = false;
+        $runner = function (array $argv) use (&$gone): array {
+            $this->argvs[] = $argv;
+
+            return match (true) {
+                $argv[0] === '/usr/bin/nvidia-smi' && !$gone => [GpuOutcome::Ok, self::CSV],
+                $argv[0] === '/usr/lib/wsl/lib/nvidia-smi' && $gone => [GpuOutcome::Ok, self::CSV],
+                default => [GpuOutcome::Absent, ''],
+            };
+        };
+        [, $gpu] = Gpu::new($runner, fn (): float => $this->now, candidates: ['/usr/bin/nvidia-smi', '/usr/lib/wsl/lib/nvidia-smi'], queries: [Gpu::QUERY])->sample();
+        $this->assertSame('/usr/bin/nvidia-smi', $gpu->binary());
+
+        $gone = true; // binary removed by a driver upgrade
+        $waits = [5.0, 10.0, 20.0]; // interval, then backoff 5 × 2¹, 5 × 2²
+        for ($i = 1; $i <= Gpu::PIN_MAX_FAILURES; $i++) {
+            $this->now += $waits[$i - 1];
+            $this->argvs = [];
+            [$snap, $gpu] = $gpu->sample();
+            $this->assertFalse($snap->available());
+            $this->assertSame(['/usr/bin/nvidia-smi'], array_column($this->argvs, 0), "failure {$i}: pinned binary only");
+            $this->assertFalse($gpu->absent());
+        }
+        $this->assertNull($gpu->binary(), 'unpinned after PIN_MAX_FAILURES consecutive failures');
+
+        // The backoff still applies before the re-sweep (5 × 2³ = 40 s).
+        $this->now += 39.0;
+        $this->argvs = [];
+        $gpu->sample();
+        $this->assertSame([], $this->argvs);
+
+        $this->now += 1.0;
+        [$snap, $gpu] = $gpu->sample();
+        $this->assertTrue($snap->available());
+        $this->assertSame(['/usr/bin/nvidia-smi', '/usr/lib/wsl/lib/nvidia-smi'], array_column($this->argvs, 0), 'full sweep re-ran');
+        $this->assertSame('/usr/lib/wsl/lib/nvidia-smi', $gpu->binary(), 'new winner pinned');
+    }
+
+    public function testUnpinRediscoversCandidatesWhenNewDiscoveredThem(): void
+    {
+        $root = sys_get_temp_dir() . '/candy-top-gpu-' . bin2hex(random_bytes(6));
+        mkdir("{$root}/old", 0777, true);
+        mkdir("{$root}/new", 0777, true);
+        touch("{$root}/old/nvidia-smi");
+        chmod("{$root}/old/nvidia-smi", 0755);
+        $path = getenv('PATH');
+        putenv("PATH={$root}/old");
+        try {
+            $runner = function (array $argv): array {
+                $this->argvs[] = $argv;
+
+                return is_file($argv[0]) ? [GpuOutcome::Ok, self::CSV] : [GpuOutcome::Absent, ''];
+            };
+            [, $gpu] = Gpu::new($runner, fn (): float => $this->now, queries: [Gpu::QUERY])->sample();
+            $this->assertSame("{$root}/old/nvidia-smi", $gpu->binary());
+
+            rename("{$root}/old/nvidia-smi", "{$root}/new/nvidia-smi");
+            putenv("PATH={$root}/new");
+            for ($i = 0; $i < Gpu::PIN_MAX_FAILURES; $i++) {
+                $this->now += 1000.0;
+                [, $gpu] = $gpu->sample();
+            }
+            $this->assertNull($gpu->binary());
+            $this->now += 1000.0;
+            [$snap, $gpu] = $gpu->sample();
+            $this->assertTrue($snap->available());
+            $this->assertSame("{$root}/new/nvidia-smi", $gpu->binary(), 'found at its new PATH location');
+        } finally {
+            putenv($path === false ? 'PATH' : "PATH={$path}");
+            @unlink("{$root}/new/nvidia-smi");
+            @rmdir("{$root}/old");
+            @rmdir("{$root}/new");
+            @rmdir($root);
+        }
+    }
+
+    public function testPinnedTimeoutsAndSuccessesResetTheUnpinCount(): void
+    {
+        $this->script = [
+            [GpuOutcome::Ok, self::CSV],
+            [GpuOutcome::Absent, ''], [GpuOutcome::Absent, ''], [GpuOutcome::Timeout, ''],
+            [GpuOutcome::Absent, ''], [GpuOutcome::Absent, ''], [GpuOutcome::Ok, self::CSV],
+            [GpuOutcome::Absent, ''], [GpuOutcome::Absent, ''],
+        ];
+        [, $gpu] = $this->gpu()->sample();
+        for ($i = 0; $i < 8; $i++) {
+            $this->now += 1000.0; // past any backoff
+            [, $gpu] = $gpu->sample();
+            $this->assertSame('nvidia-smi', $gpu->binary(), "step {$i}: never three non-timeout failures in a row");
+        }
+        $this->assertSame(9, $this->calls);
+    }
+
     public function testEveryCandidateFailingIsMemoizedAbsent(): void
     {
         $runner = function (array $argv): array {

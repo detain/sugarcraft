@@ -27,7 +27,8 @@ namespace SugarCraft\Top\Collect;
  * extra sysfs reads per tick): /sys/devices/system/cpu/cpuN/cpufreq/
  * scaling_{cur,min,max}_freq per logical cpu, the kernel-ABI path (on ARM
  * cpuN/cpufreq symlinks to the shared policy, which is what fixed btop's
- * #1288-class crash). A cpu without cpufreq (offline, VM) reads
+ * #1288-class crash). A cpu without cpufreq (offline, VM), or whose
+ * reading fails the same ≤ 1 MHz / ≥ 999999999 MHz rule as the aggregate, reads
  * UNMEASURED; when no cpu has a readable cur_freq at all, the "cpu MHz"
  * of each /proc/cpuinfo processor block is used instead. The aggregate
  * `mhz`/`label` keep the policy semantics above either way, so labels do
@@ -88,7 +89,7 @@ final class Freq
         if ($mhz <= 0.0) {
             $mhz = $this->cpuinfoMhz();
         }
-        if ($mhz <= 1.0 || $mhz >= 999999999.0) {
+        if (self::plausible($mhz) < 0.0) {
             $mhz = Sentinel::UNMEASURED;
             $label = '';
         }
@@ -153,7 +154,7 @@ final class Freq
         $mhz = static function (string $file): float {
             $khz = Read::float($file);
 
-            return $khz !== null && $khz > 0.0 ? $khz / 1000.0 : Sentinel::UNMEASURED;
+            return $khz !== null ? self::plausible($khz / 1000.0) : Sentinel::UNMEASURED;
         };
         foreach (Read::entries($base) as $entry) {
             if (preg_match('/^cpu(\d+)$/', $entry, $m) !== 1) {
@@ -168,7 +169,7 @@ final class Freq
         ksort($min);
         ksort($max);
 
-        if (array_filter($cur, static fn (float $v): bool => $v > 0.0) === []) {
+        if (array_filter($cur, static fn (float $v): bool => $v >= 0.0) === []) {
             $fallback = $this->cpuinfoPerProcessor();
             if ($fallback !== []) {
                 $cur = $fallback + array_fill_keys(array_keys($cur), Sentinel::UNMEASURED);
@@ -184,6 +185,16 @@ final class Freq
     }
 
     /**
+     * btop Cpu::get_cpuHz's failed-read rule — ≤ 1 MHz or ≥ 999999999 MHz
+     * is not a frequency — shared by the aggregate and every per-core
+     * value so the two can never disagree about the same reading.
+     */
+    private static function plausible(float $mhz): float
+    {
+        return $mhz <= 1.0 || $mhz >= 999999999.0 || !is_finite($mhz) ? Sentinel::UNMEASURED : $mhz;
+    }
+
+    /**
      * @return array<int, float> processor index → "cpu MHz"
      */
     private function cpuinfoPerProcessor(): array
@@ -192,8 +203,8 @@ final class Freq
         $out = [];
         foreach (preg_split('/\n\s*\n/', $raw) ?: [] as $block) {
             if (preg_match('/^processor\s*:\s*(\d+)/mi', $block, $p) === 1) {
-                $out[(int) $p[1]] = preg_match('/^cpu MHz\s*:\s*([\d.]+)/mi', $block, $m) === 1 && (float) $m[1] > 1.0
-                    ? (float) $m[1]
+                $out[(int) $p[1]] = preg_match('/^cpu MHz\s*:\s*([\d.]+)/mi', $block, $m) === 1
+                    ? self::plausible((float) $m[1])
                     : Sentinel::UNMEASURED;
             }
         }

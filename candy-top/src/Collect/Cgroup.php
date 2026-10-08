@@ -19,6 +19,13 @@ namespace SugarCraft\Top\Collect;
  *    docker, else the prefix itself, else "container"; a `*conmon`
  *    prefix is podman's monitor process, outside the container.
  *
+ * fromProcFile() also recognises KVM/QEMU guests (Vm, engine "kvm"):
+ * a libvirt/machined VM segment on a line competes with a container on the
+ * same line by depth — the outermost wins, as between containers — and
+ * with no container or VM in any line, a qemu binary's `-name` (bare
+ * qemu, given the cmdline) still tags the process. parse() itself stays
+ * containers-only.
+ *
  * Pure functions; never throws.
  */
 final class Cgroup
@@ -30,18 +37,30 @@ final class Cgroup
     /**
      * The first line of a /proc/[pid]/cgroup file ("id:controllers:path",
      * one line on cgroup v2, one per hierarchy on v1) whose path is a
-     * container.
+     * container or a VM.
+     *
+     * @param string|null $cmdline the raw (NUL-separated) /proc/[pid]/cmdline:
+     *                             supplies a VM's guest name, uuid, vCPUs and
+     *                             memory, and recognises non-libvirt qemu
      */
-    public static function fromProcFile(?string $raw): ?ContainerRef
+    public static function fromProcFile(?string $raw, ?string $cmdline = null): ?ContainerRef
     {
         foreach (explode("\n", $raw ?? '') as $line) {
             $parts = explode(':', $line, 3);
-            if (count($parts) === 3 && ($ref = self::parse($parts[2])) !== null) {
+            if (count($parts) !== 3) {
+                continue;
+            }
+            $container = self::parse($parts[2]);
+            $vm = Vm::fromCgroupPath($parts[2], $cmdline);
+            if ($container !== null && $vm !== null) {
+                return strlen($vm->cgroupPath) < strlen($container->cgroupPath) ? $vm : $container;
+            }
+            if (($ref = $container ?? $vm) !== null) {
                 return $ref;
             }
         }
 
-        return null;
+        return Vm::fromBareCmdline($cmdline);
     }
 
     public static function parse(string $cgroup): ?ContainerRef
@@ -64,7 +83,7 @@ final class Cgroup
             if ($prev === 'lxc' && $part !== '') {
                 return self::ref('lxc', $part, $path);
             }
-            if ($scope && str_starts_with($stem, 'machine-') && strlen($stem) > 8 && !str_starts_with($stem, 'machine-qemu')) {
+            if ($scope && str_starts_with($stem, 'machine-') && strlen($stem) > 8 && !str_starts_with($stem, 'machine-qemu\\x2d') && !str_starts_with($stem, 'machine-qemu-')) {
                 return self::ref('nspawn', str_replace('\x2d', '-', substr($stem, 8)), $path);
             }
             $n = strlen($stem);
@@ -96,7 +115,7 @@ final class Cgroup
     }
 
     /** Terminal-safe display text: the docker-name alphabet plus ':'; anything else → '?'. */
-    private static function safe(string $text): string
+    public static function safe(string $text): string
     {
         return (string) preg_replace('/[^A-Za-z0-9_.:-]/', '?', $text);
     }

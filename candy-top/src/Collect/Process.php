@@ -31,6 +31,7 @@ namespace SugarCraft\Top\Collect;
  *    `ioReadTotal` / `ioWriteTotal` the raw counters, UNMEASURED_INT
  *    likewise;
  *  - `container` (#1873): the container recognised from the cgroup path,
+ *    or the KVM/QEMU guest (engine "kvm", Wave U1b) from cgroup + cmdline;
  *    null for a host process (read once per process lifetime).
  */
 final class Process

@@ -24,8 +24,14 @@ namespace SugarCraft\Top\Collect;
  *    driver, so trying them would cost N × (TIMEOUT + REAP_WAIT) per sample
  *    and leave up to N stuck children. The sweep is retried from the top
  *    after the backoff below;
- *  - the first working (binary, query) pair is pinned for the collector's
- *    lifetime;
+ *  - the first working (binary, query) pair is pinned — until it fails
+ *    PIN_MAX_FAILURES times in a row without a timeout (the binary was
+ *    removed or replaced by a driver upgrade, which a timeout never
+ *    indicates: a hang means the binary reached the driver). Then the pin
+ *    is dropped and, at the next due query (the backoff still applies),
+ *    the full candidate × query sweep runs again — over a freshly
+ *    discovered candidate list when new() discovered it. A host that ever
+ *    answered still never goes absent: a failed re-sweep only backs off;
  *  - a timeout is always transient, and so is any failure once a query has
  *    succeeded (a driver reload or GPU reset on a host that HAS a GPU): it
  *    yields an empty snapshot and the next query is pushed back
@@ -97,6 +103,9 @@ final class Gpu
     /** Seconds a switched-off compute-apps query waits before it is tried again. */
     public const float APPS_RETRY_AFTER = 600.0;
 
+    /** Consecutive non-timeout failures of the pinned (binary, query) after which the sweep re-runs. */
+    public const int PIN_MAX_FAILURES = 3;
+
     /**
      * @param \Closure(list<string>): array{0: GpuOutcome, 1: string} $runner argv → [outcome, stdout]
      * @param \Closure(): float $clock monotonic seconds
@@ -120,6 +129,8 @@ final class Gpu
         private readonly bool $processes,
         private readonly int $appsTimeouts,
         private readonly float $appsNextAt,
+        private readonly int $pinFailures = 0,
+        private readonly bool $discovered = false,
     ) {
     }
 
@@ -140,6 +151,7 @@ final class Gpu
         ?array $queries = null,
         bool $processes = false,
     ): self {
+        $discovered = $candidates === null;
         $candidates = array_values($candidates ?? self::candidates());
         $queries = array_values(array_filter($queries ?? [self::QUERY_EXTENDED, self::QUERY], static fn (array $q): bool => $q !== []));
 
@@ -159,6 +171,8 @@ final class Gpu
             $processes,
             0,
             -INF,
+            0,
+            $discovered,
         );
     }
 
@@ -184,6 +198,8 @@ final class Gpu
             $on,
             $on && !$this->processes ? 0 : $this->appsTimeouts,
             $on && !$this->processes ? -INF : $this->appsNextAt,
+            $this->pinFailures,
+            $this->discovered,
         );
     }
 
@@ -247,8 +263,15 @@ final class Gpu
             if ($devices !== []) {
                 return $this->succeed($now, $this->pinnedBinary, $this->pinnedQuery, $devices);
             }
+            [$empty, $next] = $this->backoff($now);
+            if ($outcome === GpuOutcome::Timeout) {
+                return [$empty, $next->with(pinFailures: 0)];
+            }
+            if ($this->pinFailures + 1 >= self::PIN_MAX_FAILURES) {
+                return [$empty, $next->with(unpin: true)];
+            }
 
-            return $this->backoff($now);
+            return [$empty, $next->with(pinFailures: $this->pinFailures + 1)];
         }
 
         foreach ($this->candidates as $binary) {
@@ -280,7 +303,7 @@ final class Gpu
         return $this->absent;
     }
 
-    /** The binary that answered and is pinned for the collector's lifetime; null before the first success. */
+    /** The pinned binary that answered; null before the first success and after PIN_MAX_FAILURES unpins it. */
     public function binary(): ?string
     {
         return $this->pinnedBinary;
@@ -310,6 +333,7 @@ final class Gpu
             pinnedQuery: $query,
             appsTimeouts: $appsTimeouts,
             appsNextAt: $appsNextAt,
+            pinFailures: 0,
         )];
     }
 
@@ -475,7 +499,13 @@ final class Gpu
         ?array $pinnedQuery = null,
         ?int $appsTimeouts = null,
         ?float $appsNextAt = null,
+        ?int $pinFailures = null,
+        bool $unpin = false,
     ): self {
+        // Unpinning re-discovers the candidates (when new() did) so a
+        // binary moved by a driver upgrade is found at its new path.
+        $candidates = $unpin && $this->discovered ? array_values(self::candidates()) : $this->candidates;
+
         return new self(
             $this->runner,
             $this->clock,
@@ -485,13 +515,15 @@ final class Gpu
             $timeouts ?? $this->timeouts,
             $last ?? $this->last,
             $everSucceeded ?? $this->everSucceeded,
-            $this->candidates,
+            $candidates,
             $this->queries,
-            $pinnedBinary ?? $this->pinnedBinary,
-            $pinnedQuery ?? $this->pinnedQuery,
+            $unpin ? null : ($pinnedBinary ?? $this->pinnedBinary),
+            $unpin ? null : ($pinnedQuery ?? $this->pinnedQuery),
             $this->processes,
             $appsTimeouts ?? $this->appsTimeouts,
             $appsNextAt ?? $this->appsNextAt,
+            $unpin ? 0 : ($pinFailures ?? $this->pinFailures),
+            $this->discovered,
         );
     }
 

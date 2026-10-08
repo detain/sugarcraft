@@ -36,6 +36,7 @@ final class CgroupTest extends TestCase
         yield 'lxc payload' => ['/lxc.payload.web/system.slice/nginx.service', 'lxc', 'web', '/lxc.payload.web'];
         yield 'proxmox lxc' => ['/lxc/101/ns/init.scope', 'lxc', '101', '/lxc/101'];
         yield 'nspawn unescaped' => ['/machine.slice/machine-my\x2dbox.scope/payload', 'nspawn', 'my-box', '/machine.slice/machine-my\x2dbox.scope'];
+        yield 'nspawn named like qemu' => ['/machine.slice/machine-qemubox.scope/payload', 'nspawn', 'qemubox', '/machine.slice/machine-qemubox.scope'];
         yield 'nested is outermost' => ["/lxc.payload.host/system.slice/docker-{$id}.scope", 'lxc', 'host', '/lxc.payload.host'];
     }
 
