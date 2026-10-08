@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-ASCII GIF viewer on the SugarCraft stack — port of [`namzug16/gifterm`](https://github.com/namzug16/gifterm). Decodes a `.gif` on disk via `ext-gd`, downsamples each frame to a configurable cell grid, and renders the animation into the terminal as 24-bit background-coloured cells (`solid` preset) or shaded Unicode glyphs from a luminance ramp (`density` preset) at a configurable framerate.
+ASCII GIF viewer on the SugarCraft stack for PHP 8.3+. Decodes a `.gif` on disk via `ext-gd`, downsamples each frame to a configurable cell grid, and renders the animation into the terminal as 24-bit background-coloured cells (`solid` preset) or shaded Unicode glyphs from a luminance ramp (`density` preset) at a configurable framerate.
 
 ```bash
 composer require sugarcraft/candy-flip
@@ -67,3 +67,9 @@ vendor/bin/phpunit
 Rendering output is pinned via `candy-testing`'s `assertGoldenAnsi` golden-file
 snapshots. Any change to the ANSI cell output must be intentional — re-record the
 fixture with `UPDATE_GOLDENS=1 vendor/bin/phpunit` to accept a new canonical render.
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm).

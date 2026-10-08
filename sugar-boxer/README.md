@@ -10,7 +10,7 @@
 
 # SugarBoxer
 
-PHP port of [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) — box-drawing layout engine for composing terminal content into H/V panel layouts with borders and padding.
+sugar-boxer — a box-drawing layout engine that composes terminal content into horizontal and vertical panel layouts with borders and padding, for PHP 8.3+.
 
 ## Features
 
@@ -169,3 +169,7 @@ behaviour is always correct.
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Design antecedent: [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer); SugarCraft is developed as a native PHP project.

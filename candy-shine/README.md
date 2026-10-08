@@ -13,8 +13,8 @@
 
 ![demo](.vhs/render.gif)
 
-PHP port of [charmbracelet/glamour](https://github.com/charmbracelet/glamour) —
-Markdown → ANSI renderer built on `league/commonmark` and CandySprinkles.
+candy-shine — a Markdown → ANSI renderer for PHP 8.3+, built on
+`league/commonmark` and CandySprinkles.
 
 ```sh
 composer require sugarcraft/candy-shine
@@ -23,7 +23,7 @@ composer require sugarcraft/candy-shine
 > The `Renderer` exposes short-form aliases on every option:
 > `theme` / `wordWrap` / `hyperlinks` / `baseURL` / `tableWrap` /
 > `inlineTableLinks` / `preservedNewLines` / `emoji` / `standardStyle`.
-> The upstream-mirroring `with*` long forms still work — pick whichever
+> The long-form `with*` names still work — pick whichever
 > reads better at the call site.
 
 ## Quickstart
@@ -193,8 +193,7 @@ new Renderer($theme)
 ```
 
 With emoji on, 1,842 codes resolve: the full 1,837-entry GitHub
-cheat-sheet corpus (`GithubEmoji::MAP`, the table glamour's `WithEmoji`
-consults upstream) merged under the 39 curated house codes — house bytes
+cheat-sheet corpus (`GithubEmoji::MAP`) merged under the 39 curated house codes — house bytes
 win every collision — and unknown `:codes:` pass through verbatim.
 
 `Renderer::renderMarkdown($md, ?Theme)` is a one-shot static
@@ -232,5 +231,8 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 ## Related
 
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
-- Upstream: [charmbracelet/glamour](https://github.com/charmbracelet/glamour)
+- Originally inspired by [charmbracelet/glamour](https://github.com/charmbracelet/glamour)
 
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

@@ -13,9 +13,7 @@
 
 ![demo](.vhs/inspect.gif)
 
-PHP port of [charmbracelet/sequin](https://github.com/charmbracelet/sequin) —
-an ANSI escape-sequence inspector. Pipe styled output through it and each
-escape becomes a labelled line.
+sugar-spark — an ANSI escape-sequence inspector for PHP 8.3+. Pipe styled output through it and each escape becomes a labelled line.
 
 ```sh
 composer require sugarcraft/sugar-spark
@@ -171,3 +169,7 @@ cancelled prelude can now reappear inside one.
 ```sh
 cd sugar-spark && composer install && vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

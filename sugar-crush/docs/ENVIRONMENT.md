@@ -11,7 +11,7 @@ Two groups are listed separately because they behave differently:
   optional; each row gives the behaviour when it is unset.
 - **Provider credential variables** are read on your behalf when
   `ProviderFactory` builds a provider's *default* config. They are the
-  upstream vendors' own variable names, not ours, so they are spelled exactly
+  vendors' own variable names, not ours, so they are spelled exactly
   as the vendor SDKs spell them.
 - **Claude Code variables** are Claude Code's own relocation switches, read
   only by `/memory import claude` so it finds the memory Claude Code wrote.

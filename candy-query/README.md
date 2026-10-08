@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-Terminal SQLite browser on the SugarCraft stack — port of [`jorgerojas26/lazysql`](https://github.com/jorgerojas26/lazysql), SQLite-only at v1.
+Terminal SQL browser on the SugarCraft stack for PHP 8.3+ — MySQL, MariaDB, PostgreSQL and SQLite, with Workbench-style admin dashboards.
 
 ```bash
 composer require sugarcraft/candy-query
@@ -122,11 +122,11 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
 | `ServerStatusSnapshotAdapter` | Adapter wrapping `ServerContextInterface` to satisfy `StatusSnapshotProviderInterface`, enabling `Sampler` to compute per-second rate deltas across poll cycles. Stores snapshots internally so two-sample rate logic can operate on the same context without the context needing to implement the interface directly. |
 | `Sampler` | Rate computer service: takes two status snapshots and elapsed time, computes per-second deltas (Bytes_received, Bytes_sent, etc.) with negative-delta clamping. Restart detection is consumed from `provider->wasReset()` via `StatusSnapshotProviderInterface` — delegating to `ServerContext::detectReset()` as the single owner. Advance via `sample()` on each gauge refresh cycle. |
-| `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/tab/e/q), and inline edit via VariableEditor. The `[e]` key opens a two-phase dialog: type the new value (DLG_INPUT), press [Enter] to review the SET statement (DLG_CONFIRM), then [Enter] again to execute or [Esc] to cancel. Self-write is guarded: setting a variable to its current value is a no-op. Static (non-dynamic) variables show error 1238 with a clear message rather than silently refusing. Mirrors `charmbracelet/lazysql` VariablesPage. |
+| `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/tab/e/q), and inline edit via VariableEditor. The `[e]` key opens a two-phase dialog: type the new value (DLG_INPUT), press [Enter] to review the SET statement (DLG_CONFIRM), then [Enter] again to execute or [Esc] to cancel. Self-write is guarded: setting a variable to its current value is a no-op. Static (non-dynamic) variables show error 1238 with a clear message rather than silently refusing. Follows the VariablesPage convention of the original design. |
 | `VariableEditor`    | Inline editor for MySQL variables via `SET GLOBAL` / `SET PERSIST` / `SET PERSIST_ONLY` / `RESET PERSIST` (8.0+). Uses prepared statements; backtick-escapes variable names (from catalog, not user input), uses `?` placeholder for values. Error handling: 1142 (no privilege), 1227 (access denied), 1238 (variable is not dynamic — requires restart or use PERSIST_ONLY), 3680 (persisted_variables restriction). Press [p] in the edit dialog to cycle through GLOBAL → PERSIST → PERSIST_ONLY modes. Mirrors `mysql-workbench wb_admin_variable_editor`. |
 | `VariableMetadata` | Immutable descriptor: name, description, editable flag, **dynamic flag**, group memberships. Single MySQL system variable. `editable` = can be set at all (SET GLOBAL / SET PERSIST); `dynamic` = can be changed at runtime without restart (static vars like `innodb_log_file_size` accept SET GLOBAL but error 1238). Constructed from `data/variable_metadata.json` (1563 entries). |
 | `Catalog` | Loads `data/variable_metadata.json` (1563 variables, 67 groups). Provides `get()`, `all()`, `byGroup()`, `groups()`, `isEditable()`, `isDynamic()`. `isDynamic()` returns false for static variables (e.g. `innodb_log_file_size`) — used by VariablesPage to gate inline editing. Missing metadata is non-fatal — the page renders without categories or `[rw]` indicators. |
-| `ConnectionsPage`  | Processlist browser with selection navigation (j/k/↑/↓), detail tab cycling (Tab/1/2/3), hide-sleeping filter (f), and async refresh (r) via `Cmd::send`. Mirrors `charmbracelet/lazysql` connections page. |
+| `ConnectionsPage`  | Processlist browser with selection navigation (j/k/↑/↓), detail tab cycling (Tab/1/2/3), hide-sleeping filter (f), and async refresh (r) via `Cmd::send`. Follows the connections-page convention of the original design. |
 | `ConnectionFilters` | Immutable filter config: hide-sleeping, hide-background, skip-full-info, refresh-rate. All fields are readonly with paired `$Set` sentinels. |
 | `ConnectionCounters` | Connection metrics from `SHOW GLOBAL STATUS`: threads-connected/running/cached, connections, aborted-connects, connection-errors. Computes `connectionUsageRatio()` lazily (0.0–1.0). |
 | `ConnectionDetailTabs` | Three detail tabs (Details/Attributes/MDL) per processlist thread. Details from `performance_schema.threads`; Attributes from `session_connect_attrs`; MDL from `performance_schema.metadata_locks` with graceful fallback to `information_schema.metadata_lock_info`. Gracefully returns `null` on permission errors (1142/1146/1227). |
@@ -825,3 +825,9 @@ To add MySQL or Postgres support, implement `DatabaseInterface` and pass your im
 composer install
 vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+Design antecedent: [`jorgerojas26/lazysql`](https://github.com/jorgerojas26/lazysql); dashboard pages follow the MySQL Workbench status/dashboard spec.

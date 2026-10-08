@@ -114,14 +114,14 @@ with no behavioural divergence.
 
 ## Dependencies
 
-- `sugarcraft/candy-core` — Elm-architecture TUI runtime
+- `sugarcraft/candy-core` — Model–Update–View TUI runtime
 - `sugarcraft/candy-sprinkles` — Declarative styling
 
 ### Versioning
 
 Sibling `sugarcraft/*` requirements are pinned to `dev-master` and the
 manifest carries `minimum-stability: dev`. That is intentional while the
-monorepo pre-dates 1.0: every port moves together and published installs
+monorepo pre-dates 1.0: every library moves together and published installs
 resolve siblings from Packagist `dev-master` (path repositories are
 injected by CI at build time, never committed). At the stable release the
 pins become proper `^1.0` constraints — track this in the release plan
@@ -141,3 +141,7 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 ## License
 
 MIT
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

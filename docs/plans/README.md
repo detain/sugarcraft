@@ -3,7 +3,7 @@
 Each file in this directory is a self-contained execution plan for one
 slice of the [charmbracelet/x](https://github.com/charmbracelet/x)
 experimental tree. Drafted 2026-05-07 as a follow-up to the breakdown
-in [`UPSTREAM_OPPORTUNITIES.md`](../UPSTREAM_OPPORTUNITIES.md).
+in [`UPSTREAM_OPPORTUNITIES.md`](./UPSTREAM_OPPORTUNITIES.md).
 
 > **Running a plan with another chat app?**
 > See [`EXECUTE_PROMPT.md`](./EXECUTE_PROMPT.md) (to execute a plan)

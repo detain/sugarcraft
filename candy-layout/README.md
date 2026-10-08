@@ -104,7 +104,6 @@ $geometry->dividerColumns();                    // [['x' => 32, 'side' => Side::
 
 **Persistence.** `toArray()`/`fromArray()` ship an exact versioned shape: `['version' => 1, 'center' => 'chat', 'sides' => ['left' => [['id' => …, 'weight' => [n, d]], …], 'right' => […]], 'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]`. Malformed manifests throw `InvalidArgumentException` naming the failed key — including a slot id that collides with the center pane's (a pane has exactly one home; `withSlotAdded()` refuses the same collision). `dividerCols` has no public mutator and is not persisted.
 
-## References
+## Credits & inspiration
 
-- Mirrors [ratatui/ratatui](https://github.com/ratatui/ratatui) layout constraint system
-- Based on Badros & Borning 2001 "The Cassowary Linear Arithmetic Constraint Solving Algorithm"
+Originally inspired by the [ratatui](https://github.com/ratatui/ratatui) layout constraint system and Badros & Borning 2001, "The Cassowary Linear Arithmetic Constraint Solving Algorithm"; SugarCraft is developed as a native PHP project.

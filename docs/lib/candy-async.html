@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — CandyAsync</title>
-<meta name="description" content="CandyAsync: Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle).">
+<meta name="description" content="CandyAsync: Async building blocks for ReactPHP — cancellation tokens, subscriptions, and timeout / retry / debounce / throttle helpers.">
 <meta property="og:title" content="SugarCraft — CandyAsync">
 <meta property="og:description" content="Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). Foundation for ReactPHP usage across the ecosystem.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-async.png">
@@ -40,7 +40,7 @@
         <h2>🍬 CandyAsync</h2>
         <p class="detail-sub">Shared async vocabulary for ReactPHP</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">pioneering (no upstream)</span>
+          <span class="tag-chip accent">original — no 1:1 Go counterpart</span>
           <span class="tag-chip">async</span>
           <span class="tag-chip">cancellation</span>
           <span class="tag-chip">reactphp</span>
@@ -92,7 +92,7 @@ $promise = AsyncOps::retry(
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Unified cancellation</strong> — replace ad-hoc cancellation scattered across candy-core, candy-forms, sugar-prompt with a shared pattern.</li>
-      <li><strong>TEA subscriptions lifecycle</strong> — Subscriptions::compose() lets the runtime dispose all subscriptions atomically.</li>
+      <li><strong>Model subscriptions lifecycle</strong> — Subscriptions::compose() lets the runtime dispose all subscriptions atomically.</li>
       <li><strong>Async operation helpers</strong> — withTimeout, retry, debounce, throttle built on top of react/promise and react/event-loop.</li>
     </ul>
 
@@ -101,7 +101,7 @@ $promise = AsyncOps::retry(
       <li><a href="https://github.com/sugarcraft/candy-async">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-async/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-async/tree/master/examples">Runnable examples</a></li>
-      <li>Pioneering — no upstream parallel</li>
+      <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>

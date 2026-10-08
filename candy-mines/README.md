@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-Minesweeper on the SugarCraft stack — port of [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep). Customisable board, iterative flood-fill, win / lose detection, vim-style movement.
+Minesweeper on the SugarCraft stack for PHP 8.3+. Customisable board, iterative flood-fill, win / lose detection, vim-style movement.
 
 Difficulty presets are available via `Game::withDifficulty()`, passing a `Difficulty` case — `Difficulty::EASY` (9×9, 10 mines), `Difficulty::STANDARD` (10×10, 12 mines — the shape the CLI defaults to), `Difficulty::MEDIUM` (16×16, 40 mines), `Difficulty::EXPERT` (30×16, 99 mines).
 
@@ -83,3 +83,9 @@ The minefield renderer builds output via [candy-buffer](https://github.com/detai
 composer install
 vendor/bin/phpunit
 ```
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
+Design antecedent: [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep).

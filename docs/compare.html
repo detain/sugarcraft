@@ -3,11 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SugarCraft vs. Symfony Console vs. Go bubbletea</title>
-    <meta name="description" content="When to pick SugarCraft over Symfony Console, raw readline, or Go bubbletea. Honest comparison of terminal UI approaches for PHP and Go projects.">
+    <title>SugarCraft vs. Symfony Console vs. raw readline</title>
+    <meta name="description" content="When to pick SugarCraft over Symfony Console or raw readline. How SugarCraft approaches terminal UIs in PHP — an honest comparison.">
     <link rel="canonical" href="https://sugarcraft.github.io/compare.html">
-    <meta property="og:title" content="SugarCraft vs. Symfony Console vs. Go bubbletea">
-    <meta property="og:description" content="When to pick SugarCraft over Symfony Console, raw readline, or Go bubbletea. Honest comparison of terminal UI approaches.">
+    <meta property="og:title" content="SugarCraft vs. Symfony Console vs. raw readline">
+    <meta property="og:description" content="When to pick SugarCraft over Symfony Console or raw readline. How SugarCraft approaches terminal UIs in PHP.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://sugarcraft.github.io/compare.html">
     <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
@@ -99,30 +99,29 @@
             <code>echo "\033["</code>.
         </p>
 
-        <h3 style="margin-top: 48px;">vs. Go <a href="https://github.com/charmbracelet/bubbletea">bubbletea</a></h3>
+        <h3 style="margin-top: 48px;">Where the inspiration came from</h3>
         <p>
-            Genuinely the same architecture; SugarCraft is the deliberate PHP
-            port of bubbletea + the Charm ecosystem on top of it. If you
-            already write Go and your TUI lives next to a Go server, just
-            use bubbletea — it's the reference implementation.
+            SugarCraft is a PHP-native project. Its original design
+            inspiration came from the Go terminal ecosystem — notably
+            <a href="https://github.com/charmbracelet/bubbletea">Bubble Tea</a>
+            and the wider <a href="https://github.com/charmbracelet">Charm</a>
+            family of libraries — reimagined here for PHP 8.3+. That is
+            where the similarity ends: every package here is built and
+            shipped in PHP, for PHP toolchains.
         </p>
         <p>
-            <strong>Pick bubbletea for</strong>: existing Go codebases, any
-            project where binary distribution is part of the story.
-        </p>
-        <p>
-            <strong>Pick SugarCraft for</strong>: PHP-native shops, Composer-
-            installable distribution, drop-in to existing Symfony / Laravel
-            / Yii / WordPress tooling. The mental model carries over —
-            blog posts and tutorials about bubbletea translate almost line-
-            for-line, and CONVERSION.md has the per-feature mapping.
+            <strong>Pick SugarCraft for</strong>: PHP-native shops that want a
+            Composer-installable TUI stack — drop-in to existing Symfony /
+            Laravel / Yii / WordPress tooling, no polyglot build, no separate
+            binary pipeline.
         </p>
 
         <h3 style="margin-top: 48px;">Architecture decisions worth noting</h3>
         <ul>
             <li>
-                <strong>Cursed cell-diff renderer</strong> (Bubble Tea v2's
-                headline feature) is a first-class option in SugarCraft via
+                <strong>Cursed cell-diff renderer</strong> — a compact-repaint mode
+                that ships the full screen once, then streams only changed
+                cells — is a first-class option in SugarCraft via
                 <code>cellDiffRenderer: true</code>. Verified ≥15% bandwidth
                 savings on a 50-tick counter test — the kind of win that
                 matters when your TUI is served over SSH.
@@ -143,7 +142,7 @@
                 outbound SSH from inside a session).
             </li>
             <li>
-                <strong>Sixteen libraries, sixteen Composer packages.</strong>
+                <strong>Forty-one libraries, twenty apps, sixty-one Composer packages.</strong>
                 Pull just what you need. The umbrella <code>sugarcraft/sugarcraft</code>
                 metapackage brings the whole stack at once, but a tiny CLI
                 that only wants colours can grab <code>sugarcraft/candy-sprinkles</code>
@@ -159,12 +158,13 @@
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
             <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a>
         </div>
+        <p class="credits" style="color: var(--ink-2); font-size: 0.85em; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px;">SugarCraft is a PHP-native project. Its original design inspiration came from the Go terminal ecosystem — notably <a href="https://github.com/charmbracelet/bubbletea">Bubble Tea</a> and the wider <a href="https://github.com/charmbracelet">Charm</a> family of libraries — reimagined here for PHP 8.3+.</p>
     </div>
 </footer>
 

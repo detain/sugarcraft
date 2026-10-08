@@ -1,11 +1,11 @@
 {
     "title": "CandyMetrics — SugarCraft",
-    "description": "CandyMetrics: Telemetry primitives + CandyWish session middleware. PHP port of promwish.",
+    "description": "CandyMetrics: Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for CandyWish.",
     "ogTitle": "CandyMetrics — SugarCraft",
-    "ogDescription": "Telemetry primitives + CandyWish session middleware. Port of promwish.",
+    "ogDescription": "Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for CandyWish.",
     "emoji": "📈",
     "displayName": "CandyMetrics",
     "tagline": "Telemetry primitives + CandyWish session middleware",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/charmbracelet/promwish\" style=\"color: inherit;\">promwish</a></span>\n          <span class=\"tag-chip\">metrics</span>\n          <span class=\"tag-chip\">telemetry</span>\n          <span class=\"tag-chip\">statsd</span>\n          <span class=\"tag-chip\">prometheus</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/promwish\" style=\"color: inherit;\">charmbracelet/promwish</a></span>\n          <span class=\"tag-chip\">metrics</span>\n          <span class=\"tag-chip\">telemetry</span>\n          <span class=\"tag-chip\">statsd</span>\n          <span class=\"tag-chip\">prometheus</span>"
 }

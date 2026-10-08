@@ -10,7 +10,7 @@
 
 # CandyPalette
 
-PHP port of [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) — magical terminal color profile detection and color degradation.
+candy-palette — terminal color profile detection and color degradation for PHP 8.3+.
 
 ## Features
 
@@ -150,7 +150,7 @@ if (Probe::reducedMotion()) {
 }
 ```
 
-**Detection precedence** (mirrors [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile)):
+**Detection precedence**:
 1. `CLICOLOR_FORCE=1` → `TrueColor` (overrides everything)
 2. `NO_COLOR` (any value) → `NoTTY`
 3. `CLICOLOR=0` → `NoTTY`
@@ -202,3 +202,7 @@ SugarCraft\Palette\
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

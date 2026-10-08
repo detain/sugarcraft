@@ -10,7 +10,7 @@
 
 # SugarPost
 
-PHP port of [charmbracelet/pop](https://github.com/charmbracelet/pop) — send emails from PHP via Resend API or direct SMTP.
+sugar-post — an email sender for PHP 8.3+, via the Resend API or direct SMTP.
 
 ## Features
 
@@ -21,7 +21,7 @@ PHP port of [charmbracelet/pop](https://github.com/charmbracelet/pop) — send e
 - **CC/BCC support** — full carbon-copy / blind carbon-copy routing
 - **STDIN compose** — read email body from STDIN for shell pipeline use
 - **Environment config** — `RESEND_API_KEY`, `POP_SMTP_*`, `POP_FROM`, `POP_SIGNATURE`
-- **PHP 8.1+** — pure PHP, no extensions required beyond cURL (for Resend transport)
+- **PHP 8.3+** — pure PHP, no extensions required beyond cURL (for Resend transport)
 
 ## Install
 
@@ -73,7 +73,7 @@ $email = $email->withAttachment('invoice.pdf', '/path/to/invoice.pdf');
 $mailer->send($email);
 ```
 
-> **Note:** `--attach` / `withAttachment()` read arbitrary local paths. The caller is responsible for validating that passed paths are trusted. No path allow-list is enforced by design, matching upstream behavior.
+> **Note:** `--attach` / `withAttachment()` read arbitrary local paths. The caller is responsible for validating that passed paths are trusted. No path allow-list is enforced by design.
 
 ## CLI
 
@@ -110,3 +110,7 @@ sugar-post uses [candy-async](https://github.com/detain/sugarcraft/tree/master/c
 ## License
 
 [MIT](LICENSE)
+
+## Credits & inspiration
+
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.

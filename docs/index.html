@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SugarCraft — terminal UIs for PHP</title>
-    <meta name="description" content="SugarCraft is the PHP port of the Charmbracelet TUI ecosystem — 41 libraries and 21 apps (62 packages) for building beautiful terminal UIs. Composer-installable. PHP 8.1+. Async on ReactPHP.">
+    <meta name="description" content="SugarCraft — 41 libraries and 21 apps (62 packages) for building beautiful terminal UIs in PHP. MVC-style Model–Update–View runtime, declarative styling, charts, forms, SSH-served apps. Composer-installable. PHP 8.3+. Async on ReactPHP.">
     <meta property="og:title" content="SugarCraft — terminal UIs for PHP">
     <meta property="og:description" content="41 libraries and 21 apps for building beautiful terminal UIs in PHP. Composer-installable, fiber-driven, async on ReactPHP.">
     <meta property="og:type" content="website">
@@ -21,10 +21,10 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "SugarCraft",
-        "description": "PHP port of the Charmbracelet TUI ecosystem — 41 libraries and 21 apps (62 packages) for building beautiful terminal user interfaces.",
+        "description": "41 libraries and 21 apps (62 packages) for building beautiful terminal user interfaces in PHP — MVC-style Model–Update–View runtime, styling, charts, forms, SSH-served apps.",
         "url": "https://sugarcraft.github.io/",
         "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "PHP 8.1+",
+        "operatingSystem": "PHP 8.3+",
         "programmingLanguage": "PHP",
         "license": "https://opensource.org/licenses/MIT",
         "author": {
@@ -32,7 +32,7 @@
             "name": "Joe Huss",
             "url": "https://www.interserver.net/"
         },
-        "keywords": "PHP, TUI, terminal, bubbletea, charmbracelet, ReactPHP, async"
+        "keywords": "PHP, TUI, terminal, user interface, ReactPHP, async, SSH"
     }
     </script>
     <link rel="stylesheet" href="css/search.css">
@@ -64,12 +64,11 @@
         <img class="hero-banner" src="img/social-preview.png" alt="SugarCraft — sweet to build, fun to use">
         <h1>Terminal UIs that taste like candy.</h1>
         <p class="tag">
-            SugarCraft is the PHP port of the
-            <a href="https://charm.sh">Charmbracelet</a> TUI ecosystem — forty-one
-            libraries and twenty-one apps (sixty-two packages total). Elm-architecture runtime,
-            declarative styling, animation, charts, forms, SSH-served apps,
-            telemetry, file managers, an AI chat shell. Composer-installable,
-            PHP 8.1+, fibers, async on ReactPHP.
+            SugarCraft is a PHP-native TUI ecosystem — forty-one
+            libraries and twenty-one apps (sixty-two packages total). MVC-style
+            Model–Update–View runtime, declarative styling, animation, charts,
+            forms, SSH-served apps, telemetry, file managers, an AI chat shell.
+            Composer-installable, PHP 8.3+, fibers, async on ReactPHP.
         </p>
 
         <div class="cta-row">
@@ -90,7 +89,7 @@
             <div class="stat"><span class="num">41</span><span class="label">libraries</span></div>
             <div class="stat"><span class="num">21</span><span class="label">apps</span></div>
             <div class="stat"><span class="num">281</span><span class="label">VHS demos</span></div>
-            <div class="stat"><span class="num">PHP 8.1+</span><span class="label">fibers / ReactPHP</span></div>
+            <div class="stat"><span class="num">PHP 8.3+</span><span class="label">fibers / ReactPHP</span></div>
             <div class="stat"><span class="num">MIT</span><span class="label">licensed</span></div>
         </div>
     </div>
@@ -98,7 +97,7 @@
 
 <section class="section" id="overview">
     <div class="container">
-        <h2>The whole Charm stack — in PHP.</h2>
+        <h2>Every layer of the terminal stack — in PHP.</h2>
         <p class="lede">
             Click an icon to jump to its detail page. Every package is published
             independently, ships its own examples and PHPUnit suite, and shares
@@ -147,7 +146,7 @@
             <a href="lib/sugar-table.html"    title="SugarTable — data table"><img src="img/icons/sugar-table.png" alt="" aria-hidden="true"></a>
             <a href="lib/sugar-diff.html"     title="SugarDiff — unified-diff engine"><img src="img/icons/sugar-diff.png" alt="" aria-hidden="true"></a>
             <a href="lib/sugar-mcp.html"      title="SugarMcp — MCP client core"><img src="img/icons/sugar-mcp.png" alt="" aria-hidden="true"></a>
-            <a href="lib/candy-testing.html" title="CandyTesting — TEA test harness"><img src="img/icons/candy-testing.png" alt="" aria-hidden="true" onerror="this.style.display='none'"></a>
+            <a href="lib/candy-testing.html" title="CandyTesting — SugarCraft test harness"><img src="img/icons/candy-testing.png" alt="" aria-hidden="true" onerror="this.style.display='none'"></a>
             <a href="lib/candy-mold.html"     title="CandyMold — starter"><img src="img/icons/candy-mold.png" alt="" aria-hidden="true"></a>
             <a href="lib/candy-serve.html"    title="CandyServe — git server"><img src="img/icons/candy-serve.png" alt="" aria-hidden="true"></a>
             <a href="lib/sugar-skate.html"    title="SugarSkate — kv store CLI"><img src="img/icons/sugar-skate.png" alt="" aria-hidden="true"></a>
@@ -200,7 +199,7 @@
                     <h3>SugarCraft</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-core">GitHub →</span>
                 </div>
-                <p class="summary">Elm-architecture runtime — Model / Msg / Cmd / Program. Cursed cell-diff renderer for SSH bandwidth.</p>
+                <p class="summary">MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Cell-diff renderer saves SSH bandwidth.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-sprinkles.html">
@@ -224,7 +223,7 @@
                     <h3>CandyBuffer</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-buffer">GitHub →</span>
                 </div>
-                <p class="summary">Cell-grid value objects — immutable Buffer (2-D cell grid) and Cell (rune/style/link/width). Shared foundation for all rendering; Buffer::diff() ships in step-26.</p>
+                <p class="summary">Cell-grid value objects — immutable Buffer (2-D cell grid) and Cell (rune/style/link/width). Shared foundation for all rendering, with minimal-repaint diffs via Buffer::diff().</p>
             </a>
 
             <a class="lib-card" href="lib/candy-async.html">
@@ -269,7 +268,7 @@
                     <h3>SugarBits</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-bits">GitHub →</span>
                 </div>
-                <p class="summary">Fifteen components: TextInput, TextArea (dynamic-height), ItemList, Table (per-cell <code>styleFunc</code>), Tree, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer.</p>
+                <p class="summary">Seventeen components: TextInput, TextArea (dynamic-height), ItemList, Table (per-cell <code>styleFunc</code>), Tree, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Scrollbar, Tabs, Stopwatch, Timer.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-charts.html">
@@ -329,7 +328,7 @@
                     <h3>CandyWish</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-wish">GitHub →</span>
                 </div>
-                <p class="summary">SSH server middleware framework. Logger, Auth, RateLimit, BubbleTea — leans on OpenSSH ForceCommand for the wire protocol.</p>
+                <p class="summary">SSH server middleware framework — Logger, Auth, RateLimit, and a terminal middleware that runs a full SugarCraft app in each session. OpenSSH ForceCommand handles the wire protocol.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-metrics.html">
@@ -368,14 +367,13 @@
                 <p class="summary">Image-to-cell renderer — Sixel, Kitty, iTerm2, Unicode half-block; Picker facade; ext-gd.</p>
             </a>
 
-            <!-- TODO(candy-mouse): add a .vhs/ GIF once runnable examples are added (icon backfilled in #1376) -->
             <a class="lib-card" href="lib/candy-mouse.html">
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/candy-mouse.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyMouse</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-mouse">GitHub →</span>
                 </div>
-                <p class="summary">Self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) + ZoneClickTracker for press/release deduplication. No external Manager wiring needed.</p>
+                <p class="summary">Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication. No external Manager wiring needed.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-palette.html">
@@ -453,7 +451,7 @@
                     <h3>CandyFocus</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-focus">GitHub →</span>
                 </div>
-                <p class="summary">Focus-ring state machine — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. Dependency-free; original, no upstream parallel.</p>
+                <p class="summary">Focus-ring state machine — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. Dependency-free.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-gallery.html">
@@ -462,7 +460,7 @@
                     <h3>SugarGallery</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-gallery">GitHub →</span>
                 </div>
-                <p class="summary">Poster grids & rails for media TUIs — a 2-D virtualized, sparse PosterGrid with owner-driven range paging, a Rail carousel, and a renderer-agnostic PosterCard tile. Original, no upstream parallel.</p>
+                <p class="summary">Poster grids & rails for media TUIs — a 2-D virtualized, sparse PosterGrid with owner-driven range paging, a Rail carousel, and a renderer-agnostic PosterCard tile.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-lister.html">
@@ -546,7 +544,7 @@
                     <h3>CandyHermit</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-hermit">GitHub →</span>
                 </div>
-                <p class="summary">Fuzzy finder overlay. Type to filter a list, arrow keys to select, Enter to confirm. Bubbletea Model wrapper.</p>
+                <p class="summary">Fuzzy finder overlay. Type to filter a list, arrow keys to select, Enter to confirm. Renders over your app's view string while the background keeps updating.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-input.html">
@@ -624,14 +622,15 @@
                     <h3>SugarTable</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-table">GitHub →</span>
                 </div>
-                <p class="summary">Full-featured interactive data table — port of Evertras/bubble-table. Column definitions, StyledCell ANSI formatting, pagination, frozen rows/cols.</p>
+                <p class="summary">Full-featured interactive data table — column definitions, StyledCell ANSI formatting, pagination, frozen rows and columns.</p>
+            </a>
             <a class="lib-card" href="lib/sugar-diff.html">
                 <div class="lib-icon-row">
                     <img class="lib-icon" src="img/icons/sugar-diff.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarDiff</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-diff">GitHub →</span>
                 </div>
-                <p class="summary">Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and line-number scanner. Extracted from sugar-crush; first-party.</p>
+                <p class="summary">Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and line-number scanner.</p>
             </a>
             <a class="lib-card" href="lib/sugar-mcp.html">
                 <div class="lib-icon-row">
@@ -639,9 +638,7 @@
                     <h3>SugarMcp</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-mcp">GitHub →</span>
                 </div>
-                <p class="summary">MCP client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, tool narrowing. Extracted from sugar-crush; first-party.</p>
-            </a>
-
+                <p class="summary">MCP client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, tool narrowing.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-testing.html">
@@ -653,7 +650,7 @@
                     <h3>CandyTesting</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-testing">GitHub →</span>
                 </div>
-                <p class="summary">Test harness for TEA programs — ProgramSimulator, golden-file assertions, snapshot helpers. Pioneering what bubble-tea issue #1654 never shipped.</p>
+                <p class="summary">Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. Deterministic Model–Update–View testing down to the byte.</p>
             </a>
 
         </div>
@@ -664,7 +661,7 @@
     <div class="container">
         <h2>Twenty-one apps built on the stack.</h2>
         <p class="lede">
-            Standalone executables — CLI tools (gum, glow, freeze…), full
+            Standalone executables — CLI tools (prompts, markdown, screenshots), full
             TUIs (file manager, git, SQLite, AI chat, games), and a project
             starter. Install via Composer, run as a CLI binary. Each has a
             detail page below with controls, architecture, and demo recordings.
@@ -752,7 +749,7 @@
                     <h3>SugarSkate</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-skate">GitHub →</span>
                 </div>
-                <p class="summary">In-memory key/value store with plugin backends. Memory, SQLite, Badger. Glob listing, TTL, batch operations.</p>
+                <p class="summary">Personal key/value store CLI — one SQLite database per store file. Glob listing, TTL, JSON/YAML import/export.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-post.html">
@@ -893,7 +890,7 @@
                     <h3>SugarReel</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-reel">GitHub →</span>
                 </div>
-                <p class="summary">Terminal video player — decodes mp4 (and more) on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty. Prior art: tplay, glyph, video-to-ascii.</p>
+                <p class="summary">Terminal video player — decodes mp4 (and more) on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-top.html">
@@ -905,7 +902,7 @@
                     <h3>CandyTop</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-top">GitHub →</span>
                 </div>
-                <p class="summary">btop-style system monitor — cpu, mem + disks, net and process boxes with braille graphs, gradient meters, btop's menus, presets, 42 themes and btop-compatible config, over Linux <code>/proc</code> + <code>/sys</code> and FreeBSD collectors. Port of btop.</p>
+                <p class="summary">Terminal system monitor — cpu, mem + disks, net and process boxes with braille graphs, gradient meters, menus, presets, 42 themes and btop-compatible config, over Linux <code>/proc</code> + <code>/sys</code> and FreeBSD collectors.</p>
             </a>
 
             <a class="lib-card" href="lib/honey-flap.html">
@@ -928,8 +925,8 @@
     <div class="container">
         <h2>Five layers, no surprises.</h2>
         <p class="lede">
-            SugarCraft is the same layered architecture as the Charm stack,
-            translated package-by-package. The deps map cleanly so you can
+            SugarCraft is a layered architecture with one responsibility per
+            layer. Dependencies flow one way through the stack, so you can
             grab as much or as little as you need.
         </p>
 
@@ -944,39 +941,40 @@
             <div class="layer l2">
                 <div class="layer-title">2. Render + physics</div>
                 <div class="layer-bullets">
-                    <strong>CandySprinkles</strong> (lipgloss),
-                    <strong>HoneyBounce</strong> (harmonica). Pure rendering /
+                    <strong>CandySprinkles</strong> — styling,
+                    <strong>HoneyBounce</strong> — spring physics. Pure rendering /
                     pure math — no I/O.
                 </div>
             </div>
             <div class="layer l3">
                 <div class="layer-title">3. Runtime</div>
                 <div class="layer-bullets">
-                    <strong>SugarCraft</strong> (bubbletea) — Model / Msg / Cmd /
-                    Program. Hooks Phase 1 + 2 onto a ReactPHP loop.
+                    <strong>SugarCraft</strong> — Model / Msg / Cmd /
+                    Program. An MVC-style Model–Update–View loop on ReactPHP
+                    with command and subscription hooks.
                 </div>
             </div>
             <div class="layer l4">
                 <div class="layer-title">4. Components</div>
                 <div class="layer-bullets">
-                    <strong>SugarBits</strong> (bubbles),
-                    <strong>SugarCharts</strong> (ntcharts),
-                    <strong>SugarPrompt</strong> (huh),
-                    <strong>CandyZone</strong> (bubblezone). Composable widgets
+                    <strong>SugarBits</strong> (components),
+                    <strong>SugarCharts</strong> (charts),
+                    <strong>SugarPrompt</strong> (forms),
+                    <strong>CandyZone</strong> (mouse zones). Composable widgets
                     that drop into your Model.
                 </div>
             </div>
             <div class="layer l5">
                 <div class="layer-title">5. Tooling libs + apps</div>
                 <div class="layer-bullets">
-                    <strong>Tooling libs:</strong> CandyShine (glamour),
-                    CandyKit (fang), CandyWish (wish), CandyMetrics (promwish),
-                    CandyLog (log), CandyPalette (colorprofile).
+                    <strong>Tooling libs:</strong> CandyShine (markdown → ANSI),
+                    CandyKit (CLI chrome), CandyWish (SSH), CandyMetrics (telemetry),
+                    CandyLog (logging), CandyPalette (color detection).
                     <br>
-                    <strong>CLI apps:</strong> CandyShell (gum), SugarGlow (glow),
-                    SugarSpark (sequin), CandyFreeze (freeze),
-                    SugarWishlist (wishlist), CandyServe (soft-serve),
-                    SugarSkate (skate), SugarPost (pop).
+                    <strong>CLI apps:</strong> CandyShell (one-shot CLI helpers), SugarGlow (markdown),
+                    SugarSpark (ANSI inspector), CandyFreeze (code → SVG),
+                    SugarWishlist (SSH launcher), CandyServe (git server),
+                    SugarSkate (key/value store), SugarPost (email sender).
                     <br>
                     <strong>TUI apps:</strong> CandyMold, CandyTetris, CandyFiles,
                     SugarCrush, SugarStash, CandyQuery, SugarTick, CandyMines,
@@ -1256,7 +1254,7 @@
             </thead>
             <tbody>
                 <tr>
-                    <td>Elm-architecture runtime (Model / Msg / Cmd)</td>
+                    <td>MVC-style Model–Update–View runtime (Model / Msg / Cmd)</td>
                     <td class="yes">✓</td>
                     <td class="no">—</td>
                     <td class="no">—</td>
@@ -1298,7 +1296,7 @@
                     <td class="no">—</td>
                 </tr>
                 <tr>
-                    <td>One-shot CLI prompts (gum-style)</td>
+                    <td>One-shot CLI prompts</td>
                     <td class="yes">✓ (CandyShell)</td>
                     <td class="no">primitive</td>
                     <td class="no">—</td>
@@ -1332,8 +1330,9 @@
     <div class="container">
         <div>
             <span class="logo-mark" aria-hidden="true"></span>
-            <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+
+            <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+
         </div>
+        <p class="credits" style="color: var(--ink-2); font-size: 0.85em; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px;">SugarCraft is a PHP-native project. Its original design inspiration came from the Go terminal ecosystem — notably <a href="https://github.com/charmbracelet/bubbletea">Bubble Tea</a> and the wider <a href="https://github.com/charmbracelet">Charm</a> family of libraries — reimagined here for PHP 8.3+.</p>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·

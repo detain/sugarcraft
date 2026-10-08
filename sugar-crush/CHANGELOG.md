@@ -9,14 +9,14 @@ truth going forward.
 
 ## Feature-parity pass (current) — 2026-08
 
-Driven by `crush_feat.md` at the monorepo root: a 12-agent comparison of
+Driven by an internal 12-agent comparison of
 sugar-crush against `opencode` and Claude Code. Its dominant finding was not
 "features are missing" but **"most of this was already built and never wired
 into the live runtime"** — so most of the work below is connection, not
 construction. Waves are gated on the full suite staying green.
 
 Note on numbering: these waves are a *separate* pass from the
-`crush_code_update.md` remediation waves recorded further down this file, which
+remediation waves recorded further down this file, which
 happen to share the numbers 1–4.
 
 ### Sub-agent delegation and manifest access (2026-09)
@@ -73,7 +73,7 @@ happen to share the numbers 1–4.
   engine's tool loop in the pool's forked child, per-call gated by the session's
   hooks and permission gate. `AgentWorkerPool::executeOne()` now forks when a
   forked executor is configured, so sequential stages no longer block the TUI.
-  The executor refuses an engine on the offline echo fallback (E663).
+  The executor refuses an engine on the offline echo fallback.
   `Support\ParentProcessGuard` is the shared orphan check for it and `Task`.
 - **`composer.json` / `composer.lock` are no longer protected** by
   `ProtectFilesHook`. The unanchored patterns were judged against Read paths
@@ -229,9 +229,9 @@ happen to share the numbers 1–4.
 
 No on-disk format changed in this pass. Sessions written before it still load.
 
-## Second audit pass — `crush_code.md`
+## Second audit pass — the deep code review
 
-A second, independent 13-angle audit (monorepo root `crush_code.md`). Phase 0
+A second, independent 13-angle audit of the whole library. Phase 0
 is its highest-severity findings.
 
 ### Phase 0 — session-store performance (2026-08)
@@ -311,11 +311,10 @@ written in the old inline format still read back unchanged.
 
 ## Remediation pass
 
-An independent line-by-line audit of the original P0–P7 build (recorded in
-the monorepo root's `crush_code_update.md`) found that a large fraction of
-"complete" steps were either subtly broken, unenforced, or entirely unwired
-from the running binary despite passing their own unit tests — see that
-document for the full findings. This pass fixes the audit's findings in five
+An independent line-by-line audit of the original P0–P7 build found that a
+large fraction of "complete" steps were either subtly broken, unenforced, or
+entirely unwired from the running binary despite passing their own unit tests;
+the findings are recorded across the waves below. This pass fixes the audit's findings in five
 waves, each gated on the full suite staying green (0 new failures/errors)
 before the next wave starts.
 
@@ -499,14 +498,14 @@ One continuous, internally-ordered track (data layer before TUI):
 
 ## Original build (P0–P7)
 
-Built as a PHP port of [`charmbracelet/crush`](https://github.com/charmbracelet/crush)
-on top of the existing SugarCraft chassis (`candy-core`'s `Model`/`Program`,
-buffer-diff `Renderer`). Absorbed the former experimental `candy-crush` port
-partway through — there is now a single `SugarCraft\Crush` library.
+Built on the existing SugarCraft chassis (`candy-core`'s `Model`/`Program`,
+buffer-diff `Renderer`), with [`charmbracelet/crush`](https://github.com/charmbracelet/crush)
+as the design reference for the agent's shape. Absorbed the former experimental
+`candy-crush` codebase partway through — there is now a single `SugarCraft\Crush` library.
 
 - **Chassis + engine grafting** — streaming `CommandBackend`, tool-calling,
   slash-command parsing, an MCP client, and full session persistence were
-  ported from `candy-crush` and grafted onto the sugar-crush chassis
+  carried over from `candy-crush` and grafted onto the sugar-crush chassis
   (`EngineBackend` as the seam), then rebranded and merged as a single agent.
 - **P0 — Agent preset configuration schema.** `PermissionMode`, `Effort`,
   `MemoryScope`, `Isolation` enums; `AgentPreset` DTO; `AgentPresetRegistry`
@@ -556,7 +555,7 @@ partway through — there is now a single `SugarCraft\Crush` library.
   `php-best-practices`) plus a second batch of 8 (later relocated into their
   correct loader path above).
 
-An independent audit (`crush_code_update.md` at the monorepo root) then
+An independent audit of that build then
 found that a substantial fraction of the above — while individually
 well-tested in isolation — was either not actually wired into the running
 binary, silently broken under real concurrency, or misrepresented by its own

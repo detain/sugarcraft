@@ -211,8 +211,7 @@ Termination semantics:
 The pump deliberately does **not** call `Child::wait()` when the
 child is still alive. The caller (e.g. `candy-wish`'s
 `InProcessTransport`) needs to enforce its own kill-on-stdin-EOF
-policy without the pump holding it hostage. See plan step P2.5 for
-the rationale.
+policy without the pump holding it hostage.
 
 ## Child lifecycle (`ChildPollTrait`)
 
@@ -269,8 +268,8 @@ Two reasons:
    inject a stub `PtySystem` that returns scripted in-memory streams
    without touching libc. Production code resolves the real one via
    `PtySystemFactory::new()`.
-2. **Windows ConPTY v2.** When the Windows sidecar lands (see
-   `plans/x-windows.md`), a `WinConPtySystem` will implement the
+2. **Windows ConPTY v2.** When a Windows sidecar lands, a
+   `WinConPtySystem` will implement the
    same contract. Application code that calls
    `PtySystemFactory::new()->open()` doesn't change; only the
    factory's `match` on `PHP_OS_FAMILY` grows a new arm.
@@ -290,11 +289,11 @@ shape keep working while migrating. They will go away at v2.0.
 `PtySystemFactory::new()` reads the `SUGARCRAFT_PTY_BACKEND`
 environment variable before picking a backend. On POSIX this defaults
 to `posix-ffi`. Setting it to `sidecar` or `pecl` causes an immediate
-`UnsupportedPlatformException` noting the backend is deferred to
-phase 12. Unrecognised values throw `\InvalidArgumentException` listing
+`UnsupportedPlatformException` noting the backend is not
+implemented in v1. Unrecognised values throw `\InvalidArgumentException` listing
 the four valid options (`posix-ffi`, `sidecar`, `pecl`, `auto`).
 
-This design keeps the door open for phase-12 backends without any
+This design keeps the door open for future backends without any
 call-site changes: application code always calls
 `PtySystemFactory::new()`, and only the factory grows new arms
 when those backends are wired in.
@@ -305,9 +304,7 @@ when those backends are wired in.
 - `src/PumpOptions.php` — every knob that tunes pump behaviour.
 - `src/Posix/PosixPump.php` — the canonical `stream_select` loop.
 - `CALIBER_LEARNINGS.md` — postmortems and rules-of-thumb.
-- `plans/sugarcraft-is-a-mono-logical-twilight.md` — the project plan
-  that drove the P0–P5 ports.
-- Upstream parity tables: see [`README`](../README.md) "Compared to
+- Parity tables: see [`README`](../README.md) "Compared to
   node-pty / creack/pty / portable-pty."
 
 @see creack/pty — https://github.com/creack/pty

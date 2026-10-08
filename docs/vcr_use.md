@@ -1,14 +1,15 @@
-# Making candy-vcr a charmbracelet/vhs replacement
+# candy-vcr tape rendering — build record and design analysis
 
 **Date:** 2026-05-21
-**Question:** Can candy-vcr take over `.tape` → `.gif` rendering from the upstream charmbracelet/vhs binary the CI workflow currently uses?
-**Verdict:** Yes — with a focused **6–10 week** build. The biggest hidden cost is that **candy-vt** (the terminal-grid emulator candy-vcr would render through) is essentially unbuilt today. candy-vcr's existing Cassette + Player layer is solid and reusable; the tape compiler, renderer, rasterizer, and GIF encoder are net-new.
+**Question:** Can candy-vcr's own PHP pipeline render `.tape` → `.gif` in place of the `vhs` binary (charmbracelet/vhs) the CI workflow currently uses?
+**Verdict:** Yes — with a focused **6–10 week** build. The biggest hidden cost is that **candy-vt** (the terminal-grid emulator candy-vcr would render through) did not exist yet. candy-vcr's existing Cassette + Player layer is solid and reusable; the tape compiler, renderer, rasterizer, and GIF encoder are net-new.
+**Status (2026-10):** the pipeline shipped — candy-vcr's `Tape/` → `Render/` → `Raster/` → `Encode/` stack and candy-vt are live, and CI runs `candy-vcr render-batch` as a non-blocking seed soak. The `vhs` binary still renders the main demo matrix, so the §4 Phase 7 / §9 cutover is pending, not done. Section numbers in this file are external citation anchors — do not renumber or merge them. Looking for how to *use* candy-vcr? See `candy-vcr/README.md` — this file is the story of how the renderer was designed and built.
 
 ---
 
 ## §1. TL;DR
 
-candy-vcr today is a **Msg-flow recorder/replayer** (Program → JSONL cassette → replay with assertions). charmbracelet/vhs is a **declarative tape DSL → terminal rendering → GIF**. They solve different problems. To make candy-vcr cover what vhs does, we build a new pipeline on top of the existing Cassette + Player layer:
+candy-vcr today is a **terminal-session recorder/replayer** — it captures what your app renders and every key press (Program → JSONL cassette → replay with assertions). The `vhs` binary is a **declarative tape DSL → terminal rendering → GIF**. They solve different problems. To make candy-vcr cover what vhs does, we build a new pipeline on top of the existing Cassette + Player layer:
 
 ```
 .tape  →  Lexer/Parser/Compiler  →  Cassette  →  Player  →  Terminal (candy-vt)
@@ -24,123 +25,13 @@ candy-vcr today is a **Msg-flow recorder/replayer** (Program → JSONL cassette 
                                                               .gif
 ```
 
-ffmpeg is already in the CI runner image. `gd`, `imagick`, and `ffi` PHP extensions all load in local PHP. The PHP-native path is realistic; we don't need Chromium or ttyd. Strategy: ship as additive (new CLI command, new container image variant) and A/B alongside upstream vhs so rollback is one workflow-file change.
+ffmpeg is already in the CI runner image. `gd`, `imagick`, and `ffi` PHP extensions all load in local PHP. The PHP-native path is realistic; we don't need Chromium or ttyd. Strategy: ship as additive (new CLI command, new container image variant) and A/B alongside the vhs binary so rollback is one workflow-file change.
 
 ---
 
-## Execution protocol — applies to every phase in this document
+## How the phases were shipped (historical note)
 
-Every phase below (Phase 0 through Phase 7) ships through the same lifecycle. Read this once; it isn't repeated under each phase.
-
-### 1. One subagent per phase, sequentially — never concurrently
-
-Spawn **one** subagent (general-purpose or `oac:coder-agent`) per phase. Wait for completion before spawning the next. Concurrent subagents collide on shared root files (`MATCHUPS.md`, root `README.md`, root `composer.json`, `.codenomad/worktreeMap.json`); see the AGENTS.md gotchas. Background mode is fine, but only one in flight at a time.
-
-This also prevents context bloat in the orchestrating session — each subagent reports a short summary; the orchestrator never carries the full diff in its window.
-
-### 2. Phase work
-
-The subagent reads its scope from this document, makes the changes, never expands scope without checking back. Phase 1 (candy-vt) is large enough that it should be sub-divided across multiple PR subagents (one for value objects, one for the CSI parser, one for the theme catalog, etc.) — still one at a time.
-
-### 3. Local gate — all three must pass before commit
-
-Per affected lib:
-
-```sh
-composer install --quiet
-vendor/bin/phpunit                                            # tests
-vendor/bin/phpstan analyze --level=max 2>/dev/null || true    # if configured
-vendor/bin/php-cs-fixer fix --dry-run --diff 2>/dev/null || true  # if configured
-```
-
-Current state (verified 2026-05-21):
-- **phpunit:** configured per lib.
-- **phpstan:** only `candy-core/phpstan.neon` exists today. **Phase 0 should add `phpstan.neon` to `candy-vcr` and `candy-vt`**; subsequent phases inherit. Aim for `level: max` from day one — easier than back-fitting later.
-- **php-cs-fixer:** not configured. Phase 0 should add a root `.php-cs-fixer.dist.php` so every subsequent phase has a lint gate.
-
-PHPUnit hang gotcha (PTY/FFI tests in candy-pty, candy-vcr's PTY-recording paths) applies — see the `feedback_phpunit_kill_pattern` project memory: backgrounded `pkill -f phpunit` watchdog at 120s if needed.
-
-### 4. Review cycle — review, fix, repeat until clean
-
-After the local gate passes, spawn a **separate** review subagent (use `oac:code-review` skill, or general-purpose with the diff as input). The reviewer:
-- Cross-checks against the phase spec in this document.
-- Validates against `candy-vt/CALIBER_LEARNINGS.md` and `candy-vcr/CALIBER_LEARNINGS.md`.
-- Checks project conventions: PSR-12, `declare(strict_types=1)`, `final` classes, immutable + fluent + `mutate()` pattern, `Lang::t()` for user-facing exceptions.
-
-If the reviewer finds issues, spawn **one more** subagent to apply fixes. Re-run the local gate. Re-review. Cycle until clean. Two cycles is normal; three suggests this document's phase spec is unclear and should be tightened first.
-
-### 5. Documentation — required, not optional
-
-Every phase updates docs that the change affects:
-
-Per touched lib:
-- `<slug>/README.md` — quickstart still works; new public APIs documented with code snippets.
-- `<slug>/CALIBER_LEARNINGS.md` — append patterns and anti-patterns from the phase.
-- `<slug>/.vhs/*.tape` + `.gif` — if the lib gains demo-worthy behavior.
-- `docs/lib/<slug>.html` — public webpage if user-facing surface changed.
-
-For cross-cut additions (new candy-vt lib, new CLI subcommands):
-- Root `README.md` — library count, table row, test-loop snippet.
-- Root `MATCHUPS.md` — status icon updates.
-- Root `PROJECT_NAMES.md` — naming entry for any new lib.
-- `docs/index.html` — homepage tile.
-- Root `CALIBER_LEARNINGS.md` — cross-cut pattern.
-
-### 5b. Caliber — skip entirely for these PRs
-
-This repo's CLAUDE.md / AGENTS.md tell humans to run `caliber refresh` before commit. **For AI-driven PRs under this document, skip Caliber.** If Caliber's pre-commit hook fires and stages files on its own, unstage them and proceed:
-
-```sh
-git restore --staged \
-  CLAUDE.md AGENTS.md .claude/ .cursor/ .cursorrules \
-  .github/copilot-instructions.md .github/instructions/ \
-  .agents/ .opencode/ 2>/dev/null
-git commit ...   # continue as if Caliber never ran
-```
-
-Hand-written additions to a lib's `CALIBER_LEARNINGS.md` (per §5) are intentional content edits — keep those staged. Only unstage files Caliber regenerates on its own.
-
-If a stop hook complains that Caliber isn't set up on the machine, ignore it.
-
-### 6. Ship via the `ship-pr` skill
-
-The project's `ship-pr` skill handles: stage → commit (author `Joe Huss <detain@interserver.net>`) → push → create PR → merge → checkout master → pull.
-
-**Every `gh` invocation in this repo MUST be prefixed with `unset GITHUB_TOKEN &&`**. The repo's `GITHUB_TOKEN` conflicts with local `gh auth`. The ship-pr skill knows this; any direct `gh` invocations outside the skill need the same prefix:
-
-```sh
-unset GITHUB_TOKEN && gh pr create ...
-unset GITHUB_TOKEN && gh pr merge <n> --merge --delete-branch
-```
-
-### 7. Post-merge cleanup — return to master, prune the branch
-
-After `gh pr merge <n> --merge --delete-branch` (the skill passes `--delete-branch`, so the remote is gone), the subagent does local cleanup before reporting done:
-
-```sh
-git checkout master
-git pull --ff-only
-git branch -d ai/<slug>-<short>    # delete the merged local branch
-git fetch --prune                  # drop stale remote-tracking refs
-git status                         # must show "working tree clean" on master
-```
-
-If `git branch -d` refuses (says the branch isn't merged), something went wrong — investigate before forcing. Don't use `-D` to bypass; the merge may have failed silently.
-
-Before the **next** phase spawns, the orchestrator verifies:
-- Current branch is `master`.
-- `git status` is clean.
-- `git log -1 --oneline` shows the merge commit just pulled.
-
-### 8. Move to the next phase only after cleanup
-
-Never queue two phases concurrently. Never start a new phase from a stale branch. Phases too large for one PR (candy-vt) get split internally but each sub-PR runs through this same cleanup gate before the next sub-PR begins.
-
-### Bundling rule for small PRs
-
-Per the project's ship-as-you-go cadence and `feedback_pr_size` memory: bundle 2–4 related items per PR when they share a coherent scope, rather than one-feature-per-PR. For this document that mostly means within a phase — not across phases.
-
----
+Phases 0–6 shipped sequentially as individual PRs per the repo's standard cycle at the time (local gate → review → ship → prune); Phase 7's parallel seed-soak job is running, with the full cutover still pending. Early drafts of this document prescribed an orchestration protocol for that cycle — subagents, the `ship-pr` skill, Caliber — now retired; nothing in the analysis below depends on it.
 
 ## §2. Current state inventory
 
@@ -244,7 +135,7 @@ This phase exists to make every later phase faster. Bundle into 1 PR.
   - Primary rasterizer backend: `ext-gd` (universal availability).
   - Primary GIF encoder: `FfmpegGifEncoder` (ffmpeg already in CI image).
   - Font: JetBrainsMono Regular + Bold (OFL license, monospace, broad glyph coverage).
-- **Documentation** (per protocol §5):
+- **Documentation** (shipped alongside the code, same PR):
   - `candy-vcr/README.md` — note the new gates (phpstan + cs-fixer) under "Development".
   - Root `README.md` — note php-cs-fixer in the development section.
 
@@ -302,7 +193,7 @@ The longest pole. candy-vt is its own self-contained foundation lib; the rendere
 - At every `1/fps` boundary, capture a `Snapshot` from the Terminal.
 - Hand snapshots downstream as an iterator.
 
-`FrameDedup`: if `Snapshot::equals(previous)`, increment the previous frame's hold duration instead of emitting a duplicate. Critical for GIF size — upstream vhs does this and so must we (typical tape has 80-95% redundant frames).
+`FrameDedup`: if `Snapshot::equals(previous)`, increment the previous frame's hold duration instead of emitting a duplicate. Critical for GIF size — the vhs binary does this and so must we (typical tape has 80-95% redundant frames).
 
 Honor:
 - `Set TypingSpeed` (default 50ms inter-keystroke).
@@ -336,7 +227,7 @@ Honor:
 - Emoji: deferred to v2. Document the limit.
 
 **ImagickRasterizer (alternative):**
-- Slightly better anti-aliasing; useful if visual drift from upstream becomes a complaint.
+- Slightly better anti-aliasing; useful if visual drift from the vhs binary becomes a complaint.
 - Kept as an option, not the default.
 
 ### Phase 5 — GIF encoder (½ week)
@@ -355,7 +246,7 @@ Honor:
 - Pure-PHP using `imagegif()` per frame + custom LZW for the animation chunks.
 - Slow; exists only for environments without ffmpeg.
 
-**Goal:** visual parity with upstream vhs at "looks the same at a glance", not byte parity. Document the expectation.
+**Goal:** visual parity with the vhs binary at "looks the same at a glance", not byte parity. Document the expectation.
 
 ### Phase 6 — CLI integration (½ week)
 
@@ -387,16 +278,16 @@ Add `render-batch <dir>` command that processes every `*.tape` under a directory
 **Workflow changes:**
 - New job `vhs-candy-vcr` runs in parallel with the existing `vhs` job on a seed lib (`candy-core` first). The job invokes `php candy-vcr/bin/candy-vcr render-batch <lib>/.vhs/`.
 - After visual sign-off on the seed lib, expand to 5 more libs.
-- After a 2-week soak with no regressions, the upstream `vhs "$tape"` line is replaced.
+- After a 2-week soak with no regressions, the `vhs "$tape"` line is replaced.
 - The container-image swap is a separate PR.
 
-**Rollback:** one-line revert in `.github/workflows/vhs.yml`. The upstream-vhs container variant lives for 2–3 releases as a safety net.
+**Rollback:** one-line revert in `.github/workflows/vhs.yml`. The `vhs` container variant lives for 2–3 releases as a safety net.
 
 ---
 
 ## §5. Performance budget
 
-**Target:** ≤30 min wall-clock for the full 841-tape render (matches current ceiling under upstream vhs).
+**Target:** ≤30 min wall-clock for the full 841-tape render (matches the ceiling of the `vhs` binary in CI).
 
 **Per-tape estimates (informed; will be measured during Phase 0 and Phase 4):**
 
@@ -457,7 +348,7 @@ Performance work is gated on real numbers from Phase 0 and Phase 4 benchmarks, n
 | `ScrollUp` / `ScrollDown` / `Page*` | 0 | ❌ not in v1 | Need terminal scrollback first |
 | `CursorBlink` | 0 | ❌ not in v1 | Defeats dedup; defer |
 
-v1 covers everything actually used in the monorepo. v2 covers the remainder for parity with upstream vhs.
+v1 covers everything actually used in the monorepo. v2 covers the remainder for parity with the vhs binary.
 
 ---
 
@@ -480,7 +371,7 @@ v1 covers everything actually used in the monorepo. v2 covers the remainder for 
 5. **Phase 4 PRs:** GdRasterizer + Glyphs + FontLoader; bundle TTF.
 6. **Phase 5 PR:** FfmpegGifEncoder; smoke test produces a viewable GIF.
 7. **Phase 6 PR:** `render-tape` and `render-batch` CLI commands.
-8. **Phase 7 PRs:** New runner-image variant; parallel `vhs-candy-vcr` workflow job on a seed lib; gradual expansion; soak; finally drop upstream-vhs.
+8. **Phase 7 PRs:** New runner-image variant; parallel `vhs-candy-vcr` workflow job on a seed lib; gradual expansion; soak; finally retire the `vhs` binary.
 
 Each PR ends with `vendor/bin/phpunit` per affected lib and (for Phase 7) a visual diff on the seed library's GIFs.
 
@@ -490,19 +381,19 @@ Each PR ends with `vendor/bin/phpunit` per affected lib and (for Phase 7) a visu
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Visual drift from upstream (font, theme palette, kerning) | High | Tune until "close enough"; document the expectation; offer `ImagickRasterizer` as a fallback if needed. |
+| Visual drift from the vhs binary (font, theme palette, kerning) | High | Tune until "close enough"; document the expectation; offer `ImagickRasterizer` as a fallback if needed. |
 | Performance overshoot (>30 min CI budget) | Medium | Phase 0 + Phase 4 benchmarks gate Phase 7; if budget breaks, expand matrix sharding before reverting. |
 | candy-vt scope creep (terminal emulator is its own project) | High | Strict v1 scope: only what the renderer needs. Defer DECSAVE, alt-screen, mouse, BiDi to v2. |
 | Hidden directives in newer tapes break parser | Low | Corpus parse test runs before render; `--strict` flag for opt-in rejection. |
 | Determinism change (vhs is non-deterministic, candy-vcr is byte-deterministic) breaks `git diff --quiet` re-render check | Medium | Switch the re-render check to a manifest-hash comparison; deterministic output is actually an upgrade. |
 
-**Rollback** is always a one-line workflow revert. The upstream-vhs runner image lives in parallel for 2–3 releases.
+**Rollback** is always a one-line workflow revert. The `vhs` runner image lives in parallel for 2–3 releases.
 
 ---
 
 ## §11. Alternative architectures considered (and why not)
 
-- **Shell to headless Chromium** (mimics upstream vhs internals). Rejected — defeats the PHP-native ethos; re-introduces the Chromium container weight we'd be removing.
+- **Shell to headless Chromium** (mirrors the `vhs` binary's internals). Rejected — defeats the PHP-native ethos; re-introduces the Chromium container weight we'd be removing.
 - **Use ImageMagick CLI for everything (no PHP image libs).** Rejected as the primary path — ffmpeg has stronger GIF tooling (`palettegen` + `paletteuse`) and is already in the image. Kept `ImagickRasterizer` as an alternative backend.
 - **Pure-PHP everything (no ffmpeg shell-out).** Rejected as default — pure-PHP LZW encoding is 5–10× slower. Kept as `PhpGifEncoder` for environments where shelling out isn't allowed.
 
@@ -522,7 +413,7 @@ Independent of the render work; the existing recorder/player has room to grow:
 
 ## §13. PHP-specific opportunities
 
-Things upstream Go can't easily do that PHP can leverage:
+Things the Go tooling couldn't easily do that PHP can leverage:
 
 - **ReactPHP async loop** for parallel tape compilation + rendering within one process.
 - **Distributed rendering** via Amp/promise pools — one batch process per CPU core.
@@ -551,6 +442,10 @@ Things upstream Go can't easily do that PHP can leverage:
 
 **Yes, achievable.** The biggest hidden cost is building candy-vt itself, not the candy-vcr work. With ffmpeg already in CI and gd/imagick available in PHP, the PHP-native path is realistic without re-introducing the Chromium/ttyd container weight.
 
-Recommended sequencing: ship Phase 0 first (cheap, unblocks measurement), then Phase 1 (the candy-vt base) as a long-running parallel workstream, then Phases 2–7 in order once Phase 1 has a usable Terminal API. Each phase ships as its own PR(s); the renderer is additive throughout — upstream vhs keeps running in CI until Phase 7's soak proves the candy-vcr path is reliable.
+Recommended sequencing: ship Phase 0 first (cheap, unblocks measurement), then Phase 1 (the candy-vt base) as a long-running parallel workstream, then Phases 2–7 in order once Phase 1 has a usable Terminal API. Each phase ships as its own PR(s); the renderer is additive throughout — the vhs binary keeps running in CI until Phase 7's soak proves the candy-vcr path is reliable.
 
-(End of file - total 554 lines)
+---
+
+## Credits & inspiration
+
+The `.tape` DSL this pipeline reproduces is the format of [vhs](https://github.com/charmbracelet/vhs), a Go terminal GIF recorder; candy-vcr's replayed Program/Msg model descends from [Bubble Tea](https://github.com/charmbracelet/bubbletea). Both reimagined here in PHP 8.3+.

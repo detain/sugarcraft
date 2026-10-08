@@ -13,7 +13,7 @@ Update the public-facing site under `docs/`: lib tiles on `docs/index.html`, per
 - `docs/index.html` — 8 new tiles for the new shared foundation libs.
 - `docs/lib/<slug>.html` — 8 new pages (one per new lib).
 - `docs/repo_map_update.md` — append a `## Status (post-refactor)` section at the top showing items ✅ that were addressed by this plan; do NOT rewrite the analysis sections.
-- `docs/improvements.md` (if relevant) — cross-reference.
+- `findings/improvements-2026-05.md` (if relevant; formerly `docs/improvements.md`) — cross-reference.
 
 ## Acceptance criteria
 
