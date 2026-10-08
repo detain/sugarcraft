@@ -23,7 +23,7 @@ for d in candy-core candy-ansi candy-buffer candy-layout candy-async candy-testi
          candy-freeze sugar-glow sugar-spark \
          candy-wish sugar-wishlist candy-metrics \
          candy-mold candy-tetris candy-files sugar-crush \
-         sugar-stash candy-query sugar-tick candy-mines candy-flip honey-flap; do
+         sugar-stash candy-query sugar-tick candy-mines candy-flip candy-top honey-flap; do
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```

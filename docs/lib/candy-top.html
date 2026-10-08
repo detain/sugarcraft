@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CandyTop — SugarCraft</title>
+<meta name="description" content="CandyTop: btop-style terminal system monitor for PHP. Port of aristocratos/btop on the SugarCraft charting stack.">
+<meta property="og:title" content="CandyTop — SugarCraft">
+<meta property="og:description" content="Terminal system monitor — cpu, memory, network, disk and process panels with braille graphs. Port of btop.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-top.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-top.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-top.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-top.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All 21 apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-top.png" alt="CandyTop">
+      <div>
+        <h2>📈 CandyTop</h2>
+        <p class="detail-sub">btop-style terminal system monitor</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/aristocratos/btop" style="color: inherit;">aristocratos/btop</a></span>
+          <span class="tag-chip">system-monitor</span>
+          <span class="tag-chip">tui</span>
+          <span class="tag-chip">charts</span>
+          <span class="tag-chip">linux</span>
+        </div>
+      </div>
+    </div>
+    <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-top"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-top" alt="CandyTop code coverage" loading="lazy"></a></p>
+
+    <p class="lede" style="margin-top: 28px;">A full-screen terminal system monitor in the spirit of <a href="https://github.com/aristocratos/btop">btop</a>, written in pure PHP on the SugarCraft stack: <strong>cpu, memory, network, disk and process panels drawn with braille graphs, gradient meters and btop's own themes</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> collectors and driven by the <a href="candy-core.html">CandyCore</a> Model/Cmd runtime.</p>
+
+    <p><strong>Status: scaffold, in progress.</strong> The package skeleton has landed; the rendering primitives it needs (dual-sample braille graphs, position-colored meters, border-embedded titles, the 101-stop gradient store) are being added to <a href="sugar-dash.html">SugarDash</a>, <a href="sugar-charts.html">SugarCharts</a>, <a href="sugar-bits.html">SugarBits</a> and <a href="candy-sprinkles.html">CandySprinkles</a> first, and the app is assembled on top of them.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-top:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">What's planned</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Six panels</strong><span>cpu (graphs, per-core grid, load / freq footer, battery + clock), mem + swap, net with autoscale, disk io, a sortable / filterable process list.</span></div>
+      <div class="feature"><strong>btop's drawing language</strong><span>Dual-sample braille and block graphs, 101-stop gradients, position-colored meters, titles embedded in the borders.</span></div>
+      <div class="feature"><strong>Linux collectors</strong><span>Injectable-path readers for <code>/proc/stat</code>, <code>meminfo</code>, <code>net/dev</code>, <code>diskstats</code>, per-pid stats, thermal, hwmon and power-supply sysfs.</span></div>
+      <div class="feature"><strong>Themes + input</strong><span>btop's theme files ported as data; kitty keyboard + SGR mouse, vim keys, a btop-compatible config subset.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-top">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-top/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-top/tree/master/tests">Test suite</a></li>
+    </ul>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-top">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-top/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

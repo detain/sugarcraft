@@ -90,6 +90,7 @@ Status legend:
 | [maxpaulus43/go-sweep](https://github.com/maxpaulus43/go-sweep) | **CandyMines** | `candy-mines/` | `sugarcraft/candy-mines` | `SugarCraft\Mines` | 🟢 | Minesweeper — first-click safety / flood-fill |
 | [namzug16/gifterm](https://github.com/namzug16/gifterm) | **CandyFlip** | `candy-flip/` | `sugarcraft/candy-flip` | `SugarCraft\Flip` | 🟢 | ASCII GIF viewer (ext-gd) |
 | [maxcurzi/tplay](https://github.com/maxcurzi/tplay) · [seatedro/glyph](https://github.com/seatedro/glyph) · [joelibaceta/video-to-ascii](https://github.com/joelibaceta/video-to-ascii) | **SugarReel** | `sugar-reel/` | `sugarcraft/sugar-reel` | `SugarCraft\Reel` | 🟢 | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty); no single upstream — ffmpeg pipe + pure-PHP GIF fallback, delta repaint, seek, speed, audio companion |
+| [aristocratos/btop](https://github.com/aristocratos/btop) | **CandyTop** | `candy-top/` | `sugarcraft/candy-top` | `SugarCraft\Top` | 🔴 | btop-style system monitor — cpu/mem/net/disk/proc/battery panels, braille graphs, btop themes; Linux `/proc`+`/sys` collectors. Scaffold + library lanes in progress (plan: `plan_top.md`) |
 | [kbrgl/flapioca](https://github.com/kbrgl/flapioca) | **HoneyFlap** | `honey-flap/` | `sugarcraft/honey-flap` | `SugarCraft\Flap` | 🟢 | Flappy Bird clone — bird is a HoneyBounce projectile |
 
 <!--
@@ -113,6 +114,10 @@ port. Suffixes are short, technical, and describe the role.
 
 `Candy-` (Files) is the file manager naming. Don't mint new prefixes without a discussion in
 [`PROJECT_NAMES.md`](./PROJECT_NAMES.md).
+
+`Candy-` (Top) is a recorded naming exception: a system-monitor app would read `Sugar-` by the
+apps heuristic, but the owner chose `candy-top` (a system monitor is "system" in the `Candy-`
+sense). The ruling and both sides of the argument live in [`PROJECT_NAMES.md`](./PROJECT_NAMES.md).
 
 ---
 

@@ -1,0 +1,11 @@
+{
+    "title": "CandyTop — SugarCraft",
+    "description": "CandyTop: btop-style terminal system monitor for PHP. Port of aristocratos/btop on the SugarCraft charting stack.",
+    "ogTitle": "CandyTop — SugarCraft",
+    "ogDescription": "Terminal system monitor — cpu, memory, network, disk and process panels with braille graphs. Port of btop.",
+    "emoji": "📈",
+    "displayName": "CandyTop",
+    "tagline": "btop-style terminal system monitor",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">port of <a href=\"https://github.com/aristocratos/btop\" style=\"color: inherit;\">btop</a></span>\n          <span class=\"tag-chip\">system-monitor</span>\n          <span class=\"tag-chip\">tui</span>\n          <span class=\"tag-chip\">charts</span>\n          <span class=\"tag-chip\">linux</span>"
+}

@@ -9,6 +9,8 @@ use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Legend\Legend;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Sprinkles\Style;
 
 /**
  * Vertical bar chart drawn with `█` blocks. Bars are spaced one column
@@ -37,6 +39,7 @@ final class BarChart
     /**
      * @param list<Bar>                        $bars
      * @param list<array{label: string, color: string}> $legendItems
+     * @param ?\Closure                        $barColorFn  per-bar color resolver, see {@see withBarColor()}
      */
     private function __construct(
         public readonly array $bars,
@@ -58,6 +61,7 @@ final class BarChart
         public readonly ?string $xLabel = null,
         public readonly ?string $yLabel = null,
         private readonly array $legendItems = [],
+        public readonly ?\Closure $barColorFn = null,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('barchart.dim_nonneg'));
@@ -207,6 +211,26 @@ final class BarChart
         return $this;
     }
 
+    /**
+     * Per-bar color resolver: `fn(Bar $bar, int $i): ?Color`, `$i` being
+     * the bar's index in {@see $bars}. A returned Color paints that bar's
+     * `█` body and eighth-block cap; null leaves the bar unstyled. Gaps,
+     * labels and the axis are never colored. WHY: a single-color bar set
+     * cannot express per-bar heat (btop tints each meter by its value
+     * through the theme gradient). Mirrors btop's per-value
+     * `Theme::g(...).at(value)` lookup (btop_draw.cpp Meter::operator()).
+     *
+     * Passing null restores the default path, which renders
+     * byte-identically to a chart that never set a resolver.
+     *
+     * @throws \UnexpectedValueException at render time when the resolver
+     *         returns anything other than a Color or null
+     */
+    public function withBarColor(?\Closure $fn): self
+    {
+        return $this->copy(barColorFn: $fn, barColorFnSet: true);
+    }
+
     // ─── Legend & Label Configuration ──────────────────────────────────
 
     /** Enable or disable the legend. */
@@ -277,6 +301,8 @@ final class BarChart
     public function barGap(?int $gap): self           { return $this->withBarGap($gap); }
     /** Short-form alias for {@see withNoAutoBarWidth()}. */
     public function noAutoBarWidth(bool $on = true): self { return $this->withNoAutoBarWidth($on); }
+    /** Short-form alias for {@see withBarColor()}. */
+    public function barColor(?\Closure $fn): self    { return $this->withBarColor($fn); }
     public function legend(bool $on = true): self     { return $this->withLegend($on); }
     public function legendPos(Position $pos): self    { return $this->withLegendPosition($pos); }
     public function legendStyle(?string $char): self  { return $this->withLegendStyle($char); }
@@ -393,6 +419,7 @@ final class BarChart
             $heights[] = $whole;
             $caps[]    = self::topCapRune($exact - $whole);
         }
+        $styles = $this->barStyles($bars);
 
         $rows = [];
         for ($row = $bodyHeight; $row >= 1; $row--) {
@@ -403,7 +430,9 @@ final class BarChart
                     $caps[$i] !== '' && $h + 1 === $row => $caps[$i],
                     default => ' ',
                 };
-                $line .= str_repeat($cell, $colW);
+                $run = str_repeat($cell, $colW);
+                // Blank cells stay unstyled so rtrim() still strips them.
+                $line .= $cell !== ' ' && $styles[$i] !== null ? $styles[$i]->render($run) : $run;
                 if ($i !== $count - 1 && $gap > 0) {
                     $line .= str_repeat(' ', $gap);
                 }
@@ -459,6 +488,7 @@ final class BarChart
         $axisCol = $this->showAxis ? 1 : 0;
         $barWidth = max(0, $this->width - $labelGutter - ($this->showLabels ? 1 : 0) - $axisCol);
 
+        $styles = $this->barStyles($bars);
         $rows = [];
         foreach ($bars as $i => $bar) {
             $norm = ($bar->value - $min) / ($max - $min);
@@ -479,16 +509,40 @@ final class BarChart
             if ($this->showAxis) {
                 $row .= '├';
             }
-            $row .= str_repeat('█', $filled);
-            if ($cap !== '') {
-                $row .= $cap;
-            }
+            $body = str_repeat('█', $filled) . $cap;
+            $row .= $body !== '' && $styles[$i] !== null ? $styles[$i]->render($body) : $body;
             $rows[] = rtrim($row);
         }
         return implode("\n", $rows);
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Resolve each rendered bar's style through {@see $barColorFn}; all
+     * null when no resolver is set (the byte-identical default path).
+     *
+     * @param list<Bar> $bars
+     * @return list<?Style>
+     */
+    private function barStyles(array $bars): array
+    {
+        if ($this->barColorFn === null) {
+            return array_fill(0, count($bars), null);
+        }
+        $styles = [];
+        foreach ($bars as $i => $bar) {
+            $color = ($this->barColorFn)($bar, $i);
+            if ($color !== null && !$color instanceof Color) {
+                throw new \UnexpectedValueException(Lang::t('barchart.color_return', [
+                    'expected' => Color::class,
+                    'given'    => get_debug_type($color),
+                ]));
+            }
+            $styles[] = $color === null ? null : Style::new()->fg($color);
+        }
+        return $styles;
+    }
 
     /**
      * @param iterable<mixed> $bars
@@ -591,6 +645,8 @@ final class BarChart
         ?string $xLabel = null,
         ?string $yLabel = null,
         ?array $legendItems = null,
+        ?\Closure $barColorFn = null,
+        bool $barColorFnSet = false,
     ): self {
         return new self(
             bars:               $bars               ?? $this->bars,
@@ -612,6 +668,7 @@ final class BarChart
             xLabel:             $xLabel             ?? $this->xLabel,
             yLabel:             $yLabel             ?? $this->yLabel,
             legendItems:        $legendItems        ?? $this->legendItems,
+            barColorFn:         $barColorFnSet ? $barColorFn : $this->barColorFn,
         );
     }
 
@@ -640,6 +697,7 @@ final class BarChart
             xLabel:             $this->xLabel,
             yLabel:             $this->yLabel,
             legendItems:        $this->legendItems,
+            barColorFn:         $this->barColorFn,
         );
     }
 }

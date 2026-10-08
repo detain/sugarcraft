@@ -1377,9 +1377,12 @@ final class Style
             $b->top,
             $right ? $b->topRight : '',
             $contentWidth,
-            $this->renderTitlesAtAnchor($titles[TitleAnchor::TopLeft->name] ?? [], TitleSgr::Left, $titleSgr, $titleReset),
-            $this->renderTitlesAtAnchor($titles[TitleAnchor::TopCenter->name] ?? [], TitleSgr::Center, $titleSgr, $titleReset),
-            $this->renderTitlesAtAnchor($titles[TitleAnchor::TopRight->name] ?? [], TitleSgr::Right, $titleSgr, $titleReset),
+            $titles[TitleAnchor::TopLeft->name] ?? [],
+            $titles[TitleAnchor::TopCenter->name] ?? [],
+            $titles[TitleAnchor::TopRight->name] ?? [],
+            $titleSgr,
+            $titleReset,
+            $b->embedJunctions(false),
         );
     }
 
@@ -1402,9 +1405,12 @@ final class Style
             $b->bottom,
             $right ? $b->bottomRight : '',
             $contentWidth,
-            $this->renderTitlesAtAnchor($titles[TitleAnchor::BottomLeft->name] ?? [], TitleSgr::Left, $titleSgr, $titleReset),
-            $this->renderTitlesAtAnchor($titles[TitleAnchor::BottomCenter->name] ?? [], TitleSgr::Center, $titleSgr, $titleReset),
-            $this->renderTitlesAtAnchor($titles[TitleAnchor::BottomRight->name] ?? [], TitleSgr::Right, $titleSgr, $titleReset),
+            $titles[TitleAnchor::BottomLeft->name] ?? [],
+            $titles[TitleAnchor::BottomCenter->name] ?? [],
+            $titles[TitleAnchor::BottomRight->name] ?? [],
+            $titleSgr,
+            $titleReset,
+            $b->embedJunctions(true),
         );
     }
 
@@ -1412,25 +1418,35 @@ final class Style
      * Lay a horizontal border edge out to exactly `$contentWidth` cells
      * between its corners. Left and right titles claim space first (in that
      * order); the center title is centred in what remains, and any space no
-     * title uses is filled with `$fill`. Every title is truncated with
+     * title uses is filled with `$fill`. Every plain title is truncated with
      * {@see Width::truncateAnsi} so its SGR survives, and a title that gets
      * no space at all is dropped rather than overflowing the corner.
+     * Embedded titles follow {@see Border::withEmbeddedTitle()}'s btop law.
+     *
+     * @param list<BorderTitle>       $leftList
+     * @param list<BorderTitle>       $centerList
+     * @param list<BorderTitle>       $rightList
+     * @param array{0:string,1:string} $junctions default embed [open, close]
      */
     private function buildTitledBorderLine(
         string $cornerLeft,
         string $fill,
         string $cornerRight,
         int $contentWidth,
-        string $leftTitle,
-        string $centerTitle,
-        string $rightTitle,
+        array $leftList,
+        array $centerList,
+        array $rightList,
+        string $titleSgr,
+        string $titleReset,
+        array $junctions,
     ): string {
-        if ($leftTitle === '' && $centerTitle === '' && $rightTitle === '') {
+        if ($leftList === [] && $centerList === [] && $rightList === []) {
             return $cornerLeft . str_repeat($fill, $contentWidth) . $cornerRight;
         }
 
         $available = $contentWidth;
 
+        $leftTitle = $this->renderTitlesAtAnchor($leftList, TitleSgr::Left, $titleSgr, $titleReset, $available, $fill, $junctions);
         $leftWidth = Width::string($leftTitle);
         if ($leftWidth > $available) {
             $leftTitle = Width::truncateAnsi($leftTitle, $available);
@@ -1438,6 +1454,7 @@ final class Style
         }
         $available -= $leftWidth;
 
+        $rightTitle = $this->renderTitlesAtAnchor($rightList, TitleSgr::Right, $titleSgr, $titleReset, $available, $fill, $junctions);
         $rightWidth = Width::string($rightTitle);
         if ($rightWidth > $available) {
             $rightTitle = Width::truncateAnsi($rightTitle, $available);
@@ -1445,10 +1462,29 @@ final class Style
         }
         $available -= $rightWidth;
 
+        $centerTitle = $available > 0
+            ? $this->renderTitlesAtAnchor($centerList, TitleSgr::Center, $titleSgr, $titleReset, $available, $fill, $junctions)
+            : '';
+
         if ($available <= 0) {
             // Left + right titles exhausted the edge: no room for a center
             // title, and appending it anyway would push the right corner out.
             $middle = '';
+        } elseif ($centerTitle !== '' && self::anyEmbedded($centerList)) {
+            // btop update_clock: the opening junction lands at
+            // floor(run/2) - floor(textLen/2) into the FULL run (btop centres
+            // on the box, not on what a corner title leaves). The whole
+            // group is measured as one span. Only when that would overlap a
+            // left/right title does it fall back to the leftover space.
+            $cw = Width::string($centerTitle);
+            $want = intdiv($contentWidth, 2) - intdiv($cw - 2, 2);
+            if ($want >= $leftWidth && $want + $cw <= $contentWidth - $rightWidth) {
+                $lead = $want - $leftWidth;
+            } else {
+                $lead = intdiv($available, 2) - intdiv($cw - 2, 2);
+            }
+            $lead = max(0, min($lead, $available - $cw));
+            $middle = str_repeat($fill, $lead) . $centerTitle . str_repeat($fill, max(0, $available - $cw - $lead));
         } elseif ($centerTitle !== '') {
             $cw = Width::string($centerTitle);
             if ($cw > $available) {
@@ -1465,35 +1501,114 @@ final class Style
         return $cornerLeft . $leftTitle . $middle . $rightTitle . $cornerRight;
     }
 
+    /** @param list<BorderTitle> $titleList */
+    private static function anyEmbedded(array $titleList): bool
+    {
+        foreach ($titleList as $title) {
+            if ($title->embedded) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Render a list of titles at a given anchor position into a single string.
      *
-     * @param list<BorderTitle> $titleList
+     * Plain-only lists render unbounded (the caller truncates, preserving
+     * the pre-embed byte law). A list carrying any embedded title is fitted
+     * to `$budget` here instead, because a blind cut would sever the closing
+     * junction: each text shrinks with `…`, and a title with no room left
+     * is dropped along with everything after it.
+     *
+     * @param list<BorderTitle>        $titleList
+     * @param array{0:string,1:string} $junctions
      */
     private function renderTitlesAtAnchor(
         array $titleList,
-        TitleSgr $_position,
+        TitleSgr $position,
         string $titleSgr,
         string $titleReset,
+        int $budget,
+        string $fill,
+        array $junctions,
     ): string {
         if ($titleList === []) {
             return '';
         }
-        // Each gap between two titles is glued by the separator of the
-        // title it follows (the last title's separator has no gap to glue,
-        // so it is unused) — titles may therefore carry distinct separators.
-        // The SGR escapes stay in the returned string; Width::string() is
-        // ANSI-aware, so callers measure the print width without stripping.
+        if (!self::anyEmbedded($titleList)) {
+            // Each gap between two titles is glued by the separator of the
+            // title it follows (the last title's separator has no gap to glue,
+            // so it is unused) — titles may therefore carry distinct separators.
+            // The SGR escapes stay in the returned string; Width::string() is
+            // ANSI-aware, so callers measure the print width without stripping.
+            $rendered = '';
+            $previous = null;
+            foreach ($titleList as $title) {
+                if ($previous !== null) {
+                    $rendered .= $previous->separator;
+                }
+                $rendered .= $titleSgr . $title->text . $titleReset;
+                $previous = $title;
+            }
+            return $rendered;
+        }
+
+        // btop insets an edge-anchored embed by one edge rune from its corner.
+        $first = $titleList[0];
+        $last  = $titleList[count($titleList) - 1];
+        $leadInset  = $position === TitleSgr::Left && $first->embedded;
+        $trailInset = $position === TitleSgr::Right && $last->embedded;
+        $remaining = $budget - ($leadInset ? 1 : 0) - ($trailInset ? 1 : 0);
+
         $rendered = '';
         $previous = null;
         foreach ($titleList as $title) {
+            $sep = '';
             if ($previous !== null) {
-                $rendered .= $previous->separator;
+                $sep = ($previous->embedded && $title->embedded) ? $fill : $previous->separator;
             }
-            $rendered .= $titleSgr . $title->text . $titleReset;
+            $sepWidth = Width::string($sep);
+            $overhead = $title->embedded ? 2 : 0;
+            $textBudget = $remaining - $sepWidth - $overhead;
+            if ($textBudget < 1) {
+                break;
+            }
+            $text = self::fitWithEllipsis($title->text, $textBudget);
+            $piece = $titleSgr . $text . $titleReset;
+            if ($title->embedded) {
+                $piece = ($title->open ?? $junctions[0]) . $piece . ($title->close ?? $junctions[1]);
+            }
+            $rendered .= $sep . $piece;
+            $remaining -= $sepWidth + $overhead + Width::string($text);
             $previous = $title;
         }
-        return $rendered;
+        if ($rendered === '') {
+            return '';
+        }
+        // A trailing inset only belongs after an embed that actually closed
+        // the run; if the last title was dropped the edge just fills.
+        $trail = ($trailInset && $previous === $last) ? $fill : '';
+        return ($leadInset ? $fill : '') . $rendered . $trail;
+    }
+
+    /** Shrink to `$max` cells, marking the cut with `…` (btop uresize law). */
+    private static function fitWithEllipsis(string $text, int $max): string
+    {
+        if (Width::string($text) <= $max) {
+            return $text;
+        }
+        if ($max === 1) {
+            return '…';
+        }
+        $cut = Width::truncateAnsi($text, $max - 1);
+        // truncateAnsi keeps the escapes that trailed the cut (typically a
+        // closing reset); the ellipsis goes in front of them so it inherits
+        // the title's own styling instead of landing unstyled after it.
+        if (preg_match('/(?:\e\[[0-?]*[ -\/]*[@-~]|\e\][^\x07\e]*(?:\x07|\e\\\\))+$/', $cut, $m) === 1) {
+            return substr($cut, 0, -strlen($m[0])) . '…' . $m[0];
+        }
+        return $cut . '…';
     }
 
     private function buildContentSgr(): string

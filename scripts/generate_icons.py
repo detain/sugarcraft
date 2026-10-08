@@ -115,6 +115,7 @@ SUBJECTS: dict[str, str] = {
     "candy-tetris":    "four glossy interlocking candy tetromino blocks stacked together",
     "candy-query":     "a glossy candy magnifying glass examining a small candy data crystal",
     "candy-freeze":    "a frosted glossy candy ice-pop with delicate frost crystals on its surface",
+    "candy-top":       "a chubby glossy candy computer monitor showing a bright rainbow line graph with little peaks, a gumdrop power light below the screen",
 
     # --- physics / games (honey) ---
     "honey-bounce":    "a chubby cartoon honey jar bouncing along a curved honey-drip arc",
