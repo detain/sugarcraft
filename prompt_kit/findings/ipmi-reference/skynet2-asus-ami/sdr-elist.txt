@@ -1,0 +1,107 @@
+CPU1 Temperature | 01h | ok  |  3.0 | 45 degrees C
+CPU2 Temperature | 02h | ns  |  3.0 | Disabled
+TR2 Temperature  | 06h | ok  | 49.0 | 73 degrees C
+TR3 Temperature  | 07h | ok  | 49.0 | 81 degrees C
+TR4 Temperature  | 08h | ok  | 49.0 | 80 degrees C
+TR5 Temperature  | 09h | ok  | 49.0 | 65 degrees C
+TR6 Temperature  | 33h | ns  | 49.0 | No Reading
+TR7 Temperature  | 34h | ns  | 49.0 | No Reading
+TR8 Temperature  | 35h | ns  | 49.0 | No Reading
+TR9 Temperature  | 36h | ns  | 49.0 | No Reading
+CPU1_DIMMA1_Temp | 0Ah | ok  |  8.0 | 27 degrees C
+CPU1_DIMMB1_Temp | 0Ch | ok  |  8.0 | 28 degrees C
+CPU1_DIMMC1_Temp | 0Eh | ok  |  8.0 | 28 degrees C
+CPU1_DIMMD1_Temp | 10h | ns  |  8.0 | No Reading
+CPU1_DIMME1_Temp | 12h | ok  |  8.0 | 27 degrees C
+CPU1_DIMMF1_Temp | 14h | ns  |  8.0 | No Reading
+CPU1_DIMMG1_Temp | 16h | ok  |  8.0 | 25 degrees C
+CPU1_DIMMH1_Temp | 18h | ok  |  8.0 | 27 degrees C
+CPU1_DIMMI1_Temp | 1Bh | ok  |  8.0 | 26 degrees C
+CPU1_DIMMJ1_Temp | 1Dh | ns  |  8.0 | No Reading
+CPU1_DIMMK1_Temp | 1Fh | ok  |  8.0 | 25 degrees C
+CPU1_DIMML1_Temp | 21h | ns  |  8.0 | No Reading
+CPU2_DIMMA1_Temp | 23h | ns  |  8.0 | Disabled
+CPU2_DIMMB1_Temp | 25h | ns  |  8.0 | Disabled
+CPU2_DIMMC1_Temp | 27h | ns  |  8.0 | Disabled
+CPU2_DIMMD1_Temp | 29h | ns  |  8.0 | Disabled
+CPU2_DIMME1_Temp | 2Bh | ns  |  8.0 | Disabled
+CPU2_DIMMF1_Temp | 2Dh | ns  |  8.0 | Disabled
+CPU2_DIMMG1_Temp | 2Fh | ns  |  8.0 | Disabled
+CPU2_DIMMH1_Temp | 31h | ns  |  8.0 | Disabled
+CPU2_DIMMI1_Temp | 3Bh | ns  |  8.0 | Disabled
+CPU2_DIMMJ1_Temp | 3Dh | ns  |  8.0 | Disabled
+CPU2_DIMMK1_Temp | 3Fh | ns  |  8.0 | Disabled
+CPU2_DIMML1_Temp | 41h | ns  |  8.0 | Disabled
+Inlet Temp       | 4Bh | ok  | 55.0 | 19 degrees C
++VCORE0_CPU1     | 66h | ok  |  3.0 | 1.14 Volts
++VCORE1_CPU1     | 7Ch | ok  |  3.0 | 1.14 Volts
++VCORE0_CPU2     | 67h | ns  |  7.0 | Disabled
++VCORE1_CPU2     | 7Dh | ns  |  7.0 | Disabled
++VSOC_CPU1       | 72h | ok  |  7.0 | 1.01 Volts
++VSOC_CPU2       | 73h | ns  |  7.0 | Disabled
++VDDIO_CPU1      | 6Ch | ok  |  7.0 | 1.11 Volts
++VDDIO_CPU2      | 6Eh | ns  |  7.0 | Disabled
++12V             | 74h | ok  |  7.0 | 12.35 Volts
++5V              | 75h | ok  |  7.0 | 5.09 Volts
++3.3V            | 76h | ok  |  7.0 | 3.36 Volts
++5VSB            | 77h | ok  |  7.0 | 5.09 Volts
++3.3VSB          | 78h | ok  |  7.0 | 3.36 Volts
+VBAT             | 79h | ok  | 40.0 | 3.12 Volts
+GPU_FAN1         | 94h | ok  | 29.0 | 16510 RPM
+GPU_FAN2         | 95h | ok  | 29.0 | 16640 RPM
+GPU_FAN3         | 96h | ok  | 29.0 | 15990 RPM
+GPU_FAN4         | 97h | ok  | 29.0 | 15990 RPM
+GPU_FAN5         | 98h | ok  | 29.0 | 15990 RPM
+SYS_FAN1         | 9Ah | ok  | 29.0 | 17940 RPM
+SYS_FAN2         | 9Bh | ok  | 29.0 | 17810 RPM
+SYS_FAN3         | 9Ch | ok  | 29.0 | 17420 RPM
+SYS_FAN4         | 9Dh | ok  | 29.0 | 17680 RPM
+SYS_FAN5         | ABh | ok  | 29.0 | 17940 RPM
+SYS_FAN6         | ACh | ok  | 29.0 | 17680 RPM
+PSU1 Power In    | DFh | ok  | 10.0 | 480 Watts
+PSU1 Power Out   | 5Ah | ok  | 10.0 | 464 Watts
+PSU2 Power In    | E4h | ok  | 10.0 | 496 Watts
+PSU2 Power Out   | 5Dh | ok  | 10.0 | 464 Watts
+PSU3 Power In    | E9h | ok  | 10.0 | 496 Watts
+PSU3 Power Out   | 58h | ok  | 10.0 | 464 Watts
+PSU4 Power In    | EEh | ok  | 10.0 | 512 Watts
+PSU4 Power Out   | 63h | ok  | 10.0 | 480 Watts
+CPU_Power        | F3h | ok  | 19.0 | 112 Watts
+Memory_Power     | F4h | ok  | 19.0 | 8 Watts
+Backplane1 HD01  | B2h | ok  | 15.0 | 
+Backplane1 HD02  | B3h | ok  | 15.0 | 
+Backplane1 HD03  | B4h | ok  | 15.0 | 
+Backplane1 HD04  | B5h | ok  | 15.0 | 
+Backplane1 HD05  | B6h | ok  | 15.0 | 
+Backplane1 HD06  | B7h | ok  | 15.0 | 
+Backplane1 HD07  | B8h | ok  | 15.0 | 
+Backplane1 HD08  | B9h | ok  | 15.0 | 
+PSU1 Over Temp   | E0h | ok  | 10.0 | Transition to OK
+PSU1 AC Lost     | E1h | ok  | 10.0 | Presence detected
+PSU1 Slow FAN1   | E2h | ok  | 10.0 | Transition to OK
+PSU1 PWR Detect  | E3h | ok  | 10.0 | Presence detected
+PSU1 Over Curr   | 5Bh | ok  | 10.0 | Transition to OK
+PSU2 Over Temp   | E5h | ok  | 10.0 | Transition to OK
+PSU2 AC Lost     | E6h | ok  | 10.0 | Presence detected
+PSU2 Slow FAN1   | E7h | ok  | 10.0 | Transition to OK
+PSU2 PWR Detect  | E8h | ok  | 10.0 | Presence detected
+PSU2 Over Curr   | 5Eh | ok  | 10.0 | Transition to OK
+PSU3 Over Temp   | EAh | ok  | 10.0 | Transition to OK
+PSU3 AC Lost     | EBh | ok  | 10.0 | Presence detected
+PSU3 Slow FAN1   | ECh | ok  | 10.0 | Transition to OK
+PSU3 PWR Detect  | EDh | ok  | 10.0 | Presence detected
+PSU3 Over Curr   | 59h | ok  | 10.0 | Transition to OK
+PSU4 Over Temp   | EFh | ok  | 10.0 | Transition to OK
+PSU4 AC Lost     | F0h | ok  | 10.0 | Presence detected
+PSU4 Slow FAN1   | F1h | ok  | 10.0 | Transition to OK
+PSU4 PWR Detect  | F2h | ok  | 10.0 | Presence detected
+PSU4 Over Curr   | 64h | ok  | 10.0 | Transition to OK
+CPU1_ECC1        | D1h | ok  |  8.0 | Presence Detected
+CPU2_ECC1        | D3h | ns  |  8.0 | Disabled
+Memory_Train_ERR | DBh | ok  |  8.0 | 
+BIOS Event       | FBh | ok  | 34.0 | 
+PowerUnit        | F5h | ok  | 21.0 | 
+CPU_Hardware     | F7h | ok  |  9.0 | 
+Mem_Hardware     | F8h | ok  |  8.0 | 
+PCIE_Hardware    | F9h | ok  | 49.0 | 
+Watchdog2        | FEh | ok  |  1.0 | 

@@ -1,0 +1,71 @@
+UID              | 01h | ok  | 23.1 | 
+Sys Health LED   | 02h | ok  | 23.2 | 
+01-Inlet Ambient | 03h | ok  | 64.1 | 17 degrees C
+02-CPU 1         | 04h | ok  | 65.1 | 40 degrees C
+03-CPU 2         | 05h | ok  | 65.2 | 40 degrees C
+04-P1 DIMM 1-6   | 06h | ok  | 32.1 | 36 degrees C
+05-P1 DIMM 7-12  | 07h | ok  | 32.2 | 36 degrees C
+06-P2 DIMM 1-6   | 08h | ok  | 32.3 | 37 degrees C
+07-P2 DIMM 7-12  | 09h | ok  | 32.4 | 39 degrees C
+08-HD Max        | 0Ah | ns  |  4.1 | Disabled
+09-Exp Bay Drive | 0Bh | ns  |  4.2 | Disabled
+10-Chipset       | 0Ch | ok  | 66.1 | 39 degrees C
+11-PS 1 Inlet    | 0Dh | ok  | 10.1 | 29 degrees C
+12-PS 2 Inlet    | 0Eh | ns  | 10.2 | Disabled
+13-VR P1         | 0Fh | ok  | 20.1 | 40 degrees C
+14-VR P2         | 10h | ok  | 20.2 | 44 degrees C
+15-VR P1 Mem     | 11h | ok  | 20.3 | 27 degrees C
+16-VR P1 Mem     | 12h | ok  | 20.4 | 29 degrees C
+17-VR P2 Mem     | 13h | ok  | 20.5 | 31 degrees C
+18-VR P2 Mem     | 14h | ok  | 20.6 | 30 degrees C
+19-PS 1 Internal | 15h | ok  | 10.1 | 42 degrees C
+20-PS 2 Internal | 16h | ns  | 10.2 | Disabled
+21-PCI 1         | 17h | ns  | 11.1 | Disabled
+22-PCI 2         | 18h | ns  | 11.2 | Disabled
+23-PCI 3         | 19h | ns  | 11.3 | Disabled
+24-HD Controller | 1Ah | ns  | 11.4 | Disabled
+25-LOM Card      | 1Bh | ns  | 11.5 | Disabled
+26-LOM           | 1Ch | ns  | 66.2 | Disabled
+27-Front Ambient | 1Dh | ok  | 64.2 | 20 degrees C
+28-P/S 2 Zone    | 1Eh | ok  | 66.3 | 35 degrees C
+29-Battery Zone  | 1Fh | ok  | 40.1 | 27 degrees C
+30-iLO Zone      | 20h | ok  |  6.1 | 34 degrees C
+31-PCI 1 Zone    | 21h | ok  | 16.1 | 35 degrees C
+32-PCI 2 Zone    | 22h | ok  | 16.2 | 40 degrees C
+33-PCI 3 Zone    | 23h | ns  | 16.3 | Disabled
+34-HD Cntlr Zone | 24h | ns  | 11.6 | Disabled
+35-I/O Zone      | 25h | ok  | 66.4 | 29 degrees C
+36-Storage Batt  | 26h | ns  | 40.2 | Disabled
+37-Fuse          | 27h | ok  | 10.3 | 33 degrees C
+Fan 1            | 28h | ok  | 29.1 | 19.60 percent, Transition to Running
+Fan 1 DutyCycle  | 29h | ok  | 29.1 | 19.60 percent
+Fan 1 Presence   | 2Ah | ok  | 29.1 | Device Present
+Fan 2            | 2Bh | ok  | 29.2 | 28.22 percent, Transition to Running
+Fan 2 DutyCycle  | 2Ch | ok  | 29.2 | 28.22 percent
+Fan 2 Presence   | 2Dh | ok  | 29.2 | Device Present
+Fan 3            | 2Eh | ok  | 29.3 | 28.22 percent, Transition to Running
+Fan 3 DutyCycle  | 2Fh | ok  | 29.3 | 28.22 percent
+Fan 3 Presence   | 30h | ok  | 29.3 | Device Present
+Fan 4            | 31h | ok  | 29.4 | 35.28 percent, Transition to Running
+Fan 4 DutyCycle  | 32h | ok  | 29.4 | 35.28 percent
+Fan 4 Presence   | 33h | ok  | 29.4 | Device Present
+Fan 5            | 34h | ok  | 29.5 | 35.28 percent, Transition to Running
+Fan 5 DutyCycle  | 35h | ok  | 29.5 | 35.28 percent
+Fan 5 Presence   | 36h | ok  | 29.5 | Device Present
+Fan 6            | 37h | ok  | 29.6 | 35.28 percent, Transition to Running
+Fan 6 DutyCycle  | 38h | ok  | 29.6 | 35.28 percent
+Fan 6 Presence   | 39h | ok  | 29.6 | Device Present
+Fan 7            | 3Ah | ok  | 29.7 | 28.22 percent, Transition to Running
+Fan 7 DutyCycle  | 3Bh | ok  | 29.7 | 28.22 percent
+Fan 7 Presence   | 3Ch | ok  | 29.7 | Device Present
+Power Supply 1   | 3Dh | ok  | 10.1 | 225 Watts, Presence detected
+PS 1 Output      | 3Eh | ok  | 10.1 | 225 Watts
+PS 1 Presence    | 3Fh | ok  | 10.1 | Device Present
+Power Supply 2   | 40h | ns  | 10.2 | Disabled
+PS 2 Output      | 41h | ns  | 10.2 | Disabled
+PS 2 Presence    | 42h | ok  | 10.2 | Device Absent
+Power Meter      | 43h | ok  |  7.1 | 220 Watts, Device Enabled
+PwrMeter Output  | 44h | ok  |  7.1 | 220 Watts
+Fans             | 45h | ok  | 29.8 | Fully Redundant
+Megacell Status  | 46h | ns  | 40.1 | Disabled
+Memory Status    | 47h | ok  |  7.2 | Presence Detected

@@ -1,0 +1,71 @@
+UID              | 0x02              | ok
+Sys Health LED   | 0x01              | ok
+01-Inlet Ambient | 17 degrees C      | ok
+02-CPU 1         | 40 degrees C      | ok
+03-CPU 2         | 40 degrees C      | ok
+04-P1 DIMM 1-6   | 36 degrees C      | ok
+05-P1 DIMM 7-12  | 36 degrees C      | ok
+06-P2 DIMM 1-6   | 37 degrees C      | ok
+07-P2 DIMM 7-12  | 39 degrees C      | ok
+08-HD Max        | disabled          | ns
+09-Exp Bay Drive | disabled          | ns
+10-Chipset       | 39 degrees C      | ok
+11-PS 1 Inlet    | 29 degrees C      | ok
+12-PS 2 Inlet    | disabled          | ns
+13-VR P1         | 40 degrees C      | ok
+14-VR P2         | 44 degrees C      | ok
+15-VR P1 Mem     | 27 degrees C      | ok
+16-VR P1 Mem     | 29 degrees C      | ok
+17-VR P2 Mem     | 31 degrees C      | ok
+18-VR P2 Mem     | 30 degrees C      | ok
+19-PS 1 Internal | 42 degrees C      | ok
+20-PS 2 Internal | disabled          | ns
+21-PCI 1         | disabled          | ns
+22-PCI 2         | disabled          | ns
+23-PCI 3         | disabled          | ns
+24-HD Controller | disabled          | ns
+25-LOM Card      | disabled          | ns
+26-LOM           | disabled          | ns
+27-Front Ambient | 20 degrees C      | ok
+28-P/S 2 Zone    | 35 degrees C      | ok
+29-Battery Zone  | 27 degrees C      | ok
+30-iLO Zone      | 34 degrees C      | ok
+31-PCI 1 Zone    | 35 degrees C      | ok
+32-PCI 2 Zone    | 40 degrees C      | ok
+33-PCI 3 Zone    | disabled          | ns
+34-HD Cntlr Zone | disabled          | ns
+35-I/O Zone      | 29 degrees C      | ok
+36-Storage Batt  | disabled          | ns
+37-Fuse          | 33 degrees C      | ok
+Fan 1            | 19.60 percent     | ok
+Fan 1 DutyCycle  | 19.60 percent     | ok
+Fan 1 Presence   | 0x02              | ok
+Fan 2            | 28.22 percent     | ok
+Fan 2 DutyCycle  | 28.22 percent     | ok
+Fan 2 Presence   | 0x02              | ok
+Fan 3            | 28.22 percent     | ok
+Fan 3 DutyCycle  | 28.22 percent     | ok
+Fan 3 Presence   | 0x02              | ok
+Fan 4            | 35.28 percent     | ok
+Fan 4 DutyCycle  | 35.28 percent     | ok
+Fan 4 Presence   | 0x02              | ok
+Fan 5            | 35.28 percent     | ok
+Fan 5 DutyCycle  | 35.28 percent     | ok
+Fan 5 Presence   | 0x02              | ok
+Fan 6            | 35.28 percent     | ok
+Fan 6 DutyCycle  | 35.28 percent     | ok
+Fan 6 Presence   | 0x02              | ok
+Fan 7            | 28.22 percent     | ok
+Fan 7 DutyCycle  | 28.22 percent     | ok
+Fan 7 Presence   | 0x02              | ok
+Power Supply 1   | 215 Watts         | ok
+PS 1 Output      | 215 Watts         | ok
+PS 1 Presence    | 0x02              | ok
+Power Supply 2   | disabled          | ns
+PS 2 Output      | disabled          | ns
+PS 2 Presence    | 0x01              | ok
+Power Meter      | 210 Watts         | ok
+PwrMeter Output  | 210 Watts         | ok
+Fans             | 0x01              | ok
+Megacell Status  | disabled          | ns
+Memory Status    | 0x40              | ok

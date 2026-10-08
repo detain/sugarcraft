@@ -1,0 +1,9 @@
+
+    Instantaneous power reading:                  2064 Watts
+    Minimum during sampling period:                256 Watts
+    Maximum during sampling period:               2240 Watts
+    Average power reading over sample period:      320 Watts
+    IPMI timestamp:                           10/08/2026 06:02:12 PM EDT    Sampling period:                          00000005 Seconds.
+    Power reading state is:                   activated
+
+

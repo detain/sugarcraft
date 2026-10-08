@@ -26,8 +26,17 @@ btop-derived byte-exact oracles: `prompt_kit/tools/btop-{graph,netscale,theme}-o
 References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-reference,freebsd-reference}.md`.
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
-## In flight
-- Nothing. **Campaign complete:** every plan_top.md phase/wave is ✅ (MATCHUPS/README 🟢).
+## In flight (post-plan "better than btop" round, user-requested 2026-10-08)
+- (A) Shared non-blocking GPU feed: one accelerator feed per App for cpu/gpu/proc boxes, nvidia-smi as async
+  children (no loop stalls). Owns Collect/Gpu/**, CpuPanel, GpuPanel, Panel/Gpu/**, ProcPanel, ProcGpuColumns,
+  GpuUsage, Panels.php.
+- (B) ctr: libvirt/KVM VMs listed in the ctr box (machine-qemu scopes, domain names, cgroup stats) + container
+  engine detection for the `x ctr` title. Owns Collect/Containers*, Cgroup/ContainerRef, CtrPanel, Panel/Ctr/**,
+  FakeContainers, FrameBuilder ctr button, ProcFilter.
+- (C) NEXT, after (A) lands (reuse its async child runner): new `ipmi` box — BMC sensors via ipmitool (sensor list
+  with thresholds, dcmi power, PSU in/out, fans RPM/%, temps, voltages, chassis status, SEL, mc/fru/lan once),
+  radial/gauge visuals. Reference captures (sanitized) + timings: `prompt_kit/findings/ipmi-reference/`.
+Each: implementer → reviewer → fix → commit → note here.
 
 ## Remaining (blocked / optional)
 - Blocked: FreeBSD live ps/iostat/ifconfig/netstat -W captures (tech.trouble-free.net ssh down).
