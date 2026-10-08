@@ -9,15 +9,23 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\Help;
+use SugarCraft\Crush\Lang;
 use SugarCraft\Crush\Tests\Config\EnvRosterDriftTest;
 use SugarCraft\Crush\Tests\Config\Support\EnvReadScanner;
+use SugarCraft\Crush\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
 use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 final class HelpTest extends TestCase
 {
     use SlicesDeclaredMethodsTrait;
+    use FlushesLocaleMemoisedCataloguesTrait;
+
+    private const LANG_DIR = __DIR__ . '/../../lang';
 
     private string $locale;
+
+    /** Temp catalogue directory armed only by the poisoned-locale pin. */
+    private ?string $poisonDir = null;
 
     /**
      * The screen is the `cli.help.screen` catalogue entry (audit 15b-14), and
@@ -32,7 +40,62 @@ final class HelpTest extends TestCase
 
     protected function tearDown(): void
     {
+        T::overrideNamespace('crush', self::LANG_DIR);
         T::setLocale($this->locale);
+        self::flushLocaleMemoisedCatalogues();
+        if ($this->poisonDir !== null) {
+            array_map('unlink', glob($this->poisonDir . '/*.php') ?: []);
+            rmdir($this->poisonDir);
+            $this->poisonDir = null;
+        }
+    }
+
+    /**
+     * E453 (campaign rerun lane A6): screen() routes the one-page catalogue
+     * entry through candy-kit's HelpText::renderPage() — and for the clean
+     * English page that render is byte-identity: sanitizing without a width
+     * strips nothing that is there and re-wraps nothing. Every exact-substring
+     * and line-anchor pin in this class leans on that; this is the pin that
+     * says so outright, newlines counted in.
+     */
+    public function testTheKitRenderLeavesTheCleanEnglishPageByteIdentical(): void
+    {
+        $en   = require self::LANG_DIR . '/en.php';
+        $page = (string) $en['cli.help.screen'];
+
+        $screen = Help::screen();
+
+        $this->assertSame($page, $screen, 'renderPage() perturbed the authored page — it must pass a clean page through untouched');
+        $this->assertGreaterThan(300, substr_count($screen, "\n"), 'the page must arrive as the multi-row layout it was authored as');
+    }
+
+    /**
+     * The wiring's other half, proved behaviourally rather than by reading
+     * source: point the `crush` namespace at a throwaway catalogue whose help
+     * page carries an escape payload, a BEL, a tab and CRLF row ends, and
+     * screen() comes back with every control stripped AND every authored row
+     * still on its own line — the flattening the E453 deferral was waiting on
+     * render() to stop doing.
+     */
+    public function testAPoisonedCataloguePageIsSanitizedWithoutLosingItsRows(): void
+    {
+        $dir = sys_get_temp_dir() . '/crush-help-poison-' . bin2hex(random_bytes(4));
+        self::assertTrue(mkdir($dir, 0700), 'cannot create the poisoned-catalogue directory');
+        $this->poisonDir = $dir;
+
+        $poison = "USAGE\x1b[2J\n  my\ta [flags]\r\n\x07FLAGS\n  -v  verbose\x07\n";
+        file_put_contents(
+            $dir . '/en.php',
+            '<?php return ' . var_export(['cli.help.screen' => $poison], true) . ';',
+        );
+
+        T::overrideNamespace('crush', $dir);
+        self::flushLocaleMemoisedCatalogues();
+
+        // The poison survives the catalogue layer untouched — it is the
+        // wiring under test that must neutralize it, rows and all.
+        $this->assertSame($poison, Lang::t('cli.help.screen'));
+        $this->assertSame("USAGE\n  mya [flags]\nFLAGS\n  -v  verbose\n", Help::screen());
     }
 
     public function testScreenReturnsNonEmptyString(): void

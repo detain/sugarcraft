@@ -38,7 +38,13 @@ use RecursiveIteratorIterator;
  * restyle was costed and deferred rather than forgotten. The obvious fix, the
  * one the tool's own report recommends, was the wrong one; deleting a
  * foundation lib's require because the wiring it was added for has not landed
- * yet is how the wiring stops being possible.
+ * yet is how the wiring stops being possible. THE WIRING HAS SINCE LANDED
+ * (crush_libs rerun lane A6, 2026-10-08): candy-kit grew the multi-line-
+ * preserving `HelpText::renderPage()` the restyle needed — `render()`
+ * flattens newlines and would have collapsed the one-page catalogue screen
+ * onto a single row — and `Cli\Help::screen()` now passes the page through
+ * it, byte-identically for the clean English page. The `deferred-wiring`
+ * row went in the same commit, exactly as its own rule demanded.
  *
  * A `deferred-wiring` ROW IS A RECORD, NOT AN EXEMPTION. It says a person
  * looked at this require and kept it on purpose. It goes when the wiring
@@ -415,34 +421,48 @@ final class ManifestDependencyReachTest extends TestCase
                 . '- the prefix matching is dead and the absence below is worthless.',
         );
 
+        // E453 CLOSED (crush_libs rerun lane A6, 2026-10-08): the one row this
+        // package ever recorded was the candy-kit deferral, and its wiring
+        // landed — `Cli\Help::screen()` renders through HelpText::renderPage().
+        // The row is gone per its own rule, so the floor below replaces the
+        // Rule 25 control pair as this manifest's permanent anti-vacuity pin:
+        // if the `use SugarCraft\Kit\` reference ever disappears from src/,
+        // candy-kit becomes a dead require again and this reddes before the
+        // arm after it can lull anybody.
+        self::assertArrayHasKey(
+            'sugarcraft/candy-kit',
+            $reached,
+            'src/ no longer reaches candy-kit. If the E453 wiring regressed, restore it; if it '
+                . 'was deliberately removed, delete the require too — and reinstate the Rule 25 '
+                . 'control pair (see git log on this file) for whenever a row is recorded again.',
+        );
+
         // Rule 25, and it is this arm's own hole rather than the one below's:
         // `[]` is what idleDeferrals() returns when it is working AND when it
         // is dead, and the fixture that proves otherwise runs against a
         // synthetic manifest. This pushes THIS manifest through the same call
         // with one input flipped - every recorded row pretended to be reached -
         // so the known positive is measured on the real rows the assertion
-        // below is about.
+        // below is about. With this manifest back to recording no rows, the
+        // pair runs only while some future row exists — the floor above is
+        // what proves the instrument alive today.
         $recorded = (array) ($manifest['extra']['sugarcraft']['deferred-wiring'] ?? []);
-        self::assertNotSame(
-            [],
-            $recorded,
-            'this package records no deferrals at all, so the control below proves nothing and '
-                . 'the assertion after it is vacuous. Retire both, or find out why the row went.',
-        );
-        self::assertSame(
-            \array_map(
-                static fn (string $p): string => $p . ': src/ reaches it, so the wiring has landed',
-                \array_keys($recorded),
-            ),
-            self::idleDeferrals(
-                $manifest,
-                $reached + \array_fill_keys(\array_keys($recorded), true),
-                $ambiguous,
-            ),
-            'told that every recorded deferral is reached from src/, the classifier must report '
-                . 'every one of them. It does not, so it cannot see this manifest\'s rows at all '
-                . 'and the empty result asserted next is what a dead instrument returns.',
-        );
+        if ($recorded !== []) {
+            self::assertSame(
+                \array_map(
+                    static fn (string $p): string => $p . ': src/ reaches it, so the wiring has landed',
+                    \array_keys($recorded),
+                ),
+                self::idleDeferrals(
+                    $manifest,
+                    $reached + \array_fill_keys(\array_keys($recorded), true),
+                    $ambiguous,
+                ),
+                'told that every recorded deferral is reached from src/, the classifier must report '
+                    . 'every one of them. It does not, so it cannot see this manifest\'s rows at all '
+                    . 'and the empty result asserted next is what a dead instrument returns.',
+            );
+        }
 
         // A ROW THAT IS SUPPRESSING NOTHING IS AN EXEMPTION, NOT A RECORD, and
         // it is checked BEFORE the finding below so that the reader who added

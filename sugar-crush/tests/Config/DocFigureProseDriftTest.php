@@ -2778,50 +2778,6 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * crush_libs.md candy-kit #5: the manifest's E453 `deferred-wiring` row
-     * said `check-path-repos.php --unused` "reports it as
-     * PRUNE_REQUIRE_AND_REPO" — but the row's own existence reclassifies the
-     * dependency, and the tool reports DEFERRED_WIRING. It also named, as the
-     * restyle's blocker, that candy-kit's primitives "emit ANSI
-     * unconditionally" and so needed a `posix_isatty()` guard at the call
-     * site — which candy-kit bffd7e9a8 retired by making every presenter fall
-     * back to `Theme::detect()`. Each claim the corrected row makes is pinned
-     * to the code it describes, so the record cannot go stale silently again.
-     */
-    public function testCandyKitDeferredWiringRowMatchesWhatItRecords(): void
-    {
-        $root = \dirname(__DIR__, 2);
-        $composer = json_decode((string) file_get_contents($root . '/composer.json'), true, 512, \JSON_THROW_ON_ERROR);
-        $row = $composer['extra']['sugarcraft']['deferred-wiring']['sugarcraft/candy-kit'] ?? null;
-        self::assertIsString($row, 'the E453 candy-kit row is gone — fine if the wiring landed, but then retire this pin with it');
-
-        self::assertStringNotContainsString('reports it as PRUNE_REQUIRE_AND_REPO', $row, 'the stale report claim is back — with this row present the tool reports DEFERRED_WIRING');
-        self::assertStringContainsString('would report it as PRUNE_REQUIRE_AND_REPO without this row and reports DEFERRED_WIRING with it', $row);
-        self::assertStringNotContainsString('emit ANSI unconditionally', $row, 'the retired colour blocker is back in the record');
-        self::assertStringNotContainsString('posix_isatty', $row, 'the record asks for a call-site tty guard candy-kit already owns');
-
-        // The colour claim: presenters fall back to Theme::detect(), which
-        // downgrades through candy-core's ColorProfile::detect().
-        self::assertTrue(method_exists(\SugarCraft\Kit\Theme::class, 'detect'), 'candy-kit lost Theme::detect() — the row says presenters fall back to it');
-        $helpText = (string) file_get_contents((string) (new \ReflectionClass(\SugarCraft\Kit\HelpText::class))->getFileName());
-        self::assertStringContainsString('Theme::detect()', $helpText, 'HelpText no longer falls back to Theme::detect() — the row\'s "no colour bytes when piped" claim is unbacked');
-        $theme = (string) file_get_contents((string) (new \ReflectionClass(\SugarCraft\Kit\Theme::class))->getFileName());
-        self::assertStringContainsString('ColorProfile::detect(', self::bodyExcerpt($theme, 'detect'), 'Theme::detect() stopped delegating to candy-core ColorProfile::detect()');
-
-        // The remaining blocker: the help screen is still one block of text —
-        // since 15b-14-2 the single `cli.help.screen` nowdoc in lang/en.php,
-        // which Help::screen() returns whole through Lang::t().
-        self::assertStringContainsString("Lang::t('cli.help.screen')", self::bodyExcerpt(self::sourceOf('Cli/Help.php'), 'screen', 200), 'Help::screen() no longer returns the one catalogue entry the row names as the blocker — revisit the row');
-        $catalogue = (string) file_get_contents($root . '/lang/en.php');
-        self::assertSame(1, substr_count($catalogue, "'cli.help.screen' => <<<'TXT'"), 'the help screen is no longer the single catalogue nowdoc the row names as the blocker — revisit the row');
-        self::assertStringContainsString('`cli.help.screen`', $row, 'the row no longer names the catalogue entry that is the help screen');
-
-        // And the dependency really is unreached, which is what a row is for.
-        $reaching = array_keys(array_filter(self::srcTexts(), static fn (string $text): bool => str_contains($text, 'SugarCraft\\Kit\\')));
-        self::assertSame([], $reaching, 'src/ now reaches candy-kit — the wiring landed, so delete the row (and this pin)');
-    }
-
-    /**
      * E686 tranche-8 (AK): the Sessions-and-state table, the `/bg` `/fork`
      * sentence, and this tranche's SECOND FALSE: "ext-sqlite3 is called by
      * nothing in src/" was refuted by TaskList's own `new \SQLite3` task
