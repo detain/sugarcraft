@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Panel\Gfx;
 
+use SugarCraft\Top\Collect\MemorySnapshot;
 use SugarCraft\Top\Panel\Mem\DisksSection;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
@@ -28,7 +29,7 @@ final class RecordingDisks implements DisksSection
         return $context->config->bool('show_disks') ? $this->source : null;
     }
 
-    public function withSample(object $snapshot, Source $next, PanelContext $context): self
+    public function withSample(object $snapshot, Source $next, PanelContext $context, ?MemorySnapshot $memory = null): self
     {
         return new self($next, $snapshot);
     }

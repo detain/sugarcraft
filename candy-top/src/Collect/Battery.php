@@ -44,6 +44,17 @@ final class Battery
         return new self($paths ?? Paths::system(), $battery === null || $battery === 'Auto' ? null : $battery);
     }
 
+    /** The same reader for another `selected_battery` (null or "Auto" = auto-select). */
+    public function withSelected(?string $battery): self
+    {
+        return new self($this->paths, $battery === null || $battery === 'Auto' ? null : $battery);
+    }
+
+    public function selected(): ?string
+    {
+        return $this->selected;
+    }
+
     /**
      * @return array{0: BatterySnapshot, 1: self}
      */

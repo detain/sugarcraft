@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Cpu;
 
+use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Source\Source;
@@ -21,6 +22,9 @@ use SugarCraft\Top\View\Region;
  *    returned Source is sampled in the same Cmd as the cpu collectors.
  *  - {@see withSample()} receives that sample's snapshot and the next
  *    source inside CpuPanel::update(); keep the source for the next tick.
+ *  - {@see present()} is btop's `show_battery and has_battery`: while it
+ *    holds, CpuPanel (a {@see \SugarCraft\Top\Panel\ClockReserve})
+ *    asks the App to shrink the clock by btop's 22-cell battery reserve.
  *  - {@see paint()} gets the WHOLE cpu box region (border rows included)
  *    after the graphs and core grid are painted; draw on row 0, or the
  *    bottom row when `$frame->layout->cpuBottom`. btop positions the badge
@@ -31,6 +35,8 @@ interface BatteryBadge
     public function source(PanelContext $context): ?Source;
 
     public function withSample(object $snapshot, Source $next, PanelContext $context): self;
+
+    public function present(Config $config): bool;
 
     public function paint(Region $box, PanelFrame $frame): void;
 }

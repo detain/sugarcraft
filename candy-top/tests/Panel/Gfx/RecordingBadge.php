@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Tests\Panel\Gfx;
 
+use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Panel\Cpu\BatteryBadge;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
@@ -28,6 +29,11 @@ final class RecordingBadge implements BatteryBadge
     public function withSample(object $snapshot, Source $next, PanelContext $context): self
     {
         return new self($next, $snapshot, $this->enabled);
+    }
+
+    public function present(Config $config): bool
+    {
+        return $this->last !== null && $config->bool('show_battery');
     }
 
     public function paint(Region $box, PanelFrame $frame): void

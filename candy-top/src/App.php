@@ -23,6 +23,7 @@ use SugarCraft\Top\Msg\DataTickMsg;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Msg\SetOptionMsg;
 use SugarCraft\Top\Msg\UpdateStepMsg;
+use SugarCraft\Top\Panel\ClockReserve;
 use SugarCraft\Top\Panel\Panel;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
@@ -263,9 +264,28 @@ final class App implements Model
                 new PanelFrame($this->layout, $rect, $this->ink, $border, $this->config, $this->host),
             );
         }
-        FrameBuilder::paintClock($surface, $this->layout, $this->ink, $this->config, $this->clockText());
+        FrameBuilder::paintClock($surface, $this->layout, $this->ink, $this->config, $this->clockText(), $this->clockReserved());
 
         return $surface;
+    }
+
+    /**
+     * True when a visible panel asks for btop's clock reserve
+     * ({@see ClockReserve}; the cpu panel's battery badge).
+     */
+    public function clockReserved(): bool
+    {
+        if ($this->layout === null) {
+            return false;
+        }
+        foreach ($this->layout->ordered() as $box => $rect) {
+            $panel = $this->panels[$box] ?? null;
+            if ($panel instanceof ClockReserve && $panel->reservesClock($this->context($box))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function subscriptions(): ?Subscriptions

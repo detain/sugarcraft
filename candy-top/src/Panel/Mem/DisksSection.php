@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Mem;
 
+use SugarCraft\Top\Collect\MemorySnapshot;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Source\Source;
@@ -24,7 +25,9 @@ use SugarCraft\Top\View\Region;
  *    context (read show_disks / disks_filter / disks_order there); null
  *    skips sampling. It is sampled in the same Cmd as Memory.
  *  - {@see withSample()} folds that sample in (io history etc.) and keeps
- *    the next source.
+ *    the next source. `$memory` is the mem half's last measured snapshot
+ *    (btop's swap pseudo-disk, swap_disk, is built from mem's swap
+ *    figures); null before one.
  *  - {@see paint()} gets the whole mem box region plus `$area`, the local
  *    rectangle from the divider column (inclusive — btop's disk dividers
  *    start with `Mv::l(1)` onto it) to the right border, full box height.
@@ -34,7 +37,7 @@ interface DisksSection
 {
     public function source(PanelContext $context): ?Source;
 
-    public function withSample(object $snapshot, Source $next, PanelContext $context): self;
+    public function withSample(object $snapshot, Source $next, PanelContext $context, ?MemorySnapshot $memory = null): self;
 
     public function paint(Region $box, PanelFrame $frame, Rect $area): void;
 }

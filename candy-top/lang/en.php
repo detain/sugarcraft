@@ -347,4 +347,15 @@ return [
     'proc.status.wakekill' => 'Wakekill',
     'proc.status.parked' => 'Parked',
     'proc.status.unknown' => 'Unknown',
+    // ---- disks/battery (phase P-D) ----
+    'disks.swap' => 'swap',
+    'disks.io' => 'IO',
+    'disks.used' => 'Used:',
+    'disks.free' => 'Free:',
+    'disks.used_short' => 'U',
+    'disks.free_short' => 'F',
+    'disks.r' => 'R',
+    'disks.w' => 'W',
+    'disks.rw' => 'RW',
+    'battery.label' => 'BAT',
 ];
