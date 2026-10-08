@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\GpuPanels;
+use SugarCraft\Top\Collect\ContainerEngine;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Lang;
 
@@ -348,7 +349,7 @@ final class FrameBuilder
      *
      * @param ?int $preset active preset index; null renders btop's `*`
      */
-    public static function paintChrome(Surface $surface, Layout $layout, Ink $ink, Config $config, HostInfo $host, ?int $preset = null): void
+    public static function paintChrome(Surface $surface, Layout $layout, Ink $ink, Config $config, HostInfo $host, ?int $preset = null, int $clockWidth = self::DEFAULT_CLOCK_WIDTH): void
     {
         $border = self::border($config);
         $tty = $config->ttyMode();
@@ -387,7 +388,7 @@ final class FrameBuilder
             $budget = $layout->cpuCores->width - ($hasHz ? ($config->string('freq_mode') === 'range' ? 24 : 14) : 5);
             $name = Width::truncate($custom !== '' ? $custom : $host->cpuName, max(0, $budget));
             BoxChrome::paint($surface, $layout->cpuCores, $ink->fg('div_line'), $ink, $border, fill: false, title: $name, tty: $tty);
-            self::paintCpuButtons($surface, $layout, $ink, $config, $border, $preset);
+            self::paintCpuButtons($surface, $layout, $ink, $config, $border, $preset, $host->containerEngine, $clockWidth);
         }
 
         $mem = $layout->box('mem');
@@ -533,8 +534,83 @@ final class FrameBuilder
         );
     }
 
+    /** The drawn width of btop's default `%X` clock (HH:MM:SS) — what callers without the clock assume. */
+    public const DEFAULT_CLOCK_WIDTH = 8;
+
+    /**
+     * The width {@see paintClock()} will draw `$clock` at (cut to the same
+     * budget), 0 for no clock — the input of {@see engineLabel()} and
+     * {@see ctrZone()}, so the `x ctr` slot never runs under the clock.
+     */
+    public static function clockWidth(Layout $layout, string $clock, bool $battery = false): int
+    {
+        $cpu = $layout->box('cpu');
+        if ($cpu === null || $clock === '') {
+            return 0;
+        }
+
+        return Width::string(Width::truncate($clock, self::clockBudget($cpu->width, $layout->width, $battery)));
+    }
+
+    /**
+     * The container engine as drawn on the cpu title (btop
+     * `Cpu::container_engine`, title colour, no hotkey), or null when not
+     * in a container or there is no room.
+     *
+     * Beyond btop, which prints the whole name at `x + 28` whatever the
+     * width (a long one runs under the clock): the label takes the `x ctr`
+     * button's own slot (`x + 26`) and is cut to the cells left before the
+     * centred clock as actually drawn (`$clockWidth`, {@see clockWidth()});
+     * fewer than 3 cells and it is not drawn.
+     */
+    public static function engineLabel(Rect $cpu, string $engine, int $clockWidth = self::DEFAULT_CLOCK_WIDTH): ?string
+    {
+        if ($engine === '') {
+            return null;
+        }
+        $room = min(ContainerEngine::MAX_LENGTH, self::ctrRoom($cpu, $clockWidth));
+
+        return $room < 3 ? null : Width::truncate($engine, $room);
+    }
+
+    /**
+     * The cpu title's `x` mouse zone (0-based [x, y, w, h]) or null — the
+     * single source, with {@see engineLabel()}, of what paintCpuButtons
+     * draws there: btop `{button_y, x + 27, 1, 5}` over `x ctr` (from
+     * {@see CTR_BUTTON_MIN_WIDTH}, and only while it clears the clock);
+     * over the engine label when one is drawn instead (btop maps nothing
+     * there — candy-top keeps the click toggling the box, as `x` does).
+     *
+     * @return array{0: int, 1: int, 2: int, 3: int}|null
+     */
+    public static function ctrZone(Rect $cpu, int $y, string $engine, int $clockWidth = self::DEFAULT_CLOCK_WIDTH): ?array
+    {
+        $label = self::engineLabel($cpu, $engine, $clockWidth);
+        if ($label !== null) {
+            return [$cpu->x + 27, $y, Width::string($label), 1];
+        }
+        $button = Width::string(Lang::t('button.ctr')) + 2;
+        if ($engine === '' && $cpu->width >= self::CTR_BUTTON_MIN_WIDTH && $button <= self::ctrRoom($cpu, $clockWidth)) {
+            return [$cpu->x + 27, $y, $button, 1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Cells free for text from `x + 27` up to (not touching) the clock's
+     * left junction at `x + w/2 - len/2` ({@see paintClock()}); with no
+     * clock, up to the `- 2000ms +` button's usual place.
+     */
+    private static function ctrRoom(Rect $cpu, int $clockWidth): int
+    {
+        $limit = $clockWidth > 0 ? intdiv($cpu->width, 2) - intdiv($clockWidth, 2) : $cpu->width - 18;
+
+        return $limit - 28;
+    }
+
     /** btop's `- 2000ms +` / `menu` / `preset *` buttons on the cpu title row. */
-    private static function paintCpuButtons(Surface $surface, Layout $layout, Ink $ink, Config $config, Border $border, ?int $preset): void
+    private static function paintCpuButtons(Surface $surface, Layout $layout, Ink $ink, Config $config, Border $border, ?int $preset, string $engine = '', int $clockWidth = self::DEFAULT_CLOCK_WIDTH): void
     {
         $cpu = $layout->box('cpu');
         if ($cpu === null) {
@@ -554,10 +630,13 @@ final class FrameBuilder
             $bottom,
             $cpu,
         );
-        // btop PR #1873: `x ctr` between the preset button and the clock
-        // (btop shows the detected container engine there instead; candy-top
-        // does not detect one, so the button always shows when it fits).
-        if ($cpu->width >= self::CTR_BUTTON_MIN_WIDTH) {
+        // btop PR #1873: `x ctr` between the preset button and the clock —
+        // or, running inside a container, the engine's name in its place.
+        // ctrZone() decides both: what is drawn here and where `x` clicks land.
+        $label = self::engineLabel($cpu, $engine, $clockWidth);
+        if ($label !== null) {
+            BoxChrome::embed($surface, $cpu->x + 26, $y, $ink->fg('title') . $label, $line, $border, $bottom, $cpu);
+        } elseif (self::ctrZone($cpu, $y, $engine, $clockWidth) !== null) {
             BoxChrome::embed($surface, $cpu->x + 26, $y, Symbols::BOLD . self::hotkey(Lang::t('button.ctr'), 'x', $ink), $line, $border, $bottom, $cpu);
         }
         $update = $config->updateMs() . 'ms';

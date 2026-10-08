@@ -19,7 +19,9 @@ use SugarCraft\Top\Collect\ContainerSnapshot;
  * Figures: cpu is the sum of the container's processes (btop's
  * fallback); memory adds a per-container page cache on top of their RSS,
  * and some containers carry a memory.max, so both the "limit" and the
- * "no limit → MemTotal" paths of the detail meter show.
+ * "no limit → MemTotal" paths of the detail meter show. The demo's
+ * libvirt guest (web01, pid 6969) is listed too, limited by its `-m`
+ * like a live VM whose memory.max is "max".
  */
 final class FakeContainers implements ContainerCollector
 {
@@ -39,12 +41,18 @@ final class FakeContainers implements ContainerCollector
     /** @param list<ContainerInfo> $current */
     private function __construct(
         private readonly array $current,
+        private readonly bool $vms = true,
     ) {
     }
 
     public static function new(): self
     {
         return new self([]);
+    }
+
+    public function withVms(bool $vms): self
+    {
+        return $vms === $this->vms ? $this : new self($this->current, $vms);
     }
 
     public function enabled(): bool
@@ -65,17 +73,17 @@ final class FakeContainers implements ContainerCollector
 
     public function collect(array $processes, int $memTotal, int $cores, bool $perCore, int $historyCap): array
     {
-        [$ctrs, $newDocker] = Containers::group($this->current, $processes);
+        [$ctrs, $newDocker] = Containers::group($this->current, $processes, $this->vms);
         if ($newDocker) {
             $ctrs = Containers::named($ctrs, self::response());
         }
         $out = [];
         foreach (Containers::sorted($ctrs) as $i => $c) {
-            $c = $c->withMem($c->mem + (16 + 24 * $i) * 1024 * 1024)->withMemLimit(self::LIMITS[$c->name] ?? 0);
+            $c = Containers::limited($c->withMem($c->mem + (16 + 24 * $i) * 1024 * 1024)->withMemLimit(self::LIMITS[$c->name] ?? 0));
             $out[] = $c->withHistoryPoint(Containers::graphPercent($c->cpu, $perCore, max(1, $cores)), $historyCap);
         }
 
-        return [new ContainerSnapshot($out, $memTotal, max(1, $cores)), new self($out)];
+        return [new ContainerSnapshot($out, $memTotal, max(1, $cores)), new self($out, $this->vms)];
     }
 
     /** A `/containers/json` reply naming {@see DOCKER_NAMES}, in the daemon's field order. */

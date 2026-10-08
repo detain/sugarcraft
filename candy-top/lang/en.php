@@ -587,4 +587,9 @@ return [
     'ctr.none' => 'No containers found',
     'help.toggle_ctr' => 'Toggle CTR (containers) box.',
     'help.select_ctr' => 'Select previous/next container in CTR box.',
+    // ---- ctr vms + engine detection ----
+    'config.desc.ctr_show_vms' => '(Linux) Show libvirt/KVM virtual machines in the containers box, beside the containers.',
+    'options.desc.ctr_show_vms' => "(Linux) Show VMs in the containers box.\n\nSet to 'True' to list libvirt/KVM guests\nin the containers box (engine \"kvm\"),\nnamed by their domain name, with the\nsame cpu and memory figures, selection\nand process filtering as containers.\n\nThe memory limit of a guest without a\ncgroup memory.max is its configured RAM.\n\nTrue or False.",
+    'ctr.vcpus' => '{n} vCPU',
+    'ctr.cpu_guest' => '{host} · {guest}% of {n} vCPU',
 ];

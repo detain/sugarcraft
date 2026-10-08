@@ -32,9 +32,10 @@ use SugarCraft\Top\View\Symbols;
  *    name, engine (when the list is >= 52 wide), process count, memory,
  *    a 5x1 cpu mini-graph on the graph_bg underlay, cpu%;
  *  - with a container selected and the box >= 80 wide, a detail panel
- *    on the right (2/5 of the width, at least 30): name + engine + cpu%,
+ *    on the right (2/5 of the width, at least 30): name + engine (+ the
+ *    vCPU count for a KVM guest) + cpu%,
  *    the cpu history graph, and a `used` memory meter against memory.max
- *    (MemTotal when unlimited);
+ *    (a VM's configured memory, else MemTotal, when unlimited);
  *  - bottom border: `selected/count` (0 = none).
  *
  * Rows are written as btop's escape stream through {@see Region::ansi()},
@@ -180,9 +181,7 @@ final class CtrView
                 $r->put($dx, $i, $f->border->left, $ink->fg('div_line'));
             }
             $limit = $c->memLimit > 0 ? $c->memLimit : $memTotal;
-            $r->ansi($dx + 1, 1, $title . Symbols::BOLD
-                . Just::left($c->name . ' ' . $c->engine, $dw - 11)
-                . Just::right(Lang::t('ctr.cpu') . ' ' . self::cpuText($c->cpu) . '%', 10) . Symbols::UNBOLD);
+            $r->ansi($dx + 1, 1, $title . Symbols::BOLD . self::detailTitle($c, $dw, $config->bool('proc_per_core'), $snapshot?->coreCount ?? 1) . Symbols::UNBOLD);
             if ($c->history !== []) {
                 $graph = DualSampleGraph::new(max(1, $dw - 1), max(1, $H - 4), $family, false, true)->withData(...$c->history);
                 foreach (TintedGraph::lines($graph, $ink, 'cpu') as $i => $gl) {
@@ -218,6 +217,51 @@ final class CtrView
         $len = Width::string($location);
         $r->ansi($W - 3 - max(7, $len), $H - 1, $line . str_repeat(Symbols::H_LINE, max(0, 7 - $len)) . $openDown
             . $title . Symbols::BOLD . $location . Symbols::UNBOLD . $line . $closeDown);
+    }
+
+    /** A VM's boot vCPUs after its engine in the detail title (beyond btop, which lists no VMs). */
+    public static function vcpus(ContainerInfo $c): string
+    {
+        return $c->vm !== null && $c->vm->vcpus > 0 ? ' ' . Lang::t('ctr.vcpus', ['n' => $c->vm->vcpus]) : '';
+    }
+
+    /**
+     * A VM's cpu as a share of its own vCPUs: 100 % = every vCPU busy.
+     * `cpu` is a share of the host (or of one core with proc_per_core), so
+     * it is turned into cores first. Emulator threads and I/O run on top
+     * of the vCPUs, so this can pass 100. Null for a container or a VM
+     * whose vCPU count is unknown.
+     */
+    public static function guestShare(ContainerInfo $c, bool $perCore, int $cores): ?float
+    {
+        if ($c->vm === null || $c->vm->vcpus <= 0) {
+            return null;
+        }
+
+        return ($perCore ? $c->cpu : $c->cpu * max(1, $cores)) / $c->vm->vcpus;
+    }
+
+    /**
+     * The detail panel's title row, `$dw - 1` cells: btop's `name engine`
+     * left and `Cpu N%` in the last 10. A VM (beyond btop) reads
+     * `name kvm` + `Cpu N% · M% of K vCPU` — host share first, so it
+     * matches the list column, then the share of the guest's own
+     * allocation; when the panel is too narrow for that, the vCPU count
+     * moves left and only the host share stays.
+     */
+    public static function detailTitle(ContainerInfo $c, int $dw, bool $perCore, int $cores): string
+    {
+        $host = Lang::t('ctr.cpu') . ' ' . self::cpuText($c->cpu) . '%';
+        $guest = self::guestShare($c, $perCore, $cores);
+        if ($guest !== null && $c->vm !== null) {
+            $right = Lang::t('ctr.cpu_guest', ['host' => $host, 'guest' => self::cpuText($guest), 'n' => $c->vm->vcpus]);
+            $left = $dw - 1 - Width::string($right);
+            if ($left >= 8) {
+                return Just::left($c->name . ' ' . $c->engine, $left) . $right;
+            }
+        }
+
+        return Just::left($c->name . ' ' . $c->engine . self::vcpus($c), $dw - 11) . Just::right($host, 10);
     }
 
     /** btop: `{:.1f}`, or `{:.0f}` from 99.95 up. */

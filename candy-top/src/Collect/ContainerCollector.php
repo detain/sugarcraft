@@ -35,6 +35,13 @@ interface ContainerCollector
     public function rebased(): ContainerCollector;
 
     /**
+     * Copy that lists libvirt/KVM guests beside the containers (on) or
+     * leaves them out as btop does (off) — the ctr_show_vms option,
+     * re-applied from the current config before every collect().
+     */
+    public function withVms(bool $vms): ContainerCollector;
+
+    /**
      * @param list<Process> $processes one process scan (any order)
      * @param int  $memTotal   MemTotal bytes from the same scan (UNMEASURED_INT when unknown)
      * @param int  $cores      logical cpus (btop Shared::coreCount)

@@ -36,6 +36,7 @@ final class CgroupTest extends TestCase
         yield 'lxc payload' => ['/lxc.payload.web/system.slice/nginx.service', 'lxc', 'web', '/lxc.payload.web'];
         yield 'proxmox lxc' => ['/lxc/101/ns/init.scope', 'lxc', '101', '/lxc/101'];
         yield 'nspawn unescaped' => ['/machine.slice/machine-my\x2dbox.scope/payload', 'nspawn', 'my-box', '/machine.slice/machine-my\x2dbox.scope'];
+        yield 'nspawn, every systemd escape (Vm::unescape)' => ['/machine.slice/machine-db\x2d1\x2esvc.scope', 'nspawn', 'db-1.svc', '/machine.slice/machine-db\x2d1\x2esvc.scope'];
         yield 'nspawn named like qemu' => ['/machine.slice/machine-qemubox.scope/payload', 'nspawn', 'qemubox', '/machine.slice/machine-qemubox.scope'];
         yield 'nested is outermost' => ["/lxc.payload.host/system.slice/docker-{$id}.scope", 'lxc', 'host', '/lxc.payload.host'];
     }
@@ -60,11 +61,20 @@ final class CgroupTest extends TestCase
         foreach ([
             '', '/', '/init.scope', '/user.slice/user-1000.slice/session-3.scope', '/system.slice/docker.service',
             '/lxc.monitor.web', '/lxc.monitor/101', '/machine.slice/machine-qemu\x2d1\x2dvm.scope',
+            // Any escape case and the id-less pre-1.3 libvirt name are VMs too (Vm::scope decides).
+            '/machine.slice/machine-qemu\x2D3\x2Dvm.scope', '/machine.slice/machine-qemu\x2dold.scope', '/machine.slice/machine-qemu-4-vm.scope',
             '/machine.slice/libpod-conmon-' . self::ID . '.scope', '/system.slice/docker-' . substr(self::ID, 1) . '.scope',
             '/system.slice/docker-' . str_repeat('g', 64) . '.scope',
         ] as $path) {
             yield $path === '' ? '(empty)' : $path => [$path];
         }
+    }
+
+    public function testAnEscapedByteOutsideTheDisplayAlphabetIsDecodedThenMasked(): void
+    {
+        $ref = Cgroup::parse('/machine.slice/machine-my\x20box.scope');
+        $this->assertInstanceOf(ContainerRef::class, $ref);
+        $this->assertSame(['nspawn', 'my box', 'my?box'], [$ref->engine, $ref->id, $ref->name], 'id raw, name terminal-safe');
     }
 
     #[DataProvider('notContainers')]

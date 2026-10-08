@@ -52,7 +52,7 @@ final class ContainersTest extends TestCase
         }
     }
 
-    public function testTheLibvirtHostHasNoContainers(): void
+    public function testTheLibvirtHostListsItsGuestsAsKvm(): void
     {
         // btop parse_cgroup: machine-qemu scopes are VMs, never containers.
         $line = (string) file_get_contents(self::REAL . '/qemu-emulator.cgroup');
@@ -60,12 +60,114 @@ final class ContainersTest extends TestCase
         foreach (['init', 'session'] as $f) {
             $this->assertNull(Cgroup::fromProcFile((string) file_get_contents(self::REAL . "/{$f}.cgroup")));
         }
-        // candy-top tags the emulator as a KVM guest (Wave U1b) — the ctr box still leaves it out.
-        $vm = Cgroup::fromProcFile($line, "qemu-system-x86_64\0-name\0guest=vps3458844\0");
+        // candy-top tags the emulator as a KVM guest (Wave U1b) and lists it in the ctr box, grouped by its scope.
+        $vm = Cgroup::fromProcFile($line, "/usr/bin/kvm\0-name\0guest=vps3458844,debug-threads=on\0-m\0size=2097152k\0-smp\01,sockets=1,cores=1,threads=1\0");
         $this->assertNotNull($vm);
         $this->assertTrue($vm->isVm());
-        [$ctrs] = Containers::group([], [self::proc(1, 50.0, 100, $vm)]);
-        $this->assertSame([], $ctrs);
+        [$ctrs, $newDocker] = Containers::group([], [self::proc(1, 50.0, 100, $vm)]);
+        $this->assertFalse($newDocker);
+        $this->assertCount(1, $ctrs);
+        $this->assertSame(['kvm', 'vps3458844', '/machine.slice/machine-qemu\x2d1\x2dvps3458844.scope', 1, 50.0, 100], [$ctrs[0]->engine, $ctrs[0]->name, $ctrs[0]->path, $ctrs[0]->procs, $ctrs[0]->cpu, $ctrs[0]->mem]);
+        $this->assertSame(2 * 1024 * 1024 * 1024, $ctrs[0]->configuredMem());
+        $this->assertSame([], Containers::group([], [self::proc(1, 50.0, 100, $vm)], false)[0], 'ctr_show_vms off: btop leaves every VM out');
+    }
+
+    public function testEveryRealScopeDecodesToItsDomainName(): void
+    {
+        // kvm521: `ls /sys/fs/cgroup/machine.slice` against `virsh list --name` (55 running domains).
+        $scopes = file(self::REAL . '/machine.slice.ls', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        $domains = file(self::REAL . '/virsh-list.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        $this->assertCount(55, $scopes);
+        $processes = [];
+        foreach ($scopes as $i => $scope) {
+            // Only the cgroup (a helper without a qemu cmdline): the name must come from the scope alone.
+            $ref = Cgroup::fromProcFile('0::/machine.slice/' . $scope . '/libvirt/emulator');
+            $this->assertNotNull($ref, $scope);
+            $this->assertNull(Cgroup::parse('/machine.slice/' . $scope . '/libvirt/emulator'), 'never also a container: ' . $scope);
+            $processes[] = self::proc(1000 + $i, 1.0, 1, $ref);
+        }
+        [$ctrs] = Containers::group([], $processes);
+        $names = array_map(static fn (ContainerInfo $c): string => $c->name, Containers::sorted($ctrs));
+        sort($domains, SORT_STRING);
+        $this->assertSame($domains, $names);
+        $this->assertSame(['kvm'], array_values(array_unique(array_map(static fn (ContainerInfo $c): string => $c->engine, $ctrs))));
+    }
+
+    public function testTheEmulatorsGuestNameWinsOverAHelpersScopeName(): void
+    {
+        $scope = '/machine.slice/machine-qemu\x2d7\x2dlong.guest.scope';
+        $helper = Cgroup::fromProcFile('0::' . $scope);
+        $emulator = Cgroup::fromProcFile('0::' . $scope . '/libvirt/emulator', "/usr/libexec/qemu-kvm\0-name\0guest=long.guest_name,debug-threads=on\0-smp\0cpus=4\0-m\0size=4096\0");
+        $this->assertNotNull($helper);
+        $this->assertNotNull($emulator);
+        [$ctrs] = Containers::group([], [self::proc(1, 1.0, 10, $helper), self::proc(2, 2.0, 20, $emulator)]);
+        $this->assertCount(1, $ctrs, 'one guest, whichever process is seen first');
+        $this->assertSame(['long.guest_name', 2, 3.0, 30, 4], [$ctrs[0]->name, $ctrs[0]->procs, $ctrs[0]->cpu, $ctrs[0]->mem, $ctrs[0]->vm?->vcpus]);
+        [$again] = Containers::group($ctrs, [self::proc(1, 1.0, 10, $helper)]);
+        $this->assertSame('long.guest_name', $again[0]->name, 'a resolved name survives a sample without the emulator');
+        $bare = Cgroup::fromProcFile('0::/user.slice/x.scope', "/usr/bin/qemu-system-x86_64\0-name\0bare\0");
+        $this->assertNotNull($bare);
+        $this->assertSame([], Containers::group([], [self::proc(3, 1.0, 1, $bare)])[0], 'a non-libvirt qemu owns no cgroup: not listed');
+    }
+
+    public function testAGuestReadsItsScopeAndFallsBackToItsConfiguredMemory(): void
+    {
+        $path = '/machine.slice/machine-qemu\x2d1\x2dvps3458844.scope';
+        mkdir($this->root . $path, 0777, true);
+        foreach (['cpu.stat', 'memory.current', 'memory.max', 'memory.stat'] as $f) {
+            copy(self::REAL . '/' . $f, $this->root . $path . '/' . $f);
+        }
+        $vm = Cgroup::fromProcFile('0::' . $path . '/libvirt/emulator', "/usr/bin/kvm\0-name\0guest=vps3458844\0-m\0size=2097152k\0");
+        $this->assertNotNull($vm);
+        [$snap] = Containers::new($this->root, static fn (): string => '', static fn (): int => 1)->collect([self::proc(1, 1.0, 5, $vm)], 0, 48, false, 10);
+        $c = $snap->containers[0];
+        $this->assertSame([335096323396, 1389207552], [$c->cpuTime, $c->mem], 'the scope\'s cgroup v2 files, as a container\'s');
+        $this->assertSame(2 * 1024 * 1024 * 1024, $c->memLimit, 'memory.max "max": the guest\'s -m');
+
+        file_put_contents($this->root . $path . '/memory.max', "1073741824\n");
+        [$snap] = Containers::new($this->root, static fn (): string => '', static fn (): int => 1)->collect([self::proc(1, 1.0, 5, $vm)], 0, 48, false, 10);
+        $this->assertSame(1073741824, $snap->containers[0]->memLimit, 'a real memory.max wins');
+
+        [$v1] = Containers::new($this->root . '/none', static fn (): string => '', static fn (): int => 1)->collect([self::proc(1, 1.0, 5, $vm)], 0, 48, false, 10);
+        $this->assertSame([5, 2 * 1024 * 1024 * 1024], [$v1->containers[0]->mem, $v1->containers[0]->memLimit], 'unreadable cgroup: the RSS sum against -m');
+    }
+
+    public function testALimitLiftedBackToMaxFallsBackToTheConfiguredMemory(): void
+    {
+        $path = '/machine.slice/machine-qemu\x2d2\x2dlift.scope';
+        $this->cgroup($path, 'usage_usec 1000', '100', "inactive_file 0\n", '1073741824');
+        $vm = Cgroup::fromProcFile('0::' . $path . '/libvirt/emulator', "/usr/bin/kvm\0-name\0guest=lift\0-m\0size=2097152k\0");
+        $this->assertNotNull($vm);
+        $now = 1_000_000;
+        $c = Containers::new($this->root, static fn (): string => '', static function () use (&$now): int {
+            return $now;
+        });
+        [$snap, $c] = $c->collect([self::proc(1, 1.0, 5, $vm)], 0, 4, false, 10);
+        $this->assertSame(1073741824, $snap->containers[0]->memLimit);
+
+        // `virsh memtune --hard-limit` lifted: memory.max reads "max" again.
+        file_put_contents($this->root . $path . '/memory.max', "max\n");
+        $now += 2_000_000;
+        [$snap, $c] = $c->collect([self::proc(1, 1.0, 5, $vm)], 0, 4, false, 10);
+        $this->assertSame(2 * 1024 * 1024 * 1024, $snap->containers[0]->memLimit, 'the old limit does not stick: back to -m');
+
+        // A container lifted the same way goes back to unlimited (0 → MemTotal in the meter).
+        $docker = '/system.slice/docker-' . self::ID . '.scope';
+        $this->cgroup($docker, 'usage_usec 1000', '100', "inactive_file 0\n", '4096');
+        [$snap, $c] = $c->collect([self::proc(2, 1.0, 5, self::docker($docker))], 0, 4, false, 10);
+        file_put_contents($this->root . $docker . '/memory.max', "max\n");
+        $now += 2_000_000;
+        [$snap] = $c->collect([self::proc(2, 1.0, 5, self::docker($docker))], 0, 4, false, 10);
+        $this->assertSame(0, $snap->containers[0]->memLimit);
+    }
+
+    public function testWithVmsTogglesWithoutLosingState(): void
+    {
+        $c = Containers::new($this->root);
+        $this->assertTrue($c->vms());
+        $this->assertSame($c, $c->withVms(true));
+        $this->assertFalse($c->withVms(false)->vms());
+        $this->assertFalse($c->withVms(false)->rebased()->vms(), 'rebased keeps the choice');
     }
 
     public function testGroupSumsLiveProcessesPerContainer(): void
@@ -326,11 +428,21 @@ final class ContainersTest extends TestCase
         return new Process($pid, 1, 'p' . $pid, 'p' . $pid, 'root', 0, $state, 1, 0, $mem, $cpu, 0.0, container: $ref);
     }
 
-    /** Keeps the VmInfo import honest for the VM fixture case. */
     public function testVmRefsCarryVmInfo(): void
     {
         $vm = new ContainerRef('kvm', 'g', 'g', '/machine.slice/x.scope', new VmInfo(1, 'g', 'g', Sentinel::UNAVAILABLE, 1, 1));
         [$ctrs] = Containers::group([], [self::proc(1, 1.0, 1, $vm)]);
-        $this->assertSame([], $ctrs);
+        $this->assertSame('g', $ctrs[0]->name);
+        $this->assertTrue($ctrs[0]->isVm());
+        $this->assertSame(1, $ctrs[0]->vm?->vcpus);
+        $this->assertSame(0, (new ContainerInfo('docker', 'x', '/x'))->configuredMem());
+    }
+
+    public function testStatValueFindsAnAnchoredKey(): void
+    {
+        $this->assertSame(7, Containers::statValue("active_file 3\ninactive_file 7\n", 'inactive_file'));
+        $this->assertNull(Containers::statValue("xinactive_file 7\n", 'inactive_file'));
+        $this->assertNull(Containers::statValue("inactive_file x\n", 'inactive_file'));
+        $this->assertNull(Containers::statValue(null, 'inactive_file'));
     }
 }

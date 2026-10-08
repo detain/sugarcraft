@@ -22,11 +22,18 @@ namespace SugarCraft\Top\Collect;
  *     `memory.max` (0 for "max"). cgroup v1, or an unreadable file, keeps
  *     the sum of the processes (btop's fallback).
  *
- * VMs: candy-top's ContainerRef also tags KVM/QEMU guests (engine "kvm",
- * plan Wave U1b). btop's parse_cgroup never makes a `machine-qemu*` scope
- * a container (live check on a libvirt host: every VM lives in
- * `/machine.slice/machine-qemu\x2dN\x2d<name>.scope`), so they are left
- * out of the ctr box here too.
+ * VMs (beyond btop, whose parse_cgroup never lists a `machine-qemu*`
+ * scope): every libvirt/KVM guest is one entry, engine Vm::ENGINE
+ * ("kvm", as the proc box's `[kvm:name]` tag), grouped by its machined
+ * scope (`machine.slice/machine-qemu\x2dN\x2d<name>.scope` — the qemu
+ * process itself sits in the `libvirt/emulator` child) and named by the
+ * domain name: the emulator's `-name guest=` when seen, else the scope's
+ * own name with the systemd escapes decoded. The scope's cgroup v2 files
+ * are read exactly as a container's; a guest's memory.max is normally
+ * "max", so the limit falls back to its configured memory (`-m`, already
+ * parsed from the cmdline once per process lifetime — no libvirt call).
+ * A bare (non-libvirt) qemu owns no cgroup and is not listed; ctr_show_vms
+ * off ({@see withVms()}) restores btop's containers-only box.
  *
  * Not Linux (FreeBSD): {@see disabled()} — btop's box exists on every
  * platform but only Linux fills it; no cgroup or socket read is tried.
@@ -50,6 +57,7 @@ final class Containers implements ContainerCollector
         private readonly bool $enabled,
         private readonly array $current,
         private readonly int $oldTime,
+        private readonly bool $vms = true,
     ) {
     }
 
@@ -89,7 +97,18 @@ final class Containers implements ContainerCollector
             $this->enabled,
             array_map(static fn (ContainerInfo $c): ContainerInfo => $c->withCpu($c->cpu, 0), $this->current),
             0,
+            $this->vms,
         );
+    }
+
+    public function withVms(bool $vms): self
+    {
+        return $vms === $this->vms ? $this : new self($this->root, $this->docker, $this->clock, $this->enabled, $this->current, $this->oldTime, $vms);
+    }
+
+    public function vms(): bool
+    {
+        return $this->vms;
     }
 
     public function due(int $minWindowUs): bool
@@ -103,7 +122,7 @@ final class Containers implements ContainerCollector
         if (!$this->enabled) {
             return [new ContainerSnapshot([], $memTotal, $cores), $this];
         }
-        [$ctrs, $newDocker] = self::group($this->current, $processes);
+        [$ctrs, $newDocker] = self::group($this->current, $processes, $this->vms);
         if ($newDocker) {
             $response = ($this->docker)();
             if ($response !== '') {
@@ -117,7 +136,7 @@ final class Containers implements ContainerCollector
         foreach ($ctrs as $c) {
             $dir = $this->root . $c->path;
             if (!self::safePath($c->path)) {
-                $out[] = $c->withHistoryPoint(self::graphPercent($c->cpu, $perCore, $cores), $historyCap);
+                $out[] = self::limited($c)->withHistoryPoint(self::graphPercent($c->cpu, $perCore, $cores), $historyCap);
 
                 continue;
             }
@@ -134,41 +153,60 @@ final class Containers implements ContainerCollector
                 $inactive = self::statValue(self::read($dir . '/memory.stat'), 'inactive_file');
                 $c = $c->withMem($current - min($current, $inactive ?? 0));
             }
-            $max = self::integer(self::read($dir . '/memory.max'));
+            // Set on every read, "max" included (0): a limit lifted since the
+            // last sample must not stick and block a VM's -m fallback.
+            $max = self::read($dir . '/memory.max');
             if ($max !== null) {
-                $c = $c->withMemLimit($max);
+                $c = $c->withMemLimit(self::integer($max) ?? 0);
             }
-            $out[] = $c->withHistoryPoint(self::graphPercent($c->cpu, $perCore, $cores), $historyCap);
+            $out[] = self::limited($c)->withHistoryPoint(self::graphPercent($c->cpu, $perCore, $cores), $historyCap);
         }
 
         return [
             new ContainerSnapshot($out, $memTotal, $cores),
-            new self($this->root, $this->docker, $this->clock, true, $out, $now),
+            new self($this->root, $this->docker, $this->clock, true, $out, $now, $this->vms),
         ];
+    }
+
+    /**
+     * A VM without a memory.max (normally "max") is limited by its
+     * configured guest memory, so the detail meter reads against the RAM
+     * the domain was given rather than the host's MemTotal.
+     */
+    public static function limited(ContainerInfo $c): ContainerInfo
+    {
+        return $c->memLimit === 0 && $c->configuredMem() > 0 ? $c->withMemLimit($c->configuredMem()) : $c;
     }
 
     /**
      * btop Ctr::collect's grouping: reset every known container's totals,
      * sum the live processes into their container (a new one is appended),
-     * drop containers left without a process. Processes in a VM, without a
-     * cgroup path, or dead ('X') are skipped.
+     * drop containers left without a process. Processes without a cgroup
+     * path or dead ('X') are skipped; so are VM processes when `$vms` is
+     * off (btop) — on, a libvirt guest groups by its scope like a
+     * container, and the first process carrying the emulator's `guest=`
+     * name and facts names the entry (a helper such as swtpm only knows
+     * the scope's name).
      *
      * @param list<ContainerInfo> $current
      * @param list<Process>       $processes
      * @return array{0: list<ContainerInfo>, 1: bool} [containers, a new docker container appeared]
      */
-    public static function group(array $current, array $processes): array
+    public static function group(array $current, array $processes, bool $vms = true): array
     {
         $byPath = [];
         $totals = [];
         foreach ($current as $c) {
+            if (!$vms && $c->isVm()) {
+                continue;
+            }
             $byPath[$c->path] = $c;
             $totals[$c->path] = [0, 0.0, 0];
         }
         $newDocker = false;
         foreach ($processes as $p) {
             $ref = $p->container;
-            if ($ref === null || $ref->isVm() || $ref->cgroupPath === '' || $p->state === 'X') {
+            if ($ref === null || ($ref->isVm() && !$vms) || $ref->cgroupPath === '' || $p->state === 'X') {
                 continue;
             }
             $path = $ref->cgroupPath;
@@ -176,6 +214,8 @@ final class Containers implements ContainerCollector
                 $byPath[$path] = ContainerInfo::of($ref);
                 $totals[$path] = [0, 0.0, 0];
                 $newDocker = $newDocker || $ref->engine === 'docker';
+            } elseif ($ref->vm !== null && $ref->vm->guestName !== '' && ($known = $byPath[$path])->vm?->guestName !== $ref->vm->guestName) {
+                $byPath[$path] = $known->withName($ref->name)->withVm($ref->vm);
             }
             $totals[$path][0]++;
             $totals[$path][1] += max(0.0, $p->cpu);
@@ -245,17 +285,18 @@ final class Containers implements ContainerCollector
         return (int) $tokens[1];
     }
 
-    /** A `key value` line's value from a flat-keyed cgroup file (memory.stat). */
+    /**
+     * A `key value` line's value from a flat-keyed cgroup file
+     * (memory.stat) — one anchored match, not a split per line: with
+     * dozens of guests this runs for every one of them each tick.
+     */
     public static function statValue(?string $raw, string $key): ?int
     {
-        foreach (explode("\n", $raw ?? '') as $line) {
-            $parts = preg_split('/\s+/', trim($line)) ?: [];
-            if (($parts[0] ?? '') === $key && isset($parts[1]) && ctype_digit($parts[1])) {
-                return (int) $parts[1];
-            }
+        if ($raw === null || preg_match('/^' . preg_quote($key, '/') . '[ \t]+(\d+)[ \t]*$/m', $raw, $m) !== 1) {
+            return null;
         }
 
-        return null;
+        return (int) $m[1];
     }
 
     /** A single-integer cgroup file; null for "max", empty or unreadable. */

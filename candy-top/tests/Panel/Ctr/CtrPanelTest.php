@@ -12,6 +12,8 @@ use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Top\Collect\ContainerInfo;
+use SugarCraft\Top\Collect\Sentinel;
+use SugarCraft\Top\Collect\VmInfo;
 use SugarCraft\Top\Collect\Containers;
 use SugarCraft\Top\Collect\ContainerSnapshot;
 use SugarCraft\Top\Collect\ProcSnapshot;
@@ -62,7 +64,7 @@ final class CtrPanelTest extends TestCase
         $panel = CtrPanel::standard(8, true);
         $this->assertNull($panel->collect($ctx), 'proc shown: only the tap feeds the box — never a second, cold /proc scan');
         $panel = $this->feed($panel, $config, $layout, 1);
-        $this->assertSame(6, $panel->snapshot()?->count());
+        $this->assertSame(7, $panel->snapshot()?->count());
         $this->assertNull($panel->collect($ctx));
 
         $alone = Config::new()->with('shown_boxes', 'cpu ctr');
@@ -131,7 +133,7 @@ final class CtrPanelTest extends TestCase
             $this->assertSame('ctr', $msg->box);
             $this->assertInstanceOf(CtrSample::class, $msg->snapshot);
             $this->assertSame(
-                ['9a0c5e21b7d4', 'arch', 'build', 'c41d9e7f0a13', 'pg-main', 'web-1'],
+                ['9a0c5e21b7d4', 'arch', 'build', 'c41d9e7f0a13', 'pg-main', 'web-1', 'web01'],
                 array_map(static fn (ContainerInfo $c): string => $c->name, $msg->snapshot->snapshot->containers),
             );
         }
@@ -156,7 +158,7 @@ final class CtrPanelTest extends TestCase
         $r = $panel->update(new KeyMsg(KeyType::Char, ']'), $ctx);
         $this->assertStringStartsWith('/kubepods.slice/', $r->set[Schema::CTR_SELECTED], 'none -> the first by name (byte order: 9a0c… sorts first)');
         $r = $panel->update(new KeyMsg(KeyType::Char, '['), $ctx);
-        $this->assertSame([Schema::CTR_SELECTED => '/system.slice/docker-3f2a1b9c0d1e.scope'], $r->set, 'from none backwards: the last');
+        $this->assertSame([Schema::CTR_SELECTED => '/machine.slice/machine-qemu\x2d1\x2dweb01.scope'], $r->set, 'from none backwards: the last (the libvirt guest web01 sorts after web-1)');
         $this->assertSame([], $panel->update(new KeyMsg(KeyType::Char, ']', ctrl: true), $ctx)->set);
         $hidden = new PanelContext($ctx->config);
         $this->assertSame([], $panel->update(new KeyMsg(KeyType::Char, ']'), $hidden)->set, 'btop: only while Ctr::shown');
@@ -278,6 +280,39 @@ final class CtrPanelTest extends TestCase
     public function testDetailSgrGolden(): void
     {
         PanelPaint::assertGolden($this, 'ctr', 'detail-120x40.sgr.txt', $this->grid(120, 40, 'cpu ctr proc', '/lxc.payload.build', sgr: true));
+    }
+
+    public function testVmDetailGolden(): void
+    {
+        // Beyond btop: the demo libvirt guest, its cpu as a share of its vCPUs, limited by its -m (4 GiB) since memory.max is "max".
+        $grid = $this->grid(120, 40, 'cpu ctr proc', '/machine.slice/machine-qemu\x2d1\x2dweb01.scope');
+        $this->assertStringContainsString('Cpu 7.5% · 15.0% of 4 vCPU', $grid, 'host share, then 0.6 cores of 4 vCPUs');
+        $this->assertStringContainsString('/4.0G', $grid);
+        PanelPaint::assertGolden($this, 'ctr', 'vm-detail-120x40.txt', $grid);
+    }
+
+    public function testVmCpuAgainstItsOwnVcpus(): void
+    {
+        $vm = (new ContainerInfo('kvm', 'g', '/g', cpu: 12.5))->withVm(new VmInfo(1, 'g', 'g', Sentinel::UNAVAILABLE, 2, 1 << 30));
+        $this->assertSame(50.0, CtrView::guestShare($vm, false, 8), '12.5 % of 8 cores = 1 core = half of 2 vCPUs');
+        $this->assertSame(6.25, CtrView::guestShare($vm, true, 8), 'proc_per_core: already in cores');
+        $this->assertNull(CtrView::guestShare(new ContainerInfo('docker', 'd', '/d', cpu: 50.0), false, 8));
+        $this->assertNull(CtrView::guestShare($vm->withVm(new VmInfo()), false, 8), 'unknown vCPUs');
+        $this->assertSame('g kvm    Cpu 12.5% · 50.0% of 2 vCPU', CtrView::detailTitle($vm, 37, false, 8));
+        $this->assertSame('g kvm 2 vCPU        Cpu 12.5%', CtrView::detailTitle($vm, 30, false, 8), 'too narrow: btop\'s layout, vCPUs on the left');
+        $this->assertSame('d docker          Cpu 50.0%', CtrView::detailTitle(new ContainerInfo('docker', 'd', '/d', cpu: 50.0), 28, false, 8), 'containers keep btop\'s title');
+    }
+
+    public function testShowVmsOffRestoresBtopsContainersOnlyBox(): void
+    {
+        // The tap path (proc shown): the count drops the guest.
+        $this->assertStringContainsString('0/7', $this->grid(120, 40, self::BOXES));
+        $this->assertStringContainsString('0/6', $this->grid(120, 40, self::BOXES, options: [CtrPanel::SHOW_VMS => false]));
+        // The own-scan path (proc hidden), where every row is drawn.
+        $this->assertStringContainsString('web01', $this->grid(80, 24, 'cpu ctr'));
+        $alone = $this->grid(80, 24, 'cpu ctr', options: [CtrPanel::SHOW_VMS => false]);
+        $this->assertStringNotContainsString('web01', $alone);
+        $this->assertStringContainsString('0/6', $alone);
     }
 
     public function testNoProcColorsSgrGolden(): void

@@ -80,7 +80,7 @@ final class OptionsCatalog
             '@order', 'proc_sorting', 'proc_reversed', 'proc_tree', 'proc_aggregate', 'proc_tree_auto_collapse', 'proc_tree_persist_state',
             '@rows', 'proc_colors', 'proc_gradient', 'proc_per_core', 'proc_mem_bytes', 'keep_dead_proc_usage', 'proc_cpu_graphs',
             'proc_gpu_graphs', 'proc_gpu_only',
-            'proc_filter_kernel', 'proc_filter_containers', 'proc_command_basename', 'proc_follow_detailed', 'proc_info_smaps',
+            'proc_filter_kernel', 'proc_filter_containers', 'ctr_show_vms', 'proc_command_basename', 'proc_follow_detailed', 'proc_info_smaps',
         ],
         'gpu' => [
             '@telemetry', 'nvml_measure_pcie_speeds', 'rsmi_measure_pcie_speeds',

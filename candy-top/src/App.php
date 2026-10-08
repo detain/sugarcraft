@@ -499,7 +499,7 @@ final class App implements Model
     private function frame(): Surface
     {
         $surface = Surface::new($this->cols, $this->rows, $this->ink->base());
-        FrameBuilder::paintChrome($surface, $this->layout, $this->ink, $this->config, $this->host, $this->preset);
+        FrameBuilder::paintChrome($surface, $this->layout, $this->ink, $this->config, $this->host, $this->preset, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()));
         $border = FrameBuilder::border($this->config);
         foreach ($this->layout->ordered() as $box => $rect) {
             $panel = $this->panelFor($box);
@@ -592,8 +592,8 @@ final class App implements Model
         return [
             'm' => [$cpu->x + 11, $y, Width::string(Lang::t('button.menu')), 1],
             'p' => [$cpu->x + 17, $y, Width::string(Lang::t('button.preset')) + 2, 1],
-            // btop PR #1873 `{button_y, x + 27, 1, 5}`, only where it is drawn.
-            ...($cpu->width >= FrameBuilder::CTR_BUTTON_MIN_WIDTH ? ['x' => [$cpu->x + 27, $y, Width::string(Lang::t('button.ctr')) + 2, 1]] : []),
+            // btop PR #1873 `{button_y, x + 27, 1, 5}`, only where it is drawn (or over the engine label).
+            ...(($ctr = FrameBuilder::ctrZone($cpu, $y, $this->host->containerEngine, FrameBuilder::clockWidth($this->layout, $this->clockText(), $this->clockReserved()))) !== null ? ['x' => $ctr] : []),
             '-' => [$cpu->x + $cpu->width - $len - 7, $y, 2, 1],
             '+' => [$cpu->x + $cpu->width - 5, $y, 2, 1],
         ];

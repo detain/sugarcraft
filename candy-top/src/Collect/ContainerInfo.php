@@ -20,7 +20,11 @@ namespace SugarCraft\Top\Collect;
  *  - `memLimit`: `memory.max` in bytes, 0 when unlimited or unreadable;
  *  - `cpuTime`: the last `usage_usec` read, 0 when never read;
  *  - `history`: btop `cpu_percent`, percent of TOTAL cpu power (0-100),
- *    oldest first, capped at the terminal width.
+ *    oldest first, capped at the terminal width;
+ *  - `vm`: the guest's facts when this entry is a libvirt/KVM domain
+ *    (engine Vm::ENGINE) — candy-top lists VMs beside containers, btop
+ *    skips them — else null. Its `memBytes` (`-m`) is the memory limit
+ *    when the scope's memory.max is "max".
  */
 final class ContainerInfo
 {
@@ -35,13 +39,31 @@ final class ContainerInfo
         public readonly int $memLimit = 0,
         public readonly int $cpuTime = 0,
         public readonly array $history = [],
+        public readonly ?VmInfo $vm = null,
     ) {
     }
 
-    /** A container first seen in `$ref` (btop parse_cgroup's ctr_info). */
+    /** A container (or VM) first seen in `$ref` (btop parse_cgroup's ctr_info). */
     public static function of(ContainerRef $ref): self
     {
-        return new self($ref->engine, $ref->name, $ref->cgroupPath);
+        return new self($ref->engine, $ref->name, $ref->cgroupPath, vm: $ref->vm);
+    }
+
+    public function isVm(): bool
+    {
+        return $this->vm !== null;
+    }
+
+    /** The guest's configured memory (`-m`) in bytes, 0 when not a VM or unknown. */
+    public function configuredMem(): int
+    {
+        return $this->vm !== null && $this->vm->memBytes > 0 ? $this->vm->memBytes : 0;
+    }
+
+    /** The VM facts from a richer process of the same guest (the emulator's cmdline over a helper's scope-only ref). */
+    public function withVm(?VmInfo $vm): self
+    {
+        return $this->mutate(['vm' => $vm]);
     }
 
     public function withName(string $name): self
@@ -49,7 +71,11 @@ final class ContainerInfo
         return $this->mutate(['name' => $name]);
     }
 
-    /** The per-sample totals btop resets and re-sums from the processes. */
+    /**
+     * The per-sample totals btop resets and re-sums from the processes —
+     * memLimit included (0 unless given), so a limit never outlives the
+     * sample that read it.
+     */
     public function withTotals(int $procs, float $cpu, int $mem, int $memLimit = 0): self
     {
         return $this->mutate(['procs' => $procs, 'cpu' => $cpu, 'mem' => $mem, 'memLimit' => $memLimit]);
@@ -84,6 +110,6 @@ final class ContainerInfo
     {
         $v = array_replace(get_object_vars($this), $changes);
 
-        return new self($v['engine'], $v['name'], $v['path'], $v['procs'], $v['cpu'], $v['mem'], $v['memLimit'], $v['cpuTime'], $v['history']);
+        return new self($v['engine'], $v['name'], $v['path'], $v['procs'], $v['cpu'], $v['mem'], $v['memLimit'], $v['cpuTime'], $v['history'], $v['vm']);
     }
 }

@@ -54,12 +54,19 @@ use SugarCraft\Top\View\Region;
  * `[ select ]` title halves are the same two keys; a container that
  * vanishes drops the selection.
  *
+ * VMs: libvirt/KVM guests are listed, sorted, selected and filtered
+ * exactly like containers (engine "kvm"), unless ctr_show_vms is off —
+ * re-applied to the collector from the current config on every sample.
+ *
  * Mini-graphs: one 5x1 graph per drawn row, pushed once per fresh sample
  * with btop's value (`cpu < 5` but >= 0.1 reads 5, so a trickle shows)
  * and erased with its container.
  */
 final class CtrPanel implements Panel, ClickCapture, SampleTap
 {
+    /** candy-top's option: list libvirt/KVM guests beside the containers (btop never does). */
+    public const SHOW_VMS = 'ctr_show_vms';
+
     /** btop trims the cpu deque to Term::width; this before the first layout. */
     private const DEFAULT_HISTORY = 512;
 
@@ -146,7 +153,7 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
         }
         $perCore = $config->bool('proc_per_core');
         $procs = self::tuned($this->procs, $config);
-        $collector = $this->collector;
+        $collector = $this->collector->withVms($config->bool(self::SHOW_VMS));
         $cap = self::historyCap($context);
         $window = self::minWindowUs($config);
 
@@ -277,7 +284,7 @@ final class CtrPanel implements Panel, ClickCapture, SampleTap
             if ($snapshot === null || !$context->visible() || !$this->collector->enabled()) {
                 return new PanelResult($this);
             }
-            $collector = $this->collector;
+            $collector = $this->collector->withVms($context->config->bool(self::SHOW_VMS));
             $perCore = $context->config->bool('proc_per_core');
             $cap = self::historyCap($context);
             $procs = $this->procs;

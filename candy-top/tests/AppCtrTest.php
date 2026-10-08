@@ -13,12 +13,14 @@ use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\TickRequest;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Top\App;
 use SugarCraft\Top\Collect\Containers;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\Presets;
 use SugarCraft\Top\Config\Schema;
+use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Msg\ClockTickMsg;
 use SugarCraft\Top\Msg\DataTickMsg;
 use SugarCraft\Top\Msg\SampledMsg;
@@ -97,7 +99,7 @@ final class AppCtrTest extends TestCase
         $on = self::settle($on, $cmd);
         $ctr = $on->panel('ctr');
         $this->assertInstanceOf(CtrPanel::class, $ctr);
-        $this->assertSame(6, $ctr->snapshot()?->count());
+        $this->assertSame(7, $ctr->snapshot()?->count(), 'six containers and the demo libvirt guest');
 
         [$on] = $on->update(new KeyMsg(KeyType::Char, ']'));
         $this->assertNotSame('', $on->config->string(Schema::CTR_SELECTED));
@@ -119,6 +121,71 @@ final class AppCtrTest extends TestCase
         [$refused] = self::app(80, 24)->update(new KeyMsg(KeyType::Char, 'x'));
         $this->assertNotContains('ctr', $refused->config->shownBoxes());
         $this->assertNotNull($refused->overlay());
+    }
+
+    public function testAContainerEngineReplacesTheCtrButton(): void
+    {
+        $host = HostInfo::new('Ryzen 7 5800X', 8, 'joe', 'box', containerEngine: 'docker');
+        $config = Config::new();
+        $app = App::start($config, ThemeConfig::new(), $host, Panels::standard($host, $config, true), static fn (): ClockTickMsg => new ClockTickMsg(Harness::TIME, 3600.0), ColorProfile::TrueColor);
+        [$app] = $app->update(new WindowSizeMsg(120, 40));
+        $app = self::settle($app, $app->init());
+        $cpu = $app->layout?->box('cpu');
+        $this->assertNotNull($cpu);
+        $top = $app->surface()?->plainLines()[$cpu->y] ?? '';
+        // btop Cpu::draw: the engine name in the title colour where `x ctr` would be.
+        $this->assertSame('docker', mb_substr($top, $cpu->x + 27, 6));
+        $this->assertStringNotContainsString('ctr', $top);
+        $this->assertSame([$cpu->x + 27, $cpu->y, 6, 1], $app->chromeButtons()['x'], 'candy-top keeps the label clickable (btop maps nothing)');
+        [$on] = $app->update(new MouseMsg($cpu->x + 28, $cpu->y + 1, MouseButton::Left, MouseAction::Press));
+        $this->assertContains('ctr', $on->config->shownBoxes(), 'a click on the label toggles the box like `x`');
+
+        // Without an engine the btop button is unchanged.
+        $plain = self::app();
+        $this->assertSame([$cpu->x + 27, $cpu->y, 5, 1], $plain->chromeButtons()['x']);
+        $this->assertStringContainsString('x ctr', $plain->surface()?->plainLines()[$cpu->y] ?? '');
+    }
+
+    public function testALongClockCutsTheLabelInsteadOfPaintingOverIt(): void
+    {
+        // 54+ cells: clockBudget(120) = 54, so the clock's left junction lands at cpu.x + 33.
+        // show_battery off: the badge's 22-cell clock reserve would shorten the clock.
+        $config = Config::new()->with('clock_format', '%A %d %B %Y %X %A %d %B %Y %X')->with('show_battery', false);
+        foreach (['docker' => 'docke', '' => 'x ctr'] as $engine => $drawn) {
+            $host = HostInfo::new('Ryzen 7 5800X', 8, 'joe', 'box', containerEngine: $engine);
+            $app = App::start($config, ThemeConfig::new(), $host, Panels::standard($host, $config, true), static fn (): ClockTickMsg => new ClockTickMsg(Harness::TIME, 3600.0), ColorProfile::TrueColor);
+            [$app] = $app->update(new WindowSizeMsg(120, 40));
+            $app = self::settle($app, $app->init());
+            [$app] = $app->update(new ClockTickMsg(Harness::TIME, 3600.0));
+            $cpu = $app->layout?->box('cpu');
+            $this->assertNotNull($cpu);
+            $layout = $app->layout;
+            $this->assertNotNull($layout);
+            $width = FrameBuilder::clockWidth($layout, $app->clockText(), $app->clockReserved());
+            $this->assertSame(54, $width, 'the clock is cut to its budget');
+            $top = $app->surface()?->plainLines()[$cpu->y] ?? '';
+            $clockAt = $cpu->x + intdiv($cpu->width, 2) - intdiv($width, 2);
+            $this->assertSame($drawn, mb_substr($top, $cpu->x + 27, 5), "engine '{$engine}'");
+            $this->assertNotSame(' ', mb_substr($top, $cpu->x + 32, 1), 'its closing junction is drawn, not overwritten');
+            $this->assertSame(mb_substr(Width::truncate($app->clockText(), 54), 0, 10), mb_substr($top, $clockAt + 1, 10), 'the clock is intact');
+            $this->assertSame([$cpu->x + 27, $cpu->y, 5, 1], $app->chromeButtons()['x'], 'the click zone covers exactly what is drawn');
+        }
+        $this->assertNull(FrameBuilder::engineLabel(Rect::new(0, 0, 120, 10), 'docker', 60), 'a clock past its budget would leave no room at all');
+        $this->assertNull(FrameBuilder::ctrZone(Rect::new(0, 0, 120, 10), 0, '', 60));
+        $this->assertSame('containerd', FrameBuilder::engineLabel(Rect::new(0, 0, 76, 10), 'containerd', 0), 'no clock yet: the room runs to the interval button');
+    }
+
+    public function testTheEngineLabelIsCutToTheRoomBeforeTheClock(): void
+    {
+        $cpu = Rect::new(0, 0, 76, 10);
+        $this->assertSame('docker', FrameBuilder::engineLabel($cpu, 'docker'), '76 wide: 6 cells before a centred 8-cell clock');
+        $this->assertSame('contai', FrameBuilder::engineLabel($cpu, 'containerd'));
+        $this->assertSame('containerd', FrameBuilder::engineLabel(Rect::new(0, 0, 120, 10), 'containerd'));
+        $this->assertSame('doc', FrameBuilder::engineLabel(Rect::new(0, 0, 70, 10), 'docker'));
+        $this->assertNull(FrameBuilder::engineLabel(Rect::new(0, 0, 68, 10), 'docker'), 'under 3 cells: not drawn');
+        $this->assertNull(FrameBuilder::engineLabel($cpu, ''));
+        $this->assertNull(FrameBuilder::ctrZone(Rect::new(0, 0, 68, 10), 0, 'docker'), 'no label, and no `x ctr` either while in a container');
+        $this->assertNull(FrameBuilder::ctrZone(Rect::new(0, 0, 70, 10), 0, ''));
     }
 
     public function testTheProcSampleIsTappedOnlyWhileTheBoxIsShown(): void
@@ -179,7 +246,7 @@ final class AppCtrTest extends TestCase
         $app = self::app(config: Config::new()->with('shown_boxes', 'cpu mem net ctr proc'));
         $ctr = $app->panel('ctr');
         $this->assertInstanceOf(CtrPanel::class, $ctr);
-        $this->assertSame(6, $ctr->snapshot()?->count(), 'filled from the startup proc scan through the tap');
+        $this->assertSame(7, $ctr->snapshot()?->count(), 'filled from the startup proc scan through the tap');
         [$app] = $app->update(new KeyMsg(KeyType::Down));
         [$app] = $app->update(new KeyMsg(KeyType::Down));
 
@@ -227,7 +294,7 @@ final class AppCtrTest extends TestCase
         $app = self::settle($app, $app->init());
         $ctr = $app->panel('ctr');
         $this->assertInstanceOf(CtrPanel::class, $ctr);
-        $this->assertSame(6, $ctr->snapshot()?->count(), 'the first sample counts');
+        $this->assertSame(7, $ctr->snapshot()?->count(), 'the first sample counts');
         $sample = new SampledMsg('proc', FakeProcList::demo(8)->withContainers()->sample()[0], FakeProcList::demo(8));
         [, $again] = $app->update($sample);
         $this->assertSame([], Cmds::of(SampledMsg::class, $again), 'a second sample in the same instant is skipped');

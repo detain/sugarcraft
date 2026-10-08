@@ -39,6 +39,8 @@ use SugarCraft\Top\Lang;
  *    enum values above). A preset's `ctr` position and graph symbol are
  *    ignored (the box draws with graph_symbol_proc). The selected
  *    container (ctr_selected) is runtime state, never written.
+ *    ctr_show_vms (candy-top's own: libvirt/KVM guests in the ctr box) is
+ *    additive too; btop has no such key and always leaves VMs out.
  *  - U4 gpu boxes: gpu_box_columns (#1881) is additive; shown_boxes and
  *    the presets accept `gpuN` for any index N, at most 6 (#1730) — a
  *    superset of btop 1.4.7's gpu0-gpu5, which drops gpu6+ with a warning.
@@ -235,6 +237,8 @@ final class Schema
             Option::bool('proc_left', false),
             Option::bool('proc_filter_kernel', false),
             Option::bool('proc_filter_containers', false),
+            // candy-top beyond #1873: list libvirt/KVM guests in the ctr box.
+            Option::bool('ctr_show_vms', true),
             Option::bool('proc_follow_detailed', true),
             Option::bool('proc_aggregate', false),
             Option::int('proc_tree_auto_collapse', 0, 0, 10000),

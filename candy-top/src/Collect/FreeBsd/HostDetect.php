@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\ContainerEngine;
 use SugarCraft\Top\HostInfo;
 
 /**
@@ -15,7 +16,9 @@ use SugarCraft\Top\HostInfo;
  * `hw.ncpu`. hasSensors is {@see Temp}'s own discovery (so the layout's
  * temp columns and the readings can never disagree, as on Linux);
  * hasCpuHz is the presence of `dev.cpu.0.freq`. User and host name come
- * from posix_getpwuid / gethostname exactly as on Linux.
+ * from posix_getpwuid / gethostname exactly as on Linux. The container
+ * engine is "jail" when `security.jail.jailed` is 1 (fetched in the same
+ * sysctl call; btop detects no engine on FreeBSD).
  */
 final class HostDetect
 {
@@ -26,7 +29,7 @@ final class HostDetect
     public static function detect(?Probe $probe = null): HostInfo
     {
         $probe ??= LiveProbe::new();
-        $v = $probe->sysctl(['hw.model', 'hw.ncpu', 'dev.cpu.0.freq']);
+        $v = $probe->sysctl(['hw.model', 'hw.ncpu', 'dev.cpu.0.freq', 'security.jail.jailed']);
         [$temps] = Temp::new($probe)->sample();
 
         $user = getenv('USER');
@@ -43,6 +46,7 @@ final class HostDetect
             is_string($host) ? $host : '',
             $temps->sensors !== [],
             Sysctl::int($v, 'dev.cpu.0.freq') !== null,
+            Sysctl::int($v, 'security.jail.jailed') === 1 ? ContainerEngine::JAIL : '',
         );
     }
 }

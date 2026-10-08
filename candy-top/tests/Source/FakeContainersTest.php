@@ -43,7 +43,11 @@ final class FakeContainersTest extends TestCase
         [$a, $next] = FakeContainers::new()->collect($procs->processes, $procs->memTotal, 8, false, 10);
         [$b] = FakeContainers::new()->collect($procs->processes, $procs->memTotal, 8, false, 10);
         $this->assertEquals($a, $b);
-        $this->assertSame(['9a0c5e21b7d4', 'arch', 'build', 'c41d9e7f0a13', 'pg-main', 'web-1'], array_map(static fn (ContainerInfo $c): string => $c->name, $a->containers));
+        $this->assertSame(['9a0c5e21b7d4', 'arch', 'build', 'c41d9e7f0a13', 'pg-main', 'web-1', 'web01'], array_map(static fn (ContainerInfo $c): string => $c->name, $a->containers));
+        $vm = $a->containers[6];
+        $this->assertSame(['kvm', 4 * 1024 * 1024 * 1024], [$vm->engine, $vm->memLimit], 'the demo guest: engine kvm, limited by its -m');
+        [$noVms] = FakeContainers::new()->withVms(false)->collect($procs->processes, $procs->memTotal, 8, false, 10);
+        $this->assertCount(6, $noVms->containers, 'ctr_show_vms off: btop\'s containers-only box');
         $web = $a->containers[5];
         $this->assertSame(512 * 1024 * 1024, $web->memLimit);
         $this->assertSame(1, $web->procs);
