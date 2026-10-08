@@ -5,25 +5,23 @@ and PRs are all welcome.
 
 ## Development setup
 
-SugarCraft is a monorepo of 50 PHP libraries. Each library has its own
-`composer.json` + `vendor/` and is tested independently.
+SugarCraft is a monorepo of independently-published PHP libraries and terminal
+apps. Each library has its own `composer.json` + `vendor/` and is tested
+independently. You need PHP 8.3+ and Composer installed to run any of this.
 
 ```sh
 git clone https://github.com/detain/sugarcraft.git
-cd SugarCraft
+cd sugarcraft
 
 # Install deps + run tests for one library:
 cd candy-core
 composer install
 vendor/bin/phpunit
 
-# Or, for the whole monorepo:
-for d in candy-core candy-ansi candy-buffer candy-layout candy-async candy-testing candy-mouse candy-input candy-fuzzy candy-sprinkles honey-bounce candy-zone candy-forms \
-         sugar-bits sugar-charts sugar-dash sugar-prompt candy-shell candy-shine candy-kit \
-         candy-freeze sugar-glow sugar-spark \
-         candy-wish sugar-wishlist candy-metrics \
-         candy-mold candy-tetris candy-files sugar-crush \
-         sugar-stash candy-query sugar-tick candy-mines candy-flip honey-flap; do
+# Or, for the whole monorepo (from the repo root):
+cd ..   # the one-library run above left you inside candy-core/
+for d in candy-* sugar-* honey-*; do
+    [ -f "$d/phpunit.xml" ] || continue
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```
@@ -57,13 +55,10 @@ verify no injected entries leaked in:
 php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
 ```
 
-That is one of **seven** gates `.github/workflows/ci.yml` runs without a
-`composer install`, and until recently this file documented only two of them —
-so a contributor could pass everything CONTRIBUTING asked for and still be
-failed by CI on a check they had never been told about. They live in two jobs:
-the first command below is the `tools-guards` job, and the other six are
-`path-repo-check`, which `needs:` it. Run the whole set before you push; each
-must exit 0:
+These gates run in `.github/workflows/ci.yml` without a
+`composer install`. They live in two jobs: the first command below is the
+`tools-guards` job, and the other six are `path-repo-check`, which `needs:`
+it. Run the whole set before you push; each must exit 0:
 
 ```sh
 phpunit --no-configuration --colors=never tools/tests/  # the checker's own guards
@@ -87,11 +82,8 @@ narrowed on purpose: CI spells that line `git checkout -- .`, which is safe in
 a throwaway checkout and would eat your uncommitted work here. MEASURED on this
 tree: `--fix --strict-closure` dirties `*/composer.json` and NOTHING else — no
 root manifest, no lock, no file outside that glob — so the glob reverts all of
-it. (A count of the dirtied files used to stand here. It said 52; re-measured
-about an hour later, in the same round and with no lib added in between, it was
-53 — so the first figure was simply wrong. It is dropped rather than corrected,
-because a number no test derives rots whether or not anyone mis-typed it.
-`git status --porcelain` after the `--fix` is the answer that cannot go stale.)
+it. `git status --porcelain` after the `--fix` is the check that
+cannot go stale.
 
 The first line wants a PHPUnit 10 PHAR on `PATH` (CI installs one via
 `setup-php`'s `tools: phpunit:10`). Without one, borrow any lib's — that form
@@ -107,11 +99,11 @@ from the lock and silently ignore the injection — it only warns.
 
 ## Style guide
 
-- **PHP 8.1+**: fibers, readonly properties, enums, `match`, intersection
+- **PHP 8.3+**: fibers, readonly properties, enums, `match`, intersection
   types are all in scope.
 - **`declare(strict_types=1);`** at the top of every PHP file.
-- **PSR-12** via `php-cs-fixer` (config to come; for now, follow the
-  surrounding code's conventions).
+- **PSR-12** via `php-cs-fixer` (config: `.php-cs-fixer.dist.php`) — from the
+  repo root: `PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes`.
 - **Immutability**: every `Style`, `Model`, `Field`, etc. is immutable;
   `with*()` returns a new instance.
 - **Readonly DTOs** for value objects.
@@ -121,7 +113,7 @@ from the lock and silently ignore the injection — it only warns.
   `\RuntimeException` rather than returning `null` for "wasn't valid input".
 - **Don't add comments that re-state the code.** Comments document
   *why* — non-obvious constraints, hidden invariants, links to
-  upstream issues. Skip "increment counter" tier prose.
+  related issues. Skip "increment counter" tier prose.
 
 ## Tests
 
@@ -140,23 +132,24 @@ from the lock and silently ignore the injection — it only warns.
 3. One concern per PR. Don't pile a refactor onto a feature.
 4. Make sure every test suite the change touches is green before
    pushing.
-5. Update the relevant `README.md` and `CONVERSION.md` rows if your
-   change visibly affects the public API.
+5. Update the library's own `README.md` — and the root README's
+   entry for it — whenever your change affects the public API.
 6. Commits should be authored as your real name + email.
 
-## Adding a new library port
+## Adding a new library or app
 
-SugarCraft is also happy to host PHP ports of additional Charmbracelet
-(or Charmbracelet-adjacent) libraries. The flow:
+SugarCraft grows with original work — components, tools, and
+terminal apps that fill gaps in the PHP stack. The flow:
 
-1. Open an issue proposing the port. Include the upstream URL, a
-   one-line role summary, and the expected dependencies on existing
-   SugarCraft phases.
+1. Open an issue proposing the library. Include a one-line role
+   summary, any prior art, and the expected dependencies on existing
+   SugarCraft libraries.
 2. Decide on a name following the `Candy*` / `Sugar*` / `Honey*` +
    technical-suffix pattern documented in
    [`PROJECT_NAMES.md`](./PROJECT_NAMES.md).
-3. Add the new library's row to `CONVERSION.md`'s Phase 9+ table with
-   the proposed name, subdir, namespace, and dependency list.
+3. Add the new library's row to the root `README.md` table —
+   proposed name, subdir, namespace, and dependency list — and to the package
+   roster in `docs/MATCHUPS.md`.
 4. Scaffold the new directory:
 
    ```text
