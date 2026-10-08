@@ -28,7 +28,7 @@ skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000
 
 ## In flight at handoff (UNCOMMITTED in the working tree)
 Launched 2026-10-08 in parallel (shared brief: `prompt_kit/briefs/candy-top-panel-phase-common.md`):
-- **P-F2** options menu/presets/persistence (#1476/#1411/#1791b/#1849) — implementer running; also fixes P-F1 review leftovers (follow ↑ arrow, backdrop refresh on menu switch, renice backspace keeps last parsed, chrome drag).
+- **P-F2** options menu/presets/persistence (#1476/#1411/#1791b/#1849) — implementer running (sugar-bits require committed `892cc0e7b`, candy-top vendor relinked); also fixes P-F1 review leftovers (follow ↑ arrow, backdrop refresh on menu switch, renice backspace keeps last parsed, chrome drag).
 Each agent reports an exact file list; commit only that list (lang/en.php, Panels.php, CALIBER_LEARNINGS.md
 are shared → stage partially). Chrome goldens use frozen `Panels::placeholders()` (`4186902f5`, `c1613c6aa`).
 
