@@ -439,10 +439,10 @@ candy-top/
                            #   under candy-top/themes/*.theme — loaded by path, Default+TTY builtin-first
                            #   (draw §6 discovery order), live-cycle via options (preview-behind-overlay)
     TtyTheme.php           # 16-color stepped variant: gradient stops at 33/66 (draw §6 degradation)
-  src/Config/              # rc reader/writer ~/.config/candy-top/config.conf, key=value, subset of draw §9
+  src/Config/              # ✅ 7c893a54b — rc reader/writer ~/.config/candy-top/config.conf, key=value, subset of draw §9
                            #   defaults; unknown keys ignored (forward-compat), AtomicJsonFile-style atomic write
                            #   per candy-core P2 (withPermissions(0600) not needed — public config)
-  src/Lang/ + lang/en.php  # i18n wrapper Lang::t for user-facing strings (AGENTS.md i18n law)
+  src/Lang/ + lang/en.php  # ✅ 7c893a54b — i18n wrapper Lang::t for user-facing strings (AGENTS.md i18n law)
 ```
 
 **TEA wiring recipe** (inline, per tea §1 — every panel deviates nowhere):
