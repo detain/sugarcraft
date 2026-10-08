@@ -31,7 +31,8 @@ skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000
 - Census: candy-top share fixed ✅ `274ab740b`; remaining DescriptorSinkArgumentCensusTest red is sugar-crush only
   (note: sugar-crush ForkedChild/SessionRelaunch `(int)$entry` casts at real close/fcntl sinks deserve a look — not ours).
 - P-H candy-top docs ✅ `4956d682f` (README tables drift-pinned by tests/Docs; regen CANDY_TOP_UPDATE_DOCS=1).
-- P-G TTY polish: check found no src discrepancies; TtyModeFrameTest + goldens under review.
+- P-G ✅ complete (TTY polish `500696d7e`).
+- U4 in flight: U4a GPU/NPU collectors (src/Collect/**, tests/Collect/**, fixtures/gpu) and U4b #1791c tree-state XDG file (ProcPanel/App/bin/Config, adds Schema key proc_tree_persist_state + README regen). Then U4 box slots (#1730/#1881) + per-proc GPU cols + container box.
 - Next: U4 (P-I GPU/NPU multi-vendor, container/VM box, #1791c tree-state XDG file) — any new Schema key/KeyRow needs the README regen.
 
 ## Next
