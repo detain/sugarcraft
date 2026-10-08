@@ -12,7 +12,8 @@ namespace SugarCraft\Top\Input;
  *
  * Rows follow btop's `help_text` (src/btop_menu.cpp:172-218) minus what
  * candy-top does not do (yet): `ctrl + z` (no suspend). btop's `5` row
- * lists every gpu slot key, 5 through 0 (btop PR #1730). btop PR #1476 adds the proc-width rows after `Selected N`;
+ * lists every gpu slot key, 5 through 0 (btop PR #1730); btop PR #1873
+ * adds `x` and `[, ]` (the containers box) right after it. btop PR #1476 adds the proc-width rows after `Selected N`;
  * `O` is candy-top's #1873 extension; the vim_keys rows (btop documents
  * those only in its options text) are listed so the roster is complete.
  * `g, ctrl + g` is btop #1552's gpu-only filter (`ctrl + g` because
@@ -42,6 +43,8 @@ final class KeyTable
             new KeyRow('3', 'help.toggle_net', ['3']),
             new KeyRow('4', 'help.toggle_proc', ['4']),
             new KeyRow('5, 6, 7, 8, 9, 0', 'help.toggle_gpu', ['5', '6', '7', '8', '9', '0']),
+            new KeyRow('x', 'help.toggle_ctr', ['x']),
+            new KeyRow('[, ]', 'help.select_ctr', ['[', ']']),
             new KeyRow('d', 'help.toggle_disks', ['d']),
             new KeyRow('F2, o', 'help.options', ['f2', 'o']),
             new KeyRow('F1, ?, h', 'help.help', ['f1', '?', 'h']),

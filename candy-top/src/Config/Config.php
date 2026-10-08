@@ -243,8 +243,11 @@ final class Config
             if ($box->box === 'proc') {
                 $changes['proc_box_width_percent'] = $box->widthPercent() ?? Schema::PROC_BOX_WIDTH_PERCENT;
             }
-            $symbolKey = str_starts_with($box->box, 'gpu') ? 'graph_symbol_gpu' : 'graph_symbol_' . $box->box;
-            $changes[$symbolKey] = $box->graphSymbol;
+            // btop PR #1873 apply_preset: the ctr box uses graph_symbol_proc.
+            if ($box->box !== 'ctr') {
+                $symbolKey = str_starts_with($box->box, 'gpu') ? 'graph_symbol_gpu' : 'graph_symbol_' . $box->box;
+                $changes[$symbolKey] = $box->graphSymbol;
+            }
         }
         $changes['shown_boxes'] = implode(' ', $preset->boxNames());
 
@@ -418,6 +421,11 @@ final class Config
         if (isset($changes['shown_boxes']) && !isset($changes[GpuPanels::SLOTS_KEY])
             && $changes['shown_boxes'] !== $this->values['shown_boxes']) {
             $changes[GpuPanels::SLOTS_KEY] = '';
+        }
+        // btop PR #1873 calcSizes: `if (not Ctr::shown) Ctr::selected.clear()`.
+        $boxes = (string) ($changes['shown_boxes'] ?? $this->values['shown_boxes'] ?? '');
+        if (!\in_array('ctr', explode(' ', $boxes), true) && ($changes[Schema::CTR_SELECTED] ?? $this->values[Schema::CTR_SELECTED] ?? '') !== '') {
+            $changes[Schema::CTR_SELECTED] = '';
         }
 
         return new self(array_replace($this->values, $changes));

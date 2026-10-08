@@ -1,4 +1,4 @@
-╭─┐¹c██████╗e█████╗e███╗*┌─██╗██████╗2██╗3:2██╗─████████╗─██████╗─██████╗ms +┌─╮
+╭─┐¹c██████╗e█████╗e███╗*┌┐██╗██████╗2██╗3:2██╗─████████╗─██████╗─██████╗ms +┌─╮
 │ CP██╔════╝██╔══██╗████╗  ██║██╔══██╗╚██╗e██╔╝5╚══██╔══╝██╔═══██╗██╔══██╗────╮│
 │ Lo██║AVG: ███████║██╔██╗ ██║██║  ██║0╚████╔╝    C██║  5██║   ██║██████╔╝    ││
 │ up██║ 00:0██╔══██║██║╚██╗██║██║  ██║1 ╚██╔╝%    C██║  2██║   ██║██╔═══╝     ││
@@ -16,9 +16,9 @@
 │          3         Toggle NET box.                                         │2│
 │          4         Toggle PROC box.                                        │6│
 │  5, 6, 7, 8, 9, 0  Toggle GPU box.                                         │6│
+│          x         Toggle CTR (containers) box.                            │ │
+│        [, ]        Select previous/next container in CTR box.              │ │
 │          d         Toggle disks view in MEM box.                           │ │
 │        F2, o       Shows options.                                          │ │
 │      F1, ?, h      Shows this window.                                      │ │
-│      ctrl + r      Reloads config file from disk.                          │ │
-│     q, ctrl + c    Quits program.                                          │ │
 ╰─┘↑ page 1/4 ↓└─────────────────────────────────────────────────────────────╯─╯

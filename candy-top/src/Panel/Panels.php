@@ -67,8 +67,11 @@ final class Panels
             'proc' => $fake
                 // --fake pids are invented: the signal / renice menus must never reach a live process.
                 // #1552 Gpu%/GMem: the proc box samples its own accelerator source (per-pid rows on demand).
-                ? ProcPanel::new(FakeProcList::demo($host->coreCount), FakeProcessControl::new())->withGpu(FakeGpuProcesses::demo())
+                // #1873: the fake fleet's container processes, so the ctr box and the proc list agree.
+                ? ProcPanel::new(FakeProcList::demo($host->coreCount)->withContainers(), FakeProcessControl::new())->withGpu(FakeGpuProcesses::demo())
                 : ProcPanel::new($platform->procList(), PosixProcessControl::new())->withGpu($platform->gpu()),
+            // btop PR #1873's containers box: taps the proc box's scan, scans on its own only while proc is hidden.
+            'ctr' => CtrPanel::standard($host->coreCount, $fake, $platform),
         ];
     }
 

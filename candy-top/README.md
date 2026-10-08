@@ -66,7 +66,7 @@ From a monorepo checkout, `php candy-top/bin/candy-top` works as well. `php cand
 
 ## The boxes
 
-The screen is split into four boxes, plus up to six [gpu boxes](#gpu-boxes), laid out by a port of btop's `calcSizes`. Keys `1` to `4` toggle the four boxes, keys `5` to `0` toggle gpu box slots, and the `shown_boxes` option sets which are shown. Placement flags move the boxes around: `cpu_bottom` puts cpu at the bottom, `mem_below_net` swaps mem and net, `proc_left` moves proc to the left, and `proc_box_width_percent` sets the proc width. Box titles and buttons are drawn into the borders, and each button's hotkey letter is highlighted. A clock (`clock_format`) sits in the top border. When the terminal is smaller than the layout's minimum, btop's "Terminal size too small" notice is shown instead. `q`, `1` to `4` and the gpu slot keys `5` to `0` still work behind that notice.
+The screen is split into four boxes, plus the [containers box](#ctr) and up to six [gpu boxes](#gpu-boxes), laid out by a port of btop's `calcSizes`. Keys `1` to `4` toggle the four boxes, `x` toggles the containers box, keys `5` to `0` toggle gpu box slots, and the `shown_boxes` option sets which are shown. Placement flags move the boxes around: `cpu_bottom` puts cpu at the bottom, `mem_below_net` swaps mem and net, `proc_left` moves proc to the left, and `proc_box_width_percent` sets the proc width. Box titles and buttons are drawn into the borders, and each button's hotkey letter is highlighted. A clock (`clock_format`) sits in the top border. When the terminal is smaller than the layout's minimum, btop's "Terminal size too small" notice is shown instead. `q`, `1` to `4` and the gpu slot keys `5` to `0` still work behind that notice (`x` does not, as in btop #1873).
 
 Hidden boxes are never sampled or drawn (btop #1858). Every graph dimension is clamped to at least 1 cell, so even odd layouts cannot crash a graph.
 
@@ -112,6 +112,19 @@ Hidden boxes are never sampled or drawn (btop #1858). Every graph dimension is c
 - **Mouse.** Click a row to select it, and click the selected row to open its detail view. Click the `[-]`/`[+]` marker to collapse or expand a branch. Clicking the scrollbar pages at the arrows, drags the thumb, or jumps proportionally. The wheel scrolls by 3 rows.
 - **Containers and VMs.** These are tagged in the command column. See [Containers and VMs](#containers-and-vms).
 
+### ctr
+
+The containers box (btop #1873) lists the containers that have processes running, one row each. `x` toggles it, as does the `x ctr` button on the cpu box's top border (shown when the cpu box is at least 76 columns wide), and `ctr` in `shown_boxes` or a preset turns it on.
+
+- **Placement.** The box sits at the top of the proc column and takes a third of it: at least 6 rows, and never so many that the proc box drops below 16. Without the proc box it takes the whole column. Its minimum size is 44x6.
+- **Rows.** Each row shows the name (the docker name, or the short id), the engine (when the list is at least 52 columns wide), the process count, memory, a 5-cell cpu mini graph (`graph_symbol_proc`) and cpu%. The rows are sorted by name. Colours follow `proc_colors`. The bottom border shows `selected/count`.
+- **Selecting.** `[` and `]` step through "no selection" and the containers, wrapping round. The halves of the `[ select ]` title button do the same, and clicking a row selects it or, if it is already selected, clears the selection. While a container is selected the proc box shows only that container's processes (in list and tree view) and its selection jumps back to the top. The selection is cleared when the container goes away or the box is hidden.
+- **Detail.** With a container selected and the box at least 80 columns wide, a panel on the right shows its name and engine, cpu%, a cpu history graph, and a memory meter against its `memory.max`, or against total memory when it is unlimited.
+- **Figures.** On cgroup v2, cpu is the `cpu.stat` `usage_usec` delta (percent of the whole machine, or of one core with `proc_per_core`). Memory is `memory.current` minus `inactive_file`, which is what `docker stats` shows. Where those files cannot be read (cgroup v1, or permissions) the box shows the sum of the container's processes instead. The cpu graph is always a percentage of total cpu power.
+- **Docker names.** When a new docker container appears, one `GET /containers/json` is sent over the docker socket (`/var/run/docker.sock`, or `DOCKER_HOST` when it is a `unix://` path), with a 1 s deadline. Without access to the socket the short id stays. A name, once found, is kept until the container restarts, so a `docker rename` shows after the restart.
+- **Cost.** The box reads the proc box's process scan rather than scanning `/proc` itself; opening it beside the proc box makes the proc box rescan at once. It runs its own scan only while the proc box is hidden. A sample covering less than half of `update_ms` (a proc rescan after a sort change, Enter or a toggle) is skipped, so the cgroup cpu% always spans a real interval; re-showing the box resets that window, so its first sample always counts. A hidden box costs nothing, and on FreeBSD nothing is scanned for it.
+- **Not containers.** KVM/QEMU guests (libvirt `machine-qemu*` scopes), Flatpak and Snap are not listed. On FreeBSD the box stays empty.
+
 ### gpu boxes
 
 Up to six gpu boxes can be shown at once (btop #1730), one per accelerator: `gpu0`, `gpu1`, ... in `shown_boxes`, numbered GPUs first and then NPUs. Data, collectors and caveats are in [GPU](#gpu).
@@ -153,6 +166,7 @@ proc:P:G:W       proc only: W = proc box width percent (0-100) or "default" (bto
 The default is `cpu:1:default,proc:0:default cpu:0:default,mem:0:default,net:0:default cpu:0:block,net:0:tty`.
 
 - The alternate position maps to `cpu_bottom`, `mem_below_net` and `proc_left`.
+- A `ctr` entry (btop #1873) shows the containers box. Its position and graph symbol are ignored; the box draws with `graph_symbol_proc`.
 - A proc entry always sets `proc_box_width_percent`, to its W value or to 55 when W is missing.
 - W is written back only when you wrote it. Stock btop 1.4.7 rejects a whole `presets` string that contains a W field and falls back to its default.
 - `disable_presets` turns off the default preset (`Default`), the custom presets (`Custom`) or all of them (`All`).
@@ -196,6 +210,8 @@ Context rules, ported from btop's input handling:
 | `3` | Toggle NET box. | `3` |
 | `4` | Toggle PROC box. | `4` |
 | `5, 6, 7, 8, 9, 0` | Toggle GPU box. | `5`, `6`, `7`, `8`, `9`, `0` |
+| `x` | Toggle CTR (containers) box. | `x` |
+| `[, ]` | Select previous/next container in CTR box. | `[`, `]` |
 | `d` | Toggle disks view in MEM box. | `d` |
 | `F2, o` | Shows options. | `f2`, `o` |
 | `F1, ?, h` | Shows this window. | `f1`, `?`, `h` |
@@ -246,10 +262,11 @@ Mouse reporting is on unless `disable_mouse` is set. The mode is button and moti
 
 | Where | Action |
 |---|---|
-| cpu border: the `m` menu button, the `p` preset button, `-` / `+` around the interval | Opens the main menu, cycles the preset, steps `update_ms` (the same as the keys, hold acceleration included). |
+| cpu border: the `m` menu button, the `p` preset button, the `x ctr` button, `-` / `+` around the interval | Opens the main menu, cycles the preset, toggles the containers box, steps `update_ms` (the same as the keys, hold acceleration included). |
 | mem border: `disks`, `io` | Toggle `show_disks` / `io_mode`. |
 | net border: the `b`/`n`, `z`, `a` and `y` buttons | Previous or next interface, zero the totals, auto-scale, sync. The `a` and `y` buttons appear only when the box is wide enough. |
 | proc border buttons | `filter`, clear filter, `O` containers, `per-core`, `reverse`, `tree`, `←` / `→` sorting, `pause`, `info` (detail), and with a selection `terminate`, `kill`, `signals`, `Nice`, `Follow`. |
+| ctr border: `[ select ]`; ctr rows | The left and right halves of the button select the previous / next container. Clicking a row selects it, and clicking the selected row clears the selection. |
 | proc list | Click selects. Clicking the selected row opens the detail view, and clicking a `[-]`/`[+]` marker toggles a branch. The wheel scrolls by 3. The scrollbar pages at its arrows, the thumb can be dragged, and a click on the track jumps proportionally. |
 | any other left click | Clears the process selection, as btop does. |
 | menus | Click entries, tabs, `←`/`→` arrows and buttons. The wheel moves selections and pages. A click outside a menu closes it. |
@@ -297,7 +314,7 @@ These are all persisted keys, in config.conf write order, generated from `SugarC
 | `graph_symbol_mem` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Graph symbol to use for graphs in mem box, "default", "braille", "block", "block2" or "tty". |
 | `graph_symbol_net` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Graph symbol to use for graphs in net box, "default", "braille", "block", "block2" or "tty". |
 | `graph_symbol_proc` | string | `"default"` | `default`, `braille`, `block`, `block2`, `tty` | 0 general › Graph glyphs | Graph symbol to use for graphs in proc box, "default", "braille", "block", "block2" or "tty". |
-| `shown_boxes` | string | `"cpu mem net proc"` | validated text (see description) | 0 general › Layout | Manually set which boxes to show. Available values are "cpu mem net proc" and "gpuN" for GPU index N, separate values with whitespace. Up to 6 GPU boxes can be shown at once. |
+| `shown_boxes` | string | `"cpu mem net proc"` | validated text (see description) | 0 general › Layout | Manually set which boxes to show. Available values are "cpu mem net proc ctr" and "gpuN" for GPU index N, separate values with whitespace. Up to 6 GPU boxes can be shown at once. |
 | `update_ms` | int | `2000` | `100`–`86400000` | 0 general › Runtime and rendering | Update time in milliseconds, recommended 2000 ms or above for better sample times for graphs. |
 | `proc_sorting` | string | `"cpu lazy"` | `pid`, `name`, `command`, `threads`, `user`, `memory`, `cpu direct`, `cpu lazy`, `io read`, `io write`, `io total`, `gpu`, `gpu memory` | 4 proc › Order and tree | Processes sorting, "pid" "name" "command" "threads" "user" "memory" "cpu lazy" "cpu direct" "io read" "io write" "io total" "gpu" "gpu memory",<br>"cpu lazy" sorts top process over time (easier to follow), "cpu direct" updates top process directly.<br>"io read", "io write" and "io total" sort by disk IO rate, "gpu" and "gpu memory" by per-process GPU use; stock btop 1.4.7 does not know them and falls back to "cpu lazy" with a warning. |
 | `proc_reversed` | bool | `false` | `true`, `false` | 4 proc › Order and tree | Reverse sorting order, True or False. |
@@ -426,6 +443,7 @@ Collectors are chosen per OS at run time (`SugarCraft\Top\Collect\Platform`). Th
 | disks | `/proc/mounts` + statvfs, `/proc/diskstats`, `/sys/block` (physical filter), `/etc/fstab` (cached by mtime) |
 | net | `/proc/net/dev`, `/sys/class/net/<if>/{carrier,operstate}`, addresses via `net_get_interfaces()` |
 | proc | `/proc/[pid]/{stat,status,cmdline,cgroup,io}`, with `cwd` read for the detailed pid only |
+| ctr | the proc scan's cgroup tags; `/sys/fs/cgroup/<container>/{cpu.stat,memory.current,memory.stat,memory.max}`; the docker socket for names |
 | gpu | `nvidia-smi` (NVIDIA); amdgpu, i915/xe, intel_vpu and amdxdna nodes under `/sys/class/drm` and `/sys/class/accel`; per-process GPU use from `nvidia-smi` and `/proc/[pid]/fdinfo` (see [GPU](#gpu)) |
 
 Permissions:
@@ -447,7 +465,7 @@ Known limitations on FreeBSD:
 - No per-process IO (FreeBSD exposes only block-op counts), so the IO columns show `-`.
 - GPUs come from `nvidia-smi` only (no AMD, Intel or NPU readings).
 - No zswap.
-- No container or jail tags.
+- No container or jail tags, so the containers box stays empty.
 - One aggregate battery (`acpi`).
 - With `security.bsd.see_other_uids=0`, an unprivileged user sees only their own processes.
 - CPU interrupt time is counted as `irq` (busy) rather than dropped as btop's FreeBSD port does.
@@ -464,6 +482,8 @@ Each process's `/proc/[pid]/cgroup` is parsed (btop PR #1873). A process inside 
 KVM/QEMU guests are tagged too, with engine `kvm`. This candy-top extension is not a btop feature. A guest is recognised from its libvirt/machined cgroup scope (`machine-qemu\x2d<id>\x2d<name>.scope`, `qemu-<id>-<name>.libvirt-qemu`) or from a QEMU command line (`-name guest=...`, `-uuid`, `-smp`, `-m`). It is never recognised by the executable name alone. The guest name is shown in the program column, and helpers that share the scope (swtpm, virtiofsd) carry the VM's tag.
 
 `O` toggles `proc_filter_containers`, which hides containers and VMs alike. The text filter also matches the container or VM name.
+
+The [containers box](#ctr) groups the tagged processes per container and adds each container's own cgroup figures. VMs are not listed there.
 
 ## GPU
 
@@ -500,7 +520,7 @@ candy-top includes these open btop pull requests (evaluated 2026-10-08). New key
 | #1573 | Interface IP address in the net box (`net_hide_ip`). |
 | #1859 | Executable basename in process commands (`proc_command_basename`). |
 | #1823 | Per-process IO/R and IO/W columns and `io read`/`io write`/`io total` sorting. |
-| #1873 | Container tags and `proc_filter_containers` (`O`). The container box is deferred. |
+| #1873 | Container tags, `proc_filter_containers` (`O`), and the containers box (`ctr`: `x`, `[`/`]`, row clicks, cgroup v2 figures, docker names). |
 | #1783 | `block2` sextant graph symbols (`graph_symbol*`). |
 | #1858 | Hidden boxes are never sampled or drawn, and graph sizes are clamped to at least 1. |
 | #1614 | GPU sub-graph widths in the cpu box. |
@@ -523,7 +543,6 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 
 - No PCIe TX/RX line in the gpu boxes (nothing measures PCIe throughput), and no Apple GPUs.
 - AMD NPUs are detected but not measured; Intel GPUs report no VRAM.
-- No container box.
 - No `ctrl+z` suspend.
 - No CPU package watts (`show_cpu_watts` has no RAPL reader).
 - No ZFS pool IO.
@@ -546,6 +565,7 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 - Batteries are re-scanned every sample, so a hot-plugged one appears without a restart.
 - Mounts whose statvfs failed are retried after a while, not ignored for the process lifetime.
 - `proc_filter_containers` also hides VMs, and the text filter also matches container and VM names.
+- Containers box (#1873): candy-top does not detect the container engine it runs in, so the `x ctr` button always shows from 76 columns (btop shows the engine name there instead). Before the first sample the box shows its labels but not "No containers found". `[`/`]` with no containers does not reset the proc selection (btop resets it on every press). Conversely, the proc selection also resets when the container selection is cleared because the container vanished or the box was hidden (btop resets it only on a key or click). Container samples come from the proc box's scans, and one covering less than half of `update_ms` is skipped (btop collects containers on every proc collect). After the box is re-shown, its first cpu% is the sum of the container's processes; btop shows the cgroup delta averaged over the hidden period. The docker reply is capped at 8 MiB and the 1 s timeout bounds the whole exchange. A cgroup path containing `..` is never read. Only a bare left click (not a drag) acts on the box's buttons and rows. A translated `[ select ]` label keeps the button's right edge and splits it into halves. A `machine-qemu…` scope whose name does not continue with `-` or `\x2d` (for example `machine-qemubox.scope`) is listed as an nspawn container; btop skips every `machine-qemu*` scope.
 - Tree siblings are sorted by branch totals (#1791a).
 - Remembered tree collapse choices (#1791c) are stored in `$XDG_STATE_HOME/candy-top/tree-state.json`, not in btop's internal `proc_tree_state` config key.
 - A remembered tree choice is applied once (at startup, when `proc_tree_persist_state` is turned on, and on entering the tree view), then only to newly appearing processes. btop re-applies it on every collect. So `E` is not undone by the next sample, but a process sharing the name chain of one you just collapsed or expanded is not updated until it is recreated or candy-top restarts.

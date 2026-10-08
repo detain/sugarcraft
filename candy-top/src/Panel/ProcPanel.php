@@ -150,6 +150,7 @@ final class ProcPanel implements Panel, ClickCapture
         private ?Source $gpu = null,
         private ?GpuUsage $gpuUsage = null,
         private ?ProcGraphTracker $gpuGraphs = null,
+        private string $ctrSel = '',
     ) {
         $this->treeState ??= TreeState::empty();
         $this->sel ??= ProcSelection::new();
@@ -379,6 +380,30 @@ final class ProcPanel implements Panel, ClickCapture
 
     public function update(Msg $msg, PanelContext $context): PanelResult
     {
+        return $this->synced($context->config)->updateSynced($msg, $context);
+    }
+
+    /**
+     * btop PR #1873: picking a container in the ctr box resets the list to
+     * its top (`proc_selected = 0`, `proc_start = 0`). The pick arrives as a
+     * ctr_selected write by another panel, so the reset is applied to
+     * whatever this panel sees first afterwards — its next update() or
+     * paint() — rather than through a message, which would leave one frame
+     * drawn with the old selection over the new rows.
+     */
+    private function synced(Config $config): self
+    {
+        $selected = $config->string(Schema::CTR_SELECTED);
+        if ($selected === $this->ctrSel) {
+            return $this;
+        }
+        $sel = $this->selection();
+
+        return $this->mutate(['ctrSel' => $selected, 'sel' => ProcSelection::new(0, 0, $sel->lastSelected)]);
+    }
+
+    private function updateSynced(Msg $msg, PanelContext $context): PanelResult
+    {
         if ($msg instanceof SampledMsg) {
             if ($msg->box !== 'proc') {
                 return new PanelResult($this);
@@ -425,6 +450,12 @@ final class ProcPanel implements Panel, ClickCapture
     public function paint(Region $region, PanelFrame $frame): void
     {
         $config = $frame->config;
+        $synced = $this->synced($config);
+        if ($synced !== $this) {
+            $synced->paint($region, $frame);
+
+            return;
+        }
         $detail = $config->bool('show_detailed') ? $this->detail : null;
         ProcView::paint(
             $region,

@@ -874,7 +874,7 @@ final class ProcView
      *
      * @return list<?string>
      */
-    private static function graphCells(?DualSampleGraph $graph): array
+    public static function graphCells(?DualSampleGraph $graph): array
     {
         return $graph === null ? array_fill(0, 5, null) : self::cells($graph, 5);
     }

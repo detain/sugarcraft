@@ -34,9 +34,11 @@ use SugarCraft\Top\Lang;
  *    btop's grammar — every 3-field string parses identically — and is only
  *    ever written back when the user wrote it; stock btop rejects a whole
  *    presets string containing one and resets presets to its default.
- *  - From #1873 only proc_filter_containers is adopted; its `ctr` box is
- *    deferred (Wave U4), so a #1873-btop config naming `ctr` in shown_boxes
- *    or presets is rejected here.
+ *  - #1873: proc_filter_containers is additive; `ctr` joins the shown_boxes
+ *    and presets box names (stock btop rejects it — a soft break like the
+ *    enum values above). A preset's `ctr` position and graph symbol are
+ *    ignored (the box draws with graph_symbol_proc). The selected
+ *    container (ctr_selected) is runtime state, never written.
  *  - U4 gpu boxes: gpu_box_columns (#1881) is additive; shown_boxes and
  *    the presets accept `gpuN` for any index N, at most 6 (#1730) — a
  *    superset of btop 1.4.7's gpu0-gpu5, which drops gpu6+ with a warning.
@@ -61,8 +63,16 @@ final class Schema
     /** btop Config::valid_graph_symbols_def — per-box symbols may also defer to graph_symbol. */
     public const GRAPH_SYMBOLS_DEF = ['default', 'braille', 'block', 'block2', 'tty'];
 
-    /** btop Config::valid_boxes (GPU build). */
-    public const BOXES = ['cpu', 'mem', 'net', 'proc'];
+    /** btop Config::valid_boxes (GPU build), plus btop PR #1873's containers box. */
+    public const BOXES = ['cpu', 'mem', 'net', 'proc', 'ctr'];
+
+    /**
+     * btop PR #1873 `Ctr::selected`: the cgroup path of the container picked
+     * in the ctr box ("" = none). Runtime only — the proc box reads it to
+     * show only that container's processes; cleared whenever shown_boxes
+     * loses `ctr` (btop calcSizes).
+     */
+    public const CTR_SELECTED = 'ctr_selected';
 
     /**
      * btop PR #1881 gpu_box_columns: "Auto" (as many columns as the
@@ -309,6 +319,8 @@ final class Schema
             // btop PR #1730 Config::current_gpu_panel_slots (U4 gpu boxes):
             // the panel slot of each shown gpu box, see GpuPanels.
             Option::string(GpuPanels::SLOTS_KEY, '', validator: GpuPanels::validateSlots(...), persisted: false),
+            // btop PR #1873 Ctr::selected (U4 ctr box).
+            Option::string(self::CTR_SELECTED, '', persisted: false),
         ];
 
         $byName = [];

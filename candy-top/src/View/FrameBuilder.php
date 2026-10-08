@@ -51,7 +51,12 @@ final class FrameBuilder
         'mem' => [36, 10],
         'net' => [36, 6],
         'proc' => [44, 16],
+        // btop PR #1873 Ctr::min_width / min_height.
+        'ctr' => [44, 6],
     ];
+
+    /** btop PR #1873: the cpu title's `x ctr` button needs a cpu box this wide. */
+    public const CTR_BUTTON_MIN_WIDTH = 76;
 
     private function __construct()
     {
@@ -75,6 +80,7 @@ final class FrameBuilder
         $mem = in_array('mem', $boxes, true);
         $net = in_array('net', $boxes, true);
         $proc = in_array('proc', $boxes, true);
+        $ctr = in_array('ctr', $boxes, true);
         $roster ??= GpuRoster::none();
         $gpus = array_values(array_filter(
             GpuPanels::targets($boxes),
@@ -82,15 +88,16 @@ final class FrameBuilder
         ));
 
         $width = ($mem || $net) ? self::MINIMUMS['mem'][0] : 0;
-        $width += $proc ? self::MINIMUMS['proc'][0] : 0;
+        $width += $proc ? self::MINIMUMS['proc'][0] : ($ctr ? self::MINIMUMS['ctr'][0] : 0);
         if ($cpu && $width < self::MINIMUMS['cpu'][0]) {
             $width = self::MINIMUMS['cpu'][0];
         }
         $width = max($width, GpuGrid::minWidth(count($gpus), $termWidth, $gpuColumns));
         $height = $cpu ? self::MINIMUMS['cpu'][1] : 0;
+        // btop PR #1873: the ctr box shares the proc column.
         $height += $proc
-            ? self::MINIMUMS['proc'][1]
-            : ($mem ? self::MINIMUMS['mem'][1] : 0) + ($net ? self::MINIMUMS['net'][1] : 0);
+            ? self::MINIMUMS['proc'][1] + ($ctr ? self::MINIMUMS['ctr'][1] : 0)
+            : max($ctr ? self::MINIMUMS['ctr'][1] : 0, ($mem ? self::MINIMUMS['mem'][1] : 0) + ($net ? self::MINIMUMS['net'][1] : 0));
         $height += GpuGrid::minHeight($gpus, $termWidth, $gpuColumns, $roster);
 
         return [$width, $height];
@@ -138,6 +145,10 @@ final class FrameBuilder
         $hasMem = in_array('mem', $shown, true);
         $hasNet = in_array('net', $shown, true);
         $hasProc = in_array('proc', $shown, true);
+        $hasCtr = in_array('ctr', $shown, true);
+        // btop PR #1873 calcSizes: the ctr box shares the proc column, so
+        // every "is the proc box shown" test of the side boxes asks this.
+        $procColumn = $hasProc || $hasCtr;
         $coreCount = max(1, $coreCount);
         $temp = $showTemp ? 1 : 0;
 
@@ -146,7 +157,7 @@ final class FrameBuilder
         $cpuCores = null;
         $bColumns = 0;
         $bColumnSize = 0;
-        $others = $hasMem || $hasNet || $hasProc;
+        $others = $hasMem || $hasNet || $procColumn;
         if ($hasCpu) {
             $w = (int) round($cols * self::RATIOS['cpu'][0] / 100);
             $onlyCpu = $shown === ['cpu'];
@@ -219,11 +230,11 @@ final class FrameBuilder
         $disksWidth = 0;
         $divider = null;
         if ($hasMem) {
-            $memW = self::sideWidth($cols, $hasProc, $config->procBoxWidthPercent(), self::MINIMUMS['mem'][0]);
+            $memW = self::sideWidth($cols, $procColumn, $config->procBoxWidthPercent(), self::MINIMUMS['mem'][0]);
             // GPU build: Net::height_p * shown * 4 / ((gpu and cpu shown) + 4).
             $netShare = intdiv(self::RATIOS['net'][1] * ($hasNet ? 1 : 0) * 4, ($gpuWithCpu ? 1 : 0) + 4);
             $memH = (int) floor($rows * (100 - $netShare) / 100) - $cpuH - $gpuHeight;
-            $x = ($procLeft && $hasProc) ? $cols - $memW + 1 : 1;
+            $x = ($procLeft && $procColumn) ? $cols - $memW + 1 : 1;
             $y = ($memBelowNet && $hasNet)
                 ? $rows - $memH + 1 - ($cpuBottom ? $cpuH : 0)
                 : ($cpuBottom ? 1 : $cpuH + 1) + $gpuHeight;
@@ -241,9 +252,9 @@ final class FrameBuilder
         $netW = 0;
         $netStats = null;
         if ($hasNet) {
-            $netW = self::sideWidth($cols, $hasProc, $config->procBoxWidthPercent(), self::MINIMUMS['net'][0]);
+            $netW = self::sideWidth($cols, $procColumn, $config->procBoxWidthPercent(), self::MINIMUMS['net'][0]);
             $netH = $rows - $cpuH - $gpuHeight - $memH;
-            $x = ($procLeft && $hasProc) ? $cols - $netW + 1 : 1;
+            $x = ($procLeft && $procColumn) ? $cols - $netW + 1 : 1;
             $y = ($memBelowNet && $hasMem)
                 ? ($cpuBottom ? 1 : $cpuH + 1) + $gpuHeight
                 : $rows - $netH + 1 - ($cpuBottom ? $cpuH : 0);
@@ -256,13 +267,25 @@ final class FrameBuilder
         }
 
         $selectMax = 0;
-        if ($hasProc) {
+        if ($procColumn) {
             $procW = $cols - ($hasMem ? $memW : ($hasNet ? $netW : 0));
             $procH = $rows - $cpuH - $gpuHeight;
             $x = $procLeft ? 1 : $cols - $procW + 1;
             $y = (($cpuBottom && $hasCpu) ? 1 : $cpuH + 1) + $gpuHeight;
-            $boxes['proc'] = Rect::new($x - 1, $y - 1, $procW, $procH);
-            $selectMax = $procH - 3;
+            // btop PR #1873: the ctr box takes the top of the column — a
+            // third of it beside a proc box (at least 6 rows, leaving proc
+            // its 16), the whole column alone.
+            if ($hasCtr) {
+                $minH = self::MINIMUMS['ctr'][1];
+                $ctrH = $hasProc ? self::clamp(intdiv($procH, 3), $minH, max($minH, $procH - self::MINIMUMS['proc'][1])) : $procH;
+                $boxes['ctr'] = Rect::new($x - 1, $y - 1, $procW, $ctrH);
+                $y += $ctrH;
+                $procH -= $ctrH;
+            }
+            if ($hasProc) {
+                $boxes['proc'] = Rect::new($x - 1, $y - 1, $procW, $procH);
+                $selectMax = $procH - 3;
+            }
         }
 
         return new Layout(
@@ -334,6 +357,11 @@ final class FrameBuilder
             $gpu = $layout->gpuBox($name);
             if ($gpu !== null) {
                 self::paintGpuChrome($surface, $gpu, $ink, $config, $border, $tty);
+
+                continue;
+            }
+            if ($name === 'ctr') {
+                self::paintCtrChrome($surface, $rect, $ink, $border, $tty);
 
                 continue;
             }
@@ -446,6 +474,30 @@ final class FrameBuilder
     }
 
     /**
+     * btop PR #1873 calcSizes' ctr box: createBox in proc_box colour with no
+     * built-in title, then its own `ˣctr` title (`x` in tty mode) — the
+     * superscript names the toggle key, as the digits do for 1-4.
+     */
+    private static function paintCtrChrome(Surface $surface, Rect $rect, Ink $ink, Border $border, bool $tty): void
+    {
+        $line = $ink->fg('proc_box');
+        BoxChrome::paint($surface, $rect, $line, $ink, $border, fill: true, tty: $tty);
+        if ($rect->width < 2 || $rect->height < 2) {
+            return;
+        }
+        BoxChrome::embed(
+            $surface,
+            $rect->x + 2,
+            $rect->y,
+            Symbols::BOLD . $ink->fg('hi_fg') . ($tty ? 'x' : 'ˣ') . $ink->fg('title') . Lang::t('box.ctr'),
+            $line,
+            $border,
+            false,
+            $rect,
+        );
+    }
+
+    /**
      * Width budget for the border clock — btop update_clock:
      * `max(10, width - 66 - (battery ? 22 : 0))`, the battery reserve only
      * applying on terminals at least 100 columns wide.
@@ -502,6 +554,12 @@ final class FrameBuilder
             $bottom,
             $cpu,
         );
+        // btop PR #1873: `x ctr` between the preset button and the clock
+        // (btop shows the detected container engine there instead; candy-top
+        // does not detect one, so the button always shows when it fits).
+        if ($cpu->width >= self::CTR_BUTTON_MIN_WIDTH) {
+            BoxChrome::embed($surface, $cpu->x + 26, $y, Symbols::BOLD . self::hotkey(Lang::t('button.ctr'), 'x', $ink), $line, $border, $bottom, $cpu);
+        }
         $update = $config->updateMs() . 'ms';
         $len = strlen($update);
         BoxChrome::embed(

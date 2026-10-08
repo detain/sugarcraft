@@ -59,6 +59,7 @@ final class ProcTree
         bool $aggregate,
         array $collapsed,
         bool $gpuOnly = false,
+        string $ctrSelected = '',
     ): array {
         if ($entries === []) {
             return [];
@@ -71,6 +72,7 @@ final class ProcTree
             'collapsed' => $collapsed,
             'filter' => $filter,
             'ctr' => $filterContainers,
+            'ctrSel' => $ctrSelected,
             'aggregate' => $aggregate,
             'gpuOnly' => $gpuOnly,
             'filtered' => [],
@@ -235,7 +237,7 @@ final class ProcTree
         $st['seen'][$i] = true;
         $e = $st['e'][$i];
         $filtering = false;
-        if (ProcFilter::containerHidden($e, $st['ctr'])) {
+        if (ProcFilter::containerHidden($e, $st['ctr'], $st['ctrSel'])) {
             $filtering = true;
             $st['filtered'][$i] = true;
         } elseif (!$found && ($st['filter'] !== '' || $st['gpuOnly'])) {

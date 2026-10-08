@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Source\Fake;
 
+use SugarCraft\Top\Collect\Cgroup;
 use SugarCraft\Top\Collect\ContainerRef;
 use SugarCraft\Top\Collect\ProcDetail;
 use SugarCraft\Top\Collect\ProcList;
@@ -47,6 +48,21 @@ final class FakeProcList implements Source
         [7001, 2210, 'vim', '/usr/bin/vim notes.md', 'joe', 9, 'S'],
     ];
 
+    /**
+     * withContainers() additions: pid, ppid, name, cmd, user, argv0
+     * basename offset, state, cgroup path (`{id:<12 hex>}` expands to a
+     * 64-hex OCI id).
+     */
+    private const FLEET = [
+        [7110, 5120, 'postgres', '/usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/data', 'postgres', 25, 'S', '/system.slice/docker-{id:b7e14c0a9d22}.scope'],
+        [7111, 7110, 'postgres', 'postgres: checkpointer', 'postgres', 0, 'S', '/system.slice/docker-{id:b7e14c0a9d22}.scope'],
+        [7120, 1, 'caddy', '/usr/bin/caddy run --config /etc/caddy/Caddyfile', 'joe', 9, 'S', '/user.slice/user-1000.slice/user@1000.service/user.slice/libpod-{id:c41d9e7f0a13}.scope/container'],
+        [7130, 1, 'coredns', '/coredns -conf /etc/coredns/Corefile', 'root', 1, 'S', '/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod4f2a.slice/cri-containerd-{id:9a0c5e21b7d4}.scope'],
+        [7140, 1, 'systemd', '/sbin/init', 'root', 6, 'S', '/lxc.payload.build/init.scope'],
+        [7141, 7140, 'make', '/usr/bin/make -j8', 'joe', 9, 'R', '/lxc.payload.build/system.slice/build.service'],
+        [7150, 1, 'systemd', '/usr/lib/systemd/systemd', 'root', 17, 'S', '/machine.slice/machine-arch.scope/payload'],
+    ];
+
     /** 16 GiB — the fake host's MemTotal. */
     public const MEM_TOTAL = 16 * 1024 * 1024 * 1024;
 
@@ -59,6 +75,7 @@ final class FakeProcList implements Source
         private readonly bool $io = false,
         private readonly bool $filterKernel = false,
         private readonly ?int $detailPid = null,
+        private readonly bool $fleet = false,
     ) {
     }
 
@@ -74,6 +91,18 @@ final class FakeProcList implements Source
     public static function demo(int $cores = 8, int $extra = 0): self
     {
         return new self(max(1, $cores), 0, true, max(0, $extra));
+    }
+
+    /**
+     * Add the ctr box's demo fleet (btop PR #1873): a second docker
+     * container, podman, kubernetes, LXC and systemd-nspawn guests, as
+     * {@see FLEET} processes whose cgroup paths the live detector
+     * ({@see Cgroup::parse()}) recognises. demo() alone stays the proc
+     * box goldens' cast.
+     */
+    public function withContainers(bool $on = true): self
+    {
+        return $this->copy(['fleet' => $on]);
     }
 
     public function withPerCore(bool $on): self
@@ -126,6 +155,12 @@ final class FakeProcList implements Source
             };
             $procs[] = $this->process($i, $pid, $ppid, $name, $cmd, $user, $argv0, $state, $cpu, $mem, $container);
         }
+        foreach ($this->fleet ? self::FLEET : [] as $j => [$pid, $ppid, $name, $cmd, $user, $argv0, $state, $cgroup]) {
+            $i = 50 + $j;
+            $cpu = round(Wave::percent($this->step, $i * 0.53) / (8 + $j), 1);
+            $mem = (int) ((30 + $j * 45 + Wave::percent($this->step, $i)) * 1024 * 1024);
+            $procs[] = $this->process($i, $pid, $ppid, $name, $cmd, $user, $argv0, $state, $cpu, $mem, Cgroup::parse(self::cgroup($cgroup)));
+        }
         for ($k = 0; $k < $this->extra; $k++) {
             $i = 100 + $k;
             $pid = 10_000 + $k;
@@ -149,6 +184,16 @@ final class FakeProcList implements Source
         }
 
         return [new ProcSnapshot($procs, $this->cores, self::MEM_TOTAL, $detail), $this->copy(['step' => $this->step + 1])];
+    }
+
+    /** Expand `{id:<prefix>}` to a deterministic 64-hex container id. */
+    private static function cgroup(string $path): string
+    {
+        return (string) preg_replace_callback(
+            '/\{id:([0-9a-f]{12})\}/',
+            static fn (array $m): string => $m[1] . substr(hash('sha256', $m[1]), 0, 52),
+            $path,
+        );
     }
 
     private function process(int $i, int $pid, int $ppid, string $name, string $cmd, string $user, int $argv0, string $state, float $cpu, int $mem, ?ContainerRef $container): Process
@@ -200,6 +245,7 @@ final class FakeProcList implements Source
             $o['io'] ?? $this->io,
             $o['filterKernel'] ?? $this->filterKernel,
             array_key_exists('detailPid', $o) ? $o['detailPid'] : $this->detailPid,
+            $o['fleet'] ?? $this->fleet,
         );
     }
 }

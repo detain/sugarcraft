@@ -238,7 +238,7 @@ final class GpuPanelsTest extends TestCase
     public function testSchemaDefaults(): void
     {
         $this->assertSame('Auto', Schema::defaults()['gpu_box_columns']);
-        $this->assertSame(['cpu', 'mem', 'net', 'proc'], Schema::BOXES);
+        $this->assertSame(['cpu', 'mem', 'net', 'proc', 'ctr'], Schema::BOXES);
         $this->assertFalse(Schema::option(GpuPanels::SLOTS_KEY)?->persisted);
     }
 }

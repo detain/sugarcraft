@@ -15,8 +15,8 @@ namespace SugarCraft\Top\View;
  */
 final class Layout
 {
-    /** btop's draw order (`Config::current_boxes` walk in Runner::_runner). */
-    public const BOXES = ['cpu', 'mem', 'net', 'proc'];
+    /** btop's draw order (`Config::current_boxes` walk in Runner::_runner; PR #1873 draws ctr before proc). */
+    public const BOXES = ['cpu', 'mem', 'net', 'ctr', 'proc'];
 
     /**
      * @param array<string, Rect>   $boxes    shown boxes keyed by name (gpu boxes included)
@@ -62,7 +62,7 @@ final class Layout
 
     /**
      * Shown boxes in draw order — btop's Runner: cpu, the gpu boxes (slot
-     * order), mem, net, proc.
+     * order), mem, net, ctr, proc.
      *
      * @return array<string, Rect>
      */

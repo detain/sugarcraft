@@ -75,4 +75,17 @@ final class ProcFilterTest extends TestCase
         $this->assertTrue(ProcFilter::containerHidden($ctr, true));
         $this->assertFalse(ProcFilter::containerHidden($host, true));
     }
+
+    public function testASelectedContainerShowsOnlyItsProcesses(): void
+    {
+        // btop PR #1873 ctr_hidden: the ctr box's pick wins over proc_filter_containers.
+        $host = ProcRows::entry(1);
+        $ctr = ProcRows::entry(2, ['container' => new ContainerRef('docker', 'id', 'id', '/x')]);
+        $other = ProcRows::entry(3, ['container' => new ContainerRef('lxc', 'y', 'y', '/y')]);
+        foreach ([false, true] as $omit) {
+            $this->assertTrue(ProcFilter::containerHidden($host, $omit, '/x'));
+            $this->assertFalse(ProcFilter::containerHidden($ctr, $omit, '/x'));
+            $this->assertTrue(ProcFilter::containerHidden($other, $omit, '/x'));
+        }
+    }
 }

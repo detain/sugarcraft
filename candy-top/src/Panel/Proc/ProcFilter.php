@@ -18,8 +18,9 @@ namespace SugarCraft\Top\Panel\Proc;
  * Extension (plan Wave U1b): the plain filter also matches a process's
  * container / VM name, so typing a guest name finds its qemu process.
  *
- * {@see containerHidden()} is btop #1873's ctr_hidden without the ctr box:
- * with proc_filter_containers on, every process in a container — or, for
+ * {@see containerHidden()} is btop #1873's ctr_hidden: a container picked
+ * in the ctr box shows only its processes; else, with
+ * proc_filter_containers on, every process in a container — or, for
  * candy-top, in a KVM/QEMU guest — is omitted.
  *
  * {@see gpuHidden()} is btop #1552's proc_gpu_only test (the head of its
@@ -65,9 +66,19 @@ final class ProcFilter
         return $gpuOnly && $entry->gpuIdle();
     }
 
-    public static function containerHidden(ProcEntry $entry, bool $filterContainers): bool
+    /**
+     * btop #1873 ctr_hidden: with a container selected in the ctr box
+     * (`$selected`, its cgroup path) only that container's processes show;
+     * otherwise proc_filter_containers omits every containerised one.
+     */
+    public static function containerHidden(ProcEntry $entry, bool $filterContainers, string $selected = ''): bool
     {
-        return $filterContainers && $entry->process->container !== null;
+        $container = $entry->process->container;
+        if ($selected !== '') {
+            return $container?->cgroupPath !== $selected;
+        }
+
+        return $filterContainers && $container !== null;
     }
 
     /** A PCRE for `$pattern`, or null when it does not compile (btop: no match). */

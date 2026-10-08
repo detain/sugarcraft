@@ -1,4 +1,4 @@
-╭─┐¹c██████╗e█████╗e███╗*┌─██╗██████╗2██╗3:2██╗─████████╗─██████╗─██████╗ms +┌─╮
+╭─┐¹c██████╗e█████╗e███╗*┌┐██╗██████╗2██╗3:2██╗─████████╗─██████╗─██████╗ms +┌─╮
 │ CP██╔════╝██╔══██╗████╗  ██║██╔══██╗╚██╗e██╔╝5╚══██╔══╝██╔═══██╗██╔══██╗────╮│
 │ Lo██║AVG: ███████║██╔██╗ ██║██║  ██║0╚████╔╝    C██║  5██║   ██║██████╔╝    ││
 │ up██║ 00:0██╔══██║██║╚██╗██║██║  ██║1 ╚██╔╝%    C██║  2██║   ██║██╔═══╝     ││
@@ -6,19 +6,19 @@
 │    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
 ╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
 │        Key:        Description:                                            │─╯
-│       +, -, =      Add/Subtract 100ms to/from update timer.                │─╮
-│      Up, Down      Select in process list.                                 │%│
-│        Enter       Show detailed information for selected process.         │8│
-│      Spacebar      Expand/collapse the selected process in tree view.      │0│
-│          C         Expand/collapse the selected process' children.         │6│
-│   Pg Up, Pg Down   Jump 1 page in process list.                            │5│
-│      Home, End     Jump to first or last page in process list.             │9│
-│     Left, Right    Select previous/next sorting column.                    │2│
-│        b, n        Select previous/next network device.                    │6│
-│          i         Toggle disks io mode with big graphs.                   │6│
+│      ctrl + r      Reloads config file from disk.                          │─╮
+│     q, ctrl + c    Quits program.                                          │%│
+│       +, -, =      Add/Subtract 100ms to/from update timer.                │8│
+│      Up, Down      Select in process list.                                 │0│
+│        Enter       Show detailed information for selected process.         │6│
+│      Spacebar      Expand/collapse the selected process in tree view.      │5│
+│          C         Expand/collapse the selected process' children.         │9│
+│   Pg Up, Pg Down   Jump 1 page in process list.                            │2│
+│      Home, End     Jump to first or last page in process list.             │6│
+│     Left, Right    Select previous/next sorting column.                    │6│
+│        b, n        Select previous/next network device.                    │ │
+│          i         Toggle disks io mode with big graphs.                   │ │
 │          z         Toggle totals reset for current network device          │ │
 │          a         Toggle auto scaling for the network graphs.             │ │
 │          y         Toggle synced scaling mode for network graphs.          │ │
-│        f, /        To enter a process filter. Start with ! for regex.      │ │
-│          F         Follow selected process.                                │ │
 ╰─┘↑ page 2/4 ↓└─────────────────────────────────────────────────────────────╯─╯

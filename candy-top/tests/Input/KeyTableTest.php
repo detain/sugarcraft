@@ -54,7 +54,7 @@ final class KeyTableTest extends TestCase
     {
         $bindings = KeyTable::bindings();
         $this->assertSame(array_values(array_unique($bindings)), $bindings);
-        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '5', '0', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', ...KeyName::MODIFIED_ARROWS] as $key) {
+        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '5', '0', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', 'x', '[', ']', ...KeyName::MODIFIED_ARROWS] as $key) {
             $this->assertContains($key, $bindings);
         }
         foreach (['ctrl+z'] as $later) {
@@ -112,6 +112,8 @@ final class KeyTableTest extends TestCase
             'detail' => $boot(Config::new(), 'down', 'enter'),
             'filtered' => $filtered,
             'six gpus' => self::boot($sixGpus, Config::new()),
+            // btop PR #1873: `[` / `]` act only while the ctr box is shown.
+            'containers' => $boot(Config::new()->with('shown_boxes', 'cpu mem net ctr proc')),
         ];
     }
 
@@ -120,9 +122,14 @@ final class KeyTableTest extends TestCase
     {
         $app = App::start($config, ThemeConfig::new(), Harness::host(), $panels, static fn (): ClockTickMsg => new ClockTickMsg(Harness::TIME), ColorProfile::TrueColor);
         [$app] = $app->update(new WindowSizeMsg(120, 40));
-        foreach (Cmds::run($app->init()) as $m) {
-            if (!$m instanceof TickRequest) {
-                [$app] = $app->update($m);
+        // Follow-up Cmds too: the ctr box is filled by a Cmd its proc tap returns.
+        $pending = [$app->init()];
+        while ($pending !== []) {
+            foreach (Cmds::run(array_shift($pending)) as $m) {
+                if (!$m instanceof TickRequest) {
+                    [$app, $next] = $app->update($m);
+                    $pending[] = $next;
+                }
             }
         }
         foreach ($keys as $k) {

@@ -48,6 +48,7 @@ use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\PanelResult;
 use SugarCraft\Top\Panel\ProcPanel;
+use SugarCraft\Top\Panel\SampleTap;
 use SugarCraft\Top\Theme\Palette;
 use SugarCraft\Top\Theme\ThemeRegistry;
 use SugarCraft\Top\View\ClockFormat;
@@ -133,6 +134,13 @@ final class App implements Model
 {
     /** btop's numeric box toggles (all_boxes, GPU build index 1-4). */
     public const BOX_KEYS = ['1' => 'cpu', '2' => 'mem', '3' => 'net', '4' => 'proc'];
+
+    /**
+     * btop PR #1873's ctr box toggle — a framed global like `1`-`4`, but
+     * not read behind the size notice (the PR leaves btop's resize loop
+     * at `1`-`4`).
+     */
+    public const CTR_KEY = 'x';
 
     /** update_ms step per `+`/`-` press. */
     public const UPDATE_STEP_MS = 100;
@@ -333,6 +341,14 @@ final class App implements Model
             }
             $roster = $this->roster();
             [$next, $cmd] = $this->deliver($panel, $msg);
+            // Panels tapping this box's samples ({@see SampleTap}, the ctr box
+            // reading the proc scan), visible ones only.
+            foreach ($next->visiblePanels() as $tap) {
+                if ($tap instanceof SampleTap && $tap->box() !== $panel->box() && $tap->taps() === $msg->box) {
+                    [$next, $tapCmd] = $next->deliver($tap, $msg);
+                    $cmd = self::batch($cmd, $tapCmd);
+                }
+            }
             if ($panel instanceof GpuRosterSource && !$next->roster()->equals($roster)) {
                 // A new accelerator, or a column that started / stopped
                 // measuring, moves btop's gpu_b_height_offsets: re-layout.
@@ -576,6 +592,8 @@ final class App implements Model
         return [
             'm' => [$cpu->x + 11, $y, Width::string(Lang::t('button.menu')), 1],
             'p' => [$cpu->x + 17, $y, Width::string(Lang::t('button.preset')) + 2, 1],
+            // btop PR #1873 `{button_y, x + 27, 1, 5}`, only where it is drawn.
+            ...($cpu->width >= FrameBuilder::CTR_BUTTON_MIN_WIDTH ? ['x' => [$cpu->x + 27, $y, Width::string(Lang::t('button.ctr')) + 2, 1]] : []),
             '-' => [$cpu->x + $cpu->width - $len - 7, $y, 2, 1],
             '+' => [$cpu->x + $cpu->width - 5, $y, 2, 1],
         ];
@@ -710,7 +728,10 @@ final class App implements Model
             $panel = $next->panelFor($box);
             if ($panel !== null && !isset($sampled[$panel->box()]) && !$next->sampledBefore($panel, $before)) {
                 $sampled[$panel->box()] = true;
+                $next = $next->opened($panel);
+                $panel = $next->panelFor($box) ?? $panel;
                 $cmds[] = $panel->collect($next->context($box));
+                $cmds[] = $next->tapSourceCollect($panel, $sampled);
             }
         }
         $cmds = array_values(array_filter($cmds));
@@ -726,6 +747,34 @@ final class App implements Model
         $key = self::themeKey($config);
 
         return static fn (): Msg => new PaletteMsg($themes($config), $key);
+    }
+
+    /**
+     * A {@see SampleTap} panel that was just shown gets its first data from
+     * the box it taps: sample that box now (btop's Runner::run("all") after
+     * a toggle re-collects proc together with ctr) unless it is hidden or
+     * already being sampled in `$sampled` (panel box => true, updated).
+     *
+     * @param array<string, bool> $sampled
+     */
+    private function opened(Panel $panel): self
+    {
+        return $panel instanceof SampleTap ? $this->withPanel($panel->opened()) : $this;
+    }
+
+    private function tapSourceCollect(Panel $panel, array &$sampled): ?\Closure
+    {
+        if (!$panel instanceof SampleTap) {
+            return null;
+        }
+        $box = $panel->taps();
+        $source = $this->panelFor($box);
+        if ($source === null || isset($sampled[$source->box()]) || !\in_array($box, $this->config->shownBoxes(), true)) {
+            return null;
+        }
+        $sampled[$source->box()] = true;
+
+        return $source->collect($this->context($box));
     }
 
     /** The data-tick Cmd for the current period and generation. */
@@ -921,7 +970,7 @@ final class App implements Model
     {
         $key = KeyName::mapped($msg, $this->chromeButtons());
 
-        return in_array($key, ['m', 'p', '-', '+'], true) ? $key : null;
+        return in_array($key, ['m', 'p', 'x', '-', '+'], true) ? $key : null;
     }
 
     /** The first visible panel (layout order) that owns all input, or null. Caller checks framed(). */
@@ -961,7 +1010,7 @@ final class App implements Model
             || in_array($name, $this->menuKeys(), true)
             || in_array($name, ['p', 'P', ...KeyName::MODIFIED_ARROWS], true)
             || ($key->type === KeyType::Char && !$key->ctrl && !$key->alt
-                && (isset(self::BOX_KEYS[$key->rune]) || GpuPanels::slotFromKey($key->rune) !== null));
+                && (isset(self::BOX_KEYS[$key->rune]) || $key->rune === self::CTR_KEY || GpuPanels::slotFromKey($key->rune) !== null));
     }
 
     /**
@@ -1046,6 +1095,9 @@ final class App implements Model
         if (isset(self::BOX_KEYS[$key->rune])) {
             return $this->toggleBox(self::BOX_KEYS[$key->rune], true);
         }
+        if ($key->rune === self::CTR_KEY) {
+            return $this->toggleBox('ctr', true);
+        }
         $slot = GpuPanels::slotFromKey($key->rune);
         if ($slot !== null) {
             return $this->toggleGpuBox($slot, true);
@@ -1119,7 +1171,15 @@ final class App implements Model
         // btop toggle_box goes through Config::set: the change is saved on exit.
         $next = $this->mutate(config: $config, preset: null, presetSet: true, writeNew: true)->relayout();
 
-        return [$next, $pos === false ? ($next->panels[$box] ?? null)?->collect($next->context($box)) : null];
+        $panel = $next->panels[$box] ?? null;
+        if ($pos !== false || $panel === null) {
+            return [$next, null];
+        }
+        $seen = [$panel->box() => true];
+        $next = $next->opened($panel);
+        $panel = $next->panels[$box] ?? $panel;
+
+        return [$next, self::batch($panel->collect($next->context($box)), $next->tapSourceCollect($panel, $seen))];
     }
 
     /**

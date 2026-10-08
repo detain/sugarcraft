@@ -357,9 +357,9 @@ final class AppTest extends TestCase
         $this->assertCount($seenBefore, $app->panel('cpu')->seen, 'claimed keys are not broadcast to the others');
 
         // Unclaimed keys still reach the globals and the broadcast.
-        [, $quit] = $app->update(new KeyMsg(KeyType::Char, 'x'));
+        [, $quit] = $app->update(new KeyMsg(KeyType::Char, 'X'));
         $this->assertNull($quit);
-        [$after] = $app->update(new KeyMsg(KeyType::Char, 'x'));
+        [$after] = $app->update(new KeyMsg(KeyType::Char, 'X'));
         $this->assertCount($seenBefore + 4, $after->panel('proc')->seen);
 
         // ctrl+c is never offered.
@@ -704,7 +704,7 @@ final class AppTest extends TestCase
     public function testUnknownMsgIsBroadcastWithoutChangingTheFrame(): void
     {
         $app = self::booted(120, 40);
-        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Char, 'x'));
+        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Char, 'X'));
         $this->assertNull($cmd);
         $this->assertSame($app->view(), $next->view());
     }
