@@ -144,6 +144,70 @@ final class ProgressTest extends TestCase
         $this->assertStringContainsString("\x1b[38;2;0;0;0m", $rendered);
     }
 
+    public function testWithColorFuncReceivesTrueBarWidthAsFourthArg(): void
+    {
+        $seen = [];
+        $p = Progress::new()
+            ->withWidth(10)
+            ->withShowPercent(false)
+            ->withColorFunc(static function (int $i, int $cells, float $pct, int $width) use (&$seen): Color {
+                $seen[] = [$i, $cells, $width];
+                return Color::hex('#000000');
+            })
+            ->withPercent(0.5);
+        $p->view();
+        // 5 filled of a 10-cell bar: $cells is the filled count, $width the bar.
+        $this->assertSame([[0, 5, 10], [1, 5, 10], [2, 5, 10], [3, 5, 10], [4, 5, 10]], $seen);
+    }
+
+    public function testWithColorFuncBarWidthExcludesReservedPercentSuffix(): void
+    {
+        $widths = [];
+        $p = Progress::new()
+            ->withWidth(20)
+            ->withColorFunc(static function (int $i, int $cells, float $pct, int $width) use (&$widths): Color {
+                $widths[] = $width;
+                return Color::hex('#000000');
+            })
+            ->withPercent(1.0);
+        $p->view();
+        // Default '%3d%%' suffix "100%" + its space claims 5 cells of 20.
+        $this->assertSame(array_fill(0, 15, 15), $widths);
+    }
+
+    public function testWithColorFuncThreeParamClosureStillReceivesOldArgs(): void
+    {
+        // Positional BC pin: a pre-existing 3-param closure is called with
+        // ($i, $filledCells, $percent) exactly as before; the appended width
+        // arg is dropped silently by PHP for user closures.
+        $seen = [];
+        $p = Progress::new()
+            ->withWidth(4)
+            ->withShowPercent(false)
+            ->withColorFunc(static function (int $i, int $cells, float $pct) use (&$seen): Color {
+                $seen[] = [$i, $cells, $pct];
+                return Color::hex('#000000');
+            })
+            ->withPercent(0.5);
+        $p->view();
+        $this->assertSame([[0, 2, 0.5], [1, 2, 0.5]], $seen);
+    }
+
+    public function testWithColorFuncWidthEnablesBtopPositionColoring(): void
+    {
+        $ramp = [10 => Color::hex('#0000ff'), 20 => Color::hex('#00ff00'), 30 => Color::hex('#ff0000')];
+        $p = Progress::new()
+            ->withWidth(10)
+            ->withShowPercent(false)
+            ->withColorFunc(static fn (int $i, int $cells, float $pct, int $width): Color
+                => $ramp[(int) round(($i + 1) * 100 / $width)])
+            ->withPercent(0.3);
+        $this->assertSame(
+            "\x1b[38;2;0;0;255m█\x1b[0m\x1b[38;2;0;255;0m█\x1b[0m\x1b[38;2;255;0;0m█\x1b[0m" . str_repeat('░', 7),
+            $p->view(),
+        );
+    }
+
     public function testWithColorFuncNullClears(): void
     {
         $p = Progress::new()
