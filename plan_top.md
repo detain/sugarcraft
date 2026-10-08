@@ -469,7 +469,7 @@ from P-A.
 
 | Phase | Deliverable | Acceptance demo | Suite growth |
 |---|---|---|---|
-| P-A | Frame + theme load + clock + quit + resize, fake collectors | `php bin/candy-top` draws 6 bordered panels w/ embedded clock, `q` exits clean, resize reflows seams | +~15 tests (frame snapshot, resize coercion) |
+| ✅ P-A `b1bd8fc12` (+ candy-core resize repaint `5442e8b1f`) | Frame + theme load + clock + quit + resize, fake collectors | `php bin/candy-top` draws 6 bordered panels w/ embedded clock, `q` exits clean, resize reflows seams | +~15 tests (frame snapshot, resize coercion) |
 | P-B | CPU + MEM panels: real Cpu/Memory, DualSampleGraph upper/lower, per-core grid, Meter row, load/freq | live per-core % ticking, gradient ramps visible | +~20 (snapshot golden ×2 panels, collector delta math) |
 | P-C | NET panels: Net collector, dual graphs, hysteresis autoscale, stats sub-box, iface buttons b/n/z/a/y | up/down graph autoscales on scp burst, `z` zeroes | +~20 (hysteresis table, iface pick policy) |
 | P-D | DISK + BATTERY: Mounts/DiskIo/Temp/Battery, mem_graphs vs meters toggle, io_mode mirror graphs (L3 invert), border battery + watts | `i` flips disk graph modes | +~15 |

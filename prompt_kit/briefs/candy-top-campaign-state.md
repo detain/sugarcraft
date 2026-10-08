@@ -21,24 +21,13 @@ _Last updated: 2026-10-08 (before /compact)._
 Lib lanes L1 `0153b65e4` · L2 `073913a44` · L3 `37f5c6744` · L4 `1bbbca37f` · L5 `57cd08b9f` · L6 `0859cfa4f` ·
 L7 `07a1e5e6f` · L8 `39c65280c` · integration `03d5ef164` · candy-top Theme `672c64680` · Collect `b2d9207cc` ·
 Config+Lang `7c893a54b` · proc_open census fix `ea1949fd2` · Wave U0+U1 collectors `02f178b91` · Wave U2 block2
-`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7`.
+`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12`.
 btop-derived byte-exact oracles: `prompt_kit/tools/btop-{graph,netscale,theme}-oracle.cpp`.
 References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-reference,freebsd-reference}.md`.
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
 ## In flight at handoff (UNCOMMITTED in the working tree)
-1. **Phase P-A app shell** — implementation complete, under independent review.
-   Paths: `candy-core/src/Program.php` + `candy-core/tests/ProgramTest.php` (resize → full repaint in
-   non-inline mode; renderer erased vanished rows at clamped positions), `candy-top/bin/candy-top`,
-   `candy-top/src/{App.php,HostInfo.php,Top.php,Msg/,Panel/,Source/,View/}`,
-   `candy-top/tests/{AppTest.php,View/,Panel/,Source/,Support/,HostInfoTest.php}`,
-   `candy-top/tests/fixtures/{frames,host}/`, `candy-top/composer.json` (dropped unused candy-input +
-   sugar-charts requires — re-add sugar-charts when a panel uses it), `candy-top/CALIBER_LEARNINGS.md`,
-   the `// ---- app frame (phase P-A` block in `candy-top/lang/en.php`.
-   Panel seam: each panel = own file implementing `Panel` (box/collect/update/paint), registered with one
-   line in `Panels::standard()`; App.php untouched by P-B..P-E. Launcher: live collectors default, `--fake`.
-If the reviewer agents are gone after the reset: re-run an independent review of each unit (scope = the paths
-above), fix, re-review, commit, mark plan.
+(see below — updated as P-B..P-E launch)
 
 ## Next
 - After P-A commits: launch **P-B (cpu+mem), P-C (net), P-D (disk+battery), P-E (proc)** in parallel, each a
