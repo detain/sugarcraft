@@ -786,7 +786,7 @@ final class AppTest extends TestCase
         $palette = ThemeRegistry::new(null, [])->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
         $clock ??= static fn (): ClockTickMsg => new ClockTickMsg(self::NOW, 90_061.0);
 
-        return App::start($config, $palette, $host, $panels ?? Panels::standard($host, $config, true), $clock, ColorProfile::TrueColor);
+        return App::start($config, $palette, $host, $panels ?? Panels::placeholders($host, $config, true), $clock, ColorProfile::TrueColor);
     }
 
     private static function host(): HostInfo
