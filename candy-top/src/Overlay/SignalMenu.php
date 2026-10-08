@@ -194,7 +194,11 @@ final class SignalMenu implements Overlay
     /** btop ChooseEntering: close, sending in a Cmd; failure reopens as the error box. */
     private function send(int $signal): OverlayResult
     {
-        return OverlayResult::close(Menus::sendSignal($this->control, $this->pid, $signal));
+        // Named, not inlined: candy-core's descriptor census reads the argument
+        // of anything called close() and has no word for a call expression.
+        $cmd = Menus::sendSignal($this->control, $this->pid, $signal);
+
+        return OverlayResult::close($cmd);
     }
 
     public function paint(Surface $surface, OverlayContext $c): void

@@ -92,12 +92,16 @@ final class MsgBox implements Overlay
     {
         $key = KeyName::mapped($msg, $this->buttons($context));
         $upper = strtoupper($key);
+        // Bound to a name rather than inlined as a ternary: OverlayResult::close()
+        // shares its name with libc close(2), so candy-core's descriptor census
+        // reads its argument, and it has (deliberately) no word for a ternary.
+        $confirm = $this->selected === 0 ? $this->yes : null;
 
         return match (true) {
             $key === '' => OverlayResult::keep($this),
             in_array($key, ['escape', 'backspace', 'q', 'button2'], true) => OverlayResult::close(),
             $key === 'button1' || ($this->type === self::OK && $upper === 'O') => OverlayResult::close($this->yes),
-            in_array($key, ['enter', 'space'], true) => OverlayResult::close($this->selected === 0 ? $this->yes : null),
+            in_array($key, ['enter', 'space'], true) => OverlayResult::close($confirm),
             $this->type === self::OK => OverlayResult::keep($this),
             $upper === 'Y' => OverlayResult::close($this->yes),
             $upper === 'N' => OverlayResult::close(),

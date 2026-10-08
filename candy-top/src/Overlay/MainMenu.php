@@ -147,11 +147,15 @@ final class MainMenu implements Overlay
     /** btop MainEntering: Options / Help switch on top (the menu returns reset), Quit quits. */
     private function enter(): OverlayResult
     {
+        // The App answers with its quit Cmd (config save first). Named rather
+        // than inlined: candy-core's descriptor census reads the argument of
+        // anything called close(), and has no word for a closure literal.
+        $quit = static fn (): Msg => new QuitRequestMsg();
+
         return match ($this->selected) {
             self::OPTIONS => new OverlayResult(self::new(), null, Menus::options()),
             self::HELP => new OverlayResult(self::new(), null, Menus::help()),
-            // The App answers with its quit Cmd (config save first).
-            default => OverlayResult::close(static fn (): Msg => new QuitRequestMsg()),
+            default => OverlayResult::close($quit),
         };
     }
 
