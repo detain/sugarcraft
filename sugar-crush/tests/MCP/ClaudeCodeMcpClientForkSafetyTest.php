@@ -160,7 +160,7 @@ final class ClaudeCodeMcpClientForkSafetyTest extends TestCase
         return $this->client;
     }
 
-    private static function text(\SugarCraft\Crush\McpMessage $reply): string
+    private static function text(\SugarCraft\Mcp\McpMessage $reply): string
     {
         return (string) ($reply->result['content'][0]['text'] ?? '');
     }

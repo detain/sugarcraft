@@ -10,7 +10,7 @@ use SugarCraft\Crush\Host\SessionEvent;
 use SugarCraft\Crush\Host\SessionHost;
 use SugarCraft\Crush\Host\SessionHub;
 use SugarCraft\Crush\Host\TurnTicket;
-use SugarCraft\Crush\McpMessage;
+use SugarCraft\Mcp\McpMessage;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Protocol\ErrorCode;
@@ -704,7 +704,11 @@ final class AcpServer
     {
         try {
             $line = $message->toJson();
-        } catch (\JsonException) {
+        } catch (\JsonException | \InvalidArgumentException) {
+            // The folded library wraps an unencodable payload in
+            // InvalidArgumentException (JsonException as previous); the raw
+            // JsonException catch predates the lane-A2 fold and stays as
+            // defense in case a fallback encode itself breaks.
             if ($message->isNotification() || $message->isRequest()) {
                 return;
             }

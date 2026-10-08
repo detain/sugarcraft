@@ -48,7 +48,7 @@ use SugarCraft\Crush\Tests\Support\ClaudeMcpHandshakeFixture;
  *
  * ⚠️ AND THE FAILURE IS A NAMED THROW, NOT A TRUNCATION, WHICH IS THE PART
  * WORTH ASSERTING ON. Cutting the buffer at the cap would hand
- * {@see \SugarCraft\Crush\McpMessage::parse()} half a line, which comes back as
+ * {@see \SugarCraft\Mcp\McpMessage::parse()} half a line, which comes back as
  * a malformed message — so the diagnostic would blame the PEER for what is in
  * fact this side refusing to hold more. Each row therefore asserts that the
  * message names the cap and that the buffer was DROPPED rather than kept.

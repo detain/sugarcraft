@@ -9,7 +9,12 @@ namespace SugarCraft\Mcp;
  * or error response — as one immutable value object.
  *
  * Extracted from the sugar-crush MCP stack (src/McpMessage.php); the wire
- * algorithm is faithful, the naming follows this library.
+ * algorithm is faithful, the naming follows this library. As of the lane-A2
+ * fold this class is the ONE JSON-RPC envelope in the monorepo: sugar-crush's
+ * twin was deleted into it, carrying its id-preserving variant
+ * ({@see parsePreservingId()}, {@see withWireId()}, {@see MAX_DEPTH}) — the
+ * ACP adapter's machinery — and the `mixed` error data payload the product's
+ * error relay builds.
  *
  * WHY one class for all four shapes: the transport must decide, from a raw
  * line, whether it is looking at a request (has method AND id), a
@@ -30,6 +35,15 @@ final class McpMessage
 {
     private const JSONRPC_VERSION = '2.0';
 
+    /**
+     * How deep {@see parsePreservingId()} lets a message nest: a peer's
+     * deeply nested document is refused unread rather than recursed into.
+     * The plain {@see parse()} uses PHP's default bound instead — the
+     * variant exists precisely for the adapter that faces foreign-authored
+     * ids and must treat the whole envelope as hostile input.
+     */
+    public const MAX_DEPTH = 64;
+
     private function __construct(
         public readonly ?string $id,
         public readonly ?string $method,
@@ -39,6 +53,19 @@ final class McpMessage
         public readonly bool $isNotification,
         /** True iff the wire carried a "result" key — even when its value is null. */
         public readonly bool $resultSet = false,
+        /**
+         * The id EXACTLY as the peer sent it, or as it must go back out — `7`,
+         * not `"7"` (decision D12, the ACP adapter). Only meaningful when
+         * {@see $wireIdSet}; {@see $id} stays the string form every MCP caller
+         * matches on.
+         */
+        public readonly string|int|null $wireId = null,
+        /**
+         * Whether this message is the id-preserving variant
+         * ({@see parsePreservingId()}, {@see withWireId()}); false for every
+         * message MCP builds, whose wire form is unchanged.
+         */
+        public readonly bool $wireIdSet = false,
     ) {
     }
 
@@ -107,6 +134,71 @@ final class McpMessage
     }
 
     /**
+     * THE ID-PRESERVING VARIANT (decision D12): {@see parse()}, except that the
+     * id is also kept exactly as it arrived — an integer stays an integer —
+     * in {@see $wireId}, and {@see toJson()} writes it back that way.
+     *
+     * WHY A VARIANT AND NOT A FIX TO {@see parse()}. MCP's own traffic is ours
+     * at both ends: the stdio transport mints string ids and matches replies
+     * on the string form, so folding an integer to `"7"` there costs nothing
+     * and changing it would touch every MCP caller. The Agent Client Protocol
+     * is the other way round: the editor mints the ids, they are integers
+     * (Zed's are), and JSON-RPC 2.0 requires a response to echo the id
+     * EXACTLY — `{"id":"7"}` is not an answer to `{"id":7}`, and the client
+     * waits for it forever. {@see $id} is still the string form, so
+     * {@see isRequest()} and {@see isResponse()} read the same either way, and
+     * a response the agent receives can be matched on {@see $wireId}.
+     *
+     * Also refuses what {@see parse()} lets through and an RPC server must
+     * not: an id that is neither a string, an integer nor null, and nesting
+     * past {@see MAX_DEPTH}.
+     */
+    public static function parsePreservingId(string $json): ?self
+    {
+        try {
+            $decoded = json_decode($json, true, self::MAX_DEPTH, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        if (!is_array($decoded) || array_is_list($decoded)) {
+            return null;
+        }
+        if (array_key_exists('id', $decoded) && !is_string($decoded['id']) && !is_int($decoded['id']) && $decoded['id'] !== null) {
+            return null;
+        }
+
+        $message = self::parse($json);
+        if ($message === null) {
+            return null;
+        }
+
+        return $message->withWireId($decoded['id'] ?? null);
+    }
+
+    /**
+     * A copy whose wire id is $id exactly as given — how the id-preserving
+     * variant BUILDS a message: `McpMessage::success((string) $id, $r)->withWireId($id)`
+     * answers an integer-id request with the integer, and
+     * `McpMessage::error('', $code, $m)->withWireId(null)` is the `"id": null`
+     * error JSON-RPC requires for a request whose id could not be read. On a
+     * notification, which carries no id, it changes nothing on the wire.
+     */
+    public function withWireId(string|int|null $id): self
+    {
+        return new self(
+            id: $id === null || $this->isNotification ? $this->id : (string) $id,
+            method: $this->method,
+            params: $this->params,
+            result: $this->result,
+            error: $this->error,
+            isNotification: $this->isNotification,
+            resultSet: $this->resultSet,
+            wireId: $id,
+            wireIdSet: true,
+        );
+    }
+
+    /**
      * Build an outgoing request envelope (method + id + params).
      *
      * @param array<string,mixed>|null $params
@@ -160,9 +252,15 @@ final class McpMessage
     /**
      * Build an error response.
      *
-     * @param array<string,mixed>|null $data optional structured error detail
+     * `$data` is `mixed`, not `?array`: JSON-RPC 2.0 leaves the error `data`
+     * member "a value indicating additional information about the error", and
+     * sugar-crush's ACP error relay forwards whatever a peer's own error object
+     * carried — a plain string among them. Constraining this parameter to
+     * arrays made the faithful relay of a scalar `data` impossible.
+     *
+     * @param mixed $data optional error detail — any JSON value
      */
-    public static function error(string $id, int $code, string $message, ?array $data = null): self
+    public static function error(string $id, int $code, string $message, mixed $data = null): self
     {
         $error = ['code' => $code, 'message' => $message];
         if ($data !== null) {
@@ -193,7 +291,13 @@ final class McpMessage
     {
         $payload = ['jsonrpc' => self::JSONRPC_VERSION];
 
-        if ($this->id !== null) {
+        // The id-preserving variant writes the id as it was given — an integer
+        // as an integer, and a null one on a response, which JSON-RPC requires
+        // for an error to a request whose id could not be read. A notification
+        // never carries one.
+        if ($this->wireIdSet && !$this->isNotification) {
+            $payload['id'] = $this->wireId;
+        } elseif ($this->id !== null) {
             $payload['id'] = $this->id;
         }
 
@@ -235,14 +339,15 @@ final class McpMessage
     }
 
     /**
-     * Inspection view: every key present, including the two booleans.
+     * Inspection view: every key present, including the booleans and the
+     * wire-id pair.
      *
      * This is NOT the wire shape (toJson owns that). Callers such as
      * StdioMcpServer::start() navigate `$message->toArray()['result']['tools']`
      * and rely on the unconditional keyset; conditioning it would make
      * absent-key handling a caller-side minefield.
      *
-     * @return array<string,mixed>
+     * @return array{jsonrpc: string, id: string|null, method: string|null, params: array<string,mixed>|null, result: mixed, resultSet: bool, error: array<string,mixed>|null, isNotification: bool, wireId: string|int|null, wireIdSet: bool}
      */
     public function toArray(): array
     {
@@ -255,6 +360,8 @@ final class McpMessage
             'resultSet' => $this->resultSet,
             'error' => $this->error,
             'isNotification' => $this->isNotification,
+            'wireId' => $this->wireId,
+            'wireIdSet' => $this->wireIdSet,
         ];
     }
 

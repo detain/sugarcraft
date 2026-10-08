@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\MCP;
 
 use SugarCraft\Crush\ClaudeCodeMcpClient;
-use SugarCraft\Crush\McpMessage;
+use SugarCraft\Mcp\McpMessage;
 use SugarCraft\Mcp\ArgumentShape;
 
 /**
