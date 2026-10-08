@@ -34,7 +34,7 @@ namespace SugarCraft\Top\Collect;
  * $space closure is injectable and callers that mount network shares
  * should keep only_physical on.
  */
-final class Mounts
+final class Mounts implements SelectableMounts
 {
     private const array ALWAYS_PHYSICAL = ['zfs', 'wslfs', 'drvfs'];
     private const array NEVER_PHYSICAL = ['squashfs', 'nullfs'];

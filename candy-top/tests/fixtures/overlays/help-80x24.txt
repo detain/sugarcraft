@@ -9,16 +9,16 @@
 │       Mouse 1      Clicks buttons and selects in process list.             │─╮
 │    Mouse scroll    Scrolls any scrollable list/text under cursor.          │%│
 │       Esc, m       Toggles main menu.                                      │8│
-│          1         Toggle CPU box.                                         │0│
-│          2         Toggle MEM box.                                         │6│
-│          3         Toggle NET box.                                         │5│
-│          4         Toggle PROC box.                                        │9│
-│          d         Toggle disks view in MEM box.                           │2│
-│        F2, o       Shows options.                                          │6│
-│      F1, ?, h      Shows this window.                                      │6│
+│          p         Cycle view presets forwards.                            │0│
+│      shift + p     Cycle view presets backwards.                           │6│
+│          1         Toggle CPU box.                                         │5│
+│          2         Toggle MEM box.                                         │9│
+│          3         Toggle NET box.                                         │2│
+│          4         Toggle PROC box.                                        │6│
+│          d         Toggle disks view in MEM box.                           │6│
+│        F2, o       Shows options.                                          │ │
+│      F1, ?, h      Shows this window.                                      │ │
+│      ctrl + r      Reloads config file from disk.                          │ │
 │     q, ctrl + c    Quits program.                                          │ │
 │       +, -, =      Add/Subtract 100ms to/from update timer.                │ │
-│      Up, Down      Select in process list.                                 │ │
-│        Enter       Show detailed information for selected process.         │ │
-│      Spacebar      Expand/collapse the selected process in tree view.      │ │
-╰─┘↑ page 1/3 ↓└─────────────────────────────────────────────────────────────╯─╯
+╰─┘↑ page 1/4 ↓└─────────────────────────────────────────────────────────────╯─╯

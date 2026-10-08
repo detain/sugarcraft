@@ -28,7 +28,7 @@ namespace SugarCraft\Top\Collect;
  * re-scan the (tiny) directory each sample so a hot-plugged battery or a
  * docked/undocked UPS appears without a restart. Stateless.
  */
-final class Battery
+final class Battery implements SelectableBattery
 {
     private function __construct(
         private readonly Paths $paths,

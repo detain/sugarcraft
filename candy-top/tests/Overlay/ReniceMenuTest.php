@@ -42,6 +42,9 @@ final class ReniceMenuTest extends OverlayTestCase
         $this->assertSame(-5, $r->overlay->value());
         $this->assertSame('5', self::feed(ReniceMenu::new(1, 'x', FakeProcessControl::new()), ['5', '-'])->overlay?->edit, 'a minus only leads');
         $this->assertSame('', self::feed(ReniceMenu::new(1, 'x', FakeProcessControl::new()), ['5', 'backspace'])->overlay?->edit);
+        $this->assertSame(1, self::value(['1', '5', 'backspace', 'backspace']), 'btop: emptying the field keeps the last parsed value (15 -> 1 -> 1)');
+        $this->assertSame(2, self::value(['1', '5', 'backspace', 'backspace', 'up']), 'a step continues from it');
+        $this->assertSame(0, self::value(['-', '3', 'backspace', 'backspace']), 'the lone minus parsed to 0 (stoi failure), and the empty field keeps that');
         $this->assertSame('', self::feed(ReniceMenu::new(1, 'x', FakeProcessControl::new()), ['5', 'up'])->overlay?->edit, 'a step clears the typed text');
         $this->assertSame(0, self::value(['-']), 'a lone minus reads 0 (btop stoi failure)');
         $this->assertSame(0, self::value(str_split('4294967276')), 'btop stoi: out of int range throws, the catch gives 0');

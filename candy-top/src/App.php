@@ -9,21 +9,28 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Subscriptions;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View as CoreView;
 use SugarCraft\Top\Config\Config;
+use SugarCraft\Top\Config\ConfigFile;
 use SugarCraft\Top\Config\InvalidOptionValue;
 use SugarCraft\Top\Input\KeyName;
 use SugarCraft\Top\Msg\ClockTickMsg;
+use SugarCraft\Top\Msg\ConfigLoadedMsg;
+use SugarCraft\Top\Msg\ConfigSavedMsg;
 use SugarCraft\Top\Msg\DataTickMsg;
 use SugarCraft\Top\Msg\OpenOverlayMsg;
 use SugarCraft\Top\Msg\PaletteMsg;
+use SugarCraft\Top\Msg\QuitRequestMsg;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Msg\SetOptionMsg;
 use SugarCraft\Top\Msg\UpdateStepMsg;
@@ -33,6 +40,7 @@ use SugarCraft\Top\Overlay\OverlayContext;
 use SugarCraft\Top\Overlay\OverlayStack;
 use SugarCraft\Top\Panel\ClickCapture;
 use SugarCraft\Top\Panel\ClockReserve;
+use SugarCraft\Top\Panel\OptionChoices;
 use SugarCraft\Top\Panel\Panel;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
@@ -80,6 +88,17 @@ use SugarCraft\Top\View\Surface;
  * {@see OpenOverlayMsg}. While a menu is open the frame is painted dimmed
  * (btop's uncolor + inactive_fg backdrop) and the menu on top. A refused
  * `1`-`4` toggle or shown_boxes write opens btop's size-error box.
+ *
+ * Options, presets, persistence (phase P-F2): `f2`/`o` open the options
+ * menu ({@see Overlay\OptionsMenu}); `p`/`P` cycle the layout presets
+ * (btop_input.cpp:262-284) and the cpu title's `preset` button maps to
+ * `p`; Shift / Alt+Shift / Ctrl+Shift + arrows resize the proc box
+ * (btop PR #1476); `ctrl+r` reloads config.conf and the theme from disk
+ * in a Cmd (btop SIGUSR2) and repaints every cached frame (#1849). Any
+ * persisted change marks the config dirty (btop `write_new`); every quit
+ * path writes it first when save_config_on_exit is on, and switching
+ * save_config_on_exit off writes at once — always inside a Cmd, through
+ * the injected {@see ConfigFile} (none in tests: nothing is written).
  *
  * Config channel: panels get a fresh {@see PanelContext} (current Config,
  * Layout and their box) on every input call and write options through
@@ -141,6 +160,9 @@ final class App implements Model
         ?OverlayStack $overlays = null,
         ?\Closure $themes = null,
         private readonly ?Surface $backdrop = null,
+        private readonly ?ConfigFile $file = null,
+        public readonly bool $writeNew = false,
+        private readonly ?ThemeRegistry $catalog = null,
     ) {
         $this->overlays = $overlays ?? OverlayStack::new();
         $this->themes = $themes ?? self::systemThemes();
@@ -151,6 +173,13 @@ final class App implements Model
      * @param ?\Closure(): ClockTickMsg $clock reads wall time + uptime; null = the live system
      * @param ?ColorProfile $profile null = derived from config (truecolor / tty_mode)
      * @param ?\Closure(Config): Palette $themes theme loader for runtime theme changes; null = {@see systemThemes()}
+     * @param ?ConfigFile $file     where config changes persist (save_config_on_exit) and `ctrl+r` reloads
+     *                              from; null = never written or read (tests, demos)
+     * @param bool        $writeNew the loaded file needs a rewrite (btop `write_new`: missing, older
+     *                              version, or it held rejected values) — saved on exit even unchanged
+     * @param ?ThemeRegistry $catalog the theme list the options menu cycles (btop Theme::themes),
+     *                                scanned by the caller; null = builtin Default and TTY only, and
+     *                                `ctrl+r` does not rescan
      */
     public static function start(
         Config $config,
@@ -160,10 +189,23 @@ final class App implements Model
         ?\Closure $clock = null,
         ?ColorProfile $profile = null,
         ?\Closure $themes = null,
+        ?ConfigFile $file = null,
+        bool $writeNew = false,
+        ?ThemeRegistry $catalog = null,
     ): self {
         $profile ??= self::profileFor($config);
 
-        return new self($config, Ink::new($palette, $profile), $host, $panels, $clock ?? self::systemClock(), themes: $themes);
+        return new self(
+            $config,
+            Ink::new($palette, $profile),
+            $host,
+            $panels,
+            $clock ?? self::systemClock(),
+            themes: $themes,
+            file: $file,
+            writeNew: $writeNew,
+            catalog: $catalog,
+        );
     }
 
     /**
@@ -199,6 +241,38 @@ final class App implements Model
             $config->bool('truecolor') => ColorProfile::TrueColor,
             default => ColorProfile::Ansi256,
         };
+    }
+
+    /**
+     * The Program options bin/candy-top runs with: alt screen, 20 fps and
+     * btop's mouse reporting — `?1002h` button-event tracking + `?1006h`
+     * SGR (Term::mouse_on, candy-core CellMotion) unless disable_mouse.
+     * Runtime flips of disable_mouse answer with the matching Cmd
+     * ({@see applyConfig()}).
+     */
+    public static function programOptions(Config $config): ProgramOptions
+    {
+        return new ProgramOptions(
+            useAltScreen: true,
+            mouseMode: $config->bool('disable_mouse') ? MouseMode::Off : MouseMode::CellMotion,
+            framerate: 20.0,
+        );
+    }
+
+    /**
+     * The bytes that put a terminal back after a crash that skipped the
+     * Program's own teardown (an exception out of update()/view()/a Cmd
+     * escapes Program::run() with no finally): end any synchronized
+     * frame, reset SGR, every mouse mode and bracketed paste off, cursor
+     * shown, alt screen left — what {@see programOptions()} turned on and
+     * a little more, all harmless when already off. Raw mode itself is
+     * put back by the Tty's destructor.
+     */
+    public static function terminalReset(): string
+    {
+        return Ansi::syncEnd() . Ansi::reset()
+            . Ansi::mouseAllMotionOff() . Ansi::mouseCellMotionOff() . Ansi::mouseAllOff()
+            . Ansi::bracketedPasteOff() . Ansi::cursorShow() . Ansi::altScreenLeave();
     }
 
     /** The live clock Cmd: wall time plus /proc/uptime (0 when unreadable). */
@@ -256,11 +330,32 @@ final class App implements Model
             // A load that raced a newer theme change is dropped.
             return [$msg->key === self::themeKey($this->config) ? $this->withPalette($msg->palette) : $this, null];
         }
+        if ($msg instanceof QuitRequestMsg) {
+            return [$this, $this->quitCmd()];
+        }
+        if ($msg instanceof ConfigSavedMsg) {
+            if ($msg->ok) {
+                // Only what was written is clean: a change that landed while
+                // the write was in flight still needs saving.
+                $clean = $msg->saved !== null && !$this->config->persistedDiffers($msg->saved);
+
+                return [$clean ? $this->mutate(writeNew: false) : $this, null];
+            }
+
+            return [$this->framed() ? $this->withOverlay(Menus::warning($msg->error)) : $this, null];
+        }
+        if ($msg instanceof ConfigLoadedMsg) {
+            return $this->reloaded($msg);
+        }
         if ($msg instanceof KeyMsg) {
+            if (KeyName::dropped($msg)) {
+                return [$this, null];
+            }
             $name = $msg->string();
             $self = $this->mutate(lastKey: $name, keyRun: $name === $this->lastKey ? $this->keyRun + 1 : 1);
             if ($name === 'ctrl+c') {
-                return [$self, Cmd::quit()];
+                // btop's SIGINT handler runs clean_quit, which saves too.
+                return [$self, $self->quitCmd()];
             }
             if (!$self->framed()) {
                 return $self->sizeNoticeKey($msg);
@@ -280,8 +375,9 @@ final class App implements Model
         }
 
         if ($msg instanceof MouseMsg) {
-            // Behind the size notice btop reads only `q` and `1`-`4`.
-            if (!$this->framed()) {
+            // Behind the size notice btop reads only `q` and `1`-`4`; with
+            // disable_mouse btop turns mouse reporting off altogether.
+            if (!$this->framed() || $this->config->bool('disable_mouse')) {
                 return [$this, null];
             }
             if ($this->overlays->top()?->capturesInput() === true) {
@@ -296,10 +392,11 @@ final class App implements Model
             if ($modal !== null && !self::isClick($msg)) {
                 return [$this, null];
             }
-            if ($modal === null && self::isClick($msg) && ($key = $this->chromeButton($msg)) !== null) {
-                // btop maps the click to the button's key, pushes THAT into
-                // Input::history and processes it as the key (`m` opens the
-                // main menu, `+`/`-` step — or expand under a proc tree claim).
+            if ($modal === null && (self::isClick($msg) || self::isDrag($msg)) && ($key = $this->chromeButton($msg)) !== null) {
+                // btop maps a click — or a drag (btop_input.cpp:174) — to the
+                // button's key, pushes THAT into Input::history and processes
+                // it as the key (`m` opens the main menu, `p` cycles presets,
+                // `+`/`-` step — or expand under a proc tree claim).
                 return $this->update(new KeyMsg(KeyType::Char, $key));
             }
             // btop pushes every mouse event ("mouse_click", "mouse_scroll_up",
@@ -424,13 +521,22 @@ final class App implements Model
     /** The context an overlay is updated and painted with, built now. */
     public function overlayContext(): OverlayContext
     {
-        return new OverlayContext($this->config, $this->cols, $this->rows, $this->ink);
+        $choices = [];
+        $gpus = 0;
+        foreach ($this->panels as $panel) {
+            if ($panel instanceof OptionChoices) {
+                $choices = [...$choices, ...$panel->optionChoices()];
+                $gpus += $panel->detectedGpus();
+            }
+        }
+
+        return new OverlayContext($this->config, $this->cols, $this->rows, $this->ink, $choices, $gpus > 0, $this->catalog);
     }
 
     /**
      * The App-owned cpu title buttons as btop maps them (0-based
-     * [x, y, w, h]): `m` (menu), `-` and `+` (update_ms). `p` (preset)
-     * arrives with phase P-F2.
+     * [x, y, w, h]): `m` (menu), `p` (preset — btop `{button_y, x + 17, 1,
+     * 8}`, sized here to the translated label), `-` and `+` (update_ms).
      *
      * @return array<string, array{0: int, 1: int, 2: int, 3: int}>
      */
@@ -445,6 +551,7 @@ final class App implements Model
 
         return [
             'm' => [$cpu->x + 11, $y, Width::string(Lang::t('button.menu')), 1],
+            'p' => [$cpu->x + 17, $y, Width::string(Lang::t('button.preset')) + 2, 1],
             '-' => [$cpu->x + $cpu->width - $len - 7, $y, 2, 1],
             '+' => [$cpu->x + $cpu->width - 5, $y, 2, 1],
         ];
@@ -498,7 +605,8 @@ final class App implements Model
     /** Copy with a replaced theme (options-menu theme cycling, P-F/P-G). */
     public function withPalette(Palette $palette): self
     {
-        return $this->mutate(ink: Ink::new($palette, $this->ink->profile()));
+        // #1849: a new palette repaints everything, the frozen backdrop too.
+        return $this->mutate(ink: Ink::new($palette, $this->ink->profile()))->settledBackdrop(true);
     }
 
     /**
@@ -517,16 +625,32 @@ final class App implements Model
      *
      * @return array{0: self, 1: ?\Closure}
      */
-    public function applyConfig(Config $config): array
+    public function applyConfig(Config $config, bool $dirty = true): array
     {
         $periodChanged = $config->updateMs() !== $this->config->updateMs();
         $before = $this->config->shownBoxes();
         $profile = self::profileFor($config);
         $ink = $profile !== self::profileFor($this->config) ? Ink::new($this->ink->palette(), $profile) : null;
-        $next = $this->mutate(config: $config, ink: $ink, generation: $this->generation + ($periodChanged ? 1 : 0))->relayout();
+        $next = $this->mutate(
+            config: $config,
+            ink: $ink,
+            generation: $this->generation + ($periodChanged ? 1 : 0),
+            writeNew: $this->writeNew || ($dirty && $config->persistedDiffers($this->config)),
+        )->relayout()->settledBackdrop(true);
         $cmds = [$periodChanged ? $next->dataTick() : null];
         if (self::themeKey($config) !== self::themeKey($this->config)) {
             $cmds[] = $next->themeCmd();
+        }
+        // btop optionsMenu: turning save_config_on_exit off writes at once
+        // (write_new forced), so a manual save is "toggle it off and on".
+        // Only a user change does — a ctrl+r reload of a hand-edited file
+        // that says `false` must not rewrite that file.
+        if ($dirty && $this->config->bool('save_config_on_exit') && !$config->bool('save_config_on_exit')) {
+            $cmds[] = $next->saveCmd();
+        }
+        // btop Term::mouse_on / mouse_off when disable_mouse flips.
+        if ($config->bool('disable_mouse') !== $this->config->bool('disable_mouse')) {
+            $cmds[] = $config->bool('disable_mouse') ? Cmd::disableMouse() : Cmd::enableMouseCellMotion();
         }
         foreach (array_diff($config->shownBoxes(), $before) as $box) {
             $cmds[] = ($next->panels[$box] ?? null)?->collect($next->context($box));
@@ -594,6 +718,9 @@ final class App implements Model
         }
         // Behind the size notice a refused write opens nothing, like a refused toggle.
         $app = $refused && $this->framed() ? $this->withOverlay(Menus::sizeError()) : $this;
+        if (self::dropsPreset($this->config, $config)) {
+            $app = $app->mutate(preset: null, presetSet: true);
+        }
 
         return $config === $this->config ? [$app, null] : $app->applyConfig($config);
     }
@@ -634,7 +761,10 @@ final class App implements Model
             return [$this, null];
         }
         $result = $top->update($msg, $this->overlayContext());
-        $next = $this->mutate(overlays: $this->overlays->replaceTop($result->overlay, $this->cols, $this->rows))->settledBackdrop(false);
+        // btop Menu::process: a Closed or Switch return clears pause_output,
+        // so the frame behind the next menu is a fresh one, not the old freeze.
+        $switched = $result->overlay === null || $result->push !== null;
+        $next = $this->mutate(overlays: $this->overlays->replaceTop($result->overlay, $this->cols, $this->rows))->settledBackdrop($switched);
         if ($result->push !== null) {
             $next = $next->withOverlay($result->push);
         }
@@ -661,7 +791,7 @@ final class App implements Model
     {
         $key = KeyName::mapped($msg, $this->chromeButtons());
 
-        return in_array($key, ['m', '-', '+'], true) ? $key : null;
+        return in_array($key, ['m', 'p', '-', '+'], true) ? $key : null;
     }
 
     /** The first visible panel (layout order) that owns all input, or null. Caller checks framed(). */
@@ -697,8 +827,11 @@ final class App implements Model
      */
     private function isGlobalKey(KeyMsg $key): bool
     {
-        return $key->string() === 'q'
-            || in_array(KeyName::key($key), $this->menuKeys(), true)
+        $name = KeyName::key($key);
+
+        return in_array($key->string(), ['q', 'ctrl+r'], true)
+            || in_array($name, $this->menuKeys(), true)
+            || in_array($name, ['p', 'P', ...KeyName::MODIFIED_ARROWS], true)
             || ($key->type === KeyType::Char && !$key->ctrl && !$key->alt && isset(self::BOX_KEYS[$key->rune]));
     }
 
@@ -711,6 +844,13 @@ final class App implements Model
     private function menuKeys(): array
     {
         return ['escape', 'm', 'f1', '?', $this->config->bool('vim_keys') ? 'H' : 'h', 'f2', 'o'];
+    }
+
+    /** btop "mouse_drag": a bare left-button motion (`[<32;...M`). */
+    private static function isDrag(MouseMsg $msg): bool
+    {
+        return $msg->action === MouseAction::Motion
+            && $msg->button === MouseButton::Left && !$msg->shift && !$msg->alt && !$msg->ctrl;
     }
 
     /** btop "mouse_click": a bare left-button press (`[<0;...M`). */
@@ -731,7 +871,7 @@ final class App implements Model
     private function sizeNoticeKey(KeyMsg $key): array
     {
         if ($key->string() === 'q') {
-            return [$this, Cmd::quit()];
+            return [$this, $this->quitCmd()];
         }
         if ($key->type === KeyType::Char && !$key->ctrl && !$key->alt && isset(self::BOX_KEYS[$key->rune])) {
             return $this->toggleBox(self::BOX_KEYS[$key->rune], false);
@@ -744,9 +884,18 @@ final class App implements Model
     private function handleKey(KeyMsg $key): ?array
     {
         if ($key->string() === 'q') {
-            return [$this, Cmd::quit()];
+            return [$this, $this->quitCmd()];
+        }
+        if ($key->string() === 'ctrl+r') {
+            return [$this, $this->reloadCmd()];
         }
         $name = KeyName::key($key);
+        if ($name === 'p' || $name === 'P') {
+            return $this->cyclePreset($name === 'p');
+        }
+        if (in_array($name, KeyName::MODIFIED_ARROWS, true)) {
+            return $this->resizeProc($name);
+        }
         $help = $this->config->bool('vim_keys') ? 'H' : 'h';
         $menu = match (true) {
             in_array($name, ['escape', 'm'], true) => Menus::main(),
@@ -827,9 +976,186 @@ final class App implements Model
         } catch (InvalidOptionValue) {
             return [$this, null];
         }
-        $next = $this->mutate(config: $config, preset: null, presetSet: true)->relayout();
+        // btop toggle_box goes through Config::set: the change is saved on exit.
+        $next = $this->mutate(config: $config, preset: null, presetSet: true, writeNew: true)->relayout();
 
         return [$next, $pos === false ? ($next->panels[$box] ?? null)?->collect($next->context($box)) : null];
+    }
+
+    /**
+     * btop's `p` / `P` (btop_input.cpp:262-284): cycle Config::preset_list
+     * under disable_presets; a preset whose boxes would not fit opens the
+     * size-error box and keeps the old preset.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function cyclePreset(bool $forward): array
+    {
+        try {
+            $presets = $this->config->presets();
+        } catch (InvalidOptionValue) {
+            return [$this, null];
+        }
+        $index = $presets->cycle($this->preset, $forward, $this->config->string('disable_presets'));
+        if ($index === null) {
+            return [$this, null];
+        }
+        $preset = $presets->at($index);
+        if ($this->cols > 0 && !FrameBuilder::fits($this->cols, $this->rows, $preset->boxNames())) {
+            return [$this->withOverlay(Menus::sizeError()), null];
+        }
+        try {
+            $config = $this->config->withPreset($preset);
+        } catch (InvalidOptionValue) {
+            return [$this, null];
+        }
+
+        return $this->mutate(preset: $index, presetSet: true)->applyConfig($config);
+    }
+
+    /**
+     * btop PR #1476's proc box width keys: Shift + Left/Right step 1 %,
+     * Alt+Shift 10 %, Ctrl+Shift + Left/Right jump to the max / min,
+     * Ctrl+Shift+Down resets to 55 % — mirrored when proc_left. Only with
+     * proc and mem or net shown; a change drops the active preset.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function resizeProc(string $key): array
+    {
+        $shown = $this->config->shownBoxes();
+        if ($this->cols <= 0 || !in_array('proc', $shown, true) || (!in_array('mem', $shown, true) && !in_array('net', $shown, true))) {
+            return [$this, null];
+        }
+        $pct = $this->config->procBoxWidthPercent();
+        $minP = (int) round(FrameBuilder::MINIMUMS['proc'][0] / $this->cols * 100);
+        $side = in_array('mem', $shown, true) ? FrameBuilder::MINIMUMS['mem'][0] : FrameBuilder::MINIMUMS['net'][0];
+        $maxP = (int) round(100 - $side / $this->cols * 100);
+        $offset = str_starts_with($key, 'alt') ? ($minP + 10 <= $maxP ? 10 : $maxP - $minP) : 1;
+        $left = $this->config->bool('proc_left');
+        $grow = static fn (): int => FrameBuilder::clamp($pct + $offset, $minP + $offset, $maxP);
+        $shrink = static fn (): int => FrameBuilder::clamp($pct - $offset, $minP, $maxP - $offset);
+        $next = match ($key) {
+            'shift_left', 'alt_shift_left' => $left ? $shrink() : $grow(),
+            'shift_right', 'alt_shift_right' => $left ? $grow() : $shrink(),
+            'ctrl_shift_left' => $left ? 0 : 100,
+            'ctrl_shift_right' => $left ? 100 : 0,
+            default => \SugarCraft\Top\Config\Schema::PROC_BOX_WIDTH_PERCENT,
+        };
+        if ($next === $pct) {
+            return [$this, null];
+        }
+
+        return $this->mutate(preset: null, presetSet: true)->applyConfig($this->config->withProcBoxWidthPercent($next));
+    }
+
+    /**
+     * btop's preset resets outside `p`/`P`: an edit of shown_boxes or
+     * presets, a proc width change (#1476) and disable_presets set to
+     * anything but Off (btop optionsMenu `current_preset.reset()`).
+     */
+    private static function dropsPreset(Config $before, Config $after): bool
+    {
+        foreach (['shown_boxes', 'presets', 'proc_box_width_percent'] as $key) {
+            if ($before->value($key) !== $after->value($key)) {
+                return true;
+            }
+        }
+
+        return $before->string('disable_presets') !== $after->string('disable_presets') && $after->string('disable_presets') !== 'Off';
+    }
+
+    /**
+     * Every quit: save first when btop's clean_quit would
+     * (save_config_on_exit and a pending write), then quit.
+     */
+    public function quitCmd(): \Closure
+    {
+        $save = $this->exitSave();
+
+        return $save === null ? Cmd::quit() : Cmd::sequence($save, Cmd::quit());
+    }
+
+    /**
+     * The save btop's clean_quit performs, or null when it would not write:
+     * no file, save_config_on_exit off, or nothing changed (btop
+     * `write_new`). `bin/candy-top` runs it after the Program returns —
+     * a SIGTERM / SIGHUP (trapped in bin) or a SIGINT stops the loop
+     * without passing {@see quitCmd()}, and a quit-time save that failed
+     * left the flag set — and reports a failure on STDERR.
+     */
+    public function exitSave(): ?\Closure
+    {
+        return $this->file !== null && $this->writeNew && $this->config->bool('save_config_on_exit') ? $this->saveCmd() : null;
+    }
+
+    /**
+     * The Cmd writing the current config atomically ({@see ConfigFile::write()});
+     * answers {@see ConfigSavedMsg}. Null without a file.
+     */
+    public function saveCmd(): ?\Closure
+    {
+        $file = $this->file;
+        if ($file === null) {
+            return null;
+        }
+        $config = $this->config;
+
+        return static function () use ($file, $config): Msg {
+            try {
+                $file->write($config);
+            } catch (\RuntimeException $e) {
+                return new ConfigSavedMsg(false, $e->getMessage(), $config);
+            }
+
+            return new ConfigSavedMsg(true, '', $config);
+        };
+    }
+
+    /**
+     * `ctrl+r` (btop SIGUSR2): read config.conf over the current values and
+     * rescan the themes, inside the Cmd.
+     */
+    public function reloadCmd(): \Closure
+    {
+        $file = $this->file;
+        $base = $this->config;
+        $rescan = $this->catalog !== null;
+
+        return static fn (): Msg => new ConfigLoadedMsg($file?->load($base), $rescan ? ThemeRegistry::new() : null);
+    }
+
+    /**
+     * Apply a reload (btop.cpp reload_conf): the file's persisted values
+     * over the live runtime state, shown_boxes settled, lowcolor from
+     * truecolor, the theme reloaded even when its name did not change (the
+     * file may have), and — #1849 — every cached render dropped: the
+     * frozen backdrop is re-captured once the palette lands.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function reloaded(ConfigLoadedMsg $msg): array
+    {
+        $config = $this->config;
+        $writeNew = $this->writeNew;
+        if ($msg->result !== null) {
+            $config = $config->withPersistedFrom($msg->result->config)->withShownBoxesSettled(0);
+            $config = $config->with('lowcolor', !$config->bool('truecolor'));
+            $writeNew = $writeNew || $msg->result->needsRewrite;
+        }
+        $app = $msg->catalog !== null ? $this->mutate(catalog: $msg->catalog) : $this;
+        [$next, $cmd] = $app->applyConfig($config, false);
+        $next = $next->mutate(writeNew: $writeNew);
+        $theme = self::themeKey($config) === self::themeKey($this->config) ? $next->themeCmd() : null;
+        $next = $next->settledBackdrop(true);
+        // btop only logs load warnings; on screen the first one shows in a
+        // warning box (each rejected value kept its previous setting).
+        $warning = $msg->result?->warnings[0] ?? null;
+        if ($warning !== null && $next->framed()) {
+            $next = $next->withOverlay(Menus::warning($warning));
+        }
+
+        return [$next, self::batch($cmd, $theme)];
     }
 
     /** @return array{0: self, 1: ?\Closure} */
@@ -910,6 +1236,8 @@ final class App implements Model
         ?OverlayStack $overlays = null,
         ?Surface $backdrop = null,
         bool $backdropSet = false,
+        ?bool $writeNew = null,
+        ?ThemeRegistry $catalog = null,
     ): self {
         return new self(
             $config ?? $this->config,
@@ -930,6 +1258,9 @@ final class App implements Model
             $overlays ?? $this->overlays,
             $this->themes,
             $backdropSet ? $backdrop : $this->backdrop,
+            $this->file,
+            $writeNew ?? $this->writeNew,
+            $catalog ?? $this->catalog,
         );
     }
 }

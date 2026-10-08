@@ -10,8 +10,8 @@ use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Top\Collect\Memory;
 use SugarCraft\Top\Collect\MemorySnapshot;
+use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Msg\SampledMsg;
 use SugarCraft\Top\Panel\Gfx\History;
@@ -19,7 +19,6 @@ use SugarCraft\Top\Panel\Gfx\NamedSources;
 use SugarCraft\Top\Panel\Mem\Disks;
 use SugarCraft\Top\Panel\Mem\DisksSection;
 use SugarCraft\Top\Panel\Mem\MemView;
-use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeMemory;
 use SugarCraft\Top\Source\Samples;
 use SugarCraft\Top\Source\Source;
@@ -60,11 +59,20 @@ final class MemPanel implements Panel, ClickCapture
         return new self(NamedSources::of(['mem' => $memory]), null, History::new(), null);
     }
 
-    /** The roster entry {@see Panels::standard()} uses, with the P-D disks section installed. */
-    public static function standard(Config $config, bool $fake = false): self
+    /**
+     * The roster entry {@see Panels::standard()} uses, with the P-D disks
+     * section installed; `$platform` picks the host's collectors (default:
+     * the running OS).
+     */
+    public static function standard(Config $config, bool $fake = false, ?Platform $platform = null): self
     {
-        return self::new($fake ? FakeMemory::new() : CollectorSource::of(Memory::new(null, $config->bool('zfs_arc_cached'))))
-            ->withDisks(Disks::standard($config, $fake));
+        if ($fake) {
+            return self::new(FakeMemory::new())->withDisks(Disks::standard($config, true));
+        }
+        $platform ??= Platform::detect();
+
+        return self::new($platform->memory($config->bool('zfs_arc_cached')))
+            ->withDisks(Disks::standard($config, false, $platform));
     }
 
     /** Install (or remove) the P-D disks section. */

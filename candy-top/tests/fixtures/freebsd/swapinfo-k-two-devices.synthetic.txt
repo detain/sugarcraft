@@ -1,0 +1,4 @@
+Device          1K-blocks     Used    Avail Capacity
+/dev/ada0p3       2097152   524288  1572864    25%
+/dev/ada1p3       2097152        0  2097152     0%
+Total             4194304   524288  3670016    13%

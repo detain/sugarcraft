@@ -7,6 +7,7 @@ namespace SugarCraft\Top\Panel\Mem;
 use SugarCraft\Top\Collect\Mount;
 use SugarCraft\Top\Collect\MemorySnapshot;
 use SugarCraft\Top\Collect\MountSelection;
+use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\Gfx\History;
@@ -65,10 +66,10 @@ final class Disks implements DisksSection
         return new self($source, History::new(), [], [], null);
     }
 
-    /** The section MemPanel::standard installs: live collectors or the fakes. */
-    public static function standard(Config $config, bool $fake = false): self
+    /** The section MemPanel::standard installs: the host's collectors ({@see Platform}) or the fakes. */
+    public static function standard(Config $config, bool $fake = false, ?Platform $platform = null): self
     {
-        return self::new($fake ? DisksSource::fake($config->updateMs() / 1000) : DisksSource::live());
+        return self::new($fake ? DisksSource::fake($config->updateMs() / 1000) : DisksSource::live($platform));
     }
 
     /** The disks selection the CURRENT config asks for. */

@@ -16,8 +16,8 @@ use SugarCraft\Top\View\Ink;
  * menu entry asks for a menu, so later phases swap an implementation here
  * without touching the callers.
  *
- * P-F2 plugs the options menu in by replacing {@see options()}: the main
- * menu's Options entry and the App's `o` / `F2` keys already route here.
+ * The main menu's Options entry and the App's `o` / `F2` keys open the
+ * options menu through {@see options()}.
  */
 final class Menus
 {
@@ -36,19 +36,25 @@ final class Menus
     }
 
     /**
-     * The options menu. Phase P-F1 ships a notice in its place; P-F2
-     * returns the real OptionsMenu (an Overlay writing options through
-     * {@see OverlayResult::$set}, minSize 80x24).
+     * btop's options menu ({@see OptionsMenu}): every option by tab, edited
+     * in place and written through {@see OverlayResult::$set}.
      */
     public static function options(): Overlay
     {
+        return OptionsMenu::new();
+    }
+
+    /**
+     * btop's `warning`-style box (the options menu's msgBox shape) for a
+     * config problem btop itself only logs: a config.conf that could not be
+     * written mid-session, or a value a `ctrl+r` reload rejected.
+     */
+    public static function warning(string $reason): Overlay
+    {
         return MsgBox::ok(
-            50,
-            Lang::t('overlay.title.options'),
-            static fn (Ink $ink): array => [
-                MenuDraw::BOLD . $ink->fg('title') . Lang::t('overlay.options.pending') . $ink->fg('main_fg') . MenuDraw::UNBOLD,
-                Lang::t('overlay.options.pending_detail'),
-            ],
+            min(78, mb_strlen($reason) + 10),
+            Lang::t('overlay.title.warning'),
+            static fn (Ink $ink): array => [MenuDraw::cut($reason, 74)],
         );
     }
 

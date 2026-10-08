@@ -51,11 +51,11 @@ final class KeyTableTest extends TestCase
     {
         $bindings = KeyTable::bindings();
         $this->assertSame(array_values(array_unique($bindings)), $bindings);
-        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click'] as $key) {
+        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', ...KeyName::MODIFIED_ARROWS] as $key) {
             $this->assertContains($key, $bindings);
         }
-        foreach (['p', 'P', 'ctrl+r', 'ctrl+z', '5'] as $later) {
-            $this->assertNotContains($later, $bindings, $later . ' is not wired yet (P-F2 / no gpu box)');
+        foreach (['ctrl+z', '5'] as $later) {
+            $this->assertNotContains($later, $bindings, $later . ' is not wired yet (no suspend / no gpu box)');
         }
         foreach ($bindings as $b) {
             $this->assertIsString($b);
@@ -109,6 +109,8 @@ final class KeyTableTest extends TestCase
 
         return [
             'idle' => $boot(Config::new()),
+            // #1476 ctrl_shift_down only acts away from the 55 % default.
+            'wide proc' => $boot(Config::new()->with('proc_box_width_percent', 40)),
             'selected' => $boot(Config::new(), 'down', 'down'),
             'tree' => $boot(Config::new()->with('proc_tree', true), 'down', 'down'),
             'vim' => $boot(Config::new()->with('vim_keys', true), 'down', 'down'),
@@ -129,6 +131,13 @@ final class KeyTableTest extends TestCase
             }
         }
         $out['shift_tab'] = new KeyMsg(KeyType::Tab, shift: true);
+        foreach ([KeyType::Left, KeyType::Right, KeyType::Up, KeyType::Down] as $type) {
+            foreach ([[true, false, false], [true, true, false], [true, false, true]] as [$shift, $alt, $ctrl]) {
+                $msg = new KeyMsg($type, shift: $shift, alt: $alt, ctrl: $ctrl);
+                $name = KeyName::key($msg);
+                $out[$name !== '' ? $name : 'mod:' . $type->value . ($alt ? '+alt' : '') . ($ctrl ? '+ctrl' : '')] = $msg;
+            }
+        }
         for ($c = 0x21; $c <= 0x7e; $c++) {
             $out[chr($c)] = new KeyMsg(KeyType::Char, chr($c));
         }
@@ -141,7 +150,7 @@ final class KeyTableTest extends TestCase
 
     private static function changed(App $before, App $after, ?\Closure $cmd): bool
     {
-        if ($cmd !== null || $after->overlay() !== null || $after->config->toArray() !== $before->config->toArray()) {
+        if ($cmd !== null || $after->overlay() !== null || $after->config->toArray() !== $before->config->toArray() || $after->preset !== $before->preset) {
             return true;
         }
         foreach ($before->panels() as $box => $panel) {

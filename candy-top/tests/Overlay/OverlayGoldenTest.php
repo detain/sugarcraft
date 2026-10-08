@@ -58,6 +58,7 @@ final class OverlayGoldenTest extends TestCase
             'down' => new KeyMsg(KeyType::Down),
             'up' => new KeyMsg(KeyType::Up),
             'right' => new KeyMsg(KeyType::Right),
+            'left' => new KeyMsg(KeyType::Left),
             'enter' => new KeyMsg(KeyType::Enter),
             default => new KeyMsg(KeyType::Char, $k),
         };
@@ -95,7 +96,12 @@ final class OverlayGoldenTest extends TestCase
         yield 'signal confirm, No' => ['confirm-no-120x40', 120, 40, static fn (): Overlay => Menus::signalSend(FakeProcessControl::new(), 4410, 'node', Signals::SIGKILL), ['right'], []];
         yield 'signal failure' => ['signal-error-120x40', 120, 40, static fn (): Overlay => Menus::signalReturn(Signals::EPERM), [], []];
         yield 'refused toggle' => ['size-error-70x24', 70, 24, null, ['2'], ['shown_boxes' => 'cpu proc']];
-        yield 'options placeholder' => ['options-120x40', 120, 40, null, ['o'], []];
+        yield 'options' => ['options-120x40', 120, 40, null, ['o'], []];
+        yield 'options 80x24 paged' => ['options-80x24', 80, 24, null, ['o'], []];
+        yield 'options cpu tab' => ['options-cpu-120x40', 120, 40, null, ['o', '1', 'down'], []];
+        yield 'options update_ms' => ['options-update-ms-120x40', 120, 40, null, ['o', ...array_fill(0, 13, 'down'), 'right'], []];
+        yield 'options editing' => ['options-edit-120x40', 120, 40, null, ['o', ...array_fill(0, 8, 'down'), 'enter', 'x'], []];
+        yield 'options warning' => ['options-warning-120x40', 120, 40, null, ['o', ...array_fill(0, 13, 'down'), 'left'], ['update_ms' => 100]];
     }
 
     /**

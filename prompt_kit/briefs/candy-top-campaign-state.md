@@ -3,7 +3,7 @@
 Authoritative plan: `plan_top.md` (✅ + commit hash marks = reviewed, fixed, committed). This file is the
 supervisor's working state for resuming after a context reset. Update it whenever the in-flight set changes.
 
-_Last updated: 2026-10-08 (second /compact, P-F2 in flight)._
+_Last updated: 2026-10-08 (P-F2 committed; U5 wiring + P-H next)._
 
 ## Operating rules (user-mandated)
 - Commit straight to `master`, author/committer **Joe Huss <detain@interserver.net> only**, **no Co-Authored-By**,
@@ -21,24 +21,19 @@ _Last updated: 2026-10-08 (second /compact, P-F2 in flight)._
 Lib lanes L1 `0153b65e4` · L2 `073913a44` · L3 `37f5c6744` · L4 `1bbbca37f` · L5 `57cd08b9f` · L6 `0859cfa4f` ·
 L7 `07a1e5e6f` · L8 `39c65280c` · integration `03d5ef164` · candy-top Theme `672c64680` · Collect `b2d9207cc` ·
 Config+Lang `7c893a54b` · proc_open census fix `ea1949fd2` · Wave U0+U1 collectors `02f178b91` · Wave U2 block2
-`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12` · P-C net panel `7ac64e5f3` (+ sugar-dash NetAutoScale::rescaleNow) · P-B cpu+mem `8e4559946` · P-E proc `52f994d15` · P-D disks+battery `a856be8bd` · P-G mellow theme `632e08d49` · P-F1 overlays/menus `083176989` · P-G VHS tape `3469999a7`.
+`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12` · P-C net panel `7ac64e5f3` (+ sugar-dash NetAutoScale::rescaleNow) · P-B cpu+mem `8e4559946` · P-E proc `52f994d15` · P-D disks+battery `a856be8bd` · P-G mellow theme `632e08d49` · P-F1 overlays/menus `083176989` · P-G VHS tape `3469999a7` · U5 FreeBSD collectors `18fd19467` (not wired yet) · candy-core hangup-safe restore `fe9cdecdb` · P-F2 options/presets/persistence `16b9dcdaa`.
 btop-derived byte-exact oracles: `prompt_kit/tools/btop-{graph,netscale,theme}-oracle.cpp`.
 References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-reference,freebsd-reference}.md`.
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
-## In flight at handoff (UNCOMMITTED in the working tree)
-- **P-F2** options menu / presets / config persistence / ctrl+r reload (#1476 proc_box_width_percent + Shift/Alt+Shift
-  arrows + preset 4th field, #1411 tab digits, #1791b section headings, #1849 reload clears memos) + FilterEdit →
-  sugar-bits TextEdit + P-F1 leftovers (proc ↑ arrow when following, frozen backdrop refresh on menu close/switch,
-  renice backspace keeps last parsed value, cpu title buttons on mouse drag). Brief: `prompt_kit/briefs/candy-top-pf-common.md`
-  + the scope list in the P-F2 agent prompt (summarised here). sugar-bits require committed `892cc0e7b`; candy-top
-  vendor relinked (`php scripts/refresh-deps.php --mode=linked --libs=candy-top`; candy-testing now installed).
-  Implementer agent was running at /compact. Every uncommitted path under `candy-top/` is P-F2's (only stray
-  untracked file outside it: `server.ansi` at repo root — NOT campaign, never stage it).
-  **If the agent is gone after the reset:** inspect `git status`/`git diff candy-top`; if the work looks complete
-  (suite green: `cd candy-top && vendor/bin/phpunit`), launch an independent reviewer on it; if incomplete, launch
-  a new implementer to finish the P-F2 scope above from the current tree (don't discard work). Then review → fix →
-  commit → plan mark (plan row `| P-F (F1 overlays/menus ✅ `083176989`; F2 pending) |` → mark F2 ✅ + hash).
+## In flight
+- U5 wiring ✅ `70c09bec9` (FreeBSD ps/iostat live captures still pending; host ssh down).
+- Census: candy-top share fixed ✅ `274ab740b`; remaining DescriptorSinkArgumentCensusTest red is sugar-crush only
+  (note: sugar-crush ForkedChild/SessionRelaunch `(int)$entry` casts at real close/fcntl sinks deserve a look — not ours).
+- P-H candy-top docs ✅ `4956d682f` (README tables drift-pinned by tests/Docs; regen CANDY_TOP_UPDATE_DOCS=1).
+- P-G ✅ complete (TTY polish `500696d7e`).
+- U4 in flight: U4a GPU/NPU collectors (src/Collect/**, tests/Collect/**, fixtures/gpu) and U4b #1791c tree-state XDG file (ProcPanel/App/bin/Config, adds Schema key proc_tree_persist_state + README regen). Then U4 box slots (#1730/#1881) + per-proc GPU cols + container box.
+- Next: U4 (P-I GPU/NPU multi-vendor, container/VM box, #1791c tree-state XDG file) — any new Schema key/KeyRow needs the README regen.
 
 ## Next
 1. **P-H candy-top half** (after P-F2 commits): full `candy-top/README.md` (install, run, `--fake`/`--config`/tty,

@@ -571,6 +571,44 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'CORRECT, and an E368 carve-out: a real descriptor number spelled as a literal. '
             . 'This is the shape restoreLast() was moved to.',
         ],
+
+        // ---- candy-top --------------------------------------------------
+        // Every row: OverlayResult::close() is the overlay stack's named
+        // constructor (btop `Closed`), carrying an optional `?\Closure` Cmd. It
+        // shares only the word close with libc close(2). The non-trivial arguments
+        // are bound to a named local first rather than taught to the scanner: a
+        // ternary or call-expression arm that classified as VARIABLE would also
+        // absorb `$x ? (int) STDIN : 0` at a REAL sink.
+        'candy-top/src/Overlay/MainMenu.php::->close($quit)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, enter()\'s Quit entry. $quit is the local `static fn (): Msg => new QuitRequestMsg()` bound just above -- respelled from the inline closure literal, a shape the classifier rightly has no word for (see testNoSiteIsSpelledInAWayTheScannerCannotClassify). '
+            . 'OverlayResult::close() is the overlay stack\'s named constructor (btop `Closed`): it closes the overlay and carries an optional Cmd closure, typed `?\\Closure`. It shares only the word close with libc close(2); no descriptor is anywhere near it.',
+        ],
+        'candy-top/src/Overlay/MsgBox.php::->close($this->yes)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, update()\'s button1 / OK-box `O` arm: confirm with the box\'s yes Cmd. '
+            . 'OverlayResult::close() is the overlay stack\'s named constructor (btop `Closed`): it closes the overlay and carries an optional Cmd closure, typed `?\\Closure`. It shares only the word close with libc close(2); no descriptor is anywhere near it.',
+        ],
+        'candy-top/src/Overlay/MsgBox.php::->close($confirm)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, update()\'s enter/space arm. $confirm is the local `$this->selected === 0 ? $this->yes : null` bound above the match -- respelled from the inline ternary, which the classifier must not absorb as a variable because a ternary branch can carry a cast. '
+            . 'OverlayResult::close() is the overlay stack\'s named constructor (btop `Closed`): it closes the overlay and carries an optional Cmd closure, typed `?\\Closure`. It shares only the word close with libc close(2); no descriptor is anywhere near it.',
+        ],
+        'candy-top/src/Overlay/MsgBox.php::->close($this->yes) #2' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, update()\'s `Y` arm of a yes/no box. A SECOND site spelled like the button1 row, hence the ordinal; same yes Cmd. '
+            . 'OverlayResult::close() is the overlay stack\'s named constructor (btop `Closed`): it closes the overlay and carries an optional Cmd closure, typed `?\\Closure`. It shares only the word close with libc close(2); no descriptor is anywhere near it.',
+        ],
+        'candy-top/src/Overlay/ReniceMenu.php::->close($cmd)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, update()\'s enter/space arm. $cmd is the local `$this->pid > 0 ? Menus::renice(...) : null` bound just above -- respelled from the inline ternary. '
+            . 'OverlayResult::close() is the overlay stack\'s named constructor (btop `Closed`): it closes the overlay and carries an optional Cmd closure, typed `?\\Closure`. It shares only the word close with libc close(2); no descriptor is anywhere near it.',
+        ],
+        'candy-top/src/Overlay/SignalMenu.php::->close($cmd)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, send(). $cmd is the local `Menus::sendSignal($this->control, $this->pid, $signal)` bound just above -- respelled from the inline call expression. $signal is a signal number, not a descriptor, and it never reaches close(). '
+            . 'OverlayResult::close() is the overlay stack\'s named constructor (btop `Closed`): it closes the overlay and carries an optional Cmd closure, typed `?\\Closure`. It shares only the word close with libc close(2); no descriptor is anywhere near it.',
+        ],
     ];
 
 

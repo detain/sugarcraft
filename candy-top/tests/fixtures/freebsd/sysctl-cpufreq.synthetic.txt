@@ -1,0 +1,14 @@
+hw.ncpu=4
+dev.cpu.0.%desc=ACPI CPU
+dev.cpu.0.freq_levels=3400/-1 2800/-1 2200/-1 1600/-1 800/-1
+dev.cpu.0.freq=2800
+dev.cpu.0.temperature=52.0C
+dev.cpu.0.coretemp.tjmax=100.0C
+dev.cpu.0.coretemp.throttle_log=0
+dev.cpu.1.%desc=ACPI CPU
+dev.cpu.1.freq=3400
+dev.cpu.1.temperature=55.0C
+dev.cpu.2.%desc=ACPI CPU
+dev.cpu.2.temperature=50.0C
+dev.cpu.3.%desc=ACPI CPU
+dev.cpu.3.temperature=-1

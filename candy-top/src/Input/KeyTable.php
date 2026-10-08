@@ -11,12 +11,10 @@ namespace SugarCraft\Top\Input;
  * ({@see bindings()}).
  *
  * Rows follow btop's `help_text` (src/btop_menu.cpp:172-218) minus what
- * candy-top does not do (yet): `5` (no gpu boxes), `ctrl + z` (no
- * suspend), and — until phase P-F2 lands the options menu, presets and
- * config reload — `p` / `shift + p` / `ctrl + r`. A phase that wires one
- * of those adds its row back here. `O` is candy-top's #1873 extension; the
- * vim_keys rows (btop documents those only in its options text) are
- * listed so the roster is complete.
+ * candy-top does not do (yet): `5` (no gpu boxes) and `ctrl + z` (no
+ * suspend). btop PR #1476 adds the proc-width rows after `Selected N`;
+ * `O` is candy-top's #1873 extension; the vim_keys rows (btop documents
+ * those only in its options text) are listed so the roster is complete.
  *
  * {@see bindings()} is pinned against the handlers by KeyTableTest, which
  * drives every key through a running App and fails on any key that acts
@@ -35,6 +33,8 @@ final class KeyTable
             new KeyRow('keys.mouse_1', 'help.mouse_click', ['mouse_click', 'mouse_drag', 'mouse_release'], true),
             new KeyRow('keys.mouse_scroll', 'help.mouse_scroll', ['mouse_scroll_up', 'mouse_scroll_down'], true),
             new KeyRow('Esc, m', 'help.menu', ['escape', 'm']),
+            new KeyRow('p', 'help.preset_next', ['p']),
+            new KeyRow('shift + p', 'help.preset_prev', ['P']),
             new KeyRow('1', 'help.toggle_cpu', ['1']),
             new KeyRow('2', 'help.toggle_mem', ['2']),
             new KeyRow('3', 'help.toggle_net', ['3']),
@@ -42,6 +42,7 @@ final class KeyTable
             new KeyRow('d', 'help.toggle_disks', ['d']),
             new KeyRow('F2, o', 'help.options', ['f2', 'o']),
             new KeyRow('F1, ?, h', 'help.help', ['f1', '?', 'h']),
+            new KeyRow('ctrl + r', 'help.reload', ['ctrl+r']),
             new KeyRow('q, ctrl + c', 'help.quit', ['q', 'ctrl+c']),
             new KeyRow('+, -, =', 'help.update_ms', ['+', '-', '=']),
             new KeyRow('Up, Down', 'help.select', ['up', 'down']),
@@ -71,6 +72,11 @@ final class KeyTable
             new KeyRow('keys.selected_k', 'help.kill', ['k'], true),
             new KeyRow('keys.selected_s', 'help.signal', ['s'], true),
             new KeyRow('keys.selected_n', 'help.renice', ['N'], true),
+            new KeyRow('Shift + Left, Right', 'help.proc_width', ['shift_left', 'shift_right']),
+            new KeyRow('Alt+Shift+Left/Right', 'help.proc_width10', ['alt_shift_left', 'alt_shift_right']),
+            new KeyRow('Ctrl+Shift+Left', 'help.proc_width_max', ['ctrl_shift_left']),
+            new KeyRow('Ctrl+Shift+Right', 'help.proc_width_min', ['ctrl_shift_right']),
+            new KeyRow('Ctrl+Shift+Down', 'help.proc_width_reset', ['ctrl_shift_down']),
             new KeyRow('h, j, k, l', 'help.vim_move', ['h', 'j', 'k', 'l'], false),
             new KeyRow('g, G', 'help.vim_home_end', ['g', 'G']),
             new KeyRow('H, K', 'help.vim_help_kill', ['H', 'K']),

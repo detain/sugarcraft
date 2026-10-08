@@ -152,6 +152,19 @@ final class ProcPanelPaintTest extends TestCase
         $this->assertGolden(self::DIR . $name . '.txt', implode("\n", self::crop($surface, $box)) . "\n");
     }
 
+    public function testUpArrowLightsWhileTheFollowedDetailWillReturnTheSelection(): void
+    {
+        $ink = Ink::new(ThemeConfig::new(), ColorProfile::TrueColor);
+        $hi = Surface::canonical($ink->fg('hi_fg') . "\x1b[1m");
+        $inactive = Surface::canonical($ink->fg('inactive_fg') . "\x1b[1m");
+        // btop_draw.cpp:1949 — follow_process && followed_pid == detailed_pid && should_selection_return_to_followed.
+        [$surface, $box] = self::painted(120, 40, [], ['down', 'enter']);
+        $this->assertSame('↑', $surface->glyph($box->x + 2, $box->bottom() - 1));
+        $this->assertSame($hi, $surface->style($box->x + 2, $box->bottom() - 1), 'nothing selected, but the followed detail returns the selection');
+        [$surface, $box] = self::painted(120, 40, ['proc_follow_detailed' => false], ['down', 'enter']);
+        $this->assertSame($inactive, $surface->style($box->x + 2, $box->bottom() - 1), 'not following: unlit with nothing selected');
+    }
+
     public function testSgrGolden(): void
     {
         [$surface, $box] = self::painted(120, 40, [], ['down', 'down']);
