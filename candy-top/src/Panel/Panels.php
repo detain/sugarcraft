@@ -7,6 +7,7 @@ namespace SugarCraft\Top\Panel;
 use SugarCraft\Top\Collect\Cpu;
 use SugarCraft\Top\Collect\Memory;
 use SugarCraft\Top\Collect\Net;
+use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Collect\PosixProcessControl;
 use SugarCraft\Top\Collect\ProcList;
 use SugarCraft\Top\Config\Config;
@@ -42,21 +43,25 @@ final class Panels
      * modal()/capturesKey()/update() call.
      * The fake sources' sample interval follows its update_ms.
      *
-     * @param bool $fake deterministic fake sources instead of the live host
+     * @param bool          $fake     deterministic fake sources instead of the live host
+     * @param Platform|null $platform the host's collector family, threaded
+     *                                through every panel factory (default:
+     *                                the running OS, {@see Platform::detect()})
      * @return array<string, Panel> keyed by box name
      */
-    public static function standard(HostInfo $host, Config $config, bool $fake = false): array
+    public static function standard(HostInfo $host, Config $config, bool $fake = false, ?Platform $platform = null): array
     {
         $intervalSec = $config->updateMs() / 1000;
+        $platform ??= Platform::detect();
 
         return [
-            'cpu' => CpuPanel::standard($host, $config, $fake),
-            'mem' => MemPanel::standard($config, $fake),
-            'net' => \SugarCraft\Top\Panel\Net\NetPanel::new($fake ? FakeNet::new($intervalSec) : CollectorSource::of(Net::new())),
+            'cpu' => CpuPanel::standard($host, $config, $fake, $platform),
+            'mem' => MemPanel::standard($config, $fake, $platform),
+            'net' => \SugarCraft\Top\Panel\Net\NetPanel::new($fake ? FakeNet::new($intervalSec) : $platform->net()),
             'proc' => $fake
                 // --fake pids are invented: the signal / renice menus must never reach a live process.
                 ? ProcPanel::new(FakeProcList::demo($host->coreCount), FakeProcessControl::new())
-                : ProcPanel::new(CollectorSource::of(ProcList::new()), PosixProcessControl::new()),
+                : ProcPanel::new($platform->procList(), PosixProcessControl::new()),
         ];
     }
 

@@ -6,16 +6,15 @@ namespace SugarCraft\Top\Panel;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Top\Collect\Cpu;
 use SugarCraft\Top\Collect\CpuSnapshot;
-use SugarCraft\Top\Collect\Freq;
 use SugarCraft\Top\Collect\FreqMode;
 use SugarCraft\Top\Collect\FreqSnapshot;
 use SugarCraft\Top\Collect\Gpu;
 use SugarCraft\Top\Collect\GpuDevice;
 use SugarCraft\Top\Collect\GpuSnapshot;
-use SugarCraft\Top\Collect\Temp;
+use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Collect\TempSnapshot;
+use SugarCraft\Top\Collect\TunableFreq;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Msg\SampledMsg;
@@ -95,7 +94,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
     }
 
     /**
-     * @param Source  $cpu  CpuSnapshot source (Collect\Cpu or FakeCpu)
+     * @param Source  $cpu  CpuSnapshot source (Collect\Cpu, Collect\FreeBsd\Cpu or FakeCpu)
      * @param ?Source $freq FreqSnapshot source; retuned per collect for show_core_freq
      * @param ?Source $temp TempSnapshot source; sampled only while check_temp is on
      * @param ?Source $gpu  GpuSnapshot source; sampled only while show_gpu_info is not Off
@@ -123,9 +122,10 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
      * the deterministic fakes. Startup options (freq_mode, cpu_sensor,
      * show_core_freq) seed the collectors; runtime changes of
      * show_core_freq / check_temp / show_gpu_info are honoured at collect
-     * time.
+     * time. `$platform` picks the host's collector family (default: the
+     * running OS, {@see Platform::detect()}).
      */
-    public static function standard(HostInfo $host, Config $config, bool $fake = false): self
+    public static function standard(HostInfo $host, Config $config, bool $fake = false, ?Platform $platform = null): self
     {
         $perCore = $config->showCoreFreq() !== 'off';
         if ($fake) {
@@ -136,13 +136,14 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
             )->withBattery(BorderBattery::standard($config, true));
         }
         $sensor = $config->string('cpu_sensor');
+        $platform ??= Platform::detect();
 
         return self::new(
-            CollectorSource::of(Cpu::new()),
-            CollectorSource::of(Freq::new(null, FreqMode::tryFrom($config->string('freq_mode')) ?? FreqMode::First, $perCore)),
-            CollectorSource::of(Temp::new(null, $sensor === 'Auto' ? null : $sensor)),
+            $platform->cpu(),
+            $platform->freq(FreqMode::tryFrom($config->string('freq_mode')) ?? FreqMode::First, $perCore),
+            $platform->temp($sensor === 'Auto' ? null : $sensor),
             CollectorSource::of(Gpu::new()),
-        )->withBattery(BorderBattery::standard($config, $fake));
+        )->withBattery(BorderBattery::standard($config, $fake, $platform));
     }
 
     /** Install (or remove) the P-D battery badge. */
@@ -484,7 +485,8 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         }
         if ($source instanceof CollectorSource) {
             $collector = $source->collector();
-            if ($collector instanceof Freq) {
+            // The interface, not Collect\Freq: FreeBSD's collector retunes too.
+            if ($collector instanceof TunableFreq) {
                 return CollectorSource::of($collector->withPerCore($perCore));
             }
         }

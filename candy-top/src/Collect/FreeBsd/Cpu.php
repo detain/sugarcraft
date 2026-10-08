@@ -29,9 +29,10 @@ use SugarCraft\Top\Collect\Sentinel;
  * actually present; rows past hw.ncpu × 5 are dropped (btop sizes its
  * buffer by Shared::coreCount the same way).
  *
- * Cost: one `sysctl` child per sample. hw.ncpu and kern.boottime are
- * static, so they are read with the first successful sample and carried
- * forward; later samples ask only kern.cp_times + vm.loadavg.
+ * Cost: one `sysctl` child per sample. hw.ncpu is static, so it is read
+ * with the first successful sample and carried forward; kern.boottime is
+ * re-read every sample (same child, no extra cost) because a clock step
+ * moves it — a cached value would skew uptime by the step forever.
  * Immutable: sample() returns the snapshot and the collector carrying the
  * new baseline.
  */
@@ -51,7 +52,6 @@ final class Cpu
         private readonly array $baselines,
         private readonly array $fieldBaseline,
         private readonly ?int $ncpu = null,
-        private readonly ?float $boot = null,
     ) {
     }
 
@@ -65,15 +65,14 @@ final class Cpu
      */
     public function sample(): array
     {
-        $cached = $this->ncpu !== null && $this->boot !== null;
-        $values = $this->probe->sysctl($cached
-            ? ['kern.cp_times', 'vm.loadavg']
+        $values = $this->probe->sysctl($this->ncpu !== null
+            ? ['kern.boottime', 'kern.cp_times', 'vm.loadavg']
             : ['hw.ncpu', 'kern.boottime', 'kern.cp_times', 'vm.loadavg']);
         $ncpu = $this->ncpu ?? Sysctl::int($values, 'hw.ncpu');
-        $boot = $this->boot ?? Sysctl::boottime($values);
+        $boot = Sysctl::boottime($values);
         $load = Sysctl::loadavg($values) ?? [Sentinel::UNMEASURED, Sentinel::UNMEASURED, Sentinel::UNMEASURED];
         $uptime = $boot === null ? Sentinel::UNMEASURED : max(0.0, $this->probe->epoch() - $boot);
-        $self = new self($this->probe, $this->baselines, $this->fieldBaseline, $ncpu, $boot);
+        $self = new self($this->probe, $this->baselines, $this->fieldBaseline, $ncpu);
 
         $times = Sysctl::ints($values, 'kern.cp_times');
         if ($ncpu !== null && $ncpu > 0 && count($times) > $ncpu * self::STATES) {
@@ -106,7 +105,7 @@ final class Cpu
 
         return [
             new CpuSnapshot($total, $percents, $fields, $load, $uptime),
-            new self($this->probe, $baselines, $summed, $ncpu, $boot),
+            new self($this->probe, $baselines, $summed, $ncpu),
         ];
     }
 

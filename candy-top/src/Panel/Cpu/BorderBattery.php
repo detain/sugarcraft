@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Cpu;
 
-use SugarCraft\Top\Collect\Battery;
 use SugarCraft\Top\Collect\BatterySnapshot;
+use SugarCraft\Top\Collect\Platform;
+use SugarCraft\Top\Collect\SelectableBattery;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\Gfx\PositionMeter;
@@ -26,7 +27,7 @@ use SugarCraft\Top\View\Symbols;
  *
  *  - show_battery off: not sampled, not painted, no clock reserve;
  *  - selected_battery is applied to the collector at collect time
- *    ({@see Battery::withSelected()});
+ *    ({@see SelectableBattery::withSelected()});
  *  - status symbol ▲ charging / ▼ discharging / ■ full / ○ anything else;
  *  - the 10-cell meter (btop `Meter{10, "cpu", invert}`: the cpu gradient
  *    read top-down) and the reserve only on terminals >= 100 columns;
@@ -64,10 +65,10 @@ final class BorderBattery implements BatteryBadge
         return new self($source, null);
     }
 
-    /** The badge CpuPanel::standard installs: the live collector or the fake. */
-    public static function standard(Config $config, bool $fake = false): self
+    /** The badge CpuPanel::standard installs: the host's collector ({@see Platform}) or the fake. */
+    public static function standard(Config $config, bool $fake = false, ?Platform $platform = null): self
     {
-        return self::new($fake ? FakeBattery::new() : CollectorSource::of(Battery::new(null, $config->string('selected_battery'))));
+        return self::new($fake ? FakeBattery::new() : ($platform ?? Platform::detect())->battery($config->string('selected_battery')));
     }
 
     public function source(PanelContext $context): ?Source
@@ -80,7 +81,8 @@ final class BorderBattery implements BatteryBadge
         if ($source instanceof FakeBattery) {
             return $source->withSelected($selected);
         }
-        if ($source instanceof CollectorSource && ($c = $source->collector()) instanceof Battery) {
+        // The interface, not Collect\Battery: FreeBSD's collector retunes too.
+        if ($source instanceof CollectorSource && ($c = $source->collector()) instanceof SelectableBattery) {
             return CollectorSource::of($c->withSelected($selected));
         }
 

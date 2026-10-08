@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Mem;
 
-use SugarCraft\Top\Collect\DiskIo;
 use SugarCraft\Top\Collect\DiskIoSnapshot;
 use SugarCraft\Top\Collect\MountSelection;
-use SugarCraft\Top\Collect\Mounts;
 use SugarCraft\Top\Collect\MountsSnapshot;
+use SugarCraft\Top\Collect\Platform;
+use SugarCraft\Top\Collect\SelectableMounts;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeDiskIo;
 use SugarCraft\Top\Source\Fake\FakeMounts;
@@ -49,10 +49,16 @@ final class DisksSource implements Source
         return new self($mounts, $io, $kernelName ?? self::canonical(...));
     }
 
-    /** The live host. */
-    public static function live(): self
+    /**
+     * The live host, through `$platform`'s collector family (default: the
+     * running OS). DiskIo is unfiltered so partitions keep their own
+     * counters for the mount pairing.
+     */
+    public static function live(?Platform $platform = null): self
     {
-        return self::new(CollectorSource::of(Mounts::new()), CollectorSource::of(DiskIo::new(null, null, false)));
+        $platform ??= Platform::detect();
+
+        return self::new($platform->mounts(), $platform->diskIo(false));
     }
 
     /** Deterministic fakes; the device name is its basename. */
@@ -71,7 +77,8 @@ final class DisksSource implements Source
         $mounts = $this->mounts;
         if ($mounts instanceof FakeMounts) {
             $mounts = $mounts->withSelection($selection);
-        } elseif ($mounts instanceof CollectorSource && ($c = $mounts->collector()) instanceof Mounts) {
+        } elseif ($mounts instanceof CollectorSource && ($c = $mounts->collector()) instanceof SelectableMounts) {
+            // The interface, not Collect\Mounts: FreeBSD's collector retunes too.
             $mounts = CollectorSource::of($c->withSelection($selection));
         }
 

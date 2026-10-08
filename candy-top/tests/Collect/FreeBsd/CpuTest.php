@@ -50,8 +50,25 @@ final class CpuTest extends TestCase
         $this->assertEqualsWithDelta(2.5, $snap->fields['irq'], 1e-9, 'intr stays in totals (top(1)), unlike btop');
         $this->assertEqualsWithDelta(55.0, $snap->fields['idle'], 1e-9);
         $this->assertSame([0.40, 0.35, 0.26], $snap->load);
-        $this->assertSame(['kern.cp_times', 'vm.loadavg'], $probe->sysctls[1], 'hw.ncpu and kern.boottime are static: read once');
-        $this->assertEqualsWithDelta(3600.0, $snap->uptime, 1e-6, 'the cached boottime still gives uptime');
+        $this->assertSame(['kern.boottime', 'kern.cp_times', 'vm.loadavg'], $probe->sysctls[1], 'hw.ncpu is static: read once; kern.boottime every sample');
+        $this->assertEqualsWithDelta(3600.0, $snap->uptime, 1e-6);
+    }
+
+    public function testBoottimeIsReReadEverySampleSoAClockStepMovesUptime(): void
+    {
+        $frame = static fn (int $sec): string => "hw.ncpu=1\nkern.boottime={ sec = {$sec}, usec = 0 }\nkern.cp_times=10 0 0 0 90\n";
+        // An NTP step of +60 s moves kern.boottime by the same amount.
+        $probe = new FixtureProbe([$frame(1000), $frame(1060), "hw.ncpu=1\nkern.cp_times=10 0 0 0 90\n"], epoch: 4600.0);
+        [$first, $cpu] = Cpu::new($probe)->sample();
+        $probe->advance();
+        [$second, $cpu] = $cpu->sample();
+        $probe->advance();
+        [$third] = $cpu->sample();
+
+        $this->assertEqualsWithDelta(3600.0, $first->uptime, 1e-6);
+        $this->assertEqualsWithDelta(3540.0, $second->uptime, 1e-6, 'the stepped boottime, not the first one');
+        $this->assertSame(Sentinel::UNMEASURED, $third->uptime, 'no boottime answer = unmeasured (the panel keeps the last good value)');
+        $this->assertSame(['kern.boottime', 'kern.cp_times', 'vm.loadavg'], $probe->sysctls[2]);
     }
 
     public function testCpTimesBeyondNcpuAreDropped(): void

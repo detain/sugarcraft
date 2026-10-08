@@ -13,8 +13,8 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Dash\Plot\ProcRow\ProcGraphTracker;
 use SugarCraft\Top\Collect\ProcessControl;
-use SugarCraft\Top\Collect\ProcList;
 use SugarCraft\Top\Collect\ProcSnapshot;
+use SugarCraft\Top\Collect\TunableProcList;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\InvalidOptionValue;
 use SugarCraft\Top\Config\Schema;
@@ -297,7 +297,8 @@ final class ProcPanel implements Panel, ClickCapture
         $perCore = $config->bool('proc_per_core');
         $kernel = $config->bool('proc_filter_kernel');
         $s = $this->source;
-        if ($s instanceof CollectorSource && ($c = $s->collector()) instanceof ProcList) {
+        // The interface, not Collect\ProcList: FreeBSD's collector retunes too.
+        if ($s instanceof CollectorSource && ($c = $s->collector()) instanceof TunableProcList) {
             return CollectorSource::of($c->withIo($io)->withPerCore($perCore)->withFilterKernel($kernel)->withDetail($detailPid));
         }
         if ($s instanceof FakeProcList) {

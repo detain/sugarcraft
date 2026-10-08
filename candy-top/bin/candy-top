@@ -20,8 +20,8 @@ namespace SugarCraft\Top\bin;
 
 use SugarCraft\Core\Program;
 use SugarCraft\Top\App;
+use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Config\ConfigFile;
-use SugarCraft\Top\HostInfo;
 use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Msg\ConfigSavedMsg;
@@ -90,11 +90,13 @@ $config = $loaded->config
     ->withTtyModeResolved(null, str_starts_with($tty, '/dev/tty'))
     ->withShownBoxesSettled(0);
 
-$host = HostInfo::detect();
+// btop picks its collector per OS at compile time; candy-top per PHP_OS here.
+$platform = Platform::detect();
+$host = $platform->hostInfo();
 // btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
 $catalog = ThemeRegistry::new();
 $palette = $catalog->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
-$panels = Panels::standard($host, $config, $fake);
+$panels = Panels::standard($host, $config, $fake, $platform);
 // btop `lowcolor`: the 256-colour cube whenever truecolor is off.
 $config = $config->with('lowcolor', !$config->bool('truecolor'));
 
