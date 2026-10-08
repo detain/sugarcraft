@@ -1,0 +1,97 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Top\bin;
+
+(static function () {
+    // This lib's own vendor/ (monorepo / split-repo checkout), then the
+    // consumer's vendor/ when installed as vendor/sugarcraft/candy-top.
+    foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $path) {
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-top: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Top\App;
+use SugarCraft\Top\Config\ConfigFile;
+use SugarCraft\Top\HostInfo;
+use SugarCraft\Top\Lang;
+use SugarCraft\Top\Panel\Panels;
+use SugarCraft\Top\Theme\ThemeRegistry;
+
+$args = array_slice($argv ?? [], 1);
+$fake = false;
+$configPath = null;
+for ($i = 0; $i < count($args); $i++) {
+    $arg = $args[$i];
+    if ($arg === '-h' || $arg === '--help') {
+        $rows = static fn (array $pairs, int $pad): string => implode('', array_map(
+            static fn (string $left, string $right): string => '  ' . str_pad($left, $pad) . $right . "\n",
+            array_keys($pairs),
+            $pairs,
+        ));
+        fwrite(STDOUT, Lang::t('cli.help.title') . "\n\n"
+            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>]\n\n"
+            . Lang::t('cli.help.options') . "\n" . $rows([
+                '--fake' => Lang::t('cli.help.opt.fake'),
+                '--config <path>' => Lang::t('cli.help.opt.config'),
+                '-h, --help' => Lang::t('cli.help.opt.help'),
+            ], 18) . "\n"
+            . Lang::t('cli.help.keys') . "\n" . $rows([
+                'q, Ctrl-C' => Lang::t('cli.help.key.quit'),
+                '1-4' => Lang::t('cli.help.key.toggle'),
+                '+ / -' => Lang::t('cli.help.key.step'),
+            ], 12));
+        exit(0);
+    }
+    if ($arg === '--fake') {
+        $fake = true;
+    } elseif ($arg === '--config' || str_starts_with($arg, '--config=')) {
+        $value = $arg === '--config' ? ($args[++$i] ?? null) : substr($arg, 9);
+        // A following flag is not a path: `--config --fake` is a missing value.
+        if ($value === null || $value === '' || ($arg === '--config' && str_starts_with($value, '-'))) {
+            fwrite(STDERR, 'candy-top: ' . Lang::t('cli.missing_value', ['option' => '--config']) . "\n");
+            exit(2);
+        }
+        $configPath = $value;
+    } else {
+        fwrite(STDERR, 'candy-top: ' . Lang::t('cli.unknown_argument', ['argument' => $arg]) . "\n");
+        exit(2);
+    }
+}
+
+// btop Term::init refuses to start without an interactive terminal on both
+// ends (btop.cpp "No tty detected!"); a TUI writing frames into a pipe or
+// reading keys from /dev/null only produces garbage or spins.
+if (!stream_isatty(STDIN) || !stream_isatty(STDOUT)) {
+    fwrite(STDERR, Lang::t('cli.no_tty') . "\n");
+    exit(1);
+}
+
+$loaded = ConfigFile::new($configPath)->load();
+foreach ($loaded->warnings as $warning) {
+    fwrite(STDERR, "candy-top: {$warning}\n");
+}
+// btop auto-enables tty mode on a console: Term::current_tty.starts_with("/dev/tty")
+// (btop.cpp) — /dev/tty1 and serial consoles like /dev/ttyS0 alike.
+$tty = function_exists('posix_ttyname') ? (posix_ttyname(STDIN) ?: '') : '';
+$config = $loaded->config
+    ->withTtyModeResolved(null, str_starts_with($tty, '/dev/tty'))
+    ->withShownBoxesSettled(0);
+
+$host = HostInfo::detect();
+$palette = ThemeRegistry::new()->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
+$panels = Panels::standard($host, $config, $fake);
+
+(new Program(
+    App::start($config, $palette, $host, $panels),
+    new ProgramOptions(useAltScreen: true, framerate: 20.0),
+))->run();

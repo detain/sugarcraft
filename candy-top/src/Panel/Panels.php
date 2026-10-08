@@ -1,0 +1,57 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Top\Panel;
+
+use SugarCraft\Top\Collect\Cpu;
+use SugarCraft\Top\Collect\Memory;
+use SugarCraft\Top\Collect\Net;
+use SugarCraft\Top\Collect\ProcList;
+use SugarCraft\Top\Config\Config;
+use SugarCraft\Top\HostInfo;
+use SugarCraft\Top\Source\CollectorSource;
+use SugarCraft\Top\Source\Fake\FakeCpu;
+use SugarCraft\Top\Source\Fake\FakeMemory;
+use SugarCraft\Top\Source\Fake\FakeNet;
+use SugarCraft\Top\Source\Fake\FakeProcList;
+
+/**
+ * The panel roster — the ONE place a phase swaps its box in.
+ *
+ * P-B replaces the cpu/mem lines with `CpuPanel::new(...)` /
+ * `MemPanel::new(...)`, P-C net, P-D extends mem with disks, P-E proc. The
+ * App never names a concrete panel class, so those phases touch this file
+ * and their own, not App.php.
+ */
+final class Panels
+{
+    private function __construct()
+    {
+    }
+
+    /**
+     * One line per box: a phase swaps its box by replacing exactly its own
+     * line, so P-B..P-E edit disjoint lines and never conflict.
+     *
+     * `$config` is the startup config: a panel reads its initial options
+     * (graph symbol, proc_sorting, net_iface, ...) from it when it builds
+     * its source. Runtime changes arrive on the PanelContext of every
+     * modal()/capturesKey()/update() call.
+     * The fake sources' sample interval follows its update_ms.
+     *
+     * @param bool $fake deterministic fake sources instead of the live host
+     * @return array<string, Panel> keyed by box name
+     */
+    public static function standard(HostInfo $host, Config $config, bool $fake = false): array
+    {
+        $intervalSec = $config->updateMs() / 1000;
+
+        return [
+            'cpu' => PlaceholderPanel::new('cpu', $fake ? FakeCpu::new($host->coreCount, $intervalSec) : CollectorSource::of(Cpu::new())),
+            'mem' => PlaceholderPanel::new('mem', $fake ? FakeMemory::new() : CollectorSource::of(Memory::new())),
+            'net' => PlaceholderPanel::new('net', $fake ? FakeNet::new($intervalSec) : CollectorSource::of(Net::new())),
+            'proc' => PlaceholderPanel::new('proc', $fake ? FakeProcList::new($host->coreCount) : CollectorSource::of(ProcList::new())),
+        ];
+    }
+}

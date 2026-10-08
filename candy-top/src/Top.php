@@ -9,16 +9,16 @@ namespace SugarCraft\Top;
  *
  * Mirrors aristocratos/btop concept — a btop-style TUI dashboard for
  * CPU, memory, network, disk, and process telemetry, to be built on the
- * SugarCraft charting libraries. This class is the scaffold entry point;
- * the real Model/Cmd architecture arrives with the first implementation
- * phase (see plan_top.md in the SugarCraft monorepo).
+ * SugarCraft charting libraries. The running program is {@see App} (launched
+ * by `bin/candy-top`); this class keeps the package-level defaults.
  */
 final class Top
 {
     /**
-     * Default refresh interval in milliseconds, echoing btop's 1s tick.
+     * Default data refresh interval in milliseconds — btop's `update_ms`
+     * default (2000), the same value {@see Config\Schema} ships.
      */
-    public const DEFAULT_TICK_MS = 1000;
+    public const DEFAULT_TICK_MS = 2000;
 
     private function __construct(
         public readonly int $tickMs,
