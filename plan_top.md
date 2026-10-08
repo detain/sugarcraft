@@ -512,7 +512,7 @@ Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aris
 - **U4 — post-v1 (phase P-I, GPU/NPU):** multi-vendor GPU/NPU data model, then #1854 AMD sysfs + amdgpu.ids
   names, #1888 multi Intel GPU (DRM fdinfo/sysfs), #985 Intel NPU (`intel_vpu`), #1839 AMD NPU
   (`/sys/class/accel` + FFI ioctl), #1730 any-GPU box slots on the #1881 grid (`gpu_box_columns="Auto"`),
-  #1552 per-process GPU util/mem; #1873 container box; #1791c tree-state persistence in an
+  #1552 per-process GPU util/mem; #1873 container box; #1791c tree-state persistence ✅ `41b18d59f` in an
   `$XDG_STATE_HOME` file (not config).
 - **U5 — post-v1 FreeBSD collectors** ✅ (collectors + Platform factory `18fd19467`; panel wiring `70c09bec9`; live ps/iostat capture pending — host ssh down): reference output captured in `prompt_kit/findings/freebsd-reference.md`
   (FreeBSD 14.4, sysctl/kvm-surface notes); folds in #1851/#1830/#1787/#1728.
