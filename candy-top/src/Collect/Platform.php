@@ -113,6 +113,18 @@ final class Platform
         return CollectorSource::of($this->isFreeBsd() ? FreeBsd\Battery::new($this->probe(), $battery) : Battery::new(null, $battery));
     }
 
+    /**
+     * GPUs and NPUs ({@see Gpu\Accelerators}): nvidia-smi everywhere, plus
+     * the amdgpu / i915 / xe / intel_vpu / amdxdna sysfs backends on
+     * hosts with Linux sysfs. FreeBSD gets nvidia-smi only (its drm-kmod
+     * exposes no amdgpu/i915 sysfs nodes). Per-process collection starts
+     * off; retune with `collector()->withProcesses()`.
+     */
+    public function gpu(): Source
+    {
+        return CollectorSource::of($this->isFreeBsd() ? Gpu\Accelerators::nvidiaOnly() : Gpu\Accelerators::detect());
+    }
+
     private function probe(): FreeBsd\Probe
     {
         return $this->probe ?? FreeBsd\LiveProbe::new();

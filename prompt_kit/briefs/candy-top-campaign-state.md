@@ -3,7 +3,7 @@
 Authoritative plan: `plan_top.md` (✅ + commit hash marks = reviewed, fixed, committed). This file is the
 supervisor's working state for resuming after a context reset. Update it whenever the in-flight set changes.
 
-_Last updated: 2026-10-08 (P-F2 committed; U5 wiring + P-H next)._
+_Last updated: 2026-10-08 (third /compact; U4a GPU fix round in flight)._
 
 ## Operating rules (user-mandated)
 - Commit straight to `master`, author/committer **Joe Huss <detain@interserver.net> only**, **no Co-Authored-By**,
@@ -21,34 +21,31 @@ _Last updated: 2026-10-08 (P-F2 committed; U5 wiring + P-H next)._
 Lib lanes L1 `0153b65e4` · L2 `073913a44` · L3 `37f5c6744` · L4 `1bbbca37f` · L5 `57cd08b9f` · L6 `0859cfa4f` ·
 L7 `07a1e5e6f` · L8 `39c65280c` · integration `03d5ef164` · candy-top Theme `672c64680` · Collect `b2d9207cc` ·
 Config+Lang `7c893a54b` · proc_open census fix `ea1949fd2` · Wave U0+U1 collectors `02f178b91` · Wave U2 block2
-`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12` · P-C net panel `7ac64e5f3` (+ sugar-dash NetAutoScale::rescaleNow) · P-B cpu+mem `8e4559946` · P-E proc `52f994d15` · P-D disks+battery `a856be8bd` · P-G mellow theme `632e08d49` · P-F1 overlays/menus `083176989` · P-G VHS tape `3469999a7` · U5 FreeBSD collectors `18fd19467` (not wired yet) · candy-core hangup-safe restore `fe9cdecdb` · P-F2 options/presets/persistence `16b9dcdaa`.
+`503ee9bb7` · Wave U config keys `96dcdc43a` · P-H sibling-lib docs `776bd06b5` · Wave U1b VM awareness `b071eb8b7` · candy-core resize repaint `5442e8b1f` · P-A app shell `b1bd8fc12` · P-C net panel `7ac64e5f3` (+ sugar-dash NetAutoScale::rescaleNow) · P-B cpu+mem `8e4559946` · P-E proc `52f994d15` · P-D disks+battery `a856be8bd` · P-G mellow theme `632e08d49` · P-F1 overlays/menus `083176989` · P-G VHS tape `3469999a7` · U5 FreeBSD collectors `18fd19467` (not wired yet) · candy-core hangup-safe restore `fe9cdecdb` · P-F2 options/presets/persistence `16b9dcdaa`. · census candy-top share `274ab740b` · U5 FreeBSD wiring `70c09bec9` · child-lifetime pin 28 `39235a259` · P-H candy-top docs `4956d682f` · P-G TTY polish `500696d7e` (P-G complete) · U4b #1791c tree-state `41b18d59f` · U4a GPU/NPU collectors `a8f442188`. **All v1 phases P-A…P-H are ✅.**
 btop-derived byte-exact oracles: `prompt_kit/tools/btop-{graph,netscale,theme}-oracle.cpp`.
 References: `prompt_kit/findings/{btop-upstream-prs,nvidia-smi-skynet2,kvm-reference,freebsd-reference}.md`.
 skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000 GPU host.
 
 ## In flight
-- U5 wiring ✅ `70c09bec9` (FreeBSD ps/iostat live captures still pending; host ssh down).
-- Census: candy-top share fixed ✅ `274ab740b`; remaining DescriptorSinkArgumentCensusTest red is sugar-crush only
-  (note: sugar-crush ForkedChild/SessionRelaunch `(int)$entry` casts at real close/fcntl sinks deserve a look — not ours).
-- P-H candy-top docs ✅ `4956d682f` (README tables drift-pinned by tests/Docs; regen CANDY_TOP_UPDATE_DOCS=1).
-- P-G ✅ complete (TTY polish `500696d7e`).
-- U4b #1791c tree-state ✅ `41b18d59f`.
-- U4 in flight: U4a GPU/NPU collectors (src/Collect/**, tests/Collect/**, fixtures/gpu) and U4b #1791c tree-state XDG file (ProcPanel/App/bin/Config, adds Schema key proc_tree_persist_state + README regen). Then U4 box slots (#1730/#1881) + per-proc GPU cols + container box.
-- Next: U4 (P-I GPU/NPU multi-vendor, container/VM box, #1791c tree-state XDG file) — any new Schema key/KeyRow needs the README regen.
+- **U4 box-slots unit**, split into two parallel implementers (uncommitted):
+  (a) GPU boxes: Platform::gpu() wiring in CpuPanel::standard, shown_gpus→withVendors, bounded #1008 hold,
+      #1730/#1881 gpuN slots + gpu_box_columns grid, NPU display (CpuPanel, Panels, new GPU panel, View/**, Presets).
+  (b) #1552 proc GPU columns: Gpu%/GMem, proc_gpu_only (g), proc_gpu_graphs, sorts gpu/gpu memory (ProcPanel,
+      Panel/Proc/**); it reports a Panels.php wiring line for the supervisor to apply.
+  Shared: Schema.php, lang/*.php, KeyTable.php, OptionsCatalog.php. Supervisor does README regen
+  (`CANDY_TOP_UPDATE_DOCS=1 vendor/bin/phpunit tests/Docs`) + docs/_data + gen-docs after both reviewed, then ONE
+  commit for the unit. If agents are gone after a reset: run the suite, review the diff, finish, review, commit.
 
 ## Next
-1. **P-H candy-top half** (after P-F2 commits): full `candy-top/README.md` (install, run, `--fake`/`--config`/tty,
-   every panel, every key from `Input\KeyTable`, mouse, options menu, presets, config-key table derived from
-   `Config\Schema`, themes list (42) + user themes, TTY mode, collectors/data sources/permissions, VM/container
-   tags, adopted Wave U PR features, deviations from btop listed in CALIBER_LEARNINGS), README demo GIF embed
-   (`https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.vhs/top.gif`), docs drift tests (README
-   key table ⇔ KeyTable, config table ⇔ Schema, like sugar-crush's drift guards), `docs/_data/candy-top.{json,body.html}`
-   refresh then `php tools/gen-docs.php` (never hand-edit docs/lib/*.html), refresh stale "scaffold" wording in root
-   README / docs/index.html, MATCHUPS 🟡→🟢, CALIBER_LEARNINGS tidy. Review → fix → commit → mark P-H ✅.
-2. **P-G remainder**: TTY polish check (`--tty` / tty_mode demo) — mark P-G fully ✅ when done (mellow `632e08d49`
-   and tape `3469999a7` already done).
-3. Post-v1 (only after the above; ask nothing, proceed): U4 (P-I GPU/NPU multi-vendor, container/VM box,
-   #1791c tree-state persistence in XDG state file), U5 FreeBSD collectors (reference `prompt_kit/findings/freebsd-reference.md`).
+1. **U4 box slots unit** (after U4a commits): wire `$platform->gpu()` in CpuPanel::standard (update PlatformWiringTest
+   comment ~line 56), `shown_gpus` → `withVendors(...)`, `withProcesses()` only when proc shows GPU columns; #1730
+   any-GPU box slots on the #1881 grid (`gpu_box_columns="Auto"`, `gpuN` any N max 6), NPU display; #1552 proc
+   columns/sorts (proposed keys: proc_gpu_only bool false, proc_gpu_graphs bool true, proc_sorting += `gpu`,
+   `gpu memory`, optional `npu` word in shown_gpus). New Schema keys/KeyRows → README regen
+   (`CANDY_TOP_UPDATE_DOCS=1 vendor/bin/phpunit tests/Docs`) + docs/_data + gen-docs.
+2. **#1873 container box** (after box slots — both touch the layout grid).
+3. Then the campaign is complete: final state-file/plan tidy, MATCHUPS/README already 🟢.
+- Outstanding but blocked: FreeBSD live ps/iostat/ifconfig/netstat -W captures (tech.trouble-free.net ssh down).
 - Perf note: real ProcList 40-47 ms @1160 pids, 56-72 ms with io (kernel floor); sampling is on the loop thread.
 - Deviations/deferrals are recorded per phase in `candy-top/CALIBER_LEARNINGS.md` (P-A…P-F sections).
 

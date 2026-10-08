@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect;
 
+use SugarCraft\Top\Collect\Gpu\Backend;
+use SugarCraft\Top\Collect\Gpu\DrmScan;
+
 /**
  * Best-effort NVIDIA GPU stats via an `nvidia-smi` shell-out.
  *
@@ -56,9 +59,15 @@ namespace SugarCraft\Top\Collect;
  * keeps its own consecutive-timeout counter — each timeout pushes it back
  * interval × 2^n, and after APPS_MAX_TIMEOUTS in a row it is switched off for
  * APPS_RETRY_AFTER seconds before one more try — and never touches the
- * device schedule.
+ * device schedule. Once opted in, a third spawn, `nvidia-smi pmon -c 1 -s
+ * um` (~0.25 s on skynet2's 4 GPUs), adds per-process utilization (btop
+ * #1552's nvmlDeviceGetProcessUtilization, without NVML) and the graphics
+ * processes compute-apps omits, on its own backoff (see queryProcesses()).
+ *
+ * As the NVIDIA {@see Backend} of {@see Gpu\Accelerators} it is the
+ * first slice of the merged device list (btop Gpu::collect order).
  */
-final class Gpu
+final class Gpu implements Backend
 {
     /**
      * The base query every nvidia-smi since the 2010s answers. `name` is
@@ -84,6 +93,9 @@ final class Gpu
     /** Per-process GPU memory (btop #1552 source); process_name is omitted — ProcList owns names. */
     public const array APPS_QUERY = ['pid', 'gpu_uuid', 'used_memory'];
 
+    /** Per-process utilization: one pmon sample, utilization + memory groups. */
+    public const array PMON_ARGS = ['pmon', '-c', '1', '-s', 'um'];
+
     /**
      * Locations tried after every PATH hit: the WSL2 driver-store binary
      * (btop #1869 analog) and the usual distro / NVIDIA container toolkit
@@ -102,6 +114,12 @@ final class Gpu
 
     /** Seconds a switched-off compute-apps query waits before it is tried again. */
     public const float APPS_RETRY_AFTER = 600.0;
+
+    /** Consecutive pmon timeouts after which pmon alone is switched off for APPS_RETRY_AFTER. */
+    public const int PMON_MAX_TIMEOUTS = 3;
+
+    /** Consecutive non-timeout pmon failures after which pmon is memoized unsupported. */
+    public const int PMON_MAX_FAILURES = 3;
 
     /** Consecutive non-timeout failures of the pinned (binary, query) after which the sweep re-runs. */
     public const int PIN_MAX_FAILURES = 3;
@@ -131,6 +149,9 @@ final class Gpu
         private readonly float $appsNextAt,
         private readonly int $pinFailures = 0,
         private readonly bool $discovered = false,
+        private readonly int $pmonTimeouts = 0,
+        private readonly float $pmonNextAt = -INF,
+        private readonly int $pmonFailures = 0,
     ) {
     }
 
@@ -200,6 +221,9 @@ final class Gpu
             $on && !$this->processes ? -INF : $this->appsNextAt,
             $this->pinFailures,
             $this->discovered,
+            $on && !$this->processes ? 0 : $this->pmonTimeouts,
+            $on && !$this->processes ? -INF : $this->pmonNextAt,
+            $on && !$this->processes ? 0 : $this->pmonFailures,
         );
     }
 
@@ -303,6 +327,33 @@ final class Gpu
         return $this->absent;
     }
 
+    /** Backend: nvidia-smi needs no DRM scan; the cadence above still applies. */
+    public function poll(DrmScan $scan): array
+    {
+        return $this->sample();
+    }
+
+    public function vendor(): GpuVendor
+    {
+        return GpuVendor::Nvidia;
+    }
+
+    public function kind(): AcceleratorKind
+    {
+        return AcceleratorKind::Gpu;
+    }
+
+    public function needsDrmScan(): bool
+    {
+        return false;
+    }
+
+    /** The proprietary driver publishes no drm-* fdinfo keys (#1552 guard). */
+    public function drmClients(): bool
+    {
+        return false;
+    }
+
     /** The pinned binary that answered; null before the first success and after PIN_MAX_FAILURES unpins it. */
     public function binary(): ?string
     {
@@ -317,10 +368,10 @@ final class Gpu
     private function succeed(float $now, string $binary, array $query, array $devices): array
     {
         $processes = null;
-        $appsTimeouts = $this->appsTimeouts;
-        $appsNextAt = $this->appsNextAt;
-        if ($this->processes && in_array('uuid', $query, true) && $now >= $this->appsNextAt) {
-            [$processes, $appsTimeouts, $appsNextAt] = $this->queryProcesses($now, $binary, $devices);
+        $apps = [$this->appsTimeouts, $this->appsNextAt];
+        $pmon = [$this->pmonTimeouts, $this->pmonNextAt, $this->pmonFailures];
+        if ($this->processes && in_array('uuid', $query, true)) {
+            [$processes, $apps, $pmon] = $this->queryProcesses($now, $binary, $devices);
         }
         $snapshot = new GpuSnapshot($devices, $processes);
 
@@ -331,8 +382,9 @@ final class Gpu
             everSucceeded: true,
             pinnedBinary: $binary,
             pinnedQuery: $query,
-            appsTimeouts: $appsTimeouts,
-            appsNextAt: $appsNextAt,
+            appsTimeouts: $apps[0],
+            appsNextAt: $apps[1],
+            pmon: $pmon,
             pinFailures: 0,
         )];
     }
@@ -353,37 +405,173 @@ final class Gpu
     }
 
     /**
-     * Second spawn at the same cadence. Its failure never touches the
-     * device state: processes are just "not measured" this cycle. A timeout
-     * backs only this query off — interval × 2^n, then APPS_RETRY_AFTER once
-     * APPS_MAX_TIMEOUTS are consecutive — so a driver that hangs here costs
-     * one bounded wait per window instead of one per interval.
+     * The per-process spawns, each on its own schedule; neither touches the
+     * device state — processes are just "not measured" when both fail.
+     *
+     * compute-apps (memory): a timeout backs only it off — interval × 2^n,
+     * then APPS_RETRY_AFTER once APPS_MAX_TIMEOUTS are consecutive — and
+     * skips pmon for this cycle (the driver just hung once; a second spawn
+     * would double the wait). Any other failure clears its backoff and pmon
+     * still runs: its rows carry fb memory too.
+     *
+     * pmon (utilization): its own timeout counter with the same law
+     * (PMON_MAX_TIMEOUTS, then APPS_RETRY_AFTER), so a pmon that hangs never
+     * disables the working memory query. PMON_MAX_FAILURES consecutive
+     * non-timeout failures (exit != 0, no header — a driver whose pmon is
+     * unsupported, e.g. vGPU/WSL) memoize it off until the next fresh
+     * withProcesses() opt-in. Worst case per interval: one bounded timeout.
      *
      * @param list<GpuDevice> $devices
-     * @return array{0: list<GpuProcess>|null, 1: int, 2: float} [processes, appsTimeouts, appsNextAt]
+     * @return array{0: list<GpuProcess>|null, 1: array{0: int, 1: float}, 2: array{0: int, 1: float, 2: int}}
+     *         [processes, apps [timeouts, next at], pmon [timeouts, next at, failures]]
      */
     private function queryProcesses(float $now, string $binary, array $devices): array
     {
-        [$outcome, $output] = ($this->runner)([
-            $binary,
-            '--query-compute-apps=' . implode(',', self::APPS_QUERY),
-            '--format=csv,noheader,nounits',
-        ]);
-        if ($outcome === GpuOutcome::Timeout) {
-            $n = min($this->appsTimeouts + 1, self::APPS_MAX_TIMEOUTS);
-            $wait = $n >= self::APPS_MAX_TIMEOUTS ? self::APPS_RETRY_AFTER : $this->interval * (2 ** $n);
-
-            return [null, $n, $now + $wait];
-        }
-        if ($outcome !== GpuOutcome::Ok) {
-            return [null, 0, -INF];
-        }
         $byUuid = [];
+        $uuidByIndex = [];
         foreach ($devices as $device) {
             $byUuid[$device->uuid] = $device->index;
+            $uuidByIndex[$device->index] = $device->uuid;
+        }
+        $processes = null;
+        $apps = [$this->appsTimeouts, $this->appsNextAt];
+        $pmon = [$this->pmonTimeouts, $this->pmonNextAt, $this->pmonFailures];
+
+        if ($now >= $this->appsNextAt) {
+            [$outcome, $output] = ($this->runner)([
+                $binary,
+                '--query-compute-apps=' . implode(',', self::APPS_QUERY),
+                '--format=csv,noheader,nounits',
+            ]);
+            if ($outcome === GpuOutcome::Timeout) {
+                $n = min($this->appsTimeouts + 1, self::APPS_MAX_TIMEOUTS);
+                $wait = $n >= self::APPS_MAX_TIMEOUTS ? self::APPS_RETRY_AFTER : $this->interval * (2 ** $n);
+
+                return [null, [$n, $now + $wait], $pmon];
+            }
+            $apps = [0, -INF];
+            if ($outcome === GpuOutcome::Ok) {
+                $processes = self::parseProcesses($output, $byUuid);
+            }
         }
 
-        return [self::parseProcesses($output, $byUuid), 0, -INF];
+        if ($this->pmonFailures < self::PMON_MAX_FAILURES && $now >= $this->pmonNextAt) {
+            [$outcome, $output] = ($this->runner)([$binary, ...self::PMON_ARGS]);
+            $rows = $outcome === GpuOutcome::Ok ? self::parsePmon($output) : null;
+            if ($outcome === GpuOutcome::Timeout) {
+                $n = min($this->pmonTimeouts + 1, self::PMON_MAX_TIMEOUTS);
+                $wait = $n >= self::PMON_MAX_TIMEOUTS ? self::APPS_RETRY_AFTER : $this->interval * (2 ** $n);
+                $pmon = [$n, $now + $wait, $this->pmonFailures];
+            } elseif ($rows === null) {
+                $pmon = [0, -INF, $this->pmonFailures + 1];
+            } else {
+                $pmon = [0, -INF, 0];
+                $processes = self::mergePmon($processes ?? [], $rows, $uuidByIndex);
+            }
+        }
+
+        return [$processes, $apps, $pmon];
+    }
+
+    /** False once pmon was memoized unsupported (PMON_MAX_FAILURES non-timeout failures in a row). */
+    public function pmonSupported(): bool
+    {
+        return $this->pmonFailures < self::PMON_MAX_FAILURES;
+    }
+
+    /**
+     * `nvidia-smi pmon` rows, columns located by the first `#` header line
+     * (drivers add columns — jpg, ofa, ccpm — between versions). "-" in a
+     * percent column is an idle process (0.0); a missing column is
+     * UNMEASURED.
+     *
+     * @return list<array{gpu: int, pid: int, sm: float, mem: float, enc: float, dec: float, fb: int}>|null
+     *         null when no header line was found (not pmon output)
+     */
+    private static function parsePmon(string $output): ?array
+    {
+        $columns = null;
+        $rows = [];
+        foreach (explode("\n", $output) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            if ($line[0] === '#') {
+                $names = preg_split('/\s+/', trim(substr($line, 1))) ?: [];
+                if ($columns === null && in_array('pid', $names, true)) {
+                    $columns = array_flip($names);
+                }
+
+                continue;
+            }
+            if ($columns === null || !isset($columns['gpu'], $columns['pid'])) {
+                continue;
+            }
+            $cols = preg_split('/\s+/', $line) ?: [];
+            $gpu = $cols[$columns['gpu']] ?? '';
+            $pid = $cols[$columns['pid']] ?? '';
+            if (!ctype_digit($gpu) || !ctype_digit($pid)) {
+                continue;
+            }
+            $pct = static function (string $name) use ($columns, $cols): float {
+                $v = isset($columns[$name]) ? ($cols[$columns[$name]] ?? '') : '';
+
+                return $v === '-' ? 0.0 : (is_numeric($v) ? (float) $v : Sentinel::UNMEASURED);
+            };
+            $fb = isset($columns['fb']) ? ($cols[$columns['fb']] ?? '') : '';
+            $rows[] = [
+                'gpu' => (int) $gpu,
+                'pid' => (int) $pid,
+                'sm' => $pct('sm'),
+                'mem' => $pct('mem'),
+                'enc' => $pct('enc'),
+                'dec' => $pct('dec'),
+                'fb' => is_numeric($fb) ? self::mib($fb) : Sentinel::UNMEASURED_INT,
+            ];
+        }
+
+        return $columns === null ? null : $rows;
+    }
+
+    /**
+     * pmon utilization onto the compute-apps rows (matched by pid + GPU);
+     * a pmon-only row (a graphics process) is appended with pmon's fb.
+     *
+     * @param list<GpuProcess> $processes
+     * @param list<array{gpu: int, pid: int, sm: float, mem: float, enc: float, dec: float, fb: int}> $pmon
+     * @param array<int, string> $uuidByIndex
+     * @return list<GpuProcess>
+     */
+    private static function mergePmon(array $processes, array $pmon, array $uuidByIndex): array
+    {
+        $at = [];
+        foreach ($processes as $i => $p) {
+            $at[$p->pid . '|' . $p->gpuIndex] = $i;
+        }
+        foreach ($pmon as $row) {
+            $key = $row['pid'] . '|' . $row['gpu'];
+            $known = isset($uuidByIndex[$row['gpu']]);
+            if (isset($at[$key])) {
+                $p = $processes[$at[$key]];
+                $processes[$at[$key]] = new GpuProcess($p->pid, $p->gpuIndex, $p->gpuUuid, $p->usedMemory, $row['sm'], $row['mem'], $row['enc'], $row['dec']);
+
+                continue;
+            }
+            $at[$key] = count($processes);
+            $processes[] = new GpuProcess(
+                $row['pid'],
+                $known ? $row['gpu'] : -1,
+                $known ? $uuidByIndex[$row['gpu']] : Sentinel::UNAVAILABLE,
+                $row['fb'],
+                $row['sm'],
+                $row['mem'],
+                $row['enc'],
+                $row['dec'],
+            );
+        }
+
+        return $processes;
     }
 
     /**
@@ -460,6 +648,8 @@ final class Gpu
                 $float('utilization.encoder'),
                 $float('utilization.decoder'),
                 isset($f['uuid']) ? self::text($f['uuid']) : Sentinel::UNAVAILABLE,
+                GpuVendor::Nvidia,
+                AcceleratorKind::Gpu,
             );
         }
 
@@ -488,6 +678,7 @@ final class Gpu
 
     /**
      * @param list<string>|null $pinnedQuery
+     * @param array{0: int, 1: float, 2: int}|null $pmon [timeouts, next at, failures]
      */
     private function with(
         ?bool $absent = null,
@@ -499,6 +690,7 @@ final class Gpu
         ?array $pinnedQuery = null,
         ?int $appsTimeouts = null,
         ?float $appsNextAt = null,
+        ?array $pmon = null,
         ?int $pinFailures = null,
         bool $unpin = false,
     ): self {
@@ -524,6 +716,9 @@ final class Gpu
             $appsNextAt ?? $this->appsNextAt,
             $unpin ? 0 : ($pinFailures ?? $this->pinFailures),
             $this->discovered,
+            $pmon[0] ?? $this->pmonTimeouts,
+            $pmon[1] ?? $this->pmonNextAt,
+            $pmon[2] ?? $this->pmonFailures,
         );
     }
 

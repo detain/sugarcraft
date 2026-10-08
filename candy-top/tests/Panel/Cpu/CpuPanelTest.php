@@ -14,8 +14,10 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Top\Collect\Cpu;
 use SugarCraft\Top\Collect\CpuSnapshot;
 use SugarCraft\Top\Collect\FreqSnapshot;
+use SugarCraft\Top\Collect\AcceleratorKind;
 use SugarCraft\Top\Collect\GpuDevice;
 use SugarCraft\Top\Collect\GpuSnapshot;
+use SugarCraft\Top\Collect\GpuVendor;
 use SugarCraft\Top\Collect\MemorySnapshot;
 use SugarCraft\Top\Collect\Sentinel;
 use SugarCraft\Top\Config\Config;
@@ -384,6 +386,23 @@ final class CpuPanelTest extends TestCase
         $this->assertSame([40, 40], $panel->history()->series('gpu:0:gpu-totals'));
         $grid = PanelPaint::grid(PanelPaint::surface($panel, $config, $layout, $host), $layout->box('cpu'));
         $this->assertMatchesRegularExpression('/GPU .* 40% .*2\.0G\/8\.0G .* 60°C .*50\.0W/u', $grid);
+    }
+
+    /** P-I: the #1008 merge keeps a non-NVIDIA device's identity (vendor, kind, bus id, driver). */
+    public function testHeldAmdAndIntelDevicesKeepTheirIdentity(): void
+    {
+        $config = Config::new();
+        $host = PanelPaint::host(true, 8);
+        $layout = PanelPaint::layout(120, 40, $config, $host);
+        $amd = static fn (float $u, int $used): GpuDevice => new GpuDevice(0, 'RX', $u, $used, 16 * 1024 ** 3, 50.0, 100.0, powerLimit: 200.0, vendor: GpuVendor::Amd, busId: '0000:03:00.0', driver: 'amdgpu');
+        $intel = static fn (float $u): GpuDevice => new GpuDevice(1, 'Arc', $u, -1, -1, -1.0, -1.0, vendor: GpuVendor::Intel, busId: '0000:08:00.0', driver: 'xe');
+        $panel = PanelPaint::feed(CpuPanel::new(FakeCpu::new(8), null, FakeTemp::new(4), new ScriptedSource([
+            new GpuSnapshot([$amd(30.0, 1024 ** 3), $intel(12.0)]),
+            new GpuSnapshot([$amd(-1.0, -1), $intel(-1.0)]),
+        ])), $config, $layout, 2);
+        [$a, $i] = $panel->gpus();
+        $this->assertSame([30.0, 1024 ** 3, GpuVendor::Amd, '0000:03:00.0', 'amdgpu'], [$a->utilization, $a->memUsed, $a->vendor, $a->busId, $a->driver]);
+        $this->assertSame([12.0, GpuVendor::Intel, '0000:08:00.0', 'xe', AcceleratorKind::Gpu], [$i->utilization, $i->vendor, $i->busId, $i->driver, $i->kind]);
     }
 
     /** One core column: no meter, no mini graphs, so btop never resets bold — the % is bold main_fg. */

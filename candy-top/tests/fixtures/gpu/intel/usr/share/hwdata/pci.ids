@@ -1,0 +1,27 @@
+#
+#	List of PCI ID's — TRIMMED candy-top fixture (from pci.ids 2025-03); the
+#	real file is ~1.4 MB and is located at run time, never shipped.
+#
+# Syntax:
+# vendor  vendor_name
+#	device  device_name				<-- single tab
+#		subvendor subdevice  subsystem_name	<-- two tabs
+
+1002  Advanced Micro Devices, Inc. [AMD/ATI]
+	73bf  Navi 21 [Radeon RX 6800/6800 XT / 6900 XT]
+		1002 0e3a  Radeon RX 6900 XT
+1022  Advanced Micro Devices, Inc. [AMD]
+	1502  AMD IPU Device
+10de  NVIDIA Corporation
+	2bb4  GB202GL [RTX PRO 6000 Blackwell Max-Q Workstation Edition]
+8086  Intel Corporation
+	1502  82579LM Gigabit Network Connection (Lewisville)
+	56a0  DG2 [Arc A770]
+	7d1d  Meteor Lake NPU
+	a7a0  Raptor Lake-P [Iris Xe Graphics]
+8087  Intel Corporation
+	a7a0  Not a GPU (vendor-block boundary check)
+
+# List of known device classes, subclasses and programming interfaces
+C 00  Unclassified device
+	00  Non-VGA unclassified device
