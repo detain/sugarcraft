@@ -26,6 +26,16 @@ namespace SugarCraft\Crush\LSP;
  * where the next holder can find them. It also keeps the shared journal of
  * server notifications ({@see appendNote()}).
  *
+ * DISPOSITION (campaign re-verify lane A2, 2026-10-08): the fold audit asked
+ * once more whether this belongs inside the library lock, and the answer is
+ * recorded as a deliberate SKIP — a merge would force the library's
+ * single-file phase-byte lock to grow a general file-set abstraction (lock +
+ * state + frame + journal with per-file replacement laws) to carry a shape
+ * only LSP framing needs, for zero user benefit. The shared laws above are
+ * restated here rather than factored into a base so each class can be read
+ * whole; changing one law means changing both, which is the accepted cost of
+ * the divergence.
+ *
  * THE SAME LAWS AS THE MCP LOCK:
  *  - flock() belongs to the open file DESCRIPTION, and a handle inherited
  *    across fork shares the parent's — so each process opens the lock path
