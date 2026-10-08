@@ -150,6 +150,55 @@ final class PosixBackendRestoreLastTest extends TestCase
     }
 
     /**
+     * WHICH VERB the second call uses on the snapshot, pinned with no
+     * terminal at all — the rescue-path twin of
+     * {@see PosixBackendInjectedTermiosTest::testRestoreReplaysTheSavedSnapshot()}.
+     *
+     * WHY AN INJECTION PIN AND NOT ONLY THE REAL-PTY PROBE ABOVE: on the FFI
+     * backend `apply()` and `restore()` are one and the same syscall, so the
+     * pty round trip cannot tell the two spellings apart; they differ exactly
+     * on the `stty` fallback, whose `apply()` opens `if (!$this->raw) {
+     * return; }` — and a `current()` snapshot is never raw (the table is in
+     * `PosixBackend::restore()`'s doc-block). A real-pty stty fixture cannot
+     * reach this branch either, because `SttyTermios::runStty()` gives the
+     * stty grandchild a pipe on fd 0, so `-F /dev/fd/0` from inside a probe
+     * child names the pipe, not the terminal — a candy-pty property, measured
+     * while writing this test, and out of this file's scope. The spy is the
+     * honest deterministic seam: it records WHICH method `restoreLast()`
+     * called on the injected snapshot. `apply()` there is the bug this commit
+     * fixes; only `restore()` is correct on both backends.
+     */
+    public function testTheSecondCallRestoresTheRescueSnapshotInsteadOfApplyingIt(): void
+    {
+        $property = (new \ReflectionClass(PosixBackend::class))->getProperty('rescueSnapshot');
+        $previous = $property->getValue();
+        $spy      = new RescueSpyTermios();
+        $property->setValue(null, $spy);
+
+        try {
+            PosixBackend::restoreLast();
+        } finally {
+            $property->setValue(null, $previous);
+        }
+
+        self::assertSame(
+            1,
+            $spy->restoreCalls,
+            'the second restoreLast() must call restore() on the snapshot — apply() on a '
+                . 'SttyTermios snapshot is a silent no-op, which left stty-fallback hosts stuck in raw mode',
+        );
+        self::assertSame(
+            0,
+            $spy->applyCalls,
+            'the second restoreLast() must not call apply() on the snapshot',
+        );
+        self::assertNull(
+            $property->getValue(),
+            'the snapshot must be cleared after being replayed, or a third call re-applies a stale one',
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
     /**
@@ -275,5 +324,46 @@ final class PosixBackendRestoreLastTest extends TestCase
         );
 
         return $decoded;
+    }
+}
+
+/**
+ * Records WHICH verb the rescue path uses on the snapshot it holds.
+ *
+ * Mirrors the shape of `SpyTermios` in {@see PosixBackendInjectedTermiosTest}
+ * — same idea, different file, so the two never load-order against each
+ * other under `--filter`. Only apply()/restore() counting matters here; the
+ * remaining contract members are inert because `restoreLast()`'s second-call
+ * branch touches nothing else before clearing the static.
+ */
+final class RescueSpyTermios implements \SugarCraft\Pty\Contract\Termios
+{
+    public int $applyCalls = 0;
+
+    public int $restoreCalls = 0;
+
+    public function current(): \SugarCraft\Pty\Contract\Termios
+    {
+        return $this;
+    }
+
+    public function makeRaw(): \SugarCraft\Pty\Contract\Termios
+    {
+        return $this;
+    }
+
+    public function apply(int $when = self::TCSANOW): void
+    {
+        $this->applyCalls++;
+    }
+
+    public function restore(): void
+    {
+        $this->restoreCalls++;
+    }
+
+    public function isAtty(): bool
+    {
+        return false;
     }
 }
