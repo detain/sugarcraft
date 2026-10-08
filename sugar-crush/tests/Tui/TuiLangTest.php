@@ -207,8 +207,8 @@ final class TuiLangTest extends TestCase
 
     /**
      * Every quoted `tui.`/`palette.` key in the TUI layer's sources (the
-     * renderer, the shell, `Tui/` and `Palette/`), mapped to the first file
-     * naming it. Scoped to those files because elsewhere the same shape is
+     * renderer, the shell, `Chat.php`'s notice emitters, `Tui/` and
+     * `Palette/`), mapped to the first file naming it. Scoped to those files because elsewhere the same shape is
      * something else: `KeyBindingRegistry` ids such as `palette.move` are
      * binding ids, not catalogue keys.
      *
@@ -217,7 +217,7 @@ final class TuiLangTest extends TestCase
     private static function quotedTuiKeys(): array
     {
         $src = \dirname(__DIR__, 2) . '/src';
-        $files = [$src . '/Renderer.php', $src . '/App/App.php'];
+        $files = [$src . '/Renderer.php', $src . '/App/App.php', $src . '/Chat.php'];
         foreach (['/Tui', '/Palette'] as $dir) {
             $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($src . $dir, \FilesystemIterator::SKIP_DOTS));
             foreach ($iterator as $file) {
