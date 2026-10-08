@@ -22,6 +22,7 @@ return [
     'barchart.dim_nonneg'      => 'Balken.diagramm-Breite/-Höhe muss >= 0 sein',
     'barchart.bar_width_min'   => 'barWidth muss >= 1 sein',
     'barchart.bar_gap_nonneg'  => 'barGap muss >= 0 sein',
+    'barchart.color_return'   => 'Farbfunktion des Balkendiagramms muss {expected} oder null zurückgeben, {given} erhalten',
 
     // Heatmap/Heatmap.php
     'heatmap.dim_nonneg'       => 'Heatmap-Breite/-Höhe muss >= 0 sein',
@@ -30,6 +31,7 @@ return [
 
     // LineChart/LineChart.php
     'linechart.dim_nonneg'     => 'Liniendiagramm-Breite/-Höhe muss >= 0 sein',
+    'linechart.color_return'  => 'Reihenfarbfunktion des Liniendiagramms muss {expected} oder null zurückgeben, {given} erhalten',
 
     // LineChart/Waveline.php
     'waveline.dim_nonneg'      => 'Wellenlinien-Breite/-Höhe muss >= 0 sein',
