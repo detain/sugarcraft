@@ -1,0 +1,56 @@
+{
+    "name": "sugarcraft/candy-top",
+    "description": "Terminal system monitor (btop-style) built on SugarCraft charting libs — PHP TUI port inspired by aristocratos/btop.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "monitor",
+        "top",
+        "btop",
+        "system-monitor",
+        "dashboard",
+        "charts",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-top",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-top/issues",
+        "source": "https://github.com/sugarcraft/candy-top",
+        "docs": "https://sugarcraft.github.io/lib/candy-top.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "@dev",
+        "sugarcraft/candy-input": "@dev",
+        "sugarcraft/candy-sprinkles": "@dev",
+        "sugarcraft/sugar-charts": "@dev",
+        "sugarcraft/sugar-dash": "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Top\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Top\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
