@@ -12,12 +12,18 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Dash\Plot\ProcRow\ProcGraphTracker;
+use SugarCraft\Top\Collect\ProcessControl;
 use SugarCraft\Top\Collect\ProcList;
 use SugarCraft\Top\Collect\ProcSnapshot;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\InvalidOptionValue;
 use SugarCraft\Top\Config\Schema;
 use SugarCraft\Top\Msg\SampledMsg;
+use SugarCraft\Top\Overlay\Menus;
+use SugarCraft\Top\Overlay\Overlay;
+use SugarCraft\Top\Overlay\ReniceMenu;
+use SugarCraft\Top\Overlay\SignalMenu;
+use SugarCraft\Top\Overlay\Signals;
 use SugarCraft\Top\Panel\Proc\DetailState;
 use SugarCraft\Top\Panel\Proc\FilterEdit;
 use SugarCraft\Top\Panel\Proc\ProcEntry;
@@ -26,6 +32,7 @@ use SugarCraft\Top\Panel\Proc\ProcTable;
 use SugarCraft\Top\Panel\Proc\ProcTree;
 use SugarCraft\Top\Panel\Proc\ProcView;
 use SugarCraft\Top\Source\CollectorSource;
+use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Source\Fake\FakeProcList;
 use SugarCraft\Top\Source\Source;
 use SugarCraft\Top\View\Region;
@@ -55,20 +62,30 @@ use SugarCraft\Top\View\Region;
  * Enter/Down keep it, Esc or a click restores the old one; `!` makes it a
  * regex), delete clears it, Enter opens / closes the detailed view. Every
  * option a key changes is written through {@see PanelResult::$set}.
- * Not here: t / k / s / N (signal and renice popups are btop Menus — P-F's
- * overlay seam), F follow and u pause.
+ * Phase P-F1: `t` / `k` (`K` with vim_keys) ask to send SIGTERM / SIGKILL,
+ * `s` opens the signal chooser and `N` the renice menu — all as overlays
+ * the App opens ({@see PanelResult::$overlay}), targeting the selected row
+ * or, with nothing selected, the detailed process while it is alive; the
+ * signal / renice itself runs in a Cmd through the injected
+ * {@see ProcessControl}. `u` flips pause_proc_list (the list stops taking
+ * new samples), `F` follows the selected (or detailed) process: the list
+ * keeps it centred and highlighted until it exits, the selection moves
+ * (unless paused) or `F` is pressed again. Either shows btop's banner on
+ * the list's last row, which then holds one process fewer.
  *
  * Mouse: wheel scrolls by 3, a click selects (a click on the selected row
  * opens the detailed view, or toggles its tree branch when it lands on the
  * `[-]` marker), the scrollbar column pages at its arrows, drags from its
  * thumb and jumps proportionally elsewhere, title buttons act as their
- * keys, and a click outside the list clears the selection.
+ * keys, and a click outside the list clears the selection. The buttons
+ * are claimed through {@see ClickCapture}, so the App hands a click on
+ * one to this box alone.
  *
  * Mirrors aristocratos/btop Proc::draw / Proc::selection
  * (src/btop_draw.cpp), Input::process's proc block (src/btop_input.cpp)
  * and Proc::collect's post-processing (src/linux/btop_collect.cpp).
  */
-final class ProcPanel implements Panel
+final class ProcPanel implements Panel, ClickCapture
 {
     /** btop Proc::draw clears dead pids' graphs every 100 fresh frames. */
     private const SWEEP = 100;
@@ -96,14 +113,33 @@ final class ProcPanel implements Panel
         private ?ProcGraphTracker $graphs = null,
         private int $sweep = 0,
         private bool $dragging = false,
+        private ?ProcessControl $control = null,
+        private ?int $followedPid = null,
+        private int $followRow = 0,
+        private bool $returnToFollowed = false,
+        private bool $bannerShown = false,
     ) {
         $this->sel ??= ProcSelection::new();
         $this->graphs ??= ProcGraphTracker::new();
+        $this->control ??= FakeProcessControl::new();
     }
 
-    public static function new(Source $source): self
+    /**
+     * @param ?ProcessControl $control what the signal / renice menus act through. Null is the
+     *                                 inert {@see FakeProcessControl}: a live process is only ever
+     *                                 signalled when the caller passes
+     *                                 {@see \SugarCraft\Top\Collect\PosixProcessControl} explicitly
+     *                                 ({@see Panels::standard()} does, outside `--fake`).
+     */
+    public static function new(Source $source, ?ProcessControl $control = null): self
     {
-        return new self($source);
+        return new self($source, control: $control);
+    }
+
+    /** The followed process (btop followed_pid), or null when not following. */
+    public function followedPid(): ?int
+    {
+        return $this->followedPid;
     }
 
     public function box(): string
@@ -195,6 +231,12 @@ final class ProcPanel implements Panel
         return in_array(self::keyName($key, false), ['+', '-', '=', 'space', 'C'], true);
     }
 
+    /** A click on one of the box's painted buttons belongs to this box alone. */
+    public function capturesClick(MouseMsg $msg, PanelContext $context): bool
+    {
+        return !$context->config->bool('proc_filtering') && $this->buttonAt($msg, $context) !== null;
+    }
+
     public function update(Msg $msg, PanelContext $context): PanelResult
     {
         if ($msg instanceof SampledMsg) {
@@ -238,6 +280,8 @@ final class ProcPanel implements Panel
             $detail,
             $this->memTotal,
             $this->snapshot?->coreCount ?? 1,
+            $this->followedPid,
+            $this->followRow,
         );
     }
 
@@ -264,6 +308,23 @@ final class ProcPanel implements Panel
     private function sampled(ProcSnapshot $snap, Source $next, PanelContext $context): self
     {
         $config = $context->config;
+        if ($config->bool('pause_proc_list')) {
+            // btop pause_proc_list: the list and its values stay as they
+            // were; only the detailed view keeps following its pid.
+            $detail = $this->detail;
+            if ($detail !== null) {
+                $fresh = null;
+                foreach ($snap->processes as $p) {
+                    if ($p->pid === $detail->pid) {
+                        $fresh = ProcEntry::of($p, $p->cpu >= 0.0 ? $p->cpu : ($this->carry[$p->pid] ?? 0.0), $p->ioRead, $p->ioWrite);
+                        break;
+                    }
+                }
+                $detail = $detail->observe($fresh, $snap->detail?->pid === $detail->pid ? $snap->detail : null, $snap->coreCount, $config->bool('proc_per_core'), $this->memTotal, $detail->parent);
+            }
+
+            return $this->mutate(['source' => $next, 'snapshot' => $snap, 'detail' => $detail])->settled($config, $context);
+        }
         $previous = [];
         foreach ($this->entries as $i => $e) {
             $previous[$e->pid()] = $i;
@@ -344,7 +405,14 @@ final class ProcPanel implements Panel
         $key = self::keyName($msg, $config->bool('vim_keys'));
         $tree = $config->bool('proc_tree');
 
+        $kill = $config->bool('vim_keys') ? 'K' : 'k';
+
         return match (true) {
+            $key === 't' || $key === $kill => $this->signalKey($context, $key === 't' ? Signals::SIGTERM : Signals::SIGKILL),
+            $key === 's' => $this->menuKey($context, static fn (int $pid, string $name, ProcessControl $c): Overlay => SignalMenu::new($pid, $name, $c)),
+            $key === 'N' => $this->menuKey($context, static fn (int $pid, string $name, ProcessControl $c): Overlay => ReniceMenu::new($pid, $name, $c)),
+            $key === 'u' => $this->set($context, ['pause_proc_list' => !$config->bool('pause_proc_list')]),
+            $key === 'F' => $this->follow($context),
             $key === 'left', $key === 'right' => $this->set($context, ['proc_sorting' => self::cycleSort($config->procSorting(), $key === 'right' ? 1 : -1)]),
             $key === 'f', $key === '/' => $this->openFilter($context),
             $key === 'e' => $this->toggleTree($context),
@@ -414,6 +482,157 @@ final class ProcPanel implements Panel
         }
 
         return $all[(($i + $step) % $n + $n) % $n];
+    }
+
+    // ---- signals / renice / follow (phase P-F1) ------------------------------
+
+    /**
+     * btop's s_pid: the selected row's process, or — with nothing selected —
+     * the detailed one; null when neither applies or the detailed process is
+     * dead (btop_input.cpp:505-520).
+     *
+     * @return array{0: int, 1: string}|null [pid, name]
+     */
+    public function signalTarget(Config $config): ?array
+    {
+        $sel = $this->selection();
+        $detailShown = $config->bool('show_detailed') && $this->detail !== null;
+        if ($sel->selected > 0) {
+            $i = $sel->index();
+            $row = $i === null ? null : ($this->rows($config)[$i] ?? null);
+
+            return $row === null ? null : [$row->pid(), $row->process->name];
+        }
+        if (!$detailShown || $this->detail === null || !$this->detail->alive) {
+            return null;
+        }
+
+        return [$this->detail->pid, $this->detail->entry?->process->name ?? ''];
+    }
+
+    /** `t` / `k`: btop Menu::show(SignalSend, SIGTERM | SIGKILL) — a Yes/No box. */
+    private function signalKey(PanelContext $context, int $signal): PanelResult
+    {
+        $target = $this->signalTarget($context->config);
+        if ($target === null) {
+            return new PanelResult($this);
+        }
+
+        return new PanelResult($this, null, [], Menus::signalSend($this->processControl(), $target[0], $target[1], $signal));
+    }
+
+    /**
+     * `s` / `N`: open the chooser built by `$menu` for the target.
+     *
+     * @param \Closure(int, string, ProcessControl): Overlay $menu
+     */
+    private function menuKey(PanelContext $context, \Closure $menu): PanelResult
+    {
+        $target = $this->signalTarget($context->config);
+        if ($target === null) {
+            return new PanelResult($this);
+        }
+
+        return new PanelResult($this, null, [], $menu($target[0], $target[1], $this->processControl()));
+    }
+
+    /** What the signal / renice menus act through. */
+    public function processControl(): ProcessControl
+    {
+        return $this->control ?? FakeProcessControl::new();
+    }
+
+    /**
+     * `F` (btop_input.cpp:395-418): follow the selected process, else the
+     * detailed one; pressed while following, stop — returning the
+     * selection to the followed row (or the detailed pid) as btop does.
+     */
+    private function follow(PanelContext $context): PanelResult
+    {
+        $config = $context->config;
+        $sel = $this->selection();
+        $pid = $this->selectedPid($config);
+        $detailShown = $config->bool('show_detailed') && $this->detail !== null;
+        if ($sel->selected !== 0 && $pid !== null && $this->followedPid !== $pid) {
+            return new PanelResult($this->mutate(['followedPid' => $pid])->tracked($config, $context, true)->settled($config, $context));
+        }
+        if ($detailShown && $sel->selected === 0 && $this->detail !== null && $this->followedPid !== $this->detail->pid) {
+            return new PanelResult($this->mutate(['followedPid' => $this->detail->pid])->tracked($config, $context, true)->settled($config, $context));
+        }
+        if ($this->followedPid === null) {
+            return new PanelResult($this);
+        }
+        $panel = $this->unfollowed();
+        if ($this->returnToFollowed) {
+            $panel = $panel->mutate(['sel' => $sel->withSelected($this->followRow)]);
+        } elseif ($detailShown && $this->detail !== null && $this->followedPid === $this->detail->pid) {
+            $panel = $panel->restored($this->detail->pid, $config, $context);
+        }
+
+        return new PanelResult($panel->settled($config, $context));
+    }
+
+    private function unfollowed(): self
+    {
+        return $this->mutate(['followedPid' => null, 'followRow' => 0, 'returnToFollowed' => false]);
+    }
+
+    /**
+     * btop Proc::draw's follow block: centre the list on the followed pid
+     * (selected, unless it is the detailed one) or stop following when it
+     * is gone. While paused only a forced pass moves it (btop
+     * update_following: `F` and the sort / tree keys).
+     */
+    private function tracked(Config $config, PanelContext $context, bool $force): self
+    {
+        if ($this->followedPid === null || !$context->visible() || (!$force && $config->bool('pause_proc_list'))) {
+            return $this;
+        }
+        $rows = $this->rows($config);
+        $loc = null;
+        foreach ($rows as $i => $row) {
+            if ($row->pid() === $this->followedPid) {
+                $loc = $i + 1;
+                break;
+            }
+        }
+        if ($loc === null) {
+            return $this->unfollowed();
+        }
+        $max = max(1, $this->selectMax($config, $context));
+        $numpids = count($rows);
+        $middle = $max % 2 === 0 ? intdiv($max, 2) : intdiv($max, 2) + 1;
+        $start = max(0, $loc - $middle);
+        $followed = $loc < $middle ? $loc : ($start > $numpids - $max ? $max - $numpids + $loc : $middle);
+        // btop's later bounds check pulls start back to the list end, where
+        // `followed` (max - numpids + loc) already points.
+        $start = min($start, max(0, $numpids - $max));
+        $onDetail = $config->bool('show_detailed') && $this->detail?->pid === $this->followedPid;
+
+        return $this->mutate([
+            'sel' => $this->selection()->withStart($start)->withSelected($onDetail ? 0 : $followed),
+            'followRow' => $followed,
+            'returnToFollowed' => true,
+        ]);
+    }
+
+    /**
+     * btop Proc::selection's preamble: a selection move first returns from
+     * the detailed view to the followed row, then — unless paused — stops
+     * following.
+     */
+    private function leaveFollow(Config $config): self
+    {
+        if ($this->followedPid === null) {
+            return $this;
+        }
+        $panel = $this;
+        $sel = $this->selection();
+        if ($config->bool('show_detailed') && $sel->selected === 0 && $this->returnToFollowed && $this->detail?->pid === $this->followedPid) {
+            $panel = $panel->mutate(['sel' => $sel->withSelected($this->followRow), 'returnToFollowed' => false]);
+        }
+
+        return $config->bool('pause_proc_list') ? $panel : $panel->unfollowed();
     }
 
     private function openFilter(PanelContext $context): PanelResult
@@ -561,6 +780,10 @@ final class ProcPanel implements Panel
                 'detail' => DetailState::open($pid, $entry),
                 'sel' => $sel->withLastSelected($sel->selected)->withSelected(0),
             ]);
+            if ($config->bool('proc_follow_detailed')) {
+                // btop: opening the detailed view follows its process.
+                $panel = $panel->mutate(['followedPid' => $pid]);
+            }
             $after = $this->after($config, ['show_detailed' => true]);
             $panel = $panel->settled($after, $context);
 
@@ -572,6 +795,9 @@ final class ProcPanel implements Panel
         }
         $detailPid = $this->detail?->pid;
         $panel = $this->mutate(['detail' => null]);
+        if ($config->bool('proc_follow_detailed') && $detailPid !== null && $this->followedPid === $detailPid) {
+            $panel = $panel->unfollowed();
+        }
         if ($config->bool('proc_follow_detailed') && $detailPid !== null) {
             $panel = $panel->restored($detailPid, $this->after($config, ['show_detailed' => false]), $context);
         } elseif ($sel->lastSelected > 0) {
@@ -613,9 +839,11 @@ final class ProcPanel implements Panel
     private function moved(string $key, PanelContext $context, ?Config $config = null): self
     {
         $config ??= $context->config;
-        $rows = $this->rows($config);
+        $panel = $this->leaveFollow($config);
+        $rows = $panel->rows($config);
+        $panel = $panel->mutate(['sel' => $panel->selection()->move($key, count($rows), $panel->selectMax($config, $context))]);
 
-        return $this->mutate(['sel' => $this->selection()->move($key, count($rows), $this->selectMax($config, $context))]);
+        return $panel->bannerShown !== $panel->banner($config) ? $panel->settled($config, $context) : $panel;
     }
 
     // ---- mouse --------------------------------------------------------------
@@ -659,17 +887,21 @@ final class ProcPanel implements Panel
 
         // Title / bottom-row buttons first (btop resolves mouse_mappings before Input::process).
         $sel = $this->selection();
-        if ($context->hit($m->x, $m->y)) {
-            $buttons = ProcView::buttons($box->width, $box->height, $config, false, $sel->selected, $shown ? $this->detail : null, $this->selectedPid($config));
-            foreach ($buttons as $key => [$bx, $by, $bw]) {
-                if ($ly === $by && $lx >= $bx && $lx < $bx + $bw) {
-                    return $this->key(self::synthetic($key), $context);
-                }
-            }
+        $button = $this->buttonAt($m, $context);
+        if ($button !== null) {
+            return $this->key(self::synthetic($button), $context);
         }
 
         if (!$inList) {
-            return new PanelResult($sel->selected > 0 ? $this->mutate(['sel' => $sel->withSelected(0)]) : $this);
+            // btop: an unmapped click clears a selection and, unless
+            // paused, stops following — both only inside its
+            // `proc_selected > 0` branch; with nothing selected it is a no-op.
+            if ($sel->selected === 0) {
+                return new PanelResult($this);
+            }
+            $panel = $config->bool('pause_proc_list') ? $this : $this->unfollowed();
+
+            return new PanelResult($panel->mutate(['sel' => $sel->withSelected(0)]));
         }
         if ($lx < $box->width - 2) {
             if ($sel->selected === $row - 1) {
@@ -684,7 +916,12 @@ final class ProcPanel implements Panel
                 return $this->enter($context);
             }
 
-            return new PanelResult($this->mutate(['sel' => $sel->withSelected($row - 1)->clamp(count($rows), $max)]));
+            if ($this->banner($config) && $row === $listH - 2) {
+                return new PanelResult($this); // btop: the banner row is not a process
+            }
+            $panel = $config->bool('pause_proc_list') ? $this : $this->unfollowed();
+
+            return new PanelResult($panel->mutate(['sel' => $sel->withSelected($row - 1)->clamp(count($rows), $panel->selectMax($config, $context))]));
         }
         if ($row === 1) {
             return new PanelResult($this->moved('page_up', $context));
@@ -697,6 +934,28 @@ final class ProcPanel implements Panel
         }
 
         return new PanelResult($this->moved('mousey' . ($row - 2), $context));
+    }
+
+    /** The proc-box button (btop mouse_mappings key) under a bare left click, or null. */
+    private function buttonAt(MouseMsg $m, PanelContext $context): ?string
+    {
+        $box = $context->box;
+        if ($box === null || $m->action !== MouseAction::Press || $m->button !== MouseButton::Left
+            || $m->shift || $m->alt || $m->ctrl || !$context->hit($m->x, $m->y)) {
+            return null;
+        }
+        $config = $context->config;
+        $lx = $m->x - 1 - $box->x;
+        $ly = $m->y - 1 - $box->y;
+        $shown = $this->detailDrawn($config, $context);
+        $buttons = ProcView::buttons($box->width, $box->height, $config, false, $this->selection()->selected, $shown ? $this->detail : null, $this->selectedPid($config));
+        foreach ($buttons as $key => [$bx, $by, $bw]) {
+            if ($ly === $by && $lx >= $bx && $lx < $bx + $bw) {
+                return (string) $key;
+            }
+        }
+
+        return null;
     }
 
     /** The KeyMsg a proc-box button stands for. */
@@ -722,8 +981,11 @@ final class ProcPanel implements Panel
     private function set(PanelContext $context, array $set): PanelResult
     {
         $after = $this->after($context->config, $set);
+        // btop update_following: a sort / tree / reverse change re-centres
+        // the followed process even while paused.
+        $panel = $this->rebuilt($after)->tracked($after, $context, true);
 
-        return new PanelResult($this->rebuilt($after)->settled($after, $context), null, $set);
+        return new PanelResult($panel->settled($after, $context), null, $set);
     }
 
     /**
@@ -763,15 +1025,41 @@ final class ProcPanel implements Panel
         if (!$context->visible()) {
             return $this;
         }
-        $sel = $this->selection()->clamp(count($this->rows($config)), $this->selectMax($config, $context));
+        $panel = $this->tracked($config, $context, false);
+        $numpids = count($panel->rows($config));
+        $max = $panel->selectMax($config, $context);
+        $sel = $panel->selection();
+        // btop Proc::draw: when the banner goes away at the end of the list
+        // the row it held is filled from above, so the selection steps down
+        // with it; when a pause banner appears over the selection the list
+        // scrolls one instead.
+        $banner = $panel->banner($config);
+        if ($panel->bannerShown && !$banner && $sel->selected > 0 && $sel->start + $max - 1 === $numpids) {
+            $sel = $sel->withSelected($sel->selected + 1);
+        } elseif ($config->bool('pause_proc_list') && $sel->selected > $max) {
+            $sel = $sel->withStart($sel->start + 1);
+        }
+        $sel = $sel->clamp($numpids, $max);
+        if ($banner !== $panel->bannerShown) {
+            $panel = $panel->mutate(['bannerShown' => $banner]);
+        }
 
-        return $sel === $this->sel ? $this : $this->mutate(['sel' => $sel]);
+        return $sel === $panel->sel ? $panel : $panel->mutate(['sel' => $sel]);
     }
 
-    /** btop select_max: the list rows, minus the detailed view's 8 when it is open. */
+    /** btop proc_banner_shown: paused or following. */
+    private function banner(Config $config): bool
+    {
+        return $config->bool('pause_proc_list') || $this->followedPid !== null;
+    }
+
+    /**
+     * btop select_max: the list rows, minus the detailed view's 8 when it
+     * is open and the banner's row when it shows.
+     */
     private function selectMax(Config $config, PanelContext $context): int
     {
-        return max(0, $context->procSelectMax() - ProcView::detailRows($this->detailDrawn($config, $context)));
+        return max(0, $context->procSelectMax() - ProcView::detailRows($this->detailDrawn($config, $context)) - ($this->banner($config) ? 1 : 0));
     }
 
     /**

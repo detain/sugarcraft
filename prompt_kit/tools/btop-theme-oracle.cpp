@@ -18,7 +18,7 @@
 //   g++ -std=c++23 -O1 -o /tmp/btop-theme-oracle prompt_kit/tools/btop-theme-oracle.cpp
 //   /tmp/btop-theme-oracle candy-top/themes/*.theme candy-top/tests/Theme/fixtures/edge/*.theme > candy-top/tests/fixtures/btop-theme-oracle.json
 // The edge/*.theme inputs pin btop's corner cases (empty / malformed / clamped /
-// partial process_* values, unquoted and padded lines) beyond the 41 shipped themes.
+// partial process_* values, unquoted and padded lines) beyond the 42 shipped themes.
 // Consumed by candy-top/tests/Theme/BtopThemeOracleTest.php.
 #include <algorithm>
 #include <array>

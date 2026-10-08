@@ -13,10 +13,17 @@ use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Top\Collect\ProcessControl;
 use SugarCraft\Top\Collect\ProcList;
 use SugarCraft\Top\Collect\ProcSnapshot;
 use SugarCraft\Top\Config\Config;
+use SugarCraft\Top\Msg\OpenOverlayMsg;
 use SugarCraft\Top\Msg\SampledMsg;
+use SugarCraft\Top\Overlay\MsgBox;
+use SugarCraft\Top\Overlay\OverlayContext;
+use SugarCraft\Top\Overlay\ReniceMenu;
+use SugarCraft\Top\Overlay\SignalMenu;
+use SugarCraft\Top\Overlay\Signals;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelResult;
 use SugarCraft\Top\Panel\Proc\ProcEntry;
@@ -26,6 +33,8 @@ use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeProcList;
 use SugarCraft\Top\Source\Source;
 use SugarCraft\Top\Tests\Support\ProcRows;
+use SugarCraft\Top\Theme\ThemeConfig;
+use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\FrameBuilder;
 use SugarCraft\Top\View\Layout;
 use SugarCraft\Top\View\Rect;
@@ -122,6 +131,12 @@ final class ProcPanelTest extends TestCase
     private function demo(int $extra = 0): ProcPanel
     {
         return $this->sample(ProcPanel::new(FakeProcList::demo(8, $extra)), 2);
+    }
+
+    /** @return list<ProcEntry> */
+    private function rows(ProcPanel $p): array
+    {
+        return $p->rows($this->config);
     }
 
     /** @return list<int> */
@@ -329,14 +344,271 @@ final class ProcPanelTest extends TestCase
         $this->assertSame(['proc_filter' => ''], $this->last?->set);
     }
 
-    public function testSignalFollowAndPauseKeysAreLeftForLaterPhases(): void
+    // ---- signals / renice / pause / follow (phase P-F1) -------------------------
+
+    public function testSignalKeysAskTheAppForMenusOnTheSelectedProcess(): void
+    {
+        $p = $this->demo();
+        foreach (['t', 'k', 's', 'N'] as $k) {
+            $this->assertSame($p, $this->press($p, $k), 'nothing selected, no detail: ' . $k);
+            $this->assertNull($this->last?->overlay);
+        }
+        $p = $this->press($p, 'down', 'down');
+        $pid = $p->selectedPid($this->config);
+        $this->assertNotNull($pid);
+
+        $same = $this->press($p, 't');
+        $this->assertSame($p, $same, 'the panel itself is unchanged');
+        $this->assertSame([], $this->last?->set);
+        $this->assertNull($this->last?->cmd, 'nothing is sent before the confirmation');
+        $box = $this->last?->overlay;
+        $this->assertInstanceOf(MsgBox::class, $box);
+        $this->assertSame('SIGTERM', $box->title);
+        $this->assertSame(MsgBox::YES_NO, $box->type);
+
+        $this->press($p, 'k');
+        $this->assertInstanceOf(MsgBox::class, $this->last?->overlay);
+        $this->assertSame('SIGKILL', $this->last->overlay->title);
+
+        $this->press($p, 's');
+        $menu = $this->last?->overlay;
+        $this->assertInstanceOf(SignalMenu::class, $menu);
+        $this->assertSame($pid, $menu->pid);
+
+        $this->press($p, 'N');
+        $renice = $this->last?->overlay;
+        $this->assertInstanceOf(ReniceMenu::class, $renice);
+        $this->assertSame($pid, $renice->pid);
+        $this->assertSame([$pid, $this->rows($p)[1]->process->name], $p->signalTarget($this->config));
+    }
+
+    public function testVimKeysMoveKillToShiftK(): void
+    {
+        $this->config = $this->config->with('vim_keys', true);
+        $p = $this->press($this->demo(), 'down', 'down');
+        $up = $this->press($p, 'k');
+        $this->assertNull($this->last?->overlay, 'k is up with vim_keys');
+        $this->assertSame(1, $up->selection()->selected);
+        $this->press($p, 'K');
+        $this->assertInstanceOf(MsgBox::class, $this->last?->overlay);
+        $this->assertSame('SIGKILL', $this->last->overlay->title);
+    }
+
+    public function testSignalKeysTargetTheDetailedProcessUntilItDies(): void
+    {
+        $snap = static fn (array $pids): ProcSnapshot => new ProcSnapshot(array_map(static fn (int $pid) => ProcRows::process($pid), $pids), 1, 1 << 30);
+        $p = $this->sample(ProcPanel::new(self::replay([$snap([1, 2, 3]), $snap([1, 2, 3]), $snap([1, 3])])), 2);
+        $p = $this->press($p, 'down', 'down', 'enter');
+        $this->assertSame(0, $p->selection()->selected);
+        $this->assertSame([2, 'p2'], $p->signalTarget($this->config), 'nothing selected: the detailed process');
+        $this->press($p, 't');
+        $this->assertInstanceOf(MsgBox::class, $this->last?->overlay);
+        $p = $this->sample($p);
+        $this->assertFalse($p->detail()?->alive);
+        $this->assertNull($p->signalTarget($this->config), 'btop: a Dead detailed process gets no menu');
+        $this->press($p, 's');
+        $this->assertNull($this->last?->overlay);
+    }
+
+    public function testConfirmedSignalsAndRenicesGoThroughTheInjectedControl(): void
+    {
+        $control = new class () implements ProcessControl {
+            /** @var list<array{string, int, int}> */
+            public array $calls = [];
+            public int $errno = 0;
+
+            public function signal(int $pid, int $signal): int
+            {
+                $this->calls[] = ['signal', $pid, $signal];
+
+                return $this->errno;
+            }
+
+            public function renice(int $pid, int $nice): int
+            {
+                $this->calls[] = ['renice', $pid, $nice];
+
+                return $this->errno;
+            }
+        };
+        $p = $this->sample(ProcPanel::new(FakeProcList::demo(8), $control), 2);
+        $p = $this->press($p, 'down');
+        $pid = $p->selectedPid($this->config);
+        $this->assertNotNull($pid);
+        $ctx = new OverlayContext($this->config, 120, 40, Ink::new(ThemeConfig::new()));
+
+        $this->press($p, 't');
+        $box = $this->last?->overlay;
+        $this->assertNotNull($box);
+        $result = $box->update(new KeyMsg(KeyType::Char, 'y'), $ctx);
+        $this->assertNull($result->overlay, 'Yes closes the box');
+        $this->assertSame([], $control->calls, 'the signal is sent inside the Cmd only');
+        $this->assertNotNull($result->cmd);
+        $this->assertNull(($result->cmd)(), 'success opens nothing');
+        $this->assertSame([['signal', $pid, 15]], $control->calls);
+
+        $control->errno = Signals::EPERM;
+        $this->press($p, 'N');
+        $renice = $this->last?->overlay;
+        $this->assertNotNull($renice);
+        $renice = $renice->update(new KeyMsg(KeyType::Up), $ctx)->overlay;
+        $this->assertNotNull($renice);
+        $result = $renice->update(new KeyMsg(KeyType::Enter), $ctx);
+        $this->assertNotNull($result->cmd);
+        $failed = ($result->cmd)();
+        $this->assertInstanceOf(OpenOverlayMsg::class, $failed, 'a failure opens the error box');
+        $this->assertInstanceOf(MsgBox::class, $failed->overlay);
+        $this->assertSame(['renice', $pid, 1], $control->calls[1]);
+    }
+
+    public function testPauseFreezesTheListUntilResumed(): void
     {
         $p = $this->press($this->demo(), 'down');
-        foreach (['t', 'k', 's', 'N', 'F', 'u'] as $k) {
-            $this->assertSame($p, $this->press($p, $k), $k);
-            $this->assertSame([], $this->last?->set);
-            $this->assertNull($this->last?->cmd);
+        $p = $this->press($p, 'u');
+        $this->assertSame(['pause_proc_list' => true], $this->last?->set);
+        $before = array_map(static fn (ProcEntry $e): float => $e->cpu, $p->rows($this->config));
+        $graphs = $p->graphs();
+        $p = $this->sample($p, 3);
+        $this->assertSame($before, array_map(static fn (ProcEntry $e): float => $e->cpu, $p->rows($this->config)), 'values hold while paused');
+        $this->assertSame($graphs, $p->graphs(), 'mini-graphs do not advance');
+        $p = $this->press($p, 'u');
+        $this->assertSame(['pause_proc_list' => false], $this->last?->set);
+        $p = $this->sample($p);
+        $this->assertNotSame($before, array_map(static fn (ProcEntry $e): float => $e->cpu, $p->rows($this->config)));
+    }
+
+    public function testBannerTakesOneListRow(): void
+    {
+        $p = $this->press($this->demo(30), 'down', 'end');
+        $max = $this->layout->procSelectMax;
+        $this->assertSame($max, $p->selection()->selected);
+        $p = $this->press($p, 'u', 'end');
+        $this->assertSame($max - 1, $p->selection()->selected, 'paused: the banner holds the last row');
+    }
+
+    public function testFollowKeepsTheProcessCentredUntilTheSelectionMoves(): void
+    {
+        $p = $this->press($this->demo(30), 'down', 'down', 'down');
+        $pid = $p->selectedPid($this->config);
+        $p = $this->press($p, 'F');
+        $this->assertSame($pid, $p->followedPid());
+        $this->assertSame([], $this->last?->set, 'follow is panel state');
+        $this->assertSame($pid, $p->selectedPid($this->config));
+        $p = $this->press($p, 'r');
+        $this->assertSame($pid, $p->selectedPid($this->config), 'a resort re-centres on the followed pid');
+        $deep = $this->press($this->demo(30), ...array_fill(0, 20, 'down'));
+        $deepPid = $deep->selectedPid($this->config);
+        $deep = $this->press($deep, 'F');
+        $max = $this->layout->procSelectMax - 1;
+        $middle = $max % 2 === 0 ? intdiv($max, 2) : intdiv($max, 2) + 1;
+        $loc = array_search($deepPid, $this->rowPids($deep), true) + 1;
+        $this->assertGreaterThan($middle, $loc);
+        $this->assertSame($loc - $middle, $deep->selection()->start, 'btop list_middle: centred');
+        $this->assertSame($middle, $deep->selection()->selected);
+
+        $moved = $this->press($p, 'down');
+        $this->assertNull($moved->followedPid(), 'moving the selection stops following');
+
+        $this->config = $this->config->with('pause_proc_list', true);
+        $kept = $this->press($p, 'down');
+        $this->assertSame($pid, $kept->followedPid(), 'paused: moving keeps following');
+
+        $this->config = $this->config->with('pause_proc_list', false);
+        $off = $this->press($p, 'F');
+        $this->assertNull($off->followedPid(), 'F again stops');
+        $this->assertSame($pid, $off->selectedPid($this->config), 'the selection returns to the followed row');
+    }
+
+    public function testFollowStopsWhenTheProcessExits(): void
+    {
+        $snap = static fn (array $pids): ProcSnapshot => new ProcSnapshot(array_map(static fn (int $pid) => ProcRows::process($pid), $pids), 1, 1 << 30);
+        $p = $this->sample(ProcPanel::new(self::replay([$snap([1, 2, 3]), $snap([1, 2, 3]), $snap([1, 3])])), 2);
+        $p = $this->press($p, 'down', 'down', 'F');
+        $this->assertSame(2, $p->followedPid());
+        $p = $this->sample($p);
+        $this->assertNull($p->followedPid());
+    }
+
+    public function testDetailedViewFollowsItsProcessWithProcFollowDetailed(): void
+    {
+        $p = $this->press($this->demo(), 'down', 'down');
+        $pid = $p->selectedPid($this->config);
+        $p = $this->press($p, 'enter');
+        $this->assertSame($pid, $p->followedPid());
+        $this->assertSame(0, $p->selection()->selected, 'following the detailed pid selects nothing');
+        $p = $this->press($p, 'enter');
+        $this->assertNull($p->followedPid());
+
+        $this->config = $this->config->with('proc_follow_detailed', false);
+        $p = $this->press($p, 'enter');
+        $this->assertNull($p->followedPid());
+        $p = $this->press($p, 'F');
+        $this->assertSame($pid, $p->followedPid(), 'F with the detail open follows the detailed process');
+    }
+
+    public function testClickingARowStopsFollowingUnlessPaused(): void
+    {
+        $p = $this->press($this->demo(), 'down', 'F');
+        $this->assertNotNull($p->followedPid());
+        $clicked = $this->send($p, $this->mouse(5, 6));
+        $this->assertNull($clicked->followedPid());
+        $this->config = $this->config->with('pause_proc_list', true);
+        $kept = $this->send($p, $this->mouse(5, 6));
+        $this->assertNotNull($kept->followedPid());
+        $banner = $this->send($p, $this->mouse(5, $this->box->height - 2));
+        $this->assertSame($p->selection(), $banner->selection(), 'the banner row is not a process');
+    }
+
+    public function testAnUnmappedClickWithNothingSelectedKeepsFollowing(): void
+    {
+        // Following the detailed pid leaves selected at 0; btop's outside
+        // click only acts inside its `proc_selected > 0` branch.
+        $p = $this->press($this->demo(), 'down', 'enter');
+        $this->assertNotNull($p->followedPid());
+        $this->assertSame(0, $p->selection()->selected);
+        $same = $this->send($p, $this->mouse(-5, 3));
+        $this->assertSame($p, $same);
+        $this->assertSame($p->followedPid(), $same->followedPid());
+    }
+
+    public function testActionButtonsActAsTheirKeys(): void
+    {
+        $this->resize(180, 50);
+        $p = $this->press($this->demo(), 'down');
+        $map = ProcView::buttons($this->box->width, $this->box->height, $this->config, false, 1, null, $p->selectedPid($this->config));
+        foreach (['t' => MsgBox::class, 'k' => MsgBox::class, 's' => SignalMenu::class, 'N' => ReniceMenu::class] as $key => $class) {
+            [$x, $y] = $map[$key];
+            $this->assertSame($this->box->height - 1, $y, $key . ' sits on the bottom border');
+            $this->assertTrue($p->capturesClick($this->mouse($x, $y), $this->ctx()), $key);
+            $this->send($p, $this->mouse($x, $y));
+            $this->assertInstanceOf($class, $this->last?->overlay, $key);
         }
+        [$x, $y] = $map['F'];
+        $this->assertNotNull($this->send($p, $this->mouse($x, $y))->followedPid());
+        [$x, $y] = $map['u'];
+        $this->assertSame(0, $y);
+        $this->send($p, $this->mouse($x, $y));
+        $this->assertSame(['pause_proc_list' => true], $this->last?->set);
+
+        $this->assertArrayNotHasKey('t', ProcView::buttons($this->box->width, $this->box->height, $this->config, false, 0, null, null), 'action buttons need a selection');
+        $this->assertFalse($p->capturesClick($this->mouse(5, 6), $this->ctx()), 'list rows are never claimed');
+    }
+
+    public function testDetailRowButtonsTargetTheDetailedProcess(): void
+    {
+        $this->resize(180, 50);
+        $p = $this->press($this->demo(), 'down', 'enter');
+        $detail = $p->detail();
+        $this->assertNotNull($detail);
+        $map = ProcView::buttons($this->box->width, $this->box->height, $this->config, false, 0, $detail, null);
+        foreach (['t', 'k', 's', 'N', 'F'] as $key) {
+            $this->assertSame(0, $map[$key][1], $key . ' sits on the detail border');
+        }
+        [$x, $y] = $map['s'];
+        $this->send($p, $this->mouse($x, $y));
+        $menu = $this->last?->overlay;
+        $this->assertInstanceOf(SignalMenu::class, $menu);
+        $this->assertSame($detail->pid, $menu->pid);
     }
 
     // ---- navigation ------------------------------------------------------------

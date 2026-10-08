@@ -17,6 +17,7 @@ use SugarCraft\Top\Collect\NetInterface;
 use SugarCraft\Top\Collect\NetSnapshot;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Msg\SampledMsg;
+use SugarCraft\Top\Panel\ClickCapture;
 use SugarCraft\Top\Panel\Panel;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
@@ -58,7 +59,7 @@ use SugarCraft\Top\View\Region;
  * net-box input block (src/btop_input.cpp:594-640) and the selection /
  * autoscale half of Net::collect (src/linux/btop_collect.cpp:2994-3077).
  */
-final class NetPanel implements Panel
+final class NetPanel implements Panel, ClickCapture
 {
     public const DOWNLOAD = NetAutoScale::DOWNLOAD;
     public const UPLOAD = NetAutoScale::UPLOAD;
@@ -233,6 +234,12 @@ final class NetPanel implements Panel
         }
 
         return new PanelResult($this);
+    }
+
+    /** A click on a title button belongs to this box alone (App click map). */
+    public function capturesClick(MouseMsg $msg, PanelContext $context): bool
+    {
+        return $this->clickedButton($msg, $context) !== null;
     }
 
     /**

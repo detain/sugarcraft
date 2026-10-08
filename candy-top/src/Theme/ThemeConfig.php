@@ -32,7 +32,7 @@ use SugarCraft\Dash\Foundation\GradientStore;
  *   gradient pass sees the raw channels exactly as btop's `rgbs` does (a
  *   300 start bends the whole ramp; a negative end red marks the end unset).
  *
- * Gradients are byte-identical to btop's for Default, all 41 shipped themes
+ * Gradients are byte-identical to btop's for Default, all 42 shipped themes
  * and the edge cases pinned in tests/fixtures/btop-theme-oracle.json
  * (generated from btop's own code by prompt_kit/tools/btop-theme-oracle.cpp).
  * Only deviation: a non-numeric decimal falls back to Default instead of

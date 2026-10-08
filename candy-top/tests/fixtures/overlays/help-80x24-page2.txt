@@ -1,0 +1,24 @@
+╭─┐¹c██████╗e█████╗e███╗*┌─██╗██████╗2██╗3:2██╗─████████╗─██████╗─██████╗ms +┌─╮
+│ CP██╔════╝██╔══██╗████╗  ██║██╔══██╗╚██╗e██╔╝5╚══██╔══╝██╔═══██╗██╔══██╗────╮│
+│ Lo██║AVG: ███████║██╔██╗ ██║██║  ██║0╚████╔╝    C██║  5██║   ██║██████╔╝    ││
+│ up██║ 00:0██╔══██║██║╚██╗██║██║  ██║1 ╚██╔╝%    C██║  2██║   ██║██╔═══╝     ││
+│   ╚██████╗██║  ██║██║ ╚████║██████╔╝2  ██║0%    C██║  1╚██████╔╝██║         ││
+│    ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝C3  ╚═╝4%    C╚═╝  60╚═════╝ ╚═╝         ││
+╭─┐help┌─────────────────────────────────────────────────────────────────────╮╯│
+│        Key:        Description:                                            │─╯
+│          C         Expand/collapse the selected process' children.         │─╮
+│   Pg Up, Pg Down   Jump 1 page in process list.                            │%│
+│      Home, End     Jump to first or last page in process list.             │8│
+│     Left, Right    Select previous/next sorting column.                    │0│
+│        b, n        Select previous/next network device.                    │6│
+│          i         Toggle disks io mode with big graphs.                   │5│
+│          z         Toggle totals reset for current network device          │9│
+│          a         Toggle auto scaling for the network graphs.             │2│
+│          y         Toggle synced scaling mode for network graphs.          │6│
+│        f, /        To enter a process filter. Start with ! for regex.      │6│
+│          F         Follow selected process.                                │ │
+│          u         Pause process list.                                     │ │
+│       delete       Clear any entered filter.                               │ │
+│          c         Toggle per-core cpu usage of processes.                 │ │
+│          r         Reverse sorting order in processes box.                 │ │
+╰─┘↑ page 2/3 ↓└─────────────────────────────────────────────────────────────╯─╯

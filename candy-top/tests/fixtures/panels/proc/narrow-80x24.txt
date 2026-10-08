@@ -13,4 +13,4 @@
 │    3105 redis-s redi redis  542M   4.0   │
 │     880 postgre post post+  208M   5.9   │
 │       2 kthread      root     0B   0.0   │
-╰┘↑ select ↓└┘info ↵└────────────────┘1/13└╯
+╰┘↑ select ↓└┘info ↵└┘signals└┘N─────┘1/13└╯

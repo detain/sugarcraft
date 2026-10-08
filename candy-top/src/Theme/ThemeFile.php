@@ -17,7 +17,7 @@ namespace SugarCraft\Top\Theme;
  * - btop skips a comment only when `#` is the first byte right after the
  *   previous entry, so a commented-out `#theme[x]="…"` that follows a blank
  *   line is re-read as a live entry. Here any line whose first non-blank
- *   character is `#` is a comment. Of the 41 shipped themes only gotham has
+ *   character is `#` is a comment. Of the 42 shipped themes only gotham has
  *   such a line, and its next line re-sets the same key, so every shipped
  *   theme resolves identically.
  * - An unquoted value has trailing whitespace (incl. a CRLF `\r`) trimmed;

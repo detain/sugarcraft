@@ -1,10 +1,16 @@
 # candy-top themes
 
-These 41 `.theme` files are copied **verbatim** from
+Of these 42 `.theme` files, 41 are copied **verbatim** from
 [aristocratos/btop](https://github.com/aristocratos/btop)'s `themes/` directory
 (upstream commit `d3389d74e88644c50907e84314c3c7c973ba5be9`, 2026-09-30).
 Headers, author credits and comments are left untouched; do not edit them in
 place — re-copy from upstream instead.
+
+The 42nd, `mellow.theme`, comes from the still-unmerged upstream PR
+[#1683](https://github.com/aristocratos/btop/pull/1683) (commit `09f7dd477fbc`),
+built on the [mellow.nvim](https://github.com/mellow-theme/mellow.nvim) palette
+(MIT). It is the PR's file byte-for-byte apart from two added header lines: a
+palette licence note and a PR provenance line.
 
 btop is licensed under the Apache License, Version 2.0; a verbatim copy of its
 license ships alongside these files as [`LICENSE`](./LICENSE) (Apache-2.0 §4a),

@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
 
 /**
@@ -29,8 +30,11 @@ final class BinTest extends TestCase
         [$code, $out] = self::invoke(['--help']);
         $this->assertSame(0, $code);
         $this->assertStringContainsString('--config <path>', $out);
-        foreach (['cli.help.title', 'cli.help.opt.fake', 'cli.help.key.step'] as $key) {
+        foreach (['cli.help.title', 'cli.help.opt.fake'] as $key) {
             $this->assertStringContainsString(Lang::t($key), $out, "{$key} comes from the lang table");
+        }
+        foreach (KeyTable::keyRows() as $row) {
+            $this->assertMatchesRegularExpression('/^  ' . preg_quote($row->keyLabel(), '/') . ' +' . preg_quote($row->description(), '/') . '$/m', $out, 'KEYS is the KeyTable');
         }
     }
 

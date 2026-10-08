@@ -23,6 +23,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Top\App;
 use SugarCraft\Top\Config\ConfigFile;
 use SugarCraft\Top\HostInfo;
+use SugarCraft\Top\Input\KeyTable;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Panel\Panels;
 use SugarCraft\Top\Theme\ThemeRegistry;
@@ -33,6 +34,11 @@ $configPath = null;
 for ($i = 0; $i < count($args); $i++) {
     $arg = $args[$i];
     if ($arg === '-h' || $arg === '--help') {
+        // The KEYS section is the help overlay's own table (one roster, no hand list).
+        $keys = [];
+        foreach (KeyTable::keyRows() as $row) {
+            $keys[$row->keyLabel()] = $row->description();
+        }
         $rows = static fn (array $pairs, int $pad): string => implode('', array_map(
             static fn (string $left, string $right): string => '  ' . str_pad($left, $pad) . $right . "\n",
             array_keys($pairs),
@@ -45,11 +51,7 @@ for ($i = 0; $i < count($args); $i++) {
                 '--config <path>' => Lang::t('cli.help.opt.config'),
                 '-h, --help' => Lang::t('cli.help.opt.help'),
             ], 18) . "\n"
-            . Lang::t('cli.help.keys') . "\n" . $rows([
-                'q, Ctrl-C' => Lang::t('cli.help.key.quit'),
-                '1-4' => Lang::t('cli.help.key.toggle'),
-                '+ / -' => Lang::t('cli.help.key.step'),
-            ], 12));
+            . Lang::t('cli.help.keys') . "\n" . $rows($keys, max(array_map(static fn (int|string $k): int => strlen((string) $k), array_keys($keys))) + 2));
         exit(0);
     }
     if ($arg === '--fake') {

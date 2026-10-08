@@ -1,0 +1,40 @@
+╭─┐¹cpu┌──┐menu┌┐preset *┌──────────────────────────────┐22:13:20┌────────────────────────────────────────┐- 2000ms +┌─╮
+│ CPU 51%                                                                                                              │
+│ Load AVG: 5.42 5.66 3.29                                                                                             │
+│ up 1d 00:00:00                                                              ╭─┐Ryzen 7 5800X┌───────────────────────╮│
+│                                                                             │C0    50%          C6    13%           ││
+│                                                                             │C1    88%          C7    60%           ││
+│                                                                             │C2    70%                              ││
+│                                                                             │C3    54%                              ││
+│                                                                             │C4    51%                              ││
+│                                                                             │C5    20%                              ││
+│                    ╭─┐signals┌──────────────────────────────────────────────────────────────────╮───────────────────╯│
+│                    │                                                                            │                    │
+╰────────────────────│                       Send signal to PID 4410 (node)                       │────────────────────╯
+╭─┐²mem┌─────────────│                                                                            │────────────────────╮
+│ Total: 16.0 GiB    │                           Enter signal number: 15█                         │          MemB  Cpu%│
+│ Used: 10.2 GiB     │                                                                            │       198 MiB  27.8│
+│ Available: 5.80 Gi │ 1  (SIGHUP)    2  (SIGINT)    3  (SIGQUIT)   4  (SIGILL)    5  (SIGTRAP)   │      90.0 MiB  25.0│
+│ Cached: 3.20 GiB   │ 6  (SIGABRT)   7  (SIGBUS)    8  (SIGFPE)    9  (SIGKILL)   10 (SIGUSR1)   │s      244 MiB  13.6│
+│ Free: 2.60 GiB     │ 11 (SIGSEGV)   12 (SIGUSR2)   13 (SIGPIPE)   14 (SIGALRM)   15 (SIGTERM)   │       398 MiB  11.5│
+│                    │ 17 (SIGCHLD)   18 (SIGCONT)   19 (SIGSTOP)   20 (SIGTSTP)   21 (SIGTTIN)   │       502 MiB   7.9│
+│ Swap: 205 MiB / 2.0│ 22 (SIGTTOU)   23 (SIGURG)    24 (SIGXCPU)   25 (SIGXFSZ)   26 (SIGVTALRM) │a      305 MiB   7.2│
+│                    │ 27 (SIGPROF)   28 (SIGWINCH)  29 (SIGIO)     30 (SIGPWR)    31 (SIGSYS)    │       612 MiB   6.6│
+│                    │                                                                            │       360 MiB   2.6│
+│                    │                          ↑ ↓ ← → | To choose signal.                       │                    │
+│                    │                              0-9 | Enter manually.                         │                    │
+│                    │                            ENTER | To send signal.                         │                    │
+│                    │                       ESC or "q" | To abort.                               │                    │
+╰────────────────────│                                                                            │                    │
+╭─┐³net┌─────────────╰────────────────────────────────────────────────────────────────────────────╯                    │
+│ eth0                                               ││                                                                │
+│                         ╭─┐download┌──────────────╮││                                                                │
+│                         │ ▼ 1.21 MiB/s            │││                                                                │
+│                         │   Top: 1.21 MiB/s       │││                                                                │
+│                         │   Total: 2.43 MiB       │││                                                                │
+│                         │                         │││                                                                │
+│                         │ ▲ 294 KiB/s             │││                                                                │
+│                         │   Top: 294 KiB/s        │││                                                                │
+│                         │   Total: 588 KiB        │││                                                                │
+│                         ╰─┘upload└────────────────╯││                                                                │
+╰────────────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯

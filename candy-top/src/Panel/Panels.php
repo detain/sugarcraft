@@ -7,6 +7,7 @@ namespace SugarCraft\Top\Panel;
 use SugarCraft\Top\Collect\Cpu;
 use SugarCraft\Top\Collect\Memory;
 use SugarCraft\Top\Collect\Net;
+use SugarCraft\Top\Collect\PosixProcessControl;
 use SugarCraft\Top\Collect\ProcList;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\HostInfo;
@@ -14,6 +15,7 @@ use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeCpu;
 use SugarCraft\Top\Source\Fake\FakeMemory;
 use SugarCraft\Top\Source\Fake\FakeNet;
+use SugarCraft\Top\Source\Fake\FakeProcessControl;
 use SugarCraft\Top\Source\Fake\FakeProcList;
 
 /**
@@ -51,7 +53,10 @@ final class Panels
             'cpu' => CpuPanel::standard($host, $config, $fake),
             'mem' => MemPanel::standard($config, $fake),
             'net' => \SugarCraft\Top\Panel\Net\NetPanel::new($fake ? FakeNet::new($intervalSec) : CollectorSource::of(Net::new())),
-            'proc' => ProcPanel::new($fake ? FakeProcList::demo($host->coreCount) : CollectorSource::of(ProcList::new())),
+            'proc' => $fake
+                // --fake pids are invented: the signal / renice menus must never reach a live process.
+                ? ProcPanel::new(FakeProcList::demo($host->coreCount), FakeProcessControl::new())
+                : ProcPanel::new(CollectorSource::of(ProcList::new()), PosixProcessControl::new()),
         ];
     }
 

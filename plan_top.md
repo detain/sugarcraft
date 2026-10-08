@@ -43,7 +43,7 @@ candy-input, candy-sprinkles, sugar-charts, sugar-dash), phpunit.xml, `src/Top.p
   Used/Free meters), proc (sorter, filter, distance-fade, dual-gradient colors, vi keys, scrollbar click/drag),
   plus clock/uptime/buttons chrome. Menu set: main menu, options, help, signal popup, msgboxes (draw §5).
 - **Theme engine**: btop's 43 semantic keys + 9 gradient families ×(start,mid,end) → 101-stop caches + derived
-  `proc`/`proc_color` + TTY 16-color variant (draw §6). The upstream `themes/*.theme` files — **41**, disk-verified
+  `proc`/`proc_color` + TTY 16-color variant (draw §6). The upstream `themes/*.theme` files — **41** (+ mellow #1683 = 42 shipped), disk-verified
   2026-10-08 (`ls /home/sites/btop/themes/*.theme | wc -l`; draw §6 correct, env §4's "43" false — §8) — are
   **data to port** into `candy-top/docs/_data`-style fixtures or a themes/ dir; no
   SugarCraft lib ships them today (see §8 L-note — the brief's "sugar-dash's 43 ported btop themes" is false on
@@ -430,7 +430,7 @@ candy-top/
     MemView.php NetView.php DiskView.php ProcView.php  # mirror draw §3.3/§3.4/§3.5; proc via L6 ProcRowComposer
     Overlays.php           # menus/help/signals/msgboxes (draw §5) — veil-styled dim = SGR-strip + inactive_fg
                            #   (draw §1 overlay law, sugar-veil backdrop, draw §10 row 36)
-  src/Theme/               # ✅ 672c64680 (+ themes/ 41 files, btop oracle)
+  src/Theme/               # ✅ 672c64680 (+ themes/ 41 files, btop oracle; mellow = 42nd)
     ThemeConfig.php        # 43 semantic keys + 9 families (hexes: draw §6 verbatim Default table);
                            #   .theme ini parser `theme[key]="#hex"` (+ # comments, 'r g b', #GG gray forms)
                            #   → dash GradientStore (L7) ramps; pseudo-derivations proc/proc_color injected
@@ -474,8 +474,8 @@ from P-A.
 | ✅ P-C `7ac64e5f3` | NET panels: Net collector, dual graphs, hysteresis autoscale, stats sub-box, iface buttons b/n/z/a/y | up/down graph autoscales on scp burst, `z` zeroes | +~20 (hysteresis table, iface pick policy) |
 | ✅ P-D `a856be8bd` | DISK + BATTERY: Mounts/DiskIo/Temp/Battery, mem_graphs vs meters toggle, io_mode mirror graphs (L3 invert), border battery + watts | `i` flips disk graph modes | +~15 |
 | ✅ P-E `52f994d15` | PROC list: ProcList, sorter incl cpu-lazy rotation (draw §3.5: pull >30% or >max-of-top-6 hogs forward, btop_shared.cpp:132-150), filter `f`/`!` regex, distance fade + metric blend (L6), vi/arrows/page keys, scrollbar click/drag, detailed view, kill/signal popup | full scroll+filter+sort loop; `k` signal grid 5-col 16-skip | +~30 |
-| P-F | Config menu + keybindings overlay: options screen via L8 OptionRow/TextEdit, presets load-only (draw §4 triples), `ctrl_r` hot-reload | edit `update_ms` live via `+/-` persisted | +~15 |
-| P-G | Themes ported (all shipped `.theme` files), TTY mode fallback, VHS demo tape (`candy-top/.vhs/top.tape`: `Set Theme "TokyoNight"`, quoted values, `Type "php examples/top.php"`, deterministic seeded collectors per tea §5 — fake /proc fixtures), polish, README examples/ | CI re-renders demo GIF; `--tty` demo | +~10 |
+| P-F (F1 overlays/menus ✅ `083176989`; F2 pending) | Config menu + keybindings overlay: options screen via L8 OptionRow/TextEdit, presets load-only (draw §4 triples), `ctrl_r` hot-reload | edit `update_ms` live via `+/-` persisted | +~15 |
+| P-G (mellow #1683 ✅ `632e08d49`; VHS tape ✅ `3469999a7`) | Themes ported (all shipped `.theme` files), TTY mode fallback, VHS demo tape (`candy-top/.vhs/top.tape`: `Set Theme "TokyoNight"`, quoted values, `Type "php examples/top.php"`, deterministic seeded collectors per tea §5 — fake /proc fixtures), polish, README examples/ | CI re-renders demo GIF; `--tty` demo | +~10 |
 | P-H | **Documentation of every feature** — sibling-lib half ✅ `776bd06b5`; candy-top half pending. (user-requested 2026-10-08). candy-top: full `README.md` (install, run, every panel, every key binding, mouse, config keys table generated/derived from `Config\Schema`, presets, themes list + adding user themes, TTY mode, collectors + data sources + permissions, adopted upstream-PR features from Wave U), `docs/_data/candy-top.{json,body.html}` refresh then `php tools/gen-docs.php`, `CALIBER_LEARNINGS.md`, examples/. Sibling libs — document each lane API in that lib's README + `docs/_data/<slug>.body.html` (+ gen-docs): sugar-charts (withSeriesColorFn, withBarColor), sugar-dash (BrailleCanvas gradient, Gradient101, DualSampleGraph, Meter position mode, NetAutoScale, GradientStore, DistanceFade, ProcRow*), candy-sprinkles (withEmbeddedTitle, embedJunctions, seam), sugar-bits (TextEdit, OptionRow, Progress width arg). Refresh stale "scaffold" wording in root README/docs/index.html; MATCHUPS 🟡→🟢 at v1. Add a docs drift test where cheap (e.g. README key-binding / config-key tables re-derived from source, like sugar-crush's drift guards). | README/doc pages cover every shipped feature; drift tests green | +~5 (drift guards) |
 
 
