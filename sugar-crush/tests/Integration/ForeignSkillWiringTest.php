@@ -127,20 +127,23 @@ final class ForeignSkillWiringTest extends TestCase
     }
 
     /**
-     * All four foreign trees in ONE launch, because four passing single-tree
-     * assertions do not say that the four are merged rather than the last one
+     * All seven foreign trees in ONE launch, because seven passing single-tree
+     * assertions do not say that the seven are merged rather than the last one
      * winning — and the merge is the part of the wiring that has an ordering.
      */
-    public function testAllFourForeignTreesSurviveOneLaunchTogether(): void
+    public function testAllSevenForeignTreesSurviveOneLaunchTogether(): void
     {
-        $this->writeSkill($this->home . '/.claude/skills', 'four-a', 'a');
-        $this->writeSkill($this->repo . '/.claude/skills', 'four-b', 'b');
-        $this->writeSkill($this->home . '/.config/opencode/skills', 'four-c', 'c');
-        $this->writeSkill($this->repo . '/.opencode/skills', 'four-d', 'd');
+        $this->writeSkill($this->home . '/.claude/skills', 'tree-a', 'a');
+        $this->writeSkill($this->repo . '/.claude/skills', 'tree-b', 'b');
+        $this->writeSkill($this->home . '/.config/opencode/skills', 'tree-c', 'c');
+        $this->writeSkill($this->repo . '/.opencode/skills', 'tree-d', 'd');
+        $this->writeSkill($this->repo . '/.agents/skills', 'tree-e', 'e');
+        $this->writeSkill($this->home . '/.agents/skills', 'tree-f', 'f');
+        $this->writeSkill($this->home . '/.opencode/skills', 'tree-g', 'g');
 
         $registry = $this->engineSkillRegistry();
 
-        foreach (['four-a', 'four-b', 'four-c', 'four-d'] as $name) {
+        foreach (['tree-a', 'tree-b', 'tree-c', 'tree-d', 'tree-e', 'tree-f', 'tree-g'] as $name) {
             $this->assertNotNull($registry->get($name), "{$name} must survive the merge");
         }
     }
@@ -192,9 +195,9 @@ final class ForeignSkillWiringTest extends TestCase
     /**
      * THE CROSS-TOOL PAIR, measured rather than inferred.
      *
-     * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} states that between
-     * the two foreign trees "the fixed call order decides it (opencode over
-     * Claude)" and that the pair has no principled winner, so what is being
+     * {@see \SugarCraft\Crush\Skills\SkillManager::loadAll()} states that among
+     * the foreign trees "the fixed order spec < claude < opencode decides" and
+     * that the pair has no principled winner, so what is being
      * guaranteed is determinism. That sentence was written from the call order and
      * from `SkillRegistry::register()`'s last-write-wins loop; this pins it, which
      * matters because the sibling registry for AGENTS resolves the same pair the
@@ -238,8 +241,8 @@ final class ForeignSkillWiringTest extends TestCase
 
         // Half one: the discovery itself declines the tier. Called directly ON
         // PURPOSE here — the claim being measured is about the class's own
-        // behaviour under a refused home, not about its reachability. BOTH
-        // conventions, because `tiers()` is shared but the two suffixes are not,
+        // behaviour under a refused home, not about its reachability. ALL THREE
+        // conventions, because `tiers()` is shared but the suffixes are not,
         // and a message saying "no foreign skills" may not rest on one of them.
         $discovery = new ForeignSkillDiscovery();
         $this->assertSame(
@@ -250,7 +253,12 @@ final class ForeignSkillWiringTest extends TestCase
         $this->assertSame(
             [],
             array_keys($discovery->discoverOpencode($this->repo)),
-            'nor any ~/.config/opencode/skills',
+            'nor any ~/.opencode/skills or ~/.config/opencode/skills',
+        );
+        $this->assertSame(
+            [],
+            array_keys($discovery->discoverAgents($this->repo)),
+            'nor any ~/.agents/skills',
         );
 
         // Half two: the surface. A launch does not merely come back shorter.

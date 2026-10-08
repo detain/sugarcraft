@@ -2088,10 +2088,10 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * FIFTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * SIXTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * THIRTY-TWO distinct ones on this tree, fifteen of them classified
+     * THIRTY-THREE distinct ones on this tree, sixteen of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}, which
@@ -2124,18 +2124,18 @@ final class Bootstrap
      * literal with no directory component — `src/` holds exactly two,
      * `.mcp.json` in {@see mcpClient()} and `.phpunit.cache` in `IgnoreRules` —
      * cannot match, so `.mcp.json` is repository-chosen, feeds this collector, and
-     * is not one of the ten. EIGHT repository-chosen paths therefore produce
-     * entries here: the seven below plus `.mcp.json`, which
+     * is not one of the directory paths. NINE repository-chosen paths therefore
+     * produce entries here: the eight below plus `.mcp.json`, which
      * {@see $projectTierRefusals} records as the only entry that is not a
      * directory. Stating the two figures without their domain is how the count
      * that this whole enumeration exists to prevent gets made in the sentence
      * describing it.
      *
-     * The SEVEN of the ten whose refusals reach THIS map:
+     * The EIGHT whose refusals reach THIS map:
      *
      *   `.sugar-crush/workflows`  `.sugar-crush/skills`  `.claude/skills`
      *   `.opencode/skills`        `.sugar-crush/agents`  `.claude/agents`
-     *   `.opencode/agents`
+     *   `.opencode/agents`        `.agents/skills`
      *
      * The last two joined in crush_code.md Phase 1 item 3, which wired
      * {@see foreignAgentPresets()} and gave that registry's refusal seam its first
@@ -2152,7 +2152,8 @@ final class Bootstrap
      * it was — a gap list that went stale when crush_code.md Phase 2 item 4
      * wired {@see \SugarCraft\Crush\Commands\CommandLoader} and
      * {@see chat()} started draining `refusedDirectories()` straight into
-     * {@see $projectTierRefusals}. It is the EIGHTH feeder. The stale sentence
+     * {@see $projectTierRefusals}. It is a ninth feeder beside the eight above.
+     * The stale sentence
      * then very nearly reclassified the live code to match itself, which is the
      * direction this project's recurring defect always runs: prose is easier to
      * believe than a drain twenty lines long.
@@ -2205,7 +2206,7 @@ final class Bootstrap
             // line rather than a count.
             //
             // THE ONE PER-PATH SOURCE ON THE SEAM, and the reason
-            // {@see LAUNCH_NOTICE_LIMIT} exists: the eight feeders named above
+            // {@see LAUNCH_NOTICE_LIMIT} exists: the nine feeders named above
             // are bounded, but $commandLoader->refusedCommands() is one entry
             // per refused FILE and nothing caps that.
             self::warnPermissionConfigInTranscript(

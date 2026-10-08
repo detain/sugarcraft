@@ -19,7 +19,7 @@ moving.
 ## Where a skill goes
 
 `SkillLoader` walks **three** native locations; a separate discovery class walks
-**four** foreign ones. The three are the three calls
+**seven** foreign ones. The three are the three calls
 `SkillLoader::manifestTiers()` makes —
 `builtInSkillsDir()`, `projectSkillsDir()`, `userSkillsDir()` — and
 `SkillLoader::loadAllManifests()` merges them lowest-priority-first by
@@ -45,8 +45,10 @@ work — and to self-merge the PR (audit 15d-21). That instruction is gone too:
 a tree that is not clean now means stop and report.
 
 The **foreign** trees are other tools' conventions, imported read-only and
-badged with a `SkillSource` (`src/Skills/ForeignSkillDiscovery.php`):
-`<root>/.claude/skills`, `~/.claude/skills`, `<root>/.opencode/skills`,
+badged with a `SkillSource` (`src/Skills/ForeignSkillDiscovery.php`), lowest
+cross-convention priority first:
+`<root>/.agents/skills`, `~/.agents/skills`, `<root>/.claude/skills`,
+`~/.claude/skills`, `<root>/.opencode/skills`, `~/.opencode/skills`,
 `~/.config/opencode/skills`.
 
 ### Which skill keeps a name
@@ -56,14 +58,14 @@ built-in < project < user — whatever format each file is in, and the format
 only breaks a tie *inside* one tier:
 
 ```text
-built-in  <  project: claude < opencode < native  <  user: claude < opencode < native
+built-in  <  project: spec < claude < opencode < native  <  user: spec < claude < opencode < native
 ```
 
 `SkillManager::loadAll()` registers the tiers in that order into a
 last-write-wins registry. So cloning a repository that ships
 `.sugar-crush/skills/deploy` or `.claude/skills/db-query` cannot re-point a
 `deploy` or `db-query` you already had — in `~/.sugar-crush/skills`,
-`~/.claude/skills` or `~/.config/opencode/skills` alike. A repository may
+`~/.agents/skills`, `~/.claude/skills` or `~/.config/opencode/skills` alike. A repository may
 still *add* a skill, and may replace a built-in (the tier below it); it may
 not re-point one you wrote. Until audit 15d-03(b) the native order was
 built-in < user < project, so a repository's `.sugar-crush/skills/deploy`
@@ -73,13 +75,18 @@ silently replaced yours, and "native always wins" let it replace your
 Inside one tier, **native wins**: a repository carrying both
 `.claude/skills/deploy` and `.sugar-crush/skills/deploy` gets the native one,
 and installing another CLI cannot re-point a skill in your own
-`~/.sugar-crush/skills`. Between the two foreign conventions, opencode wins
-over Claude. That pair has no principled winner; what matters is that the
-order is fixed in `SkillManager::loadAll()` rather than decided by scan order.
+`~/.sugar-crush/skills`. Among the foreign conventions the fixed order is
+spec < claude < opencode — the least tool-specific convention loses a name to
+the more tool-specific ones, since a tree a named tool wrote carries that
+tool's assumptions. That ordering's bottom pair has no principled winner; what
+matters is that the order is fixed in `SkillManager::loadAll()` rather than
+decided by scan order. Inside one convention with two user trees — opencode's
+legacy `~/.opencode/skills` and its XDG `~/.config/opencode/skills` — the XDG
+tree is the later registration and wins.
 
 **Every shadowing is reported.** Whichever tier wins, the skill that lost is
 not dropped silently: each one a later tier (or a native skill, or opencode
-over Claude, or your copy over a repository's inside one foreign convention)
+over Claude over spec, or your copy over a repository's inside one foreign convention)
 replaces is recorded in `SkillLoader::skipped()` / `SkillManager::skipped()`
 under the losing file's path, with a reason naming the winner — `shadowed by
 [user] skill <path> (same name 'deploy'); this [project] skill was not

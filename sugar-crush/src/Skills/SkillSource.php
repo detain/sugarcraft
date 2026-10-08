@@ -10,8 +10,8 @@ use SugarCraft\Crush\Theme;
 /**
  * Where a Skill/AgentPreset definition was discovered on disk. Surfaced in
  * the palette/menu as a provenance badge so a user importing a foreign
- * .claude/skills or .opencode/skills tree can tell native sugar-crush
- * content apart from an imported one.
+ * .agents/skills, .claude/skills or .opencode/skills tree can tell native
+ * sugar-crush content apart from an imported one.
  */
 enum SkillSource: string
 {

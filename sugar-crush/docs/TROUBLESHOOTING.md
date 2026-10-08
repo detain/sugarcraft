@@ -90,7 +90,7 @@ That puts `SkillLoader`'s per-skip and per-refused-directory lines back into the
 [Where diagnostics go](#where-diagnostics-go) — `~/.sugar-crush/logs/sugarcrush.log`
 by default), elsewhere stderr. They are off by default because many of the
 scanned files belong to other tools (`~/.claude/skills`,
-`~/.config/opencode/skills`), and a line on every launch about a file this CLI's
+`~/.opencode/skills`, `~/.config/opencode/skills`, `~/.agents/skills`), and a line on every launch about a file this CLI's
 user cannot fix is noise.
 
 Then work down this list:
@@ -101,17 +101,18 @@ Then work down this list:
    directory's name becomes the skill's name.
 3. **The whole directory was refused.** A committed
    `.sugar-crush/skills -> /elsewhere` is refused wholesale, and the launch prints
-   `ignoring <path> — <reason>`. Same for `.claude/skills`, `.opencode/skills`,
-   `.sugar-crush/agents`, `.claude/agents`, `.opencode/agents`,
-   `.sugar-crush/workflows`.
+   `ignoring <path> — <reason>`. Same for `.agents/skills`, `.claude/skills`,
+   `.opencode/skills`, `.sugar-crush/agents`, `.claude/agents`,
+   `.opencode/agents`, `.sugar-crush/workflows`.
 4. **The foreign user tier is gone.** If `$HOME` is unresolvable,
-   world-writable, or owned by somebody else, `~/.claude/skills` and
-   `~/.config/opencode/skills` are dropped entirely — project trees survive.
+   world-writable, or owned by somebody else, `~/.agents/skills`,
+   `~/.claude/skills`, `~/.opencode/skills` and `~/.config/opencode/skills`
+   are dropped entirely — project trees survive.
 5. **The walk hit a cap.** Depth 7, or 2000 directories. A `skills/x -> /usr/share`
    link cost 8.29s on one measured launch, which is why the caps exist.
 6. **A name collision.** The tier decides first — user beats project beats
    built-in, whatever the format — and inside one tier native beats foreign
-   (opencode beats Claude). The loser is listed by `SUGARCRUSH_DEBUG_SKILLS=1`.
+   (opencode beats Claude beats spec). The loser is listed by `SUGARCRUSH_DEBUG_SKILLS=1`.
 7. **The file is too big.** A `SKILL.md` over 1 MiB, or one whose frontmatter
    does not close within its first 64 KiB, is refused and listed by
    `SUGARCRUSH_DEBUG_SKILLS=1`.

@@ -15,8 +15,9 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * Tests for ForeignSkillDiscovery — imports SKILL.md-shaped directories from
- * other coding-CLI tools' conventions (.claude/skills, .opencode/skills) and
- * tags them with the originating SkillSource for provenance badges.
+ * other coding-CLI tools' conventions (.agents/skills, .claude/skills,
+ * .opencode/skills) and tags them with the originating SkillSource for
+ * provenance badges.
  */
 final class ForeignSkillDiscoveryTest extends TestCase
 {
@@ -130,7 +131,7 @@ final class ForeignSkillDiscoveryTest extends TestCase
      * Audit 15d-03 (the ForeignSkillDiscovery half): the user's copy already
      * won inside one convention, but the repository's copy was dropped with
      * nothing recorded. The loss now lands in the loader's skipped(), keyed by
-     * the losing file, naming the winner — for both conventions.
+     * the losing file, naming the winner — for all three conventions.
      */
     public function testTheUsersCopyShadowingTheProjectsCopyIsRecordedInSkipped(): void
     {
@@ -141,6 +142,7 @@ final class ForeignSkillDiscoveryTest extends TestCase
         $conventions = [
             'claude' => ['/.claude/skills', '/.claude/skills', 'discoverClaude'],
             'opencode' => ['/.opencode/skills', '/.config/opencode/skills', 'discoverOpencode'],
+            'spec' => ['/.agents/skills', '/.agents/skills', 'discoverAgents'],
         ];
         foreach ($conventions as $format => [$projectSuffix, $userSuffix, $method]) {
             $this->createSkillFile($projectRoot . $projectSuffix, 'shared', "From project ({$format})");
@@ -329,6 +331,7 @@ SKILL
         return [
             'claude' => ['discoverClaude', '.claude/skills'],
             'opencode' => ['discoverOpencode', '.config/opencode/skills'],
+            'agents' => ['discoverAgents', '.agents/skills'],
         ];
     }
 
@@ -431,6 +434,7 @@ SKILL
         return [
             'claude' => ['discoverClaude', '.claude/skills'],
             'opencode' => ['discoverOpencode', '.opencode/skills'],
+            'agents' => ['discoverAgents', '.agents/skills'],
         ];
     }
 }
