@@ -31,9 +31,9 @@ skynet2 (`ssh root@skynet2`, read-only nvidia-smi queries OK) = 4× RTX PRO 6000
   panel `instanceof` retune checks to the Collect\{TunableFreq,SelectableBattery,SelectableMounts,TunableProcList}
   interfaces; FreeBsd\Cpu should re-read kern.boottime every sample (reviewer nit); append `## U5 FreeBSD collectors`
   to candy-top/CALIBER_LEARNINGS.md. ps/iostat live captures pending (FreeBSD host ssh down).
-- **Census**: candy-core DescriptorSinkArgumentCensusTest is red partly because candy-top `->close(...)` sites
-  (MainMenu, MsgBox×3, ReniceMenu, SignalMenu) are unrostered — uncommitted MainMenu row edit sits in the tree;
-  fix candy-top's share (rows + scanner shapes or respelling), leave sugar-crush sites alone.
+- Census: candy-top share fixed ✅ `274ab740b`; remaining DescriptorSinkArgumentCensusTest red is sugar-crush only
+  (note: sugar-crush ForkedChild/SessionRelaunch `(int)$entry` casts at real close/fcntl sinks deserve a look — not ours).
+- **P-H docs** agent running (README, drift tests, docs/_data, root README/index, MATCHUPS).
 
 ## Next
 1. **P-H candy-top half** (after P-F2 commits): full `candy-top/README.md` (install, run, `--fake`/`--config`/tty,
