@@ -484,7 +484,7 @@ from P-A.
 Full per-PR evaluation: `prompt_kit/findings/btop-upstream-prs.md` (32 open aristocratos/btop PRs: 16 ADOPT,
 7 ADOPT-LATER, 9 N/A). Every new config key is additive (btop and our reader both skip unknown keys); new
 *values* (`graph_symbol=block2`, `proc_sorting=io *`) make stock btop warn+default; the presets 4th field
-(#1476) is written only when the user set it (stock btop discards a presets string containing it).
+(#1476) is written only when the user set it (stock btop discards a presets string containing it). Config schema for all Wave U keys/values ✅ `96dcdc43a`.
 
 - ✅ `02f178b91` **U0 — fix now (no config):** #1869 try every `nvidia-smi` candidate (incl. `/usr/lib/wsl/lib/nvidia-smi`)
   before memoizing absence; #1856 add rename/parenthesis stat regression fixtures (parser already correct).
