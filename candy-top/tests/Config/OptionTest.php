@@ -181,4 +181,17 @@ final class OptionTest extends TestCase
         $this->assertSame(['a', 'b'], $string->allowed);
         $this->assertSame('', $string->description(), 'no lang key → no description');
     }
+
+    public function testHasValidatorIsTrueOnlyForStringsWithAnExtraLaw(): void
+    {
+        foreach (['presets', 'shown_boxes', 'cpu_core_map', 'io_graph_speeds'] as $name) {
+            $this->assertTrue(Schema::option($name)?->hasValidator(), $name);
+        }
+        foreach (['color_theme', 'graph_symbol', 'update_ms', 'vim_keys'] as $name) {
+            $this->assertFalse(Schema::option($name)?->hasValidator(), $name);
+        }
+        $this->assertTrue(Option::string('x', '', validator: static function (string $v): void {
+        })->hasValidator());
+        $this->assertFalse(Option::string('x', '')->hasValidator());
+    }
 }

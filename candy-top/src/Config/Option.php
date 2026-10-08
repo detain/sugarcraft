@@ -78,6 +78,16 @@ final class Option
     }
 
     /**
+     * Whether a string law beyond the enumeration applies (presets,
+     * shown_boxes, cpu_core_map, io_graph_speeds) — what docs call
+     * "validated text".
+     */
+    public function hasValidator(): bool
+    {
+        return $this->validator !== null;
+    }
+
+    /**
      * The option's description as written above it in config.conf, in the
      * active locale; empty when btop writes none (net_upload).
      */

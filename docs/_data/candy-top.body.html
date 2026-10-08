@@ -1,23 +1,50 @@
-<p class="lede" style="margin-top: 28px;">A full-screen terminal system monitor in the spirit of <a href="https://github.com/aristocratos/btop">btop</a>, written in pure PHP on the SugarCraft stack: <strong>cpu, memory, network, disk and process panels drawn with braille graphs, gradient meters and btop's own themes</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> collectors and driven by the <a href="candy-core.html">CandyCore</a> Model/Cmd runtime.</p>
-
-    <p><strong>Status: scaffold, in progress.</strong> The package skeleton has landed; the rendering primitives it needs (dual-sample braille graphs, position-colored meters, border-embedded titles, the 101-stop gradient store) are being added to <a href="sugar-dash.html">SugarDash</a>, <a href="sugar-charts.html">SugarCharts</a>, <a href="sugar-bits.html">SugarBits</a> and <a href="candy-sprinkles.html">CandySprinkles</a> first, and the app is assembled on top of them.</p>
+<p class="lede" style="margin-top: 28px;">A full-screen terminal system monitor in pure PHP: a port of <a href="https://github.com/aristocratos/btop">btop</a> (v1.4.7 plus a set of adopted upstream pull requests) on the SugarCraft stack. <strong>cpu, memory + disks, network and process boxes drawn with braille / block / sextant graphs, gradient meters and btop's own themes</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> or FreeBSD <code>sysctl</code> collectors and driven by the <a href="candy-core.html">CandyCore</a> Model/Cmd runtime. It reads btop's config format, so a <code>btop.conf</code> works unchanged.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-top:@dev</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-top</code></pre>
 
-    <h3 style="margin-top: 32px;">What's planned</h3>
+    <h3 style="margin-top: 32px;">Run</h3>
+    <pre class="code"><code class="language-shell">vendor/bin/candy-top                      # the live host
+vendor/bin/candy-top --config ~/top.conf  # another config file (also the save target)
+vendor/bin/candy-top --fake               # deterministic demo data, never the real host
+vendor/bin/candy-top --help               # options + the full key list</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Six panels</strong><span>cpu (graphs, per-core grid, load / freq footer, battery + clock), mem + swap, net with autoscale, disk io, a sortable / filterable process list.</span></div>
-      <div class="feature"><strong>btop's drawing language</strong><span>Dual-sample braille and block graphs, 101-stop gradients, position-colored meters, titles embedded in the borders.</span></div>
-      <div class="feature"><strong>Linux collectors</strong><span>Injectable-path readers for <code>/proc/stat</code>, <code>meminfo</code>, <code>net/dev</code>, <code>diskstats</code>, per-pid stats, thermal, hwmon and power-supply sysfs.</span></div>
-      <div class="feature"><strong>Themes + input</strong><span>btop's theme files ported as data; kitty keyboard + SGR mouse, vim keys, a btop-compatible config subset.</span></div>
+      <div class="feature"><strong>cpu box</strong><span>Upper/lower dual-sample graphs (any <code>/proc/stat</code> field), per-core grid with mini graphs and temperatures, load / uptime, frequency (aggregate and per-core, value or graph), battery badge with watts, NVIDIA GPU sub-graphs.</span></div>
+      <div class="feature"><strong>mem + disks</strong><span>Used / available / cached / free as graphs or meters, a single focused metric (<code>mem_selected</code>), swap + zswap, ZFS ARC, per-mount meters with read/write/busy readouts and a big-graph io mode.</span></div>
+      <div class="feature"><strong>net box</strong><span>Download/upload graphs with hysteresis auto-scale and sync, interface cycling, totals zeroing, interface IP in the title.</span></div>
+      <div class="feature"><strong>proc box</strong><span>Sortable list (cpu lazy/direct, memory, io, …), tree view with collapse, live substring / regex filter, detailed view with cwd and IO, signals, renice, follow, pause, IO/R + IO/W columns.</span></div>
+      <div class="feature"><strong>Containers + VMs</strong><span>Processes tagged <code>[engine:name]</code> from their cgroup — docker, podman, k8s, lxc, nspawn — and KVM/QEMU guests by name; one key hides them all.</span></div>
+      <div class="feature"><strong>btop's menus</strong><span>Main menu, a tabbed options menu with grouped headings and live preview, paged help, signal chooser, renice and warning boxes — over a dimmed backdrop.</span></div>
+      <div class="feature"><strong>Presets + layout</strong><span><code>p</code> / <code>P</code> cycle layout presets (with btop #1476's proc width field); Shift/Alt/Ctrl+Shift arrows resize the proc box; boxes toggle with <code>1</code>–<code>4</code>.</span></div>
+      <div class="feature"><strong>Themes + TTY mode</strong><span>The 42 btop themes are bundled, and you can add your own <code>.theme</code> files. TTY mode (16 colours, stepped gradients, tty glyphs) is used on a real console or with <code>force_tty</code>.</span></div>
+      <div class="feature"><strong>Config that persists</strong><span>btop-format <code>config.conf</code>, atomic save on exit (also on SIGTERM / SIGHUP), <code>ctrl+r</code> hot reload, every key documented and drift-tested.</span></div>
+      <div class="feature"><strong>Mouse</strong><span>Every border button, list rows, tree markers, a draggable scrollbar, the wheel, and menu tabs and entries all respond to the mouse.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">Adopted upstream btop PRs</h3>
+    <p>zswap (#1739), per-core frequency (#1785), interface IPs (#1573), command basename (#1859), per-process IO columns and sorts (#1823), container tags and filter (#1873), <code>block2</code> sextant graphs (#1783), focused mem graph (#1747), <code>disks_order</code> (#1700), cwd in the detail view (#1546), tree branch sorting and option headings (#1791), proc box width and presets W field (#1476), digit option tabs (#1411), reload repaint (#1849), the <code>mellow</code> theme (#1683), WSL <code>nvidia-smi</code> discovery (#1869), and the FreeBSD memory and battery fixes (#1851, #1728, #1830, #1787). The README lists the key, config key and theme tables, which are generated from the source. It also covers data sources, permissions, and every deviation from btop.</p>
 
     <h3 style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-top">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-top/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-top/blob/master/README.md">Full README</a> — key bindings, config keys, themes, collectors</li>
       <li><a href="https://github.com/sugarcraft/candy-top/tree/master/tests">Test suite</a></li>
     </ul>
   </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIF of the bundled demo (<code>examples/top.php</code>). Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.vhs/top.gif" alt="candy-top demo">
+                <h3>Tour</h3>
+                <span class="demo-caption">Interval steps, a box toggle, tree view, filter, detailed view, main menu and help, on deterministic fake data.</span>
+            </div>
+        </div>
+    </div>
 </section>
